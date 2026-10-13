@@ -1441,17 +1441,34 @@ describe("dl-98 round 2: a request that goes away is no longer measured", () => 
   test(
     "F9: a request ffmpeg closed while it was reading does not count a later pause as the origin's time",
     async () => {
-      // 4 MB/s against 3 MB/s of media: fast, so the job must stay on one
-      // connection. A reads and is closed while it is still reading. B reads
-      // 200 KB and stops for 8 s, so the feeder pauses its origin, then reads
-      // on. Were A still counted as reading, B's pause would be charged to the
-      // origin, its rate would read low, and a fast origin would be split.
+      // A reads and is closed while it is still reading. B reads 200 KB and
+      // stops for 2 s, so the feeder pauses its origin, then reads on. Were A
+      // still counted as reading, B's pause would be charged to the origin, its
+      // rate would read low, and a fast origin would be split. The arithmetic is
+      // `parallel-ranges-meter.test.ts`'s; this test is that the feeder releases
+      // A when its request closes, and it is scaled to be quick (dl-114).
+      //
+      // **B is not throttled** (the same remedy as `pausedThenRead`, dl-120),
+      // and the media is 10 MB/s. Throttled at 4 MB/s, the loopback's fill
+      // (5.2 to 7.8 MB, so 1.3 to 2 s) outlasts a 1 s window: the meter judged B
+      // fast before the pause began, and with a closed reader kept as a member
+      // this test still passed, 3 of 3 (measured, dl-114). Unthrottled, the fill takes the socket's
+      // own speed, and what the pause charged to the origin is the fill over the
+      // pause, at most 10.45 MB over 2 s, about 5.2 MB/s. That sits below the
+      // media's 10 MB/s and far below what B reads at when the pause is
+      // subtracted, so the two cases are told apart with margin on both sides:
+      // with a closed reader kept as a member, 12 of 12 runs split (23 busy loops
+      // pinned to the test's core, and 24 spread over the cores); with `release`
+      // as shipped, 12 of 12 stayed on one connection. At 6 MB/s of media, one of
+      // the 12 loaded runs with the bug missed it.
       const size = 80_000_000;
       files["released.bin"] = Buffer.alloc(size, 7);
+      // A is throttled so it is still reading when it is closed; the fixture
+      // takes the rate when a request arrives, so B's is set after A's.
       behaviour.perConnectionBps = 4_000_000;
       const { feeder } = await feederFor("released.bin", {
-        settings: { ...PARALLEL_RANGE_DEFAULTS, chunkBytes: 1024 * 1024, measureMs: 4_000 },
-        durationSec: () => size / 3_000_000,
+        settings: { ...PARALLEL_RANGE_DEFAULTS, chunkBytes: 1024 * 1024, measureMs: 1_000 },
+        durationSec: () => size / 10_000_000,
       });
       const a = http.get(feeder.url, { headers: { range: "bytes=0-" }, agent: false });
       a.on("response", (response) => response.resume());
@@ -1459,6 +1476,7 @@ describe("dl-98 round 2: a request that goes away is no longer measured", () => 
       await sleep(500);
       a.destroy();
 
+      behaviour.perConnectionBps = null;
       let bBytes = 0;
       const b = http.get(feeder.url, { headers: { range: "bytes=20000000-" }, agent: false });
       b.on("error", () => undefined);
@@ -1467,11 +1485,11 @@ describe("dl-98 round 2: a request that goes away is no longer measured", () => 
           bBytes += chunk.length;
           if (bBytes >= 200_000 && bBytes - chunk.length < 200_000) {
             response.pause();
-            setTimeout(() => response.resume(), 8_000);
+            setTimeout(() => response.resume(), 2_000);
           }
         });
       });
-      await sleep(12_000);
+      await sleep(3_000);
       const stats = feeder.stats();
       b.destroy();
       expect(stats.mode, JSON.stringify(stats)).toBe("single");

@@ -131,3 +131,170 @@ testability on 2026-10-12**, provided production behaviour is unchanged.
 - 2026-10-13 — The owner answered the meter-gap question (Build, item 3) before
   any source changed: option (a), pin today's behaviour. The question, the three
   options and the answer are written under that bullet.
+- 2026-10-13 — Built (builder, Sonnet 5.5). Three rules exported, tabled and
+  their browser rows deleted. Production code: three `export` keywords and one
+  function split in two; no caller changes.
+  - **`sameDocument`** (`resolvers/src/resolvers/browser.ts`) is exported in
+    place. `src/index.ts` names what it re-exports from that module and does not
+    name this, so the package surface is unchanged. The table is the new
+    `resolvers/test/browser/same-document.test.ts`.
+  - **The play-press rule** is extracted from `isPlayPress`
+    (`resolvers/src/browser/provoke.ts`) as `attributesMarkPlayPress(read)`,
+    over the `Map` of attribute values `isPlayPress` already built. `isPlayPress`
+    reads the five attributes and calls it. The table is the new
+    `resolvers/test/browser/play-press.test.ts`.
+  - **`Meter`** (`engine/src/download/parallel-ranges.ts`) is exported in place;
+    `src/index.ts` names its exports and does not name it. The unit tests are the
+    new `engine/test/parallel-ranges-meter.test.ts`. Both new files are separate
+    from `provoke.test.ts` and `parallel-ranges.test.ts` on purpose: dl-122 edits
+    the first and dl-121 will edit the second.
+  - **Done when 1: each deleted row, and the table entry that covers it.** The
+    rows were in `resolvers/test/browser/browser-resolver.test.ts`, found by name
+    (the ticket's line numbers did not resolve).
+
+    | Deleted row (browser-resolver.test.ts)                                                | Table entry (test name)                                     |
+    | ------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+    | `adding ?start= on play is not a departure`                                           | same-document: `adding ?start=`                             |
+    | `adding ?autoplay= on play is not a departure`                                        | same-document: `adding ?autoplay=`                          |
+    | `a query key outside the exception is still a departure`                              | same-document: `adding another key (...): a departure`      |
+    | `a reordered query string is not a departure (dl-55, decision 5)`                     | same-document: `the same two keys in the other order (...)` |
+    | `ctl=display (...) is pressed but does not hold back the box click`                   | play-press, do not count: `display`                         |
+    | `ctl=autoplay-cls (...)`                                                              | play-press, do not count: `autoplay-cls`                    |
+    | `ctl=autoplay-id (...)`                                                               | play-press, do not count: `autoplay-id`                     |
+    | `ctl=autoplay-camel (...)`                                                            | play-press, do not count: `autoplay-camel`                  |
+    | `ctl=display-cls (...)`                                                               | play-press, do not count: `display-cls`                     |
+    | `ctl=testid-word is a press that counts, so the box is not clicked`                   | play-press, count: `testid-word`                            |
+    | `ctl=class-btn is a press that counts, ...`                                           | play-press, count: `class-btn`                              |
+    | `ctl=id-button is a press that counts, ...`                                           | play-press, count: `id-button`                              |
+    | `ctl=id-play is a press that counts, ...`                                             | play-press, count: `id-play`                                |
+    | `ctl=carousel is a press that counts, ...`                                            | play-press, count: `carousel`                               |
+    | `ctl=camel-testid (...) is a press that counts, so a slow player is not clicked past` | play-press, count: `camel-testid`                           |
+    | `ctl=camel-title (...) ...`                                                           | play-press, count: `camel-title`                            |
+    | `ctl=label (aria-label=Play) ...`                                                     | play-press, count: `label`                                  |
+
+    Kept in the browser, as the ticket asked: `adding ?t= on play is not a
+departure` (now a single test), the `location.assign` departure test (the
+    ticket's 336, still at that line), `ctl=autoplay`, `ctl=jw`, `ctl=watch` and
+    `ctl=xo`. `t`, `autoplay` and `jw` are in the tables
+    as well. 17 rows deleted: `browser-resolver.test.ts` went from 137 tests to
+    120 (the head run's `Tests 120 passed (120)`). The three new files hold 57
+    (`same-document` 17, `play-press` 25, `parallel-ranges-meter` 15). Their
+    fixtures lost the modes nothing reaches any more: `guard-query.html` keeps
+    `?rewrite=t`, `box-with-control.html` keeps `autoplay`, `jw` and `watch`, and
+    `player-poster-icon-grid.html` is deleted (its only user was the `ctl=label`
+    and camel rows).
+
+  - **Each table can fail.** Every mutation was applied to the source, the spec
+    run, and the source restored (`git diff` of the three `src` files shows only
+    the intended change):
+
+    | Mutation                                                      | Spec          | Failing tests                                                                       |
+    | ------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------- |
+    | `sameDocument` stops sorting the query                        | same-document | `the same two keys in the other order`                                              |
+    | `sameDocument` stops ignoring `start`                         | same-document | `adding ?start=`, `removing ?start=`                                                |
+    | `sameDocument` stops comparing the path                       | same-document | `another path`                                                                      |
+    | `startsWord` loses its camel-case branch                      | play-press    | `camel-testid`, `camel-title`                                                       |
+    | `startsWord` accepts "play" anywhere ("Autoplay", "display")  | play-press    | six rows, `display` and the four `autoplay-*` among them                            |
+    | the camel branch loses `(?<![Aa]uto)`                         | play-press    | `autoplay-camel`                                                                    |
+    | the `id === "play"` line deleted                              | play-press    | `id-play`                                                                           |
+    | the library-class line deleted                                | play-press    | `jw (kept in the browser)`, `plyr`                                                  |
+    | `release` does not leave the paused set (the F9 fix undone)   | meter         | `a paused fetch that ffmpeg closed does not keep the meter paused for the next one` |
+    | the meter is paused when any member is, not every one         | meter         | three F9 rows                                                                       |
+    | `release` does not remove the member                          | meter         | `a fetch ffmpeg closed while it was reading does not make a later pause ...`        |
+    | the pause is not taken out of the interval                    | meter         | five rows                                                                           |
+    | `interrupt` does nothing                                      | meter         | `interrupt drops the next interval ...`                                             |
+    | `release` of the last member calls `interrupt()` (option (b)) | meter         | the two release rows and all three `a gap of N ms` rows                             |
+
+  - **The gap rule is pinned as option (a).** `a gap of 0, 300, 1000 ms before
+B's first byte` in `parallel-ranges-meter.test.ts`: the 8 MB/s origin, A
+    read for 0.5 s and released, the judge at 1500 ms of measured time against 5
+    MB/s of media. 0 ms: 12 080 000 bytes in 1500 ms, fast; 300 ms: 9 680 000 in
+    1500, fast; 1000 ms: 4 080 000 in 1500, **not fast** (a fast origin is split).
+    These are not the ticket's 7956671, 6782876 and 3994964 B/s: those came from
+    a real run and this is a deterministic model of the same rule, so the
+    numbers differ and the verdicts agree. The tests carry a comment saying they
+    pin today's rule rather than endorse it, and what option (b) would change.
+    Option (b) was not filed: the owner chose (a) and not (c), so no ticket
+    follows from this.
+  - **The third F9 test was measured before it was changed** (the fold-in).
+    `engine/test/parallel-ranges.test.ts` › "F9: a request ffmpeg closed while it
+    was reading ...". A temporary parameterised copy (not committed) was run
+    against the shipped `Meter` ("good") and against one that never removes a
+    released reader from its members ("bug", the mutation the test exists to
+    catch). Reader B unthrottled where it says "null". Single connection is the
+    right answer.
+
+    | Configuration (pause, sleep, media)                                             | good: single | bug: parallel |
+    | ------------------------------------------------------------------------------- | ------------ | ------------- |
+    | B 4 MB/s, window 4 s, pause 8 s, sleep 12 s, media 3 MB/s (as it was)           | 1 of 1       | 1 of 1        |
+    | B 4 MB/s, window 1 s, pause 2 s, sleep 3 s, media 3 MB/s (the ticket's numbers) | 3 of 3       | **0 of 3**    |
+    | B null, window 1 s, pause 2 s, sleep 3 s, media 3 MB/s                          | 3 of 3       | **0 of 3**    |
+    | B null, same, media 6 MB/s                                                      | 3 of 3       | 3 of 3        |
+    | B null, same, media 10 MB/s                                                     | 3 of 3       | 3 of 3        |
+    | media 6 MB/s, 23 busy loops pinned to the test's core                           | 6 of 6       | 5 of 6        |
+    | media 6 MB/s, 24 busy loops spread over 12 cores                                | 6 of 6       | 6 of 6        |
+    | media 10 MB/s, 23 busy loops pinned                                             | 6 of 6       | 6 of 6        |
+    | media 10 MB/s, 24 busy loops spread                                             | 6 of 6       | 6 of 6        |
+
+    **The ticket's scaled numbers cannot work with a throttled reader**: at
+    4 MB/s the loopback's fill (5.2 to 7.8 MB, so 1.3 to 2 s) outlasts a 1 s
+    window, the meter judges B fast before the pause begins, and the test passes
+    with the bug in (0 of 3 failed). That is dl-120's bound, met from the other
+    side. The remedy dl-120 made for `pausedThenRead` does work here, with a
+    higher media rate: with B unthrottled the fill is quick, and what a charged
+    pause leaves is the fill over the pause, at most 10.45 MB over 2 s, about
+    5.2 MB/s, so the media must be above that; 3 MB/s is not (0 of 3). **The test
+    now runs B unthrottled, `measureMs: 1_000`, an 8 s pause cut to 2 s, a 12 s
+    sleep cut to 3 s, and media at 10 MB/s** (`size / 10_000_000`; 6 MB/s missed
+    the bug once in 12 loaded runs). At 10 MB/s: shipped code stayed single 12
+    of 12 loaded runs, the bug split 12 of 12. `bBytes > 10_000_000` still
+    holds (B read the 60 MB to the end in every run). The measurement ran the
+    shipped Meter and one mutation, on Linux, under busy loops; Windows
+    timer-tick behaviour (dl-106) is **unmeasured**.
+
+  - **The other two F9 tests (`pausedThenRead`) are unchanged**, and so is the
+    `sleep(4_000)` in it. Each of the three integration tests fails on exactly
+    its own Meter mutation (run with `-t F9` after the edit: the paused-closed
+    mutation fails "a paused request ffmpeg closed ...", the any-member mutation
+    fails "a paused request left open ...", the never-remove mutation fails "a
+    request ffmpeg closed while it was reading ..."), so none is a duplicate of
+    the unit tests: they prove the feeder calls `pause`, `resume` and `release`
+    where the meter needs them. Shortening the `sleep(4_000)` is dl-120's
+    "could now be about 2.5 s" and nothing measured it; the first check after it
+    is the only guard against a split before B exists, so a shorter sleep would
+    narrow what dl-120 fixed. **Left for an owner decision** (see the report):
+    whether to delete the two `pausedThenRead` tests (about 10 s) or leave them.
+  - **Done when 4: durations.** Each suite alone, `npx vitest run <spec-file>`,
+    wall time from the shell, same machine, other agents' suites running on it
+    in both:
+
+    | Spec                                                 | Base (2cb4e734)                        | Head                         |
+    | ---------------------------------------------------- | -------------------------------------- | ---------------------------- |
+    | `resolvers/test/browser/browser-resolver.test.ts`    | 137 tests, 408.6 s (406.3 s by vitest) | 120 tests, 346.3 s (344.2 s) |
+    | `engine/test/parallel-ranges.test.ts`                | 43 tests, 81.5 s (80.5 s)              | 43 tests, 72.3 s (71.4 s)    |
+    | `resolvers/test/browser/provoke.test.ts` (untouched) | 264 tests, 11.8 s                      | 264 tests, 11.8 s            |
+
+    The saving is 62.3 s and 9.2 s, against the filing's estimates of 58 s
+    and 15 to 18 s. Load was not controlled, so the browser figure carries
+    that noise. The 9.2 s is the third F9 test going from 12.5 s (the ticket's
+    figure; not re-timed on base) to 3.5 s (`--reporter=verbose` on head, `-t F9`:
+    6.1 s, 6.4 s and 3.5 s for the three). The base `provoke.test.ts` run started
+    after the `provoke.ts` edit, so that row is base plus the extraction; the
+    browser-resolver and parallel-ranges base runs started before any edit.
+
+  - **Done when 2 and 3.** `git diff` of the `src` files shows three `export`
+    keywords and the function split. Neither `index.ts` changed, and the built
+    `dist/index.d.ts` of both packages is byte-identical to the one built before
+    the edit: `md5sum` of the engine's is `04432f6a...` and the resolvers' is
+    `207b8122...` on both sides. The engine's and resolvers' suites at the
+    changed paths pass; the full project is preflight's.
+  - **What the brief had wrong.** The ticket's line numbers had moved (`sameDocument`
+    at 756, not 746; `Meter` at 233; the F9 sleeps at 1372 and 1474), and the
+    deleted-row citations (2252, 2280, 2323) did not resolve in a file of 2083
+    lines; the browser-resolver spec is `resolvers/test/browser/browser-resolver.test.ts`.
+    The label row at 2323 was **not** deleted by dl-113: it was still there. It
+    is not strictly a duplicate of the 3000 ms row, since that page's button
+    carries `id="play"` as well as `aria-label`, which the rule counts on either;
+    but the attribute rule it exercised (`aria-label=Play` alone) is the `label`
+    entry in the table, which is what makes the deletion safe. The ticket's
+    scaling for the third F9 test did not work as written (above).

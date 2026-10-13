@@ -229,8 +229,13 @@ function parseContentRange(
  * a pause left such an origin with no measured time at all, and it never
  * split: 2 MB/s a connection against 8 MB/s of media stayed on one connection
  * with 64 KiB writes and split with 16 KiB ones.
+ *
+ * Every method takes `now`, so it is pure. Exported for
+ * `test/parallel-ranges-meter.test.ts` and for nothing else (dl-114):
+ * `src/index.ts` names what it re-exports from this module, and this is not one
+ * of them.
  */
-class Meter {
+export class Meter {
   bytes = 0;
   activeMs = 0;
   #lastAt: number | null = null;

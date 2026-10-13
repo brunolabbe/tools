@@ -752,8 +752,12 @@ const PLAY_TIME_QUERY_EXCEPTIONS: ReadonlySet<string> = new Set(PLAY_TIME_QUERY_
  * (`watch?v=`), so every key outside the exception set is compared as-is, and
  * a page that rewrites its own query on play with some other key, or its own
  * path, has still left (dl-55).
+ *
+ * Exported for `test/browser/same-document.test.ts` and for nothing else
+ * (dl-114): `src/index.ts` names what it re-exports from this module, so this
+ * is not part of the package's surface.
  */
-function sameDocument(a: string, b: string): boolean {
+export function sameDocument(a: string, b: string): boolean {
   try {
     const left = new URL(a);
     const right = new URL(b);
