@@ -3,7 +3,7 @@ id: dl-120
 tool: downloader
 title: The F9 paused-request tests split under CPU load, because the loopback's fill outlasts the 2 s window
 kind: fix
-status: in-flight
+status: done
 milestone: null
 depends_on: [dl-106]
 difficulty: standard
@@ -63,6 +63,53 @@ request"`.
    the meter), both tests fail at the head as they do at the base.
 5. No production line changes: `git diff origin/main -- tools/downloader/engine/src`
    prints nothing.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-12 · `84c899e4..fa0a03cf` · Sonnet 5.5, depth standard
+
+| Done when                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The cause is named in the Log with a measurement                                     | **verified**. Reproduced with trace lines planted in `Meter.record`, `#pump`, `#judge` and `#split` (since removed). At the base under 11 busy loops the feeder's held pause came at `active=1898..1996 ms`, `bytes=7.62..7.98 MB` (39 held pauses); the one failing run had no held pause and `SPLIT rate=3797040 bitrate=10000000 active=2007 bytes=7618763`. See finding 1 for what moves the number.              |
+| 2. Both tests pass 20 of 20 at the head with 11 busy loops; the Log records both series | **verified** for the head: 20 of 20 (`Tests  2 passed \| 41 skipped (43)` each). The base half is the builder's record of 5 of 20; I measured 1 of 20 under the same 11 loops (load average 9 to 14, the loops counted), the same signature, and 15 of 15 at 23 loops. Not a failure of the line: the base rate depends on load.                                                                                      |
+| 3. "F9: a paused request ffmpeg closed …" passes 10 of 10 alone at the head             | **verified**, 10 of 10 (`-t "F9: a paused request ffmpeg closed"`, pinned to core 5, load average 4.4 to 8.8).                                                                                                                                                                                                                                                                                                        |
+| 4. With the one-flag meter planted, both tests fail at the head                         | **verified**. `parallel-ranges.test.ts` › both "F9: a paused request …" tests: planted `release()` that deletes nothing **and** `allPaused = this.#paused.size > 0` → 2 of 2 fail at the head (`expected null not to be null`) and 4 of 4 across the base and head files. Each half alone: release-only fails 0 of 4; paused-only fails "left open" in both files and "closed" passes in both. Same at base and head. |
+| 5. No production line changes                                                           | **verified**. `git diff 84c899e4...HEAD -- tools/downloader/engine/src` prints nothing; `git diff HEAD origin/main -- tools/downloader/engine/src` (origin/main e46ec2eb) prints nothing. The diff is three files: the helper, the ticket, one dl-114 bullet. dl-108's tests at the end of the file are untouched.                                                                                                    |
+
+CI on this head: `test (ubuntu-latest)` and `test (windows-latest, informational)` both passed on `fa0a03cf`, as did `check`, `CodeQL`, `docker` and both e2e legs. The Windows leg is one run of an informational check; Windows buffer autotuning is unmeasured.
+
+- **med** · no `Done when` line depends on it · **open decision: the fix cuts the failure but does not remove it, and its stated headroom is the median.** The Log says the fill takes "about 0.9 s clear of the window"; the shipped comment says it "takes about 1 s". The fill is 7.5 to 9.2 MB at 8 MB/s (6.3 to 10.4 MB across every series here), bounded by the kernel (this machine: `tcp_wmem` max 4 MiB, `tcp_rmem` max 6 MiB). So what decides a run is how fast the fixture's 8 MB/s is delivered in a starved process. Measured, `-t "F9: a paused request"`, the run and the busy loops pinned with `taskset -c 11`:
+
+  | series (2 tests per run)                     | runs failed | held-pause active time (the fill's cost)       | load average, loops included |
+  | -------------------------------------------- | ----------- | ---------------------------------------------- | ---------------------------- |
+  | base, 11 loops                               | 1 of 20     | 1898 to 1996 ms of 2000                        | 9 to 14                      |
+  | **head, 11 loops**                           | 0 of 20     | 917 to 1870 ms, median 990, 4 of 40 over 1.4 s | 13 to 22                     |
+  | base, 23 loops                               | 15 of 15    | none held in 30 of 30                          | 24 to 32                     |
+  | **head, 23 loops**                           | 4 of 15     | 1191 to 1873 ms; 6 of 30 tests held none       | 16 to 37                     |
+  | A unthrottled, B at 4 MB/s (below), 23 loops | 0 of 15     | 254 to 1182 ms                                 | 24 to 31                     |
+
+  A failing head run shows the mechanism: `SPLIT rate=2545751 bitrate=20000000 active=2002 bytes=5095627` with no pause held, after 26 `JUMP … sinceLast=…` stalls of 110 to 458 ms. The fixture delivered 1.5 to 3 MB/s of its 8, and the meter, which was right about that, split. The cause the Log names is correct; doubling the rate buys a 1.7x margin on the delivered rate (the worst fill, 9.2 MB, needs 4.6 MB/s sustained), not independence from it. The thinnest margin at the Done-when load was 130 ms.
+
+  - Option A, **accept**: Done when 2 is met; the residual failure shows at twice the acceptance load. No further work.
+  - Option B, **pin the fill instead of the rate (recommended)**: Node has no API for a TCP socket's buffers (`socket._handle` exposes `open, bind, listen, connect, bind6, connect6, getsockname, getpeername, setNoDelay, setKeepAlive, reset`; only `dgram` has `setRecvBufferSize`), so the kernel's fill cannot be pinned. The fixture reads `behaviour.perConnectionBps` once per request, though, so in `pausedThenRead` set it to `null` before A's request (the loopback then fills in 0.25 to 1.2 s of window even at a 1/24 share of a core) and to `4_000_000` before B's, with the media rate at `size / 20_000_000`. Measured 15 of 15 at 23 loops, and the same planted one-flag meter fails both tests (2 of 2). Cost: one more builder round on a few lines and the comment; the 4 s wait and the bounds stay.
+
+- **low** · `nfr:maintainability` · The comment above `pausedThenRead` ("took 5.2 to 7.8 MB", "(7.5 to 9.2 MB) take about 1 s", "5 of 20 runs") reads as more headroom than there is: held fills measured 6.3 to 10.4 MB and 0.92 to 1.87 s at the head, and the base rate was 1 of 20 here. If option A is taken, reword it to "about 1 s, up to 1.9 s with 11 busy loops on the core, and the test still fails when the process is starved further".
+- **low** · `nfr:maintainability` · dl-114's new Build bullet says to keep "the origin's rate × `measureMs` well above about 10 MB". At 23 loops 16 MB nominal (8 MB/s × 2 s) failed 4 of 15, because the delivered rate fell to a third of nominal. It should say delivered, and name the unthrottled reader as the way out if option B is taken. Its "5.2 to 9.2 MB" is not an upper bound either (10.4 MB with an unthrottled origin).
+- **low** · open decision, outside dl-120 (its Done when 5 forbids a production change) · no live call site shown · **the meter charges the gap between a released request and the next request's first byte as origin time.** `Meter.record` adds `now - lastAt - paused`; once `release()` empties the members nothing is paused and nothing is being read, so the whole gap counts, with no bytes in it. This is what the builder's 3.4 MB/s was: in an idle base run `JUMP t=5983 added=302 sinceLast=2730 paused=2427 … members=1`, then `JUDGE rate=3410889 active=2003 bytes=6832128`, that is 1582 ms of A, the test's 300 ms sleep, and 118 ms of B. Reproduction with nothing paused: an 8 MB/s origin against 5 MB/s of media, A read for 0.5 s and closed, B starts `gapMs` later, 4 s read:
+
+  | gapMs | judged rate               | mode after 4 s                              |
+  | ----- | ------------------------- | ------------------------------------------- |
+  | 0     | 7956671 B/s               | single                                      |
+  | 300   | 6782876 B/s               | single                                      |
+  | 1000  | 3994964 B/s, `added=1006` | **parallel** (a fast origin, wrongly split) |
+
+  It is not what made the old test fail (those runs split before B existed, `held=NONE`), it is not a regression, and the old test could not see it (its bitrate is 2.5x the origin's rate). In production the gap is ffmpeg's reopen plus the origin's first-byte time, so a few percent of a 5 s window, and a wrong split falls back through `no-speedup`. Options: (a) leave it, since first-byte latency is arguably the origin's; (b) have `release()` of the last member call `interrupt()`, which drops the gap and B's first chunk. Recommend (a) now, and a bullet on dl-114's Meter unit-test item so whichever is chosen gets an assertion. The owner's call.
+
+- **dropped** · "a timer or the meter's arithmetic is the real cause": checked. In every failing base run the pause had not engaged when the window closed (`held=NONE`), so no pause arithmetic ran; `rate=3797040` is `7618763 B / 2.007 s`. The stalls that shave the delivered rate are in finding 1.
+- **dropped** · "at 8 MB/s a 16 MB fill reaches the window again": not on Linux here. The fill was 10.4 MB at most, even with an unthrottled origin. The risk is the delivered rate, finding 1; Windows is unmeasured.
+- **dropped** · scope: no file under `engine/src` changes, the dl-114 bullet's facts match what was measured apart from the two points above, and dl-108's tests are untouched. Nothing to report.
+- **findings** · the hunt returned 7; 4 carried (1 med, 3 low), 3 dropped.
+- NFR: security n/a · performance n/a (the 4 s wait is unchanged) · reliability — finding 1 · maintainability — the two comment findings above.
 
 ## Log
 
