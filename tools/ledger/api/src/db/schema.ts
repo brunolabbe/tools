@@ -481,12 +481,15 @@ const MIGRATIONS: readonly string[] = [
     uploaded_by TEXT NOT NULL REFERENCES people (id)
   );
 
-  -- A receipt filed, once: the proposal as the person confirmed it, and either
-  -- the period line it became or the joint-account row it documents. Never a
-  -- column on the row or the line, which are not edited.
+  -- A receipt filed: the proposal as the person confirmed it, and either the
+  -- period line it became or the joint-account row it documents. Never a column
+  -- on the row or the line, which are not edited. A photo can hold more than one
+  -- receipt, and each is filed once, as its part.
   CREATE TABLE receipt_filings (
     id INTEGER PRIMARY KEY,
-    receipt_id INTEGER NOT NULL UNIQUE REFERENCES receipts (id),
+    receipt_id INTEGER NOT NULL REFERENCES receipts (id),
+    -- Which receipt in the photo, from 1.
+    part INTEGER NOT NULL CHECK (part BETWEEN 1 AND 10),
     merchant TEXT,
     date TEXT,
     subtotal_cents INTEGER,
@@ -497,10 +500,13 @@ const MIGRATIONS: readonly string[] = [
     row_id INTEGER REFERENCES statement_rows (id),
     filed_at TEXT NOT NULL,
     filed_by TEXT NOT NULL,
-    CHECK ((period_line_id IS NULL) <> (row_id IS NULL))
+    CHECK ((period_line_id IS NULL) <> (row_id IS NULL)),
+    UNIQUE (receipt_id, part)
   );
 
-  CREATE INDEX receipt_filings_row ON receipt_filings (row_id) WHERE row_id IS NOT NULL;
+  -- A row is documented by one receipt: two members photographing the same
+  -- purchase must not both attach to it (gate 1, F3).
+  CREATE UNIQUE INDEX receipt_filings_row ON receipt_filings (row_id) WHERE row_id IS NOT NULL;
   `,
 ];
 

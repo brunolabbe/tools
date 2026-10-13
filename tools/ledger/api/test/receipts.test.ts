@@ -10,7 +10,7 @@ import { Buffer } from "node:buffer";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { MAX_RECEIPT_PHOTO_BYTES, ROUTES } from "@ledger/contract";
 import type {
   ErrorResponse,
@@ -21,9 +21,11 @@ import type {
   ReceiptMatchesResponse,
   ReceiptProposal,
 } from "@ledger/contract";
+import { createModelReader } from "@ledger/receipts";
 import type { ReceiptReader } from "@ledger/receipts";
 import { loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
+import type { AppLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
 import {
@@ -84,7 +86,13 @@ afterEach(async () => {
 });
 
 async function start(
-  options: { reader?: ReceiptReader | null; files?: boolean; lines?: string[] } = {},
+  options: {
+    reader?: ReceiptReader | null;
+    files?: boolean;
+    lines?: string[];
+    logger?: AppLogger;
+    apiKey?: string;
+  } = {},
 ): Promise<App> {
   if (options.files === true) dataDir = mkdtempSync(path.join(tmpdir(), "ledger-receipts-"));
   const lines = options.lines;
@@ -96,12 +104,14 @@ async function start(
       rateLimitReadsPerMinute: 0,
       rateLimitWritesPerMinute: 0,
       // Never the environment's: a key on the host must not reach a test.
-      receiptReader: { apiKey: undefined, model: "claude-haiku-5-5" },
+      receiptReader: { apiKey: options.apiKey, model: "claude-haiku-5-5" },
     },
-    logger: createLogger({
-      level: lines === undefined ? "silent" : "debug",
-      ...(lines === undefined ? {} : { write: (line: string) => lines.push(line) }),
-    }),
+    logger:
+      options.logger ??
+      createLogger({
+        level: lines === undefined ? "silent" : "debug",
+        ...(lines === undefined ? {} : { write: (line: string) => lines.push(line) }),
+      }),
     now: () => NOW,
     fetch: jwksFetch(() => [KEY]).fetch,
     receiptReader: options.reader === undefined ? countingReader().reader : options.reader,
@@ -151,12 +161,13 @@ async function read(target: App, id: number, who = ALEX) {
   });
 }
 
-async function file(target: App, id: number, request: unknown, who = ALEX) {
+/** Files the first receipt in the photo unless the request names another `part`. */
+async function file(target: App, id: number, request: Record<string, unknown>, who = ALEX) {
   return await target.server.inject({
     method: "POST",
     url: url(ROUTES.receiptFile, id),
     headers: as(who),
-    payload: request as Record<string, unknown>,
+    payload: { part: 1, ...request },
   });
 }
 
@@ -178,6 +189,51 @@ function asLine(amountCents: number, extra: Record<string, unknown> = {}) {
     chargedTo: null,
     ...extra,
   };
+}
+
+/** A deposit, the 26,50 $ charge `READ` matches, and one a cent off it. */
+async function pasteRows(target: App): Promise<void> {
+  const paste = renderPaste(
+    withBalances(
+      [
+        {
+          date: "2026-10-01",
+          category: "Virements",
+          description: "Virement /Caisse",
+          amountCents: 50_000,
+        },
+        {
+          date: "2026-10-03",
+          category: "Épicerie",
+          description: "Achat /Marché Exemple",
+          amountCents: -2_650,
+        },
+        {
+          date: "2026-10-04",
+          category: "Épicerie",
+          description: "Achat /Autre",
+          amountCents: -2_651,
+        },
+      ],
+      100_000,
+    ),
+  );
+  const pasted = await target.server.inject({
+    method: "POST",
+    url: ROUTES.statements,
+    headers: as(ALEX),
+    payload: { text: paste },
+  });
+  expect(pasted.statusCode, pasted.body).toBe(200);
+}
+
+/** The stored row the 26,50 $ charge is. */
+function chargeRow(target: App): number {
+  return (
+    homeBooks(target).prepare("SELECT id FROM statement_rows WHERE amount_cents = -2650").get() as {
+      id: number;
+    }
+  ).id;
 }
 
 function count(target: App, table: string): number {
@@ -283,7 +339,7 @@ describe("reading a receipt", () => {
     const target = await start({ reader: counted.reader });
     const receipt = await uploaded(target);
 
-    // Uploading, asking for matches and filing by hand never call it.
+    // Uploading and asking for matches never call it; filing is the F1 test below.
     await matches(target, receipt.id, 2_650, "2026-10-04");
     expect(counted.calls).toBe(0);
 
@@ -394,38 +450,7 @@ describe("filing a receipt", () => {
 
   test("a proposal matching a stored joint-account row is offered, and confirming it attaches the receipt and adds no line", async () => {
     const target = await start();
-    const paste = renderPaste(
-      withBalances(
-        [
-          {
-            date: "2026-10-01",
-            category: "Virements",
-            description: "Virement /Caisse",
-            amountCents: 50_000,
-          },
-          {
-            date: "2026-10-03",
-            category: "Épicerie",
-            description: "Achat /Marché Exemple",
-            amountCents: -2_650,
-          },
-          {
-            date: "2026-10-04",
-            category: "Épicerie",
-            description: "Achat /Autre",
-            amountCents: -2_651,
-          },
-        ],
-        100_000,
-      ),
-    );
-    const pasted = await target.server.inject({
-      method: "POST",
-      url: ROUTES.statements,
-      headers: as(ALEX),
-      payload: { text: paste },
-    });
-    expect(pasted.statusCode, pasted.body).toBe(200);
+    await pasteRows(target);
     const receipt = await uploaded(target);
 
     const offered = (
@@ -518,15 +543,34 @@ describe("filing a receipt", () => {
 describe("what is logged", () => {
   test("never the photo, and never the key", async () => {
     const lines: string[] = [];
-    const target = await start({ lines });
+    const logger = createLogger({ level: "debug", write: (line) => lines.push(line) });
+    // The real reader, built from a configured key, against an API that refuses
+    // the key and quotes it back (gate 1, F7): no test reaches a model.
+    const secret = "sk-ant-api-KEY-MARKER";
+    const reader = createModelReader({
+      provider: "anthropic",
+      apiKey: secret,
+      maxRetries: 0,
+      logger,
+      fetch: async () =>
+        Response.json(
+          { type: "error", error: { type: "authentication_error", message: `bad key ${secret}` } },
+          { status: 401 },
+        ),
+    });
+    const target = await start({ reader, logger, apiKey: secret });
     const photo = jpeg();
     photo.write("PHOTO-MARKER", 8);
     const sent = await upload(target, photo);
-    await read(target, sent.json<Receipt>().id);
+    const refused = await read(target, sent.json<Receipt>().id);
     await upload(target, Buffer.from("PHOTO-MARKER and no image"));
 
     const log = lines.join("\n");
+    expect(refused.statusCode).toBe(500);
     expect(lines.length).toBeGreaterThan(0);
+    expect(log).toContain("the receipt reader refused the request");
+    expect(log).not.toContain("KEY-MARKER");
+    expect(log).not.toContain("sk-ant");
     expect(log).not.toContain("PHOTO-MARKER");
     expect(log).not.toContain(photo.toString("base64").slice(0, 16));
   });
@@ -557,5 +601,159 @@ describe("the receipt reader's configuration", () => {
     expect(bootWithCustomHeaders).not.toThrow(/other/u);
     // With no key nothing builds the SDK, so the variable reaches nothing.
     expect(() => loadApiConfig({}, { ANTHROPIC_CUSTOM_HEADERS: "x" })).not.toThrow();
+  });
+});
+
+// --- Gate 1's findings (lg-8) ---
+
+describe("filing never reaches the model (gate 1, F1)", () => {
+  test("filing as a line and onto a row calls no reader", async () => {
+    const counted = countingReader();
+    const target = await start({ reader: counted.reader });
+    await pasteRows(target);
+    const first = await uploaded(target);
+    const second = await uploaded(target);
+
+    const asALine = await file(target, first.id, { proposal: READ, destination: asLine(2_650) });
+    const onARow = await file(target, second.id, {
+      proposal: READ,
+      destination: { to: "row", rowId: chargeRow(target) },
+    });
+
+    expect([asALine.statusCode, onARow.statusCode]).toEqual([200, 200]);
+    expect(counted.calls).toBe(0);
+  });
+});
+
+describe("a photo of two receipts (gate 1, F2)", () => {
+  test("files each receipt the photo holds, each once", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+    const answer = (await read(target, receipt.id)).json<ReadReceiptResponse>();
+    expect(answer.proposals).toHaveLength(2);
+    const [marche, quincaillerie] = answer.proposals.map((checked) => checked.proposal);
+
+    const first = await file(target, receipt.id, {
+      part: 1,
+      proposal: marche,
+      destination: asLine(2_650),
+    });
+    const second = await file(target, receipt.id, {
+      part: 2,
+      proposal: quincaillerie,
+      destination: asLine(2_651, { note: "Quincaillerie" }),
+    });
+    const again = await file(target, receipt.id, {
+      part: 2,
+      proposal: quincaillerie,
+      destination: asLine(2_651),
+    });
+
+    expect([first.statusCode, second.statusCode], second.body).toEqual([200, 200]);
+    expect(second.json<ReceiptFiling>()).toMatchObject({ receiptId: receipt.id, part: 2 });
+    expect(again.statusCode).toBe(409);
+    expect(again.json<ErrorResponse>().error.code).toBe("RECEIPT_ALREADY_FILED");
+    expect(count(target, "period_lines")).toBe(2);
+  });
+
+  test("refuses a part past the receipts a photo can hold", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+
+    const response = await file(target, receipt.id, {
+      part: 11,
+      proposal: READ,
+      destination: asLine(2_650),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(count(target, "receipt_filings")).toBe(0);
+  });
+});
+
+describe("a row documented once (gate 1, F3)", () => {
+  test("refuses a second receipt the row a receipt already documents, and files nothing", async () => {
+    const target = await start();
+    await pasteRows(target);
+    const first = await uploaded(target);
+    const second = await uploaded(target, SAM);
+    const row = { proposal: READ, destination: { to: "row", rowId: chargeRow(target) } };
+
+    const attached = await file(target, first.id, row);
+    const refused = await file(target, second.id, row, SAM);
+
+    expect(attached.statusCode).toBe(200);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json<ErrorResponse>().error.code).toBe("ROW_ALREADY_DOCUMENTED");
+    expect(count(target, "receipt_filings")).toBe(1);
+  });
+});
+
+describe("the paid route (gate 1, F4)", () => {
+  test("takes a bucket of its own, five reads a minute a person by default", async () => {
+    const counted = countingReader();
+    const target = await start({ reader: counted.reader });
+    const receipt = await uploaded(target);
+
+    const statuses = [];
+    for (let attempt = 0; attempt < 6; attempt++) {
+      statuses.push((await read(target, receipt.id)).statusCode);
+    }
+
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+    expect(counted.calls).toBe(5);
+    // The writes' bucket is not the one spent.
+    expect((await upload(target)).statusCode).toBe(200);
+  });
+
+  test("refuses to read a receipt already filed, and calls no reader for it", async () => {
+    const counted = countingReader();
+    const target = await start({ reader: counted.reader });
+    const receipt = await uploaded(target);
+    await file(target, receipt.id, { proposal: READ, destination: asLine(2_650) });
+
+    const response = await read(target, receipt.id);
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<ErrorResponse>().error.code).toBe("RECEIPT_ALREADY_FILED");
+    expect(counted.calls).toBe(0);
+  });
+
+  test("hands the reader the request's signal, which a caller hanging up aborts", async () => {
+    const seen: { signal?: AbortSignal | undefined; aborted: boolean } = { aborted: false };
+    const started: { resolve?: () => void } = {};
+    const reading = new Promise<void>((resolve) => {
+      started.resolve = resolve;
+    });
+    const reader: ReceiptReader = {
+      model: "fake-haiku",
+      async read(_photo, signal) {
+        seen.signal = signal;
+        started.resolve?.();
+        if (signal === undefined) return [];
+        return await new Promise<ReceiptProposal[]>((_resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            seen.aborted = true;
+            reject(new Error("aborted"));
+          });
+        });
+      },
+    };
+    const target = await start({ reader });
+    const receipt = await uploaded(target);
+    await target.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = target.server.addresses()[0];
+    const caller = new AbortController();
+
+    const request = fetch(
+      `http://127.0.0.1:${String(address?.port)}${url(ROUTES.receiptRead, receipt.id)}`,
+      { method: "POST", headers: as(ALEX), signal: caller.signal },
+    ).catch(() => undefined);
+    await reading;
+    caller.abort();
+    await request;
+
+    expect(seen.signal).toBeInstanceOf(AbortSignal);
+    await vi.waitFor(() => expect(seen.aborted).toBe(true), { timeout: 2_000 });
   });
 });

@@ -21,7 +21,7 @@
  * after them are the store's (lg-2), the next two are the rules' and the
  * inbox's (lg-4), the next is the salaries' (lg-5), the next four are the
  * periods' (lg-6), the next is the spending categories' (lg-15), the next
- * is the household directory's (lg-20), and the last five are the receipts'
+ * is the household directory's (lg-20), and the last six are the receipts'
  * (lg-8).
  */
 
@@ -164,6 +164,12 @@ export const LEDGER_ERROR_CODES = [
    * the receipt is typed by hand rather than retried.
    */
   "RECEIPT_UNREADABLE",
+  /**
+   * The joint-account row named already has a receipt documenting it: the other
+   * person photographed the same purchase, most likely. One row, one receipt
+   * (gate 1, F3); the caller files this one as a line, or not at all.
+   */
+  "ROW_ALREADY_DOCUMENTED",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -206,6 +212,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   RECEIPT_READER_UNCONFIGURED:
     "Reading receipts is not set up on this server. Type the receipt in instead.",
   RECEIPT_UNREADABLE: "The receipt could not be read. Type it in instead.",
+  ROW_ALREADY_DOCUMENTED:
+    "That row already has a receipt. It may have been attached since it was offered.",
 };
 
 /**

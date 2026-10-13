@@ -63,6 +63,7 @@ beforeEach(() => {
   vi.mocked(fileReceipt).mockResolvedValue({
     id: 1,
     receiptId: 3,
+    part: 1,
     proposal: READ,
     periodLineId: 9,
     rowId: null,
@@ -109,6 +110,7 @@ test("typing it in never sends the photo, and starts the date at the upload's", 
   expect(vi.mocked(fileReceipt).mock.calls[0]).toEqual([
     3,
     {
+      part: 1,
       proposal: {
         merchant: "Dépanneur",
         date: "2026-10-05",
@@ -156,6 +158,7 @@ test("files the charge with its tip, which differs from the total", async () => 
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(vi.mocked(fileReceipt).mock.calls[0]?.[1]).toEqual({
+    part: 1,
     proposal: READ,
     destination: {
       to: "line",
@@ -188,6 +191,7 @@ test("offers the joint-account rows for the charge, and attaches the receipt to 
   expect(fetchReceiptMatches).toHaveBeenCalledWith(3, 2_650, "2026-10-04");
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(vi.mocked(fileReceipt).mock.calls[0]?.[1]).toEqual({
+    part: 1,
     proposal: READ,
     destination: { to: "row", rowId: 41 },
   });
@@ -224,4 +228,35 @@ test("refuses a photo over the cap without sending it", async () => {
 
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(uploadReceipt).not.toHaveBeenCalled();
+});
+
+// Gate 1, F2: each receipt in a photo of two is filed, as its own part.
+test("files each receipt in a photo of two, and goes back to the one not filed yet", async () => {
+  const second = { ...READ, merchant: "Quincaillerie", total: 999 };
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 3,
+    model: "claude-haiku-5-5",
+    proposals: [
+      { proposal: READ, flags: [] },
+      { proposal: second, flags: ["parts-differ"] },
+    ],
+  });
+  await takePhoto();
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Quincaillerie, 9.99 $" }));
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Marché Exemple, 26.50 $" }));
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(2));
+  const calls = vi.mocked(fileReceipt).mock.calls;
+  expect(calls.map(([, request]) => [request.part, request.proposal.merchant])).toEqual([
+    [2, "Quincaillerie"],
+    [1, "Marché Exemple"],
+  ]);
+  expect(await screen.findByText("Filed as alex's line in the period.")).toBeTruthy();
+  // Both filed: nothing more to pick, and no second read.
+  expect(screen.queryByRole("button", { name: /Quincaillerie|Marché/u })).toBeNull();
+  expect(readReceipt).toHaveBeenCalledTimes(1);
 });

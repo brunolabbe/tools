@@ -633,6 +633,7 @@ const WRITES: Write[] = [
         h,
         url,
         {
+          part: 1,
           proposal,
           destination: {
             to: "line",
@@ -652,7 +653,7 @@ const WRITES: Write[] = [
         app,
         h,
         ROUTES.receiptFile.replace(":id", String(second.id)),
-        { proposal, destination: { to: "row", rowId: boutique } },
+        { part: 1, proposal, destination: { to: "row", rowId: boutique } },
         this.route,
       );
     },

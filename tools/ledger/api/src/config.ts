@@ -61,6 +61,12 @@ export interface ApiConfig {
    */
   rateLimitReadsPerMinute: number;
   rateLimitWritesPerMinute: number;
+  /**
+   * Receipt reads a person may ask for per minute (lg-8's gate 1, F4): the one
+   * route that costs money, so a bucket of its own, like the planner's runs,
+   * and not the writes' sixty. Zero disables it.
+   */
+  rateLimitReceiptReadsPerMinute: number;
 
   /** `NODE_ENV=production`, which the image sets. Decides what may not be configured. */
   production: boolean;
@@ -128,6 +134,9 @@ export const API_DEFAULTS = {
   // handful of reads, so neither is near these; a script is.
   rateLimitReadsPerMinute: 120,
   rateLimitWritesPerMinute: 60,
+  // A person reads a receipt or two at a time; five a minute is the planner's
+  // runs, and a loop meets it at once.
+  rateLimitReceiptReadsPerMinute: 5,
 } as const satisfies Partial<Record<string, unknown>>;
 
 function int(
@@ -296,6 +305,11 @@ export function loadApiConfig(
     rateLimitWritesPerMinute:
       overrides.rateLimitWritesPerMinute ??
       int(env["RATE_LIMIT_WRITES_PER_MINUTE"], API_DEFAULTS.rateLimitWritesPerMinute, { min: 0 }),
+    rateLimitReceiptReadsPerMinute:
+      overrides.rateLimitReceiptReadsPerMinute ??
+      int(env["RATE_LIMIT_RECEIPT_READS_PER_MINUTE"], API_DEFAULTS.rateLimitReceiptReadsPerMinute, {
+        min: 0,
+      }),
     production: overrides.production ?? isProduction(env["NODE_ENV"]),
     access: overrides.access ?? loadAccessConfig(env),
     receiptReader: overrides.receiptReader ?? loadReceiptReaderConfig(env),

@@ -62,6 +62,7 @@ interface ReceiptColumns {
 interface FilingColumns {
   id: number;
   receipt_id: number;
+  part: number;
   merchant: string | null;
   date: string | null;
   subtotal_cents: number | null;
@@ -88,6 +89,7 @@ function toFiling(columns: FilingColumns): ReceiptFiling {
   return {
     id: columns.id,
     receiptId: columns.receipt_id,
+    part: columns.part,
     proposal: {
       merchant: columns.merchant,
       date: columns.date,
@@ -147,16 +149,23 @@ export async function uploadReceipt(context: UploadContext, body: unknown): Prom
 /**
  * What the reader makes of the receipt's photo, each proposal checked. Only
  * this reaches a model, and only when the person asks; nothing is stored.
+ *
+ * A receipt with anything filed from it is not read again (gate 1, F4): the
+ * screen holds the proposals it filed from, and another read would be paid for
+ * nothing. `signal` is the request's, so a caller who hangs up stops the call.
  */
 export async function readReceipt(
   context: { db: Database; photos: PhotoStore; household: string },
   reader: ReceiptReader | undefined,
   id: number,
+  signal?: AbortSignal,
 ): Promise<ReadReceiptResponse> {
   const receipt = storedReceipt(context.db, id);
+  const filed = context.db.prepare("SELECT id FROM receipt_filings WHERE receipt_id = ?").get(id);
+  if (filed !== undefined) throw new AppError("RECEIPT_ALREADY_FILED");
   if (reader === undefined) throw new AppError("RECEIPT_READER_UNCONFIGURED");
   const bytes = await context.photos.load(context.household, receipt.photo);
-  const proposals = await reader.read({ bytes, mediaType: receipt.media_type });
+  const proposals = await reader.read({ bytes, mediaType: receipt.media_type }, signal);
   return {
     receiptId: receipt.id,
     model: reader.model,
@@ -193,7 +202,8 @@ export function receiptMatches(
 }
 
 /**
- * Files the receipt as the person confirmed it, once. A line is paid by
+ * Files one receipt in the photo as the person confirmed it — its `part`, once;
+ * a photo of two receipts files twice (gate 1, F2). A line is paid by
  * whoever uploaded the photo, and entered by whoever confirms; a row is only
  * documented, and gains no line. Either way the filing records the proposal as
  * confirmed, which lg-10 reads its items against.
@@ -207,8 +217,8 @@ export function fileReceipt(
     .transaction(() => {
       const receipt = storedReceipt(context.db, id);
       const filed = context.db
-        .prepare("SELECT id FROM receipt_filings WHERE receipt_id = ?")
-        .get(id);
+        .prepare("SELECT id FROM receipt_filings WHERE receipt_id = ? AND part = ?")
+        .get(id, request.part);
       if (filed !== undefined) throw new AppError("RECEIPT_ALREADY_FILED");
 
       const { destination, proposal } = request;
@@ -234,16 +244,21 @@ export function fileReceipt(
           .prepare("SELECT id FROM statement_rows WHERE id = ?")
           .get(destination.rowId);
         if (row === undefined) throw new AppError("ROW_NOT_FOUND");
+        const documented = context.db
+          .prepare("SELECT id FROM receipt_filings WHERE row_id = ?")
+          .get(destination.rowId);
+        if (documented !== undefined) throw new AppError("ROW_ALREADY_DOCUMENTED");
         rowId = destination.rowId;
       }
 
       const result = context.db
         .prepare(
-          `INSERT INTO receipt_filings (receipt_id, merchant, date, subtotal_cents, gst_cents, qst_cents, total_cents, period_line_id, row_id, filed_at, filed_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO receipt_filings (receipt_id, part, merchant, date, subtotal_cents, gst_cents, qst_cents, total_cents, period_line_id, row_id, filed_at, filed_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
+          request.part,
           proposal.merchant,
           proposal.date,
           proposal.subtotal,

@@ -118,7 +118,9 @@ it catches.
 `api/src/rate-limit.ts`, over core's token bucket, keyed on the household and
 the person `personOf(request)` gives, and not the address — two households can
 each have an alex (lg-21). A route added without one is unlimited, and
-`api/test/route-limits.test.ts` walks `ROUTES` so that it fails instead.
+`api/test/route-limits.test.ts` walks `ROUTES` so that it fails instead. The
+one route that costs money, a receipt read, takes a bucket of its own instead,
+five a minute (`RATE_LIMIT_RECEIPT_READS_PER_MINUTE`, lg-8).
 
 **Never log a request's headers.** Behind Access every request carries a signed
 identity token in a header and a cookie, and `logger.ts` censors both as a
@@ -208,12 +210,17 @@ names invented descriptions.
 keeps the photo, at `<data>/receipts/<household>/<uuid>.<ext>` under a name the
 API made — never one a request gave — and reads nothing; only
 `POST /api/receipts/:id/read` hands it to the reader, and the screen names the
-model beside that button. Filing is a third request and the only one that
-writes the books: a line paid by **whoever uploaded the photo**, or the receipt
-attached to the row it documents. A photo is never logged, and **no test calls
-a real model**: `createApp` takes a `receiptReader`, and every test that reads
-hands in a fake (`api/test/receipts.test.ts`); `receipts/test` answers the real
-reader from fixtures through its `fetch`.
+model beside that button; a receipt with anything filed from it is not read
+again. Filing is a third request and the only one that writes the books: a line
+paid by **whoever uploaded the photo**, or the receipt attached to the row it
+documents. A photo of several receipts files each as its own `part`, once; a row
+is documented by one receipt (`ROW_ALREADY_DOCUMENTED`). A photo is never
+logged, and **no test calls a real model**: `createApp` takes a
+`receiptReader`, and every test that reads hands in a fake
+(`api/test/receipts.test.ts`); `receipts/test` answers the real reader from
+fixtures through its `fetch`; and the ledger's vitest project clears the host's
+`ANTHROPIC_*` variables before every file
+(`api/test/helpers/no-model-environment.ts`).
 
 **Error `details` carry bank text, so a log carries their names and no values.**
 A refused statement's details name the offending row's description, amount and

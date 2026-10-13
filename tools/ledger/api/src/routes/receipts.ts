@@ -25,10 +25,11 @@ import type {
   UploadedReceipt,
 } from "@ledger/contract";
 import type { ReceiptReader } from "@ledger/receipts";
+import { RateLimiter } from "@webtools/core/rate-limit";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
 import { booksOf, personOf } from "../identity.ts";
-import { rateLimitsFor } from "../rate-limit.ts";
+import { createRateLimitHook, rateLimitsFor } from "../rate-limit.ts";
 import type { PhotoStore } from "../receipt-photos.ts";
 import { fileReceipt, readReceipt, receiptMatches, uploadReceipt } from "../receipts.ts";
 import { bodyOf, idOf } from "./periods.ts";
@@ -52,6 +53,12 @@ export function registerReceiptRoutes(
 ): void {
   const { read, write } = rateLimitsFor(context);
   const { reader, photos } = options;
+  // The paid route's own bucket (gate 1, F4), per person like the others.
+  const reading = createRateLimitHook({
+    limiter: new RateLimiter({ perMinute: context.config.rateLimitReceiptReadsPerMinute }),
+    logger: context.logger,
+    scope: "receipt-reads",
+  });
 
   void app.register(async (scope) => {
     scope.removeAllContentTypeParsers();
@@ -80,11 +87,17 @@ export function registerReceiptRoutes(
   });
 
   // The one route that reaches a model, and only when the person asks.
-  app.post(ROUTES.receiptRead, { onRequest: write }, async (request) => {
+  app.post(ROUTES.receiptRead, { onRequest: reading }, async (request, reply) => {
+    // A caller who hangs up before the answer stops the model's call too.
+    const hungUp = new AbortController();
+    reply.raw.on("close", () => {
+      if (!reply.raw.writableEnded) hungUp.abort();
+    });
     const body: ReadReceiptResponse = await readReceipt(
       photosContext(request, photos),
       reader,
       idOf(request, "receipt"),
+      hungUp.signal,
     );
     return body;
   });

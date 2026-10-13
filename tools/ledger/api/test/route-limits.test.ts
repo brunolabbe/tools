@@ -39,6 +39,7 @@ async function startTight(): Promise<App> {
       access: accessConfig({ devIdentity: "alex@example.test" }),
       rateLimitReadsPerMinute: 1,
       rateLimitWritesPerMinute: 1,
+      rateLimitReceiptReadsPerMinute: 1,
     },
   });
   return app;

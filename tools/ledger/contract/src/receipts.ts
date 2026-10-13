@@ -90,10 +90,21 @@ export interface CheckedProposal {
   flags: ReceiptFlag[];
 }
 
-/** What filed a receipt: a period line, or a joint-account row it documents. */
+/**
+ * How many receipts one photo may hold and each be filed (gate 1, F2): far past
+ * the two side by side lg-8 measured.
+ */
+export const MAX_RECEIPTS_PER_PHOTO = 10;
+
+/**
+ * What filed a receipt: a period line, or a joint-account row it documents.
+ * A photo holding more than one receipt files each as its own `part`, once.
+ */
 export interface ReceiptFiling {
   id: number;
   receiptId: number;
+  /** Which receipt in the photo, from 1: the read's proposals in order, or 1 for one typed in. */
+  part: number;
   /** The proposal as the person confirmed it. */
   proposal: ReceiptProposal;
   /** The line it became, or `null` when it was attached to a row. */
@@ -187,11 +198,14 @@ export type ReceiptDestination =
 
 /** `POST /api/receipts/:id/file`: the confirmation. Nothing is filed without it. */
 export interface FileReceiptRequest {
+  /** Which receipt in the photo is filed, from 1; each is filed once. */
+  part: number;
   proposal: ReceiptProposal;
   destination: ReceiptDestination;
 }
 
 export const fileReceiptRequestSchema = z.strictObject({
+  part: z.number().int().min(1).max(MAX_RECEIPTS_PER_PHOTO),
   proposal: receiptProposalSchema,
   destination: z.discriminatedUnion("to", [
     z.strictObject({

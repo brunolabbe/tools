@@ -286,3 +286,74 @@ as it does for the planner.
 
 **Fold-ins.** None was free. lg-10 extends this reader and is left to its own
 ticket, as the dispatch said.
+
+### 2026-10-13 — the owner's answers, and gate 1's findings repaired
+
+**Decided by the owner, 2026-10-13.**
+
+1. _Can a proposal the check flags be filed once the person confirms it?_ The
+   options were that the flags stay advisory, or that filing is blocked until
+   nothing is flagged. **Chosen: advisory, fileable once the person confirms.**
+   The builder recommended this. A typed receipt with no subtotal, or a note,
+   could not be filed otherwise.
+2. _Gate 1, F2: a photo of two receipts could file only one._ The options were:
+   - (A) one filing per proposal, by changing `receipt_filings` while migration
+     8 is unmerged;
+   - (B) one filing per photo, with the filed screen saying another receipt is
+     in it;
+   - (C) recording it on lg-10.
+
+   **Chosen: (A).** The gate recommended it.
+
+3. _Gate 1, F3 and F4, both low._ The options were to fix them now or to leave
+   them recorded, which is the severity floor's default. **Chosen: fix both
+   in this round.** The orchestrator recommended it.
+
+**What changed.** Each new test failed before its change and passes after it.
+
+- **F2.** A filing names its `part`, the receipt's place in the photo from 1,
+  up to `MAX_RECEIPTS_PER_PHOTO` (10). Each part is filed once, as
+  `UNIQUE (receipt_id, part)`. After one is filed, the screen goes back to the
+  others, and "Type another receipt from this photo" files the next part by
+  hand.
+  - Red: the API test "files each receipt the photo holds, each once" failed,
+    with every `part` refused by the old schema (13 of 31 red). The web test
+    "files each receipt in a photo of two…", run against the committed screen,
+    failed with `Unable to find role="button" and name "Marché Exemple, 26.50 $"`
+    (4 of 9 red).
+- **F3.** `receipt_filings_row` is now a partial unique index, and attaching a
+  receipt to a row that already has one is refused as the new
+  `ROW_ALREADY_DOCUMENTED` (409).
+  - Red: with the index alone the API answered `500`, and without it `200`.
+- **F4.** A receipt read takes a bucket of its own, five a minute a person
+  (`RATE_LIMIT_RECEIPT_READS_PER_MINUTE`), and a receipt with anything filed
+  from it is refused a read as `RECEIPT_ALREADY_FILED`. The route also passes
+  the request's signal to `reader.read`, aborted when the response closes
+  unsent. That was three lines, so it is in.
+  - Red: the bucket test got `[200, 200, 200, 200, 200, 200]`. The filed test
+    got `200`. The signal test got `expected undefined to be an instance of
+AbortSignal`.
+  - With the abort call removed, the signal test still fails:
+    `expected false to be true`.
+- **F1.** "filing as a line and onto a row calls no reader" files both ways
+  and asserts no call. With the gate's mutation, a `reader.read` call at the
+  top of the file handler, it fails with `expected 2 to be +0`.
+- **F6.** The ledger's vitest project clears every `ANTHROPIC_*` variable and
+  `RECEIPT_MODEL` before each file (`api/test/helpers/no-model-environment.ts`,
+  from `setupFiles` in the root `vitest.config.ts`). Twelve test files build an
+  app directly, so a helper would not have reached them all.
+  - Red: with both variables set, `npx vitest run --project ledger
+tools/ledger/api` gave 17 of 28 files and 332 of 525 tests failed.
+  - After: 28 of 28 files, 525 of 525 tests.
+- **F7.** "never the photo, and never the key" now builds the real reader from
+  a configured key against a `401` that quotes the key back. It asserts that
+  the key, `sk-ant` and the photo are absent from a non-empty log.
+  - Red: adding `message: error.message` to the reader's failure log line fails
+    it, with `not to contain 'KEY-MARKER'`.
+
+**Left recorded, unfixed, as the dispatch said:** F5, the photos accumulating
+with no cap, and F8, a provider `400` or `408` answering `INTERNAL`.
+
+**What the first entry said that is no longer so.** "A receipt is filed once"
+now means once per part. A row a receipt documents is refused a second one,
+where before it was only left out of the offers.

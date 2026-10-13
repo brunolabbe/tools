@@ -16,7 +16,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { checkReceipt, formatCents, parseTypedAmountCents } from "@ledger/books";
-import { AppError, MAX_RECEIPT_PHOTO_BYTES } from "@ledger/contract";
+import { AppError, MAX_RECEIPT_PHOTO_BYTES, MAX_RECEIPTS_PER_PHOTO } from "@ledger/contract";
 import type {
   CheckedProposal,
   ReceiptFlag,
@@ -93,11 +93,29 @@ function proposalOf(draft: Draft): ReceiptProposal {
   };
 }
 
+/**
+ * Where a photo stands: what was read from it, if anything, and which of the
+ * receipts it holds are filed. A photo of two receipts files each as its own
+ * part, from 1 (gate 1, F2).
+ */
+interface Photo {
+  receipt: UploadedReceipt;
+  read: CheckedProposal[] | null;
+  filed: number[];
+}
+
 type Stage =
   | { step: "photo" }
-  | { step: "kept"; receipt: UploadedReceipt; read: CheckedProposal[] | null }
-  | { step: "form"; receipt: UploadedReceipt }
-  | { step: "filed"; said: string };
+  | ({ step: "kept"; said: string | null } & Photo)
+  | ({ step: "form"; part: number } & Photo)
+  | ({ step: "filed"; said: string } & Photo);
+
+/** The first part of the photo not filed yet. */
+function nextPart(filed: readonly number[]): number {
+  let part = 1;
+  while (filed.includes(part)) part += 1;
+  return part;
+}
 
 export function Receipts(): React.ReactElement {
   const id = useId();
@@ -150,10 +168,13 @@ export function Receipts(): React.ReactElement {
     setProblem(null);
   };
 
-  const open = (receipt: UploadedReceipt, proposal: ReceiptProposal | null): void => {
-    setDraft(draftOf(proposal, receipt));
+  const open = (photo: Photo, part: number, proposal: ReceiptProposal | null): void => {
+    setDraft(draftOf(proposal, photo.receipt));
+    setSpendingCategoryId(null);
+    setTheirs(false);
     setMatches(null);
-    setStage({ step: "form", receipt });
+    // The photo's own three fields, not a stage spread in whole: its `step` would win.
+    setStage({ step: "form", part, receipt: photo.receipt, read: photo.read, filed: photo.filed });
   };
 
   const choose = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -166,7 +187,7 @@ export function Receipts(): React.ReactElement {
     }
     void run(async () => {
       const receipt = await uploadReceipt(photo);
-      setStage({ step: "kept", receipt, read: null });
+      setStage({ step: "kept", receipt, read: null, filed: [], said: null });
     });
   };
 
@@ -182,6 +203,17 @@ export function Receipts(): React.ReactElement {
       <section className="card" aria-labelledby={`${id}-title`}>
         <h2 id={`${id}-title`}>Receipt</h2>
         {stage.step === "filed" && <output>{stage.said}</output>}
+        {stage.step === "filed" && nextPart(stage.filed) <= MAX_RECEIPTS_PER_PHOTO && (
+          <div className="actions">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => open(stage, nextPart(stage.filed), null)}
+            >
+              Type another receipt from this photo
+            </button>
+          </div>
+        )}
         <label className="camera">
           {busy ? "Keeping the photo…" : "Take a photo of a receipt"}
           <input
@@ -201,37 +233,43 @@ export function Receipts(): React.ReactElement {
   }
 
   if (stage.step === "kept") {
-    const { receipt, read } = stage;
+    const { receipt, read, filed } = stage;
     const ask = (): void => {
       void run(async () => {
         const answer = await readReceipt(receipt.id);
-        if (answer.proposals.length === 1) open(receipt, answer.proposals[0]?.proposal ?? null);
-        else setStage({ step: "kept", receipt, read: answer.proposals });
+        const photo = { receipt, read: answer.proposals, filed };
+        const [only] = answer.proposals;
+        if (answer.proposals.length === 1 && only !== undefined) open(photo, 1, only.proposal);
+        else setStage({ step: "kept", ...photo, said: null });
       });
     };
+    // Each receipt read keeps its place in the photo as its part, filed or not.
+    const waiting = (read ?? [])
+      .map((checked, index) => ({ checked, part: index + 1 }))
+      .filter(({ part }) => !filed.includes(part));
     return (
       <section className="card" aria-labelledby={`${id}-title`}>
         <h2 id={`${id}-title`}>Receipt</h2>
-        <p>Photo kept.</p>
+        {stage.said === null ? <p>Photo kept.</p> : <output>{stage.said}</output>}
         {read !== null && read.length === 0 && (
           <p className="bad">Nothing in the photo was read as a receipt. Type it in instead.</p>
         )}
-        {read !== null && read.length > 1 && (
+        {read !== null && (read.length > 1 || filed.length > 0) && waiting.length > 0 && (
           <div className="offer">
-            <h3>The photo holds {read.length} receipts</h3>
-            {read.map((checked) => (
-              <button
-                key={JSON.stringify(checked.proposal)}
-                type="button"
-                onClick={() => open(receipt, checked.proposal)}
-              >
+            <h3>
+              {filed.length === 0
+                ? `The photo holds ${String(read.length)} receipts`
+                : `The photo holds ${String(waiting.length)} more to file`}
+            </h3>
+            {waiting.map(({ checked, part }) => (
+              <button key={part} type="button" onClick={() => open(stage, part, checked.proposal)}>
                 {checked.proposal.merchant ?? "Unnamed"}
                 {checked.proposal.total === null ? "" : `, ${formatCents(checked.proposal.total)}`}
               </button>
             ))}
           </div>
         )}
-        {read === null && receipt.reader !== null && (
+        {read === null && filed.length === 0 && receipt.reader !== null && (
           <div className="offer">
             <p className="hint">
               Reading sends this photo out of the house, to Anthropic, where{" "}
@@ -250,7 +288,7 @@ export function Receipts(): React.ReactElement {
           </p>
         )}
         <div className="actions">
-          <button type="button" disabled={busy} onClick={() => open(receipt, null)}>
+          <button type="button" disabled={busy} onClick={() => open(stage, nextPart(filed), null)}>
             Type it in
           </button>
           <button type="button" disabled={busy} onClick={startOver}>
@@ -262,7 +300,7 @@ export function Receipts(): React.ReactElement {
     );
   }
 
-  const { receipt } = stage;
+  const { receipt, part } = stage;
   const form = draft ?? draftOf(null, receipt);
   const flags = checkReceipt(proposalOf(form));
   const payer = receipt.uploadedBy;
@@ -302,6 +340,7 @@ export function Receipts(): React.ReactElement {
     }
     void run(async () => {
       await fileReceipt(receipt.id, {
+        part,
         proposal: proposalOf(form),
         destination:
           destination === "line"
@@ -315,14 +354,16 @@ export function Receipts(): React.ReactElement {
               }
             : { to: "row", rowId: destination },
       });
-      startOver();
-      setStage({
-        step: "filed",
-        said:
-          destination === "line"
-            ? `Filed as ${payer}'s line in the period.`
-            : "Attached to the joint-account row.",
-      });
+      const said =
+        destination === "line"
+          ? `Filed as ${payer}'s line in the period.`
+          : "Attached to the joint-account row.";
+      const photo = { receipt, read: stage.read, filed: [...stage.filed, part] };
+      setDraft(null);
+      setMatches(null);
+      // A photo of two receipts goes back to the one not filed yet.
+      const more = (photo.read ?? []).some((_checked, index) => !photo.filed.includes(index + 1));
+      setStage(more ? { step: "kept", ...photo, said } : { step: "filed", ...photo, said });
     });
   };
 
