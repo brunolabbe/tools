@@ -5337,3 +5337,53 @@ Total $4.6036 (rates read 2026-10-10). The close-out fixer is not in the table.
 **Worked, and worth keeping:**
 
 - Gating a filing before asking the owner its decision: the narrow gate measured all 39 Windows readings of the row, so the owner chose between the options knowing the failure was one outlier, not on the builder's two readings.
+
+### Batch 2026-10-13 (tools-22, dl-114 and dl-122, with dl-123 to dl-125 filed) — base 2cb4e734
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | intake over four ready ids | 42s / 42s | 0 | $0.1635 |
+| #475 | merged | Sonnet 5.5 / high | builder-standard | dl-122 build | 7m05s / 13m53s | 0 | $0.7876 |
+| #475 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-122 gate 1 | 7m06s / 7m06s | 0 | $1.4942 |
+| #475 | merged | Sonnet 5.5 / high | fixer | dl-122 landing with two fixes | 3m32s / 10m50s | 0 | $0.5331 |
+| #476 | open, ready | Sonnet 5.5 / high | builder-standard | dl-114 build and round 1 | 26m20s / 4h38m50s | 1 | $4.9080 |
+| #476 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-114 gates 1, 2 and 3 | 15m17s / 9h42m18s | 2 | $5.7176 |
+| #476 | open, ready | Sonnet 5.5 / high | fixer | dl-114 round 2, landing, a Log follow-up | 4m49s / 44m41s | 0 | $0.7341 |
+| #477 | merged | Sonnet 5.5 / high | builder-standard | dl-123 filing (maintenance) | 4m22s / 4m21s | 0 | $0.6312 |
+| #480, #481 | open, ready | Sonnet 5.5 / high | builder-standard | dl-124 build and dl-125 filing | 8m44s / 8m42s | 0 | $1.1716 |
+| #480 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-124 gate 1, narrow | 3m12s / 3m12s | 0 | $0.9348 |
+| #480 | open, ready | Sonnet 5.5 / high | fixer | dl-124 landing with two fixes | 3m34s / 3m34s | 0 | $0.4770 |
+| — | — | Opus 5.5 / high | orchestrator | the batch | 1h00m15s / 11h13m31s | 2 | $8.1779 |
+
+Total $25.7306, active 2h24m58s (rates read 2026-10-10).
+
+**Tickets:**
+
+- dl-122 → #475, merged as 4f756c40. Gate 1 PASS, three lows. The `frame.click` escape and the comment were fixed at landing by owner choice. The cookie-row ceiling was an open decision: the owner chose (a), keep the ceiling and record a trigger.
+- dl-114 → #476. Gate 1 CONCERNS:
+  - the med (untested DOM read): owner chose (1), export the attribute list;
+  - the F9 open decision: owner chose to keep both tests;
+  - the low (xo reason): fixed;
+  - a dropped finding: filed as dl-123.
+
+  Gate 2 FAIL, one high: the comment and the Log said `id="play"` rows covered the read, which was false. The owner chose to fix it and then run a narrow gate 3. Gate 3 PASS.
+- dl-123 → #477, merged as 628d7efa. A filing with no gate. Its reproduction measured gate 1's explanation wrong, and gate 2 accepted the correction.
+- dl-124 → #480. Handed over from tools-4f's #474 Windows leg. Gate 1 CONCERNS (narrow), two lows: the hostname's random hex and the comment's rate. Both were fixed at landing by owner choice.
+- dl-125 → #481. Handed over from the same leg. A filing with no gate, rated `hard` by the filer.
+
+**Defects in the skill:**
+
+1. `SKILL.md`, _Which model built it, and which gated it_. The maintenance row assigns "a filing whose reproduction is in hand" to `builder-mechanical` (Haiku). The bullet under the table says "Never `haiku` … for prose and records". A ticket filing is prose. Reproduction: `grep -n "a filing whose reproduction\|for prose and records" .claude/skills/orchestrate-tickets/SKILL.md` → lines 173 and 177. dl-123 and dl-125 were filed on `builder-standard` to satisfy the bullet.
+2. `SKILL.md`, _The loop_, step 8. The sentence "a third runs only when gate 2 itself raises a `high`, or when the owner asks for one — then the owner's answer names its depth and scope" does not say whether the first case needs an owner answer at all, or what depth it runs at. Reproduction: `sed -n 124,126p .claude/skills/orchestrate-tickets/SKILL.md`. dl-114's gate-2 high was a one-clause text fix that the gate itself said might not need a gate 3. It was put to the owner, who chose a narrow gate 3.
+3. `agents/seam-mapper.md`, the bullet that recommends `npm run -s status -- --json`. It does not say the output is too large to print. Reproduction: `npm run -s status -- --json | wc -c` → `135910`.
+4. `reference/records.md` and `roles/fixer.md` have no accepted form for marking a finding _fixed at landing_, or for an owner's answer, in a landed gate copy. `SKILL.md` step 6 prescribes the marking. Reproduction: `grep -c -i "fixed at landing" .claude/skills/orchestrate-tickets/reference/records.md .claude/skills/orchestrate-tickets/roles/fixer.md` → `0` and `0`. The dl-122 and dl-124 landers each invented a form, and `--land` accepted both.
+5. `roles/fixer.md`, _The work_, the `git merge origin/<base>` step. This recurs from the 2026-10-10 entry's item 7. In a round fix that a third gate will review, the merge puts main's commits into the head that gate sees. Reproduction: `git log --oneline --merges f8f8819e..e3f65f8e` → the merge of 4f756c40 and 628d7efa into dl-114 before gate 3. The gate 3 dispatch had to name those two commits as out of scope.
+6. `roles/builder.md`, _Push, then open a draft pull request_. It gives only `gh pr create --draft`. There is no case for a filing that the pairing table's maintenance row gates with "none", so the PR should open ready. Reproduction: `sed -n 86,90p .claude/skills/orchestrate-tickets/roles/builder.md`. #481 opened ready, on the dispatch's word, against the page.
+7. `roles/builder.md`, _Set up_. `git checkout -b <branch> origin/<base>` makes the new branch track `origin/<base>`, so a bare `git push` before `-u` targets the base. Reproduction (dl-114 builder): `git checkout -b dl-114 origin/main` → `branch 'dl-114' set up to track 'origin/main'.`
+
+**Worked, and worth keeping:**
+
+- Messaging the live peer orchestrator before choosing the batch: one message settled claims, id ranges, the `docs/02-DEPLOYMENT.md` overlap and the shared checkout. The same peer later handed over two Windows failures, which became dl-124 and dl-125.
+- A filing dispatch that has to reproduce on `main` before it files: dl-123's filer overturned the gate's explanation, a second press path through `clickByText`, before the record was landed.
+- A gate that plants the fault in a real page instead of trusting the comment: dl-114 gate 2 nulled the `id` read, saw 120 of 120 browser tests pass, and caught a false coverage claim.
+- A lander that reads the gated sha's test leg before its push cancels the run: dl-124's lander read ubuntu green on 95e57de5 first.
