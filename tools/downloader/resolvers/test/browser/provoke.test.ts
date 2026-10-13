@@ -631,16 +631,19 @@ describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118, dl-122
   // reading that slow no longer showed the cap working. The click's timeout does
   // not depend on the runner.
   //
-  // The observation point is `Locator.click`, wrapped on the prototype
-  // Playwright's client gives every locator. That class is internal, not
+  // The observation point is `Frame.click`, wrapped on the prototype Playwright's
+  // client gives every frame. `Locator.click` and `Page.click` both go through
+  // it, so a play click rewritten as a frame, page or locator click is still
+  // recorded; an `ElementHandle.click` is not. That class is internal, not
   // documented API: if a Playwright upgrade moves it, the `typeof` check below
   // and the empty-list companion fail the row rather than letting it pass.
   //
   // What it does not cover: a wait that is not a click's timeout. The cookie rows
-  // keep their wall-clock ceiling for that reason (capped 2.1 to 2.5 s; the
+  // keep their wall-clock ceiling as that backstop (capped 2.1 to 2.5 s; the
   // consent click uncapped is 3.9 to 4.5 s, so 3200 ms sits near the middle).
-  // The menu row has none: its play clicks are the only blocked ones, and they
-  // are click timeouts.
+  // The menu row has none only because dl-122's decision was about the menu row:
+  // on the cookie sheets too, every blocked click is a click timeout. A cookie row
+  // that fails its clock on Windows gets its ceiling set to null.
   //
   // Clicks are told apart by outcome, not by value. The age-gate press and the
   // video clicks legitimately carry 2000 and 1500 and succeed; only a click that
@@ -654,7 +657,11 @@ describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118, dl-122
     timeout: unknown;
     rejected: boolean;
   }
-  type ClickFn = (this: unknown, options?: { timeout?: unknown }) => Promise<unknown>;
+  type ClickFn = (
+    this: unknown,
+    selector: string,
+    options?: { timeout?: unknown },
+  ) => Promise<unknown>;
 
   // Array rows with %s, not objects with $name: Vitest quotes a `$` value and cuts
   // it at 40 characters, which gave the two cookie rows one title. The ceiling is
@@ -685,17 +692,21 @@ describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118, dl-122
         try {
           const page = await context.newPage();
           await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
-          const proto: { click?: ClickFn } = Object.getPrototypeOf(page.locator("body"));
+          const proto: { click?: ClickFn } = Object.getPrototypeOf(page.mainFrame());
           const original = proto.click;
           expect(typeof original).toBe("function");
           if (original === undefined) return;
           // Wrapped by hand and put back in `finally`, not `vi.spyOn`: this block
           // owns no `vi`, and the prototype is shared by every later test.
-          proto.click = async function (this: unknown, options?: { timeout?: unknown }) {
+          proto.click = async function (
+            this: unknown,
+            selector: string,
+            options?: { timeout?: unknown },
+          ) {
             const record: RecordedClick = { timeout: options?.timeout, rejected: false };
             clicks.push(record);
             try {
-              return await original.call(this, options);
+              return await original.call(this, selector, options);
             } catch (error) {
               record.rejected = true;
               throw error;

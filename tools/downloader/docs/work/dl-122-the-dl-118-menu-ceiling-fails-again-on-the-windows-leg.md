@@ -251,3 +251,30 @@ Whichever option is chosen, the work is:
     pull request) were fixed in #470 before it merged; the Why and Build already read
     "1.2 s under", "dl-113's edits ... merged in #450", labelled per-test times, and
     the wrap-by-hand wording. Nothing further was free.
+- 2026-10-13 — Gate 1 (Opus 5.5, PASS) answered, and two lows fixed at landing
+  (fixer, Sonnet 5.5). The wrapper entry above says `Locator.click`; it is now
+  `Frame.click`.
+  - **Owner's answer on the cookie rows.** The question: the cookie rows keep the
+    3200 ms wall-clock ceiling that failed on the menu row; what to do with them.
+    The options were (a) keep them, as built, and record a trigger (the gate's
+    recommendation), (b) set both to `null` now, (c) raise `COOKIE_CEILING_MS`. The
+    owner chose **(a)** on 2026-10-13. **Trigger: a cookie row that fails its clock
+    on Windows gets `ceilingMs` set to `null`.** The block comment in
+    `provoke.test.ts` carries the same sentence.
+  - **Owner's answer on the other two lows:** apply both at landing, with no second
+    gate (2026-10-13).
+  - **Escaping clicks, fixed.** The wrapper moved from `Locator.prototype.click` to
+    `Object.getPrototypeOf(page.mainFrame()).click`, with the signature
+    `(selector, options)`; every locator, frame and page click goes through it.
+    `ElementHandle.click` still escapes, and the comment says so. Plant, the gate's:
+    `sed -i 's|^        await target.click({ timeout: options.timeoutMs });$|        await frame.click(\`${visibleQuery(selectors)} >> nth=${index}\`, { timeout: 2000 });|' tools/downloader/resolvers/src/browser/provoke.ts`,
+then `npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts -t "clickTimeoutMs caps"`:
+`Tests 3 failed | 261 skipped (264)`, each row on `expected [ …(2) ] to deeply
+    equal []`(two rejected clicks at`timeout: 2000`). After
+`git checkout -- tools/downloader/resolvers/src/browser/provoke.ts`, the same
+command: `Tests 3 passed | 261 skipped (264)`. Against the unfixed wrapper the
+gate measured `Tests 2 failed | 1 passed` and the menu row passing at 5464 ms.
+  - **Comment, fixed.** The block comment now says the cookie rows keep the clock as
+    a backstop and that the menu row lacks one because the decision was about the
+    menu row, not because its clicks differ: on the cookie sheets too every blocked
+    click is a click timeout.
