@@ -16,7 +16,7 @@ import { createRateLimitHook } from "../src/rate-limit.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { accessConfig, memberDirectory } from "./helpers/access.ts";
+import { accessConfig, memberDirectory, homeBooks } from "./helpers/access.ts";
 import { VERBS } from "./helpers/routes.ts";
 import { TRANSFER_RULE, addRule, startApp } from "./helpers/classification.ts";
 
@@ -34,7 +34,7 @@ async function startTight(): Promise<App> {
   app = await createApp({
     directory: memberDirectory(),
     config: {
-      databasePath: ":memory:",
+      dataDir: ":memory:",
       logLevel: "silent",
       access: accessConfig({ devIdentity: "alex@example.test" }),
       rateLimitReadsPerMinute: 1,
@@ -105,14 +105,14 @@ describe("the routes", () => {
     });
 
     expect(refused.statusCode).toBe(429);
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM rules").get()).toEqual({ n: 1 });
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM rules").get()).toEqual({ n: 1 });
   });
 
   test("a limit of zero turns the limiter off", async () => {
     app = await createApp({
       directory: memberDirectory(),
       config: {
-        databasePath: ":memory:",
+        dataDir: ":memory:",
         logLevel: "silent",
         access: accessConfig({ devIdentity: "alex@example.test" }),
         rateLimitReadsPerMinute: 0,
@@ -214,5 +214,29 @@ describe("the routes that answer two verbs", () => {
     const second = await target.server.inject({ method: "POST", url, payload: {} });
 
     expect(second.statusCode).toBe(429);
+  });
+});
+
+/** The hook, called for a person in a household (lg-21). */
+function callIn(hook: ReturnType<typeof hookFor>, household: string, person: string) {
+  const email = `${person}@${household}.test`;
+  const request = {
+    ip: "10.0.0.1",
+    identity: { email, admin: false, person: { id: person, email, household } },
+  } as unknown as FastifyRequest;
+  return hook(request, { header: vi.fn() } as unknown as FastifyReply);
+}
+
+// lg-21: a person is a name in a household, and two households can each have an
+// alex. The bucket is kept for the household and the name together.
+describe("the key, across households", () => {
+  test("is the household and the person, so two households' people with one name have a bucket each", async () => {
+    const hook = hookFor(new RateLimiter({ perMinute: 1 }));
+
+    await callIn(hook, "home", "alex");
+
+    await expect(callIn(hook, "home", "alex")).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    await expect(callIn(hook, "away", "alex")).resolves.toBeUndefined();
+    await expect(callIn(hook, "away", "alex")).rejects.toMatchObject({ code: "RATE_LIMITED" });
   });
 });

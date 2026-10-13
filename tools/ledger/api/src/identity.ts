@@ -1,6 +1,6 @@
 /**
- * The identity check, as a hook, and the identity it leaves on the request
- * (lg-3, lg-20).
+ * The identity check, as a hook, and what it leaves on the request: the
+ * identity (lg-3, lg-20) and the books of the caller's household (lg-21).
  *
  * One `onRequest` hook for the whole app rather than a guard per route, so a
  * route added later is checked without anyone remembering to ask for it. What
@@ -13,10 +13,16 @@
  * admin, who may be a member of none (lg-20). A route reads the member through
  * `personOf`, which refuses the admin with no household, so every books route
  * refuses them; lg-22's `adminOf` is the one guard that reads the admin flag.
+ *
+ * **A route reads its books from `booksOf(request)`**, the handle the hook
+ * attached for the member's own household, and never from a handle of its own:
+ * that is the whole of what keeps one household's rows out of another's
+ * answers (lg-21).
  */
 
 import { API_PREFIX, AppError, ROUTES } from "@ledger/contract";
 import type { Person } from "@ledger/contract";
+import type { Database } from "better-sqlite3";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { ACCESS_TOKEN_HEADER } from "./access.ts";
 import type { Identity, IdentityVerifier } from "./access.ts";
@@ -29,6 +35,12 @@ declare module "fastify" {
      * and an identity with no household.
      */
     identity: Identity | null;
+    /**
+     * The books of the member's household, attached by the check; `null` for
+     * an identity with no household and on a route the check does not cover.
+     * Read it through `booksOf`.
+     */
+    books: Database | null;
   }
 }
 
@@ -49,23 +61,24 @@ function requiresIdentity(request: FastifyRequest): boolean {
 
 export interface IdentityCheckOptions {
   /**
-   * Called with each request's member, after the check: what keeps the books'
-   * `people` in step with a directory that changed since boot (`people.ts`).
+   * The books of a member's household, opened if they are not and with its
+   * members' names enrolled (`Books.forMember`). Throws to refuse the request.
    */
-  onMember?: (person: Person) => void;
+  booksFor: (person: Person) => Database;
 }
 
 export function registerIdentityCheck(
   server: FastifyInstance,
   verifier: IdentityVerifier,
-  options: IdentityCheckOptions = {},
+  options: IdentityCheckOptions,
 ): void {
   server.decorateRequest("identity", null);
+  server.decorateRequest("books", null);
   server.addHook("onRequest", async (request) => {
     if (!requiresIdentity(request)) return;
     const identity = await verifier.identify(request.headers[ACCESS_TOKEN_HEADER]);
     request.identity = identity;
-    if (identity.person !== null) options.onMember?.(identity.person);
+    if (identity.person !== null) request.books = options.booksFor(identity.person);
   });
 }
 
@@ -79,6 +92,17 @@ export function personOf(request: FastifyRequest): Person {
   if (request.identity === null) throw new AppError("UNAUTHENTICATED");
   if (request.identity.person === null) throw new AppError("FORBIDDEN");
   return request.identity.person;
+}
+
+/**
+ * The books of the household the caller belongs to, and no other's. Fails
+ * closed as `personOf` does: no identity, or one with no household — an admin
+ * in none included — has no books, and the route is refused.
+ */
+export function booksOf(request: FastifyRequest): Database {
+  personOf(request);
+  if (request.books === null) throw new AppError("FORBIDDEN");
+  return request.books;
 }
 
 /** The identity the check left, or `UNAUTHENTICATED` on a route it did not cover. */

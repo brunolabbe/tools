@@ -313,9 +313,10 @@ export const API_DEFAULTS = {
   dataDir: "./storage/planner",
   databaseFile: "planner.db",
   modelProvider: "scripted",
-  // The owner's choice for pl-39. Configurable per deployment, and ignored
-  // under `scripted`.
-  model: "claude-opus-5",
+  // The owner's choice after pl-40's paid run: Sonnet 5.5 matched Opus 5.5's
+  // candidate yield at `low` for half the price. Configurable per deployment,
+  // and ignored under `scripted`.
+  model: "claude-sonnet-5-5",
   modelEffort: "low",
   // Two minutes an attempt. See `ApiConfig.modelTimeoutMs`: unmeasured, and
   // pl-40 is where a real latency replaces it.

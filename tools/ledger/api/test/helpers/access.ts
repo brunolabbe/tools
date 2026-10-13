@@ -11,8 +11,10 @@
 
 import { generateKeyPairSync, sign } from "node:crypto";
 import type { KeyObject } from "node:crypto";
+import type Database from "better-sqlite3";
 import type { AccessConfig } from "../../src/config.ts";
 import { Directory } from "../../src/directory.ts";
+import type { App } from "../../src/server.ts";
 
 export const TEAM = "household-test";
 export const AUDIENCE = "aud-tag-for-the-ledger-test";
@@ -58,6 +60,14 @@ export function memberDirectory(
     directory.addMember({ household: HOUSEHOLD, address, person, ...change });
   }
   return directory;
+}
+
+/**
+ * The test household's books, as the app holds them (lg-21): what a test looks
+ * inside, since the context holds no handle a route could reach for.
+ */
+export function homeBooks(app: Pick<App, "books">): Database.Database {
+  return app.books.of(HOUSEHOLD);
 }
 
 /** The same household written to a directory file, closed, for the commands that read one. */

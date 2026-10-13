@@ -126,7 +126,9 @@ with `--max-usd 10`, each with its own rates and its own `--out`. **Read the
 rates from Anthropic's pricing page on the day.** On 2026-10-12 the cached model
 table read, per MTok in and out: $0.10 / $0.50 for Haiku 5.5 (on prompts up to
 100K tokens; this harness's largest is about 10.7k), $2 / $10 for Sonnet 5.5, and
-$4 / $20 for Opus 5.5, with cache reads at $0.20 for the latter two. No ticket
+$4 / $20 for Opus 5.5, with cache reads at $0.20 for the latter two. (The
+pricing page itself said $0.10 for Sonnet 5.5's cache reads that same day, and
+pl-40's run used it — the cached table was wrong, which is the point.) No ticket
 should be the source of a rate.
 
 ## Done when
@@ -165,7 +167,9 @@ noise to average away.
 
 **Token counts do not compare across the three models.** Their tokenizers differ, so
 `count_tokens` over the same prompt gives different numbers. pl-40's comparison
-is in dollars and in reply quality, never in tokens.
+is in dollars and in reply quality, never in tokens. (pl-40's run found the
+opposite on these prompts: all 44 counted identically on all three models. The
+rule to compare in dollars stands anyway.)
 
 **Effort defaults differ (`medium` on Opus 5.5 and Haiku 5.5, `high` on Sonnet
 5.5), and none of the three can run without thinking the way `disabled` once did.**

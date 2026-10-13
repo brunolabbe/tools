@@ -1198,14 +1198,14 @@ model is a deliberate act per deployment, not something a host inherits.
 the first one, Anthropic's. A real provider also means outbound egress from the
 host, which nothing else on this page needs.
 
-| Variable            | Value                     | Required                                     |
-| ------------------- | ------------------------- | -------------------------------------------- |
-| `MODEL_PROVIDER`    | `anthropic`               | yes                                          |
-| `ANTHROPIC_API_KEY` | the key                   | yes — **a secret**, see below                |
-| `MODEL`             | `claude-opus-5` (default) | no                                           |
-| `MODEL_EFFORT`      | `low` (default)           | no — `low`, `medium`, `high`, `xhigh`, `max` |
-| `MODEL_TIMEOUT_MS`  | `120000` (default)        | no — per attempt                             |
-| `MAX_OUTPUT_TOKENS` | `8000` (default)          | no — see the budget trap below               |
+| Variable            | Value                         | Required                                     |
+| ------------------- | ----------------------------- | -------------------------------------------- |
+| `MODEL_PROVIDER`    | `anthropic`                   | yes                                          |
+| `ANTHROPIC_API_KEY` | the key                       | yes — **a secret**, see below                |
+| `MODEL`             | `claude-sonnet-5-5` (default) | no                                           |
+| `MODEL_EFFORT`      | `low` (default)               | no — `low`, `medium`, `high`, `xhigh`, `max` |
+| `MODEL_TIMEOUT_MS`  | `120000` (default)            | no — per attempt                             |
+| `MAX_OUTPUT_TOKENS` | `8000` (default)              | no — see the budget trap below               |
 
 **The key is a secret, and it never goes in a compose file that is checked in.**
 Put it in the host's `.env` beside `COMPOSE_FILE`, and pass it through from an
@@ -1232,7 +1232,7 @@ header for one. Under `scripted` the variable is ignored, since nothing builds
 the SDK.
 
 After it boots, `/api/health` reports `agent: { provider: "anthropic", model:
-"claude-opus-5" }` — the model configured. A refused request can be answered by a
+"claude-sonnet-5-5" }` — the model configured. A refused request can be answered by a
 fallback model inside the same call, and when that happens the log line
 `model reply served by another model` names the one that did.
 
@@ -1247,12 +1247,12 @@ did: `RUN_TOKEN_BUDGET=20000` ran 4 specialists and now runs 1. **Nothing errors
 The plan comes back with `specialist-dropped-for-budget` gaps, which is exactly
 the shape of a budget working as intended.
 
-The arithmetic also counts output only. Input is roughly a quarter of a fixture
-run's dollars, and a corridor run is not a fixture run: nothing caps how many
-discovery finds reach a specialist's prompt today. Whether the budget should
-count input is
-[pl-40](../tools/planner/docs/work/pl-40-prove-p3-against-a-real-model.md)'s
-measurement to take; until then, size `RUN_TOKEN_BUDGET` in output tokens, as
+The arithmetic also counts output only. Input is nearly two-fifths of a fixture
+run's dollars (37–39% in pl-40's set A, on all three models), and a corridor run is not a fixture run: its finds-reading specialists also
+read up to 40 discovery finds, which roughly doubles their input. [pl-40](../tools/planner/docs/work/pl-40-prove-p3-against-a-real-model.md)
+measured this on 2026-10-12, now that pl-41 caps the finds. Input is 19.5% of a
+corridor run's worst case, under the 20% at which counting it would have been
+filed. So size `RUN_TOKEN_BUDGET` in output tokens, as
 `maxSpecialists × 16000` for the roster you mean to afford, or leave it unset and
 let `MAX_SPECIALISTS` be the cap.
 
@@ -1262,7 +1262,8 @@ bill a single attempt twice: the declined model's partial reply and the fallback
 model's whole one, each up to `MAX_OUTPUT_TOKENS`. So the worst case per
 specialist is four times `MAX_OUTPUT_TOKENS` — 32,000 at the default — not the
 16,000 the budget divides by. The arithmetic is deliberately left alone here, as
-the input-token gap is; how often a fallback fires is pl-40's to measure.
+the input-token gap is. pl-40's run saw no fallback in 574 replies across three
+models, which is an observation, not a rate.
 
 #### What the runs cost
 
@@ -1301,12 +1302,24 @@ holds one.
 ## The ledger
 
 A plain Node image, like the planner's, with SQLite on a volume and nothing it
-reaches outside the host. Two things are its own:
+reaches outside the host. Three things are its own:
 
 - **The volume is the books.** `ledger_storage` is the only copy of every
-  statement either person imported, and of the history carried over from the
-  spreadsheet it replaces. `docker compose down` without `-v` leaves it alone;
-  back it up as you would that spreadsheet, and more often.
+  statement anyone imported, and of the history carried over from the
+  spreadsheet it replaces. Each household's books are a file of their own,
+  `/data/households/<id>.db`, beside the directory, so **a backup takes the whole
+  data directory**, `/data`, never one file: a household's books without the
+  directory have nobody to sign in as, and one household's file is not the
+  others'. `docker compose down` without `-v` leaves it alone; back it up as you
+  would that spreadsheet, and more often.
+- **The release that gives each household its own books (lg-21) does not
+  carry over `/data/ledger.db`,** the one books file before it. Nobody had
+  started using the ledger, so it is deleted rather than migrated, and nothing
+  reads it any more: once the new image is up, remove it and its write-ahead
+  files,
+  `docker compose -f compose.prod.yaml -f compose.ledger.prod.yaml exec ledger rm -f /data/ledger.db /data/ledger.db-wal /data/ledger.db-shm`.
+  The image's `DATABASE_PATH` is now the directory `/data`; an override that
+  still names a file is refused at boot.
 - **Its login admits every household's addresses, and the household directory
   says whose they are** — [step 2](#the-ledgers-every-households-addresses-and-still-no-bypass) has the
   policy. The directory is `/data/directory.db` on the same volume, read on every
@@ -1323,11 +1336,13 @@ reaches outside the host. Two things are its own:
 
   A household id is one lowercase word; a household holds two people, each
   behind any number of addresses, and a name it has held stays one of its two.
-  Until each household has books of its own (lg-21) the command refuses a second
-  household. **On the first deploy of this release the directory is empty**, so
-  everyone sees the "no household" page until the household and its members
-  are added; and delete `LEDGER_ACCESS_PEOPLE` from `.env`, which nothing reads
-  any more. `--as` in the workbook import names a person the directory holds.
+  A household's books file is made by the API the first time it needs it. **On
+  the first deploy of the directory (lg-20) it is empty**, so everyone sees the
+  "no household" page until the household and its members are added, and the
+  API's boot log warns that the directory has no members; and delete
+  `LEDGER_ACCESS_PEOPLE` from `.env`, which nothing reads any more. The workbook
+  import takes `--household <id>`, writes that household's books and no other's,
+  and `--as` names one of its members.
 
 There is no model behind it yet. Reading receipts will be one, behind a seam of
 its own with an offline default, and it will get a section here when it lands.

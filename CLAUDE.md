@@ -51,15 +51,24 @@ inside the tool, and lift it when something else actually needs it.
 ```bash
 npm install                   # workspaces
 npm run check                 # lint + format check + typecheck — must pass before done
-npm test                      # vitest, every project
+npm test                      # vitest, every project, through the test gate (below)
 npm test -- --project <tool>  # just one tool's suite — seconds, not a minute
-npx vitest run <package-dir>  # just one package, e.g. tools/downloader/api
+npm test -- <package-dir>     # just one package, e.g. tools/downloader/api
+npx vitest run <spec-file>    # one file, ungated: the only vitest call to make directly
 npm run lint:fix              # oxlint --fix
 npm run format                # oxfmt
 npm run build                 # every workspace
 npm run status                # open tickets per tool, computed from their frontmatter
 npm run status -- --show <id> # one ticket: its fields, its blockers, its path
 ```
+
+**The test gate** (`scripts/test-gate.mjs`, repo-103) sits in front of `npm test` and
+`npm run test:<tool>`. Two runs hold a slot; a third waits up to 300 s, then runs
+with one worker and no slot. The locks live in one clone's `.git`, so the limit is
+per clone, not per machine. Workers are fixed when a run starts, so a run that
+arrives while another is going gets half and the two oversubscribe the cores for
+as long as they overlap. It does nothing under `CI`. `scripts/test-gate.mjs`'s
+header is the full account.
 
 Per-tool commands (`dev`, `e2e`) live in that tool's `CLAUDE.md`.
 

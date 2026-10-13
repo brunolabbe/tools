@@ -8,6 +8,7 @@ import type { BucketsResponse } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { bucketsAsOf } from "../buckets.ts";
 import type { AppContext } from "../context.ts";
+import { booksOf } from "../identity.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 
 /** `?asOf=yyyy-mm-dd`, or today by the API's clock. */
@@ -23,7 +24,7 @@ export function registerBucketRoutes(app: FastifyInstance, context: AppContext):
   const { read } = rateLimitsFor(context);
 
   app.get(ROUTES.buckets, { onRequest: read }, async (request) => {
-    const body: BucketsResponse = bucketsAsOf(context.db, asOfOf(context, request));
+    const body: BucketsResponse = bucketsAsOf(booksOf(request), asOfOf(context, request));
     return body;
   });
 }

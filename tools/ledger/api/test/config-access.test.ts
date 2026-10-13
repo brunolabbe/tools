@@ -28,7 +28,7 @@ async function start(devIdentity: string): Promise<App> {
   return await createApp({
     directory: memberDirectory(),
     config: {
-      databasePath: ":memory:",
+      dataDir: ":memory:",
       logLevel: "silent",
       access: accessConfig({ devIdentity }),
     },
@@ -79,7 +79,7 @@ describe("loadApiConfig: Access", () => {
       createApp({
         directory: memberDirectory(),
         config: {
-          databasePath: ":memory:",
+          dataDir: ":memory:",
           logLevel: "silent",
           production: true,
           access: accessConfig({ devIdentity: ALEX }),
@@ -128,15 +128,15 @@ describe("loadApiConfig: Access", () => {
     }
   });
 
-  test("the directory sits beside the books unless DIRECTORY_PATH says otherwise", () => {
-    expect(loadApiConfig({}, { DATABASE_PATH: "/data/ledger.db" }).directoryPath).toBe(
-      path.join("/data", "directory.db"),
+  test("the directory sits in the data directory unless DIRECTORY_PATH says otherwise", () => {
+    expect(loadApiConfig({}, { DATABASE_PATH: "/data" }).directoryPath).toBe(
+      path.join(path.resolve("/data"), "directory.db"),
     );
     expect(
-      loadApiConfig({}, { DATABASE_PATH: "/data/ledger.db", DIRECTORY_PATH: "/elsewhere/d.db" })
+      loadApiConfig({}, { DATABASE_PATH: "/data", DIRECTORY_PATH: "/elsewhere/d.db" })
         .directoryPath,
     ).toBe("/elsewhere/d.db");
-    expect(loadApiConfig({ databasePath: ":memory:" }, {}).directoryPath).toBe(":memory:");
+    expect(loadApiConfig({ dataDir: ":memory:" }, {}).directoryPath).toBe(":memory:");
   });
 });
 
@@ -153,6 +153,37 @@ describe("loadApiConfig: production mode, however it is written", () => {
   test("and only production: other names still allow it", () => {
     for (const value of ["development", "test", "", "productionish"]) {
       expect(refusal({ NODE_ENV: value, DEV_IDENTITY: ALEX }), value).toBe(undefined);
+    }
+  });
+});
+
+// lg-21, step 9 (lg-20's gate, F4): the directory and the books cannot be one
+// file. The books are a directory of files now, and households/ is theirs.
+describe("loadApiConfig: the directory is never one of the books", () => {
+  test("refuses a DIRECTORY_PATH inside households/, however it is spelled", () => {
+    for (const directory of [
+      "/data/households/directory.db",
+      "/data/households/home.db",
+      "/data/households",
+      "/data/households/../households/x.db",
+      "/data/./households/deeper/d.db",
+    ]) {
+      expect(refusal({ DATABASE_PATH: "/data", DIRECTORY_PATH: directory }), directory).toMatch(
+        /DIRECTORY_PATH is inside the households directory/u,
+      );
+    }
+  });
+
+  test("and allows one beside it, or a name that only starts the same", () => {
+    for (const directory of [
+      "/data/directory.db",
+      "/data/households.db",
+      "/data/householdsx/d.db",
+      "/elsewhere/households/d.db",
+    ]) {
+      expect(refusal({ DATABASE_PATH: "/data", DIRECTORY_PATH: directory }), directory).toBe(
+        undefined,
+      );
     }
   });
 });

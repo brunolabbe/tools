@@ -13,7 +13,15 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { AppError, ROUTES } from "@downloader/contract";
-import type { Job, JobResponse, JobStatus, ProbeResponse } from "@downloader/contract";
+import type {
+  Job,
+  JobResponse,
+  JobStatus,
+  ProbeResponse,
+  ProbeResult,
+  ResolveOptions,
+  Resolver,
+} from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { initialProgress } from "../src/db/job-store.ts";
 import type { LightMyRequestResponse as Response } from "fastify";
@@ -858,5 +866,131 @@ describe("CONTAINER_UNSUPPORTED is re-probed once although it is not retryable (
     expect(finished.error?.retryable).toBe(false);
     expect(finished.attempts).toBe(2);
     expect(harness.engine.calls).toBe(2);
+  });
+});
+
+describe("the re-probe narrates its stages on the job's stream (dl-110)", () => {
+  /**
+   * Reports one stage of its own mid-resolve, as a real tier does beside an
+   * `await`. `StubResolver` reports none, which is the case the card falls back
+   * to the status line for.
+   */
+  class NarratingResolver implements Resolver {
+    readonly name = "narrating";
+    readonly priority = 10;
+
+    canHandle(): boolean {
+      return true;
+    }
+
+    async resolve(_url: URL, options: ResolveOptions): Promise<ProbeResult> {
+      options.onStage?.({ stage: "page-load", resolver: this.name });
+      return probeResult();
+    }
+  }
+
+  test("resolver-start and the tier's own stage arrive between probing and downloading", async () => {
+    harness = await createHarness({ resolver: new NarratingResolver() });
+
+    const created = await createJob(harness, {}, { open: false });
+    const frames: string[] = [];
+    harness.app.context.events.subscribe(created.id, (event) => {
+      if (event.type === "status") frames.push(event.status);
+      if (event.type === "stage") frames.push(`${event.stage} by ${event.resolver}`);
+    });
+    openLink(harness, created);
+
+    const finished = await runToTerminal(harness, created.id);
+    expect(finished.status).toBe("completed");
+    expect(frames).toEqual([
+      "probing",
+      "resolver-start by narrating",
+      "page-load by narrating",
+      "downloading",
+      "completed",
+    ]);
+  });
+
+  test("a subscriber that throws on a stage frame cannot fail the job or silence the others", async () => {
+    harness = await createHarness({ resolver: new NarratingResolver() });
+
+    const created = await createJob(harness, {}, { open: false });
+    harness.app.context.events.subscribe(created.id, (event) => {
+      if (event.type === "stage") throw new Error("a socket that closed mid-write");
+    });
+    const stages: string[] = [];
+    harness.app.context.events.subscribe(created.id, (event) => {
+      if (event.type === "stage") stages.push(event.stage);
+    });
+    openLink(harness, created);
+
+    const finished = await runToTerminal(harness, created.id);
+    expect(finished.status).toBe("completed");
+    expect(stages).toEqual(["resolver-start", "page-load"]);
+  });
+
+  /**
+   * Reports a different stage per source, then holds there on that source's
+   * latch. Two jobs are in `probing` at once (the default is two slots), so
+   * each one's frames are in the hub while the other's are being emitted — the
+   * only moment a frame keyed to the wrong job could be seen.
+   */
+  class PerSourceResolver implements Resolver {
+    readonly name = "per-source";
+    readonly priority = 10;
+    readonly reached = { a: latch(), b: latch() };
+    readonly release = { a: latch(), b: latch() };
+
+    canHandle(): boolean {
+      return true;
+    }
+
+    async resolve(url: URL, options: ResolveOptions): Promise<ProbeResult> {
+      const which = url.searchParams.get("source") === "b" ? "b" : "a";
+      options.onStage?.({ stage: which === "a" ? "page-load" : "ytdlp-run", resolver: this.name });
+      this.reached[which].open();
+      await this.release[which].wait;
+      return probeResult();
+    }
+  }
+
+  test("a job's stage frames reach only its own subscribers, with another job probing", async () => {
+    const resolver = new PerSourceResolver();
+    harness = await createHarness({
+      config: { maxConcurrentJobs: 2, maxJobsPerClient: 0 },
+      resolver,
+    });
+
+    const a = await createJob(harness, { url: `${SOURCE_URL}?source=a` }, { open: false });
+    const b = await createJob(harness, { url: `${SOURCE_URL}?source=b` }, { open: false });
+    const seen = new Map<string, { jobId: string; stage: string }[]>([
+      [a.id, []],
+      [b.id, []],
+    ]);
+    for (const job of [a, b]) {
+      harness.app.context.events.subscribe(job.id, (event) => {
+        if (event.type === "stage") {
+          seen.get(job.id)?.push({ jobId: event.jobId, stage: event.stage });
+        }
+      });
+    }
+    openLink(harness, a);
+    openLink(harness, b);
+
+    // Both resolvers have reported and are parked: the two jobs overlap.
+    await Promise.all([resolver.reached.a.wait, resolver.reached.b.wait]);
+    resolver.release.a.open();
+    resolver.release.b.open();
+    await runToTerminal(harness, a.id);
+    await runToTerminal(harness, b.id);
+
+    expect(seen.get(a.id)).toEqual([
+      { jobId: a.id, stage: "resolver-start" },
+      { jobId: a.id, stage: "page-load" },
+    ]);
+    expect(seen.get(b.id)).toEqual([
+      { jobId: b.id, stage: "resolver-start" },
+      { jobId: b.id, stage: "ytdlp-run" },
+    ]);
   });
 });

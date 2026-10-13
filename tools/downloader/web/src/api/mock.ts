@@ -39,7 +39,7 @@ import type { EventStream, EventStreamHandlers } from "../lib/event-stream.ts";
 import { applyJobEvent } from "../lib/job-reducer.ts";
 import { findVariant, pickDefaultVariantId } from "../lib/variants.ts";
 import { DIRECT_STAGE_SCRIPT, baseProbeResult, findScenario } from "./scenarios.ts";
-import type { JobScript, Scenario } from "./scenarios.ts";
+import type { JobScript, Scenario, StageBeat } from "./scenarios.ts";
 import type { ApiClient } from "./types.ts";
 
 const DOWNLOAD_TICKS = 12;
@@ -185,6 +185,7 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
     script: JobScript,
     probeResult: ProbeResult,
     variant: MediaVariant | null,
+    stages: readonly StageBeat[],
   ): Step[] {
     const steps: Step[] = [];
     const totalBytes = script.indeterminate ? null : (variant?.filesizeBytes ?? null);
@@ -194,7 +195,25 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
     let t = 300;
     steps.push(statusStep(t, "probing"));
 
-    t += 800;
+    // dl-110: the re-probe narrates the same chain the analysis did, on the job's
+    // own stream, spread over the window before `probed` as the analysis's beats
+    // are over its delay. Strictly after the `probing` frame, as on the server.
+    const reprobeMs = 800;
+    for (const beat of stages) {
+      steps.push({
+        atMs: t + 1 + Math.round(beat.at * (reprobeMs - 2)),
+        run: (runtime) =>
+          emit(runtime, {
+            type: "stage",
+            jobId: runtime.job.id,
+            stage: beat.stage,
+            resolver: beat.resolver,
+            at: nowIso(),
+          }),
+      });
+    }
+
+    t += reprobeMs;
     steps.push({
       atMs: t,
       run: (runtime) =>
@@ -382,7 +401,12 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
       runtime,
       scenario.job.linkExpires === true
         ? linkExpirySteps()
-        : buildSteps(scriptFor(scenario.job, jobOptions), result, variant),
+        : buildSteps(
+            scriptFor(scenario.job, jobOptions),
+            result,
+            variant,
+            scenario.stages ?? DIRECT_STAGE_SCRIPT,
+          ),
     );
     return { job };
   }

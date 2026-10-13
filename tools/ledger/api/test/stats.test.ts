@@ -29,6 +29,7 @@ import type { App } from "../src/server.ts";
 import { addRule, pasteStatement, startApp } from "./helpers/classification.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import type { PasteRow } from "./helpers/paste.ts";
+import { homeBooks } from "./helpers/access.ts";
 
 let app: App | undefined;
 
@@ -397,7 +398,7 @@ describe("GET /api/stats/settlements", () => {
 test("nothing here writes: the books are the same after every series is read", async () => {
   const target = await start();
   const count = () =>
-    target.context.db
+    homeBooks(target)
       .prepare(
         "SELECT (SELECT count(*) FROM statement_rows) + (SELECT count(*) FROM classifications) + (SELECT count(*) FROM period_lines) + (SELECT count(*) FROM periods) AS n",
       )

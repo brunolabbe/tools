@@ -16,14 +16,15 @@ import type { AutoFiledResponse, ClassificationRecord, InboxResponse } from "@le
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { autoFiled, classifyRow, inbox } from "../classifications.ts";
+import { booksOf } from "../identity.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 import { ruleContext } from "./rules.ts";
 
 export function registerInboxRoutes(app: FastifyInstance, context: AppContext): void {
   const { read, write } = rateLimitsFor(context);
 
-  app.get(ROUTES.inbox, { onRequest: read }, async () => {
-    const body: InboxResponse = { rows: inbox(context.db) };
+  app.get(ROUTES.inbox, { onRequest: read }, async (request) => {
+    const body: InboxResponse = { rows: inbox(booksOf(request)) };
     return body;
   });
 
@@ -37,8 +38,8 @@ export function registerInboxRoutes(app: FastifyInstance, context: AppContext): 
   // test, not this comment, is what holds it. Measured 2026-10-10 on lg-17,
   // head 7dcaa89c.
   // codeql[js/missing-rate-limiting]
-  app.get(ROUTES.autoFiled, { onRequest: read }, async () => {
-    const body: AutoFiledResponse = { rows: autoFiled(context.db) };
+  app.get(ROUTES.autoFiled, { onRequest: read }, async (request) => {
+    const body: AutoFiledResponse = { rows: autoFiled(booksOf(request)) };
     return body;
   });
 

@@ -14,6 +14,7 @@ import {
 import type { StatsRange } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
+import { booksOf } from "../identity.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 import {
   bufferStats,
@@ -45,13 +46,18 @@ type Series = (request: FastifyRequest) => unknown;
 
 export function registerStatsRoutes(app: FastifyInstance, context: AppContext): void {
   const { read } = rateLimitsFor(context);
-  const { db } = context;
 
   const series: [string, Series][] = [
-    [ROUTES.statsMortgagePayments, (request) => mortgagePaymentsStats(db, rangeOf(request))],
-    [ROUTES.statsSalaries, (request) => salariesStats(db, rangeOf(request))],
-    [ROUTES.statsContributions, (request) => contributionsStats(db, rangeOf(request))],
-    [ROUTES.statsMortgageOwn, (request) => mortgageOwnStats(db, rangeOf(request))],
+    [
+      ROUTES.statsMortgagePayments,
+      (request) => mortgagePaymentsStats(booksOf(request), rangeOf(request)),
+    ],
+    [ROUTES.statsSalaries, (request) => salariesStats(booksOf(request), rangeOf(request))],
+    [
+      ROUTES.statsContributions,
+      (request) => contributionsStats(booksOf(request), rangeOf(request)),
+    ],
+    [ROUTES.statsMortgageOwn, (request) => mortgageOwnStats(booksOf(request), rangeOf(request))],
     [
       ROUTES.statsBuffer,
       (request) => {
@@ -67,12 +73,22 @@ export function registerStatsRoutes(app: FastifyInstance, context: AppContext): 
           throw rangeError();
         }
         const range = { from: query.data.from ?? null, to: query.data.to ?? null };
-        return bufferStats(db, range, query.data.minDropCents ?? DEFAULT_LARGE_DROP_CENTS);
+        return bufferStats(
+          booksOf(request),
+          range,
+          query.data.minDropCents ?? DEFAULT_LARGE_DROP_CENTS,
+        );
       },
     ],
-    [ROUTES.statsSpending, (request) => spendingStats(db, rangeOf(request), todayOf(context))],
-    [ROUTES.statsFixedItems, (request) => fixedItemsStats(db, rangeOf(request), todayOf(context))],
-    [ROUTES.statsSettlements, (request) => settlementsStats(db, rangeOf(request))],
+    [
+      ROUTES.statsSpending,
+      (request) => spendingStats(booksOf(request), rangeOf(request), todayOf(context)),
+    ],
+    [
+      ROUTES.statsFixedItems,
+      (request) => fixedItemsStats(booksOf(request), rangeOf(request), todayOf(context)),
+    ],
+    [ROUTES.statsSettlements, (request) => settlementsStats(booksOf(request), rangeOf(request))],
   ];
 
   // The eight routes are registered at this one call, each taking `read`, so the

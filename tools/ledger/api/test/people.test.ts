@@ -5,17 +5,25 @@
  * table at boot and as members are added, never the repository.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type { PeopleResponse } from "@ledger/contract";
+import { householdBooksPath } from "../src/books.ts";
 import { migrate } from "../src/db/schema.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { ALEX, SAM, accessConfig, memberDirectory } from "./helpers/access.ts";
+import {
+  ALEX,
+  HOUSEHOLD,
+  SAM,
+  accessConfig,
+  homeBooks,
+  memberDirectory,
+} from "./helpers/access.ts";
 import {
   TRANSFER_RULE,
   addRule,
@@ -34,7 +42,7 @@ afterEach(async () => {
 
 function people(target: App): string[] {
   return (
-    target.context.db.prepare("SELECT id FROM people ORDER BY id").all() as { id: string }[]
+    homeBooks(target).prepare("SELECT id FROM people ORDER BY id").all() as { id: string }[]
   ).map((row) => row.id);
 }
 
@@ -55,7 +63,7 @@ describe("the people table", () => {
         [ALEX, "alex"],
       ]),
       config: {
-        databasePath: ":memory:",
+        dataDir: ":memory:",
         logLevel: "silent",
         access: accessConfig({ devIdentity: SAM }),
       },
@@ -63,7 +71,7 @@ describe("the people table", () => {
 
     expect(people(app)).toEqual(["alex", "sam"]);
     // The route answers from the table: a person only the table holds is listed.
-    app.context.db.prepare("INSERT INTO people (id, added_at) VALUES ('casey', 'x')").run();
+    homeBooks(app).prepare("INSERT INTO people (id, added_at) VALUES ('casey', 'x')").run();
     const response = await app.server.inject({ method: "GET", url: ROUTES.people });
     expect(response.json<PeopleResponse>()).toEqual({ people: ["alex", "casey", "sam"] });
   });
@@ -82,7 +90,7 @@ describe("the people table", () => {
       },
     });
 
-    const named = app.context.db
+    const named = homeBooks(app)
       .prepare(
         `SELECT person_id FROM rules WHERE person_id IS NOT NULL
          UNION SELECT person_id FROM classifications WHERE person_id IS NOT NULL
@@ -97,17 +105,16 @@ describe("the people table", () => {
 
   test("a person the directory stops holding stays, so their rows still name someone", async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-people-"));
-    const databasePath = path.join(dir, "ledger.db");
     try {
       app = await createApp({
         directory: memberDirectory(),
-        config: { databasePath, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
+        config: { dataDir: dir, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
       });
       await app.shutdown();
 
       app = await createApp({
         directory: memberDirectory([[ALEX, "alex"]]),
-        config: { databasePath, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
+        config: { dataDir: dir, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
       });
 
       expect(people(app)).toEqual(["alex", "sam"]);
@@ -184,7 +191,9 @@ describe("migration 3: salaries and ratios", () => {
 describe("upgrading a database lg-4 wrote", () => {
   test("every person id its rules and classifications name is enrolled, configured or not", async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-upgrade-"));
-    const databasePath = path.join(dir, "ledger.db");
+    // The household's books file, where lg-21 keeps it.
+    const databasePath = householdBooksPath(dir, HOUSEHOLD);
+    mkdirSync(path.dirname(databasePath), { recursive: true });
     try {
       // As lg-4's release left it: two migrations, a rule naming casey and a row
       // classified to dana, neither of whom the configuration below names.
@@ -217,12 +226,12 @@ describe("upgrading a database lg-4 wrote", () => {
 
       app = await createApp({
         directory: memberDirectory(),
-        config: { databasePath, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
+        config: { dataDir: dir, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
       });
 
       expect(people(app)).toEqual(["alex", "casey", "dana", "sam"]);
       // Added when the id was first recorded, not when the upgrade ran.
-      expect(app.context.db.prepare("SELECT added_at FROM people WHERE id = 'dana'").get()).toEqual(
+      expect(homeBooks(app).prepare("SELECT added_at FROM people WHERE id = 'dana'").get()).toEqual(
         { added_at: "2026-09-03T00:00:00.000Z" },
       );
       const response = await app.server.inject({ method: "GET", url: ROUTES.people });

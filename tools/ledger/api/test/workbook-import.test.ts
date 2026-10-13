@@ -21,15 +21,17 @@ import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { householdBooksPath } from "../src/books.ts";
 import { bucketsAsOf } from "../src/buckets.ts";
 import { classifyRow } from "../src/classifications.ts";
 import { migrate } from "../src/db/schema.ts";
+import { Directory } from "../src/directory.ts";
 import { runImportCommand } from "../src/import-command.ts";
 import { enrollPeople } from "../src/people.ts";
 import { closedPeriods, currentLines } from "../src/periods.ts";
 import { currentRatios, currentSalaries } from "../src/salaries.ts";
 import { importStatement } from "../src/statements.ts";
-import { writeMemberDirectory } from "./helpers/access.ts";
+import { HOUSEHOLD, writeMemberDirectory } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import { history, render } from "./helpers/workbook.ts";
 import type { Fixture } from "./helpers/workbook.ts";
@@ -37,12 +39,16 @@ import type { Fixture } from "./helpers/workbook.ts";
 const NOW = new Date("2026-10-07T12:00:00.000Z");
 
 let dir: string;
+/** `DATABASE_PATH`: the directory the books are kept in (lg-21). */
+let dataDir: string;
+/** The test household's books file in it, the one the import writes. */
 let databasePath: string;
 let directoryPath: string;
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), "ledger-workbook-"));
-  databasePath = path.join(dir, "books", "ledger.db");
+  dataDir = path.join(dir, "books");
+  databasePath = householdBooksPath(dataDir, HOUSEHOLD);
   // Outside the books' directory, so a test can still see that a refused
   // import leaves no books directory behind.
   directoryPath = path.join(dir, "directory.db");
@@ -59,17 +65,19 @@ interface Ran {
   err: string;
 }
 
+/** The command, for the test household unless the arguments name one (lg-21). */
 async function run(...args: string[]): Promise<Ran> {
   let out = "";
   let err = "";
-  const code = await runImportCommand(args, {
+  const argv = args.includes("--household") ? args : [...args, "--household", HOUSEHOLD];
+  const code = await runImportCommand(argv, {
     stdout: (text) => {
       out += text;
     },
     stderr: (text) => {
       err += text;
     },
-    env: { DATABASE_PATH: databasePath, DIRECTORY_PATH: directoryPath },
+    env: { DATABASE_PATH: dataDir, DIRECTORY_PATH: directoryPath },
     cwd: dir,
     now: () => NOW,
   });
@@ -439,7 +447,7 @@ describe("the workbook import", () => {
     expect(dry.code, dry.out).toBe(0);
     expect(refused.code, refused.err).toBe(1);
     expect(sha256(databasePath)).toBe(hash);
-    expect(readdirSync(path.dirname(databasePath))).toEqual(["ledger.db"]);
+    expect(readdirSync(path.dirname(databasePath))).toEqual([path.basename(databasePath)]);
   });
 
   test("a refused --write into books that do not exist leaves no file", async () => {
@@ -609,18 +617,19 @@ describe("the workbook against the rows already pasted", () => {
     const live = books();
     enrollPeople(live, ["alex", "sam"], NOW);
     pasteTail(live);
-    const crash = path.join(dir, "crash");
-    mkdirSync(crash);
-    copyFileSync(databasePath, path.join(crash, "ledger.db"));
-    copyFileSync(`${databasePath}-wal`, path.join(crash, "ledger.db-wal"));
+    dataDir = path.join(dir, "crash");
+    const crash = path.dirname(householdBooksPath(dataDir, HOUSEHOLD));
+    mkdirSync(crash, { recursive: true });
+    copyFileSync(databasePath, householdBooksPath(dataDir, HOUSEHOLD));
+    copyFileSync(`${databasePath}-wal`, `${householdBooksPath(dataDir, HOUSEHOLD)}-wal`);
     live.close();
-    databasePath = path.join(crash, "ledger.db");
+    databasePath = householdBooksPath(dataDir, HOUSEHOLD);
     const before = {
       file: sha256(databasePath),
       log: sha256(`${databasePath}-wal`),
       entries: readdirSync(crash),
     };
-    expect(before.entries).toEqual(["ledger.db", "ledger.db-wal"]);
+    expect(before.entries).toEqual(["home.db", "home.db-wal"]);
 
     const ran = await run(await workbook(), "--as", "alex");
 
@@ -824,5 +833,68 @@ describe("--as resolves against the household directory (lg-20)", () => {
     expect(ran.code).toBe(2);
     expect(ran.err).toContain("household:ledger");
     expect(existsSync(directoryPath)).toBe(false);
+  });
+});
+
+// lg-21: each household has books of its own, and the import writes one
+// household's, named on the command line, and no other's.
+describe("--household names the books the import writes (lg-21)", () => {
+  const AWAY = "away";
+
+  /** A second household, kim and alex, beside the test one, with books of its own. */
+  function secondHousehold(): Database.Database {
+    const directory = Directory.open(directoryPath);
+    const change = { by: "operator", at: NOW };
+    directory.addHousehold({ id: AWAY, name: "The other household", ...change });
+    directory.addMember({ household: AWAY, address: "kim@example.test", person: "kim", ...change });
+    directory.addMember({ household: AWAY, address: "alex@away.test", person: "alex", ...change });
+    directory.close();
+    const file = householdBooksPath(dataDir, AWAY);
+    mkdirSync(path.dirname(file), { recursive: true });
+    const db = new Database(file);
+    migrate(db);
+    enrollPeople(db, ["alex", "kim"], NOW);
+    db.pragma("wal_checkpoint(TRUNCATE)");
+    return db;
+  }
+
+  test("a --write goes to the named household's file, and the other's is not touched", async () => {
+    const away = secondHousehold();
+    const before = dump(away);
+    away.close();
+    const hash = sha256(householdBooksPath(dataDir, AWAY));
+
+    const ran = await run(await workbook(), "--household", HOUSEHOLD, "--as", "alex", "--write");
+
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain(`Household: ${HOUSEHOLD}`);
+    const home = books();
+    expect(home.prepare("SELECT count(*) AS n FROM statement_rows").get()).toEqual({ n: 17 });
+    home.close();
+    expect(sha256(householdBooksPath(dataDir, AWAY))).toBe(hash);
+    const after = new Database(householdBooksPath(dataDir, AWAY), { readonly: true });
+    expect(dump(after)).toEqual(before);
+    expect(after.prepare("SELECT count(*) AS n FROM statement_rows").get()).toEqual({ n: 0 });
+    after.close();
+  });
+
+  test("--as is one of the named household's own members", async () => {
+    secondHousehold().close();
+
+    const ran = await run(await workbook(), "--household", AWAY, "--as", "sam");
+
+    expect(ran.code).toBe(2);
+    expect(ran.err).toContain(`--as names "sam", who is not a member of ${AWAY}`);
+    expect(ran.err).toContain("alex, kim");
+  });
+
+  test("a household the directory does not hold, or an id that is not a word, is refused and creates nothing", async () => {
+    for (const household of ["nowhere", "../home", "Home", ""]) {
+      const ran = await run(await workbook(), "--household", household, "--as", "alex", "--write");
+
+      expect(ran.code, household).toBe(2);
+      expect(ran.err, household).toMatch(/--household/u);
+    }
+    expect(existsSync(dataDir)).toBe(false);
   });
 });

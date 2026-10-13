@@ -2,7 +2,8 @@
  * The first real model behind the seam: Anthropic's Messages API.
  *
  * Decided by the repo owner on 2026-09-13, from options with measurements
- * attached, and argued in pl-39: Anthropic, `claude-opus-5` by default,
+ * attached, and argued in pl-39: Anthropic, `claude-opus-5` by default (since
+ * pl-40's paid run, `claude-sonnet-5-5`),
  * structured outputs through the seam rather than prompt-JSON and re-ask, and
  * adaptive thinking at a low effort. Nothing above this file names the vendor —
  * `createModelProvider` in `api/src/server.ts` is still the only place in the

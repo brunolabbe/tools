@@ -6,8 +6,9 @@
  * traffic before the sockets close.
  *
  * **Never a path and never a key.** The shape is `HealthResponse` in the
- * contract, and it carries whether the books and the household directory
- * (lg-20) are open but not where either is:
+ * contract, and it carries whether every household's books (lg-21) and the
+ * household directory (lg-20) are open but not where any of them is, nor which
+ * households there are or how many:
  * this tool holds a household's bank history, and the file's location is
  * infrastructure detail nobody reading health needs.
  */
@@ -38,12 +39,15 @@ const VERSION = readVersion();
 
 export function registerHealthRoute(app: FastifyInstance, context: AppContext): void {
   app.get(ROUTES.health, async (_request, reply) => {
+    // Every household's books, as one answer: health never names a household,
+    // says how many there are, or where any of them is (lg-21).
+    const booksOpen = context.booksOpen();
     const body: HealthResponse = {
-      ok: context.db.open && context.directory.open && !context.isShuttingDown(),
+      ok: booksOpen && context.directory.open && !context.isShuttingDown(),
       shuttingDown: context.isShuttingDown(),
       version: VERSION,
       uptimeSec: Math.round((context.now().getTime() - context.startedAt.getTime()) / 1000),
-      database: { open: context.db.open },
+      database: { open: booksOpen },
       directory: { open: context.directory.open },
     };
     // 503 while draining so a load balancer stops sending traffic before the

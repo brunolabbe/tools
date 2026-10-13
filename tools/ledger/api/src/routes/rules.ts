@@ -15,7 +15,7 @@ import { AppError, ROUTES, ruleDraftSchema } from "@ledger/contract";
 import type { PeopleResponse, Rule, RuleDraft, RulesResponse } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
-import { personOf } from "../identity.ts";
+import { booksOf, personOf } from "../identity.ts";
 import { knownPeople } from "../people.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 import { createRule, currentRules, editRule, retireRule } from "../rules.ts";
@@ -23,10 +23,10 @@ import type { RuleContext } from "../rules.ts";
 
 export function ruleContext(context: AppContext, request: FastifyRequest): RuleContext {
   return {
-    db: context.db,
+    db: booksOf(request),
     personId: personOf(request).id,
     now: context.now,
-    people: new Set(knownPeople(context.db)),
+    people: new Set(knownPeople(booksOf(request))),
   };
 }
 
@@ -50,8 +50,8 @@ function draft(request: FastifyRequest): RuleDraft {
 export function registerRuleRoutes(app: FastifyInstance, context: AppContext): void {
   const { read, write } = rateLimitsFor(context);
 
-  app.get(ROUTES.rules, { onRequest: read }, async () => {
-    const body: RulesResponse = { rules: currentRules(context.db) };
+  app.get(ROUTES.rules, { onRequest: read }, async (request) => {
+    const body: RulesResponse = { rules: currentRules(booksOf(request)) };
     return body;
   });
 
@@ -64,9 +64,9 @@ export function registerRuleRoutes(app: FastifyInstance, context: AppContext): v
   // refuses the second request in a minute, as RATE_LIMITED" — that test, not
   // this comment, is what holds it. Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]
-  app.get(ROUTES.people, { onRequest: read }, async () => {
-    // The table, which boot fills from the configuration (people.ts).
-    const body: PeopleResponse = { people: knownPeople(context.db) };
+  app.get(ROUTES.people, { onRequest: read }, async (request) => {
+    // The household's table, which the directory's members fill (people.ts).
+    const body: PeopleResponse = { people: knownPeople(booksOf(request)) };
     return body;
   });
 

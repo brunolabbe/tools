@@ -116,8 +116,6 @@ describe("membership", () => {
   test("an address belongs to at most one household, this one included", () => {
     const directory = withHousehold();
     directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
-    // A second household exists only past the host command's refusal (lg-21),
-    // which the class does not know about.
     directory.addHousehold({ id: "other", name: "Other", ...CHANGE });
 
     expect(

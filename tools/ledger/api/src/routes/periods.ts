@@ -28,6 +28,7 @@ import type {
 } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
+import { booksOf } from "../identity.ts";
 import {
   addLine,
   addRecurring,
@@ -73,8 +74,8 @@ export function registerPeriodRoutes(app: FastifyInstance, context: AppContext):
   const { read, write } = rateLimitsFor(context);
   const today = (): string => context.now().toISOString().slice(0, 10);
 
-  app.get(ROUTES.periods, { onRequest: read }, async () => {
-    const body: PeriodsResponse = { periods: closedPeriods(context.db) };
+  app.get(ROUTES.periods, { onRequest: read }, async (request) => {
+    const body: PeriodsResponse = { periods: closedPeriods(booksOf(request)) };
     return body;
   });
 
@@ -83,7 +84,7 @@ export function registerPeriodRoutes(app: FastifyInstance, context: AppContext):
     if (!query.success) {
       throw new AppError("BAD_REQUEST", "start and end are days, written yyyy-mm-dd.");
     }
-    const body: OpenPeriodResponse = openPeriod(context.db, {
+    const body: OpenPeriodResponse = openPeriod(booksOf(request), {
       start: query.data.start,
       end: query.data.end ?? today(),
     });
@@ -108,7 +109,7 @@ export function registerPeriodRoutes(app: FastifyInstance, context: AppContext):
         "from and to are days, written yyyy-mm-dd; spendingCategory, offset and limit are whole numbers.",
       );
     }
-    const body: PeriodLinesResponse = listLines(context.db, query.data);
+    const body: PeriodLinesResponse = listLines(booksOf(request), query.data);
     return body;
   });
 
@@ -145,8 +146,8 @@ export function registerPeriodRoutes(app: FastifyInstance, context: AppContext):
   // recurring refuses the second request in a minute too" — that test, not this
   // comment, is what holds it. Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]
-  app.get(ROUTES.recurring, { onRequest: read }, async () => {
-    const body: RecurringResponse = { items: currentRecurring(context.db) };
+  app.get(ROUTES.recurring, { onRequest: read }, async (request) => {
+    const body: RecurringResponse = { items: currentRecurring(booksOf(request)) };
     return body;
   });
 

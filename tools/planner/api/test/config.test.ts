@@ -121,9 +121,9 @@ describe("loadApiConfig", () => {
     expect(config.modelTimeoutMs).toBe(45_000);
   });
 
-  test("defaults the model to claude-opus-5 at effort low, with no key", () => {
+  test("defaults the model to claude-sonnet-5-5 at effort low, with no key", () => {
     const config = loadApiConfig({}, {});
-    expect(config.model).toBe("claude-opus-5");
+    expect(config.model).toBe("claude-sonnet-5-5");
     expect(config.modelEffort).toBe("low");
     expect(config.modelTimeoutMs).toBe(120_000);
     // No default key, ever, and an empty one is not a key.

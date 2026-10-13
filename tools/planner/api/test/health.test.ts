@@ -50,7 +50,7 @@ describe("GET /api/health", () => {
       await app.server.inject({ method: "GET", url: ROUTES.health })
     ).json<HealthResponse>();
 
-    expect(body.agent).toEqual({ provider: "anthropic", model: "claude-opus-5" });
+    expect(body.agent).toEqual({ provider: "anthropic", model: "claude-sonnet-5-5" });
     expect(JSON.stringify(body)).not.toContain("sk-ant-health-test-key");
   });
 

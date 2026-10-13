@@ -11,6 +11,7 @@
 import { isLegalTransition, terminalStatuses, type TransitionTable } from "@webtools/core";
 import type { AppErrorPayload } from "./errors.ts";
 import type { MediaVariant, ProbeResult } from "./media.ts";
+import type { ProbeStage } from "./resolver.ts";
 
 /**
  * Written as a const tuple with the union derived from it, matching
@@ -268,5 +269,17 @@ export type JobEvent =
    * not attached when it was sent never sees it.
    */
   | { type: "refused"; jobId: string; error: AppErrorPayload; at: string }
+  /**
+   * The re-probe reached a point in the resolver chain (dl-110): the
+   * `ProbeStageEvent` that `/api/probe/:id/events` carries, keyed by job. Sent
+   * only while the job is `probing`. **Not persisted and not a status**: like
+   * `refused` it is a moment, the job record does not change, and a client that
+   * was not attached when it was sent never sees it.
+   *
+   * A client older than this frame drops it at validation and carries on: a
+   * frame that fails `parseJobEvent` is discarded by the transport, never
+   * treated as a broken stream.
+   */
+  | { type: "stage"; jobId: string; stage: ProbeStage; resolver: string; at: string }
   /** Periodic no-op so intermediaries do not close an idle connection. */
   | { type: "heartbeat"; at: string };

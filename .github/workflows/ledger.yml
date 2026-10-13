@@ -100,5 +100,27 @@ jobs:
           grep -q '<div id="root">' /tmp/index.html
           curl -fsS http://127.0.0.1:8100/api/health > /dev/null
 
+      # The household command, run inside the image the way the deployment
+      # notes run it: a second process writing the directory the running API
+      # reads (lg-20's gate, F8). The API gives a household its own books file
+      # the first time it needs one, and health is one of those times (lg-21).
+      - name: The household command runs inside the image, and a household gets its books
+        run: |
+          set -euo pipefail
+          household() { docker exec ledger node tools/ledger/api/dist/household-ledger.js "$@"; }
+          household add ci "CI household"
+          household member ci someone@example.test someone
+          household list | tee /tmp/list.txt
+          grep -q 'someone@example.test' /tmp/list.txt
+          household remove someone@example.test
+          household list | tee /tmp/list.txt
+          if grep -q 'someone@example.test' /tmp/list.txt; then
+            echo "the removal did not take"
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:8100/api/health | tee /tmp/health.json
+          grep -q '"ok":true' /tmp/health.json
+          docker exec ledger test -f /data/households/ci.db
+
       - if: always()
         run: docker rm -f ledger || true

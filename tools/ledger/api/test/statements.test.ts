@@ -5,10 +5,18 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type { ErrorResponse, ImportStatementReport } from "@ledger/contract";
+import { householdBooksPath } from "../src/books.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { ALEX, SAM, accessConfig, memberDirectory } from "./helpers/access.ts";
+import {
+  ALEX,
+  HOUSEHOLD,
+  SAM,
+  accessConfig,
+  homeBooks,
+  memberDirectory,
+} from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import type { PasteRow } from "./helpers/paste.ts";
 
@@ -24,7 +32,7 @@ async function startApp(person: string = ALEX): Promise<App> {
   app = await createApp({
     directory: memberDirectory(),
     config: {
-      databasePath: ":memory:",
+      dataDir: ":memory:",
       logLevel: "silent",
       access: accessConfig({ devIdentity: person }),
     },
@@ -121,7 +129,7 @@ interface StoredRowColumns {
 }
 
 function stored(target: App): StoredRowColumns[] {
-  return target.context.db
+  return homeBooks(target)
     .prepare(
       "SELECT seq, date, category, description, amount_cents, balance_cents, import_id FROM statement_rows ORDER BY seq",
     )
@@ -134,7 +142,8 @@ function refusal(response: { statusCode: number; json: <T>() => T }): ErrorRespo
 
 describe("POST /api/statements", () => {
   test("the first paste into an empty database is the anchor", async () => {
-    const { server, context } = await startApp();
+    const target = await startApp();
+    const { server } = target;
 
     const response = await server.inject({
       method: "POST",
@@ -149,7 +158,7 @@ describe("POST /api/statements", () => {
       tailBalanceCents: ROWS[5]?.balanceCents,
     });
     // Oldest = 0, in the order the account lived, whatever order the paste listed.
-    const rows = context.db
+    const rows = homeBooks(target)
       .prepare("SELECT seq, description FROM statement_rows ORDER BY seq")
       .all();
     expect(rows.map((row) => (row as { seq: number }).seq)).toEqual([0, 1, 2, 3, 4, 5]);
@@ -172,7 +181,7 @@ describe("POST /api/statements", () => {
     });
     expect(stored(target)).toEqual(before);
     // A paste that stored nothing is not an import: there is no row to point at.
-    const imports = target.context.db.prepare("SELECT count(*) AS n FROM statement_imports").get();
+    const imports = homeBooks(target).prepare("SELECT count(*) AS n FROM statement_imports").get();
     expect(imports).toEqual({ n: 1 });
   });
 
@@ -222,7 +231,7 @@ describe("POST /api/statements", () => {
     const target = await startApp(SAM);
     await report(target, paste(0, 3));
 
-    const imported = target.context.db
+    const imported = homeBooks(target)
       .prepare("SELECT imported_at, imported_by FROM statement_imports")
       .all();
     // The configured name, never the address.
@@ -392,8 +401,12 @@ describe("POST /api/statements", () => {
 
   test("is refused without an Access identity, like every API route but health", async () => {
     // The default configuration has no development identity, so a request with
-    // no token has nobody to be.
-    app = await createApp({ config: { databasePath: ":memory:", logLevel: "silent" } });
+    // no token has nobody to be. The household is there so its books can be
+    // looked inside afterwards.
+    app = await createApp({
+      directory: memberDirectory(),
+      config: { dataDir: ":memory:", logLevel: "silent" },
+    });
 
     const response = await post(app, paste(0, 3));
 
@@ -407,7 +420,7 @@ describe("POST /api/statements", () => {
     app = await createApp({
       directory: memberDirectory(),
       config: {
-        databasePath: ":memory:",
+        dataDir: ":memory:",
         access: accessConfig({ devIdentity: ALEX }),
       },
       logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
@@ -562,7 +575,7 @@ describe("a row's identity is not unique, so a paste is read by position", () =>
     const target = await startApp();
     await report(target, paste(0, 3));
     // Older rows may later be numbered below the oldest, so positions are not 0..n.
-    target.context.db.prepare("UPDATE statement_rows SET seq = seq - 5").run();
+    homeBooks(target).prepare("UPDATE statement_rows SET seq = seq - 5").run();
 
     await report(target, paste(3, 6));
 
@@ -609,20 +622,19 @@ describe("an over-long paste and a busy database", () => {
 
   test("a write lock held by another connection answers a retryable timeout, and stores nothing", async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-busy-"));
-    const databasePath = path.join(dir, "ledger.db");
     let other: Database.Database | undefined;
     try {
       app = await createApp({
         directory: memberDirectory(),
         config: {
-          databasePath,
+          dataDir: dir,
           logLevel: "silent",
           access: accessConfig({ devIdentity: ALEX }),
         },
       });
       // The 5 s the server waits is the production value; a test must not.
-      app.context.db.pragma("busy_timeout = 50");
-      other = new Database(databasePath);
+      homeBooks(app).pragma("busy_timeout = 50");
+      other = new Database(householdBooksPath(dir, HOUSEHOLD));
       other.prepare("BEGIN IMMEDIATE").run();
 
       const response = await post(app, paste(0, 3));

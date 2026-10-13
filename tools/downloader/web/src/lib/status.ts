@@ -12,8 +12,8 @@ export const STATUS_LABEL: Record<JobStatus, string> = {
 /**
  * Why the job is sitting in this state, in one line — the line under the job
  * card's bar, which is where the card says what is happening now (dl-109). It
- * moves with the status and nothing finer: the re-probe's own stages do not
- * reach the job's event stream.
+ * moves with the status and nothing finer; while re-analysing, the re-probe's
+ * own stages go on the line under it (dl-110), and this one keeps saying why.
  */
 export const STATUS_HINT: Record<JobStatus, string> = {
   queued: "Opening your download link.",
