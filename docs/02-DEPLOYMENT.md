@@ -1315,7 +1315,8 @@ holds one.
 ## The ledger
 
 A plain Node image, like the planner's, with SQLite on a volume and nothing it
-reaches outside the host. Three things are its own:
+reaches outside the host unless it is given a key to read receipts
+([below](#reading-receipts-with-a-model)). Three things are its own:
 
 - **The volume is the books.** `ledger_storage` is the only copy of every
   statement anyone imported, and of the history carried over from the
@@ -1361,8 +1362,29 @@ reaches outside the host. Three things are its own:
   import takes `--household <id>`, writes that household's books and no other's,
   and `--as` names one of its members.
 
-There is no model behind it yet. Reading receipts will be one, behind a seam of
-its own with an offline default, and it will get a section here when it lands.
+### Reading receipts with a model
+
+Receipts (lg-8) are read by Claude Haiku 5.5, and only when a person taps "Read
+it". **With no key the ledger reaches nothing outside the host**: a read is
+refused, and a receipt is typed in instead, which never needed one. Photos are
+kept on the volume, at `/data/receipts/<household>/`, so the backup of `/data`
+above covers them.
+
+| Variable                              | Value                        | Required                     |
+| ------------------------------------- | ---------------------------- | ---------------------------- |
+| `ANTHROPIC_API_KEY`                   | the key                      | no — **a secret**, see below |
+| `RECEIPT_MODEL`                       | `claude-haiku-5-5` (default) | no                           |
+| `RATE_LIMIT_RECEIPT_READS_PER_MINUTE` | `5` (default), per person    | no                           |
+
+The key reaches the process the way the planner's does ([A real model behind
+the planner](#a-real-model-behind-the-planner)): in the host's `.env`, passed
+through from an override file that also stays on the host —
+`ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}` under the `ledger` service's
+`environment`, in a file listed after `compose.ledger.prod.yaml` in
+`COMPOSE_FILE`. Nothing checked in names it. The boot log says which model
+reads, or that none does; never the key. As for the planner,
+`ANTHROPIC_CUSTOM_HEADERS` set beside the key refuses to boot, and a key means
+outbound egress to `api.anthropic.com`.
 
 ---
 

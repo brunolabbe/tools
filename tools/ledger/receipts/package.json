@@ -1,0 +1,27 @@
+{
+  "name": "@ledger/receipts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The receipt reader: a photo in, the receipts a model read in it out, as proposals a person edits. The only package in the tool that talks to a model, and it reads no environment.",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "@ledger/contract": "*",
+    "zod": "^4.4.3"
+  }
+}

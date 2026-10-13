@@ -70,6 +70,12 @@ export const ROUTES = {
   statsSpending: `${API_PREFIX}/stats/spending`,
   statsFixedItems: `${API_PREFIX}/stats/fixed-items`,
   statsSettlements: `${API_PREFIX}/stats/settlements`,
+  // lg-8: a receipt photo uploaded, read by the model when the person asks,
+  // the joint-account rows it may document, and filing it on confirmation.
+  receipts: `${API_PREFIX}/receipts`,
+  receiptRead: `${API_PREFIX}/receipts/:id/read`,
+  receiptMatches: `${API_PREFIX}/receipts/:id/matches`,
+  receiptFile: `${API_PREFIX}/receipts/:id/file`,
 } as const;
 
 /**
@@ -582,9 +588,9 @@ export interface RatiosResponse {
 /**
  * Where a period line came from. `manual` is a person's own entry (lg-6) and
  * `workbook` a line of one of the old workbook's period sheets, imported once
- * (lg-7); receipts (lg-8) add their own.
+ * (lg-7); `receipt` a receipt confirmed and filed (lg-8).
  */
-export const PERIOD_LINE_SOURCES = ["manual", "workbook"] as const;
+export const PERIOD_LINE_SOURCES = ["manual", "workbook", "receipt"] as const;
 export type PeriodLineSource = (typeof PERIOD_LINE_SOURCES)[number];
 
 /**

@@ -1,12 +1,13 @@
 /**
  * The shell: the home screen and the salaries (lg-5), the paste screen (lg-2),
  * the inbox and the rules (lg-4), the period (lg-6), and the spending
- * categories (lg-15) and the history's charts (lg-9).
+ * categories (lg-15) and the history's charts (lg-9), and a receipt photographed
+ * and filed (lg-8).
  *
  * The books arrive with their design — `docs/00-ANALYSIS.md` first, then the
  * tickets it produces — and a screen guessed at before its ticket is one more
  * thing to unpick, so each one lands with the work that stores what it shows.
- * Six screens do not need a router: a tab is a piece of state, and the inbox
+ * A handful of screens does not need a router: a tab is a piece of state, and the inbox
  * carries the number of rows waiting so a paste that left some is not missed.
  *
  * An address the household directory does not hold sees none of it (lg-20):
@@ -32,6 +33,7 @@ import { Household } from "./household/Household.tsx";
 import { Inbox } from "./inbox/Inbox.tsx";
 import { NoHousehold } from "./NoHousehold.tsx";
 import { Periods } from "./periods/Periods.tsx";
+import { Receipts } from "./receipts/Receipts.tsx";
 import { Rules } from "./rules/Rules.tsx";
 import { Salaries } from "./salaries/Salaries.tsx";
 import { Spending } from "./spending/Spending.tsx";
@@ -42,6 +44,7 @@ type Tab =
   | "home"
   | "stats"
   | "period"
+  | "receipt"
   | "paste"
   | "inbox"
   | "rules"
@@ -133,6 +136,9 @@ export function App(): React.ReactElement {
         <button type="button" aria-pressed={tab === "period"} onClick={() => setTab("period")}>
           Period
         </button>
+        <button type="button" aria-pressed={tab === "receipt"} onClick={() => setTab("receipt")}>
+          Receipt
+        </button>
         <button type="button" aria-pressed={tab === "paste"} onClick={() => setTab("paste")}>
           Paste
         </button>
@@ -167,6 +173,7 @@ export function App(): React.ReactElement {
         {tab === "home" && <Home />}
         {tab === "stats" && <Stats />}
         {tab === "period" && <Periods />}
+        {tab === "receipt" && <Receipts />}
         {tab === "paste" && <StatementPaste />}
         {tab === "inbox" && <Inbox onCount={setWaiting} />}
         {tab === "rules" && <Rules />}

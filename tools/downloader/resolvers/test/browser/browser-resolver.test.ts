@@ -400,43 +400,15 @@ describe("BrowserResolver", () => {
   });
 
   describe("play-time query rewrites are not a departure, within a narrow exception (dl-55, decision 1)", () => {
-    test.each(["t", "start", "autoplay"])(
-      "adding ?%s= on play is not a departure",
-      { timeout: TEST_TIMEOUT_MS },
-      async (param) => {
-        const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-        const result = await probe(`/guard-query.html?rewrite=${param}`, resolver);
-        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
-      },
-    );
-
-    test(
-      "a query key outside the exception is still a departure",
-      { timeout: TEST_TIMEOUT_MS },
-      async () => {
-        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
-        const error = await probeError("/guard-query.html?rewrite=other", resolver);
-        expectCode(error, "NO_MEDIA_FOUND");
-        expect(error.details?.["reason"]).toBe("navigated-away");
-      },
-    );
-
-    test(
-      "a reordered query string is not a departure (dl-55, decision 5)",
-      { timeout: TEST_TIMEOUT_MS },
-      async () => {
-        // No parameter's value changes, only the order the same two appear
-        // in — the owner's answer named only t/start/autoplay as allowed to
-        // differ and said nothing about order, so this pins the current
-        // behaviour (URLSearchParams sorted before comparison) as intended
-        // rather than incidental.
-        const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-        const result = await probe("/guard-query.html?rewrite=reorder&v=abc&list=PL1", resolver);
-        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
-      },
-    );
+    // The rule is `sameDocument`, and `same-document.test.ts` tables it: `start`,
+    // `autoplay`, another key and a reordered query were rows here until dl-114.
+    // One row stays as the proof the guard is wired to it.
+    test("adding ?t= on play is not a departure", { timeout: TEST_TIMEOUT_MS }, async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const result = await probe("/guard-query.html?rewrite=t", resolver);
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    });
   });
 
   describe("the cross-origin chooser picks the player, not a JS-click card (dl-55, decision 3)", () => {
@@ -1873,45 +1845,36 @@ describe("a click-only player box beside a press that did not start a player (dl
   // below asserts the same box-clicked beacon and the same stream.
 
   // Pressed as before; not counted as a player having started, because
-  // "Autoplay" and "display" do not start a word with "play".
-  test.each([
-    ["autoplay", "a toggle labelled Autoplay"],
-    ["display", "a data-testid of display-name, which is no control at all"],
-    // The word is read in the attribute the selector matched on, not in the
-    // others (gate 1): a `player-` class or id on the same element does not
-    // turn the toggle into a play control.
-    ["autoplay-cls", "the Autoplay toggle, with a player-autoplay-toggle class"],
-    ["autoplay-id", "the Autoplay toggle, with a player-autoplay id"],
-    ["autoplay-camel", "an autoPlayToggle test id, in camelCase"],
-    ["display-cls", "display-name, with a player-meta class"],
-  ])(
-    "ctl=%s (%s) is pressed but does not hold back the box click",
+  // "Autoplay" and "display" do not start a word with "play". The attribute rule
+  // is `attributesMarkPlayPress`, tabled in `play-press.test.ts`: the other
+  // `ctl=` rows that stood here (display, autoplay-cls, autoplay-id,
+  // autoplay-camel, display-cls) were rows of that table until dl-114. This one
+  // stays as the browser-level proof that a press which does not count is made
+  // and does not hold back the box click.
+  test(
+    "ctl=autoplay (a toggle labelled Autoplay) is pressed but does not hold back the box click",
     { timeout: TEST_TIMEOUT_MS },
-    async (ctl) => {
+    async () => {
       server.requests.length = 0;
-      const result = await probe(`/box-with-control.html?ctl=${ctl}`, resolverWith());
+      const result = await probe("/box-with-control.html?ctl=autoplay", resolverWith());
 
       expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
-      expect(server.requests).toContain(`/beacon/control-${ctl}`);
+      expect(server.requests).toContain("/beacon/control-autoplay");
       expect(server.requests).toContain("/beacon/box-clicked");
     },
   );
 
-  // What a press that counts still does, and the rows option A leaves counting
-  // on purpose (the owner's answer of 2026-10-11 left them to the builder; the
-  // ticket's Log has the reasoning): each is a label a player's own control
-  // can carry, so the box is left alone. `jw` is the one that proves the
-  // library-class branch, since `jw-icon-display` holds no "play" at all.
+  // What a press that counts still does. The rule that decides which presses
+  // count is tabled in `play-press.test.ts`; the rows kept here are the ones that
+  // reach the browser by another road. `jw` proves the library-class branch,
+  // since `jw-icon-display` holds no "play" at all. `watch` and `xo` ("Watch
+  // now", in a frame) carry no attribute mark, so they take the visible-text path
+  // and neither reaches the attribute rule; a frame alone would not keep them out,
+  // since the selector press runs in every frame.
+  // `testid-word`, `class-btn`, `id-button`, `id-play` and `carousel` stood here
+  // until dl-114.
   test.each([
     ["jw", "/box-with-control.html?ctl=jw", "/beacon/control-jw"],
-    // A word start in the data-testid, the class and the id, each alone: the
-    // control has no label, so a rule that reads only aria-label and title
-    // misses all three.
-    ["testid-word", "/box-with-control.html?ctl=testid-word", "/beacon/control-testid-word"],
-    ["class-btn", "/box-with-control.html?ctl=class-btn", "/beacon/control-class-btn"],
-    ["id-button", "/box-with-control.html?ctl=id-button", "/beacon/control-id-button"],
-    ["id-play", "/box-with-control.html?ctl=id-play", "/beacon/control-id-play"],
-    ["carousel", "/box-with-control.html?ctl=carousel", "/beacon/control-carousel"],
     ["watch", "/box-with-control.html?ctl=watch", "/beacon/control-watch"],
     ["xo", "/box-xo-cta.html", "/beacon/cta-pressed"],
   ])(
@@ -1938,30 +1901,6 @@ describe("a click-only player box beside a press that did not start a player (dl
 
       expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
       expect(server.requests).not.toContain("/beacon/embed-surface-clicked");
-    },
-  );
-
-  // Gate 1: an icon-only play control marked in camelCase, with no label to
-  // read. `main` counted its press; a rule that took only a non-letter for a
-  // word boundary did not, and a related-video card was pressed 1.5 s before
-  // the manifest came. `label` is the harness's control.
-  test.each([
-    ["label", "aria-label=Play"],
-    ["camel-testid", 'data-testid="videoPlayButton"'],
-    ["camel-title", 'title="VideoPlay"'],
-  ])(
-    "ctl=%s (%s) is a press that counts, so a slow player is not clicked past",
-    { timeout: TEST_TIMEOUT_MS },
-    async (ctl) => {
-      server.requests.length = 0;
-      const result = await probe(
-        `/player-poster-icon-grid.html?ctl=${ctl}&delay=1500`,
-        // The shipped floor, which a request at 1.5 s needs.
-        resolverWith(undefined, 9000),
-      );
-
-      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
-      expect(server.requests).not.toContain("/beacon/card-clicked");
     },
   );
 });

@@ -5338,6 +5338,44 @@ Total $4.6036 (rates read 2026-10-10). The close-out fixer is not in the table.
 
 - Gating a filing before asking the owner its decision: the narrow gate measured all 39 Windows readings of the row, so the owner chose between the options knowing the failure was one outlier, not on the builder's two readings.
 
+### Batch 2026-10-13 (tools-4f, lg-22 and lg-8 concurrent over one tool) — base 6d879b26
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | intake over five ready ids | 53s / 53s | 0 | $0.1822 |
+| #472 | merged | Opus 5.5 / high | builder-hard | lg-22 build, round 1, landing (N1/N2 at landing) | 31m45s / 1h38m43s | 0 | $12.9699 |
+| #472 | merged | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | lg-22 gates 1 and 2 | 19m52s / 41m10s | 0 | $4.5716 |
+| #474 | open, ready | Opus 5.5 / high | builder-hard | lg-8 build, round 1, N1–N4, merge from main, landing | 46m08s / 5h27m26s | 1 | $27.7467 |
+| #474 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | lg-8 gates 1 and 2 | 28m44s / 1h03m46s | 0 | $7.2405 |
+| #478 | open, ready | Haiku 5.5 / high | builder-mechanical | lg-24 filing (maintenance), lg-23 migration number folded in | 5m31s / 5m31s | 0 | $0.0959 |
+| — | — | Opus 5.5 / high | orchestrator | the batch | 56m31s / 11h06m35s | 2 | $8.4095 |
+
+Total $61.2163, active 3h09m24s (rates read 2026-10-10).
+
+**Tickets:**
+
+- lg-22 → #472, merged as 32929437: gate 1 FAIL (F1 high: the household routes' guard ran after the body was parsed while the shipped comment and Log said before; F2–F5 low; F6 low with an owner decision, accepted and documented), gate 2 PASS (N1, N2 low, fixed at landing by owner choice).
+- lg-8 → #474, built concurrently with lg-22 and held as a draft until #472 merged: gate 1 FAIL (F1 med, Done when 5's file-route clause unasserted; F2 med, owner chose one filing per proposal; F3–F8 low, F3 and F4 fixed by owner choice, F5 and F8 recorded unfixed), gate 2 PASS (N1–N4 low, fixed at landing by owner choice). The merge from main after gate 2 (three conflicted files) was verified by content and tests, not gated.
+- lg-24 → #478, filed by owner choice from a finding lg-22's gate 1 dropped as out of scope (a NULL `households.id` the directory schema accepts); lg-23's stale "migration 2" corrected in the same PR.
+
+**Defects in the skill:**
+
+1. `roles/common.md`, _Your worktree_, the paragraph beginning "A dependency your ticket adds is not in the farm" — for a branch that adds a *workspace* (not an outside package), `npm install --ignore-scripts` in the farmed worktree replaces the farm's links and leaves better-sqlite3 unbuilt. Reproduction (lg-8 builder): after that install, `npx vitest run tools/ledger/api/test/route-limits.test.ts tools/ledger/api/test/schema.test.ts …` → `Tests 63 failed | 38 passed (101)`, bindings errors ending at `node_modules/better-sqlite3/lib/binding/node-v127-linux-x64/better_sqlite3.node`; deleting the worktree's `node_modules`, re-running `worktree-farm.sh` and `ln -s ../../tools/ledger/receipts node_modules/@ledger/receipts` → 134 of 134.
+2. `roles/reviewer.md`, _Get the branch under review_ — gives a gate no instruction for a workspace the branch under review adds, which the farm does not link. Reproduction (lg-8 gate 1): `bash /workspaces/tools/.claude/scripts/worktree-farm.sh` then `ls -la node_modules/@ledger/` → `api books contract web`, no `receipts`; the gate added the symlink only because its dispatch said to.
+3. `roles/builder.md` — nothing warns that undoing a temporary mutation with `git checkout <file>` restores the index and discards the builder's own uncommitted edits to that file. Reproduction (lg-8 builder): after a mutation check on the Dockerfile undone that way, `grep -c receipts tools/ledger/Dockerfile` → `0`; the three Dockerfile lines had to be re-applied.
+4. `review-ticket/gate.md`, _Severity and the gate_ table — the `high` row ("shipped text that is false against the code, a comment stating a bound the code does not keep included") and the `low` row ("a comment that will mislead the next reader") both cover a false comment, with nothing to separate them. Reproduction: lg-22 gate 1 graded F1 (`routes/households.ts` header "Every guard runs before the body is read", false for the household routes) `high` and F3 (`append-only.ts` "any of the three ways SQLite reads one", SQLite reads four) `low`; each fits both rows (`git show origin/main:tools/ledger/docs/work/lg-22-manage-households-from-the-app.md | grep -n 'F1 —\|F3 —'`).
+5. `review-ticket/gate.md`, _Steps_, "Six verdicts" — no verdict for an acceptance line proven for some of its clauses and unasserted for another. Reproduction (lg-8 gate 1, Done when 5): planting `await reader?.read(...)` as the first statement of the `ROUTES.receiptFile` handler left `npx vitest run tools/ledger/api/test/receipts.test.ts` at `Tests 24 passed (24)` while upload and matches were asserted; the gate used `unproven` for the clause and explained it in the row.
+6. `reference/records.md`, _Landing_ — does not say that a release-please force-push during the `--land` run makes its preflight fail on "this checkout does not have" *after* the records are pushed, so a correct landing exits 1. Reproduction (lg-8 landing): `git fetch origin` before `--land` showed the three release-please branches `(forced update)`; `--land` printed `FAIL #465 release-please--branches--main--components--planner is at 4ad9dfb, which this checkout does not have` (and #460, #459) and `--land failed at "preflight"`; a second `git fetch origin` showed them forced again, and `node scripts/preflight.mjs --base origin/main --title "…(lg-8)"` → `preflight passed (exit 0)`.
+7. Root `CLAUDE.md`, _Handing back_ ("A subagent never writes it") — not reaching `builder-mechanical`: the lg-24 maintenance builder's second report ended with a `# Done` heading, while its first report in the same run said "Done is for the orchestrator to write". Reproduction: `node scripts/agent-cost.mjs --agent a22737d0b51bf29c8` prices the run as `claude-haiku-5-5`; the final report's last line is `# Done`.
+
+**Worked, and worth keeping:**
+
+- Each builder's and gate's open decision was put to the owner the moment it arrived, while the agent was alive: five decisions across both tickets, each answered on the agent's recommended option, none causing a rebuild.
+- Two tickets built at once over twelve shared files, with the second held as a draft and told to keep its edits to shared files additive; the merge from main after the first merged cost one landing step, verified by grepping every code, route and tab from both sides on `HEAD` plus the full ledger suite (60 files, 1045 tests).
+- Owner-chosen fixed-at-landing for every gate-2 low whose fix the gate fully stated (lg-22 N1–N2, lg-8 N1–N4), no third gate.
+- Grepping a gate section's finding bullets against its own summary before landing: lg-22 gate 2's file said "three `low` findings" and listed two; the gate corrected the sentence before it was committed.
+- A peer orchestrator (tools-22) asked for claims and id ranges before dispatching, and relayed main's cancelled push run; both were checked with one command each before being relied on.
+
 ### Batch 2026-10-13 (tools-22, dl-114 and dl-122, with dl-123 to dl-125 filed) — base 2cb4e734
 
 | PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |

@@ -12,7 +12,7 @@ describe("the schema's migrations", () => {
   test("migration 1 stores the statement rows and the imports they came from", () => {
     const db = open();
 
-    expect(db.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.pragma("user_version", { simple: true })).toBe(8);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()
@@ -82,7 +82,7 @@ describe("the schema's migrations", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.pragma("user_version", { simple: true })).toBe(8);
     expect(db.prepare("SELECT count(*) AS n FROM statement_imports").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -102,7 +102,7 @@ describe("the schema's migrations", () => {
     migrate(db);
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.pragma("user_version", { simple: true })).toBe(8);
     expect(db.prepare("SELECT source FROM statement_imports").all()).toEqual([{ source: "paste" }]);
     expect(db.prepare("SELECT note FROM statement_rows").all()).toEqual([{ note: null }]);
     expect(() =>
@@ -112,6 +112,39 @@ describe("the schema's migrations", () => {
         )
         .run("2026-10-03T00:00:00.000Z", "alex", "scan"),
     ).toThrow(/CHECK/u);
+    db.close();
+  });
+});
+
+// lg-8's gate 2, N3: the request's own check answers a second receipt on a row
+// with a 409; the index is what holds against a second writer on the same file.
+describe("migration 8's receipt filings", () => {
+  test("refuse a second filing on a row a receipt already documents", () => {
+    const db = open();
+    db.prepare("INSERT INTO people (id, added_at) VALUES ('alex', '2026-10-01')").run();
+    db.prepare("INSERT INTO statement_imports (imported_at, imported_by) VALUES (?, ?)").run(
+      "2026-10-02T00:00:00.000Z",
+      "alex",
+    );
+    db.prepare(
+      `INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id)
+       VALUES (0, '2026-10-01', 'Épicerie', 'Achat', -2650, 100, 1)`,
+    ).run();
+    const receipt = db.prepare(
+      `INSERT INTO receipts (photo, media_type, bytes, uploaded_at, uploaded_by)
+       VALUES (?, 'image/jpeg', 64, '2026-10-02T00:00:00.000Z', 'alex')`,
+    );
+    receipt.run("a.jpg");
+    receipt.run("b.jpg");
+    const filing = db.prepare(
+      `INSERT INTO receipt_filings (receipt_id, part, row_id, filed_at, filed_by)
+       VALUES (?, 1, 1, '2026-10-02T00:00:00.000Z', 'alex')`,
+    );
+
+    filing.run(1);
+
+    expect(() => filing.run(2)).toThrow(/UNIQUE/u);
+    expect(db.prepare("SELECT count(*) AS n FROM receipt_filings").get()).toEqual({ n: 1 });
     db.close();
   });
 });
