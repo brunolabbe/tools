@@ -619,39 +619,49 @@ describe("a page that refuses the visitor's region is GEO_BLOCKED (dl-113)", () 
   });
 });
 
-describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118)", () => {
+describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118, dl-122)", () => {
   // Each page puts a cover up that stays up, so each consent and play click is
-  // retried until its timeout. Uncapped that is 2000 ms a click. Each row has its
-  // own ceiling (dl-119), because each catches a different regression and the
-  // two are not the same distance from a capped run. Measured on 2026-10-12, in
-  // the unit this test times (`provokePlayback` alone), 5 runs capped and 3 to 5
-  // with the regression planted:
+  // retried until its timeout. Uncapped that is 2000 ms a click.
   //
-  // - the menu page: capped 1.9 to 2.1 s. The play clicks are the only blocked
-  //   ones there, twice each: one site uncapped is 5.5 to 5.7 s, both 9.2 to
-  //   9.4 s. The consent click is not blocked on this page, so it does not move
-  //   the row. The ceiling is 4000 ms, which catches either site alone.
-  // - the cookie sheets: capped 2.1 to 2.5 s. The consent click, once, uncapped
-  //   is 3.9 to 4.5 s; the gap is one 2000 ms wait less the 200 ms cap, so the
-  //   ceiling can only sit near the middle of it. 3200 ms leaves 0.7 s each way.
+  // The check is the mechanism, not the clock (dl-122): every click that was
+  // rejected was given the cap as its timeout. A wall-clock ceiling on the menu
+  // row failed on a Windows runner twice (dl-119: 3584 ms against 3000; dl-122:
+  // 4286 ms against 4000) while the two cookie rows beside it read normal, and
+  // at 4.3 s it was only 1.2 s under the one-site regression (5.5 s), so a
+  // reading that slow no longer showed the cap working. The click's timeout does
+  // not depend on the runner.
   //
-  // Only `provokePlayback` is timed: browser launch, context and navigation are
-  // not what the cap bounds, and the one row dl-118's landing run saw slow on a
-  // Windows runner (3.6 s against 2.2 s for the same code) was the menu row.
-  const MENU_CEILING_MS = 4000;
+  // The observation point is `Locator.click`, wrapped on the prototype
+  // Playwright's client gives every locator. That class is internal, not
+  // documented API: if a Playwright upgrade moves it, the `typeof` check below
+  // and the empty-list companion fail the row rather than letting it pass.
+  //
+  // What it does not cover: a wait that is not a click's timeout. The cookie rows
+  // keep their wall-clock ceiling for that reason (capped 2.1 to 2.5 s; the
+  // consent click uncapped is 3.9 to 4.5 s, so 3200 ms sits near the middle).
+  // The menu row has none: its play clicks are the only blocked ones, and they
+  // are click timeouts.
+  //
+  // Clicks are told apart by outcome, not by value. The age-gate press and the
+  // video clicks legitimately carry 2000 and 1500 and succeed; only a click that
+  // rejected waited out its whole timeout, so only those must carry the cap. The
+  // count of rejected clicks varies with timing (four on the menu page, five on a
+  // cookie sheet), so the companion asks for at least one, not an exact number.
+  const CAP_MS = 200;
   const COOKIE_CEILING_MS = 3200;
+
+  interface RecordedClick {
+    timeout: unknown;
+    rejected: boolean;
+  }
+  type ClickFn = (this: unknown, options?: { timeout?: unknown }) => Promise<unknown>;
 
   // Array rows with %s, not objects with $name: Vitest quotes a `$` value and cuts
   // it at 40 characters, which gave the two cookie rows one title. The ceiling is
   // the fourth element, so no placeholder reads it (a %d took the wrong argument
-  // in dl-118 and printed NaN).
+  // in dl-118 and printed NaN). A null ceiling is the menu row's: no clock.
   test.each([
-    [
-      "a shell's 18+ menu button",
-      "/age-false-shell-menu-button.html",
-      "/beacon/nav-18",
-      MENU_CEILING_MS,
-    ],
+    ["a shell's 18+ menu button", "/age-false-shell-menu-button.html", "/beacon/nav-18", null],
     [
       "a cookie sheet's View our 18 partners, closable panel",
       "/age-false-cookie-sheet-closable.html",
@@ -665,33 +675,62 @@ describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118)", () =
       COOKIE_CEILING_MS,
     ],
   ])(
-    "%s: the blocked clicks wait for the cap, not 2000 ms",
+    "%s: the blocked clicks are given the cap, not 2000 ms",
     async (_name, pathname, pressed, ceilingMs) => {
       server.requests.length = 0;
+      const clicks: RecordedClick[] = [];
       let elapsedMs = Number.NaN;
       await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
         const context = await browser.newContext();
         try {
           const page = await context.newPage();
           await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
-          const startedAt = Date.now();
-          await provokePlayback(page, {
-            deadline: Date.now() + 15_000,
-            signal: new AbortController().signal,
-            confirmAge: true,
-            clickTimeoutMs: 200,
-          });
-          elapsedMs = Date.now() - startedAt;
+          const proto: { click?: ClickFn } = Object.getPrototypeOf(page.locator("body"));
+          const original = proto.click;
+          expect(typeof original).toBe("function");
+          if (original === undefined) return;
+          // Wrapped by hand and put back in `finally`, not `vi.spyOn`: this block
+          // owns no `vi`, and the prototype is shared by every later test.
+          proto.click = async function (this: unknown, options?: { timeout?: unknown }) {
+            const record: RecordedClick = { timeout: options?.timeout, rejected: false };
+            clicks.push(record);
+            try {
+              return await original.call(this, options);
+            } catch (error) {
+              record.rejected = true;
+              throw error;
+            }
+          };
+          try {
+            const startedAt = Date.now();
+            await provokePlayback(page, {
+              deadline: Date.now() + 15_000,
+              signal: new AbortController().signal,
+              confirmAge: true,
+              clickTimeoutMs: CAP_MS,
+            });
+            elapsedMs = Date.now() - startedAt;
+          } finally {
+            proto.click = original;
+          }
         } finally {
           await context.close();
         }
       });
 
-      // The press landed, which is what opened the cover. The ceiling shows the
-      // cap shortened the run; it is not a count of the clicks.
+      // The press landed, which is what opened the cover.
       expect(server.requests).toContain(pressed);
       expect(server.requests).not.toContain("/beacon/play");
-      expect(elapsedMs).toBeLessThan(ceilingMs);
+
+      // The companion that fails on empty: with no rejected click the check below
+      // is vacuous, which is also what a moved prototype would look like.
+      const rejected = clicks.filter((click) => click.rejected);
+      expect(rejected.length).toBeGreaterThan(0);
+      // Every click that waited out its timeout was given the cap. A site that
+      // lost the cap shows here as a click at 2000, and this names it.
+      expect(rejected.filter((click) => click.timeout !== CAP_MS)).toEqual([]);
+
+      if (ceilingMs !== null) expect(elapsedMs).toBeLessThan(ceilingMs);
     },
   );
 });
