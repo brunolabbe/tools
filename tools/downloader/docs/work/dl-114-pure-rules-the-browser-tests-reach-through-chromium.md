@@ -270,6 +270,37 @@ New in the round:
   `test (ubuntu-latest)`, `test (windows-latest, informational)`,
   `e2e (direct)`, `docker` and `codeql`.
 
+### Gate 3
+
+**Gate: PASS** — 2026-10-13 · `f8f8819e..e3f65f8e` (the round is a6c7254b; the merge of `main` bringing 4f756c40 and 628d7efa was not reviewed) · Opus 5.5, narrow: gate 2's high only
+
+| Done when | Proof                                                                                                                                                                                                                         |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1–4       | unchanged since gate 2: a6c7254b changes text only (a comment in `play-press.test.ts` and the ticket's Log). CI on e3f65f8e: every check passed, `test (ubuntu-latest)` and `test (windows-latest, informational)` included ✓ |
+
+Gate 2's finding:
+
+- **high, the false coverage claim: fixed.** a6c7254b touches 2 files, +15 −4,
+  in the two places the remedy named.
+  - The header of `play-press.test.ts` now says "Only `ctl=jw`, which counts
+    through a class, can fail on a broken read; no browser row fails on a broken
+    `id`, `aria-label`, `title` or `data-testid` read".
+  - The Log's "Owner's answer 2" bullet says the same.
+  - The rest of the change is one new Log bullet recording the fix.
+  - Nothing else changed; the commit holds no code.
+
+  `git diff origin/main...e3f65f8e | grep 'id="play"'` finds three Log lines on
+  the branch, and none claims those pages cover the read:
+  - the 3000 ms row's button carries `id="play"` (accurate);
+  - gate 1's mutation flipped 14 verdicts on `id="play"` pages (accurate, left
+    alone as the fixer reported);
+  - the new bullet, which says they do not cover it.
+
+- **findings** · the round's hunt returned 0.
+- CI on e3f65f8e, read once: 11 checks passed, none failing or pending
+  (`test (windows-latest, informational)` included). No tests were run locally,
+  because the round touches no code.
+
 ## Log
 
 - 2026-10-12 — Filed from the suite-speed audit. The estimate is about 25 s
