@@ -32,7 +32,20 @@ worktree: several sessions run against this repo at once.
   looks fine.
 - **A dependency your ticket adds is not in the farm.** Run
   `npm install --ignore-scripts` in your worktree once, and say so in your
-  report; it is the one install allowed here.
+  report; it is the one install allowed here. **A workspace your branch adds
+  is different**: that install replaces the farm's links and leaves native
+  modules unbuilt (lg-8: 63 of 101 failed on `better_sqlite3.node`). Link it
+  by hand after the farm — `ln -s ../../tools/<tool>/<package>
+  node_modules/@<tool>/<package>` — and a gate on that branch does the same;
+  the farm links only what the shared checkout has.
+- **Undo a temporary mutation from a commit, never with `git checkout -- <file>`**,
+  which restores the index and discards every uncommitted edit to that file,
+  yours included (lg-8's builder lost its three Dockerfile lines that way).
+  Commit first; restore with `git checkout <sha> -- <path>`.
+- **End every commit message with the `Co-Authored-By` trailer** your session's
+  attribution reminder gives, in the commit that lands it; never rewrite a
+  pushed commit, or one a Log cites, to add it (repo-101 moved three cited shas
+  that way).
 - **A red/green across packages needs a rebuild between the two states** —
   `contract` included; `e2e:serve` builds only `web` — and a grep of `dist` for
   an identifier the change introduced, to prove which state you measured. A
@@ -76,12 +89,41 @@ either. `pkill -f` and `pgrep -f` match your own shell — kill by pid.
 anything that depends on it: a refused `git add && git commit` leaves the tree
 uncommitted and says nothing.
 
-**Preflight runs longer than a foreground call allows.** Run it in the
+**Preflight runs longer than a foreground call allows, and so does
+`review-record.mjs --land`, which runs preflight inside it.** Run either in the
 background with its output and its exit code written to files in your scratch
-directory, then wait with `until [ -s <exit file> ]; do sleep 3; done`. The
+directory, then wait with `until [ -s <exit file> ]; do sleep 3; done`. The wait
+is a foreground call too, capped at 600 s, and a downloader preflight runs past
+it (598 s for the suite alone): a wait the harness "moved to the background" is
+not a failure — start another, or read the exit file in a later call. The
 harness's "completed" notice reports the outer shell, not preflight; the exit
 file is the signal. The same shape for any suite that can run past two minutes:
 three resolver spec files took 490 s.
+
+## Reading a pull request's checks
+
+`gh pr checks <n>` and `gh pr view <n> --json headRefOid,statusCheckRollup`,
+naming the sha in anything you conclude.
+
+- **Checks register up to a minute after a push.** An empty list is not green:
+  `until ! gh pr checks <n> | grep -q pending` returns at once on it (dl-106).
+- **A run still in progress has no log.** `gh run view <run> --log` and
+  `--log-failed` answer "logs will be available when it is complete" until the
+  whole run finishes; `gh run view <run> --json jobs` gives each step's
+  conclusion at once. Once it has finished, `--job <id> --log-failed` prints the
+  failing tests, and `--job <id> --log | grep "<test name>"` the per-test
+  duration a timing line needs. Add `--attempt <n>` for an earlier attempt:
+  without it a job id from attempt 1 returns the latest attempt's log.
+- **A check `cancelled` on a sha with a later run of the same check on that sha
+  is superseded**: the later run is the reading (`pr-title` on #420 and #417).
+- **A `skipped` matrix is no baseline.** A run named as a "before" is read with
+  `--json jobs` first; the push run at bb4d2044 tested nothing (repo-99).
+- **The informational Windows leg is read, not graded.** A red one in code the
+  diff cannot reach is named with its failing test and the latest reading of
+  that leg on `main`; it is a finding only when the diff reaches it.
+- **Do not wait on a running leg past a few minutes.** A gate grades the line
+  `unproven (gate)` and names the sha; the lander reads the leg before its push
+  (`SKILL.md` step 9).
 
 ## Point every run at the narrowest thing that can fail
 

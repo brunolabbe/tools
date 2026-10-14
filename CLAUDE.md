@@ -133,7 +133,8 @@ which loads itself when you open one.
 
 ## Testing
 
-**vitest**, one project per tool plus one for `packages/`, configured in the root
+**vitest**, one project per tool plus `core` for `packages/` and `repo` for
+`scripts/`, configured in the root
 `vitest.config.ts`. Tests live in `<package>/test/**/*.test.{ts,tsx}` and are
 typechecked by the same `npm run check` the source is. Import `test`/`expect`/`vi`
 explicitly — globals are off on purpose. Fixtures, not live network calls.

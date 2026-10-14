@@ -100,9 +100,10 @@ the batch cannot proceed, put it to the user at once.
    for lows alone. **Below the floor, a finding whose fix is fully stated may
    still be applied by the lander, with no re-gate, when the owner says so**:
    put the recorded-unfixed list to the owner at the checkpoint with that
-   option, and the record keeps each finding as the gate wrote it, marked
-   _fixed at landing_. The owner took that path on seven tickets in five
-   batches.
+   option, and the record keeps each finding as the gate wrote it; the mark is
+   one Log entry in the form `reference/records.md` gives under _Fixed at
+   landing_. The owner took that path on seven tickets in five batches, and on
+   most tickets of the eleven batches that followed.
 
    After sending to a running or resumed agent, confirm delivery with
    `ListAgents` and with the artefact the message should produce.
@@ -121,9 +122,11 @@ the batch cannot proceed, put it to the user at once.
    inside the range is not the round — and returns one new `### Gate 2`
    section.
 
-   **Two gates is the default, and a third runs only when gate 2 itself raises a
-   `high`, or when the owner asks for one** — then the owner's answer names its
-   depth and scope, and the dispatch carries them. Anything less from gate 2 is handled by the floor in step 6 and
+   **Two gates is the default. A third runs when gate 2 itself raises a `high`
+   — then it is narrow, scoped to that finding's fix, and needs no owner answer
+   (dl-114's was put to the owner for nothing) — or when the owner asks for
+   one, and then the owner's answer names its depth and scope.** The dispatch
+   carries the depth and scope either way. Anything less from gate 2 is handled by the floor in step 6 and
    checked by preflight and CI, not by another gate. If a third gate raises
    another `high`, stop and put the state to the user. Across 253 recorded gate
    sections, the 47 past gate 2 found no high (adr/006).
@@ -134,6 +137,12 @@ the batch cannot proceed, put it to the user at once.
    lander first commits the ticket's `awaiting:` line. Then one command per
    ticket ([reference/records.md](reference/records.md)):
    `node scripts/review-record.mjs --land <ticket-path> <gate files…> --base origin/<base> --status done --title "<PR title>" --branch <branch>`.
+   **A gate cannot write its report to a file** — the harness refuses a
+   subagent writing one ("Subagents should return findings as text", 51 times
+   in six transcripts since 2026-10-10) — so before you dispatch the lander,
+   write each gate's returned report verbatim to
+   `<scratch>/<id>/gate-<n>/report.md` yourself and hand the lander those
+   paths beside the gate files.
    **A gate verdict conditional on a CI leg is read before the lander pushes**:
    the landing push cancels the gated sha's run. When the landing changed only
    the ticket file, the landing head's run stands for it, named in the thread
@@ -141,7 +150,10 @@ the batch cannot proceed, put it to the user at once.
    the PR body, and marks the PR ready — unless you are holding it as a draft
    for merge order, in which case you say so in a PR comment.
 
-10. **Look once at the PR's finished checks** (`gh pr checks <n>`), then remove
+10. **Look once at the PR's finished checks** (`gh pr checks <n>`) — and when a
+    fix was applied at the landing to anything but the ticket file, at the
+    landing head's `CodeQL` check too: the gated sha's run does not stand for
+    that code (repo-103's landing fix raised a new `high` alert). Then remove
     the ticket's worktrees: each clean, each head on origin, each agent finished
     and sent nothing since. If CI shows a problem, ask the owner whether to keep
     them. A lock names your own pid for every agent, so it is not a liveness
@@ -174,8 +186,12 @@ files together.
 | a docs-only chore — ticket files, tool docs, no source | `builder-standard` | one gate, narrow, after the PR opens |
 | a round's mechanical fixes, and a landing | `fixer` (Sonnet 5.5, high) | the round's gate, woken |
 
-- Never `haiku` for a gate or for prose and records; never `fable` for either
-  role. The rule is "a different model", not "a cheaper one".
+- Never `haiku` for a gate or a gate record; never `fable` for either role. A
+  filing whose reproduction is in hand is a maintenance dispatch and runs on
+  `builder-mechanical` (owner, 2026-10-14: lg-24's filing cost $0.10 there,
+  against $0.63 and $1.17 for dl-123 and dl-125 on `builder-standard`); a
+  filing that must first reproduce on `main` is not in hand and is a `standard`
+  dispatch. The rule is "a different model", not "a cheaper one".
 - A Haiku build is always gated: it has reported verifications it did not run
   (dl-36, pl-51).
 - Confirm what ran from the transcript:
@@ -200,7 +216,13 @@ that reads `success`, and any check that is not an Actions workflow. Name the
 sha in whatever you conclude. A default-setup `CodeQL` failure is read with
 `WebFetch` on the check's `detailsUrl` from `statusCheckRollup`: the page lists
 each alert's rule, file and line, where `gh pr checks` prints only `fail`
-(verified 2026-10-10). Never run `gh api`, alone or inside a compound command.
+(verified 2026-10-10). WebFetch returns a model's summary of that page, not the
+page: take the rule and the file from it and check the line against the source
+rather than quoting it. Never run `gh api`, alone or inside a compound command.
+The alerts' state on `main` after `security.yml`'s dismissal step — the reading
+an `awaiting` CodeQL line names — is the owner's to take: the security tab needs
+a sign-in and `gh api` is denied, so ask for it after the merge (#414 closed
+four lines that way).
 
 **After the merge**:
 `gh run list --branch main --limit 10 --json databaseId,event,conclusion,headSha`,
@@ -230,7 +252,11 @@ work. How to ask is the root `CLAUDE.md` rule. What is specific to a batch:
   dl-97's excusal were each given on a builder's example and overturned by a
   gate's numbers; the owner re-chose each time.
 - **An acceptance line that says "every" is reworded to an enumerable scope
-  before dispatch**, or the gate can always find one more shape (dl-58).
+  before dispatch**, or the gate can always find one more shape (dl-58). So is
+  a line whose named proof is unsafe on the shared machine — three concurrent
+  downloader runs (repo-103) — or costs hours at its stated bar (dl-105's ten
+  whole-file runs, about 3.4 h): reword it, or name in the dispatch what the
+  gate grades it as, before anyone builds to it.
 - **While the owner is away, a reversible choice is taken, not held.** An away
   signal is the owner saying so; silence is not one, and neither is a cache
   expiry. Then a decision that meets **every** condition is taken on your
@@ -286,14 +312,30 @@ receiving agent needed in full.
 
 ## If the session dies
 
-Two of the five batches of 2026-10-06 to 2026-10-08 lost their session
-mid-batch — once the orchestrator, once the host. Its subagents die with it and
-cannot be messaged, and a worktree an agent left clean is reclaimed. The next
-session reads `board.md` and the transcript, then for each remaining worktree
-`git log <last known sha>..HEAD` and `git status --short`, before it decides
-anything: local commits a builder never pushed are handed to a fresh agent by
-name, not rebuilt; a gate that died is dispatched fresh for the round it was in,
-and the gate files already in the scratch directory stand.
+Four sessions between 2026-10-06 and 2026-10-12 died mid-batch — the
+orchestrator twice, the host twice. Before deciding anything, the next session
+reads `board.md` and the transcript, then checks three things this page used to
+assume:
+
+- **The old process may still be alive.** A VS Code/WSL crash leaves the CLI
+  running with its agents and its lander: `ListAgents` lists the old session
+  under its own name, and `ps -o pid,lstart,args` shows its `--land`
+  (repo-103, 2026-10-12). Wait for it to finish or stop it; never run a second
+  landing beside it.
+- **A stopped agent is resumable when its worktree survived.** The harness says
+  so ("Resume it by sending it a message"), and a `SendMessage` resumes it with
+  its measurements intact (dl-120). An agent that stopped with nothing
+  committed has had its worktree reclaimed, and a resume would run in the
+  shared checkout: dispatch that one fresh, by name, with its last pushed sha.
+  A gate's files already in the scratch directory stand.
+- **Per surviving worktree**, `git log <last known sha>..HEAD`,
+  `git status --short`, and a `ps` for the agent's own background runs — a
+  `pinned.sh` series, vitest, preflight — which can still be writing to the
+  tree. A file staged where the builder left it unstaged means the index and
+  the tree disagree: read both before any `git checkout -- <file>`.
+
+Local commits a builder never pushed are handed to a fresh agent by name, not
+rebuilt.
 
 ## Reporting to the user
 

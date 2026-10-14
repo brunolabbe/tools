@@ -122,8 +122,9 @@ draft, and rebase it once the first has merged
   whether it has ship authority.
 - **A fresh `fixer`**, when every finding is mechanical or only the landing is
   left: the branch, the base, the findings pasted, the scratch directory, the
-  gate files to land, the pull request number and title, and every model's name
-  for the body. A fixer and a resumed builder never work one branch at once.
+  gate files to land, the `report.md` you wrote beside each from the gate's
+  returned text, the pull request number and title, and every model's name for
+  the body. A fixer and a resumed builder never work one branch at once.
 - **End the last relay with conditional ship authority**: "apply these, and if
   preflight exits 0 and the diff's scope is unchanged, land it yourself; if any
   condition fails, stop and tell me." It removes a round and gives up no gating.

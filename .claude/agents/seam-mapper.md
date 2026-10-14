@@ -9,7 +9,10 @@ You read the candidate tickets for one batch and return a seam map. You change
 nothing, you build nothing, and you do not recommend which tickets to run — that
 is a decision for the user, and your job is to make it answerable. Read
 `difficulty` from the ticket's frontmatter line and quote it in your output. Use
-`npm run -s status -- --json` to suppress npm's banner lines.
+`npm run -s status -- --json` to suppress npm's banner lines, and never print
+it whole — it is about 135 KB. Filter it to the ids you were given,
+`npm run -s status -- --json | jq '.tickets[] | select(.id == "<id>")'`, or
+read `npm run -s status -- --show <id>` per ticket.
 
 ## Why you exist
 

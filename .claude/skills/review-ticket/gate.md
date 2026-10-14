@@ -54,12 +54,18 @@ side is in [SKILL.md](SKILL.md).
      the clause proves half the clause. Say which assertion carries the line.
    - **A line with several clauses is proven only when every clause is.** A row
      ticked on the strength of its first clause is the failure this step exists
-     to prevent.
+     to prevent. A line with one clause unasserted is **unproven**, and the row
+     names the clause (lg-8's Done when 5). A line that reads two ways, one met
+     and one that a test on the branch contradicts, is graded on the literal
+     reading as the open-decision case below, and the owner rewords or confirms
+     the line (dl-100).
    - **Every "contains no X" assertion needs a companion that fails on empty
      output.** A test that a string never appears passes on a function that
      returns nothing.
 
-   Six verdicts:
+   The verdicts — six here, and two more under _Severity and the gate_
+   (`unproven (scope)`, `unproven (open decision)`). A docs-only line checked by
+   reading is **verified**, and the row says so:
 
    - **proven** — a test asserts it, and it runs in `npm test`.
    - **unproven** — nothing asserts it.
@@ -69,7 +75,8 @@ side is in [SKILL.md](SKILL.md).
    - **unproven (gate)** — asserted only by something the local gates do not
      run: a tool's `e2e` suite, its container build, the Windows leg. When the
      pull request's CI has run that leg green on the head you are gating, say so
-     and count it proven, naming the check and the sha.
+     and count it proven, naming the check and the sha — a check named with its
+     sha is a measurement, not a commit pin.
    - **awaiting** — nothing that can run before the merge proves it, and an
      event after the merge will. The test is the one `docs/01-TICKETS.md` gives
      the `awaiting` field: the event is nameable (a release commit, the first
@@ -118,8 +125,11 @@ side is in [SKILL.md](SKILL.md).
    - A new workspace dependency for an `api` costs **two** edits to that tool's
      `Dockerfile`, and neither is typechecked.
    - When a check is about "every route", enumerate them with Fastify's
-     `printRoutes({ includeHooks: true })`, not a contract table, which misses
-     `HEAD` and a second verb on one path.
+     `printRoutes({ commonPrefix: false, includeMeta: true })`, rebuilding each
+     path from its ancestors as `tools/ledger/api/test/isolation.test.ts` does
+     — not a contract table, which misses `HEAD` and a second verb on one path,
+     and not `includeHooks: true`, which prints a radix tree with `HEAD` folded
+     in (lg-21).
    - Style: no `any`, no `console`, `import type`, `node:` builtins, `.ts` in
      relative imports.
 
@@ -140,13 +150,20 @@ sections, in the same pull request as the fix. Name them in the finding.
 
 | Severity | Means |
 | --- | --- |
-| **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested — including a test that passes when the thing it claims to prove is broken, and shipped text that is false against the code, a comment stating a bound the code does not keep included |
+| **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested — including a test that passes when the thing it claims to prove is broken, and shipped text that promises a guarantee the code does not keep (a bound, a guard order, a coverage claim), so that a reader relying on it is unsafe |
 | **med** | An acceptance line unproven, a rule bent with no reason given, a defect behind a condition that will occur, a new branch in a file with no test file of its own |
-| **low** | Style, a missing fixture, a comment that will mislead the next reader, a defect with no live call site |
+| **low** | Style, a missing fixture, a defect with no live call site, and shipped text or a comment that is false in the safe direction or about a detail nothing relies on |
 
 **"The thing it claims to prove" is the test's assertion, not its title.** A
 test whose title claims more than its body asserts leaves the line `unproven`,
 a `med`; a test that passes while the claim it asserts is broken is `high`.
+
+**False text is graded by its direction, not its form** (owner, 2026-10-14).
+lg-22's F1, a routes header saying every guard runs before the body is read
+where two routes read it first, is `high`: a reader trusting it skips a check.
+Its F3, a comment counting three SQLite read paths where there are four, is
+`low`: nothing relies on the count. Say in the bullet which way the falsehood
+runs.
 
 **Say for each `med` whether a `Done when` line depends on it.** Only a `high`,
 or a `med` an acceptance line depends on, opens a fix round; everything else is
@@ -160,12 +177,18 @@ hypothetical with no caller as `low`, and say "no live call site" in the bullet.
 - **CONCERNS** — any med, or any acceptance line **unproven (gate)**.
 - **unproven (scope)** — a line the dispatch removed from the branch's scope,
   with the row naming who scoped it and where the work lands instead. It does
-  not force FAIL.
+  not force FAIL. A line whose named proof the dispatch forbids running — three
+  concurrent downloader runs on the shared machine (repo-103) — is the same
+  case: the row names the dispatch and what was run instead.
 - **unproven (open decision)** — a line the build cannot meet because the brief
-  contradicts itself: the build does what the brief's Decision says, the line
-  asks for something that Decision cannot deliver, and **no test on the branch
-  asserts the opposite of the line**. The row names the two facts that
-  contradict. It is one finding, a `med` that the line depends on, so the
+  contradicts itself: the build does what the brief's Decision says — or, on a
+  ticket with no Decision section, what its Build step says to do or to stop on
+  (dl-93) — the line asks for something that cannot deliver, and **no test on
+  the branch asserts the opposite of the line**. A test older than the branch
+  that contradicts the literal line (dl-80's `elapsedMs >= 9000` against
+  dl-111's first Done when) is a contradiction in the brief, not in the build,
+  and belongs here. The row names the two facts that contradict. It is one
+  finding, a `med` that the line depends on, so the
   decision goes to the owner before any round (`orchestrate-tickets`, step 6),
   and it does not force FAIL: the verdict is CONCERNS unless something else is
   higher. **A test that asserts the opposite of an acceptance line is a
@@ -221,9 +244,14 @@ record up by ticket and gate; none is cited by line.
   Log records that decision, its options and who gave it, and every other check
   is green on this head, the row is **awaiting**: the event is the push to
   `main` that runs the dismissal step in `security.yml`, and the reading is the
-  alerts' state on `main` afterwards. The gate does not grant an excusal and
-  does not count a red check as green: with no recorded decision the row stays
-  `unproven (gate)`, and a red leg nobody excused is a finding.
+  alerts' state on `main` afterwards — the owner's to take, since the security
+  tab needs a sign-in and `gh api` is denied (#414 closed four such lines). The
+  gate does not grant an excusal and does not count a red check as green: with
+  no recorded decision the row stays `unproven (gate)`, and a red leg nobody
+  excused is a `med` finding the line depends on (lg-17 gate 1) — the line is
+  unproven, not false. An excused alert can also leave the check green ("No new
+  alerts in code changed by this pull request", lg-9): the check then proves
+  the row, and the excusal is a Log fact, not a row.
 
 ## The section
 
@@ -256,7 +284,8 @@ line that separates a gate whose hunt found nothing from one whose hunt never
 ran, and its count has to reconcile against the bullets.
 
 A later gate's section starts `### Gate 2` with the same header line, gives each
-earlier finding a verdict — fixed, not fixed, refuted — and lists only findings
+earlier finding a verdict — fixed, fixed in part, not fixed, refuted — and
+lists only findings
 in the lines the round touched.
 
 ## What this is not

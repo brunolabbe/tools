@@ -16,7 +16,12 @@ Then `git worktree unlock`, then remove. If CI shows a problem at that look, ask
 the owner whether to keep the ticket's worktrees.
 
 **Removing a worktree makes its agent unresumable.** A follow-up after that — a
-post-PR fix, a stacked rebase — goes to a fresh `fixer`, not a resume.
+post-PR fix, a stacked rebase — goes to a fresh `fixer`, not a resume. The
+harness removes one too: an agent that stops with nothing committed loses its
+worktree, and a resume then runs in the shared checkout silently (tools-4f's
+maintenance builder ran `git checkout --detach`, the farm and `npm run build`
+in `/workspaces/tools`). A completion with no `<worktree>` line is dispatched
+fresh, never resumed.
 
 **Before the landing, a round is not over because an agent said so.** A builder
 can always be woken for one more finding; hold the worktrees until the landing.
