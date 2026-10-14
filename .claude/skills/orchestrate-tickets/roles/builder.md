@@ -20,7 +20,10 @@ instead.
    branch exists for a re-dispatch to refuse.
 2. Confirm the branch name you were given is free — `git branch --list <branch>`
    and `git ls-remote --heads origin <branch>` both print nothing — then
-   `git checkout -b <branch> origin/<base>`. **Never `-B`, and never reuse or
+   `git checkout --no-track -b <branch> origin/<base>`. Without `--no-track`
+   the branch tracks `origin/<base>` and a bare `git push` aims at `main`: 33
+   builders since 2026-10-10 saw `set up to track 'origin/main'`. **Never
+   `-B`, and never reuse or
    rename an existing branch**: refs are shared across every worktree. If the
    name exists, stop and report. When the base was never pushed, branch off the
    named local ref and say which you used.
@@ -36,32 +39,54 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   decide not to, say in the Log that you could have and why you did not. A
   ticket for another tool is filed in its own `docs` pull request, never in this
   one: release-please routes by path.
-- **A ticket you file and fix inside this branch stays `in-flight`** until its
-  own gate record lands.
+- **A ticket you file in this branch is left `ready`**, whether it is the
+  branch's own or one folded in beside it; the lander sets its status with the
+  record (owner, 2026-10-14; dl-119 and dl-120 both landed `done` that way).
+- **A `.claude/settings.json` rule or a hook on your branch binds nothing until
+  it merges**: the harness reads the shared checkout's copy. Prove one with a
+  control on the branch and say so in the Log (repo-95: `gh stack merge --help`
+  ran under a branch-only deny, while `gh api --help`, denied on `main`, was
+  refused).
 - **You have no `Skill` tool.** When the Build names a procedure a skill owns,
   read its `SKILL.md` and follow it.
-- **Stopping on the ticket's own stop condition** — a Build step that says to
-  stop for an answer — you commit the Log entry that says where you stopped,
-  and push it. A worktree with nothing committed is reclaimed when you finish,
-  and a resume then lands in the shared checkout with no tree of its own.
+- **Stopping on a stop condition** — a Build step that says to stop for an
+  answer, or a dispatch that says to measure and stop before changing production
+  code — you commit the Log entry that says where you stopped, and push it
+  unless the dispatch says not to push; then the commit alone keeps the worktree
+  and your report names its sha. A worktree with nothing committed is reclaimed
+  when you finish, and a resume then lands in the shared checkout with no tree
+  of its own.
 
 ## Before you report
 
 - `npm run format` after touching any `.md`. Fix lint by hand; never
   `npm run lint:fix`, which rewrites files outside the branch.
-- `npx oxlint <the packages you touched>` before preflight: seconds, against a
-  twelve-minute preflight that stops on one lint line.
+- `npx oxlint <the packages you touched>` and `npm run check` before preflight:
+  seconds, against a twelve-minute preflight that stops on one lint line or one
+  type error `npx vitest run` never sees (lg-19's `exactOptionalPropertyTypes`
+  error failed only under `npm run check`).
 - `git fetch origin` before preflight: `--base origin/<base>` reads the ref this
   worktree holds, and `main` moves during a batch. **A moved `main` is taken by
   `git merge origin/<base>`, never by a rebase**: a rebased branch cannot reach
   `origin` without a force-push, and a merge of the same sha gives the same tree
-  (dl-81).
+  (dl-81). Run the merge with no `-m`: the commit-msg hook bypasses git's own
+  `Merge remote-tracking branch…` subject and rejects any subject you write (41
+  `Not committing merge` lines in the transcripts since 2026-10-10).
+- **A reproduction only another OS can give is the orchestrator's to arrange**
+  (`reference/dispatching.md`, _A probe pull request_): never add a file under
+  `.github/workflows/` unasked. The pull request's own Windows leg is the
+  reading you have.
+- **A `Done when` bar you measure to cost hours** (dl-105: ten whole-file runs
+  at 615 s each, about 3.4 h) is an open decision in your report, with the
+  measurement, not a run; take the line's own escape only when it gives one.
 - A new dependency: `npm audit --package-lock-only` before the push. CI's
   `dependency-review` job is not in preflight and goes red on a moderate
   advisory (lg-7).
 - `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`,
-  exit 0. It runs `npm run check`, the suite of every tool the diff touches
-  (and `core` and `repo` when `scripts/` moved),
+  exit 0. It runs `npm run check`; then, for each tool the diff touches with a
+  path that is not markdown, the packages those paths can reach (repo-101,
+  repo-102: a markdown-only change under a tool plans no suite); `core` and
+  `repo` when `scripts/` moved;
   every other `ci.yml` check-job command, the `## Review` presence test, the
   title's type against the paths it touches, and a merge-tree probe against
   every other open pull request head. Run full `npm test` yourself if shared
@@ -87,7 +112,9 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   the title with `node scripts/commit-message.mjs --text "<title>"`, then
   `gh pr create --draft --title "<title>" --body-file <file>`. The body's
   Summary describes the ticket's whole change; say the gate is pending. The
-  draft exists so CI runs while the gate works — it is not ship authority.
+  draft exists so CI runs while the gate works — it is not ship authority. A
+  filing the pairing table gates with none opens ready, without `--draft`, when
+  your dispatch says so.
 
 ## Your report
 

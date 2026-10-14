@@ -125,3 +125,10 @@ entirely. The unit matrix still skips a change that is all `.md`, through a
 `changes` job rather than a trigger filter. A tool's slow gates (e2e, container
 build) live in `.github/workflows/<tool>.yml`, path-filtered so work on one tool
 does not pay for another's.
+
+**Fake timers never reap a killed child.** A child killed with `SIGKILL` stays a
+zombie — alive to `process.kill(pid, 0)` — until the event loop reaps it, and
+under `vi.useFakeTimers` the loop never gets there, so a liveness check written
+as `kill(pid, 0)` passes with the child dead (dl-116's first kill-grace pin
+passed under a `DEFAULT_KILL_GRACE_MS = 1000` mutation). Check liveness with
+real timers, or on the child's `exit` event.

@@ -7,7 +7,10 @@ models so one can be held against the other:
 - **The section, in the ticket**, above `## Log`: the verdict, the acceptance
   table and the findings, one subsection per gate, exactly as the gate wrote it.
 - **The full report, on the pull request thread**: the reasoning, the
-  enumerations and the reproductions.
+  enumerations and the reproductions. A gate returns it as text and cannot
+  write it to a file (the harness refuses a subagent writing a report file);
+  the orchestrator writes each one to `<scratch>/<id>/gate-<n>/report.md`, and
+  the lander posts those.
 
 ## What a record names
 
@@ -43,6 +46,17 @@ against a sibling included, so read the output, never the code alone; a verify
 failure names the force-push only the owner can make; and a `cleanup` line about
 the scratch clone is a warning, not a failure (repo-94).
 
+Two failures after the push are not the lander's to repair. A merge-tree exit
+16 against a sibling that conflicts with the base itself (lg-21 and repo-103,
+both against dl-110) is cleared by the orchestrator's merge order. A
+`FAIL #<n> … is at <sha>, which this checkout does not have` right after a
+`git fetch origin` is release-please force-updating its branches between the
+fetch and the probe (three landings this period; repo-104): the records are
+landed, and `preflight.mjs` alone exits 0 on the next run. A `--land` killed
+after its push is finished except for the thread comments and `gh pr ready`:
+do those by hand, and never run `--land` on the same files again — it splices
+a second `## Review` (repo-103).
+
 - **Gate 1's file starts `## Review`; a later gate's starts `### Gate <n>`.**
   The script reads the gate number off that line.
 - **The lander changes no word of a section.** A difference between a file and
@@ -74,6 +88,26 @@ commit, then
 `node scripts/review-record.mjs --verify <ticket-path> <section-file> [--gate <n>] --rev HEAD`.
 `<ticket-path>` is the file's path, not its id, and `--gate` is given only for a
 file that starts `### Gate <n>`.
+
+## Fixed at landing
+
+A below-floor finding the owner chose to fix at the landing (`SKILL.md` step 6)
+is applied as the finding states it — the gate's wording and the code it names,
+not the lander's reading of it (repo-95's lander wrote "a similar sentence";
+the gate's is the record). The gate's section is not touched. The mark is one
+Log entry on the ticket, in the landing commit:
+
+```markdown
+- 2026-10-14 — Fixed at landing by owner choice: gate 2, N1 — "<the gate's
+  sentence>". `<the command that shows it fixed>` → <its output>.
+```
+
+It names the finding, not the commit: a commit cannot carry its own sha (lg-19
+spent two commits on one line), and the fix is the landing commit whose subject
+names the finding. When the fix touched anything but the ticket file, the
+orchestrator reads the landing head's `CodeQL` check before the merge
+(`SKILL.md` step 10): repo-103's landing fix raised a new `high` alert that the
+gated sha's run had not seen.
 
 ## Rules for what the record says
 

@@ -9,7 +9,10 @@ re-read its whole transcript on every turn.
 ## Set up
 
 1. `git checkout --detach origin/<branch>` — the builder's worktree holds the
-   branch name. **Never create, reset or rename the branch.**
+   branch name. **Never create, reset or rename a builder's branch.** The one
+   branch you create is your own, for a maintenance pull request whose branch
+   your dispatch names and which does not exist yet:
+   `git checkout --no-track -b <branch> origin/<base>` (#414).
 2. Farm and build, per `common.md`, even for a docs-only landing: preflight's
    `npm run check` typechecks every workspace, and a fresh tree without `dist`
    fails it in files you never touched.
@@ -24,11 +27,28 @@ re-read its whole transcript on every turn.
   report it. The orchestrator sends it to the builder.
 - **Before you narrow or delete a test, name what it asserted and where each
   assertion went.**
-- Run the checks your fixes touch, narrowest first, then `git fetch origin` —
-  if `origin/<base>` has moved past the build base, `git merge origin/<base>`,
-  never a rebase, which cannot reach `origin` without the force-push forbidden
-  below — then
-  `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`.
+- Run the checks your fixes touch, narrowest first, then `git fetch origin`.
+  **Merge `origin/<base>` only when your dispatch asks for it or preflight's
+  merge-tree probe fails against it** — with no `-m`, since the hook accepts
+  only git's own merge subject, and never a rebase, which cannot reach `origin`
+  without the force-push forbidden below. A landing-only dispatch pinned to a
+  gated head does not merge: the merge moves the head past the gate and
+  restarts CI (lg-15), and before a third gate it puts `main`'s commits into
+  the range that gate reads (dl-114). Then
+  `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`
+  — unless the landing is the only work left: `--land` runs preflight itself
+  after the push, and a run before it costs ten minutes for nothing.
+- **Exit 16 alone is a conflict with another open pull request's head, not a
+  fault in the branch**, and a sibling that conflicts with `main` itself
+  reports against your HEAD (lg-21 and repo-103 against dl-110): stop and
+  report the number and the paths; the merge order is the orchestrator's. A
+  head preflight says "this checkout does not have" is a `git fetch origin`,
+  not a conflict.
+- **A mutation check runs on a committed tree**: commit the fix, run the gate's
+  script with your tree and an output directory of your own as its arguments —
+  never as the gate ran it, whose copies point at the gate's scratch (dl-106) —
+  and restore with `git checkout <sha> -- <path>`, never `git checkout --
+  <path>` while the ticket's Log edit sits uncommitted under it (dl-105).
 - Commit with `git commit -F <file>`, a conventional subject under 100
   characters, then `git push origin HEAD:refs/heads/<branch>`. A push rejected
   as non-fast-forward means someone else moved the branch: stop and report,
@@ -53,8 +73,19 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
   re-read the pull request body before `gh pr ready`: a Summary written before
   the round may still say "open decision" or "gate pending".
 - `--status in-flight` when the work lands partial, as your dispatch says.
+- **A pull request that only files a ticket, or only records a decision, gets no
+  `--land`** (records.md): it leaves the ticket `ready` or `needs-decision`, its
+  gate's full report goes on the thread, the body says so, and the ticket's Log
+  names the thread. Ship authority on one is `gh pr ready` after that.
+- **A fix applied at the landing by owner choice** is applied as the finding
+  states it and marked as records.md's _Fixed at landing_ says.
+- **A ticket you are told to file during a landing** follows
+  `docs/01-TICKETS.md` and adds nothing the dispatch did not name — no roadmap
+  row, no status move (lg-23).
 - Then post each gate's full report to the pull request thread
-  (`gh pr comment <n> --body-file <f>`), make sure the body's Summary describes
+  (`gh pr comment <n> --body-file <f>`, the `report.md` your dispatch names
+  beside each gate file — the orchestrator wrote it from the gate's returned
+  text), make sure the body's Summary describes
   the ticket's whole change and names every model as your dispatch states them,
   and run `gh pr ready <n>` unless the dispatch says to hold the draft.
 
@@ -63,5 +94,7 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
 Per finding: fixed, with the command that failed before and passes after, or the
 evidence the finding gave; not reproduced, with the command and output; or handed
 back for judgement, with the reason. Then the new head sha from
-`git rev-parse HEAD`, confirmed by `git ls-remote --heads origin <branch>` —
-never padded out from a short one — and `common.md`'s report rules.
+`git rev-parse HEAD` after `--land` has run — the head `origin` holds, not your
+fix commit (dl-111: `6565425b` fixed, `7524b62a` landed) — confirmed by
+`git ls-remote --heads origin <branch>`, never padded out from a short one, and
+`common.md`'s report rules.
