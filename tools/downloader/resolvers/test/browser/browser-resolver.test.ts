@@ -13,6 +13,7 @@ import { AppError } from "@downloader/contract";
 import type { ErrorCode, ProbeResult, ProbeStageEvent, ResolveOptions } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { BrowserPool } from "../../src/browser/pool.ts";
+import type * as provoke from "../../src/browser/provoke.ts";
 import { BrowserResolver, MIN_WAIT_MS } from "../../src/resolvers/browser.ts";
 import type { BrowserResolverLogger, BrowserResolverOptions } from "../../src/resolvers/browser.ts";
 import {
@@ -28,6 +29,21 @@ import { PROGRESSIVE_FILE_BYTES, startProgressiveServer } from "./helpers/progre
 import type { ProgressiveServer } from "./helpers/progressive-server.ts";
 import { STREAM_WAITS } from "./helpers/stream-waits.ts";
 
+// Records the `minWaitMs` each quiet wait is handed (dl-115), and changes nothing:
+// the default can only be read where the resolver passes it on, and a timing
+// bound cannot tell 1200 from a default that merely lands near it.
+const quietWaitCalls = vi.hoisted(() => [] as { minWaitMs: number }[]);
+vi.mock("../../src/browser/provoke.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof provoke>();
+  return {
+    ...actual,
+    waitForQuiet: (...args: Parameters<typeof actual.waitForQuiet>) => {
+      quietWaitCalls.push({ minWaitMs: args[0].minWaitMs });
+      return actual.waitForQuiet(...args);
+    },
+  };
+});
+
 const PROBE_TIMEOUT_MS = 25_000;
 const TEST_TIMEOUT_MS = 90_000;
 /**
@@ -41,7 +57,10 @@ const NO_EMPTY_FLOOR_MS = 1200;
 /**
  * The quiet rule a builder uses unless its caller says the test expects a stream
  * (dl-115): only those take `STREAM_WAITS`. A shorter wait in a test that expects
- * no media, or nothing pressed, would make it pass more easily.
+ * no media, or an error, would make it pass more easily. A test that expects a
+ * stream and also asserts that something was not pressed or not requested may
+ * take it: the presses happen during provocation, before the quiet wait, and the
+ * revisits stop at the first hit, so a shorter wait cannot hide one.
  */
 type Waits = Pick<BrowserResolverOptions, "quietMs" | "minWaitMs">;
 const BASE_WAITS: Waits = { quietMs: 1200 };
@@ -2055,7 +2074,9 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
    * and provocation are outside it. `quietMs` is small so that only the minimum
    * can hold the wait: the page's last request is a second old by then.
    */
-  async function quietWaitMs(minWaitMs: number | undefined): Promise<number> {
+  async function quietWait(
+    minWaitMs: number | undefined,
+  ): Promise<{ waitedMs: number; handedMs: number | undefined }> {
     const resolver = new BrowserResolver({
       pool,
       hlsParser: recordingHlsParser().parser,
@@ -2064,6 +2085,7 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
     });
     let stopwatch: (() => number) | undefined;
     let waitedMs: number | undefined;
+    quietWaitCalls.length = 0;
     await probe(
       "/mse.html",
       resolver,
@@ -2075,7 +2097,8 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
       }),
     );
     expect(waitedMs).toBeDefined();
-    return waitedMs ?? Number.NaN;
+    expect(quietWaitCalls).toHaveLength(1);
+    return { waitedMs: waitedMs ?? Number.NaN, handedMs: quietWaitCalls[0]?.minWaitMs };
   }
 
   test("the default is 1200 ms", () => {
@@ -2083,11 +2106,14 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
   });
 
   test(
-    "a resolver given no minWaitMs holds the wait for MIN_WAIT_MS",
+    "a resolver given no minWaitMs hands the wait MIN_WAIT_MS, and holds it that long",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const waitedMs = await quietWaitMs(undefined);
+      const { waitedMs, handedMs } = await quietWait(undefined);
 
+      // Exactly the constant: a default that skips it, 2400 say, fails here and
+      // not on a timing bound a slow runner could cross.
+      expect(handedMs).toBe(MIN_WAIT_MS);
       expect(waitedMs).toBeGreaterThanOrEqual(MIN_WAIT_MS);
       // Not the 9 s floor of a probe that captured nothing, which would pass the
       // line above for the wrong reason.
@@ -2096,7 +2122,10 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
   );
 
   test("a minWaitMs below it shortens the wait", { timeout: TEST_TIMEOUT_MS }, async () => {
-    expect(await quietWaitMs(STREAM_WAITS.minWaitMs)).toBeLessThan(MIN_WAIT_MS);
+    const { waitedMs, handedMs } = await quietWait(STREAM_WAITS.minWaitMs);
+
+    expect(handedMs).toBe(STREAM_WAITS.minWaitMs);
+    expect(waitedMs).toBeLessThan(MIN_WAIT_MS);
   });
 });
 
