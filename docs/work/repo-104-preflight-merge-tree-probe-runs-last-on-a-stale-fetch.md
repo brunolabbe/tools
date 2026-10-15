@@ -126,6 +126,46 @@ rerun.
 - Invariants: no shell ✓ (argv arrays, `shell: false`; the option-injection case is above). Specs registered ✓ (both files already existed). The rest (cross-tool imports, AppError, redaction, SSRF, progress, contract, Dockerfile closure) do not apply to `scripts/`.
 - NFR: security, low above (option injection, title quoting) · performance ✓ (the probe took 1.0 s on 7 real heads, and a halt costs 0.1 s on a fixture) · reliability, high above · maintainability ✓.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-15 · `2505255f..2caf41dc` (one commit, "fix(repo): make a halted preflight name every unrun check in its rerun text (repo-104)") · Opus 5.5, depth standard
+
+| Done when                                                                                            | Proof                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. mergeTree lines print first; a merge-tree failure exits 16 within a minute on a downloader branch | `scripts/test/preflight.test.ts` › "the CLI prints the probe's failure first and exits 16 alone, with no suite started (repo-104)" ✓. This round adds an assertion on that test's last line. The timing is unchanged from gate 1 and the round does not touch the order            |
+| 2. A moved head is fetched and compared, and an unfetchable oid still fails                          | `preflight.test.ts` › "checkMergeTree fetches a head that moved after gh pr list, then compares it (repo-104)" ✓, › "checkMergeTree still fails an oid that a fetch cannot bring (repo-104)" ✓                                                                                     |
+| 3. `--only mergeTree` runs the probe alone, exits 0 or 16, and no suite runs                         | `preflight.test.ts` › "--only mergeTree runs the probe alone: no suite, no other check (repo-104)" ✓ and › "the CLI's --only mergeTree exits 16 on a failed probe and prints no other check (repo-104)" ✓. The exit-0 path was **verified** on a fixture (`F-clean-only` status=0) |
+| 4. The header and the builder.md bullet say the probe runs first and fetches                         | **verified** by reading. The round rewrote the builder.md bullet and kept "runs a merge-tree probe … first, fetching `origin` itself"                                                                                                                                              |
+
+Gate 1's findings:
+
+- **high, halted rerun text named the probe alone: fixed.** On a halted run the last line now ends `; not run: …`. `preflightVerdict`/`failedChecks` return the checks that failed plus the ones that did not run. The `--land` hint says "Preflight stopped at mergeTree, so check, ciCommands, review, title did not run on this landing" and prints `--only mergeTree,check,ciCommands,review,title`.
+  - Verified on the real CLI output at this head. A-conflict, B-ghost and E2-offline-lack each gave status=16, headers `[mergeTree,halted]`, last line `preflight failed: mergeTree (exit 16); not run: check, ciCommands, review, title`. `preflightVerdict` on each gave `{"failed":["mergeTree"],"notRun":["check","ciCommands","review","title"]}`.
+  - C-gh-throws gave status=17, all five checks ran, `notRun: []`, and `failedChecks` gave `["check","mergeTree"]`.
+  - The pages now agree with what the code prints: `roles/builder.md`, `roles/fixer.md` (rerun the block's first command, then its second), `reference/records.md` (one command over all five names) and `reference/dispatching.md` ("unproven until it reruns the checks its last line lists after `not run:`").
+  - The land test's stub now has the real output shape.
+  - Positive controls, each restored afterwards:
+    - Dropping the `; not run` suffix failed 1 test (the CLI last-line test).
+    - Making `failedChecks` and `open` return `failed` only failed 3 tests (`failedChecks`, the land test and the CLI test).
+- **low, three causes of exit 16: fixed.** The halted block now says "A conflict is another pull request's head … a missing head is a fetch to retry". builder.md lists the conflict, the missing head (a `note` line or a head the remote no longer serves) and `mergeTree threw`, which does not halt. The C case confirms that a probe that threw does not halt. Positive control: removing the missing-head clause failed › "a halted run for an oid no fetch can bring says so, not only 'a conflict' (repo-104)".
+- **low, `rerunCommand` quoting: fixed.** `shellQuote` single-quotes the base and the title and escapes `'` as `'\''`. Three titles round-trip exactly through `bash -c "printf '%s\n' <args>"`: `fix(repo): it's done (repo-1)`, a title holding backticks and `$(touch …)`, and `a 'b' "c" \d $HOME ''`. The `$(touch)` marker was not created. Positive control: switching back to `JSON.stringify` failed 4 tests.
+- **low, unvalidated oid: fixed.** `defaultListOpenHeads` refuses anything that does not match `^[0-9a-f]{40}([0-9a-f]{24})?$` before any `git fetch`. Read through the real CLI with a fake `gh`:
+  - a 64-hex oid is accepted and fails as "does not have even after `git fetch origin`";
+  - an uppercase 40-hex oid is refused as "not a commit id", as are 63 hex digits and 40 hex digits plus a trailing newline;
+  - each refusal is a `mergeTree threw`, which exits 16 and fails safe, and GitHub reports lowercase oids;
+  - the `--upload-pack=` oid from gate 1 no longer creates the marker (`H marker exists: false`).
+
+  Positive control: removing the guard failed › "a gh payload with an oid that is not a commit id is refused before it reaches git fetch (repo-104)".
+
+- **low, the mangled Log list: fixed.** The two bullets are rewritten, there is no stray list item, and `check` (oxfmt) passed on `2caf41dc` in CI.
+
+New in the lines this round touched:
+
+- **low** · `roles/fixer.md`, the exit-16 bullet, opens with "Exit 16 is the merge-tree probe, and it stops the run: the suites … have **not run**". That sentence is unconditional, but the same bullet ends "`mergeTree threw` (`gh` down) does not halt", and C-gh-throws shows every check running. The opening is false in the safe direction: it overstates what was skipped, and the last line (no `not run:`) settles which case applies. builder.md says it correctly.
+- **findings** · the round's hunt returned 1; 1 carried, 0 dropped. Gate 1's 5: 5 fixed.
+- CI at `2caf41dc`: `check` ×2, `changes`, `codeql`/`CodeQL` and `dependency-review` passed. `test (ubuntu-latest)` and `test (windows-latest, informational)` were still pending and have not been read. No acceptance line depends on them.
+- NFR: security ✓ (quoting and the oid guard are above) · performance n/a · reliability ✓ · maintainability, low above.
+
 ## Log
 
 - 2026-10-14 — Filed by the review of the orchestration log over the eleven
