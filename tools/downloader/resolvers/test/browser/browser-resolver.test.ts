@@ -1891,13 +1891,29 @@ describe("a click-only player box beside a press that did not start a player (dl
   );
 
   test(
-    "a Play press in a frame from another site still holds back the box click, whose centre is that frame",
+    "a Play press in a frame from another site that only isPlayPress counts (an icon button) still holds back the box click, whose centre is that frame",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       server.requests.length = 0;
       // The embed asks for its manifest 1.5 s after its Play press, so the
       // shipped floor; a centre click on the wrapper would land on the embed.
+      // Its button has no text, so the label path cannot cover for isPlayPress.
       const result = await probe("/box-xo-embed.html", resolverWith(undefined, 9000));
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+      expect(server.requests).not.toContain("/beacon/embed-surface-clicked");
+    },
+  );
+
+  test(
+    "a Play press in a frame from another site that only the label path makes (a text button) still holds back the box click",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // The button is named "Play" and has no id, class or attribute that
+      // isPlayPress counts: provokeFrame's labelClicked is the only thing that
+      // reports it pressed (dl-123).
+      const result = await probe("/box-xo-embed-label.html", resolverWith(undefined, 9000));
 
       expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
       expect(server.requests).not.toContain("/beacon/embed-surface-clicked");

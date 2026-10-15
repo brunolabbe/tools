@@ -5,7 +5,10 @@
     <title>Embedded player</title>
   </head>
   <body style="margin: 0; background: #222; height: 360px">
-    <button id="play">Play</button>
+    <!-- Icon-only, as a real embed's play control often is: no word, aria-label or
+         title for the label path (`PLAY_TEXT`) to match, so only `isPlayPress`
+         (the id `play`) counts this press (dl-123). -->
+    <button id="play">&#9654;</button>
     <script>
       // The Play button asks for the manifest 1.5 s after the press, as a player
       // that loads a script first does. A click anywhere else on the surface is
