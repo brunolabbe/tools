@@ -354,13 +354,27 @@ user_version 2`, so `Directory.open` would throw on such a file until it was
     scratch): `null id: TypeError code=none Cannot read properties of null
 (reading 'trim')`, the same for `undefined` and `7`; after: `null id: AppError
 code=BAD_REQUEST … null is not.`. Test, at the end of `directory.test.ts`:
-    "the class refuses an id that is not a string as BAD_REQUEST, before the
-    schema", for `null`, `undefined` and `7`. Red with the guard line deleted:
+    "the class refuses an id or a name that is not a string as BAD_REQUEST,
+    before the schema" (renamed from "an id" when the name case below joined
+    it), for `null`, `undefined` and `7`. Red with the guard line deleted:
     `1 failed | 18 passed (19)`, `expected TypeError: Cannot read properties of
 null… to be an instance of AppError`; restored from `f821a478`, `19 passed
-(19)`. A `null` name still reaches `.trim()` as a `TypeError` (same script:
-    `null name: TypeError`); not changed, as the decision named the id.
+(19)`.
   - **F4, folded in.** Migration 3's header says the refusal holds from that
     migration on: a trigger does not read the rows already there, so a household
     stored with no id before it stays (`upgrade.mts` above). Comment only, so no
     test pins it.
+- 2026-10-15 — The null name, fixed here. Round 1 left `addHousehold({ id:
+"home", name: null })` reaching `.trim()` as a `TypeError` (`f3.mts`: `null
+name: TypeError code=none Cannot read properties of null (reading 'trim')`) and
+  put it to the owner as an open decision. The owner chose "Fix in this branch",
+  from "Fix in this branch / Leave recorded / File a ticket", on 2026-10-15.
+  `addHousehold` now refuses a name that is not a string with the existing
+  `BAD_REQUEST` sentence, "A household's name is 1 to 80 characters.", before
+  `.trim()`; `f3.mts` after: `null name: AppError code=BAD_REQUEST A household's
+name is 1 to 80 characters.`. One more case at the end of the same test. Red
+  with the name guard deleted, `npx vitest run
+tools/ledger/api/test/directory.test.ts`: `1 failed | 18 passed (19)`, `null
+name: expected TypeError: Cannot read properties of null… to be an instance of
+AppError`; restored from `ce65a6ab`, `19 passed (19)`. Nothing in this ticket's
+  part (c) is left as a `TypeError` now.

@@ -478,7 +478,7 @@ describe("a household id is never NULL", () => {
     }
   });
 
-  test("the class refuses an id that is not a string as BAD_REQUEST, before the schema", () => {
+  test("the class refuses an id or a name that is not a string as BAD_REQUEST, before the schema", () => {
     const directory = Directory.open(":memory:");
     for (const id of [null, undefined, 7]) {
       let refusal: unknown;
