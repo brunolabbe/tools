@@ -299,6 +299,57 @@ option was taken.
 - Repo invariants walked: no cross-tool import, no new error code, no contract edit, no new workspace or dependency (so no `Dockerfile` edit), no `any`, `console` or shell. New tests are in an existing registered spec. Skipped as not touched: SSRF, redaction, progress, process kill, routes.
 - Not run: the owner's live directory file; the Windows leg; the ubuntu `test` leg (pending at this head); a concurrent open of one file.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-15 · `6f7e27278b0a5373408fd4c8bfe5dc6a31a141b4..823f7768564d2e27ef91c965af0371935c732cd8` · Sonnet 5.5, depth hard (full gate), the round's four commits only
+
+Nothing in this round is a `high`, and no `Done when` line depends on any finding below. Done when 1 to 4 are unchanged by the round and still hold: `npm test -- --project ledger` is 60 of 60 files and 1048 of 1048 tests (one more than gate 1's 1047: the new guard test), exit 0; `npm run check` exit 0; `npx vitest run scripts/test/status.test.ts` 135 of 135; `npm run status -- --show lg-24` reads `difficulty standard`. The PR's `check`, `docker`, `codeql`, `CodeQL`, `changes` and `dependency-review` pass at this head; `test (ubuntu-latest)` and `test (windows-latest, informational)` were still pending when read, so the local ledger run stands in for the ubuntu leg and the Windows leg is unread.
+
+**Verdicts on gate 1**
+
+- **F1 (med), fixed.** The corrected "Why not A" paragraph, the round-1 entry and migration 3's header comment now say what `optiona.mts` and `optiona2.mts` measured, and I checked each sentence against my output:
+  - "copying to a new table and dropping the old fails on a directory that holds a membership, with or without `defer_foreign_keys`": my A1 (without) and A3 (with) both `REFUSED SQLITE_CONSTRAINT_FOREIGNKEY`. ✓
+  - "copying the rows aside, dropping, recreating and copying back under `defer_foreign_keys` does apply": my A7, `migration applied`, `id:notnull=1`, both tables identical, `fk violations: 0 integrity: ok`, three NULL inserts refused with `NOT NULL constraint failed: households.id`. ✓
+  - "that rebuild refuses a directory that already holds a NULL id": `optiona2.mts`, `REFUSED SQLITE_CONSTRAINT_NOTNULL … | user_version 2`. ✓ "so it would not open until the file was mended by hand" is read from `Directory.open` (it rethrows the migration's error after closing), not run: I ran A7 through `applyMigrationList`, not through a `Directory.open` carrying it.
+  - "a trigger does not read the rows already there": `upgrade.mts`, a v2 file with two NULL-id households opens, reaches `user_version` 3 and keeps both. ✓
+  - The Log's reproduced block (A1, A3, A4 refused; A7 applied; `Directory.open: ok`, `user_version 3 records identical NULL-id rows remaining: 2`) is my output line for line.
+  - Left as the build's original and not reproduced by the gate: A2 (`PRAGMA foreign_keys = OFF` inside `BEGIN`, refused). The new text no longer rests on it.
+  - Nothing is claimed that I did not measure, and nothing I measured is left out. The migration's header text is a comment before `CREATE TRIGGER`, so it does not enter `sqlite_master`.
+- **F2 (low), fixed.** The frontmatter reads `difficulty: standard` and the round-1 entry records it as the owner's answer, "Keep B, re-rate standard", with the three options it was chosen from. I cannot see the owner's answer; the dispatch relayed it and it matches the Log.
+- **F3 (low), fixed** for both fields, below.
+- **F4 (low), fixed.** The header now says "The refusal holds from this migration on" and the migration is titled "never added without an id".
+
+**The guards, run (`guards.mts`, the base's `directory.ts` loaded beside the head's)**
+
+- **String paths unchanged:** 136 `(id, name)` pairs (17 ids including `""`, whitespace, `home`, `Home`, `home2`, `con`, `nul`, 32 and 33 letters, a NUL byte; 8 names including `""`, whitespace, 80 and 81 characters, a NUL byte), each added twice to a fresh directory at the base and at the head. 0 differ in outcome, in the duplicate's outcome, or in the rows stored.
+- **Non-string `id`**, name valid: `null`, `undefined`, `7`, `NaN`, `true`, `{}`, `[]`, `['home']`, a function, `1n`, a `Symbol` all give `AppError BAD_REQUEST` with the id sentence, no row stored (the base threw `TypeError` for each). Two do not, see N1.
+- **Non-string `name`**, id valid: the same 13 values all give `AppError BAD_REQUEST`, "A household's name is 1 to 80 characters.", no row stored, `Object.create(null)` and a throwing `toString` included, since this arm echoes nothing.
+- Both fields bad: an invalid string id with `name: null` reports the name; `id: null` reports the id first. Formerly a `TypeError`, so nothing relies on the order.
+- **Positive control, each guard deleted in turn in the detached tree** (restored from the gated sha each time, `git diff` empty after): the id guard line deleted gave `1 failed | 18 passed (19)`, `AssertionError: null: expected TypeError: Cannot read properties of null… to be an instance of AppError`; the name guard line deleted gave `1 failed | 18 passed (19)`, `null name: expected TypeError: Cannot read properties of null… to be an instance of AppError`. Restored, 19 of 19.
+
+**The same shape elsewhere in `directory.ts`** (the dispatch asked to report it, not to assume it is in scope). `guards.mts` section 4 passed a non-string to each method on a directory holding one household:
+
+| call                                                                 | result                                                                  |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `addMember({ address: null })` or `undefined`                        | `TypeError`, `.trim` (inside `readAddress`)                             |
+| `addMember({ person: null })`, `7`                                   | `TypeError`, `.trim`                                                    |
+| `addMember({ household: {} })`                                       | `RangeError: Too few parameter values were provided` (the driver)       |
+| `removeMember({ address: null })`                                    | `TypeError`, `.trim`                                                    |
+| `membershipOf(null)` or `undefined`                                  | `TypeError`, `.toLowerCase`                                             |
+| `addHousehold({ at: null })`                                         | `TypeError`, `.toISOString`, inside the transaction, nothing stored     |
+| `addHousehold({ by: null })` or `undefined`                          | `SqliteError SQLITE_CONSTRAINT_NOTNULL` on `created_by`, nothing stored |
+| `addMember({ household: null })`, `history(null)`, `household(null)` | `HOUSEHOLD_NOT_FOUND`, `[]`, `undefined`: no string method reached      |
+
+No live call site reaches any of them: the routes parse the body with `addMemberRequestSchema`, `removeMemberRequestSchema` and `createHouseholdRequestSchema` (all `z.string()`), the host command defaults each argument to `""`, and the Access identity is a JWT claim checked `typeof email === "string"`.
+
+- **low** · no `Done when` line depends on it · **N1, the id guard's own message can throw.** `notAnId(String(household.id as unknown))` stringifies the value to echo it, and `String()` throws on two non-strings: `addHousehold({ id: Object.create(null), … })` gives `TypeError: Cannot convert object to primitive value`, and an id whose `toString` throws gives that `Error`, neither an `AppError`, with no row stored. Reproduction: `guards.mts`, the "non-string id" block, rows `Object.create(null)` and `{toString(){throw}}`. No live call site (zod hands the class a string). The brief for this round, "every non-string gives `AppError BAD_REQUEST`", is therefore true of 11 of 13 id values and 13 of 13 name values. Fix, if wanted: echo `typeof` for an object instead of the value, or catch around the stringify. The echo is also uninformative for an array (`['home']` prints `home is not.`, `[]` prints an empty value).
+- **low** · no `Done when` line depends on it · **N2, the name arm of the new test asserts `null` only, and its title says "an id or a name that is not a string".** With the name guard narrowed from `typeof household.name !== "string"` to `household.name == null`, the spec stays `19 passed (19)`. `undefined` and `7` as a name are measured correct above and unasserted. The id arm covers `null`, `undefined` and `7`. Title wider than the assertion, direction safe: the guard works.
+- **low** · no live call site · **N3, open decision: the table above.** The owner chose "Fix here" twice for `addHousehold`'s two fields, both reached by this ticket's own reproduction (part (c)). The other rows share the shape and are not in that reproduction. Options: (1) **file one ticket** for the typed-string guards on `addMember`, `removeMember` and `membershipOf` (and `at`/`by` if wanted), with `guards.mts` section 4 as its reproduction (recommended: it keeps this PR at what the owner approved, and no caller can reach them today); (2) fold them in here, about three more guards and a test, at the cost of a third change to a branch already re-rated `standard`; (3) leave them recorded in the Log. I did not run option 2.
+- **dropped** · the round-1 entry cites branch commits by short sha ("restored from …") in prose. They are plain text, not `@sha` citations that a squash would break.
+- **findings** · the hunt returned 4 on the round's lines; 3 carried (N1, N2, N3), 1 dropped.
+- NFR: security ✓ (the new refusals are `AppError BAD_REQUEST` raised before any SQL; N1 is the only path that escapes as another error) · performance n/a · reliability — N1, N3 · maintainability — N2; the guard reads clearly and its comment says why.
+- Not run: `Directory.open` over a file whose migration list carries A7; A2; the Windows leg; the ubuntu `test` leg at this head (pending).
+
 ## Log
 
 - 2026-10-13 — Filed from lg-22's gate 1, which dropped the finding as out of that
