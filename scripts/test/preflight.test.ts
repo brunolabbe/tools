@@ -28,6 +28,7 @@ import path from "node:path";
 import process from "node:process";
 import { expect, test } from "vitest";
 import {
+  CHECK_ORDER,
   CI_WORKFLOW_PATH,
   EXIT,
   checkBuild,
@@ -45,6 +46,7 @@ import {
   assertSpawnable,
   tokenize,
   preflight,
+  rerunCommand,
   runBuildCommand,
   scriptsTouched,
   sharedConfigTouched,
@@ -1990,4 +1992,334 @@ test("testPlan widens for a file at the tool's root whose name begins with a pac
   } finally {
     tree.cleanup();
   }
+});
+
+// --- repo-104: the merge-tree probe runs first, fetches for itself, and can run alone ---
+
+const gitIn = (dir: string, ...args: string[]) => {
+  const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", shell: false });
+  if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+  return result.stdout.trim();
+};
+
+/**
+ * `repo` pushed to a bare `origin`, and a second clone of that origin which can
+ * publish a branch `repo` has not fetched: the shape of a pull request head
+ * that moved while a run was going. The clone is the "peer"; `repo` never
+ * learns of its commits until something fetches.
+ */
+function makeRepoWithOrigin() {
+  const repo = makeRepo();
+  repo.write("docs/work/x-1.md", "## Review\n\nFirst pass.\n");
+  repo.commitAll("base");
+  const bare = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-origin-")));
+  gitIn(bare, "init", "-q", "--bare", "-b", "main");
+  repo.git("remote", "add", "origin", bare);
+  repo.git("push", "-q", "origin", "main");
+  const peer = path.join(
+    fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-peer-"))),
+    "clone",
+  );
+  gitIn(os.tmpdir(), "clone", "-q", bare, peer);
+  gitIn(peer, "config", "user.email", "peer@example.test");
+  gitIn(peer, "config", "user.name", "peer");
+  /** Publish `branch` from the peer with `content` in the gate record; return its oid. */
+  const publish = (branch: string, content: string) => {
+    gitIn(peer, "checkout", "-q", "-B", branch, "origin/main");
+    fs.writeFileSync(path.join(peer, "docs/work/x-1.md"), content);
+    gitIn(peer, "commit", "-qam", `gate on ${branch} ${content.length}`);
+    gitIn(peer, "push", "-q", "--force", "origin", branch);
+    return gitIn(peer, "rev-parse", "HEAD");
+  };
+  return {
+    repo,
+    publish,
+    cleanup: () => {
+      repo.cleanup();
+      fs.rmSync(bare, { recursive: true, force: true });
+      fs.rmSync(path.dirname(peer), { recursive: true, force: true });
+    },
+  };
+}
+
+const hasCommitIn = (dir: string, oid: string) =>
+  spawnSync("git", ["-C", dir, "cat-file", "-e", `${oid}^{commit}`], { shell: false }).status === 0;
+
+test("checkMergeTree fetches a head that moved after gh pr list, then compares it (repo-104)", () => {
+  const world = makeRepoWithOrigin();
+  try {
+    world.repo.write("docs/work/x-1.md", "## Review\n\nSecond pass, from here.\n");
+    world.repo.commitAll("gate here");
+    const moved = world.publish("moved", "## Review\n\nSecond pass, from the peer.\n");
+    // The premise: this checkout has never seen the head `gh` is about to list.
+    expect(hasCommitIn(world.repo.dir, moved)).toBe(false);
+
+    const result = checkMergeTree(world.repo.dir, {
+      run: realRun,
+      listOpenHeads: () => [{ number: 11, headRefName: "moved", oid: moved }],
+    });
+
+    const text = result.lines.join("\n");
+    expect(text).not.toMatch(/does not have/);
+    // Compared, not merely found: the two branches edit one gate record.
+    expect(result.ok).toBe(false);
+    expect(text).toMatch(/#11 moved conflicts on: docs\/work\/x-1\.md/);
+    expect(hasCommitIn(world.repo.dir, moved)).toBe(true);
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("checkMergeTree brings in a listed head that was force-updated before the fetch (repo-104)", () => {
+  const world = makeRepoWithOrigin();
+  try {
+    const listed = world.publish("moved", "## Review\n\nListed, then replaced.\n");
+    // release-please's shape: the branch is force-pushed again, so `listed` is
+    // no branch's tip and `git fetch origin` alone will not bring it.
+    world.publish("moved", "## Review\n\nThe replacement.\n");
+
+    const result = checkMergeTree(world.repo.dir, {
+      run: realRun,
+      listOpenHeads: () => [{ number: 12, headRefName: "moved", oid: listed }],
+    });
+
+    expect(result.lines.join("\n")).not.toMatch(/does not have/);
+    expect(result.lines.join("\n")).toMatch(/#12 moved merges cleanly/);
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("checkMergeTree still fails an oid that a fetch cannot bring (repo-104)", () => {
+  const world = makeRepoWithOrigin();
+  try {
+    const result = checkMergeTree(world.repo.dir, {
+      run: realRun,
+      listOpenHeads: () => [{ number: 13, headRefName: "ghost", oid: "a".repeat(40) }],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.bit).toBe(EXIT.mergeTree);
+    expect(result.lines.join("\n")).toMatch(/#13 ghost is at aaaaaaa.*does not have even after/);
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("checkMergeTree notes a fetch that failed instead of failing on it, and still compares what it has (repo-104)", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("f.txt", "seed\n");
+    repo.commitAll("base");
+    repo.git("checkout", "-q", "-b", "other");
+    repo.write("g.txt", "other\n");
+    repo.commitAll("other");
+    const other = repo.git("rev-parse", "HEAD");
+    repo.git("checkout", "-q", "main");
+
+    const run = (command: string, args: string[], options: { cwd?: string } = {}) => {
+      if (command === "git" && args[0] === "fetch") throw new Error("git fetch origin exited 128");
+      return realRun(command, args, options);
+    };
+    const result = checkMergeTree(repo.dir, {
+      run,
+      listOpenHeads: () => [{ number: 15, headRefName: "other", oid: other }],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.lines.join("\n")).toMatch(/note {2}git fetch origin exited 128/);
+    expect(result.lines.join("\n")).toMatch(/#15 other merges cleanly/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test("preflight runs the merge-tree probe before any other check and reports each as it finishes (repo-104)", () => {
+  const repo = makeRepo();
+  fs.writeFileSync(path.join(repo.dir, "release-please-config.json"), RP_CONFIG);
+  fs.mkdirSync(path.join(repo.dir, "tools", "downloader"), { recursive: true });
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+    repo.write("docs/work/x-2.md", DONE_WITH_REVIEW);
+    repo.commitAll("fix(downloader): close x-2 cleanly");
+
+    const events: string[] = [];
+    const results = preflight(repo.dir, {
+      base,
+      run: realRun,
+      buildRun: () => {
+        events.push("suite");
+        return "";
+      },
+      listOpenHeads: () => [],
+      onResult: (r) => events.push(r.name),
+    });
+
+    expect(results.map((r) => r.name)).toEqual([...CHECK_ORDER]);
+    expect(CHECK_ORDER[0]).toBe("mergeTree");
+    // The probe's line is out before the first suite command starts.
+    expect(events.indexOf("mergeTree")).toBeLessThan(events.indexOf("suite"));
+    expect(events.indexOf("suite")).toBeGreaterThan(-1);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test("preflight stops at a conflicting head with exit 16 before any suite, and names the command for the rest (repo-104)", () => {
+  const world = makeRepoWithOrigin();
+  try {
+    const { repo } = world;
+    const base = repo.git("rev-parse", "HEAD");
+    repo.write("docs/work/x-1.md", "## Review\n\nSecond pass, from here.\n");
+    repo.commitAll("gate here");
+    const peerHead = world.publish("peer", "## Review\n\nSecond pass, from the peer.\n");
+
+    let suites = 0;
+    const results = preflight(repo.dir, {
+      base,
+      title: "docs(repo): a title (repo-1)",
+      run: realRun,
+      buildRun: () => {
+        suites += 1;
+        return "";
+      },
+      listOpenHeads: () => [{ number: 21, headRefName: "peer", oid: peerHead }],
+    });
+
+    expect(suites).toBe(0);
+    expect(results.map((r) => r.name)).toEqual(["mergeTree", "halted"]);
+    expect(results.reduce((mask, r) => mask | r.bit, 0)).toBe(EXIT.mergeTree);
+    const halted = results[1]?.lines.join("\n") ?? "";
+    expect(halted).toMatch(/check, ciCommands, review, title did not run/);
+    expect(halted).toContain(
+      `node scripts/preflight.mjs --only check,ciCommands,review,title --base ${base} --title "docs(repo): a title (repo-1)"`,
+    );
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("--only mergeTree runs the probe alone: no suite, no other check (repo-104)", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+    repo.write("tools/downloader/api/src/a.ts", "export {};\n");
+    repo.commitAll("fix(downloader): touch a suite (dl-1)");
+
+    let suites = 0;
+    const results = preflight(repo.dir, {
+      base,
+      run: realRun,
+      buildRun: () => {
+        suites += 1;
+        return "";
+      },
+      listOpenHeads: () => [],
+      only: ["mergeTree"],
+    });
+
+    // The diff touches a tool, so a full run would have planned its suite: the
+    // zero is the option working, not an empty plan.
+    expect(touchedTools(["tools/downloader/api/src/a.ts"])).toEqual(["downloader"]);
+    expect(suites).toBe(0);
+    expect(results.map((r) => r.name)).toEqual(["mergeTree"]);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test("the CLI's --only mergeTree exits 16 on a failed probe and prints no other check (repo-104)", () => {
+  const repo = makeRepo();
+  const shimDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-ghshim-"));
+  try {
+    repo.write("docs/work/seed.md", "seed\n");
+    repo.commitAll("docs(repo): seed a fixture");
+    const base = repo.git("rev-parse", "HEAD");
+    plantFakeGh(shimDir, repo.dir);
+
+    const result = spawnSync(
+      process.execPath,
+      [CLI, "--repo", repo.dir, "--base", base, "--only", "mergeTree"],
+      {
+        encoding: "utf8",
+        shell: false,
+        env: { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}` },
+      },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(EXIT.mergeTree);
+    // The marker proves the fake answered, not a real gh.
+    expect(result.stdout).toMatch(/fake gh answered/);
+    expect(result.stdout).toMatch(/== mergeTree ==/);
+    expect(result.stdout).not.toMatch(/== (check|ciCommands|review|title) ==/);
+    expect(result.stdout).toMatch(/preflight failed: mergeTree \(exit 16\)/);
+  } finally {
+    repo.cleanup();
+    fs.rmSync(shimDir, { recursive: true, force: true });
+  }
+});
+
+test("the CLI prints the probe's failure first and exits 16 alone, with no suite started (repo-104)", () => {
+  const repo = makeRepo();
+  const shimDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-ghshim-"));
+  try {
+    repo.write("docs/work/x-1.md", "## Review\n\nFirst pass.\n");
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+    repo.git("checkout", "-q", "-b", "peer");
+    repo.write("docs/work/x-1.md", "## Review\n\nFrom the peer.\n");
+    repo.commitAll("peer gate");
+    const peer = repo.git("rev-parse", "HEAD");
+    repo.git("checkout", "-q", "main");
+    repo.write("docs/work/x-1.md", "## Review\n\nFrom here.\n");
+    repo.commitAll("our gate");
+
+    plantFakeGh(shimDir, repo.dir);
+    // Overwrite the fake's script: a gh that answers, listing the peer head.
+    fs.writeFileSync(
+      path.join(repo.dir, "pr.js"),
+      `process.stdout.write(${JSON.stringify(JSON.stringify([{ number: 31, headRefName: "peer", headRefOid: peer }]))});\n`,
+    );
+
+    const result = spawnSync(process.execPath, [CLI, "--repo", repo.dir, "--base", base], {
+      encoding: "utf8",
+      shell: false,
+      env: { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}` },
+    });
+    expect(result.error).toBeUndefined();
+    // Exactly 16: the repository has no package.json, so a started `npm run
+    // check` would have added bit 1.
+    expect(result.status).toBe(EXIT.mergeTree);
+    expect(result.stdout.trimStart().startsWith("== mergeTree ==")).toBe(true);
+    expect(result.stdout).toMatch(/#31 peer conflicts on: docs\/work\/x-1\.md/);
+    expect(result.stdout).not.toMatch(/== check ==/);
+    expect(result.stdout).toMatch(/check, ciCommands, review, title did not run/);
+  } finally {
+    repo.cleanup();
+    fs.rmSync(shimDir, { recursive: true, force: true });
+  }
+});
+
+test("parseArgs reads --only as a comma list, repeatable, and rejects a name that is not a check (repo-104)", () => {
+  expect(parseArgs(["--base", "b", "--only", "mergeTree"]).only).toEqual(["mergeTree"]);
+  expect(parseArgs(["--base", "b", "--only", "check,title", "--only", "review"]).only).toEqual([
+    "check",
+    "title",
+    "review",
+  ]);
+  expect(parseArgs(["--base", "b"]).only).toBeUndefined();
+  expect(() => parseArgs(["--base", "b", "--only", "merge-tree"])).toThrow(/not merge-tree/);
+  expect(() => parseArgs(["--base", "b", "--only", ""])).toThrow(/--only takes/);
+});
+
+test("rerunCommand names the checks, the base and the title, and omits a title it was not given (repo-104)", () => {
+  expect(rerunCommand(["mergeTree"], "origin/main", "fix(repo): x (repo-1)")).toBe(
+    'node scripts/preflight.mjs --only mergeTree --base origin/main --title "fix(repo): x (repo-1)"',
+  );
+  expect(rerunCommand(["check", "title"], "origin/main", undefined)).toBe(
+    "node scripts/preflight.mjs --only check,title --base origin/main",
+  );
 });

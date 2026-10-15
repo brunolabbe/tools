@@ -65,6 +65,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { extractSections, selectSection, splitLines } from "./markdown.mjs";
+import { rerunCommand as preflightRerunCommand } from "./preflight.mjs";
 import { parseFrontmatter } from "./status.mjs";
 
 /**
@@ -1116,6 +1117,20 @@ function spliceAndCommitAll(ticketPath, repoRoot, plans, ticketId, tool, status,
 }
 
 /**
+ * The checks preflight's last line says failed — `preflight failed: mergeTree,
+ * title (exit 20)` — or none when the output has no such line (a thrown start,
+ * a stub). Read off the output because `runPreflight` hands back text, not the
+ * bitmask (repo-104).
+ *
+ * @param {string} output
+ * @returns {string[]}
+ */
+export function failedChecks(output) {
+  const match = /^preflight failed: (.+) \(exit \d+\)$/mu.exec(output);
+  return match ? match[1].split(", ") : [];
+}
+
+/**
  * `--land`'s own default `preflight` step, resolved next to this file rather
  * than inside whatever `repo` the ticket lives in — see `land`'s docblock.
  * `spawn` is injectable (default `spawnSync`) purely so a test can assert on
@@ -1346,10 +1361,22 @@ export function land(options) {
   // Once the push has passed the landing is on origin, and a reset would throw
   // a good one away locally while origin keeps it (repo-94). A preflight
   // finding is then the only thing left to act on, so say that instead.
-  const pushedHint = () =>
-    `\n\nThe ${plans.length} section(s) are landed and pushed to origin/${branch}, and verify ` +
-    `passed; only the preflight finding above is left. Nothing to undo — fix what it names ` +
-    `and re-run preflight.`;
+  // repo-104: when preflight's last line names the checks that failed, so does
+  // this — the one command that reruns them alone. A failed merge-tree probe
+  // stops the run before the suites, and its own output carries the command for
+  // the rest; the landing needs neither a reset nor a full ten-minute rerun.
+  const pushedHint = (output = "") => {
+    const failed = failedChecks(output);
+    const rerun =
+      failed.length > 0
+        ? `\nRerun only what failed: ${preflightRerunCommand(failed, base, title)}`
+        : "";
+    return (
+      `\n\nThe ${plans.length} section(s) are landed and pushed to origin/${branch}, and verify ` +
+      `passed; only the preflight finding above is left. Nothing to undo — fix what it names ` +
+      `and re-run preflight.${rerun}`
+    );
+  };
 
   // A verify failure also comes after the push, but there the record on origin
   // is not the gate's text, so the reset command stays — with the fact that
@@ -1477,7 +1504,8 @@ export function land(options) {
   } catch (error) {
     return fail("preflight", `${/** @type {Error} */ (error).message}${pushedHint()}`);
   }
-  if (!preflightResult.ok) return fail("preflight", `${preflightResult.output}${pushedHint()}`);
+  if (!preflightResult.ok)
+    return fail("preflight", `${preflightResult.output}${pushedHint(preflightResult.output)}`);
   pass("preflight", "exit 0");
 
   return { ok: true, steps };

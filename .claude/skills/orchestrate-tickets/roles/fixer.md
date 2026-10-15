@@ -41,9 +41,12 @@ re-read its whole transcript on every turn.
 - **Exit 16 alone is a conflict with another open pull request's head, not a
   fault in the branch**, and a sibling that conflicts with `main` itself
   reports against your HEAD (lg-21 and repo-103 against dl-110): stop and
-  report the number and the paths; the merge order is the orchestrator's. A
-  head preflight says "this checkout does not have" is a `git fetch origin`,
-  not a conflict.
+  report the number and the paths; the merge order is the orchestrator's. The
+  probe runs first and stops the run, so no suite has run: the output ends with
+  the `--only` command for the rest (repo-104). A head preflight still says "this
+  checkout does not have" after its own fetch is rerun with
+  `node scripts/preflight.mjs --only mergeTree --base origin/<base> --title "<title>"`,
+  not by repeating the whole run.
 - **A mutation check runs on a committed tree**: commit the fix, run the gate's
   script with your tree and an output directory of your own as its arguments —
   never as the gate ran it, whose copies point at the gate's scratch (dl-106) —

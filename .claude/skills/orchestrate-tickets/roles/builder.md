@@ -83,21 +83,26 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   `dependency-review` job is not in preflight and goes red on a moderate
   advisory (lg-7).
 - `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`,
-  exit 0. It runs `npm run check`; then, for each tool the diff touches with a
-  path that is not markdown, the packages those paths can reach (repo-101,
-  repo-102: a markdown-only change under a tool plans no suite); `core` and
-  `repo` when `scripts/` moved;
-  every other `ci.yml` check-job command, the `## Review` presence test, the
-  title's type against the paths it touches, and a merge-tree probe against
-  every other open pull request head. Run full `npm test` yourself if shared
-  config moved.
+  exit 0. It runs **a merge-tree probe against every other open pull request
+  head first, fetching `origin` itself just before it compares** (repo-104), so a
+  stale head is found in seconds, not after the suites. Then `npm run check`;
+  for each tool the diff touches with a path that is not markdown, the packages
+  those paths can reach (repo-101, repo-102: a markdown-only change under a tool
+  plans no suite); `core` and `repo` when `scripts/` moved; every other `ci.yml`
+  check-job command, the `## Review` presence test and the title's type against
+  the paths it touches. Run full `npm test` yourself if shared config moved.
 - **Exit 16 alone is a conflict with another open pull request's head, not a
-  fault in your branch.** Push, open the draft, report the other pull request's
-  number and the paths, and stop there: the merge order is the orchestrator's to
-  set. A sibling that conflicts with `main` itself reports as a conflict with
-  your HEAD, because HEAD carries `main`; that is the sibling's merge to make.
-  A head preflight says "this checkout does not have" is a `git fetch origin`,
-  not a conflict.
+  fault in your branch.** The probe stops the run there, so no suite has run:
+  the output ends with the `--only check,ciCommands,review,title` command for
+  the rest, and you run it before you report. Then push, open the draft, report
+  the other pull request's number and the paths, and stop: the merge order is
+  the orchestrator's to set. A sibling that conflicts with `main` itself reports
+  as a conflict with your HEAD, because HEAD carries `main`; that is the
+  sibling's merge to make. A head preflight still says "this checkout does not
+  have" *even after* its own fetch is one the remote no longer serves; rerun
+  `node scripts/preflight.mjs --only mergeTree --base origin/<base> --title "<title>"`,
+  which takes seconds, never the whole run. `--only` takes any of `mergeTree`,
+  `check`, `ciCommands`, `review`, `title`, comma-separated.
 - A new `scripts/*.mjs` needs an `include` line in `scripts/test/tsconfig.json`.
 - **A commit subject is under 100 characters**; the hook rejects longer, and
   ticket titles often exceed it.
