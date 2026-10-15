@@ -53,6 +53,7 @@ import {
   testPlan,
   touchedTools,
 } from "../preflight.mjs";
+import { failedChecks } from "../review-record.mjs";
 
 const CLI = path.join(import.meta.dirname, "..", "preflight.mjs");
 
@@ -2192,9 +2193,14 @@ test("preflight stops at a conflicting head with exit 16 before any suite, and n
     expect(results.reduce((mask, r) => mask | r.bit, 0)).toBe(EXIT.mergeTree);
     const halted = results[1]?.lines.join("\n") ?? "";
     expect(halted).toMatch(/check, ciCommands, review, title did not run/);
+    // Both commands: the probe on its own, and the checks that never ran.
     expect(halted).toContain(
-      `node scripts/preflight.mjs --only check,ciCommands,review,title --base ${base} --title "docs(repo): a title (repo-1)"`,
+      `node scripts/preflight.mjs --only mergeTree --base '${base}' --title 'docs(repo): a title (repo-1)'`,
     );
+    expect(halted).toContain(
+      `node scripts/preflight.mjs --only check,ciCommands,review,title --base '${base}' --title 'docs(repo): a title (repo-1)'`,
+    );
+    expect(results[1]).toMatchObject({ skipped: ["check", "ciCommands", "review", "title"] });
   } finally {
     world.cleanup();
   }
@@ -2297,6 +2303,18 @@ test("the CLI prints the probe's failure first and exits 16 alone, with no suite
     expect(result.stdout).toMatch(/#31 peer conflicts on: docs\/work\/x-1\.md/);
     expect(result.stdout).not.toMatch(/== check ==/);
     expect(result.stdout).toMatch(/check, ciCommands, review, title did not run/);
+    // The last line carries the unrun checks too: it is the line a lander reads.
+    expect(result.stdout.trimEnd().split("\n").at(-1)).toBe(
+      "preflight failed: mergeTree (exit 16); not run: check, ciCommands, review, title",
+    );
+    // And the lander's hint, fed this real output, covers all five checks.
+    expect(failedChecks(result.stdout)).toEqual([
+      "mergeTree",
+      "check",
+      "ciCommands",
+      "review",
+      "title",
+    ]);
   } finally {
     repo.cleanup();
     fs.rmSync(shimDir, { recursive: true, force: true });
@@ -2317,9 +2335,58 @@ test("parseArgs reads --only as a comma list, repeatable, and rejects a name tha
 
 test("rerunCommand names the checks, the base and the title, and omits a title it was not given (repo-104)", () => {
   expect(rerunCommand(["mergeTree"], "origin/main", "fix(repo): x (repo-1)")).toBe(
-    'node scripts/preflight.mjs --only mergeTree --base origin/main --title "fix(repo): x (repo-1)"',
+    "node scripts/preflight.mjs --only mergeTree --base 'origin/main' --title 'fix(repo): x (repo-1)'",
   );
   expect(rerunCommand(["check", "title"], "origin/main", undefined)).toBe(
-    "node scripts/preflight.mjs --only check,title --base origin/main",
+    "node scripts/preflight.mjs --only check,title --base 'origin/main'",
   );
+});
+
+test("rerunCommand single-quotes a title so backticks and $(…) stay text when pasted (repo-104)", () => {
+  expect(rerunCommand(["title"], "origin/main", "fix: `npm run dev` never $(id) started")).toBe(
+    "node scripts/preflight.mjs --only title --base 'origin/main' --title 'fix: `npm run dev` never $(id) started'",
+  );
+  expect(rerunCommand(["title"], "origin/main", 'fix: it\'s "done"')).toBe(
+    "node scripts/preflight.mjs --only title --base 'origin/main' --title 'fix: it'\\''s \"done\"'",
+  );
+});
+
+test("a gh payload with an oid that is not a commit id is refused before it reaches git fetch (repo-104)", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("f.txt", "seed\n");
+    repo.commitAll("base");
+    const calls: string[][] = [];
+    const run = (command: string, args: string[], options: { cwd?: string } = {}) => {
+      if (command === "gh") {
+        return JSON.stringify([
+          { number: 7, headRefName: "evil", headRefOid: "--upload-pack=touch /tmp/x;false" },
+        ]);
+      }
+      calls.push(args);
+      return realRun(command, args, options);
+    };
+    expect(() => checkMergeTree(repo.dir, { run })).toThrow(/PR #7 \(evil\).*not a commit id/);
+    expect(calls.some((args) => args[0] === "fetch")).toBe(false);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test("a halted run for an oid no fetch can bring says so, not only 'a conflict' (repo-104)", () => {
+  const world = makeRepoWithOrigin();
+  try {
+    const base = world.repo.git("rev-parse", "HEAD");
+    const results = preflight(world.repo.dir, {
+      base,
+      run: realRun,
+      buildRun: stubBuild,
+      listOpenHeads: () => [{ number: 13, headRefName: "ghost", oid: "a".repeat(40) }],
+    });
+    const halted = results.find((r) => r.name === "halted")?.lines.join("\n") ?? "";
+    expect(halted).toMatch(/a missing head is a fetch to retry/);
+    expect(halted).toMatch(/A conflict is another pull request's head/);
+  } finally {
+    world.cleanup();
+  }
 });

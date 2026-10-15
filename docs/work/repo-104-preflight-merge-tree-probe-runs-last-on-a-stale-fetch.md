@@ -114,18 +114,38 @@ rerun.
     same script, so it inherits the order and the fetch; the ticket's trap is
     met by the hint above, and I did not move a probe in front of the push (that
     would change `--land`'s sequence, which repo-94 fixed on purpose).
-  - **Proof.** `npx vitest run scripts/test/preflight.test.ts` → `Tests  101
-passed (101)` before the CLI test was added; `-t repo-104` → `Tests  11
-passed | 91 skipped (102)`; `scripts/test/review-record.test.ts` → `Tests
-67 passed (67)`. Mutations on the committed tree, each restored with
-    `git checkout 59e3909d -- scripts/preflight.mjs`: removing both fetches →
-    3 failed (moved head, force-updated head, failed-fetch note); `mergeTree`
-    last in `CHECK_ORDER` → 3 failed (order, halt, CLI exit 16); ignoring
-    `only` → 2 failed (`--only mergeTree` unit and CLI).
-  - **Measured, Done when 1.** `node scripts/preflight.mjs --only mergeTree
---base origin/main --title "…"` on this repo: `real 0m0.719s`, five heads
-    compared, `preflight passed (only mergeTree; the other checks did not run)
-(exit 0)`. The CLI test with a planted `gh` listing a conflicting head
-    exits exactly 16 (a started `npm run check` in that fixture would add bit
-    1. with `== mergeTree ==` the first output. A real conflict on a downloader
-       branch was not staged: unmeasured, the fixture stands in for it.
+  - **Proof.** `npx vitest run scripts/test/preflight.test.ts` gave 101 of 101
+    before the CLI test was added; with `-t repo-104` it gave 11 passed, 91
+    skipped, of 102. `scripts/test/review-record.test.ts` gave 67 of 67.
+    Mutations were made on the committed tree and each restored with
+    `git checkout 59e3909d -- scripts/preflight.mjs`. Removing both fetches
+    failed 3 tests (moved head, force-updated head, failed-fetch note). Putting
+    `mergeTree` last in `CHECK_ORDER` failed 3 (order, halt, CLI exit 16).
+    Ignoring `only` failed 2 (the `--only mergeTree` unit test and the CLI one).
+  - **Measured, Done when 1.** `node scripts/preflight.mjs --only mergeTree`
+    on this repo took `real 0m0.719s` with five heads compared, and ended
+    `preflight passed (only mergeTree; the other checks did not run) (exit 0)`.
+    The CLI test, with a planted `gh` listing a conflicting head, exits exactly
+    16 (a started `npm run check` in that fixture would add bit 1) and
+    `== mergeTree ==` is the first output. A real conflict on a downloader
+    branch was not staged: unmeasured, the fixture stands in for it.
+- 2026-10-15 — Round 1, after gate 1 failed at 2505255f. The owner chose, over
+  halting only on an unfetchable oid, to keep the halt on any verdict failure
+  and fix the hints. Findings and what changed:
+  - **High: a halted run's rerun text named only the probe.** The last line now
+    ends `; not run:` and the four unrun check names, `failedChecks` returns the failed and the unrun checks, and
+    `--land`'s hint says preflight stopped at the probe and prints one `--only`
+    command over all five names. The `== halted ==` block prints two commands,
+    the probe alone and the rest. `roles/builder.md`, `roles/fixer.md`,
+    `reference/records.md` and `reference/dispatching.md` no longer say that
+    `--only mergeTree` is the rerun, or that exit 16 alone means the rest passed.
+    The `--land` test's stub now has the real output shape.
+  - **Low: three causes of exit 16.** The halt block names a conflict and a
+    missing head separately, and the two role pages describe three causes
+    (conflict, unreachable head, `mergeTree threw`, which does not halt).
+  - **Low: `rerunCommand` quoting.** It single-quotes the title and the base,
+    escaping `'` as `'\''`.
+  - **Low: oid option injection.** `defaultListOpenHeads` refuses a
+    `headRefOid` that is not 40 or 64 hex digits, before any `git fetch`.
+  - **Low: this entry's formatting.** The two bullets above are rewritten with
+    no code span across a line and no stray list item.

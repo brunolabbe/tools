@@ -1117,17 +1117,32 @@ function spliceAndCommitAll(ticketPath, repoRoot, plans, ticketId, tool, status,
 }
 
 /**
- * The checks preflight's last line says failed — `preflight failed: mergeTree,
- * title (exit 20)` — or none when the output has no such line (a thrown start,
- * a stub). Read off the output because `runPreflight` hands back text, not the
- * bitmask (repo-104).
+ * Preflight's last line, read as a verdict: `preflight failed: mergeTree (exit
+ * 16); not run: check, ciCommands, review, title`. `failed` are the checks
+ * that failed; `notRun` the ones a halted run never started, which that run
+ * proved nothing about. Both are empty when the output has no such line (a
+ * thrown start, a stub). Read off the output because `runPreflight` hands back
+ * text, not the bitmask (repo-104).
+ *
+ * @param {string} output
+ * @returns {{failed: string[], notRun: string[]}}
+ */
+export function preflightVerdict(output) {
+  const match = /^preflight failed: (.+?) \(exit \d+\)(?:; not run: (.+))?$/mu.exec(output);
+  if (!match) return { failed: [], notRun: [] };
+  return { failed: match[1].split(", "), notRun: match[2] ? match[2].split(", ") : [] };
+}
+
+/**
+ * Every check a rerun has to cover: the ones that failed and the ones that did
+ * not run. A halted run's failed probe alone is not the whole of what is open.
  *
  * @param {string} output
  * @returns {string[]}
  */
 export function failedChecks(output) {
-  const match = /^preflight failed: (.+) \(exit \d+\)$/mu.exec(output);
-  return match ? match[1].split(", ") : [];
+  const { failed, notRun } = preflightVerdict(output);
+  return [...failed, ...notRun];
 }
 
 /**
@@ -1366,15 +1381,20 @@ export function land(options) {
   // stops the run before the suites, and its own output carries the command for
   // the rest; the landing needs neither a reset nor a full ten-minute rerun.
   const pushedHint = (output = "") => {
-    const failed = failedChecks(output);
+    const { failed, notRun } = preflightVerdict(output);
+    const open = [...failed, ...notRun];
     const rerun =
-      failed.length > 0
-        ? `\nRerun only what failed: ${preflightRerunCommand(failed, base, title)}`
+      open.length > 0
+        ? `\nRerun what failed and what did not run: ${preflightRerunCommand(open, base, title)}`
+        : "";
+    const halted =
+      notRun.length > 0
+        ? ` Preflight stopped at ${failed.join(", ")}, so ${notRun.join(", ")} did not run on this landing.`
         : "";
     return (
       `\n\nThe ${plans.length} section(s) are landed and pushed to origin/${branch}, and verify ` +
-      `passed; only the preflight finding above is left. Nothing to undo — fix what it names ` +
-      `and re-run preflight.${rerun}`
+      `passed; only the preflight finding above is left.${halted} Nothing to undo — fix what it ` +
+      `names and re-run preflight.${rerun}`
     );
   };
 

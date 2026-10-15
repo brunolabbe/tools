@@ -91,18 +91,28 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   plans no suite); `core` and `repo` when `scripts/` moved; every other `ci.yml`
   check-job command, the `## Review` presence test and the title's type against
   the paths it touches. Run full `npm test` yourself if shared config moved.
-- **Exit 16 alone is a conflict with another open pull request's head, not a
-  fault in your branch.** The probe stops the run there, so no suite has run:
-  the output ends with the `--only check,ciCommands,review,title` command for
-  the rest, and you run it before you report. Then push, open the draft, report
-  the other pull request's number and the paths, and stop: the merge order is
-  the orchestrator's to set. A sibling that conflicts with `main` itself reports
-  as a conflict with your HEAD, because HEAD carries `main`; that is the
-  sibling's merge to make. A head preflight still says "this checkout does not
-  have" *even after* its own fetch is one the remote no longer serves; rerun
-  `node scripts/preflight.mjs --only mergeTree --base origin/<base> --title "<title>"`,
-  which takes seconds, never the whole run. `--only` takes any of `mergeTree`,
-  `check`, `ciCommands`, `review`, `title`, comma-separated.
+- **Exit 16 has three causes; read the output, not the code.** Whichever it is,
+  the last line says whether anything was skipped.
+  - **A conflict with another open pull request's head** is not a fault in your
+    branch. The probe stops the run there, so **no suite, no `## Review` check
+    and no title check has run** and the last line ends `; not run: check, …`:
+    run the `--only check,ciCommands,review,title` command in the `== halted ==`
+    block before you report. Then push, open the draft, report the other pull
+    request's number and the paths, and stop: the merge order is the
+    orchestrator's to set. A sibling that conflicts with `main` itself reports as
+    a conflict with your HEAD, because HEAD carries `main`; that is the sibling's
+    merge to make.
+  - **A head "this checkout does not have" even after the probe's own fetch**
+    halts the run the same way. The cause is a `note` line (the fetch failed) or
+    a head the remote no longer serves. Rerun the probe alone with the first
+    command in the `== halted ==` block (seconds); once it passes, run the second
+    for the rest.
+  - **`mergeTree threw`** (`gh` down) does not halt: every other check ran, and
+    the exit is 16 only if they passed.
+
+  `--only` takes any of `mergeTree`, `check`, `ciCommands`, `review`, `title`,
+  comma-separated. A pass from `--only` is not a pass of the run: its last line
+  says which checks did not run.
 - A new `scripts/*.mjs` needs an `include` line in `scripts/test/tsconfig.json`.
 - **A commit subject is under 100 characters**; the hook rejects longer, and
   ticket titles often exceed it.

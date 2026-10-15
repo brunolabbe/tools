@@ -1283,6 +1283,16 @@ function defaultListOpenHeads(run) {
           1,
         );
       }
+      // The oid reaches `git fetch origin <oid>` (repo-104), where a value that
+      // begins with `-` would be read as an option. GitHub computes it, so this
+      // is a guard on a path no caller has, not a repair.
+      if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/u.test(p.headRefOid)) {
+        throw fail(
+          `gh pr list reported headRefOid ${JSON.stringify(p.headRefOid)} for PR #${p.number} ` +
+            `(${p.headRefName}), which is not a commit id`,
+          1,
+        );
+      }
       return { number: p.number, headRefName: p.headRefName, oid: p.headRefOid };
     });
   };
@@ -1535,7 +1545,7 @@ export function workingTreePaths(repo, run) {
  *   spawn?: typeof spawnRaw,
  *   listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[],
  *   only?: string[],
- *   onResult?: (result: {ok: boolean, bit: number, name: string, lines: string[]}) => void,
+ *   onResult?: (result: {ok: boolean, bit: number, name: string, lines: string[], skipped?: string[]}) => void,
  * }} options
  */
 export function preflight(repo, options) {
@@ -1595,14 +1605,19 @@ export function preflight(repo, options) {
     if (name === "mergeTree" && !result.ok && !result.threw) {
       const skipped = selected.slice(selected.indexOf(name) + 1);
       if (skipped.length > 0) {
+        // `skipped` is read by `main` for the last line and by `--land`'s hint
+        // through it: a run that stopped here proved nothing about these.
         const halted = {
           ok: false,
           bit: 0,
           name: "halted",
+          skipped,
           lines: [
-            `mergeTree failed, so ${skipped.join(", ")} did not run. A conflict with another pull`,
-            `request's head is not a fault in this branch; once it is cleared, or to see the`,
-            `rest now, run them with:`,
+            `mergeTree failed, so ${skipped.join(", ")} did not run: this run proved nothing`,
+            `about them. A conflict is another pull request's head, not a fault in this`,
+            `branch; a missing head is a fetch to retry. Clear the probe, then rerun it:`,
+            `  ${rerunCommand(["mergeTree"], base, title)}`,
+            `and run the rest, now if you want their verdict before the probe is clear:`,
             `  ${rerunCommand(skipped, base, title)}`,
           ],
         };
@@ -1616,6 +1631,17 @@ export function preflight(repo, options) {
 }
 
 /**
+ * A string a POSIX shell reads back as itself. Single quotes, not
+ * `JSON.stringify`'s double ones: a title with backticks or `$(…)` (one of the
+ * last 600 subjects on `main` has backticks) would run when pasted.
+ *
+ * @param {string} text
+ */
+function shellQuote(text) {
+  return `'${text.replaceAll("'", `'\\''`)}'`;
+}
+
+/**
  * The command that reruns `names` alone. `--repo` is left out: the caller's
  * working directory is the repository, as it was for the run being repeated.
  *
@@ -1625,8 +1651,8 @@ export function preflight(repo, options) {
  */
 export function rerunCommand(names, base, title) {
   return (
-    `node scripts/preflight.mjs --only ${names.join(",")} --base ${base}` +
-    (title === undefined ? "" : ` --title ${JSON.stringify(title)}`)
+    `node scripts/preflight.mjs --only ${names.join(",")} --base ${shellQuote(base)}` +
+    (title === undefined ? "" : ` --title ${shellQuote(title)}`)
   );
 }
 
@@ -1690,6 +1716,8 @@ export function main(argv = process.argv.slice(2)) {
   // Printed as each check finishes, so the probe's verdict is on screen before
   // the first suite starts and a long run is not silent until the end.
   let bitmask = 0;
+  /** @type {string[]} */
+  let notRun = [];
   preflight(repo, {
     base,
     title,
@@ -1698,6 +1726,7 @@ export function main(argv = process.argv.slice(2)) {
       process.stdout.write(`\n== ${result.name} ==\n`);
       for (const line of result.lines) process.stdout.write(`${line}\n`);
       bitmask |= result.bit;
+      if (result.skipped) notRun = result.skipped;
     },
   });
 
@@ -1709,8 +1738,11 @@ export function main(argv = process.argv.slice(2)) {
     only === undefined
       ? ""
       : ` (only ${[...new Set(only)].join(", ")}; the other checks did not run)`;
+  // A halted run names what it never ran on the same line, so whoever reads
+  // only that line (`--land`'s hint does) cannot take it for a full verdict.
+  const unproven = notRun.length > 0 ? `; not run: ${notRun.join(", ")}` : "";
   process.stdout.write(
-    `\n${bitmask === 0 ? `preflight passed${scope}` : `preflight failed: ${names.join(", ")}`} (exit ${bitmask})\n`,
+    `\n${bitmask === 0 ? `preflight passed${scope}` : `preflight failed: ${names.join(", ")}`} (exit ${bitmask})${unproven}\n`,
   );
   process.exitCode = bitmask;
 }
