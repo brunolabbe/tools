@@ -5430,3 +5430,61 @@ not a defect in a page: the 2026-10-10 review dropped twelve of those, the
 2026-10-14 review one. An exit code in a reproduction is read directly, never
 through a pipe: the 2026-10-14 review refuted one that way. An item a script,
 not a page, got wrong names the script and is filed or recorded, not fixed here.
+
+### Batch 2026-10-15 (tools-e9, dl-115 dl-123 repo-104 lg-24, dl-121 and dl-125 measured, lg-25 filed) — base 8e49523c
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | seam map, 9 tickets | 1m03s / 1m02s | 0 | $0.1767 |
+| #487 | merged | Sonnet 5.5 / high | builder-standard | dl-123 build | 5m54s / 11m04s | 0 | $0.4219 |
+| #487 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-123 gate 1 | 4m58s / 4m54s | 0 | $0.8664 |
+| #487 | merged | Sonnet 5.5 / high | fixer | dl-123 landing | 2m17s / 9m13s | 0 | $0.2466 |
+| #491 | open, ready | Sonnet 5.5 / high | builder-standard | dl-115 build + round 1 | 42m42s / 1h24m31s | 0 | $2.4308 |
+| #491 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-115 gates 1–2 | 22m13s / 44m27s | 0 | $3.9491 |
+| #491 | open, ready | Sonnet 5.5 / high | fixer | dl-115 round 2 + landing | 4m52s / 9m44s | 0 | $0.3840 |
+| #491 | open, ready | Haiku 5.5 / high | builder-mechanical | dl-115 maintenance merge after #487 | 16m23s / 11m35s | 0 | $0.0392 |
+| #488 | merged | Sonnet 5.5 / high | builder-standard | repo-104 build + round 1 | 23m03s / 35m15s | 0 | $2.0114 |
+| #488 | merged | Opus 5.5 / high | ticket-reviewer-opus | repo-104 gates 1–2 | 14m13s / 26m52s | 0 | $2.0470 |
+| #488 | merged | Sonnet 5.5 / high | fixer | repo-104 landing | 3m35s / 3m33s | 0 | $0.2263 |
+| #485 | merged | Opus 5.5 / high | builder-hard | lg-24 build + round 1 | 22m05s / 40m09s | 0 | $2.5023 |
+| #485 | merged | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | lg-24 gates 1–2 | 13m10s / 36m51s | 0 | $1.4618 |
+| #485 | merged | Sonnet 5.5 / high | fixer | lg-24 landing | 5m13s / 5m01s | 0 | $0.5077 |
+| #493 | merged | Haiku 5.5 / high | builder-mechanical | lg-25 filing | 8m42s / 8m32s | 0 | $0.1491 |
+| #489 | merged | Sonnet 5.5 / high | builder-standard | dl-121 Windows measurement + build | 17m49s / 53m21s | 0 | $1.3597 |
+| #489 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-121 gate 1 | 9m07s / 9m06s | 0 | $1.2038 |
+| #489 | merged | Sonnet 5.5 / high | fixer | dl-121 landing | 3m45s / 3m42s | 0 | $0.2588 |
+| #490 | merged | Opus 5.5 / high | builder-hard | dl-125 two Windows probes + record + round 1 | 57m49s / 1h37m30s | 0 | $8.5936 |
+| #490 | merged | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | dl-125 narrow gates 1–2 | 30m12s / 42m24s | 0 | $3.3394 |
+| #490 | merged | Sonnet 5.5 / high | fixer | dl-125 round 2 + ready | 4m06s / 3m48s | 0 | $0.4676 |
+| — | — | Opus 5.5 / medium | orchestrator | tools-e9 | 2h14m32s / 2h15m23s | 0 | $10.6679 |
+
+Total $43.3112, active 7h27m40s (rates read 2026-10-10).
+
+**Tickets:**
+
+- dl-123 → #487: gate 1 PASS (one low, fixed at landing).
+- dl-115 → #491: gate 1 CONCERNS (med: what "negative test" means, owner answered), gate 2 CONCERNS (med: pin timing bounds flaked 1/10, fixed by fixer, no gate 3); held as draft behind #487, merged main at 6a189377.
+- repo-104 → #488: gate 1 FAIL (high: a halted preflight's rerun hint named only mergeTree), gate 2 PASS (one low, fixed at landing).
+- lg-24 → #485: gate 1 CONCERNS (med: the builder's "option A cannot be a migration" was false; the gate's copy-aside rebuild applied, re-run by the orchestrator), gate 2 PASS (two lows fixed at landing; N3 filed as lg-25).
+- lg-25 → #493: maintenance filing, no gate.
+- dl-121 → #489: measured on windows-latest (probe #484), owner chose a 2.5 floor on win32; gate 1 PASS (one low fixed at landing).
+- dl-125 → #490: measured (probes #486, #492), owner chose the 0.25 s rule, record only, ticket stays ready; narrow gate 1 CONCERNS (F1–F9), gate 2 CONCERNS (F10–F13, fixed by fixer, thread is the record).
+
+**Defects in the skill:**
+
+1. `reference/dispatching.md`, "A probe pull request" — says the probe is "closed with its branch deleted" but not how, and the obvious command leaves the remote branch from a worktree. Reproduction: `gh pr close 486 --delete-branch` → `✓ Closed pull request …#486` then `failed to run git: fatal: 'main' is already used by worktree at '/workspaces/tools'`; `git ls-remote --heads origin dl-125-probe` → `63d63d25… refs/heads/dl-125-probe`. `git push origin --delete <branch>` was needed.
+2. `reference/dispatching.md`, "A probe pull request" — does not say that workflow artifacts cannot be downloaded here, so a probe must print everything into its job log. Reproduction: `gh run download 38662561661 -n dl-125-probe-traces` → `dial tcp 52.239.172.36:443: i/o timeout`.
+3. `reference/dispatching.md`, "A probe pull request" — does not say that a probe's new workflow file also un-gates `ci.yml`'s own matrix, so the probe pays the full Windows and Linux legs too. Reproduction: `gh pr checks 484` lists `test (windows-latest, informational)` and `test (ubuntu-latest)` beside the probe job; dl-125's builder measured about 17 min of ci.yml legs beside a 13 min probe.
+4. `reference/records.md`, "Fixed at landing" — says the mark goes "in the landing commit", but `--land` refuses a tree dirty against HEAD, so the fix and its Log entry land as a separate commit before the splice. Reproduction: `git log --oneline 2caf41dc..ccba3a13` on repo-104 → `ba703486` (fix + entry) before the two record commits.
+5. `roles/fixer.md`, "The work" (the mutation-check bullet) — tells the fixer to run the gate's script with its own tree and output directory as arguments, but gate scripts hard-code both. Reproduction: `grep -n "HEAD_SHA=\|^G=" <scratch>/dl-115/gate-2/mrun.sh` → `4:G=…/dl-115/gate-2` and `6:HEAD_SHA=4c5709cb…`. The same held for a builder's scripts handed to a gate (`const repo = "/workspaces/tools/.claude/worktrees/agent-aff5b81c4cb82b61c"` in dl-125's `boundary.mjs`, since fixed); `roles/common.md`, "Your scratch directory" says nothing about it.
+6. `roles/reviewer.md`, "What makes a gate worth its cost" — says nothing about repeating a new wall-clock assertion, and dl-115's gate 1 passed a bound on one run that failed 1 in 10. Reproduction: `cat <scratch>/dl-115/gate-2/repeat.summary` → `run 1 exit 1 … Tests 1 failed | 2 passed`, runs 2–10 exit 0.
+7. `roles/builder.md`, "Set up" step 2 — has no path for a branch creation the harness denies. Reproduction: lg-25's `git checkout --no-track -b lg-typed-string-guards-file origin/main` → "Permission for this action was denied by the Claude Code auto mode classifier … [Modify Shared Resources]"; the same command succeeded on retry after the owner said to resume.
+8. `docs/01-TICKETS.md`, "The file" — the template has no heading for an open or answered decision, and tickets differ. Reproduction: `grep -n "^## " tools/downloader/docs/work/dl-50-*.md tools/downloader/docs/work/dl-102-*.md | grep -i decision` → `## Decision — answered 2026-09-13 by the owner, not open` and `## Decisions`.
+
+Script, recorded not fixed: `scripts/preflight.mjs`'s merge-tree probe compares HEAD against the branch's own open pull request (lg-24's run printed `ok #485 lg-24 merges cleanly with HEAD`); harmless while the old head is an ancestor.
+
+**Worked, and worth keeping:**
+
+- A gate that ran the builder's own "measured" claim (lg-24 option A) and an orchestrator re-run of the gate's script before the owner chose: the owner chose on a reproduced fact, not on either agent's word.
+- Asking the owner a builder's open decision only after its gate returned (repo-104): the gate's high changed what the halt option meant.
+- Probe pull requests that added new files only and were closed with `git push origin --delete` and a `ls-remote | wc -l` → 0 proof (#484, #486, #492).
