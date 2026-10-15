@@ -1,0 +1,65 @@
+# dl-125 probe. DO NOT MERGE: closed, and its branch deleted, once read.
+#
+# Loops the dl-103 test's 60% fast-start case on windows-latest to put a rate
+# on the one failure seen there (PR #474, run 38355111789), and traces ffmpeg's
+# stderr on every run so a failing one says whether ffmpeg logged
+# `partial file` (dl-125's steps 1 and 2). Nothing under tools/ changes:
+# .github/probe-dl-125/trace.mjs is preloaded with NODE_OPTIONS.
+#
+# Counts, and why. Phase "block" runs the "dl-103: an unanswered seek probe"
+# block (the 60% case with its block neighbours; on Windows the stand-ins skip,
+# so eight real cases) in a fresh vitest process, 60 times: with no failure,
+# 60 runs put the rate under 5% at 95% confidence (3/n). Phase "file" then
+# runs the whole stream.test.ts, which is what held the failing case's worker
+# on the run that failed, 30 times: under 10% by the same rule. Each phase
+# stops early at its time budget, 20 and 15 minutes, so the job stays inside
+# 45 minutes and the probe near an hour of runner time with ci.yml's own legs.
+name: probe dl-125
+
+on:
+  pull_request:
+
+concurrency:
+  group: probe-dl-125-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+jobs:
+  loop:
+    if: github.head_ref == 'dl-125-probe'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Which ffmpeg
+        run: |
+          ff="$(node -p "require('ffmpeg-static')")"
+          echo "ffmpeg-static: $ff"
+          "$ff" -hide_banner -version | head -2
+          echo "FFMPEG_PATH=${FFMPEG_PATH:-unset}"
+          nproc || true
+      - name: Phase block, 60 runs of the dl-103 block
+        run: |
+          bash .github/probe-dl-125/loop.sh block "dl-103: an unanswered seek probe" 60 1200
+      - name: Phase file, 30 runs of the whole stream.test.ts
+        run: bash .github/probe-dl-125/loop.sh file "" 30 900
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dl-125-probe-traces
+          path: ${{ runner.temp }}/dl125
+          retention-days: 3
