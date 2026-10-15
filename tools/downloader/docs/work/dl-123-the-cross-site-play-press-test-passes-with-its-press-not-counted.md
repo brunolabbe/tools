@@ -3,7 +3,7 @@ id: dl-123
 tool: downloader
 title: The cross-site Play press test still passes when that press is not counted
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -182,6 +182,29 @@ not done the work. Change no source under `resolvers/src`.
 3. The test's title says what its outcome depends on.
 4. `provoke.ts` and every other file under `resolvers/src` are byte-identical to
    `main`; only the test, its fixtures, and this ticket change.
+
+## Review
+
+**Gate: PASS** — 2026-10-15 · `8e49523c..197f6eb2` · Opus 5.5, depth standard
+
+| Done when                                                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Under plant A the `-t "a Play press in a frame from another site"` command exits non-zero on the beacon assertion, and zero unmodified | `resolvers/test/browser/browser-resolver.test.ts` › "a Play press in a frame from another site that only isPlayPress counts (an icon button) still holds back the box click, whose centre is that frame" ✓ — gate-run: unmodified exit 0 (`2 passed \| 119 skipped (121)`); plant A exit 1 (`1 failed \| 1 passed`), `AssertionError: expected [ '/box-xo-embed.html', …(5) ] to not include '/beacon/embed-surface-clicked'`. Unmodified was run at the head, not at the base sha |
+| 2. The label path is still exercised in a cross-site frame; plant B alone run and recorded                                                | same file › "a Play press in a frame from another site that only the label path makes (a text button) still holds back the box click" ✓ — gate-run: plant B exit 1 on the beacon assertion against `/box-xo-embed-label.html`, the icon test green; recorded in the Log's table                                                                                                                                                                                                    |
+| 3. The test's title says what its outcome depends on                                                                                      | **verified** by reading: the title names `isPlayPress` and the icon button; the new test's names the label path and the text button                                                                                                                                                                                                                                                                                                                                                |
+| 4. `resolvers/src` byte-identical to `main`                                                                                               | **verified** — `git diff --stat 8e49523c -- tools/downloader/resolvers/src` empty at the head, and again after every plant was restored                                                                                                                                                                                                                                                                                                                                            |
+
+Positive controls, each green at the head and red under the plant: A (`id === "play"` rule deleted), A2 (`isPlayPress` always false), A3 (`playClicks > 0` dropped from `provokeFrame`'s return) turn the icon test red; B (`labelClicked` dropped) turns the label test red; A + B turns both red. In every red run the first assertion (the manifest variant) passed and the beacon one failed, so the press happens in each state and only its counting changed.
+
+Converse: with the box click disabled in `provokeInput`, A + E and B + E both exit 0 (`2 passed`). The beacon is requested only by the resolver's centre click on `div.player-embed`, never by the embed's own listeners on the press, so the assertion reads the resolver's choice.
+
+- **low** · `nfr:maintainability` — the icon test's new comment says "Its button has no text", but `embed-inner.html`'s button holds a text node, the glyph `&#9654;`. What keeps the label path off is that the glyph is no word `PLAY_TEXT` matches, which the fixture's own comment says. The comment is false in the safe direction, and nothing relies on it.
+- **dropped** · "another site" in both titles: primary and secondary are `127.0.0.1` on two ports, so they are cross-origin but the same site. The rule under test, `isScriptableFrame`, compares origins, and the wording comes from dl-81 and dl-100, outside this range.
+- **dropped** · Done when 1's `-t` now selects two tests, so under plant A it reports `1 failed | 1 passed`. It still exits non-zero on the beacon assertion, which is what the line asks.
+- **findings** · the hunt returned 3; 1 carried, 2 dropped.
+- Fixture realism: `box-xo-embed.html` is unchanged, a 640×360 `div.player-embed` whose centre is the secondary-origin frame. `embed-inner.html` is used only by that page and that test, so no other test's meaning moved. The new pair has the same shape, with `id="go"` and the text "Play". The diff to the test file deletes only the old title line.
+- CI at `197f6eb2`: check, e2e (direct, sniffer), docker, codeql, CodeQL and dependency-review pass. `test (ubuntu-latest)` and `test (windows-latest, informational)` were still pending when read. No acceptance line depends on them.
+- NFR: security n/a (test and fixtures only) · performance: one more browser test, about 4.6 s · reliability ✓, five plant runs and two converse runs gave the same result as the Log's table · maintainability: the low above.
 
 ## Log
 
