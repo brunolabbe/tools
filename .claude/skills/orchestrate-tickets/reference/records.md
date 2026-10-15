@@ -49,10 +49,14 @@ the scratch clone is a warning, not a failure (repo-94).
 Two failures after the push are not the lander's to repair. A merge-tree exit
 16 against a sibling that conflicts with the base itself (lg-21 and repo-103,
 both against dl-110) is cleared by the orchestrator's merge order. A
-`FAIL #<n> … is at <sha>, which this checkout does not have` right after a
-`git fetch origin` is release-please force-updating its branches between the
-fetch and the probe (three landings this period; repo-104): the records are
-landed, and `preflight.mjs` alone exits 0 on the next run. A `--land` killed
+`FAIL #<n> … is at <sha>, which this checkout does not have even after
+git fetch origin` is release-please force-updating its branches faster than
+the probe's own fetch (three landings before repo-104 made the probe fetch for
+itself and run first): the records are landed. A merge-tree failure stops
+preflight before the suites, and the `--land` output ends with the one command
+that covers the probe and every check that did not run, `--only` followed by
+all five names: **the landing's `## Review` and title checks have not run until
+it passes**, so `--only mergeTree` alone is not enough. A `--land` killed
 after its push is finished except for the thread comments and `gh pr ready`:
 do those by hand, and never run `--land` on the same files again — it splices
 a second `## Review` (repo-103).

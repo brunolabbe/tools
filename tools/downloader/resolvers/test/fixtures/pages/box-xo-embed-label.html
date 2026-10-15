@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player box that is a wrapper around a cross-site embed with its own text-labelled Play button</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-123: box-xo-embed.html's case, with a Play button only the label path
+         (`PLAY_TEXT`) presses: its id is not `play` and it has no class or
+         attribute `isPlayPress` counts. The press is still a frame's Play press,
+         so the box click is held back; its centre is the embed. -->
+    <div class="player-embed" style="width: 640px; height: 360px">
+      <iframe src="{{SECONDARY}}/embed-inner-label.html" width="640" height="360" style="border: 0"></iframe>
+    </div>
+  </body>
+</html>

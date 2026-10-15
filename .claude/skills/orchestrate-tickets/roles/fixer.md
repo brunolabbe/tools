@@ -38,12 +38,17 @@ re-read its whole transcript on every turn.
   `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`
   — unless the landing is the only work left: `--land` runs preflight itself
   after the push, and a run before it costs ten minutes for nothing.
-- **Exit 16 alone is a conflict with another open pull request's head, not a
-  fault in the branch**, and a sibling that conflicts with `main` itself
-  reports against your HEAD (lg-21 and repo-103 against dl-110): stop and
-  report the number and the paths; the merge order is the orchestrator's. A
-  head preflight says "this checkout does not have" is a `git fetch origin`,
-  not a conflict.
+- **Exit 16 from a conflict or a missing head stops the run** (repo-104): the
+  suites, the `## Review` check and the title check have **not run**, and
+  preflight's last line ends `; not run: check, …`. Read the `== halted ==`
+  block. A conflict with another open pull request's head is not a fault in the
+  branch, and a sibling that conflicts with `main` itself reports against your
+  HEAD (lg-21 and repo-103 against dl-110): run the block's second command (the
+  rest of the checks) before you report, then stop and report the number and the
+  paths; the merge order is the orchestrator's. A head "this checkout does not
+  have" even after the probe's own fetch is a failed fetch (a `note` line) or a
+  head the remote no longer serves: rerun the block's first command (the probe
+  alone, seconds), then its second. `mergeTree threw` (`gh` down) does not halt.
 - **A mutation check runs on a committed tree**: commit the fix, run the gate's
   script with your tree and an output directory of your own as its arguments —
   never as the gate ran it, whose copies point at the gate's scratch (dl-106) —
