@@ -277,3 +277,54 @@ option was taken.
   branch's second commit, which changes lg-23's sentence to "the next free directory
   migration" and this ticket's claims to match, so whichever of the two lands second
   takes the next free number.
+- 2026-10-15 — Built on `origin/main` at `8e49523c`. **Option B, a decision the
+  owner can overrule at the gate**: directory migration 3 (the next free number;
+  lg-23 is not on `main`) adds `households_id_not_null`, a `BEFORE INSERT` trigger
+  on `households` with `WHEN NEW.id IS NULL` and `RAISE(ABORT, 'a household has
+an id')`. The declared column is unchanged: `PRAGMA table_info(households)` still
+  reads `notnull: 0` for `id`, and the refusal is the trigger's, not the column's.
+  No contract, error code or route changes; the message is raw SQLite, as
+  migration 2's are, since no route can write a NULL id.
+  - **Why not A**: measured, A cannot be written as a migration under today's
+    runner. `option-a.mts` (build scratch) migrates an in-memory directory to 2,
+    adds a household and a membership, then runs A's rebuild (`CREATE TABLE
+households_rebuilt … NOT NULL`, `INSERT … SELECT … ORDER BY id`, `DROP TABLE
+households`, `ALTER TABLE … RENAME`) inside `BEGIN`, as `applyMigrationList`
+    does. `node option-a.mts`, Node v22.23.3:
+    ```
+    A1 plain rebuild inside BEGIN, foreign_keys ON: refused, SQLITE_CONSTRAINT_FOREIGNKEY FOREIGN KEY constraint failed
+    A2 PRAGMA foreign_keys = OFF inside BEGIN, then rebuild: refused, SQLITE_CONSTRAINT_FOREIGNKEY FOREIGN KEY constraint failed
+    A3 PRAGMA defer_foreign_keys = ON inside BEGIN, then rebuild: refused, SQLITE_CONSTRAINT_FOREIGNKEY FOREIGN KEY constraint failed
+    ```
+    So A's cost is a change to `applyMigrationList` in `db/schema.ts`, which the
+    books' eight migrations share (a migration run outside a transaction with
+    `foreign_keys` off, or a rebuild of `memberships` too), plus restoring the
+    three `households` triggers. The brief said "the four `households` triggers"
+    and named three; three is the count on `main`
+    (`households_never_updated`, `households_never_deleted`,
+    `households_never_replaced`).
+  - **Difficulty not re-rated.** The 2026-10-13 entry asks for `standard` if B is
+    taken; ratings are the owner's, so `difficulty: hard` is left for the owner to
+    change.
+  - **Tests**, at the end of `api/test/directory.test.ts`, `describe("a household
+id is never NULL")`: a plain `INSERT` with `NULL`, an `INSERT` that omits `id`,
+    `INSERT OR REPLACE` and `REPLACE INTO` with `NULL` are each refused and the
+    count is unchanged (Done when 1); a file directory at `migrateDirectory(db, 2)`
+    with one household and one membership, reopened through `Directory.open`,
+    reads `user_version` 3, the same `households` and `memberships` rows, the same
+    `history("home")`, and refuses the same four statements (Done when 2). The
+    existing "a directory made before the trigger takes it on its next open" test
+    asserted `user_version` 2 after a full migration; it now asserts 3.
+  - **Red first**: with the trigger's `WHEN` mutated to `WHEN 0`,
+    `npx vitest run tools/ledger/api/test/directory.test.ts` gave `2 failed | 16
+passed (18)`, both new tests on `expected [Function] to throw an error` for the
+    `NULL` insert; restored from `555e86f5`, `18 passed (18)`.
+  - `npm test -- --project ledger`: `60 passed (60)` files, `1047 passed (1047)`
+    tests, which includes the append-only scan "no source file that writes the
+    directory issues an UPDATE or a DELETE" over `api/src` (Done when 3).
+    `npm run check` exit 0.
+  - **Not folded in**: part (c)'s `addHousehold({ id: null })` throwing a
+    `TypeError` instead of an `AppError`. It was free to fix, but it is recorded
+    here as an observation, not specified work, and no route reaches it (the zod
+    schema refuses a non-string id first); the schema now refuses a NULL id
+    whichever writer sends it.
