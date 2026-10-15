@@ -240,3 +240,15 @@ assertion (`expected 3584 to be less than 3000`). It is not counted here.
     nothing afterwards.
   - Not run: the `win32` branch of the floor, which only the pull request's
     Windows leg exercises. That leg is informational.
+- 2026-10-15 — Fixed at landing by owner choice (the owner answered "Apply at
+  landing" on 2026-10-15 to whether the lander applies fully stated lows
+  without a re-gate): gate 1, the low `nfr:maintainability` finding — "the new
+  comment says the four-connection run 'slows by 200 to 400 ms' next to the
+  rest of the suite. The Log's own numbers put the lower end lower: loaded
+  `splitMs` 2631 to 2854 against quiet medians of 2449 and 2481 is 150 to 405
+  ms." Changed only that figure in the comment in
+  `tools/downloader/engine/test/parallel-ranges.test.ts`.
+  `grep -n "slows by" tools/downloader/engine/test/parallel-ranges.test.ts` →
+  `487:      // of the suite the four-connection run alone slows by 150 to 405 ms (its`;
+  `npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts -t "finishes at least 3x faster"`
+  → `Test Files  1 passed (1)`, `Tests  1 passed | 42 skipped (43)`, exit 0.
