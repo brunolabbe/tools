@@ -224,3 +224,19 @@ assertion (`expected 3584 to be less than 3000`). It is not counted here.
   lowest ratio ever recorded and 1.5 above the mutant's 0.999, one platform
   branch. The Done-when line "passes 10 times in a row" is reworded to the floor
   (above), and Build step 2 is marked answered.
+- 2026-10-15 — **Built.** The assertion in `parallel-ranges.test.ts` is now
+  `const floor = process.platform === "win32" ? 2.5 : 3`, with a comment citing
+  the measurement above. Nothing else in the test or in `src` changed.
+  - Linux, floor 3: `npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts -t "finishes at least 3x faster"`
+    printed `Tests  1 passed | 42 skipped (43)`, exit 0.
+  - The mutant (`this.#split(...)` at `parallel-ranges.ts:985` replaced by
+    `void [serve, fetch, rate, bitrate];`) fails the same command, exit 1, first
+    on `AssertionError: expected 0 to be greater than 4` (the fan-out count).
+    To show the ratio bar itself rejects it, a scratch copy of the spec with the
+    `fanOut` and `maxOpen` lines deleted ran on the same mutant and failed with
+    `AssertionError: {"singleMs":8382.27,"splitMs":8383.99}: expected 0.9997956240753664 to be greater than or equal to 3`.
+    The scratch copy was deleted and `parallel-ranges.ts` restored from the
+    commit with `git checkout 6fd11969 -- <path>`; `git status --short` printed
+    nothing afterwards.
+  - Not run: the `win32` branch of the floor, which only the pull request's
+    Windows leg exercises. That leg is informational.
