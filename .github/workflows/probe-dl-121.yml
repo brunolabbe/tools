@@ -1,10 +1,11 @@
 name: probe-dl-121
 
 # DO NOT MERGE. A measurement for dl-121, on a branch that is closed once the
-# reading is captured. Loops the one 3x parallel-ranges test on windows-latest
-# and prints singleMs, splitMs and the ratio for every pass, which the real test
-# only prints when it fails. The test file is copied and given one console.log
-# before its assertion, so the assertion itself is the ref's own.
+# reading is captured. Round 2: the whole suite once per runner, the way CI runs
+# it, with the 3x test's singleMs, splitMs and ratio printed for every pass (the
+# real test prints them only on a failure). The test file is copied and given one
+# console.log before its assertion, so the assertion is the ref's own; the
+# original is excluded so the two do not both load the machine.
 on:
   pull_request:
     branches: [main]
@@ -12,35 +13,22 @@ on:
 permissions:
   contents: read
 
+env:
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
 jobs:
-  loop:
-    name: loop (${{ matrix.label }}, ${{ matrix.mode }})
+  full:
+    name: full (${{ matrix.label }}, ${{ matrix.n }})
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
+        label: [before-07acbb86, main-8e49523c]
+        n: [1, 2, 3, 4, 5, 6, 7, 8]
         include:
-          - {
-              label: before-07acbb86,
-              ref: 07acbb8605d6ad11bba42c26b7f2f724f8c0829d,
-              mode: one,
-              loops: 30,
-            }
-          - {
-              label: main-8e49523c,
-              ref: 8e49523c8e7d6fc8fada32736212c6b1e3146316,
-              mode: one,
-              loops: 30,
-            }
-          # What CI does: the whole engine package at once, so the test shares the
-          # machine with its sibling files. The copy replaces the original.
-          - {
-              label: main-8e49523c,
-              ref: 8e49523c8e7d6fc8fada32736212c6b1e3146316,
-              mode: pkg,
-              loops: 4,
-            }
+          - { label: before-07acbb86, ref: 07acbb8605d6ad11bba42c26b7f2f724f8c0829d }
+          - { label: main-8e49523c, ref: 8e49523c8e7d6fc8fada32736212c6b1e3146316 }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -50,7 +38,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build -w @downloader/engine
+      - run: npm run build
+      - run: npx playwright install chromium
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
       - name: Copy the test with a print before its assertion
         shell: bash
         run: |
@@ -60,22 +51,14 @@ jobs:
             "$dir/parallel-ranges.test.ts" > "$dir/parallel-ranges-probe.test.ts"
           grep -n 'console.log("RATIO"' "$dir/parallel-ranges-probe.test.ts"
           git rev-parse HEAD
-          node --version
           echo "cores: $NUMBER_OF_PROCESSORS"
-      - name: Loop
+      - name: Whole suite
         shell: bash
         run: |
-          dir=tools/downloader/engine/test
-          for i in $(seq 1 ${{ matrix.loops }}); do
-            if [ "${{ matrix.mode }}" = one ]; then
-              npx vitest run "$dir/parallel-ranges-probe.test.ts" -t "finishes at least 3x faster" > "run-$i.log" 2>&1
-            else
-              npx vitest run tools/downloader/engine --exclude "**/node_modules/**" --exclude "**/dist/**" --exclude "**/parallel-ranges.test.ts" > "run-$i.log" 2>&1
-            fi
-            code=$?
-            line=$(grep -h 'RATIO' "run-$i.log" | head -1 || true)
-            echo "RUN $i exit=$code $line"
-            if [ "$code" != 0 ]; then
-              grep -E "FAIL|AssertionError|expected" "run-$i.log" | head -5 || true
-            fi
-          done
+          code=0
+          npx vitest run --exclude "**/node_modules/**" --exclude "**/dist/**" --exclude "**/parallel-ranges.test.ts" > full.log 2>&1 || code=$?
+          echo "FULL ${{ matrix.label }} ${{ matrix.n }} exit=$code"
+          grep -h 'RATIO' full.log | head -2 || true
+          grep -E "Test Files|Tests  |Duration" full.log || true
+          echo "original spec lines in the log: $(grep -c 'parallel-ranges.test.ts' full.log || true)"
+          grep -E "FAIL|AssertionError" full.log | head -10 || true
