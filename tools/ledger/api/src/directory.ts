@@ -172,14 +172,21 @@ export class Directory {
   }
 
   addHousehold(household: Household & Change): Household {
+    const notAnId = (shown: string): never =>
+      refuse(
+        `A household id is one lowercase word of a to z, at most 32 letters, and not con, prn, aux or nul; ${shown} is not.`,
+      );
+    const notAName = (): never => refuse("A household's name is 1 to 80 characters.");
+    // Typed strings, but a caller past the request schema can pass null, which
+    // reached `.trim()` as a TypeError rather than these refusals (lg-24).
+    // The type, not the value: String() throws on Object.create(null) and on an
+    // object whose toString throws, and prints nothing useful for an array.
+    if (typeof household.id !== "string") notAnId(typeof (household.id as unknown));
+    if (typeof household.name !== "string") notAName();
     const id = household.id.trim();
     const name = household.name.trim();
-    if (!isHouseholdId(id)) {
-      refuse(
-        `A household id is one lowercase word of a to z, at most 32 letters, and not con, prn, aux or nul; "${id}" is not.`,
-      );
-    }
-    if (name === "" || name.length > 80) refuse("A household's name is 1 to 80 characters.");
+    if (!isHouseholdId(id)) notAnId(`"${id}"`);
+    if (name === "" || name.length > 80) notAName();
     return this.#db
       .transaction(() => {
         if (this.household(id) !== undefined) refuse(`There is already a household "${id}".`);

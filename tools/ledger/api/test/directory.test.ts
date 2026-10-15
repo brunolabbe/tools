@@ -4,7 +4,8 @@
  * and by the schema, so that a writer which skips the class is refused too.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
@@ -363,7 +364,7 @@ describe("a record is never replaced", () => {
         "INSERT OR REPLACE INTO households (id, name, created_at, created_by) VALUES ('home', 'Elsewhere', 'x', 'raw')",
       ),
     ).toThrow(/appended, never replaced/u);
-    expect(db.pragma("user_version", { simple: true })).toBe(2);
+    expect(db.pragma("user_version", { simple: true })).toBe(3);
     db.close();
   });
 
@@ -402,5 +403,130 @@ describe("a record is never replaced", () => {
     ]) {
       expect(WRITES_IN_PLACE.test(innocent), innocent).toBe(false);
     }
+  });
+});
+
+// lg-24: `households.id` is a TEXT PRIMARY KEY, which SQLite lets hold NULL, and
+// its CHECK passes on a NULL. No route writes one — the request schema wants a
+// string — so these are the writers that skip the class.
+describe("a household id is never NULL", () => {
+  const NULL_ID_INSERTS = [
+    "INSERT INTO households (id, name, created_at, created_by) VALUES (NULL, 'Nobody', 'x', 'raw')",
+    "INSERT INTO households (name, created_at, created_by) VALUES ('Nobody', 'x', 'raw')",
+    "INSERT OR REPLACE INTO households (id, name, created_at, created_by) VALUES (NULL, 'Nobody', 'x', 'raw')",
+    "REPLACE INTO households (id, name, created_at, created_by) VALUES (NULL, 'Nobody', 'x', 'raw')",
+  ];
+
+  function refusesNullIds(db: Database.Database): void {
+    const count = () => db.prepare("SELECT count(*) AS n FROM households").get();
+    const before = count();
+    for (const statement of NULL_ID_INSERTS) {
+      expect(() => db.exec(statement), statement).toThrow(/a household has an id/u);
+    }
+    expect(count()).toEqual(before);
+    expect(db.prepare("SELECT count(*) AS n FROM households WHERE id IS NULL").get()).toEqual({
+      n: 0,
+    });
+  }
+
+  test("the schema refuses an INSERT and an INSERT OR REPLACE with a NULL id", () => {
+    const db = raw();
+    refusesNullIds(db);
+    // A household with an id still goes in.
+    db.exec(
+      "INSERT INTO households (id, name, created_at, created_by) VALUES ('away', 'Away', 'x', 'raw')",
+    );
+    expect(db.prepare("SELECT id FROM households ORDER BY id").all()).toEqual([
+      { id: "away" },
+      { id: "home" },
+    ]);
+    db.close();
+  });
+
+  test("a directory at the previous migration takes the refusal on its next open, its records unchanged", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-directory-"));
+    try {
+      const file = path.join(dir, "directory.sqlite");
+      const before = new Database(file);
+      migrateDirectory(before, 2);
+      before.exec(
+        "INSERT INTO households (id, name, created_at, created_by) VALUES ('home', 'Home', '2026-10-12T12:00:00.000Z', 'operator')",
+      );
+      insert(before, { address: ALEX, person: "alex" });
+      const households = before.prepare("SELECT * FROM households ORDER BY id").all();
+      const memberships = before.prepare("SELECT * FROM memberships ORDER BY id").all();
+      expect(households).toHaveLength(1);
+      expect(memberships).toHaveLength(1);
+      expect(before.pragma("user_version", { simple: true })).toBe(2);
+      before.close();
+
+      const directory = Directory.open(file);
+      expect(directory.households()).toEqual([{ id: "home", name: "Home" }]);
+      expect(directory.history("home")).toEqual([
+        { address: ALEX, person: "alex", action: "add", at: "x", by: "operator" },
+      ]);
+      directory.close();
+
+      const after = new Database(file);
+      expect(after.pragma("user_version", { simple: true })).toBe(3);
+      expect(after.prepare("SELECT * FROM households ORDER BY id").all()).toEqual(households);
+      expect(after.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(memberships);
+      refusesNullIds(after);
+      after.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the class refuses an id or a name that is not a string as BAD_REQUEST, before the schema", () => {
+    const directory = Directory.open(":memory:");
+    const refusalOf = (input: { id: unknown; name: unknown }): unknown => {
+      try {
+        directory.addHousehold({ ...input, ...CHANGE } as Parameters<Directory["addHousehold"]>[0]);
+      } catch (error) {
+        return error;
+      }
+      return undefined;
+    };
+    // Echoed as its type, never stringified: String() throws on the last two.
+    const ids: [label: string, value: unknown, shown: string][] = [
+      ["null", null, "object"],
+      ["undefined", undefined, "undefined"],
+      ["7", 7, "number"],
+      ["['home']", ["home"], "object"],
+      ["Object.create(null)", Object.create(null), "object"],
+      [
+        "an object whose toString throws",
+        {
+          toString() {
+            throw new Error("boom");
+          },
+        },
+        "object",
+      ],
+    ];
+    for (const [label, value, shown] of ids) {
+      const refusal = refusalOf({ id: value, name: "Nobody" });
+      expect(refusal, label).toBeInstanceOf(AppError);
+      expect(refusal, label).toMatchObject({
+        code: "BAD_REQUEST",
+        message: expect.stringContaining(`; ${shown} is not.`),
+      });
+    }
+    // The name beside it reached `.trim()` the same way.
+    for (const [label, value] of [
+      ["null", null],
+      ["undefined", undefined],
+      ["7", 7],
+    ] as const) {
+      const refusal = refusalOf({ id: "home", name: value });
+      expect(refusal, `${label} name`).toBeInstanceOf(AppError);
+      expect(refusal, `${label} name`).toMatchObject({
+        code: "BAD_REQUEST",
+        message: "A household's name is 1 to 80 characters.",
+      });
+    }
+    expect(directory.households()).toEqual([]);
+    directory.close();
   });
 });
