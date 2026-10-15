@@ -1897,7 +1897,8 @@ describe("a click-only player box beside a press that did not start a player (dl
       server.requests.length = 0;
       // The embed asks for its manifest 1.5 s after its Play press, so the
       // shipped floor; a centre click on the wrapper would land on the embed.
-      // Its button has no text, so the label path cannot cover for isPlayPress.
+      // Its button holds only a glyph, no word PLAY_TEXT matches, so the label
+      // path cannot cover for isPlayPress.
       const result = await probe("/box-xo-embed.html", resolverWith(undefined, 9000));
 
       expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));

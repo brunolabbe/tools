@@ -243,3 +243,5 @@ the label test), `Tests 1 failed | 1 passed | 119 skipped (121)`, and A + B
 
 Not folded in: nothing else was free. dl-115 edits `quietMs: 1200` sites in the
 same test file; this branch touches only the one title and appends one test.
+
+- 2026-10-15 — Fixed at landing by owner choice: gate 1, the low `nfr:maintainability` — "the icon test's new comment says 'Its button has no text', but `embed-inner.html`'s button holds a text node, the glyph `&#9654;`. What keeps the label path off is that the glyph is no word `PLAY_TEXT` matches". The comment in `browser-resolver.test.ts` now reads "Its button holds only a glyph, no word PLAY_TEXT matches, so the label path cannot cover for isPlayPress." `npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "a Play press in a frame from another site"` → `Test Files  1 passed (1)`, `Tests  2 passed | 119 skipped (121)`, exit 0.
