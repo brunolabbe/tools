@@ -105,7 +105,9 @@ for as long as it is open, so:
   the prompt; "DO NOT MERGE" goes after the type and scope.
 - **It is a draft, and it is closed with its branch deleted** as the next action
   after the reading is captured. A sibling whose preflight exits 16 against a
-  probe waits for that, and changes nothing.
+  probe waits for that, and changes nothing. That exit stopped its run at the
+  probe (repo-104): the sibling's suites, `## Review` and title checks are
+  unproven until it reruns the checks its last line lists after `not run:`.
 
 **Preflight exit 16 against a sibling that will merge** blocks `gh pr ready` on
 the branch that merges second, not on both: set the order, hold the second as a

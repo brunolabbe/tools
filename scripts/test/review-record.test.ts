@@ -2100,3 +2100,59 @@ test("land() keeps the reset command on a verify failure after the push, and say
     cleanup();
   }
 });
+
+// --- repo-104: a preflight failure after the push names the one check to rerun ---
+
+import { failedChecks } from "../review-record.mjs";
+
+test("failedChecks reads the checks off preflight's last line, and none off a line that is not one (repo-104)", () => {
+  expect(
+    failedChecks("\n== mergeTree ==\nFAIL x\n\npreflight failed: mergeTree (exit 16)\n"),
+  ).toEqual(["mergeTree"]);
+  expect(failedChecks("preflight failed: check, title (exit 9)\n")).toEqual(["check", "title"]);
+  // A halted run: the probe failed and four checks never started, so all five are open.
+  expect(
+    failedChecks(
+      "preflight failed: mergeTree (exit 16); not run: check, ciCommands, review, title\n",
+    ),
+  ).toEqual(["mergeTree", "check", "ciCommands", "review", "title"]);
+  expect(failedChecks("preflight passed (exit 0)\n")).toEqual([]);
+  expect(failedChecks("FAIL check: no package.json in the fixture")).toEqual([]);
+});
+
+test("land() after a halted merge-tree failure names every check that is still open, not the probe alone (repo-104)", () => {
+  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base: "origin/main",
+      status: "done",
+      title: "fix(repo): a title (zz-1)",
+      runPreflight: () => ({
+        ok: false,
+        // The shape the real preflight prints for a verdict failure: the probe,
+        // the halted block, then a last line that names what never ran.
+        output:
+          "\n== mergeTree ==\nFAIL  #465 release-please--x is at 4ad9dfb\n" +
+          "\n== halted ==\nmergeTree failed, so check, ciCommands, review, title did not run\n" +
+          "\npreflight failed: mergeTree (exit 16); not run: check, ciCommands, review, title\n",
+      }),
+    });
+
+    const failed = result.steps.at(-1);
+    expect(failed?.name).toBe("preflight");
+    expect(failed?.detail).toMatch(/landed and pushed to origin\/feature/);
+    expect(failed?.detail).not.toMatch(/git reset --hard/);
+    expect(failed?.detail).toMatch(
+      /Preflight stopped at mergeTree, so check, ciCommands, review, title did not run/,
+    );
+    expect(failed?.detail).toContain(
+      "node scripts/preflight.mjs --only mergeTree,check,ciCommands,review,title --base 'origin/main' --title 'fix(repo): a title (zz-1)'",
+    );
+    expect(gitIn(bareDir, "rev-parse", "refs/heads/feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
+  } finally {
+    cleanup();
+  }
+});

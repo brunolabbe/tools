@@ -3,7 +3,7 @@ id: repo-104
 tool: repo
 title: preflight's merge-tree probe runs last, on a fetch ten minutes stale, and fails whole runs and landings
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -80,6 +80,92 @@ rerun.
 4. `scripts/preflight.mjs`'s header and `roles/builder.md`'s preflight bullet
    say the probe runs first and fetches.
 
+## Review
+
+**Gate: FAIL**: 2026-10-15 · `8e49523c..2505255f` · Opus 5.5, depth standard
+
+| Done when                                                                                                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `node scripts/preflight.mjs` prints the `mergeTree` lines before any suite output, and a merge-tree failure exits 16 within a minute on a downloader branch                          | `scripts/test/preflight.test.ts` › "the CLI prints the probe's failure first and exits 16 alone, with no suite started (repo-104)" ✓ (asserts `stdout` starts `== mergeTree ==`, status exactly 16, no `== check ==`). Also › "preflight runs the merge-tree probe before any other check and reports each as it finishes (repo-104)" ✓ (`onResult` order is before the first `buildRun`). **Verified** for the "within a minute on a downloader branch" clause: a fixture whose diff and conflict sit in `tools/downloader/api/src/a.ts` exited 16 in 0.1 s with only `mergeTree` and `halted` printed. A real run on this head printed `== mergeTree ==` at 1.0 s and `== check ==` at 66.1 s |
+| 2. A test plants a head moved after `gh pr list` and shows the probe fetches and compares it with no "does not have" failure; the failure still fires for an oid the fetch cannot bring | `preflight.test.ts` › "checkMergeTree fetches a head that moved after gh pr list, then compares it (repo-104)" ✓ (no `does not have`, a `conflicts on` line, and the oid is present afterwards). › "checkMergeTree brings in a listed head that was force-updated before the fetch (repo-104)" ✓. › "checkMergeTree still fails an oid that a fetch cannot bring (repo-104)" ✓                                                                                                                                                                                                                                                                                                                  |
+| 3. `--only mergeTree --base origin/main --title "<title>"` runs the probe alone and exits 0 or 16 with no suite run, and its test proves no suite ran                                   | `preflight.test.ts` › "--only mergeTree runs the probe alone: no suite, no other check (repo-104)" ✓ (`suites` is 0 on a diff that plans a downloader suite). › "the CLI's --only mergeTree exits 16 on a failed probe and prints no other check (repo-104)" ✓ (16). The exit-0 branch is **verified** but no test asserts it: on fixtures, `--only mergeTree` with a clean head exited 0 and printed `preflight passed (only mergeTree; the other checks did not run) (exit 0)`                                                                                                                                                                                                                |
+| 4. `scripts/preflight.mjs`'s header and `roles/builder.md`'s preflight bullet say the probe runs first and fetches                                                                      | **verified** by reading: the header paragraph "Check 5 runs first, and fetches (repo-104)", and the builder.md bullet "a merge-tree probe against every other open pull request head first, fetching `origin` itself"                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+- **high** · no `Done when` line depends on it · **The checks that a halted run never ran are left out of the rerun instructions.** A merge-tree verdict failure (a conflict, or an oid that is still missing) now stops preflight before `check`, `ciCommands`, `review` and `title`. The final line still reads `preflight failed: mergeTree (exit 16)`. Three shipped texts then name `mergeTree` as the only thing to rerun:
+  - `failedChecks`/`pushedHint` in `scripts/review-record.mjs` print "only the preflight finding above is left … Rerun only what failed: `node scripts/preflight.mjs --only mergeTree …`".
+  - `roles/builder.md`, _Before you report_, the exit-16 bullet, says for a "does not have" failure: "rerun `--only mergeTree` …, never the whole run".
+  - `roles/fixer.md`, the same bullet, says the same, and for a conflict it says the rest-command exists but never tells the fixer to run it.
+
+  These texts are false in the unsafe direction. A builder or lander who follows them gets `exit 0` from `--only mergeTree` even though no suite, no `## Review` presence check and no title check ever ran on that head. At `--land`, `review` is the check that reads the record that was just landed. The `== halted ==` block does print the right command, but the last instruction on screen contradicts it.
+
+  The branch's own test › "land() after a merge-tree failure says the records are landed and names the one command to rerun (repo-104)" asserts the defect. It does so on a stubbed output with no `== halted ==` block, which the real preflight never produces for a verdict failure.
+
+  Reproduction (premise: a fixture repo, a fake `gh` listing a conflicting head, then `failedChecks` and `rerunCommand` imported from the tree and applied to the real CLI output):
+
+  ```
+  A-conflict: status=16 headers=[mergeTree,halted] last="preflight failed: mergeTree (exit 16)"
+  R failedChecks(real halted output) = ["mergeTree"]
+  R land hint would print: Rerun only what failed: node scripts/preflight.mjs --only mergeTree --base origin/main --title "docs(repo): ours (repo-1)"
+  ```
+
+  An oid that a fetch cannot bring (`B-ghost`) and an offline fetch with a missing head (`E2-offline-lack`) halt in the same way: `status=16 headers=[mergeTree,halted]`.
+
+  Fix, fully stated: make a halted run's last line or `failedChecks` carry the unrun names, for example by unioning the `== halted ==` list, so the hint becomes `--only mergeTree,check,ciCommands,review,title`. Change the builder.md and fixer.md sentences to "rerun the probe, then the halted command" (or "rerun the whole preflight, since the probe now fails in seconds"), and correct the land test's stub to the real output shape. `reference/dispatching.md` ("A sibling whose preflight exits 16 … changes nothing") still assumes that exit 16 alone means everything else passed, which is no longer true.
+
+- **low** · "exit 16 alone" now has three causes, but the halt message and the pages name only one. The `halted` block says "A conflict with another pull request's head is not a fault in this branch" even when the cause was an unreachable oid or a failed fetch (`B-ghost`, `E2-offline-lack`). `roles/builder.md`/`roles/fixer.md` open with "Exit 16 alone is a conflict … The probe stops the run there, so no suite has run". For a `gh` outage whose other checks all pass, exit 16 alone comes with every suite run and no halt block: `C-gh-throws` printed `headers=[mergeTree,check,ciCommands,review,title]`. builder.md also says a lasting "does not have" is "one the remote no longer serves", but it is just as likely a failed fetch (the `note` line). The text is false in the safe direction (it over-reports what was skipped) or names the wrong cause.
+- **low** · `rerunCommand` in `scripts/preflight.mjs` quotes the title with `JSON.stringify`, which gives a double-quoted shell string, so a pasted command runs backticks and `$(…)` in the title. Reproduction: `rerunCommand(["title"], "origin/main", "fix: \`npm run dev\` never $(id) started")` → `… --title "fix: \`npm run dev\` never $(id) started"`. 1 of the last 600 subjects on `main` has backticks (`fix: \`npm run dev\` never started the web app`). Fix: single-quote, escaping `'`as`'\''`.
+- **low** · no live call site · `checkMergeTree` passes the `gh`-reported `head.oid` to `git fetch origin <oid>` without validating it, so an oid that begins with `-` is parsed as an option. With a fake `gh` listing `headRefOid: "--upload-pack=touch <marker>;false"` against a local-path origin, the marker appeared at head (`marker exists: true`) and did not appear at base (`marker exists: false`, because base has no fetch). It cannot happen in practice: GitHub computes `headRefOid`, and `origin` here is `https://github.com/…`, where `--upload-pack` has no effect. Fix: reject anything other than `/^[0-9a-f]{40}([0-9a-f]{24})?$/` in `defaultListOpenHeads`.
+- **low** · the ticket's `## Log` (2026-10-15 entry, the "Measured, Done when 1" bullet): oxfmt turned "would add bit 1." into an ordered list item `1. with \`== mergeTree ==\` …`, and the parenthesis is never closed. Several code spans in the "Proof" bullet are also split across lines.
+- **dropped** · whether the in-probe `git fetch origin` can clobber a local ref or the caller's branch. Measured: `remote.origin.fetch` is `+refs/heads/*:refs/remotes/origin/*`, `fetch.prune` is unset and `FETCH_HEAD` is per-worktree. Only remote-tracking refs move, as they already do whenever any session fetches (`common.md`). The prelude computes `diffPaths` before the probe moves `origin/main`, so the later checks in the same run stay consistent. Not a defect.
+- **dropped** · `git fetch` has no timeout, so a stalled network could hang the probe. The same was already true of the `gh pr list` call this probe made before the branch, so the branch introduces no new exposure. Out of scope.
+- **dropped** · `--only " title"` and `--only mergeTree, title` are rejected with exit 64 rather than trimmed. That fails safe, so it is not a defect.
+- **dropped** · `--only title` with no `--title` exits 0 (`G6`). That is `checkTitle`'s existing behaviour, not something this branch introduced.
+- **findings** · the hunt returned 9; 5 carried, 4 dropped.
+- Positive control: in a second detached worktree at this head, each mutation of `scripts/preflight.mjs` turned the repo-104 tests red. Each was restored from the head sha, and the worktree was removed with 0 dirty paths. `mergeTree` last in `CHECK_ORDER` → 3 of 11 failed. Both fetches removed → 3 failed. Only the oid fetch removed → 1 failed ("force-updated"). Halt removed → 2 failed. `only` ignored → 2 failed.
+- CI at `2505255f`: `check`, `test (ubuntu-latest)`, `changes`, `codeql`/`CodeQL` and `dependency-review` passed. `test (windows-latest, informational)` was still pending and has not been read. The diff reaches its `repo` project.
+- Invariants: no shell ✓ (argv arrays, `shell: false`; the option-injection case is above). Specs registered ✓ (both files already existed). The rest (cross-tool imports, AppError, redaction, SSRF, progress, contract, Dockerfile closure) do not apply to `scripts/`.
+- NFR: security, low above (option injection, title quoting) · performance ✓ (the probe took 1.0 s on 7 real heads, and a halt costs 0.1 s on a fixture) · reliability, high above · maintainability ✓.
+
+### Gate 2
+
+**Gate: PASS** — 2026-10-15 · `2505255f..2caf41dc` (one commit, "fix(repo): make a halted preflight name every unrun check in its rerun text (repo-104)") · Opus 5.5, depth standard
+
+| Done when                                                                                            | Proof                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. mergeTree lines print first; a merge-tree failure exits 16 within a minute on a downloader branch | `scripts/test/preflight.test.ts` › "the CLI prints the probe's failure first and exits 16 alone, with no suite started (repo-104)" ✓. This round adds an assertion on that test's last line. The timing is unchanged from gate 1 and the round does not touch the order            |
+| 2. A moved head is fetched and compared, and an unfetchable oid still fails                          | `preflight.test.ts` › "checkMergeTree fetches a head that moved after gh pr list, then compares it (repo-104)" ✓, › "checkMergeTree still fails an oid that a fetch cannot bring (repo-104)" ✓                                                                                     |
+| 3. `--only mergeTree` runs the probe alone, exits 0 or 16, and no suite runs                         | `preflight.test.ts` › "--only mergeTree runs the probe alone: no suite, no other check (repo-104)" ✓ and › "the CLI's --only mergeTree exits 16 on a failed probe and prints no other check (repo-104)" ✓. The exit-0 path was **verified** on a fixture (`F-clean-only` status=0) |
+| 4. The header and the builder.md bullet say the probe runs first and fetches                         | **verified** by reading. The round rewrote the builder.md bullet and kept "runs a merge-tree probe … first, fetching `origin` itself"                                                                                                                                              |
+
+Gate 1's findings:
+
+- **high, halted rerun text named the probe alone: fixed.** On a halted run the last line now ends `; not run: …`. `preflightVerdict`/`failedChecks` return the checks that failed plus the ones that did not run. The `--land` hint says "Preflight stopped at mergeTree, so check, ciCommands, review, title did not run on this landing" and prints `--only mergeTree,check,ciCommands,review,title`.
+  - Verified on the real CLI output at this head. A-conflict, B-ghost and E2-offline-lack each gave status=16, headers `[mergeTree,halted]`, last line `preflight failed: mergeTree (exit 16); not run: check, ciCommands, review, title`. `preflightVerdict` on each gave `{"failed":["mergeTree"],"notRun":["check","ciCommands","review","title"]}`.
+  - C-gh-throws gave status=17, all five checks ran, `notRun: []`, and `failedChecks` gave `["check","mergeTree"]`.
+  - The pages now agree with what the code prints: `roles/builder.md`, `roles/fixer.md` (rerun the block's first command, then its second), `reference/records.md` (one command over all five names) and `reference/dispatching.md` ("unproven until it reruns the checks its last line lists after `not run:`").
+  - The land test's stub now has the real output shape.
+  - Positive controls, each restored afterwards:
+    - Dropping the `; not run` suffix failed 1 test (the CLI last-line test).
+    - Making `failedChecks` and `open` return `failed` only failed 3 tests (`failedChecks`, the land test and the CLI test).
+- **low, three causes of exit 16: fixed.** The halted block now says "A conflict is another pull request's head … a missing head is a fetch to retry". builder.md lists the conflict, the missing head (a `note` line or a head the remote no longer serves) and `mergeTree threw`, which does not halt. The C case confirms that a probe that threw does not halt. Positive control: removing the missing-head clause failed › "a halted run for an oid no fetch can bring says so, not only 'a conflict' (repo-104)".
+- **low, `rerunCommand` quoting: fixed.** `shellQuote` single-quotes the base and the title and escapes `'` as `'\''`. Three titles round-trip exactly through `bash -c "printf '%s\n' <args>"`: `fix(repo): it's done (repo-1)`, a title holding backticks and `$(touch …)`, and `a 'b' "c" \d $HOME ''`. The `$(touch)` marker was not created. Positive control: switching back to `JSON.stringify` failed 4 tests.
+- **low, unvalidated oid: fixed.** `defaultListOpenHeads` refuses anything that does not match `^[0-9a-f]{40}([0-9a-f]{24})?$` before any `git fetch`. Read through the real CLI with a fake `gh`:
+  - a 64-hex oid is accepted and fails as "does not have even after `git fetch origin`";
+  - an uppercase 40-hex oid is refused as "not a commit id", as are 63 hex digits and 40 hex digits plus a trailing newline;
+  - each refusal is a `mergeTree threw`, which exits 16 and fails safe, and GitHub reports lowercase oids;
+  - the `--upload-pack=` oid from gate 1 no longer creates the marker (`H marker exists: false`).
+
+  Positive control: removing the guard failed › "a gh payload with an oid that is not a commit id is refused before it reaches git fetch (repo-104)".
+
+- **low, the mangled Log list: fixed.** The two bullets are rewritten, there is no stray list item, and `check` (oxfmt) passed on `2caf41dc` in CI.
+
+New in the lines this round touched:
+
+- **low** · `roles/fixer.md`, the exit-16 bullet, opens with "Exit 16 is the merge-tree probe, and it stops the run: the suites … have **not run**". That sentence is unconditional, but the same bullet ends "`mergeTree threw` (`gh` down) does not halt", and C-gh-throws shows every check running. The opening is false in the safe direction: it overstates what was skipped, and the last line (no `not run:`) settles which case applies. builder.md says it correctly.
+- **findings** · the round's hunt returned 1; 1 carried, 0 dropped. Gate 1's 5: 5 fixed.
+- CI at `2caf41dc`: `check` ×2, `changes`, `codeql`/`CodeQL` and `dependency-review` passed. `test (ubuntu-latest)` and `test (windows-latest, informational)` were still pending and have not been read. No acceptance line depends on them.
+- NFR: security ✓ (quoting and the oid guard are above) · performance n/a · reliability ✓ · maintainability, low above.
+
 ## Log
 
 - 2026-10-14 — Filed by the review of the orchestration log over the eleven
@@ -87,3 +173,66 @@ rerun.
   eight-ticket entry, 15 of tools-9e and 6 of tools-4f). The owner chose to file
   it rather than record it as known; the review's pull request carries the
   filing.
+- 2026-10-15 — Built at 59e3909d (Sonnet 5.5). `scripts/preflight.mjs`:
+  `CHECK_ORDER` puts `mergeTree` first; `checkMergeTree` runs `git fetch origin`
+  after `listOpenHeads` and before the first compare, and for an oid still
+  missing asks `git fetch origin <oid>` (a branch force-updated between the
+  listing and the fetch is no tip, so the plain fetch skips it — measured: the
+  "force-updated" test below passes only with that second fetch). The "does not
+  have" failure is kept and now says "even after `git fetch origin`". A fetch
+  that fails is a `note` line, not a verdict. `preflight()` takes `only` and
+  `onResult`; `main` prints each check as it finishes, so the probe's lines are
+  out before the first suite starts. `--only` is a comma list, repeatable, and
+  an unknown name is `EXIT.setup`. `review-record.mjs` `pushedHint` reads
+  `preflight failed: <names> (exit N)` off the output and appends
+  `Rerun only what failed: node scripts/preflight.mjs --only <names> --base … --title …`.
+  Pages: `roles/builder.md` and `roles/fixer.md` preflight bullets and the exit-16
+  bullet, `reference/records.md` _Landing_.
+  - **Two choices the brief left open.** (1) A probe that returns a failure
+    (conflict, or an oid a fresh fetch lacks) halts the run with exit 16 and
+    adds a `halted` result naming `--only check,ciCommands,review,title`; a
+    probe that _throws_ (`gh` down) does not halt, because
+    "preflight isolates a throwing check to its own bit and still runs the
+    others" (repo-51's gate) pins that a `gh` outage costs its own verdict only.
+    The cost of halting on a conflict is that a builder with a real exit 16 must
+    run the printed command before reporting; `roles/builder.md` now says so.
+    (2) `--land` calls the probe "the same way" by construction — it runs the
+    same script, so it inherits the order and the fetch; the ticket's trap is
+    met by the hint above, and I did not move a probe in front of the push (that
+    would change `--land`'s sequence, which repo-94 fixed on purpose).
+  - **Proof.** `npx vitest run scripts/test/preflight.test.ts` gave 101 of 101
+    before the CLI test was added; with `-t repo-104` it gave 11 passed, 91
+    skipped, of 102. `scripts/test/review-record.test.ts` gave 67 of 67.
+    Mutations were made on the committed tree and each restored with
+    `git checkout 59e3909d -- scripts/preflight.mjs`. Removing both fetches
+    failed 3 tests (moved head, force-updated head, failed-fetch note). Putting
+    `mergeTree` last in `CHECK_ORDER` failed 3 (order, halt, CLI exit 16).
+    Ignoring `only` failed 2 (the `--only mergeTree` unit test and the CLI one).
+  - **Measured, Done when 1.** `node scripts/preflight.mjs --only mergeTree`
+    on this repo took `real 0m0.719s` with five heads compared, and ended
+    `preflight passed (only mergeTree; the other checks did not run) (exit 0)`.
+    The CLI test, with a planted `gh` listing a conflicting head, exits exactly
+    16 (a started `npm run check` in that fixture would add bit 1) and
+    `== mergeTree ==` is the first output. A real conflict on a downloader
+    branch was not staged: unmeasured, the fixture stands in for it.
+- 2026-10-15 — Round 1, after gate 1 failed at 2505255f. The owner chose, over
+  halting only on an unfetchable oid, to keep the halt on any verdict failure
+  and fix the hints. Findings and what changed:
+  - **High: a halted run's rerun text named only the probe.** The last line now
+    ends `; not run:` and the four unrun check names, `failedChecks` returns the failed and the unrun checks, and
+    `--land`'s hint says preflight stopped at the probe and prints one `--only`
+    command over all five names. The `== halted ==` block prints two commands,
+    the probe alone and the rest. `roles/builder.md`, `roles/fixer.md`,
+    `reference/records.md` and `reference/dispatching.md` no longer say that
+    `--only mergeTree` is the rerun, or that exit 16 alone means the rest passed.
+    The `--land` test's stub now has the real output shape.
+  - **Low: three causes of exit 16.** The halt block names a conflict and a
+    missing head separately, and the two role pages describe three causes
+    (conflict, unreachable head, `mergeTree threw`, which does not halt).
+  - **Low: `rerunCommand` quoting.** It single-quotes the title and the base,
+    escaping `'` as `'\''`.
+  - **Low: oid option injection.** `defaultListOpenHeads` refuses a
+    `headRefOid` that is not 40 or 64 hex digits, before any `git fetch`.
+  - **Low: this entry's formatting.** The two bullets above are rewritten with
+    no code span across a line and no stray list item.
+- 2026-10-15 — Fixed at landing by owner choice: gate 2, the low on `roles/fixer.md`'s exit-16 bullet — "That sentence is unconditional, but the same bullet ends `mergeTree threw` (`gh` down) does not halt … start that bullet with \"Exit 16 from a conflict or a missing head stops the run\"". The owner answered "Apply at landing" on 2026-10-15 to whether the lander applies fully stated lows without a re-gate. `grep -n "Exit 16 from a conflict" .claude/skills/orchestrate-tickets/roles/fixer.md` → `41:- **Exit 16 from a conflict or a missing head stops the run** (repo-104): the`.

@@ -42,6 +42,18 @@
  *     requests are open is the only part that cannot be answered from the
  *     tree in hand.
  *
+ * **Check 5 runs first, and fetches (repo-104).** The suites take about ten
+ * minutes on a downloader branch, and release-please force-updates its three
+ * branches on every push to `main`, so a probe that ran last compared heads
+ * against a fetch ten minutes older than the run (three recurrences, 2026-10-10
+ * to 2026-10-13). It now runs before anything slow, runs `git fetch origin`
+ * itself after listing the heads and immediately before comparing them, and a
+ * verdict failure (a conflict, or an oid a fresh fetch still lacks) stops the
+ * run there with exit 16 and the one command that runs the rest. A probe that
+ * threw (`gh` down) does not stop it: that costs its own verdict only. Each
+ * check prints as it finishes. `--only` runs the named checks alone, so one
+ * failed check is rerun without the others.
+ *
  * **The exit code is a bitmask** (`EXIT`): the failure classes co-occur, and a ranking
  * would collapse them exactly when there is most to say. The bit names are
  * printed with the number, so a CI log or a ship-condition check says what the
@@ -59,7 +71,7 @@ import { EXTRA_SCOPES, TYPES, releasingTypes, toolScopes, validate } from "./com
 import { hasGateRecord } from "./status.mjs";
 
 export const USAGE =
-  "usage: node scripts/preflight.mjs --base <ref> [--title <text>] [--repo <dir>]";
+  "usage: node scripts/preflight.mjs --base <ref> [--title <text>] [--repo <dir>] [--only <check>[,<check>...]]";
 
 /** An error carrying the exit status the CLI should leave behind. */
 function fail(message, exit) {
@@ -1271,6 +1283,16 @@ function defaultListOpenHeads(run) {
           1,
         );
       }
+      // The oid reaches `git fetch origin <oid>` (repo-104), where a value that
+      // begins with `-` would be read as an option. GitHub computes it, so this
+      // is a guard on a path no caller has, not a repair.
+      if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/u.test(p.headRefOid)) {
+        throw fail(
+          `gh pr list reported headRefOid ${JSON.stringify(p.headRefOid)} for PR #${p.number} ` +
+            `(${p.headRefName}), which is not a commit id`,
+          1,
+        );
+      }
       return { number: p.number, headRefName: p.headRefName, oid: p.headRefOid };
     });
   };
@@ -1294,8 +1316,8 @@ function defaultListOpenHeads(run) {
  * **An oid this checkout does not have is a failure, not a skip.** A pull
  * request head genuinely cannot be compared without fetching it, and reporting
  * it clean because nothing was checked is the same silent gap the ref-name
- * comparison had, one layer down; naming the fetch to run is the repair, not
- * excusing the check.
+ * comparison had, one layer down. Since repo-104 the probe fetches for itself
+ * first, so what is left failing is an oid a fresh fetch could not bring.
  *
  * **The zero-heads case says so explicitly rather than reporting `ok` with no
  * further line.** An empty pull request list must not read like "checked
@@ -1314,19 +1336,50 @@ export function checkMergeTree(repo, options = {}) {
   const heads = listOpenHeads(repo).filter((h) => h.oid !== headOid);
 
   const out = [`comparing HEAD against ${heads.length} other open pull request head(s)`];
+
+  // repo-104: the fetch belongs here, between listing the heads and comparing
+  // them, not in whatever the caller ran minutes ago. release-please
+  // force-updates its branches on every push to `main`, so a head listed a
+  // moment ago is one an older fetch cannot contain. A failed fetch is a note,
+  // not a verdict: heads this checkout already has are still comparable, and
+  // the ones it lacks fail below by name.
+  if (heads.length > 0) {
+    try {
+      run("git", ["fetch", "origin"], { cwd: repo });
+    } catch (error) {
+      const message = /** @type {Error} */ (error).message.split("\n")[0];
+      out.push(`note  ${message} — heads this checkout lacks cannot be compared`);
+    }
+  }
+
+  const hasCommit = (/** @type {string} */ oid) => {
+    try {
+      run("git", ["cat-file", "-e", `${oid}^{commit}`], { cwd: repo });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   let problems = 0;
   for (const head of heads) {
-    let reachable = true;
-    try {
-      run("git", ["cat-file", "-e", `${head.oid}^{commit}`], { cwd: repo });
-    } catch {
-      reachable = false;
+    let reachable = hasCommit(head.oid);
+    if (!reachable) {
+      // A head force-updated between the listing and the fetch above is no
+      // branch tip any more, so the fetch skipped it; asking for the oid itself
+      // can still bring it. Best effort: the failure below names what is left.
+      try {
+        run("git", ["fetch", "origin", head.oid], { cwd: repo });
+      } catch {
+        // the check below reports it
+      }
+      reachable = hasCommit(head.oid);
     }
     if (!reachable) {
       problems += 1;
       out.push(
         `FAIL  #${head.number} ${head.headRefName} is at ${head.oid.slice(0, 7)}, which this ` +
-          `checkout does not have — run \`git fetch origin\` and re-run; a head that cannot be ` +
+          `checkout does not have even after \`git fetch origin\`; a head that cannot be ` +
           `compared is not clean`,
       );
       continue;
@@ -1380,6 +1433,7 @@ export function checkMergeTree(repo, options = {}) {
  * @param {string} name
  * @param {number} bit
  * @param {() => {ok: boolean, bit: number, name: string, lines: string[]}} run
+ * @returns {{ok: boolean, bit: number, name: string, lines: string[], threw?: true}}
  */
 function guarded(name, bit, run) {
   try {
@@ -1390,6 +1444,7 @@ function guarded(name, bit, run) {
       ok: false,
       bit,
       name,
+      threw: true,
       lines: [`FAIL  ${name} threw:`, ...message.split("\n").map((l) => `      ${l}`)],
     };
   }
@@ -1449,7 +1504,10 @@ export function workingTreePaths(repo, run) {
 }
 
 /**
- * Every check, in the Build section's order.
+ * Every check, in `CHECK_ORDER` (the probe first, repo-104), each handed to
+ * `onResult` as it finishes so a caller can print while the slow ones run.
+ * `only` names the checks to run and nothing else: `--only mergeTree` runs no
+ * suite at all.
  *
  * Two path sets, not one, since repo-65: `diffPaths` is `${base}...HEAD`,
  * committed history only, computed once and handed to whichever checks read
@@ -1486,10 +1544,12 @@ export function workingTreePaths(repo, run) {
  *   buildRun?: typeof runBuildCommand,
  *   spawn?: typeof spawnRaw,
  *   listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[],
+ *   only?: string[],
+ *   onResult?: (result: {ok: boolean, bit: number, name: string, lines: string[], skipped?: string[]}) => void,
  * }} options
  */
 export function preflight(repo, options) {
-  const { base, title, run = runGit, buildRun, spawn, listOpenHeads } = options;
+  const { base, title, run = runGit, buildRun, spawn, listOpenHeads, only, onResult } = options;
   if (!base) throw fail(`--base is required\n${USAGE}`, EXIT.setup);
 
   let diffPaths;
@@ -1524,27 +1584,117 @@ export function preflight(repo, options) {
     );
   }
 
-  return [
-    guarded("check", EXIT.check, () => checkBuild(repo, testSelectionPaths, buildRun)),
-    guarded("ciCommands", EXIT.ciCommands, () => checkCiCommands(repo, buildRun)),
-    guarded("review", EXIT.review, () => checkReview(repo, diffPaths, run)),
-    guarded("title", EXIT.title, () => checkTitle(repo, diffPaths, title, run)),
-    guarded("mergeTree", EXIT.mergeTree, () => checkMergeTree(repo, { run, spawn, listOpenHeads })),
-  ];
+  const runners = {
+    mergeTree: () => checkMergeTree(repo, { run, spawn, listOpenHeads }),
+    check: () => checkBuild(repo, testSelectionPaths, buildRun),
+    ciCommands: () => checkCiCommands(repo, buildRun),
+    review: () => checkReview(repo, diffPaths, run),
+    title: () => checkTitle(repo, diffPaths, title, run),
+  };
+  const selected = CHECK_ORDER.filter((name) => only === undefined || only.includes(name));
+
+  const results = [];
+  for (const name of selected) {
+    const result = guarded(name, EXIT[name], runners[name]);
+    results.push(result);
+    onResult?.(result);
+    // A verdict, not an outage: a probe that threw (`gh` down) costs its own
+    // check only, as it did before the reorder. A conflict or an oid a fresh
+    // fetch lacks ends the run, so the ten minutes of suites behind it are not
+    // spent on a head that must be fixed or re-listed first (repo-104).
+    if (name === "mergeTree" && !result.ok && !result.threw) {
+      const skipped = selected.slice(selected.indexOf(name) + 1);
+      if (skipped.length > 0) {
+        // `skipped` is read by `main` for the last line and by `--land`'s hint
+        // through it: a run that stopped here proved nothing about these.
+        const halted = {
+          ok: false,
+          bit: 0,
+          name: "halted",
+          skipped,
+          lines: [
+            `mergeTree failed, so ${skipped.join(", ")} did not run: this run proved nothing`,
+            `about them. A conflict is another pull request's head, not a fault in this`,
+            `branch; a missing head is a fetch to retry. Clear the probe, then rerun it:`,
+            `  ${rerunCommand(["mergeTree"], base, title)}`,
+            `and run the rest, now if you want their verdict before the probe is clear:`,
+            `  ${rerunCommand(skipped, base, title)}`,
+          ],
+        };
+        results.push(halted);
+        onResult?.(halted);
+      }
+      break;
+    }
+  }
+  return results;
 }
+
+/**
+ * A string a POSIX shell reads back as itself. Single quotes, not
+ * `JSON.stringify`'s double ones: a title with backticks or `$(…)` (one of the
+ * last 600 subjects on `main` has backticks) would run when pasted.
+ *
+ * @param {string} text
+ */
+function shellQuote(text) {
+  return `'${text.replaceAll("'", `'\\''`)}'`;
+}
+
+/**
+ * The command that reruns `names` alone. `--repo` is left out: the caller's
+ * working directory is the repository, as it was for the run being repeated.
+ *
+ * @param {string[]} names
+ * @param {string} base
+ * @param {string | undefined} title
+ */
+export function rerunCommand(names, base, title) {
+  return (
+    `node scripts/preflight.mjs --only ${names.join(",")} --base ${shellQuote(base)}` +
+    (title === undefined ? "" : ` --title ${shellQuote(title)}`)
+  );
+}
+
+/**
+ * Every check, in the order they run. The merge-tree probe is first because it
+ * is the one that costs seconds and can fail on something the suites cannot
+ * help with (repo-104).
+ */
+export const CHECK_ORDER = /** @type {const} */ ([
+  "mergeTree",
+  "check",
+  "ciCommands",
+  "review",
+  "title",
+]);
 
 /** @param {string[]} argv */
 export function parseArgs(argv) {
-  /** @type {{base: string | null, title: string | undefined, repo: string | undefined}} */
-  const parsed = { base: null, title: undefined, repo: undefined };
+  /** @type {{base: string | null, title: string | undefined, repo: string | undefined, only: string[] | undefined}} */
+  const parsed = { base: null, title: undefined, repo: undefined, only: undefined };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === "--base" || arg === "--title" || arg === "--repo") {
+    if (arg === "--base" || arg === "--title" || arg === "--repo" || arg === "--only") {
       const value = argv[i + 1];
       if (value === undefined) throw fail(`${arg} needs a value\n${USAGE}`, EXIT.setup);
       if (arg === "--base") parsed.base = value;
       else if (arg === "--title") parsed.title = value;
-      else parsed.repo = value;
+      else if (arg === "--repo") parsed.repo = value;
+      else {
+        // Comma-separated, and repeatable: the halt message prints the rest of
+        // the run as one list, and a name that is not a check must not run
+        // nothing and exit 0 (repo-104).
+        const names = value.split(",").filter(Boolean);
+        const unknown = names.filter((name) => !CHECK_ORDER.includes(/** @type {never} */ (name)));
+        if (names.length === 0 || unknown.length > 0) {
+          throw fail(
+            `--only takes ${CHECK_ORDER.join(", ")}${unknown.length > 0 ? `, not ${unknown.join(", ")}` : ""}\n${USAGE}`,
+            EXIT.setup,
+          );
+        }
+        parsed.only = [...(parsed.only ?? []), ...names];
+      }
       i += 1;
     } else {
       throw fail(`unknown argument ${arg}\n${USAGE}`, EXIT.setup);
@@ -1555,7 +1705,7 @@ export function parseArgs(argv) {
 }
 
 export function main(argv = process.argv.slice(2)) {
-  const { base, title, repo: repoArg } = parseArgs(argv);
+  const { base, title, repo: repoArg, only } = parseArgs(argv);
   const repo =
     repoArg ??
     execFileSync("git", ["rev-parse", "--show-toplevel"], {
@@ -1563,19 +1713,36 @@ export function main(argv = process.argv.slice(2)) {
       shell: false,
     }).trim();
 
-  const results = preflight(repo, { base, title });
+  // Printed as each check finishes, so the probe's verdict is on screen before
+  // the first suite starts and a long run is not silent until the end.
   let bitmask = 0;
-  for (const result of results) {
-    process.stdout.write(`\n== ${result.name} ==\n`);
-    for (const line of result.lines) process.stdout.write(`${line}\n`);
-    bitmask |= result.bit;
-  }
+  /** @type {string[]} */
+  let notRun = [];
+  preflight(repo, {
+    base,
+    title,
+    only,
+    onResult: (result) => {
+      process.stdout.write(`\n== ${result.name} ==\n`);
+      for (const line of result.lines) process.stdout.write(`${line}\n`);
+      bitmask |= result.bit;
+      if (result.skipped) notRun = result.skipped;
+    },
+  });
 
   const names = Object.entries(EXIT)
     .filter(([name, bit]) => name !== "setup" && (bitmask & bit) !== 0)
     .map(([name]) => name);
+  // A partial run must not read like a full one to whoever greps the last line.
+  const scope =
+    only === undefined
+      ? ""
+      : ` (only ${[...new Set(only)].join(", ")}; the other checks did not run)`;
+  // A halted run names what it never ran on the same line, so whoever reads
+  // only that line (`--land`'s hint does) cannot take it for a full verdict.
+  const unproven = notRun.length > 0 ? `; not run: ${notRun.join(", ")}` : "";
   process.stdout.write(
-    `\n${bitmask === 0 ? "preflight passed" : `preflight failed: ${names.join(", ")}`} (exit ${bitmask})\n`,
+    `\n${bitmask === 0 ? `preflight passed${scope}` : `preflight failed: ${names.join(", ")}`} (exit ${bitmask})${unproven}\n`,
   );
   process.exitCode = bitmask;
 }
