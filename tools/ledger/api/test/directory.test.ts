@@ -477,4 +477,23 @@ describe("a household id is never NULL", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("the class refuses an id that is not a string as BAD_REQUEST, before the schema", () => {
+    const directory = Directory.open(":memory:");
+    for (const id of [null, undefined, 7]) {
+      let refusal: unknown;
+      try {
+        directory.addHousehold({ id: id as unknown as string, name: "Nobody", ...CHANGE });
+      } catch (error) {
+        refusal = error;
+      }
+      expect(refusal, String(id)).toBeInstanceOf(AppError);
+      expect(refusal, String(id)).toMatchObject({
+        code: "BAD_REQUEST",
+        message: expect.stringContaining(`; ${String(id)} is not.`),
+      });
+    }
+    expect(directory.households()).toEqual([]);
+    directory.close();
+  });
 });

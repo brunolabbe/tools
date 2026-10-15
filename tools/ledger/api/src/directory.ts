@@ -172,13 +172,16 @@ export class Directory {
   }
 
   addHousehold(household: Household & Change): Household {
+    const notAnId = (shown: string): never =>
+      refuse(
+        `A household id is one lowercase word of a to z, at most 32 letters, and not con, prn, aux or nul; ${shown} is not.`,
+      );
+    // Typed a string, but a caller past the request schema can pass null, which
+    // reached `.trim()` as a TypeError rather than this refusal (lg-24).
+    if (typeof household.id !== "string") notAnId(String(household.id as unknown));
     const id = household.id.trim();
     const name = household.name.trim();
-    if (!isHouseholdId(id)) {
-      refuse(
-        `A household id is one lowercase word of a to z, at most 32 letters, and not con, prn, aux or nul; "${id}" is not.`,
-      );
-    }
+    if (!isHouseholdId(id)) notAnId(`"${id}"`);
     if (name === "" || name.length > 80) refuse("A household's name is 1 to 80 characters.");
     return this.#db
       .transaction(() => {
