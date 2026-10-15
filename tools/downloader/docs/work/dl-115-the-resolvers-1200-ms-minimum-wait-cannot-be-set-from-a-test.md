@@ -3,7 +3,7 @@ id: dl-115
 tool: downloader
 title: The resolver's 1200 ms minimum wait cannot be set from a test, so the quietMs every test passes does nothing
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: [dl-114]
 difficulty: standard
@@ -84,6 +84,37 @@ covers players that mount late. Faking the clock was ruled out:
 3. Before and after durations for the browser suites are in the Log, and
    `npm test -- --project downloader` passes three times in a row locally. It
    should also pass on the Windows leg.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-15 · `8e49523c..dd8b5c8e` · Opus 5.5, depth medium
+
+| Done when                                                              | Proof                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A test pins `minWaitMs`'s default at 1200                              | `resolvers/test/browser/browser-resolver.test.ts` › "the default is 1200 ms" (`MIN_WAIT_MS` is 1200) and › "a resolver given no minWaitMs holds the wait for MIN_WAIT_MS" (the unset option waits at least `MIN_WAIT_MS`) ✓. The wiring is pinned from below only (low, below)                                                                |
+| Production callers pass nothing new                                    | **verified** — the one production construction, `BrowserResolver` in `api/src/resolvers.ts`, passes no `minWaitMs`; the diff touches nothing in `api`, `engine`, `web` or `contract`                                                                                                                                                          |
+| Every test given a shorter `minWaitMs` expects a stream                | **verified** — enumerated every block that takes `STREAM_WAITS`: 51 in `browser-resolver.test.ts`, the `r5`/`r7`/`r9` table in `consent-scope.test.ts`, the gallery in `chunk-streams.test.ts`. Each asserts a stream (`variants[0]`, `variants.length` or the three gallery URLs). None expects `NO_MEDIA_FOUND`, `TIMEOUT` or another error |
+| The Log lists them and shows no negative test among them               | **unproven (open decision)** — the brief's Build 2 counts "`not.toContain` a beacon, nothing pressed" as negative tests. 16 short-wait blocks carry such an assertion beside their stream, among them "presses nothing on %s, and finds the stream". The Log says the "nothing pressed" tests are untouched (med, below)                      |
+| Before and after durations are in the Log                              | **verified** by reading: two before/after pairs over the browser directory. The gate measured the same direction: with revisits disabled, `browser-resolver` plus `consent-scope` ran 368.4 s on the base's tests and 296.6 s on the branch's                                                                                                 |
+| `npm test -- --project downloader` passes three times in a row locally | **unproven (scope)** — the dispatch forbade three project runs. Instead, one run of `resolvers/test/browser`: 761 of 761 passed in 15 files, exit 0. `test (ubuntu-latest)` was green on `dd8b5c8e`                                                                                                                                           |
+| It should also pass on the Windows leg                                 | `test (windows-latest, informational)` success on `dd8b5c8e`, run 38665960108 ✓                                                                                                                                                                                                                                                               |
+
+- **med** · open decision · Done when 2 depends on it · **What "negative test" means.** The brief's Build 2 says not to give the short wait to "negative tests: `NO_MEDIA_FOUND`, `not.toContain` a beacon, nothing pressed". The build reads "negative" as "expects no stream". So 16 blocks that expect a stream and also assert that something was not pressed or not requested take `STREAM_WAITS`. They include the "never presses %s ... and finds the stream" and "presses nothing on %s, and finds the stream" tables, decoy, exit, card, billboard and ad-frame. Two pieces of shipped text are false as written:
+  - the Log says "the ... 'nothing pressed' tests are untouched";
+  - the `BASE_WAITS` comment in `browser-resolver.test.ts` says a shorter wait "in a test that expects ... nothing pressed" would weaken it, yet such tests take one.
+
+  The falsehood runs in the safe direction. The gate measured that the short wait weakens none of these assertions. The resolver presses during `provokePlayback`, which ends before the quiet wait, or during revisits. Revisits stop at the first hit, so they never run once `minWaitMs` governs. A regression planted in `src` turned the shortened tests red: one press per document removed (the decoy's `not.toContain("/beacon/age-decoy")` failed), the `hasPlayable` guard removed from the centre click, and the `pressed` guard removed. Options:
+  1. **(recommended)** Confirm the build's reading: a negative test is one that expects no stream or an error. Reword the Log sentence and the `BASE_WAITS` comment to say that a stream test with a not-pressed assertion may take the short wait, and why. Cost: two sentences.
+  2. Take Build 2 literally: return the 16 blocks to `BASE_WAITS`. Cost: about 1 s each of the saving, and no assertion gets stronger.
+
+- **low** · no `Done when` line depends on it (Build 1 accepts the exported constant as the pin) · The unset-option test asserts a wait in [1200, 3200) ms. A constructor default that skips the constant (`options.minWaitMs ?? 2400`) passes all three tests in the block, so the title "holds the wait for MIN_WAIT_MS" says more than the test asserts. The falsehood is safe: a raised default slows probes and loses nothing, and a lowered one fails.
+- **low** · The Log says "`browser-resolver.test.ts` (49 blocks)", but its own list, and the gate's enumeration, come to 51. Nothing relies on the count.
+- **dropped** · a shortened test passing because it stopped looking too early. The gate planted `src` regressions under the branch's waits, and each went red. Consent `r7`: the `statistik`/`marketing` prefixes removed. Consent `r5`: the second provocation pass removed. Departure, fragment, `?t=` and redirect rows: the guard taking any URL change as a departure. Script-redirect and `replaceState` rows: the landing URL read before `load`. Gallery: the tail-`moov` file sniffed as a fragment. Overlay revisit disabled outright: the same single test failed with the branch's tests and the base's ("meets a modal and a gate that mount after the playback passes are over", which keeps `quietMs: 6000`). No shortened test depends on a revisit.
+- **dropped** · the PR is typed `test` although it adds an option in `src`. `test` is `hidden` in `release-please-config.json` and the production default is unchanged, so this is not a defect.
+- **dropped** · `stream-waits.ts` says shortening leaves the revisit alone. The sentence is about `minWaitMs`, which is true, and the revisit comparison above measured it.
+- **findings** · the hunt returned 6: 3 carried, 3 dropped.
+- Invariants: no cross-tool import, no error code, no shell, no logged URL or header, no SSRF path and no progress report are touched. The contract is untouched (`BrowserResolverOptions` is in `resolvers`). `import type` is used for the new type import. The `check` job is green on `dd8b5c8e`.
+- NFR: security n/a · performance ✓ (about 70 s off the browser suites; production waits unchanged) · reliability ✓ (both new timing tests passed on the Windows leg) · maintainability: the comment above.
 
 ## Log
 
