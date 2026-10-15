@@ -60,8 +60,8 @@ covers players that mount late. Faking the clock was ruled out:
      base wait"; chosen: the first): a negative test is one that expects no
      stream or an error. A test that expects a stream and also asserts that
      something was not pressed or not requested may take the short wait. The
-     presses happen during provocation, which ends before the quiet wait, and the
-     overlay revisits stop at the first hit, so a shorter wait cannot hide one.
+     presses happen during provocation, which ends before the quiet wait, and
+     every request these fixtures make on a press is made on the click itself.
      This is also what Done when 2 means by "negative".
    - Choose a value at or above the 200 ms tick of the wait loop, and measure
      that the overlay revisit (`browser.ts:399–408`, first at least 1 s in)

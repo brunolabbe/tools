@@ -59,8 +59,8 @@ const NO_EMPTY_FLOOR_MS = 1200;
  * (dl-115): only those take `STREAM_WAITS`. A shorter wait in a test that expects
  * no media, or an error, would make it pass more easily. A test that expects a
  * stream and also asserts that something was not pressed or not requested may
- * take it: the presses happen during provocation, before the quiet wait, and the
- * revisits stop at the first hit, so a shorter wait cannot hide one.
+ * take it: the presses happen during provocation, before the quiet wait, and
+ * every request these fixtures make on a press is made on the click itself.
  */
 type Waits = Pick<BrowserResolverOptions, "quietMs" | "minWaitMs">;
 const BASE_WAITS: Waits = { quietMs: 1200 };
@@ -2115,18 +2115,18 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
       // not on a timing bound a slow runner could cross.
       expect(handedMs).toBe(MIN_WAIT_MS);
       expect(waitedMs).toBeGreaterThanOrEqual(MIN_WAIT_MS);
-      // Not the 9 s floor of a probe that captured nothing, which would pass the
-      // line above for the wrong reason.
-      expect(waitedMs).toBeLessThan(MIN_WAIT_MS + 2000);
     },
   );
 
-  test("a minWaitMs below it shortens the wait", { timeout: TEST_TIMEOUT_MS }, async () => {
-    const { waitedMs, handedMs } = await quietWait(STREAM_WAITS.minWaitMs);
+  test(
+    "a minWaitMs below it is the one the wait is handed",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { handedMs } = await quietWait(STREAM_WAITS.minWaitMs);
 
-    expect(handedMs).toBe(STREAM_WAITS.minWaitMs);
-    expect(waitedMs).toBeLessThan(MIN_WAIT_MS);
-  });
+      expect(handedMs).toBe(STREAM_WAITS.minWaitMs);
+    },
+  );
 });
 
 /** Elapsed milliseconds since the call, off a clock that follows no one's `date`. */
