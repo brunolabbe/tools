@@ -148,3 +148,113 @@ So the failing Windows case (117 ms) was not slower than a passing Linux one
 **Not measured.** The failure rate, the cause, ffmpeg's log on the failing run,
 and the size of the fixture, so that `689225` being the stored body in full is
 the reading and not a count. No Windows run was made from here.
+
+### 2026-10-15 — steps 1 and 2 measured; stopped before step 3 (Opus 5.5, builder)
+
+This entry covers measurement only. Neither `src/stream.ts` nor the test was changed.
+
+**Step 1: the Windows probe.** The probe was draft PR #486, head `63d63d25`, now
+closed with its branch deleted. It added new files only: one workflow, plus
+`NODE_OPTIONS=--import` instrumentation that wrapped `child_process.spawn` and
+recorded the engine ffmpeg's stderr, exit and close times. The instrumentation
+was needed because the test's failure message prints the outcome but not
+ffmpeg's log, and step 2 asks for that log. The run was 38662561661, job
+116186998598, on `windows-latest`. It printed:
+
+```
+ffmpeg-static: D:\a\tools\tools\node_modules\ffmpeg-static\ffmpeg.exe
+ffmpeg version 6.1.1-essentials_build-www.gyan.dev
+FFMPEG_PATH=unset
+phase block result: 0 failed of 60 runs (60% case: 60 pass, 0 fail, 0 not found; 0 runs failed on something else) in 236s
+phase file result: 0 failed of 30 runs (60% case: 30 pass, 0 fail, 0 not found; 0 runs failed on something else) in 492s
+```
+
+Each run was a fresh `vitest run tools/downloader/engine/test/stream.test.ts`:
+
+- "block" used `-t "dl-103: an unanswered seek probe"`. On Windows the stand-ins
+  skip, so this is the 60% case plus seven real neighbours.
+- "file" ran the whole file.
+
+**The rate is 0 of 90 isolated runs.** With no failures, the rule of three puts
+it under 5% for the block (n = 60) and under 10% for the whole file (n = 30).
+The probe PR's own whole-suite Windows leg (run 38662561614) also passed
+`stream.test.ts`. That leg's one failure was dl-98's parallel-ranges timing,
+which is dl-121's test.
+
+**The whole-suite rate is 1 of 183, read from CI history.** I read every
+`ci.yml` run created between 2026-10-11T01:28Z, when dl-103 merged as
+`df941568`, and 2026-10-15T00:56Z:
+
+- 186 Windows legs ran: 141 `success` and 45 `failure`.
+- 183 of those heads carry `df941568`. The other 3 could not be checked.
+- Every failed leg's `--log-failed` output was grepped for the 60% case. It
+  appears in one: run 38355111789, the run this ticket was filed from. The
+  other 44 failures are other tests, mostly dl-98's `parallel-ranges.test.ts`.
+
+Two limits apply. `gh run list` shows only the latest attempt of each run, so an
+earlier attempt that was re-run is not counted. A leg that concluded `success`
+is counted as a pass of the 60% case, because a passing job's log has no
+per-test lines to read.
+
+**Step 2: what ffmpeg said, on passing runs only.** No looped run failed. I could
+identify the 60% case's engine ffmpeg in 89 of the 90 runs. In every one:
+
+- ffmpeg logged `partial file`, then exited 0, 4.1 to 14.5 ms later;
+- it logged no `Stream ends prematurely`;
+- the engine had the line well before the exit.
+
+The trace's `data` listener reads the same chunk the engine's listener does. For
+example, block run 1:
+
+```
+ffmpeg 4412/6344: video=654kB exit=0 null@45.1ms close@45.4ms stderr-end@42.7ms partial=[39.2ms:stream 1, offset 0xaa8a9: partial file] early=[] reconnect=[]
+```
+
+In the 90th run (file run 4), Windows reused the ffmpeg's pid within one worker,
+and the trace keys on that pid. Its `partial file` at offset `0xaa395` is
+present, but its exit timing is merged with another process's. The run's trace
+artifact could not be downloaded from here: the artifact host timed out
+(`dial tcp 52.239.172.36:443: i/o timeout`).
+
+**The fixture differs on every run.** The fixture's size is not fixed: 60
+distinct `faststart.mp4` sizes in 60 block runs (1,149,431 to 1,154,833 bytes)
+and 30 in 30 file runs (1,149,409 to 1,155,036). So the 60% cut lands on a
+different byte, and in a different place relative to the samples, every run.
+
+**A cut that lands on a sample boundary gives the failing outcome on Linux.** I
+ran a scratch script, not committed, against the built engine (`dist`), with
+ffmpeg 6.1.1-3ubuntu5. It served a stored prefix exactly as the test's 60%
+`answer` does and kept the engine's `ffmpeg` debug lines:
+
+```
+file 1026622 bytes, 60% = 615973, packets 274, cut falls inside packet at 611570+9299, next packet starts at 620869
+60% (the test's cut): cut=615973 -> {"streamed":614789,"done":"DOWNLOAD_FAILED"} | ... stream 1, offset 0x97945: partial file
+exactly at the next packet's start: cut=620869 -> {"streamed":619685,"done":619685} | (no partial file, no early end)
+one byte past it: cut=620870 -> {"streamed":619690,"done":"DOWNLOAD_FAILED"} | ... stream 0, offset 0x979f1: partial file
+one byte short of it: cut=620868 -> {"streamed":619684,"done":"DOWNLOAD_FAILED"} | ... stream 1, offset 0x97945: partial file
+cuts exactly at a packet start in 40-80%: 114; done resolved on 114
+random cuts in 40-80%: 500; DOWNLOAD_FAILED 500
+```
+
+So a stored file that ends exactly where a sample ends makes ffmpeg log nothing
+at all. ffmpeg then exits 0 and `done` resolves with every byte, with no timing
+involved. That is the failing run's outcome: `done` equal to `streamed`, and
+fewer than 100 frames. One more reading agrees with it. On Linux, `streamed` is
+about the cut minus 1,184 bytes. Applied to the Windows fixture range, a whole
+60% prefix would stream 688,461 to 691,837 bytes, and `689225` falls inside it. This is consistent with
+the failing run receiving the whole prefix, but it is not proof.
+
+**What this does not settle.**
+
+- Whether the Windows failure was this mechanism is not measured. Packet starts
+  are 114 in 410,648 bytes, about 1 per 3,600. A uniformly placed cut would hit
+  one on about 0.03% of runs. Over 273 runs (the 183 CI legs plus these 90),
+  that predicts at least one hit only about 7% of the time, against the 1 seen.
+- The boundary case has not been run on Windows's ffmpeg-static build.
+- No failing run's ffmpeg log exists.
+
+**The brief had one thing wrong.** ffmpeg does not read the test's origin
+directly. Its `-i` is the engine's own loopback URL
+(`http://127.0.0.1:<port>/<hex>`), and the engine relays to the origin.
+
+Stopped here, before step 3, as dispatched.
