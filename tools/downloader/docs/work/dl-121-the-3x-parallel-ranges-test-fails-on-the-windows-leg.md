@@ -3,7 +3,7 @@ id: dl-121
 tool: downloader
 title: The 3x parallel-ranges test fails on the Windows leg since 2026-10-12, at a ratio of 2.91 to 3.00
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -95,6 +95,24 @@ assertion (`expected 3584 to be less than 3000`). It is not counted here.
   failure, and ten whole-suite runs cost about 1.5 h for a flake detector.)
 - With `#split` never called, the test still fails on Linux, and
   `npm run check` passes.
+
+## Review
+
+**Gate: PASS** — 2026-10-15 · `8e49523c..989ce4c5` · Opus 5.5, depth medium
+
+| Done when                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The Log names what step 1 measured on both heads, with the run ids                              | **verified** — every cell of both Log tables and every per-run ratio list was rebuilt from `gh run view 38661757405 --log` and `gh run view 38662846516 --log` and matches to the printed digit; each job's checkout prints `HEAD is now at 07acbb8` or `HEAD is now at 8e49523`                                                                                                                                                                                                                  |
+| The test asserts at least 2.5 on `win32` and at least 3 elsewhere, with the reason in a comment | **verified** by reading `engine/test/parallel-ranges.test.ts` › "a job that measures slow switches to 4 connections and finishes at least 3x faster": `process.platform === "win32"` is the only platform branch in the file, and the comment's numbers match the Log. A logged run on Linux printed `floor=3`; with the predicate flipped it printed `floor=2.5`. On PR #489, `test (windows-latest, informational)` passed this test at 989ce4c5 (10988ms, 276 files passed, 2 skipped, of 278) |
+| With `#split` never called the test still fails on Linux, and `npm run check` passes            | **proven** — with the mutant, the same test fails on `expected 0 to be greater than 4` (the fan-out count). With the fan-out and max-open assertions removed, it fails on the ratio itself: 0.9996 against 3, and 0.9990 against 2.5 with the predicate flipped. `npm run check` exits 0                                                                                                                                                                                                          |
+
+- **low** · no `Done when` line depends on it · `nfr:maintainability` — the new comment says the four-connection run "slows by 200 to 400 ms" next to the rest of the suite. The Log's own numbers put the lower end lower: loaded `splitMs` 2631 to 2854 against quiet medians of 2449 and 2481 is 150 to 405 ms. The error is in the safe direction, and nothing relies on the figure.
+- **dropped** · the 2.5 floor accepts a partial split on the ratio alone. With `PARALLEL_RANGE_DEFAULTS.connections` set to 3 and the fan-out and max-open assertions removed, the ratio was 2.538 on Linux: it passes 2.5 and fails 3 (2.634). The unmodified test still rejects that build on every platform through `expect(splitCount.maxOpen).toBe(4)` (`expected 3 to be 4`). Two connections give 1.86 and fail both bars, and also fail `maxOpen` (`expected 2 to be 4`). Not a defect: the platform-independent `maxOpen` assertion catches it.
+- **dropped** · round 2's 16 Windows runners used two image versions, 20260925.250.1 and 20261007.264.1. Both versions produced slow and fast splits (3 of 9 slow and 5 of 7 slow), so the image does not explain the slow runs. The Log already lists the runner pool as unmeasured. Not a defect.
+- **dropped** · the ticket still says `status: ready` at the head. Moving it is the author's or lander's call, not the gate's.
+- **findings** · the hunt returned 4; 1 kept, 3 dropped.
+- Invariants: the diff touches one assertion in one test file and the ticket. It contains no `console`, no `any` and no new import. I skipped the AppError, shell, redaction, SSRF, contract, test-registration and Dockerfile checks because the diff reaches none of them.
+- NFR: security n/a · performance n/a (no runtime change) · reliability ✓ (the informational leg's flake band is now below the floor) · maintainability — the low above.
 
 ## Log
 
