@@ -238,3 +238,29 @@ tools/downloader/resolvers/test/browser/` (15 files, 758 tests before, 761
     all three. The option ignored (`this.#minWaitMs = MIN_WAIT_MS`) fails
     "a minWaitMs below it shortens the wait" with `expected 1200 ...`. Both were
     restored from `d98d8799`.
+
+- 2026-10-15 — Gate 2's two findings applied by the fixer (Sonnet 5.5). Owner
+  answered gate 2's question "How should it be fixed?" with "Drop the upper
+  bounds" (the other option was "Time from first hit"), and the low finding was
+  folded into the same round.
+  - **Bounds dropped.** `waitedMs < MIN_WAIT_MS + 2000` and
+    `waitedMs < MIN_WAIT_MS` are gone from `browser-resolver.test.ts`. Kept:
+    the `handedMs` equalities and `waitedMs >= MIN_WAIT_MS`. The second test
+    asserted only the dropped bound beside `handedMs`, so it is retitled "a
+    minWaitMs below it is the one the wait is handed". The 4055 ms and 1616 ms
+    readings above and in gate 2 name the bounds that failed.
+  - **Wording.** "a shorter wait cannot hide one" is now "every request these
+    fixtures make on a press is made on the click itself", in the `BASE_WAITS`
+    comment and in Build 2's recorded answer.
+  - **Ten runs, each its own process,** `npx vitest run
+tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
+"defaults to 1200"` at `7c79bbbc` → 10 of 10 exit 0, `Tests  3 passed | 120
+skipped (123)` each.
+  - **Gate 2's mutants, both still red** on `7c79bbbc`, the file restored from
+    that sha afterwards. `options.minWaitMs ?? 2400` →
+    `× a resolver given no minWaitMs hands the wait MIN_WAIT_MS, and holds it
+that long`, `AssertionError: expected 2400 to be 1200`. `minWaitMs:
+this.#minWaitMs` replaced by `minWaitMs: MIN_WAIT_MS` →
+    `× a minWaitMs below it is the one the wait is handed`, `AssertionError:
+expected 1200 to be 200`. Each: `Tests  1 failed | 2 passed | 120 skipped
+(123)`.
