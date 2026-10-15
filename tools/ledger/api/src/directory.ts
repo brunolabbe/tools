@@ -176,13 +176,15 @@ export class Directory {
       refuse(
         `A household id is one lowercase word of a to z, at most 32 letters, and not con, prn, aux or nul; ${shown} is not.`,
       );
-    // Typed a string, but a caller past the request schema can pass null, which
-    // reached `.trim()` as a TypeError rather than this refusal (lg-24).
+    const notAName = (): never => refuse("A household's name is 1 to 80 characters.");
+    // Typed strings, but a caller past the request schema can pass null, which
+    // reached `.trim()` as a TypeError rather than these refusals (lg-24).
     if (typeof household.id !== "string") notAnId(String(household.id as unknown));
+    if (typeof household.name !== "string") notAName();
     const id = household.id.trim();
     const name = household.name.trim();
     if (!isHouseholdId(id)) notAnId(`"${id}"`);
-    if (name === "" || name.length > 80) refuse("A household's name is 1 to 80 characters.");
+    if (name === "" || name.length > 80) notAName();
     return this.#db
       .transaction(() => {
         if (this.household(id) !== undefined) refuse(`There is already a household "${id}".`);

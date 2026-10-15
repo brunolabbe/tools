@@ -493,6 +493,18 @@ describe("a household id is never NULL", () => {
         message: expect.stringContaining(`; ${String(id)} is not.`),
       });
     }
+    // The name beside it reached `.trim()` the same way.
+    let refusal: unknown;
+    try {
+      directory.addHousehold({ id: "home", name: null as unknown as string, ...CHANGE });
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal, "null name").toBeInstanceOf(AppError);
+    expect(refusal, "null name").toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A household's name is 1 to 80 characters.",
+    });
     expect(directory.households()).toEqual([]);
     directory.close();
   });
