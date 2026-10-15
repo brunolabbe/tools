@@ -378,3 +378,32 @@ tools/ledger/api/test/directory.test.ts`: `1 failed | 18 passed (19)`, `null
 name: expected TypeError: Cannot read properties of null… to be an instance of
 AppError`; restored from `ce65a6ab`, `19 passed (19)`. Nothing in this ticket's
   part (c) is left as a `TypeError` now.
+- 2026-10-15 — Fixed at landing by owner choice: gate 2, N1 — "the id guard's own
+  message can throw. `notAnId(String(household.id as unknown))` stringifies the
+  value to echo it, and `String()` throws on two non-strings". The owner chose the
+  first fix the gate named: `addHousehold` echoes `typeof` of a non-string id, never
+  the value. `node --import tsx guards.mts <tree>` (gate 2's script, run on the
+  landing tree) → every non-string id, 13 of 13, gives `AppError BAD_REQUEST` with
+  no row stored, `Object.create(null)` and `{toString(){throw}}` included
+  (`...nul; object is not.`). Test, `npx vitest run
+tools/ledger/api/test/directory.test.ts`, the same case at the end of the suite:
+  `Object.create(null)`, an object whose `toString` throws and `['home']` joined
+  `null`, `undefined` and `7`, each asserted `AppError` `BAD_REQUEST` echoing its
+  type, with no row stored. Red with `String(household.id as unknown)` restored:
+  `1 failed | 18 passed (19)`, `null: expected AppError … to match object`
+  (`"; object is not."`, the echo changed); red with `String()` kept only for a
+  plain object: `Object.create(null): expected TypeError: Cannot convert object to
+primi… to be an instance of AppError`; restored from the fix commit, `19 passed
+(19)`.
+- 2026-10-15 — Fixed at landing by owner choice: gate 2, N2 — "the name arm of
+  the new test asserts `null` only, and its title says 'an id or a name that is not
+  a string'". The name arm now asserts `null`, `undefined` and `7`, each `AppError`
+  `BAD_REQUEST` with "A household's name is 1 to 80 characters.". Red with the name
+  guard narrowed to `household.name == null`, `npx vitest run
+tools/ledger/api/test/directory.test.ts`: `1 failed | 18 passed (19)`, `7 name:
+expected TypeError: household.name.trim is not a f… to be an instance of
+AppError`; restored from the fix commit, `19 passed (19)`.
+- 2026-10-15 — Gate 2's N3, the `TypeError`s a caller past the request schema
+  reaches in `addMember`, `removeMember` and `membershipOf`, was put to the owner on
+  2026-10-15, who chose "File one ticket"; it is being filed separately and is not
+  fixed here.
