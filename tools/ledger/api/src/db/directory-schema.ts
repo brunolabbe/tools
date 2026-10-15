@@ -118,6 +118,22 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
     WHEN EXISTS (SELECT 1 FROM households WHERE id = NEW.id)
     BEGIN SELECT RAISE(ABORT, 'a household is appended, never replaced'); END;
   `,
+  // 3 — a household always has an id (lg-24).
+  `
+  -- households.id is a TEXT PRIMARY KEY, which SQLite lets hold NULL, and its
+  -- CHECK passes when the expression is NULL, so migration 1 stores a household
+  -- with no id, and as many as are written, since NULLs never collide in a key.
+  -- households_never_replaced compares with =, which no NULL matches.
+  --
+  -- A trigger rather than NOT NULL on the column, so PRAGMA table_info still
+  -- reads notnull 0 for the id and the refusal is this trigger's. Declaring it
+  -- means rebuilding the table, and the old table's DROP fails on a directory
+  -- that holds a membership: foreign_keys is ON, and SQLite ignores turning it
+  -- off inside the transaction every migration runs in (measured in lg-24).
+  CREATE TRIGGER households_id_not_null BEFORE INSERT ON households
+    WHEN NEW.id IS NULL
+    BEGIN SELECT RAISE(ABORT, 'a household has an id'); END;
+  `,
 ];
 
 /** Brings a directory up to `target`, every migration by default. */
