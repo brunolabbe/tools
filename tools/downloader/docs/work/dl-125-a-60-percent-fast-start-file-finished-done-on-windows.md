@@ -66,43 +66,109 @@ at its offset. That makes the verdict depend on ffmpeg printing the one line and
 the engine reading it before the process ends. That is where to look first, and it
 is only where to look.
 
+## Decision
+
+**Settled on 2026-10-15** by the owner's answers, relayed by the orchestrator.
+The measurements behind them are in the Log entries of 2026-10-15.
+
+**The cause.** "What next?" had four options:
+
+- Boundary case + Win probe
+- Boundary case, no probe
+- Test defect: pin the cut
+- Park it
+
+The owner chose **"Boundary case + Win probe"**. So the measured condition is a
+fast-start file stored so that it ends exactly at a sample's first byte. ffmpeg
+then logs no `partial file` and no early end, and exits 0, so `done` resolves
+with every byte. This happened on 816 of 822 such cuts on Linux and on 544 of
+548 on Windows with ffmpeg-static. The fixture's size changes on every run, so
+the test's 60% cut lands on a boundary now and then. That is a product defect,
+not test timing: the product cannot tell such a source is short from anything
+ffmpeg says.
+
+**The rule.** "Which rule?" had four options:
+
+- Gap > 0.25 s fails
+- Gap > 0.1 s fails
+- Gap > 2% of declared
+- Resolver duration, not container
+
+The owner chose **"Gap > 0.25 s fails"**. In full:
+
+- The rule applies to progressive sources only.
+- It applies after ffmpeg exits 0 with no `partial file` verdict.
+- `done` fails `DOWNLOAD_FAILED` when the container's declared duration minus
+  ffmpeg's last `out_time` exceeds 0.25 s.
+- The engine reads the container's `Duration` line on every run.
+
+As measured, 0.25 s catches 94.1% of boundary cuts on both platforms. It
+falsely failed 0 of 90 whole-source runs, whose largest gap was 0.067 s. It
+accepts missing only a truncation that loses the last 0.25 s or less.
+
+**When to build.** "When should dl-125's fix be built?" had two options:
+
+- Record now, build later
+- Build it in this batch
+
+The owner chose **"Record now, build later"**. This ticket stays `ready` for a
+later batch.
+
 ## Build
 
-Start by measuring. Do not change `src/stream.ts` or the test until step 3 has an
-answer.
+The cause and the rule are settled (Decision, above). Build the rule. Do not
+re-measure the cause.
 
-1. **Get a rate on Windows.** The Windows leg is informational and runs the
-   whole suite. Run the one case alone, many times, on a Windows runner (a
-   throwaway branch with a workflow that loops
-   `npx vitest run tools/downloader/engine/test/stream.test.ts -t "stored at 60%"`,
-   which is how the local runs below were made). Record the count of failures
-   over the count of runs. If it never fails alone, run it in the whole file and in
-   the whole project, because the failing run had the machine loaded with the
-   rest of the suite.
-2. **Make a failing run say what ffmpeg said.** In a throwaway change, have the
-   test's outcome carry ffmpeg's stderr lines that match `PARTIAL_FILE` and
-   `SAME_OFFSET_ENDS_EARLY`, and whether the process exited before or after the
-   engine read them. Loop as in step 1 until one fails.
-3. **Decide from that.** `partial file` logged and the verdict missed: a product
-   race, in the engine. `partial file` never logged on a run that finished `done`:
-   ffmpeg or the origin behaved differently, and the question is whether
-   the product can still tell. Timing in the test's origin or its read of `done`:
-   a test defect. Record which, with the lines that show it.
-4. Then fix what step 3 named, with a check that fails before the fix on the
-   measured condition, and the dl-103 rule kept as the owner stated it: a short
-   source is `DOWNLOAD_FAILED`, never `done`.
+1. **Read the container's duration every time.** Today
+   `engine/src/stream.ts` parses ffmpeg's `Duration` line (`learnedDurationSec`,
+   through `durationFromInfoLine` in the `onInfoLine` handler) only when the
+   variant carries no duration. Keep that value's current role in progress
+   reporting unchanged. Also keep the container's own `Duration`, for
+   progressive sources, whatever the variant says. The handler takes the first
+   line that parses, which is the video input's. If a progressive variant with
+   a separate `audioUrl` changes that, say so in the Log.
+2. **Apply the rule where the other short-source verdicts are.** It goes in
+   `done`'s completion handler, after the `endedEarly` and `partialAt` checks
+   and before `body.end()`. Fail a progressive run with `DOWNLOAD_FAILED` when
+   the container's duration minus the last progress snapshot's `out_time`
+   exceeds 0.25 s, so the visitor sees a cut connection and not a complete
+   response. Name the 0.25 s as a constant whose comment cites this ticket's
+   measurement. The answer does not cover a run with no `Duration` line or no
+   progress snapshot. If the build meets one, bring it back as a question;
+   do not choose.
+3. **Test it on the measured condition.**
+   - **The failing case.** In `engine/test/stream.test.ts`, at the end of the
+     file, cut dl-103's large fast-start fixture exactly at a sample's first
+     byte, far enough from the end that the gap is well over 0.25 s (around 60%
+     gives about 1.6 s). Serve it the way the 60% case's `answer` does.
+   - **Finding the sample starts.** The probe's moov parser does this:
+     `sampleStarts` in `.github/probe-dl-125-2/detect.mts`, at probe PR #492's
+     head `fd58776c` (`git fetch origin pull/492/head`). It reads
+     `stco`/`co64`, `stsc` and `stsz`, and needs no ffprobe, which ffmpeg-static
+     does not ship. Where it lives once it is real (a test helper beside
+     `topLevelBoxes` in `helpers/media.ts`, or elsewhere) is your call.
+   - **Before the fix.** This case must fail on every run, because the boundary
+     cut ended `done` on every such run measured. Record the count from a loop
+     of it in the Log.
+   - **Controls.** A cut at the final sample start (a gap of about 0.029 s)
+     still ends `done`, so the accepted miss is pinned from the other side. The
+     existing whole-source cases still end `done`.
+4. Keep the dl-103 rule as the owner stated it: a short source is
+   `DOWNLOAD_FAILED`, never `done`. Its 5% and 60% cases keep their assertions.
 
 ## Done when
 
-- The Log records the failure rate on Windows from step 1, as failures over runs,
-  and what ffmpeg and the engine said on a failing run from step 2.
-- The cause is named as a product defect or a test-timing defect, with the
-  evidence that separates the two.
-- The fix has a test that fails on the measured condition before it and passes
-  after, or, if the cause is the test, the test is changed so that it cannot
-  report `done` as a pass of the wrong thing, and says so.
-- The 60% case passes on the Windows leg over the same number of runs that
-  step 1 used to measure the failure.
+- The Log records the cause and the measurements behind it. Done: the Log
+  entries of 2026-10-15 and the Decision above.
+- A progressive run that exits 0 with no `partial file`, and whose container
+  duration exceeds its last `out_time` by more than 0.25 s, ends
+  `DOWNLOAD_FAILED` before `body.end()`.
+- The exact-sample-start cut fails on every run before the fix, with the count
+  in the Log, and passes after.
+- The final-sample-start control and the existing whole-source cases end
+  `done`, before and after.
+- On the pull request's own Windows leg, the new test and the dl-103 60% case
+  both pass.
 - `npm run check` and the downloader project's tests pass.
 
 ## Log
@@ -380,3 +446,27 @@ the final sample start leaves a gap of 0.029 s. Cuts at 99.1%, 98.2%, 97.3% and
   (`learnedDurationSec`), and the variant's duration is the resolver's.
 
 The detection rule is open, with the owner. No source or test was changed.
+
+### 2026-10-15 — the rule chosen; to be built later (Opus 5.5, builder)
+
+The owner answered two questions, relayed by the orchestrator:
+
+- **"Which rule?"** The options were "Gap > 0.25 s fails", "Gap > 0.1 s
+  fails", "Gap > 2% of declared" and "Resolver duration, not container". The
+  owner chose **"Gap > 0.25 s fails"**.
+- **"When should dl-125's fix be built?"** The options were "Record now, build
+  later" and "Build it in this batch". The owner chose **"Record now, build
+  later"**.
+
+What changed on the ticket:
+
+- A Decision section now records all three answers of 2026-10-15.
+- The Build is rewritten. It no longer runs steps 1 to 3 again; it starts from
+  the rule and gives a test plan: an exact-sample-start cut, using
+  `sampleStarts` from probe PR #492's `detect.mts`, failing on every run before
+  the fix, plus a final-sample-start control.
+- The Done-when lines are rewritten to match.
+- `status` stays `ready`. No source or test was changed.
+
+One case is outside the answer: a run with no `Duration` line or no progress
+snapshot. The Build says to bring it back as a question rather than choose.
