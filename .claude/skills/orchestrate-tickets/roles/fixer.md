@@ -38,7 +38,7 @@ re-read its whole transcript on every turn.
   `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`
   — unless the landing is the only work left: `--land` runs preflight itself
   after the push, and a run before it costs ten minutes for nothing.
-- **Exit 16 is the merge-tree probe, and it stops the run** (repo-104): the
+- **Exit 16 from a conflict or a missing head stops the run** (repo-104): the
   suites, the `## Review` check and the title check have **not run**, and
   preflight's last line ends `; not run: check, …`. Read the `== halted ==`
   block. A conflict with another open pull request's head is not a fault in the

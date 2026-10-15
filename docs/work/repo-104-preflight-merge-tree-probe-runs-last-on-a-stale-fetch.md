@@ -149,3 +149,4 @@ rerun.
     `headRefOid` that is not 40 or 64 hex digits, before any `git fetch`.
   - **Low: this entry's formatting.** The two bullets above are rewritten with
     no code span across a line and no stray list item.
+- 2026-10-15 — Fixed at landing by owner choice: gate 2, the low on `roles/fixer.md`'s exit-16 bullet — "That sentence is unconditional, but the same bullet ends `mergeTree threw` (`gh` down) does not halt … start that bullet with \"Exit 16 from a conflict or a missing head stops the run\"". The owner answered "Apply at landing" on 2026-10-15 to whether the lander applies fully stated lows without a re-gate. `grep -n "Exit 16 from a conflict" .claude/skills/orchestrate-tickets/roles/fixer.md` → `41:- **Exit 16 from a conflict or a missing head stops the run** (repo-104): the`.
