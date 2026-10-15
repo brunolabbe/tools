@@ -73,8 +73,9 @@ assertion (`expected 3584 to be less than 3000`). It is not counted here.
    `splitMs` and the ratio for each run, on the current `main` and on
    `07acbb86`. That shows whether the slower split comes from code or from the
    runner.
-2. Then bring the owner the options with the numbers attached. The 3x bar is
-   dl-98's acceptance line, so changing it is a decision, not a fix:
+2. **Answered 2026-10-15: option (b), floor 2.5 on `win32`; see the Log.** Then
+   bring the owner the options with the numbers attached. The 3x bar is dl-98's
+   acceptance line, so changing it is a decision, not a fix:
    - (a) A cause in the code, if step 1 finds a difference between the two
      heads: fix that, and keep the bar.
    - (b) Keep `>= 3` on Linux and set a measured floor on Windows, with the
@@ -88,8 +89,10 @@ assertion (`expected 3584 to be less than 3000`). It is not counted here.
 ## Done when
 
 - The Log names what step 1 measured on both heads, with the run ids.
-- The test passes 10 times in a row on `windows-latest`, or the Log says why that
-  is not the bar.
+- The test asserts a ratio of at least 2.5 on `win32` and at least 3 elsewhere,
+  with the reason in a comment. (Reworded 2026-10-15 from "passes 10 times in a
+  row on `windows-latest`": the Log shows a loop of the one test cannot show the
+  failure, and ten whole-suite runs cost about 1.5 h for a flake detector.)
 - With `#split` never called, the test still fails on Linux, and
   `npm run check` passes.
 
@@ -212,3 +215,12 @@ assertion (`expected 3584 to be less than 3000`). It is not counted here.
   `npm test`, passed 276 files of 278; the probe ran `npx vitest run`, not
   through the gate, so this is probably the invocation and was not
   investigated. It does not touch the 3x test. `status` is left as it is.
+
+- 2026-10-15 — **Owner's answer, taken by the orchestrator, 2026-10-15.**
+  Question: "What should the bar be?" Options: (b) Win32 floor 2.5, (c) not
+  wall-clock, (d) leave as is, (e) lengthen the file; (a) was closed by the
+  measurement above and not offered. Chosen: **(b) keep `>= 3` everywhere else
+  and set 2.5 on `win32`, with the reason in a comment**, which is 0.41 below the
+  lowest ratio ever recorded and 1.5 above the mutant's 0.999, one platform
+  branch. The Done-when line "passes 10 times in a row" is reworded to the floor
+  (above), and Build step 2 is marked answered.
