@@ -19,6 +19,7 @@ import { BrowserPool } from "../../src/browser/pool.ts";
 import { provokePlayback } from "../../src/browser/provoke.ts";
 import { BrowserResolver } from "../../src/resolvers/browser.ts";
 import { recordingHlsParser } from "./helpers/fake-parsers.ts";
+import { STREAM_WAITS } from "./helpers/stream-waits.ts";
 import { startFixtureServer } from "./helpers/fixture-server.ts";
 import type { FixtureServer } from "./helpers/fixture-server.ts";
 
@@ -41,12 +42,14 @@ afterAll(async () => {
 
 async function visit(
   pathname: string,
+  // Only a row that expects a stream may wait less (dl-115).
+  waits: { quietMs: number; minWaitMs?: number } = { quietMs: 1200 },
 ): Promise<{ outcome: ProbeResult | AppError; requests: string[] }> {
   const hls = recordingHlsParser();
   const resolver = new BrowserResolver({
     pool,
     hlsParser: hls.parser,
-    quietMs: 1200,
+    ...waits,
     emptyMinWaitMs: 1200,
   });
   server.requests.length = 0;
@@ -75,7 +78,7 @@ describe("a fixed bar whose cookie wording is a compound word or a kept word (dl
     ["r7", "Statistikcookies and Marketingcookies, then Ich stimme zu"],
     ["r9", "a CMP whose text and button sit in separate blocks"],
   ])("%s (%s) is pressed and its stream found", { timeout: TEST_TIMEOUT_MS }, async (row) => {
-    const { outcome, requests } = await visit(`/consent-bar-rows.html?row=${row}`);
+    const { outcome, requests } = await visit(`/consent-bar-rows.html?row=${row}`, STREAM_WAITS);
 
     expect(requests).toContain("/beacon/consent-accepted");
     expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));

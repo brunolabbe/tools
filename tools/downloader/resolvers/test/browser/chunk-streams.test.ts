@@ -33,9 +33,10 @@ import { BrowserPool } from "../../src/browser/pool.ts";
 import { BrowserResolver } from "../../src/resolvers/browser.ts";
 import { startChunkServer } from "./helpers/chunk-server.ts";
 import type { ChunkServer } from "./helpers/chunk-server.ts";
+import { STREAM_WAITS } from "./helpers/stream-waits.ts";
 
 const TEST_TIMEOUT_MS = 90_000;
-/** The resolver's own `MIN_WAIT_MS`, so a page that must find nothing does not wait the longer floor. */
+/** The resolver's default `minWaitMs` (1200), so a page that must find nothing does not wait the longer floor. */
 const NO_EMPTY_FLOOR_MS = 1200;
 
 let files: ChunkServer;
@@ -51,13 +52,19 @@ afterAll(async () => {
   await files.close();
 });
 
-function resolver(): BrowserResolver {
-  return new BrowserResolver({ pool, quietMs: 1200, emptyMinWaitMs: NO_EMPTY_FLOOR_MS });
+function resolver(
+  waits: { quietMs: number; minWaitMs?: number } = { quietMs: 1200 },
+): BrowserResolver {
+  return new BrowserResolver({ pool, ...waits, emptyMinWaitMs: NO_EMPTY_FLOOR_MS });
 }
 
-async function probe(pathname: string): Promise<ProbeResult> {
+// Only a probe that expects a stream may wait less (dl-115).
+async function probe(
+  pathname: string,
+  waits?: { quietMs: number; minWaitMs?: number },
+): Promise<ProbeResult> {
   files.requests.length = 0;
-  return await resolver().resolve(new URL(files.url(pathname)), {
+  return await resolver(waits).resolve(new URL(files.url(pathname)), {
     timeoutMs: 25_000,
     signal: new AbortController().signal,
   });
@@ -99,7 +106,7 @@ describe("numbered whole files are still offered (dl-90)", () => {
     "three whole files in one directory are all offered, one with its moov after its mdat",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const result = await probe("/gallery.html");
+      const result = await probe("/gallery.html", STREAM_WAITS);
 
       expect(urls(result).toSorted()).toEqual([
         files.url("/media/1.mp4"),
