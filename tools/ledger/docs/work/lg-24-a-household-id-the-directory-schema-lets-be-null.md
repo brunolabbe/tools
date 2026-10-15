@@ -6,7 +6,7 @@ kind: fix
 status: ready
 milestone: P6
 depends_on: []
-difficulty: hard
+difficulty: standard
 ---
 
 # lg-24 — A household id the directory schema lets be NULL
@@ -285,27 +285,27 @@ an id')`. The declared column is unchanged: `PRAGMA table_info(households)` stil
   reads `notnull: 0` for `id`, and the refusal is the trigger's, not the column's.
   No contract, error code or route changes; the message is raw SQLite, as
   migration 2's are, since no route can write a NULL id.
-  - **Why not A**: measured, A cannot be written as a migration under today's
-    runner. `option-a.mts` (build scratch) migrates an in-memory directory to 2,
-    adds a household and a membership, then runs A's rebuild (`CREATE TABLE
-households_rebuilt … NOT NULL`, `INSERT … SELECT … ORDER BY id`, `DROP TABLE
-households`, `ALTER TABLE … RENAME`) inside `BEGIN`, as `applyMigrationList`
-    does. `node option-a.mts`, Node v22.23.3:
+  - **Why not A** (corrected in round 1, below; this paragraph first said A could
+    not run under today's runner at all, which gate 1's F1 disproved). What was
+    measured: `option-a.mts` (build scratch) migrates an in-memory directory to 2,
+    adds a household and a membership, then runs a copy-to-new-table rebuild
+    (`CREATE TABLE households_rebuilt … NOT NULL`, `INSERT … SELECT … ORDER BY id`,
+    `DROP TABLE households`, `ALTER TABLE … RENAME`) inside `BEGIN`, as
+    `applyMigrationList` does. `node option-a.mts`, Node v22.23.3:
     ```
     A1 plain rebuild inside BEGIN, foreign_keys ON: refused, SQLITE_CONSTRAINT_FOREIGNKEY FOREIGN KEY constraint failed
     A2 PRAGMA foreign_keys = OFF inside BEGIN, then rebuild: refused, SQLITE_CONSTRAINT_FOREIGNKEY FOREIGN KEY constraint failed
     A3 PRAGMA defer_foreign_keys = ON inside BEGIN, then rebuild: refused, SQLITE_CONSTRAINT_FOREIGNKEY FOREIGN KEY constraint failed
     ```
-    So A's cost is a change to `applyMigrationList` in `db/schema.ts`, which the
-    books' eight migrations share (a migration run outside a transaction with
-    `foreign_keys` off, or a rebuild of `memberships` too), plus restoring the
-    three `households` triggers. The brief said "the four `households` triggers"
-    and named three; three is the count on `main`
+    That shape fails, but another applies through `applyMigrationList` unchanged:
+    copy the rows aside, drop, recreate with `NOT NULL`, copy back, all under
+    `PRAGMA defer_foreign_keys = ON` (gate 1's A7, reproduced in round 1 below).
+    B stays for the two reasons measured there. The brief said "the four
+    `households` triggers" and named three; three is the count on `main`
     (`households_never_updated`, `households_never_deleted`,
     `households_never_replaced`).
-  - **Difficulty not re-rated.** The 2026-10-13 entry asks for `standard` if B is
-    taken; ratings are the owner's, so `difficulty: hard` is left for the owner to
-    change.
+  - **Difficulty not re-rated** at build time, as ratings are the owner's;
+    superseded in round 1, where the owner re-rated it.
   - **Tests**, at the end of `api/test/directory.test.ts`, `describe("a household
 id is never NULL")`: a plain `INSERT` with `NULL`, an `INSERT` that omits `id`,
     `INSERT OR REPLACE` and `REPLACE INTO` with `NULL` are each refused and the
@@ -323,8 +323,44 @@ passed (18)`, both new tests on `expected [Function] to throw an error` for the
     tests, which includes the append-only scan "no source file that writes the
     directory issues an UPDATE or a DELETE" over `api/src` (Done when 3).
     `npm run check` exit 0.
-  - **Not folded in**: part (c)'s `addHousehold({ id: null })` throwing a
-    `TypeError` instead of an `AppError`. It was free to fix, but it is recorded
-    here as an observation, not specified work, and no route reaches it (the zod
-    schema refuses a non-string id first); the schema now refuses a NULL id
-    whichever writer sends it.
+  - **Not folded in** at build time: part (c)'s `addHousehold({ id: null })`
+    throwing a `TypeError` instead of an `AppError`. Superseded in round 1, where
+    the owner chose to fix it here.
+- 2026-10-15 — Round 1, on gate 1's CONCERNS at `6f7e2727`. The owner's answers,
+  given at the checkpoint on 2026-10-15:
+  - **F1 and F2, "Keep B, re-rate standard"**, chosen from "Keep B, re-rate
+    standard / Keep B, leave hard / Switch to A7". F1 reproduced before changing
+    anything: gate 1's `optiona.mts` at this branch printed `A1_plain_rebuild:
+REFUSED SQLITE_CONSTRAINT_FOREIGNKEY`, `A3_defer_then_plain_rebuild: REFUSED
+SQLITE_CONSTRAINT_FOREIGNKEY`, `A4_legacy_alter_table: REFUSED
+SQLITE_CONSTRAINT_FOREIGNKEY`, and for `A7_defer_copy_aside`: `migration
+applied`, `user_version 3`, `id:notnull=1`, `households rows identical: true
+memberships identical: true`, `fk violations: 0 integrity: ok`, and three NULL
+    inserts refused with `NOT NULL constraint failed: households.id`. B stays
+    for two measured reasons: `optiona2.mts` ran A7 over a v2 directory already
+    holding a NULL-id household and got `REFUSED SQLITE_CONSTRAINT_NOTNULL … |
+user_version 2`, so `Directory.open` would throw on such a file until it was
+    mended by hand, where B opens it (`upgrade.mts`: `Directory.open: ok`,
+    `user_version 3 records identical NULL-id rows remaining: 2`); and B rewrites
+    no table on a live append-only file. The cost of B: the column stays declared
+    nullable, and a later rebuild of the table or a `DROP TRIGGER` loses the
+    refusal. The "Why not A" paragraph above and migration 3's header comment now
+    say this. **`difficulty: standard`**, set by the owner in this round, as the
+    2026-10-13 entry asked for option B.
+  - **F3, "Fix here"**, chosen from "Fix here / File a ticket / Leave recorded".
+    `addHousehold` now refuses an id that is not a string with the same
+    `BAD_REQUEST` sentence (the ledger's `refuse`, which throws the core code)
+    before `.trim()`. Reproduced first, `node --import tsx f3.mts` (build
+    scratch): `null id: TypeError code=none Cannot read properties of null
+(reading 'trim')`, the same for `undefined` and `7`; after: `null id: AppError
+code=BAD_REQUEST … null is not.`. Test, at the end of `directory.test.ts`:
+    "the class refuses an id that is not a string as BAD_REQUEST, before the
+    schema", for `null`, `undefined` and `7`. Red with the guard line deleted:
+    `1 failed | 18 passed (19)`, `expected TypeError: Cannot read properties of
+null… to be an instance of AppError`; restored from `f821a478`, `19 passed
+(19)`. A `null` name still reaches `.trim()` as a `TypeError` (same script:
+    `null name: TypeError`); not changed, as the decision named the id.
+  - **F4, folded in.** Migration 3's header says the refusal holds from that
+    migration on: a trigger does not read the rows already there, so a household
+    stored with no id before it stays (`upgrade.mts` above). Comment only, so no
+    test pins it.
