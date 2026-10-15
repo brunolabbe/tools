@@ -258,3 +258,125 @@ directly. Its `-i` is the engine's own loopback URL
 (`http://127.0.0.1:<port>/<hex>`), and the engine relays to the origin.
 
 Stopped here, before step 3, as dispatched.
+
+### 2026-10-15 — the owner's answer; the boundary cut on Windows; what a detection rule would see (Opus 5.5, builder)
+
+**The owner's answer, relayed by the orchestrator on 2026-10-15.** The question
+was "What next?", with four options:
+
+- Boundary case + Win probe
+- Boundary case, no probe
+- Test defect: pin the cut
+- Park it
+
+The owner chose **"Boundary case + Win probe"**, which was put to them as: take
+the sample-boundary cut as step 3's measured condition; first, a roughly
+10-minute Windows probe confirms that ffmpeg-static behaves the same way; then
+the builder brings the detection rule (an output-time threshold, and the risk of
+false failures) as options with numbers. No source changes until the owner
+chooses.
+
+**How it was measured.** One script, `detect.mts`, ran on both platforms. On
+Windows it ran in probe PR #492 (head `fd58776c`, now closed, its branch
+deleted). It does two things:
+
+- **Boundary cuts.** It cuts fresh copies of dl-103's large fast-start fixture
+  at every sample start and at random positions, and serves each cut the way
+  the test's 60% `answer` does. The sample starts come from the moov's own
+  `stco`/`stsc`/`stsz` tables, because ffmpeg-static ships no ffprobe.
+- **Whole sources.** It serves every progressive fixture the engine's suites
+  generate, uncut, with the variant declaring the container's own duration.
+
+For each run it records three things:
+
+- whether ffmpeg logged `partial file`;
+- how `done` ended;
+- `done`'s `durationSec`, which is ffmpeg's last `out_time` whenever a progress
+  block arrived.
+
+The gap is the declared duration minus `out_time`.
+
+**On Windows, a boundary cut ends `done` the same way it does on Linux.** The
+run was 38666579367, job 116199801215, on ffmpeg 6.1.1-essentials_build-www.gyan.dev
+(ffmpeg-static, `FFMPEG_PATH` unset), with two fixture copies and 30 random cuts
+each:
+
+```
+== outcomes ==
+  boundary DOWNLOAD_FAILED partial: 4
+  boundary done no-partial: 544
+  random DOWNLOAD_FAILED partial: 60
+  whole done no-partial: 36
+```
+
+On Linux (ffmpeg 6.1.1-3ubuntu5, three copies, 40 random cuts each) the result
+is the same:
+
+```
+  boundary DOWNLOAD_FAILED partial: 5
+  boundary done no-partial: 816
+  boundary refused DOWNLOAD_FAILED partial: 1
+  random DOWNLOAD_FAILED partial: 120
+  whole done no-partial: 54
+```
+
+The boundary cuts that failed are the two earliest of each copy, inside the
+first 2.3% of the file, where ffmpeg still logged `partial file`. Every other
+sample-boundary cut ended `done` with no `partial file`, on both platforms.
+Every random cut was `DOWNLOAD_FAILED`.
+
+**The gap, in seconds.** The two platforms agree to the millisecond:
+
+```
+                        boundary cuts ended done                       whole sources
+Windows  n=544 min=0.029 p5=0.215 median=2.026 max=4.000    n=36 min=0.006 median=0.011 max=0.067
+Linux    n=816 min=0.029 p5=0.215 median=2.026 max=4.000    n=54 min=0.006 median=0.011 max=0.067
+```
+
+**Every whole source, on both platforms.** The values were identical on every
+copy:
+
+| source           | declared (s) | out_time (s) | gap (s) |
+| ---------------- | ------------ | ------------ | ------- |
+| prog4 a/v        | 4.000        | 3.994        | 0.006   |
+| prog5 a/v        | 5.000        | 4.992        | 0.008   |
+| prog9 a/v        | 9.000        | 8.986        | 0.014   |
+| prog4/5/9 audio  | as a/v       | as a/v       | as a/v  |
+| prog4/5/9 video  | 4, 5, 9      | 3.933 ...    | 0.067   |
+| large 4 s 2 Mb/s | 4.000        | 3.994        | 0.006   |
+| gop6 12 s        | 12.000       | 11.981       | 0.019   |
+| rate 7 s 1 Mb/s  | 7.000        | 6.989        | 0.011   |
+| webm (Windows)   | 6.010        | 6.001        | 0.009   |
+
+The largest gap, 0.067 s, is one 15 fps frame on the video-only files: there,
+`out_time` is the last frame's start, not its end.
+
+**What a threshold T would catch and falsely fail.** "Fail a `done` whose gap
+exceeds T", on both platforms:
+
+| T              | boundary cuts caught, Windows | Linux     | whole sources failed |
+| -------------- | ----------------------------- | --------- | -------------------- |
+| 0.05 s         | 540 / 544                     | 810 / 816 | 6/36 and 9/54        |
+| 0.1 s          | 532 / 544                     | 798 / 816 | 0 and 0              |
+| 0.25 s         | 512 / 544                     | 768 / 816 | 0 and 0              |
+| 0.5 s          | 478 / 544                     | 717 / 816 | 0 and 0              |
+| 1% of declared | 542 / 544                     | 813 / 816 | 4/36 and 6/54        |
+| 2% of declared | 536 / 544                     | 804 / 816 | 0 and 0              |
+
+The cuts any threshold misses are the last few samples of the file. A cut at
+the final sample start leaves a gap of 0.029 s. Cuts at 99.1%, 98.2%, 97.3% and
+96.4% of the file leave gaps of 0.053 to 0.080 s, 0.099 to 0.120 s, 0.122 to
+0.160 s and 0.169 to 0.200 s respectively.
+
+**What this does not measure.**
+
+- Real-world sources: low or variable frame rates, edit lists, a declared
+  duration longer than the tracks the engine maps (`-map 0:v:0? -map 0:a:0?`),
+  and resolver-supplied durations rounded to whole seconds. Each could widen
+  the whole-source gap past these fixtures'.
+- HLS and DASH, which a rule for progressive sources would not cover.
+- Whether the engine reads the reference duration itself. Today it parses
+  ffmpeg's `Duration` line only when the variant carries no duration
+  (`learnedDurationSec`), and the variant's duration is the resolver's.
+
+The detection rule is open, with the owner. No source or test was changed.
