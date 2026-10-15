@@ -202,3 +202,44 @@ button by its accessible name and reports `labelClicked`.
 Not measured: whether any other test depends on `embed-inner.html`'s button
 being matched by the label path (a grep over `tools/downloader` finds the fixture
 named only by `box-xo-embed.html`, the test, and dl-100's ticket).
+
+**2026-10-15 — built (builder Sonnet 5.5), branch `dl-123-play-press` off `origin/main` at `8e49523c`.**
+Took Build 1 and added Build 2's second embed, because Done when 2 asks for
+plant B alone to fail some test and an icon-only fixture alone would leave no
+test pressing the label path in a cross-site frame.
+
+- `embed-inner.html`: the button is now `<button id="play">&#9654;</button>`, a
+  glyph with no word, `aria-label` or `title`, so `PLAY_TEXT` cannot match it.
+  The existing test's title now says what it depends on.
+- New `embed-inner-label.html` (the old text button, `id="go"`, no attribute
+  `isPlayPress` counts) and `box-xo-embed-label.html`, and a test after the
+  existing one pinning that the label path alone holds the box click back.
+- `resolvers/src` is untouched; the plants below were applied to `provoke.ts`
+  in place and restored from commit `e051772c`, and `git diff HEAD --stat --
+tools/downloader/resolvers/src` was empty after each.
+
+The brief had one thing wrong in the fixture: a glyph wrapped in a `<span>` is
+not enough. The embed's own `document` click listener reports any click whose
+target is not the button, and a click on a child `span` has the span as its
+target, so the press itself requested `/beacon/embed-surface-clicked` and the
+test failed on unmodified `main` (`expected [ '/box-xo-embed.html', …(6) ] to not
+include '/beacon/embed-surface-clicked'`). The glyph is a bare text node.
+
+Command for every row: `npx vitest run
+tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "a Play press
+in a frame from another site"`, which now selects two tests (121 in the file).
+
+| State                                            | icon test (isPlayPress only) | label test (label path only) | exit |
+| ------------------------------------------------ | ---------------------------- | ---------------------------- | ---- |
+| unmodified                                       | pass                         | pass                         | 0    |
+| plant A (`id === "play"` line deleted)           | **fail**, beacon asserted    | pass                         | 1    |
+| plant B (`labelClicked` dropped from the return) | pass                         | **fail**, beacon asserted    | 1    |
+| plant A + B                                      | fail                         | fail                         | 1    |
+
+Each failing row prints `AssertionError: expected [ '/box-xo-embed.html', …(5) ]
+to not include '/beacon/embed-surface-clicked'` (`/box-xo-embed-label.html` for
+the label test), `Tests 1 failed | 1 passed | 119 skipped (121)`, and A + B
+`Tests 2 failed | 119 skipped (121)`.
+
+Not folded in: nothing else was free. dl-115 edits `quietMs: 1200` sites in the
+same test file; this branch touches only the one title and appends one test.
