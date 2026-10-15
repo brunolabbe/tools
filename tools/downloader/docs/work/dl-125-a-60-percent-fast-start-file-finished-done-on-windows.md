@@ -47,7 +47,11 @@ in the same run both passed. The lg-8 pull request touches no downloader code.
 - It has been seen once, on Windows only so far. One occurrence is no rate, and
   Linux passing does not refute the Windows failure.
 
-**What is not known.**
+**What was not known when this was filed.** _Superseded on 2026-10-15; the
+paragraphs below are kept as filed. The Log entries of 2026-10-15 now give the
+rate: 0 of 90 isolated Windows runs, and 1 of 183 Windows CI legs. The
+Decision section names the measured condition the fix targets. Whether ffmpeg
+logged `partial file` on the filed run is still unknown._
 
 - Whether this is a **product defect** (the engine misses the verdict it should
   reach for a short source, under some ordering Windows produces) or a **test
@@ -57,7 +61,11 @@ in the same run both passed. The lg-8 pull request touches no downloader code.
   outcome and not ffmpeg's log, so the CI log cannot say.
 - The failure rate.
 
-**A reading, not a measurement.** The test's origin answers a `Range` request
+**A reading, not a measurement.** _Superseded on 2026-10-15; kept as filed. The
+reading has two corrections. ffmpeg reads the engine's own loopback URL, not
+the test's origin (the Log). And `done` can resolve on a short source with no
+`partial file` at all, when the stored file ends exactly at a sample boundary
+(the Decision)._ The test's origin answers a `Range` request
 with `content-range: bytes start-end/<stored length>` and a matching
 `content-length`, so it declares exactly the bytes it has. Reading
 `engine/src/stream.ts`, a short source of that kind has no early end, and the only
@@ -78,14 +86,28 @@ The measurements behind them are in the Log entries of 2026-10-15.
 - Test defect: pin the cut
 - Park it
 
-The owner chose **"Boundary case + Win probe"**. So the measured condition is a
-fast-start file stored so that it ends exactly at a sample's first byte. ffmpeg
-then logs no `partial file` and no early end, and exits 0, so `done` resolves
-with every byte. This happened on 816 of 822 such cuts on Linux and on 544 of
-548 on Windows with ffmpeg-static. The fixture's size changes on every run, so
-the test's 60% cut lands on a boundary now and then. That is a product defect,
-not test timing: the product cannot tell such a source is short from anything
-ffmpeg says.
+The owner chose **"Boundary case + Win probe"**: take the sample-boundary cut as
+step 3's measured condition.
+
+**What the fix targets is that measured condition.** A fast-start file is stored
+so that it ends exactly at a sample's first byte. ffmpeg then logs no
+`partial file` and no early end, and exits 0, so `done` resolves with every
+byte. Measured: every cut past the first two of a fixture copy ended this way,
+816 of 816 on Linux and 544 of 544 on Windows with ffmpeg-static. The first two
+cuts of each copy, inside the first 2.3% of the file, still log `partial file`.
+ffmpeg says nothing the engine could read, so on both platforms a short source
+of this kind breaks dl-103's rule today.
+
+**The filed run matches this condition's signature, but its mechanism is
+unmeasured.** Its signature is `done` equal to `streamed`, and 56 of 100 frames
+decoding. No failing run's ffmpeg log exists. The rate also argues against
+assuming the match:
+
+- The fixture changes size on every run, so the 60% cut does land on a
+  different byte each time.
+- But a uniformly placed cut hits a sample start about once in 3,600 runs. That
+  predicts at least one hit in 273 runs only about 7% of the time.
+- Measured: 0 of 90 isolated Windows runs failed, and 1 of 183 Windows CI legs.
 
 **The rule.** "Which rule?" had four options:
 
@@ -102,9 +124,41 @@ The owner chose **"Gap > 0.25 s fails"**. In full:
   ffmpeg's last `out_time` exceeds 0.25 s.
 - The engine reads the container's `Duration` line on every run.
 
-As measured, 0.25 s catches 94.1% of boundary cuts on both platforms. It
-falsely failed 0 of 90 whole-source runs, whose largest gap was 0.067 s. It
-accepts missing only a truncation that loses the last 0.25 s or less.
+**What 0.25 s catches and misses, as measured:**
+
+- It catches 94.1% of boundary cuts on both platforms.
+- It falsely failed none of 90 whole-source runs. Those were 18 distinct
+  synthetic fixtures, each run on 5 fixture copies (2 Windows, 3 Linux). Every
+  copy gave identical values, and the largest gap was 0.067 s.
+- Within its coverage, it misses only a truncation that loses the last 0.25 s
+  or less.
+
+**The rule does not cover:**
+
+- HLS and DASH;
+- a progressive run with no `Duration` line or no progress snapshot (the next
+  answer).
+
+**What the false-failure side was not measured against:**
+
+- real sources;
+- low or variable frame rates;
+- edit lists;
+- a declared duration longer than the tracks the engine maps
+  (`-map 0:v:0? -map 0:a:0?`);
+- resolver durations rounded to whole seconds.
+
+Each could put a whole source's gap past 0.25 s.
+
+**A run the rule cannot measure.** "What should such a run do?" (a progressive
+run with no `Duration` line, or no progress snapshot) had three options:
+
+- Stays `done`, as today
+- Fails DOWNLOAD_FAILED
+- Fall back to resolver duration
+
+The owner chose **"Stays `done`, as today"**. With no container duration or no
+`out_time`, the rule does not apply, and the run ends as it does now.
 
 **When to build.** "When should dl-125's fix be built?" had two options:
 
@@ -116,14 +170,19 @@ later batch.
 
 ## Build
 
-The cause and the rule are settled (Decision, above). Build the rule. Do not
-re-measure the cause.
+The rule and the condition it targets are settled (Decision, above). Build the
+rule. A Windows failure whose ffmpeg log shows `partial file` is a second
+mechanism, not this one: bring it back.
 
 1. **Read the container's duration every time.** Today
    `engine/src/stream.ts` parses ffmpeg's `Duration` line (`learnedDurationSec`,
-   through `durationFromInfoLine` in the `onInfoLine` handler) only when the
-   variant carries no duration. Keep that value's current role in progress
-   reporting unchanged. Also keep the container's own `Duration`, for
+   through `durationFromInfoLine` in the `onInfoLine` handler) only when
+   `mediaDurationSec` is null. That value is
+   `context.liveDurationSec ?? context.durationSec`, where `durationSec` is
+   `request.durationSec ?? variant.durationSec`. So a variant or request that
+   declares a duration, as the test's `large()` does with `durationSec: 4`,
+   means the line is never learned. Keep `learnedDurationSec`'s current role in
+   progress reporting unchanged. Also keep the container's own `Duration`, for
    progressive sources, whatever the variant says. The handler takes the first
    line that parses, which is the video input's. If a progressive variant with
    a separate `audioUrl` changes that, say so in the Log.
@@ -133,40 +192,69 @@ re-measure the cause.
    the container's duration minus the last progress snapshot's `out_time`
    exceeds 0.25 s, so the visitor sees a cut connection and not a complete
    response. Name the 0.25 s as a constant whose comment cites this ticket's
-   measurement. The answer does not cover a run with no `Duration` line or no
-   progress snapshot. If the build meets one, bring it back as a question;
-   do not choose.
+   measurement. A run with no container `Duration` or no progress snapshot
+   stays `done`, as today (the owner's answer in the Decision): the rule
+   applies only when both are present.
 3. **Test it on the measured condition.**
-   - **The failing case.** In `engine/test/stream.test.ts`, at the end of the
-     file, cut dl-103's large fast-start fixture exactly at a sample's first
-     byte, far enough from the end that the gap is well over 0.25 s (around 60%
-     gives about 1.6 s). Serve it the way the 60% case's `answer` does.
+   - **The failing case.**
+     - Add a new `describe` at the end of `engine/test/stream.test.ts`, with
+       its own origin. dl-103's `answer`, `blind` and `outcomeOf` are closed
+       over inside their own block, so only the top-level helpers (`exchange`,
+       `large`, `fixtureRoot`) are reachable.
+     - In it, cut dl-103's large fast-start fixture exactly at a sample's first
+       byte, far enough from the end that the gap is well over 0.25 s (around
+       60% gives about 1.6 s).
+     - The origin serves the stored prefix the way the 60% case's `answer`
+       does: `206` with `content-range: bytes start-end/<stored length>` and a
+       matching `content-length`.
+     - Read it through `exchange`, as the HLS and DASH cut tests do. Assert
+       that it ends `DOWNLOAD_FAILED` and that the visitor's response is
+       aborted (`received.aborted` is `true`), not completed.
+     - A test that checks only the `done` code cannot see where the verdict
+       sits. The gate measured this: it stays green with the verdict moved
+       after `await finished(body, …)`.
+     - Do not model the test on "a progressive body cut after the first byte
+       and never served again fails the stream". It stays green with the
+       `endedEarly` verdict deleted, because its `DOWNLOAD_FAILED` comes from
+       another path.
    - **Finding the sample starts.** The probe's moov parser does this:
      `sampleStarts` in `.github/probe-dl-125-2/detect.mts`, at probe PR #492's
      head `fd58776c` (`git fetch origin pull/492/head`). It reads
      `stco`/`co64`, `stsc` and `stsz`, and needs no ffprobe, which ffmpeg-static
      does not ship. Where it lives once it is real (a test helper beside
      `topLevelBoxes` in `helpers/media.ts`, or elsewhere) is your call.
-   - **Before the fix.** This case must fail on every run, because the boundary
-     cut ended `done` on every such run measured. Record the count from a loop
-     of it in the Log.
-   - **Controls.** A cut at the final sample start (a gap of about 0.029 s)
-     still ends `done`, so the accepted miss is pinned from the other side. The
-     existing whole-source cases still end `done`.
+   - **Before the fix.** This case must fail on every run, because every cut
+     past the first two of a fixture copy ended `done` (816 of 816 on Linux,
+     544 of 544 on Windows). Each vitest process makes a fresh fixture, so
+     loop it in at least 25 fresh processes, the filing's own loop count. Log
+     the count as failures over runs.
+   - **Controls**, each ending `done` before and after the fix:
+     - A cut at the final sample start (a gap of about 0.029 s), so the
+       accepted miss is pinned from the other side.
+     - A stand-in ffmpeg that writes output and exits 0 with no `Duration`
+       line and no progress block. Make it the way dl-103's `standIn103`
+       does. That helper is closed over inside its own block too, so copy it
+       or lift it to the top level.
+     - A second stand-in that prints a `Duration` line but no progress block.
+     - The stand-ins are Linux-only, skipped on win32 like their dl-103
+       siblings, and serve the owner's "stays `done`" answer.
 4. Keep the dl-103 rule as the owner stated it: a short source is
    `DOWNLOAD_FAILED`, never `done`. Its 5% and 60% cases keep their assertions.
 
 ## Done when
 
-- The Log records the cause and the measurements behind it. Done: the Log
-  entries of 2026-10-15 and the Decision above.
+- The Log records the measured condition the fix targets, and says the filed
+  run's mechanism is unmeasured. Done: the Log entries of 2026-10-15 and the
+  Decision above.
 - A progressive run that exits 0 with no `partial file`, and whose container
   duration exceeds its last `out_time` by more than 0.25 s, ends
-  `DOWNLOAD_FAILED` before `body.end()`.
-- The exact-sample-start cut fails on every run before the fix, with the count
-  in the Log, and passes after.
-- The final-sample-start control and the existing whole-source cases end
-  `done`, before and after.
+  `DOWNLOAD_FAILED`, and the visitor's response is aborted, not completed
+  (`received.aborted` through `exchange`).
+- The exact-sample-start cut fails in every one of at least 25 fresh-process
+  runs before the fix, logged as failures over runs, and passes after.
+- The final-sample-start control and both no-`Duration`/no-snapshot stand-ins
+  end `done`, before and after. The rest of the downloader project's existing
+  suite passes unchanged.
 - On the pull request's own Windows leg, the new test and the dl-103 60% case
   both pass.
 - `npm run check` and the downloader project's tests pass.
@@ -254,8 +342,11 @@ which is dl-121's test.
 - 186 Windows legs ran: 141 `success` and 45 `failure`.
 - 183 of those heads carry `df941568`. The other 3 could not be checked.
 - Every failed leg's `--log-failed` output was grepped for the 60% case. It
-  appears in one: run 38355111789, the run this ticket was filed from. The
-  other 44 failures are other tests, mostly dl-98's `parallel-ranges.test.ts`.
+  has a `FAIL` line in one: run 38355111789, the run this ticket was filed
+  from. (_Corrected after gate 1:_ the case's name also appears in run
+  38165406514, as a passing line, `✓ a fast-start file stored at 60% of itself
+is DOWNLOAD_FAILED 343ms`.) The other 44 failures are other tests, mostly
+  dl-98's `parallel-ranges.test.ts`.
 
 Two limits apply. `gh run list` shows only the latest attempt of each run, so an
 earlier attempt that was re-run is not counted. A leg that concluded `success`
@@ -289,7 +380,10 @@ different byte, and in a different place relative to the samples, every run.
 
 **A cut that lands on a sample boundary gives the failing outcome on Linux.** I
 ran a scratch script, not committed, against the built engine (`dist`), with
-ffmpeg 6.1.1-3ubuntu5. It served a stored prefix exactly as the test's 60%
+ffmpeg 6.1.1-3ubuntu5. The script is `boundary.mjs` in the dispatch's scratch
+directory. _Corrected after gate 1:_ it, and `history.mjs` beside it, now take
+the repository tree as their first argument instead of hard-coding this
+worktree's path. It served a stored prefix exactly as the test's 60%
 `answer` does and kept the engine's `ffmpeg` debug lines:
 
 ```
@@ -431,8 +525,10 @@ exceeds T", on both platforms:
 
 The cuts any threshold misses are the last few samples of the file. A cut at
 the final sample start leaves a gap of 0.029 s. Cuts at 99.1%, 98.2%, 97.3% and
-96.4% of the file leave gaps of 0.053 to 0.080 s, 0.099 to 0.120 s, 0.122 to
-0.160 s and 0.169 to 0.200 s respectively.
+96.4% of the Windows fixtures leave gaps of 0.053 to 0.080 s, 0.099 to 0.120 s,
+0.122 to 0.160 s and 0.169 to 0.200 s respectively. On the Linux fixtures the
+same gaps fall at 98.9 to 99.1%, 97.9 to 98.0%, 96.7 to 97.0% and 95.7 to
+95.9%.
 
 **What this does not measure.**
 
@@ -470,3 +566,58 @@ What changed on the ticket:
 
 One case is outside the answer: a run with no `Duration` line or no progress
 snapshot. The Build says to bring it back as a question rather than choose.
+(_Answered the same day, below._)
+
+### 2026-10-15 — gate 1's findings applied (Opus 5.5, builder)
+
+Gate 1 (Sonnet 5.5, narrow) at `9417c837` returned CONCERNS with nine findings.
+It re-derived every logged number from the raw logs, and the Linux boundary
+reproduction re-ran identically. The owner answered the two open decisions,
+relayed by the orchestrator:
+
+- **F1, "How should the record read?"** The options were "Reword to what's
+  measured" and "Leave as written". The owner chose **"Reword to what's
+  measured"**.
+  - The Decision now says the boundary cut is the measured condition the fix
+    targets, and that the filed run matches its signature but its mechanism is
+    unmeasured.
+  - The Build now says a Windows failure whose ffmpeg log shows `partial file`
+    is a second mechanism, to be brought back.
+  - `Done when` 1 is reworded to match.
+- **F3, "What should such a run do?"** (a progressive run with no `Duration`
+  line, or no progress snapshot). The options were "Stays `done`, as today",
+  "Fails DOWNLOAD_FAILED" and "Fall back to resolver duration". The owner chose
+  **"Stays `done`, as today"**.
+  - It is recorded in the Decision and replaces Build 2's "bring it back".
+  - Two stand-in controls the next gate can grade are now in Build 3 and
+    `Done when` 4.
+
+The others were applied as the gate wrote them:
+
+- **F2.** `Done when` 2 now asserts `DOWNLOAD_FAILED` with the visitor's
+  response aborted (`received.aborted` through `exchange`). "Before
+  `body.end()`" stays as Build 2's placement. Build 3 says the "cut after the
+  first byte" test is not the model.
+- **F4.** "Every cut past the first two of a copy" (816 of 816, 544 of 544); a
+  floor of 25 fresh-process runs; "the rest of the downloader project's
+  existing suite".
+- **F5.** A new `describe` with its own origin.
+- **F6.** The `Duration` condition is now worded as the code has it:
+  `mediaDurationSec` null, which is `liveDurationSec ?? durationSec`. I checked
+  this against `stream.ts`: `const durationSec = request.durationSec ??
+variant.durationSec ?? null`.
+- **F7.** The superseded `## Why` paragraphs are marked, and the pull request
+  is retitled.
+- **F8.** The "not measured" list and the coverage limits are carried into the
+  Decision.
+- **F9.** Both wording points are corrected in place, each marked "Corrected
+  after gate 1". I reproduced the first one:
+  `gh run view 38165406514 --log-failed | grep "stored at 60%"` prints
+  `✓ a fast-start file stored at 60% of itself is DOWNLOAD_FAILED  343ms`.
+- **The gate's script defect.** `boundary.mjs`, `sweep.mjs` and `history.mjs`
+  now take the repository tree as their first argument. Re-run:
+  `node boundary.mjs <tree> <work dir>` gives `cut=620869 ->
+{"streamed":619685,"done":619685} | (no partial file, no early end)`, as
+  logged.
+
+`status` stays `ready`. No source or test was changed.
