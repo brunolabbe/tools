@@ -22,8 +22,12 @@ measured the phases with `onStage` timestamps:
 | Phase                                       | Time                  | Source                                                   |
 | ------------------------------------------- | --------------------- | -------------------------------------------------------- |
 | Page load, then a fixed sleep               | about 510 ms          | `LANDING_URL_SETTLE_MS = 500`, `browser.ts:115`          |
-| Two provocation passes with a sleep between | about 1000 ms         | 900 ms at `provoke.ts:1838`                              |
-| Quiet wait                                  | about 1200 to 1400 ms | `MIN_WAIT_MS = 1200` (`browser.ts:66`, passed at `:384`) |
+| Two provocation passes with a sleep between | about 1000 ms         | 900 ms at `provoke.ts:1893`                              |
+| Quiet wait                                  | about 1200 to 1400 ms | `MIN_WAIT_MS = 1200` (`browser.ts:66`, passed at `:394`) |
+
+`browser.ts` here is `tools/downloader/resolvers/src/resolvers/browser.ts` and
+`provoke.ts` is `tools/downloader/resolvers/src/browser/provoke.ts`; the line
+numbers are as of `8e49523c`, before dl-115 changed the first.
 
 **The quiet phase is held by `MIN_WAIT_MS`, not by `quietMs`.** The page's last
 request lands at least 900 ms before the quiet wait starts. The 71 tests that
@@ -52,7 +56,7 @@ covers players that mount late. Faking the clock was ruled out:
      beacon, nothing pressed. There a shorter wait makes the test pass more
      easily, which weakens it. That trade is the reason for this rule.
    - Choose a value at or above the 200 ms tick of the wait loop, and measure
-     that the overlay revisit (`browser.ts:389–398`, first at least 1 s in)
+     that the overlay revisit (`browser.ts:399–408`, first at least 1 s in)
      still runs in every test that depends on it.
 3. **Remove the dead `quietMs: 1200`** from tests where it changes nothing. Or,
    if the value documents intent, replace it with the option that actually
@@ -79,7 +83,114 @@ covers players that mount late. Faking the clock was ruled out:
   each of about 40 or more stream-expecting tests across the browser files,
   about 35 s or more in total (inferred). Considered and not filed:
   - **Skipping `settle` once the probe has left the page.** `settle` runs
-    before the departure check (`browser.ts:402–425`) and departure discards
+    before the departure check (`browser.ts:411–435`) and departure discards
     every hit, so the skip would save up to 3 s per departed probe in
     production too. It is a production behaviour change, which the owner's
     "defaults unchanged" rule excludes.
+
+- 2026-10-15 — Built on branch `dl-115` from `8e49523c`. Code and tests are in
+  `cdf2e58e`.
+  - **What changed.** `BrowserResolverOptions.minWaitMs` (default
+    `MIN_WAIT_MS`, now exported) is passed to `waitForQuiet` where the constant
+    was. `api` and every production caller pass nothing new. The tests take the
+    pair `STREAM_WAITS = { quietMs: 200, minWaitMs: 200 }` from
+    `test/browser/helpers/stream-waits.ts`.
+  - **What the brief had wrong.**
+    - Its cites pointed at the wrong lines and a path that does not exist as
+      written: `provoke.ts:1838` is `:1893`, `browser.ts:384` is `:394`, the
+      overlay revisit `389–398` is `399–408`, and `settle` through the
+      departure check `402–425` is `411–435`. `:66`, `:115` and `:150` were
+      right. All are corrected above, with the full paths.
+    - Build 3 says to remove the dead `quietMs: 1200`. Removed, `quietMs`
+      falls back to its default of 2500 and the wait gets longer. Worse, once
+      `minWaitMs` is short, a `quietMs` of 1200 is what holds the wait (the last
+      request is 900 ms old when it starts, so it ends at the next 200 ms tick
+      after 1200 ms of silence), which gives back most of the saving. So the
+      stream tests take both values at 200, and the negative tests keep
+      `quietMs: 1200` as before.
+    - `minWaitMs` only governs once a playable hit is captured; until then
+      `emptyMinWaitMs` does. The overlay revisit runs only while nothing is
+      captured, so it rides on `emptyMinWaitMs`, which no test changed.
+  - **Tests given the shorter wait.** All of them assert a stream (a
+    `variants[0]` URL, or a count of variants) or, where noted, that a probe
+    carried on to the stream. By file, `test` blocks, with `test.each` tables
+    counted as one:
+    - `browser-resolver.test.ts` (49 blocks): the MSE, consent-banner HLS,
+      DASH, iframe, throwing-parser and real-parser tests; both dl-55 chooser
+      tests that start the real player; the fragment-only, script-redirect,
+      `replaceState`, redirect-then-fragment and `?t=` tests; the cross-origin
+      card; the age-gate close and Escape tests; in the dl-83 blocks the
+      Italian gate told to confirm, the three exit-link rows, the shadow-root
+      and decoy rows, the "never presses ... and finds the stream" and "presses
+      nothing ... and finds the stream" rows, the cookie-sheet and age-button
+      residue tests, and the gate-built-as-a-link rows that expect a stream;
+      the stage-narration test with the stream; the shadow-root player tests
+      (four); the untyped-playlist, "Sono d'accordo" and cookie-strip tests;
+      three tests of the dl-82 gate 2 block that expect a stream; the dl-80
+      delayed-player test; in the dl-81 block the first-wheel, header-nudge,
+      box-click, poster-grid delay rows, autostart, billboard and three
+      cross-origin frame tests; in the dl-100 block `ctl=autoplay` and the
+      cross-site Play press; the dl-78 ranged progressive file; and the dl-111
+      abandoned body.
+    - `consent-scope.test.ts`: the `r5`, `r7` and `r9` rows, the ones that
+      assert a stream.
+    - `chunk-streams.test.ts`: the gallery test. The file's `MIN_WAIT_MS` was a
+      comment; it now says "default `minWaitMs`", and the one probe that expects
+      a stream takes the pair.
+  - **No negative test among them.** Every builder that serves both kinds
+    (`confirming()` in both dl-83 blocks, `press()`, both `resolverWith()`,
+    `visit()`, `resolver()`) defaults to `{ quietMs: 1200 }`; only a call that
+    expects a stream passes `STREAM_WAITS`, in the dl-81 and dl-100 blocks by
+    way of `streamingWith()`. The `NO_MEDIA_FOUND`, `AGE_CONFIRMATION_REQUIRED`,
+    `DRM_PROTECTED`, `BOT_CHALLENGE`, `AUTH_REQUIRED` and "nothing pressed"
+    tests are untouched, as are `emptyMinWaitMs`, `NO_EMPTY_FLOOR_MS`, the late
+    modal's `quietMs: 6000` and the dl-105 floor test.
+  - **Pinned default.** A new block at the end of `browser-resolver.test.ts`
+    ("the quiet wait's minimum can be set, and defaults to 1200 ms"): the
+    exported `MIN_WAIT_MS` is 1200, a resolver given no `minWaitMs` holds the
+    wait at least that long and under 3200 ms, and `minWaitMs: 200` holds it
+    under 1200 ms. The wait is timed from the `network-quiet` stage to
+    `settle-requests` on `performance.now()`. Each of three mutations failed
+    exactly the test meant for it:
+    - the constant at 900: `expected 900 to be 1200` (the "default is 1200 ms"
+      test only);
+    - the constructor default at `600`: `expected 605.07 to be greater than or
+equal to 1200`;
+    - the option ignored: `expected 1223.23 to be less than 1200`.
+  - **Before and after**, `npx vitest run --project downloader --reporter=verbose
+tools/downloader/resolvers/test/browser/` (15 files, 758 tests before, 761
+    after), two pairs, each on the same machine in turn:
+
+    | Run                 | Wall    | Summed test time | `browser-resolver.test.ts` |
+    | ------------------- | ------- | ---------------- | -------------------------- |
+    | before, first pair  | 366.1 s | 438.6 s          | 363.9 s over 120 tests     |
+    | after, first pair   | 296.8 s | 371.2 s          | 289.6 s over 120 tests     |
+    | before, second pair | 360.5 s | 431.0 s          | 357.9 s over 120 tests     |
+    | after, second pair  | 300.4 s | 376.5 s          | 290.2 s over 120 tests     |
+
+    That is about 70 s of summed test time and 60 s of wall time, against the
+    35 s the brief estimated. A typical stream test fell from about 2.8 s to
+    about 1.8 s. `consent-scope.test.ts` fell 1 to 2 s (two rows) and
+    `chunk-streams.test.ts` did not move beyond noise (one row, 9.1 s against
+    9.6 s over its three tests). The first "before" run overlapped a
+    13 s `npm run format` and the first edits to two unrelated files, so the
+    second pair is the cleaner one. Single tests move by up to a second
+    between runs (`reports BOT_CHALLENGE`, which no edit touched, read 795 ms
+    lower in the first "after").
+
+  - **The overlay revisit still runs where it did.** A temporary line in
+    `revisit()` (not committed) wrote the page of each revisit to a file during
+    a full run of the directory, old test files against new. 51 revisits before,
+    52 after, on the same 43 pages; the extra one is a second visit to
+    `/age-gate-overlay.html?shadow` (two tests probe it, one told to confirm). No
+    test lost one.
+  - **`npm test -- --project downloader`, three in a row**, through the test
+    gate, on `cdf2e58e` (the later commits change a ticket file only): each
+    `Test Files 119 passed | 1 skipped (120)`, `Tests 2564 passed | 2 skipped
+(2566)`, exit 0, at 304.4 s, 302.6 s and 299.4 s. The Windows leg is not
+    measured here; the pull request's own run is the reading.
+  - **Folded in, or not.** Nothing else was free. The hand-written `1200` in
+    `consent-scope.test.ts`'s `emptyMinWaitMs` and the `quietMs: 1200` in the
+    negative tests are the same number as the default and say so by being
+    identical; making them reach for `MIN_WAIT_MS` would only widen the diff
+    that dl-117 is about to move.
