@@ -1,0 +1,50 @@
+# dl-125 probe 2. DO NOT MERGE: closed, and its branch deleted, once read.
+#
+# Runs .github/probe-dl-125-2/detect.mts on windows-latest against
+# ffmpeg-static. It does two things:
+#  - checks whether a fast-start file cut exactly at a sample boundary ends
+#    `done` there with no `partial file`, as it does on Linux;
+#  - records ffmpeg's out_time against the declared duration, for those cuts
+#    and for whole sources, so a detection rule's threshold can be read off.
+# Everything is printed to the job log. Two fixture copies and 30 random cuts
+# each fit in about ten minutes.
+name: probe dl-125-2
+
+on:
+  pull_request:
+
+concurrency:
+  group: probe-dl-125-2-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+jobs:
+  detect:
+    if: github.head_ref == 'dl-125-probe-2'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Which ffmpeg
+        run: |
+          ff="$(node -p "require('ffmpeg-static')")"
+          echo "ffmpeg-static: $ff"
+          "$ff" -hide_banner -version | head -1
+          echo "FFMPEG_PATH=${FFMPEG_PATH:-unset}"
+      - name: Boundary cuts and whole sources
+        run: |
+          npx tsx .github/probe-dl-125-2/detect.mts "$RUNNER_TEMP/dl125-2" 2 30
