@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Embedded player with a labelled Play button</title>
+  </head>
+  <body style="margin: 0; background: #222; height: 360px">
+    <button id="go">Play</button>
+    <script>
+      // The Play button asks for the manifest 1.5 s after the press, as a player
+      // that loads a script first does. A click anywhere else on the surface is
+      // reported, because a second click on a starting player can pause it.
+      var button = document.getElementById("go");
+      button.addEventListener("click", function () {
+        setTimeout(function () {
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .catch(function () {});
+        }, 1500);
+      });
+      document.addEventListener("click", function (event) {
+        if (event.target !== button) fetch("/beacon/embed-surface-clicked").catch(function () {});
+      });
+    </script>
+  </body>
+</html>
