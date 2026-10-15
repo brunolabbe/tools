@@ -87,3 +87,45 @@ rerun.
   eight-ticket entry, 15 of tools-9e and 6 of tools-4f). The owner chose to file
   it rather than record it as known; the review's pull request carries the
   filing.
+- 2026-10-15 — Built at 59e3909d (Sonnet 5.5). `scripts/preflight.mjs`:
+  `CHECK_ORDER` puts `mergeTree` first; `checkMergeTree` runs `git fetch origin`
+  after `listOpenHeads` and before the first compare, and for an oid still
+  missing asks `git fetch origin <oid>` (a branch force-updated between the
+  listing and the fetch is no tip, so the plain fetch skips it — measured: the
+  "force-updated" test below passes only with that second fetch). The "does not
+  have" failure is kept and now says "even after `git fetch origin`". A fetch
+  that fails is a `note` line, not a verdict. `preflight()` takes `only` and
+  `onResult`; `main` prints each check as it finishes, so the probe's lines are
+  out before the first suite starts. `--only` is a comma list, repeatable, and
+  an unknown name is `EXIT.setup`. `review-record.mjs` `pushedHint` reads
+  `preflight failed: <names> (exit N)` off the output and appends
+  `Rerun only what failed: node scripts/preflight.mjs --only <names> --base … --title …`.
+  Pages: `roles/builder.md` and `roles/fixer.md` preflight bullets and the exit-16
+  bullet, `reference/records.md` _Landing_.
+  - **Two choices the brief left open.** (1) A probe that returns a failure
+    (conflict, or an oid a fresh fetch lacks) halts the run with exit 16 and
+    adds a `halted` result naming `--only check,ciCommands,review,title`; a
+    probe that _throws_ (`gh` down) does not halt, because
+    "preflight isolates a throwing check to its own bit and still runs the
+    others" (repo-51's gate) pins that a `gh` outage costs its own verdict only.
+    The cost of halting on a conflict is that a builder with a real exit 16 must
+    run the printed command before reporting; `roles/builder.md` now says so.
+    (2) `--land` calls the probe "the same way" by construction — it runs the
+    same script, so it inherits the order and the fetch; the ticket's trap is
+    met by the hint above, and I did not move a probe in front of the push (that
+    would change `--land`'s sequence, which repo-94 fixed on purpose).
+  - **Proof.** `npx vitest run scripts/test/preflight.test.ts` → `Tests  101
+passed (101)` before the CLI test was added; `-t repo-104` → `Tests  11
+passed | 91 skipped (102)`; `scripts/test/review-record.test.ts` → `Tests
+67 passed (67)`. Mutations on the committed tree, each restored with
+    `git checkout 59e3909d -- scripts/preflight.mjs`: removing both fetches →
+    3 failed (moved head, force-updated head, failed-fetch note); `mergeTree`
+    last in `CHECK_ORDER` → 3 failed (order, halt, CLI exit 16); ignoring
+    `only` → 2 failed (`--only mergeTree` unit and CLI).
+  - **Measured, Done when 1.** `node scripts/preflight.mjs --only mergeTree
+--base origin/main --title "…"` on this repo: `real 0m0.719s`, five heads
+    compared, `preflight passed (only mergeTree; the other checks did not run)
+(exit 0)`. The CLI test with a planted `gh` listing a conflicting head
+    exits exactly 16 (a started `npm run check` in that fixture would add bit
+    1. with `== mergeTree ==` the first output. A real conflict on a downloader
+       branch was not staged: unmeasured, the fixture stands in for it.
