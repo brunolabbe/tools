@@ -179,7 +179,9 @@ export class Directory {
     const notAName = (): never => refuse("A household's name is 1 to 80 characters.");
     // Typed strings, but a caller past the request schema can pass null, which
     // reached `.trim()` as a TypeError rather than these refusals (lg-24).
-    if (typeof household.id !== "string") notAnId(String(household.id as unknown));
+    // The type, not the value: String() throws on Object.create(null) and on an
+    // object whose toString throws, and prints nothing useful for an array.
+    if (typeof household.id !== "string") notAnId(typeof (household.id as unknown));
     if (typeof household.name !== "string") notAName();
     const id = household.id.trim();
     const name = household.name.trim();

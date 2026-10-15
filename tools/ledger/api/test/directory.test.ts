@@ -480,31 +480,52 @@ describe("a household id is never NULL", () => {
 
   test("the class refuses an id or a name that is not a string as BAD_REQUEST, before the schema", () => {
     const directory = Directory.open(":memory:");
-    for (const id of [null, undefined, 7]) {
-      let refusal: unknown;
+    const refusalOf = (input: { id: unknown; name: unknown }): unknown => {
       try {
-        directory.addHousehold({ id: id as unknown as string, name: "Nobody", ...CHANGE });
+        directory.addHousehold({ ...input, ...CHANGE } as Parameters<Directory["addHousehold"]>[0]);
       } catch (error) {
-        refusal = error;
+        return error;
       }
-      expect(refusal, String(id)).toBeInstanceOf(AppError);
-      expect(refusal, String(id)).toMatchObject({
+      return undefined;
+    };
+    // Echoed as its type, never stringified: String() throws on the last two.
+    const ids: [label: string, value: unknown, shown: string][] = [
+      ["null", null, "object"],
+      ["undefined", undefined, "undefined"],
+      ["7", 7, "number"],
+      ["['home']", ["home"], "object"],
+      ["Object.create(null)", Object.create(null), "object"],
+      [
+        "an object whose toString throws",
+        {
+          toString() {
+            throw new Error("boom");
+          },
+        },
+        "object",
+      ],
+    ];
+    for (const [label, value, shown] of ids) {
+      const refusal = refusalOf({ id: value, name: "Nobody" });
+      expect(refusal, label).toBeInstanceOf(AppError);
+      expect(refusal, label).toMatchObject({
         code: "BAD_REQUEST",
-        message: expect.stringContaining(`; ${String(id)} is not.`),
+        message: expect.stringContaining(`; ${shown} is not.`),
       });
     }
     // The name beside it reached `.trim()` the same way.
-    let refusal: unknown;
-    try {
-      directory.addHousehold({ id: "home", name: null as unknown as string, ...CHANGE });
-    } catch (error) {
-      refusal = error;
+    for (const [label, value] of [
+      ["null", null],
+      ["undefined", undefined],
+      ["7", 7],
+    ] as const) {
+      const refusal = refusalOf({ id: "home", name: value });
+      expect(refusal, `${label} name`).toBeInstanceOf(AppError);
+      expect(refusal, `${label} name`).toMatchObject({
+        code: "BAD_REQUEST",
+        message: "A household's name is 1 to 80 characters.",
+      });
     }
-    expect(refusal, "null name").toBeInstanceOf(AppError);
-    expect(refusal, "null name").toMatchObject({
-      code: "BAD_REQUEST",
-      message: "A household's name is 1 to 80 characters.",
-    });
     expect(directory.households()).toEqual([]);
     directory.close();
   });
