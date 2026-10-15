@@ -116,6 +116,35 @@ covers players that mount late. Faking the clock was ruled out:
 - Invariants: no cross-tool import, no error code, no shell, no logged URL or header, no SSRF path and no progress report are touched. The contract is untouched (`BrowserResolverOptions` is in `resolvers`). `import type` is used for the new type import. The `check` job is green on `dd8b5c8e`.
 - NFR: security n/a · performance ✓ (about 70 s off the browser suites; production waits unchanged) · reliability ✓ (both new timing tests passed on the Windows leg) · maintainability: the comment above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-15 · `dd8b5c8e..4c5709cb` · Opus 5.5, depth medium
+
+| Gate 1 finding                                     | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **med** · what "negative test" means (Done when 2) | **fixed**. The owner's answer is recorded under Build 2. The `BASE_WAITS` comment and the Log's "No negative test among them" bullet now say what gate 1 measured: a test that expects no stream or an error keeps the base wait, and a stream test with a not-pressed or not-requested assertion may take the short one, for the reason gate 1 gave. Done when 2 is now proven as the owner reads it. One generalisation in the new wording is a new low (below) |
+| **low** · the default pinned from below only       | **fixed**. `browser-resolver.test.ts` › "a resolver given no minWaitMs hands the wait MIN_WAIT_MS, and holds it that long" now asserts that the value handed to `waitForQuiet` equals `MIN_WAIT_MS`. Re-run at `4c5709cb`: `options.minWaitMs ?? 2400` fails with "expected 2400 to be 1200". With the option ignored (`minWaitMs: MIN_WAIT_MS` passed to `waitForQuiet`), "a minWaitMs below it shortens the wait" fails with "expected 1200 to be 200"          |
+| **low** · the Log's count of 49                    | **fixed**. It now reads 51, which matches the gate's enumeration: 50 blocks inside `test` bodies, plus the dl-78 test, which takes the pair through its `probeFile` helper                                                                                                                                                                                                                                                                                        |
+
+- **The `vi.mock` of `waitForQuiet` is a true pass-through.**
+  - Reach: `vi.mock` is hoisted for the whole file. The `2400` mutant failing on the recorded value shows that the resolver's own import goes through the wrapper.
+  - Pass-through: the wrapper records `minWaitMs` and returns the original's promise unchanged. Every other export is spread from the actual module. `provoke.ts` has no `export let`, and nothing inside it calls `waitForQuiet`, so no binding or internal call bypasses or changes. `resolvers/browser.ts` is its only importer in `src`.
+  - No other test moved: `resolvers/test/browser` passed 761 of 761 in 15 files, exit 0, in 290.95 s, against 293.96 s at `dd8b5c8e`.
+- **med** · Done when 3 depends on it ("passes three times in a row") · open decision · **The pin block's timing bounds fail intermittently.** This round rewrote both of its probe tests and kept their wall-clock bounds.
+  - Gate measurement: one of ten sequential runs of `-t "defaults to 1200"` at `4c5709cb` failed "a minWaitMs below it shortens the wait" with `expected 1616.7663920000005 to be less than 1200`. The other nine passed, and the load average was about 1.
+  - Builder's measurement, from this round's Log: a 4055 ms wait in "hands the wait MIN_WAIT_MS". The Log notes this would also fail the kept `< MIN_WAIT_MS + 2000` bound.
+  - Probable cause, **not verified**: `quietWait` leaves `emptyMinWaitMs` at its 9 s default. On a run where `/mse.html`'s playable hit lands after the quiet wait has started, the wait is held until that hit arrives, and a revisit can run first.
+
+  The exact `handedMs` assertions now carry the pin, so the upper bounds add only flakiness. The lower bound `waitedMs >= MIN_WAIT_MS` cannot fail by timing, because the loop guarantees it. Options:
+  1. **(recommended)** Drop `waitedMs < MIN_WAIT_MS + 2000` and `waitedMs < MIN_WAIT_MS`. Keep the `handedMs` equalities and the lower bound; `wait-for-quiet.test.ts` already pins that the loop honours a small `minWaitMs`.
+  2. Keep the bounds, and time from the first playable hit rather than from `network-quiet`. This costs a hook into the collector, and the bound still measures the machine.
+
+- **low** · no `Done when` line depends on it · no live call site · The new `BASE_WAITS` comment and Build 2's recorded answer both say "a shorter wait cannot hide one". That is true of the press itself. It is not true of a request the page makes some time after the press: `embed-inner.html` fetches 1.5 s after its click, for example. No short-wait test asserts the absence of such a delayed request, since every beacon these tests check fires on the click. The text is false in the unsafe direction for a future fixture. A wording that holds: "every request these fixtures make on a press is made on the click itself".
+- **dropped** · the round's Log says its list missed the dl-78 test, but the list does name "the dl-78 ranged progressive file". This is a remark about the Log's own miscount, the count itself is now right, and nothing relies on the remark.
+- **findings** · this round's hunt returned 3: 2 carried, 1 dropped. All three gate 1 findings are fixed.
+- CI at `4c5709cb`: every check passed, `test (ubuntu-latest)` and `test (windows-latest, informational)` included (run 38669291491).
+- NFR: security n/a · performance ✓ (no change) · reliability: the med above · maintainability ✓.
+
 ## Log
 
 - 2026-10-12 — Filed from the suite-speed audit. The estimate is about 0.9 s on
