@@ -128,8 +128,11 @@ The owner chose **"Gap > 0.25 s fails"**. In full:
 
 - It catches 94.1% of boundary cuts on both platforms.
 - It falsely failed none of 90 whole-source runs. Those were 18 distinct
-  synthetic fixtures, each run on 5 fixture copies (2 Windows, 3 Linux). Every
-  copy gave identical values, and the largest gap was 0.067 s.
+  synthetic fixtures, each run on 5 fixture copies (2 Windows, 3 Linux). 17
+  of the 18 gave identical values across all five copies and both platforms;
+  `webm/source.webm` differs by 2 ms across platforms (declared, `out_time`,
+  gap: Windows 6.010 / 6.001 / 0.009, Linux 6.008 / 6.001 / 0.007). The largest
+  gap was 0.067 s.
 - Within its coverage, it misses only a truncation that loses the last 0.25 s
   or less.
 
@@ -167,6 +170,18 @@ The owner chose **"Stays `done`, as today"**. With no container duration or no
 
 The owner chose **"Record now, build later"**. This ticket stays `ready` for a
 later batch.
+
+**What the record says about the second mechanism.** Answered on 2026-10-15,
+after gate 2. "What should the record say?" had two options:
+
+- Add the capture to Build
+- Leave it
+
+The owner chose **"Add the capture to Build"**. The Build tells a reader to
+bring back a Windows failure whose ffmpeg log shows `partial file`, and no
+reader can see that log from CI today. Build 4 now has the two dl-103 cases'
+failure messages carry the engine's ffmpeg `partial file` and
+`Stream ends prematurely` lines.
 
 ## Build
 
@@ -236,10 +251,22 @@ mechanism, not this one: bring it back.
        does. That helper is closed over inside its own block too, so copy it
        or lift it to the top level.
      - A second stand-in that prints a `Duration` line but no progress block.
+       Print it tagged, `[info]   Duration: 00:00:04.00, start: 0.000000`, as
+       the engine's `level+info` makes ffmpeg do; an untagged line never
+       reaches `onInfoLine`.
+     - A third stand-in that prints no `Duration` line but writes a progress
+       snapshot (`out_time_us=1000000`, then `progress=end`) to descriptor 3,
+       with its output on stdout, and exits 0. Its `large()` variant declares 4. It must end `done`, before and after the fix: a rule that took the
+       variant's 4 s as the container's duration would see a gap of 3 s and
+       fail it.
      - The stand-ins are Linux-only, skipped on win32 like their dl-103
        siblings, and serve the owner's "stays `done`" answer.
 4. Keep the dl-103 rule as the owner stated it: a short source is
    `DOWNLOAD_FAILED`, never `done`. Its 5% and 60% cases keep their assertions.
+   Change their failure messages only: they carry the engine's ffmpeg
+   `partial file` and `Stream ends prematurely` lines, read through
+   `capturingLogger`, so a Windows recurrence shows which mechanism it is (the
+   owner's answer, in the Decision).
 
 ## Done when
 
@@ -252,9 +279,10 @@ mechanism, not this one: bring it back.
   (`received.aborted` through `exchange`).
 - The exact-sample-start cut fails in every one of at least 25 fresh-process
   runs before the fix, logged as failures over runs, and passes after.
-- The final-sample-start control and both no-`Duration`/no-snapshot stand-ins
-  end `done`, before and after. The rest of the downloader project's existing
-  suite passes unchanged.
+- The final-sample-start control and the three stand-ins (no `Duration` line
+  and no snapshot, a tagged `Duration` line and no snapshot, a snapshot and no
+  `Duration` line) end `done`, before and after. The rest of the downloader
+  project's existing suite passes unchanged.
 - On the pull request's own Windows leg, the new test and the dl-103 60% case
   both pass.
 - `npm run check` and the downloader project's tests pass.
@@ -380,10 +408,11 @@ different byte, and in a different place relative to the samples, every run.
 
 **A cut that lands on a sample boundary gives the failing outcome on Linux.** I
 ran a scratch script, not committed, against the built engine (`dist`), with
-ffmpeg 6.1.1-3ubuntu5. The script is `boundary.mjs` in the dispatch's scratch
-directory. _Corrected after gate 1:_ it, and `history.mjs` beside it, now take
-the repository tree as their first argument instead of hard-coding this
-worktree's path. It served a stored prefix exactly as the test's 60%
+ffmpeg 6.1.1-3ubuntu5. The script, `boundary.mjs`, is not kept; the outputs
+below stand without it. _Corrected after gate 1:_ it, and `history.mjs`
+beside it, took the repository tree as their first argument instead of
+hard-coding this worktree's path. It served a stored prefix exactly as the
+test's 60%
 `answer` does and kept the engine's `ffmpeg` debug lines:
 
 ```
@@ -494,7 +523,8 @@ Linux    n=816 min=0.029 p5=0.215 median=2.026 max=4.000    n=54 min=0.006 media
 ```
 
 **Every whole source, on both platforms.** The values were identical on every
-copy:
+copy and both platforms, except the webm's, which differs by 2 ms (_corrected
+after gate 2:_ Linux 6.008 / 6.001 / 0.007):
 
 | source           | declared (s) | out_time (s) | gap (s) |
 | ---------------- | ------------ | ------------ | ------- |
@@ -527,7 +557,7 @@ The cuts any threshold misses are the last few samples of the file. A cut at
 the final sample start leaves a gap of 0.029 s. Cuts at 99.1%, 98.2%, 97.3% and
 96.4% of the Windows fixtures leave gaps of 0.053 to 0.080 s, 0.099 to 0.120 s,
 0.122 to 0.160 s and 0.169 to 0.200 s respectively. On the Linux fixtures the
-same gaps fall at 98.9 to 99.1%, 97.9 to 98.0%, 96.7 to 97.0% and 95.7 to
+same gaps fall at 98.9 to 99.1%, 97.9 to 98.0%, 96.8 to 96.9% and 95.7 to
 95.9%.
 
 **What this does not measure.**
@@ -619,5 +649,29 @@ variant.durationSec ?? null`.
   `node boundary.mjs <tree> <work dir>` gives `cut=620869 ->
 {"streamed":619685,"done":619685} | (no partial file, no early end)`, as
   logged.
+
+`status` stays `ready`. No source or test was changed.
+
+### 2026-10-15 — gate 2's findings applied; the records are on the thread (Sonnet 5.5, fixer)
+
+Gate 2 (Sonnet 5.5, narrow) at `270ec0e9` returned CONCERNS with four findings.
+The ticket stays `ready`, so no review record is committed here (`status.mjs`
+fails one on a `ready` ticket). Gate 1's and gate 2's full reports are on pull
+request #490's thread, one comment each.
+
+- **F10.** Build 3's second stand-in prints its `Duration` line tagged
+  `[info]`, as the gate wrote it.
+- **F11.** Build 3 has a third stand-in: no `Duration` line, a progress
+  snapshot, output on stdout, exit 0, the `large()` variant declaring 4.
+  `Done when` 4 names the three stand-ins.
+- **F12.** The owner chose "Add the capture to Build" for "What should the
+  record say?" (options: "Add the capture to Build", "Leave it"). It is in the
+  Decision, and Build 4 has the two dl-103 cases' failure messages carry the
+  engine's ffmpeg `partial file` and `Stream ends prematurely` lines.
+- **F13.** (a) The Decision names `webm/source.webm`'s 2 ms difference across
+  platforms; the whole-source paragraph of the 2026-10-15 Log carries the same
+  correction, marked, because it made the same claim. (b) The Linux band is
+  "96.8 to 96.9%". (c) The `boundary.mjs` sentence no longer sends the reader to
+  a scratch path.
 
 `status` stays `ready`. No source or test was changed.
