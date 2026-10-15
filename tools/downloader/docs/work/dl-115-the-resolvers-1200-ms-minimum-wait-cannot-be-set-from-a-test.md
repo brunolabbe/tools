@@ -55,6 +55,14 @@ covers players that mount late. Faking the clock was ruled out:
    - **Do not use it in negative tests:** `NO_MEDIA_FOUND`, `not.toContain` a
      beacon, nothing pressed. There a shorter wait makes the test pass more
      easily, which weakens it. That trade is the reason for this rule.
+     **Answered by the owner, 2026-10-15** (gate 1 asked "Which reading?";
+     options "Confirm build, reword" and "Literal: return the 16 blocks to the
+     base wait"; chosen: the first): a negative test is one that expects no
+     stream or an error. A test that expects a stream and also asserts that
+     something was not pressed or not requested may take the short wait. The
+     presses happen during provocation, which ends before the quiet wait, and the
+     overlay revisits stop at the first hit, so a shorter wait cannot hide one.
+     This is also what Done when 2 means by "negative".
    - Choose a value at or above the 200 ms tick of the wait loop, and measure
      that the overlay revisit (`browser.ts:399–408`, first at least 1 s in)
      still runs in every test that depends on it.
@@ -115,7 +123,7 @@ covers players that mount late. Faking the clock was ruled out:
     `variants[0]` URL, or a count of variants) or, where noted, that a probe
     carried on to the stream. By file, `test` blocks, with `test.each` tables
     counted as one:
-    - `browser-resolver.test.ts` (49 blocks): the MSE, consent-banner HLS,
+    - `browser-resolver.test.ts` (51 blocks): the MSE, consent-banner HLS,
       DASH, iframe, throwing-parser and real-parser tests; both dl-55 chooser
       tests that start the real player; the fragment-only, script-redirect,
       `replaceState`, redirect-then-fragment and `?t=` tests; the cross-origin
@@ -142,8 +150,13 @@ covers players that mount late. Faking the clock was ruled out:
     `visit()`, `resolver()`) defaults to `{ quietMs: 1200 }`; only a call that
     expects a stream passes `STREAM_WAITS`, in the dl-81 and dl-100 blocks by
     way of `streamingWith()`. The `NO_MEDIA_FOUND`, `AGE_CONFIRMATION_REQUIRED`,
-    `DRM_PROTECTED`, `BOT_CHALLENGE`, `AUTH_REQUIRED` and "nothing pressed"
-    tests are untouched, as are `emptyMinWaitMs`, `NO_EMPTY_FLOOR_MS`, the late
+    `DRM_PROTECTED`, `BOT_CHALLENGE` and `AUTH_REQUIRED` tests, and every test
+    that expects no stream, are untouched. A test that expects a stream and also
+    asserts that something was not pressed or not requested does take the short
+    wait (16 blocks by gate 1's count: the "never presses %s ... and finds the stream" and
+    "presses nothing on %s, and finds the stream" tables, the decoy, exit, card,
+    billboard and ad-frame tests); that reading is the owner's answer recorded
+    in the round 1 entry below. Also untouched: `emptyMinWaitMs`, `NO_EMPTY_FLOOR_MS`, the late
     modal's `quietMs: 6000` and the dl-105 floor test.
   - **Pinned default.** A new block at the end of `browser-resolver.test.ts`
     ("the quiet wait's minimum can be set, and defaults to 1200 ms"): the
@@ -194,3 +207,34 @@ tools/downloader/resolvers/test/browser/` (15 files, 758 tests before, 761
     negative tests are the same number as the default and say so by being
     identical; making them reach for `MIN_WAIT_MS` would only widen the diff
     that dl-117 is about to move.
+
+- 2026-10-15 — Round 1, after gate 1 (Opus 5.5, `dd8b5c8e`: CONCERNS).
+  - **Owner's answers, 2026-10-15.** Med, "Which reading?" of Build 2's
+    "negative tests", options "Confirm build, reword" and "Literal: return the
+    16 blocks to the base wait": **Confirm build, reword.** It is recorded at
+    Build 2 above. The reworded text is the `BASE_WAITS` comment in
+    `browser-resolver.test.ts` and the "No negative test among them" bullet of
+    the entry above. Lows, "Fold both in?", options "Fold both in", "Count only"
+    and "Neither": **Fold both in.**
+  - **Count.** 49 blocks was a miscount of my own list: it names 50 for
+    `browser-resolver.test.ts`, and the dl-78 progressive-file test takes the pair
+    through its `probeFile` helper, where the list did not look. That is 51, as
+    the gate counted; corrected above.
+  - **The default pin, tightened rather than retitled.** The test now reads what
+    the resolver hands `waitForQuiet`: `browser-resolver.test.ts` wraps
+    `waitForQuiet` in a pass-through `vi.mock` that records `minWaitMs`, and
+    "a resolver given no minWaitMs hands the wait MIN_WAIT_MS, and holds it that
+    long" asserts it is exactly `MIN_WAIT_MS` (and still that the wait is at
+    least that, under 3200 ms). "a minWaitMs below it shortens the wait" asserts
+    200 is handed and the wait is under 1200 ms. Exact equality was chosen over a
+    tighter timing bound because the bound is load-sensitive: I first tightened
+    the upper bound to `MIN_WAIT_MS + 600`, and the first run of five measured
+    `4055 ms` for the wait (cause not established; load average was 2.6 from other
+    sessions), failing it. The next four runs passed. The old `+ 2000` bound would
+    have failed on 4055 too.
+  - **Mutants, `npx vitest run ... -t "quiet wait's minimum"`.** The finding's
+    `options.minWaitMs ?? 2400` is now red, in "hands the wait MIN_WAIT_MS" only:
+    `AssertionError: expected 2400 ...` against 1200. Before the change it passed
+    all three. The option ignored (`this.#minWaitMs = MIN_WAIT_MS`) fails
+    "a minWaitMs below it shortens the wait" with `expected 1200 ...`. Both were
+    restored from `d98d8799`.
