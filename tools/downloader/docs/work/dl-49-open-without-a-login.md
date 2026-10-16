@@ -132,3 +132,55 @@ the allowlist is the only configuration in which its data model is coherent.
   the owner's step-5 dashboard visit; (b) keep it, inert while nothing is gated
   and ready if a login returns. **The owner chose (a).** Build 1 and step 5 above
   now say so. The script still never learns to delete.
+- 2026-10-16 — Builder, Build steps 1 to 3 only (branch `dl-49-public-script-docs`).
+  **Status stays `ready`: steps 4, 5 and 6 are the owner's and nothing in them was
+  attempted, and no request was made to `oludoi.com`.**
+  - Step 1: `TOOLS` gives the downloader `access: []`, so `--apply` creates neither
+    the login nor the `api/files/*` Bypass; the widget entry is untouched. The
+    header and the `applyOrder` comment were reworded where they named the
+    downloader's Bypass or an open downloader as the reason for the ordering. New
+    and changed tests, in `scripts/test/cloudflare-setup.test.ts`: _a live
+    downloader application is neither adopted nor proposed again_, _the downloader
+    has no Access application at all, and nothing bypasses_, _the planner's and the
+    ledger's applications are unchanged_ (whole objects); and, at the end of
+    `scripts/test/cloudflare-turnstile.test.ts`, which already holds the fake
+    account, _applications already live are not written again, and no downloader
+    login is named_ and _--apply on an empty account creates the planner's and the
+    ledger's applications and no downloader one_. Watched failing first: with the
+    old two entries put back in `TOOLS`, 5 of the 34 tests in those two files fail.
+  - Step 2: `docs/02-DEPLOYMENT.md`. Step 2 is retitled "Decide who may reach each
+    tool" and its downloader subsection is "The downloader: with a login or
+    without one": what stands in for a login (dl-50 to dl-54, each linked), that
+    the human check is off until both keys are in `.env`, that a host without
+    them still needs Access (the application and the Bypass by hand, since the
+    script no longer makes them), and that a login already live is removed on the
+    dashboard. "When you want it genuinely public" keeps its heading, so the
+    anchor holds, and now says the downloader is the case that met its
+    precondition. Verifying, the terms-page paragraph and the expiring-session
+    note are conditional on a host that kept the login. Also touched, because each
+    stated the old arrangement: the root `README.md` deploy paragraph and
+    `tools/downloader/README.md`'s deploy paragraph.
+  - Step 3: `SECURITY.md` names `downloader.oludoi.com` as the one public instance,
+    says the planner and the ledger have none, and sends reports about it through
+    the same private channel. Its "Running it exposed and unauthenticated" bullet
+    now says the public instance's missing login is not a finding and a way past
+    its replacement is.
+  - **The brief was wrong about two things.** It says to rewrite "step 4" of
+    `02-DEPLOYMENT.md`; the login is step 2 (step 4 is "Bring it up"). And the
+    sentence it quotes, "is unsafe without it", is not on the page; the text was
+    "no tool here is safe without it".
+  - **Left for the owner:** Build 4 (Turnstile keys in the host `.env`, then
+    `curl /api/config`), Build 5 (delete the downloader's Access application **and
+    the live `api/files/*` Bypass application**, per the answer above), Build 6
+    (Web Analytics), and the Done when lines they carry: both `/api/config` and
+    `POST /api/probe` curls, `/api/health` answering JSON, the planner's `302`, the
+    live plan-mode run, and the beacon and CSP check in a browser. The new text in
+    the docs and `SECURITY.md` describes the state after step 5, so it reads ahead
+    of the live host until then.
+  - **Not folded in:** the plan prints nothing about a leftover downloader
+    application still live on a host. A one-line `NOTE` would be small but is not
+    specified, and it would be the first thing in this script to speak about an
+    object it does not manage; step 5 and the docs already name the deletion.
+    The comments in `compose.downloader.prod.yaml` and `.env.example` that call
+    the check-off state "right behind a login" are still true of a host that keeps
+    one, so they were left alone.

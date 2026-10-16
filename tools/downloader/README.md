@@ -96,9 +96,10 @@ and the loopback bind is there for the same reason as above.
 Beside the other tools, on one host behind one Cloudflare Tunnel — the
 [root README](../../README.md#deploying-a-set-of-tools) for the shape, and
 [docs/02-DEPLOYMENT.md](../../docs/02-DEPLOYMENT.md) for the walkthrough and
-[its downloader section](../../docs/02-DEPLOYMENT.md#the-downloader). Its login
-carries the one exception on that page — a Bypass on `/api/files/*`, so download
-links stay shareable — and it is an exception the planner's must not copy.
+[its downloader section](../../docs/02-DEPLOYMENT.md#the-downloader). The
+project's own instance runs with no login, on the safeguards the app carries
+itself, and that page says what a host that lacks them needs
+([with a login or without one](../../docs/02-DEPLOYMENT.md#the-downloader-with-a-login-or-without-one)).
 
 ### From source
 

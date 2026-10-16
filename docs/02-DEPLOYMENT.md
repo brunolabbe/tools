@@ -1,8 +1,11 @@
 # Deployment — the tools on a home host
 
 How to put any set of this repo's tools on subdomains — `downloader.example.com`,
-`planner.example.com`, `ledger.example.com` — from one machine sitting behind a domestic router, with
-authentication in front of each.
+`planner.example.com`, `ledger.example.com` — from one machine sitting behind a domestic router.
+The planner and the ledger sit behind a login. The downloader can too, but the
+project's own instance runs it without one, on safeguards the app carries itself
+([step 2](#2--decide-who-may-reach-each-tool) says which, and what a host that
+lacks them needs).
 
 The container half is a set of compose fragments merged on the host —
 [`compose.prod.yaml`](../compose.prod.yaml) for the tunnel and the network, plus
@@ -227,7 +230,8 @@ CLOUDFLARE_API_TOKEN=… node scripts/cloudflare-setup.mjs \
   --ledger-email <the second person's address>
 ```
 
-`--email` is the one address every tool's Allow policy admits. `--ledger-email`
+`--email` is the one address the planner's and the ledger's Allow policies admit
+(the downloader gets no policy from the script, since dl-49). `--ledger-email`
 is a second address the ledger's policy admits, and only the ledger's — see
 [its section of step 2](#the-ledgers-every-households-addresses-and-still-no-bypass). The script
 refuses to create the ledger's application without it, and ignores it once the
@@ -243,6 +247,13 @@ host that runs one tool it therefore also creates the others' Access application
 and routes its hostname to a service that is not there, which answers with a
 login and then an error. Harmless, and untidy; a one-tool host that minds does
 steps 2 and 3 by hand instead.
+
+**It creates no Access application for the downloader.** A host that keeps the
+downloader behind a login — see [step 2](#2--decide-who-may-reach-each-tool) for
+when it must — makes that application, and the download-links Bypass beside it,
+by hand in the dashboard. The script is additive and never deletes, so a host set
+up before dl-49 still has both until its operator removes them there; a run
+neither reports them nor touches them.
 
 The token wants exactly four permissions, and one of them is per-zone:
 
@@ -283,7 +294,10 @@ widget, _Rotate secret key_). Cloudflare's published OpenAPI document
 widget, and omits it from the list; **not measured against the live API**. The
 script never needs it, so a re-run prints no keys either way. The hosts that
 leave the two variables empty keep the check off, which is correct while the
-hostname is still behind Access.
+hostname is still behind Access. **A host that serves the downloader with no
+login must have both set**: with them empty the app still starts, and answers
+anyone on the internet with no human check at all
+([step 2](#2--decide-who-may-reach-each-tool)).
 
 **A token made on the dashboard's _Account API tokens_ page is account-owned**,
 which is now the default, and an account-owned token is not a user token: it
@@ -309,31 +323,31 @@ for as long as the remaining calls take, which on a host whose `cloudflared` is
 already connected is real exposure. This way round, the worst case is a policy
 guarding a name that does not resolve yet.
 
-**Read step 2 before running it either way.** The script encodes which tool gets
-a Bypass rule and which must never have one; the argument for that is below, and
-it is not a preference.
+**Read step 2 before running it either way.** The script encodes which tools get
+a login at all and which must never have a Bypass rule; the argument for that is
+below, and it is not a preference.
 
 ---
 
-## 2 — Put a login in front of each tool
+## 2 — Decide who may reach each tool
 
-**This is the step that matters, and no tool here is safe without it.** Neither
-has authentication of its own:
+**This is the step that matters.** The planner and the ledger are not safe
+without a login, because neither has authentication of its own. The downloader
+is the one tool that can go without, and only because it carries its own
+safeguards; a copy of it that lacks them is exactly as unsafe as the others.
 
-- **The downloader** — see the security posture in
-  [its architecture](../tools/downloader/docs/01-ARCHITECTURE.md). A reachable,
-  unauthenticated instance is a machine that will fetch any URL a stranger
-  names, open it in a real browser, and spend your disk and your bandwidth doing
-  it. That is not a hypothetical use of an open endpoint; it is the only use.
 - **The planner** has no owner model, so every visitor reads and edits everyone's
   plans — and once it runs a real model, every visitor spends your token budget.
   The detail is [below](#the-planners-no-bypass-rule-ever).
 - **The ledger** holds households' bank history, and the Access identity is the
   only identity it has. The detail is
   [below](#the-ledgers-every-households-addresses-and-still-no-bypass).
+- **The downloader** is the project's public instance, and [its own
+  section](#the-downloader-with-a-login-or-without-one) says what stands in for a
+  login and what a host that has not applied it needs.
 
-For each tool this host runs, **Access → Applications → Add an application →
-Self-hosted**:
+For the planner and the ledger, and for a downloader that keeps its login,
+**Access → Applications → Add an application → Self-hosted**, once per tool:
 
 | Field            | Value                                               |
 | ---------------- | --------------------------------------------------- |
@@ -353,15 +367,48 @@ the tunnel, so they never reach the host.
 What each tool needs on top of that one application differs, and the difference
 is the part of this page most worth reading slowly.
 
-### The downloader's: keep the download links shareable
+### The downloader: with a login or without one
 
-Access in front of everything would also gate `/api/files/:token`, which defeats
-the point of a link you hand to someone. It does not have to: that token _is_ the
-authorisation, 32 bytes from a CSPRNG, and
-[`jobs/tokens.ts`](../tools/downloader/api/src/jobs/tokens.ts) explains why it is
-strong enough to stand alone.
+**The project's own instance, `downloader.oludoi.com`, has no Access application
+and anyone may use it** (the owner's decision of 2026-09-13, dl-49). That is safe
+only because the app now answers, itself, the ways an anonymous visitor could
+spend the host. Each is a ticket you can read:
 
-So add a **second** application, identical except:
+- **A human check, before any probe runs**
+  ([dl-50](../tools/downloader/docs/work/dl-50-a-human-check-without-an-account.md)):
+  a Cloudflare Turnstile widget. It is **off until the host's `.env` carries both
+  `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`**, which
+  [`compose.downloader.prod.yaml`](../compose.downloader.prod.yaml) passes
+  through, and `scripts/cloudflare-setup.mjs --apply` creates the widget and
+  prints the two lines once. Check it before the login comes off:
+  `curl -sS https://downloader.example.com/api/config` answers a `siteKey`, not
+  `null`, and a `POST /api/probe` with no `humanCheckToken` answers `403`
+  `HUMAN_CHECK_FAILED`.
+- **No client can hold every slot**
+  ([dl-51](../tools/downloader/docs/work/dl-51-one-client-holds-every-job-slot.md)):
+  `MAX_JOBS_PER_CLIENT` and `MAX_PROBES_PER_CLIENT` per address, and a bounded
+  queue behind them.
+- **Limits sized for strangers**
+  ([dl-52](../tools/downloader/docs/work/dl-52-limits-for-anonymous-traffic.md)):
+  the per-minute rates and concurrency that `compose.downloader.prod.yaml` sets
+  ([the table](#tightening-it-past-one-user)), and the optional
+  [edge rate limit](#the-edge-rate-limit-on-api).
+- **Nothing kept**
+  ([dl-53](../tools/downloader/docs/work/dl-53-finished-files-and-the-tunnel.md)):
+  each file is streamed from ffmpeg to the visitor as it is produced, and the
+  link is good once, for fifteen minutes. That is also why `/api/files/*` needs
+  no Bypass rule on this host: there is no login for it to be a hole through.
+- **Terms, a takedown contact and a bounded log**
+  ([dl-54](../tools/downloader/docs/work/dl-54-terms-takedown-and-what-is-logged.md)):
+  [below](#terms-a-contact-and-what-is-logged).
+
+**A host that has not applied those still needs Access.** Without the human
+check an open downloader is a machine that will fetch any URL a stranger names,
+open it in a real browser, and spend your bandwidth doing it — see the security
+posture in [its architecture](../tools/downloader/docs/01-ARCHITECTURE.md). Such
+a host makes the application in the table above by hand (the setup script no
+longer does), and, if it wants download links to stay shareable, a **second**
+application, identical except:
 
 | Field | Value         |
 | ----- | ------------- |
@@ -369,8 +416,14 @@ So add a **second** application, identical except:
 
 with a single policy: action **Bypass**, include **Everyone**. Access matches the
 more specific path first, so the UI demands a login and a download link works for
-whoever opens it — once, within fifteen minutes, since dl-53 made each link
-start its own download rather than serve a stored file.
+whoever opens it. That token _is_ the authorisation, 32 bytes from a CSPRNG, and
+[`jobs/tokens.ts`](../tools/downloader/api/src/jobs/tokens.ts) explains why it is
+strong enough to stand alone.
+
+**Taking an existing login off is a dashboard action.** The setup script never
+deletes, so a host set up before dl-49 keeps the downloader's application and its
+`api/files/*` Bypass until you delete both under **Access → Applications**. Turn
+the human check on first, in the order above.
 
 ### The planner's: no Bypass rule, ever
 
@@ -454,11 +507,16 @@ the other tools too.
 
 ### When you want it genuinely public
 
-Widen a tool's application policy — or delete it — once that tool has its own
-authentication; for the planner, that also means an owner model, since today
-there is nobody for a login to keep apart. No compose fragment changes. Until
-then, this is the auth layer, and leaving it on costs you a login page you see
-once a week.
+Widen a tool's application policy — or delete it — only once that tool answers,
+itself, for what its login was keeping out. **The downloader is the one that
+does** ([its section of this step](#the-downloader-with-a-login-or-without-one)):
+the precondition this page used to set was that the app logs people in, and
+dl-49 replaced it with the thing that mattered, that an anonymous visitor
+cannot spend the host, which the human check and the per-client limits now
+settle. For the planner it means an owner model, since today there is nobody
+for a login to keep apart, and the ledger's is its own decision (repo-98). No
+compose fragment changes either way. Until then, the Access application is the
+auth layer, and leaving it on costs you a login page you see once a week.
 
 ## 3 — Route each tool's hostname
 
@@ -523,7 +581,7 @@ live.
 For each tool, from anywhere and then on the host:
 
 ```bash
-curl -sS https://downloader.example.com/api/health          # expect an Access login page
+curl -sS https://downloader.example.com/api/health          # expect JSON; an Access login page if you kept the login
 curl -sS http://127.0.0.1:8080/api/health | jq              # on the host: real JSON
 
 curl -sS https://planner.example.com/api/health             # expect an Access login page
@@ -534,8 +592,11 @@ curl -sS https://ledger.example.com/api/health              # expect an Access l
 curl -sS http://127.0.0.1:8100/api/health | jq              # on the host: real JSON
 ```
 
-A public request returning HTML rather than JSON is the good outcome — it means
-Access is enforcing. From a browser you get the login, then the UI.
+For the planner and the ledger, a public request returning HTML rather than JSON
+is the good outcome — it means Access is enforcing. From a browser you get the
+login, then the UI. The downloader without a login answers JSON, and what to look
+at instead is `curl -sS https://downloader.example.com/api/config`: a `siteKey`
+means the human check is on, `null` means it is not.
 
 Then use each tool once, end to end, because a health check proves less than it
 looks:
@@ -670,7 +731,9 @@ What follows applies to a host that merges `compose.downloader.prod.yaml`.
 
 ### Things that will bite you
 
-**An expiring Access session looks like a hung download.** When the session ends
+**On a host that keeps the downloader behind Access, an expiring session looks
+like a hung download.** (The project's own instance has no login, so it cannot
+happen there.) When the session ends
 mid-stream, the reconnecting `EventSource` is handed a login page, the client
 discards it as an invalid frame, and the UI stops updating. The job itself
 finishes normally on the server. A one-week session duration makes this rare;
@@ -732,13 +795,14 @@ retired without touching it. It is by hand because `scripts/cloudflare-setup.mjs
 would need a permission its token does not have (see `dl-52`). I have not run
 these steps; the menu names are as the dashboard documents them.
 
-**Until the login is gone, a rights holder cannot read the page.** `/terms.html`
-sits behind the same Access application as the UI, so a stranger who was sent
-the address meets a login first. The alias works regardless, since it is mail.
-The owner chose on 2026-10-03 to leave it so until `dl-49` removes the login. A
-Bypass application for the paths `terms.html` and `terms.css`, the way
-[the download links](#the-downloaders-keep-the-download-links-shareable) get one,
-would open it sooner; nothing here builds that.
+**With no login in front of the downloader, a rights holder can read the page.**
+On a host that keeps the downloader behind Access, `/terms.html` sits behind the
+same application as the UI, so a stranger who was sent the address meets a login
+first; the alias works regardless, since it is mail. The owner chose on
+2026-10-03 to leave it so until `dl-49` removed the login. A Bypass application
+for the paths `terms.html` and `terms.css`, the way
+[the download links](#the-downloader-with-a-login-or-without-one) once got one,
+would open it on such a host sooner; nothing here builds that.
 
 **What is kept, and when it goes**
 

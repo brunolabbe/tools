@@ -39,8 +39,9 @@ is a deliberate act, described in its README.
 ## Deploying a set of tools
 
 A host runs whichever tools it chooses, from released images at exact versions,
-behind one Cloudflare Tunnel — each tool on its own subdomain with a login in
-front, and no port opened on the router.
+behind one Cloudflare Tunnel — each tool on its own subdomain, the planner and
+the ledger with a login in front and the downloader on its own safeguards, and
+no port opened on the router.
 
 **The list of compose fragments a host merges is the only place it says which
 tools it runs** ([adr/004](./docs/adr/004-one-compose-fragment-per-tool.md)), and
