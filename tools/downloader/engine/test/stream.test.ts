@@ -2324,6 +2324,10 @@ describe("dl-108 round 1: the count the card is given", () => {
   });
 });
 
+/** dl-125's stand-ins: one progress block on descriptor 3, where `-progress pipe:3` sends it. */
+const progress125 = (outTimeUs: number): string =>
+  `require("node:fs").writeSync(3, "out_time_us=${outTimeUs}\\nprogress=end\\n");`;
+
 /**
  * dl-125. A fast-start file stored so that it ends exactly at a sample's first
  * byte makes ffmpeg log no `partial file` and no early end, and exit 0: every
@@ -2340,7 +2344,7 @@ describe("dl-125: a fast-start file stored to exactly a sample's first byte", ()
   let whole: Buffer;
   let starts: number[];
   /** What the origin has: a prefix of `whole`, which it serves as all there is. */
-  let stored = Buffer.alloc(0);
+  let stored: Buffer = Buffer.alloc(0);
   let shortOrigin: FixtureServer;
 
   beforeAll(async () => {
@@ -2449,9 +2453,6 @@ describe("dl-125: a fast-start file stored to exactly a sample's first byte", ()
 
   /** Tagged, as `level+info` makes ffmpeg write it; an untagged one never reaches `onInfoLine`. */
   const DURATION_4S = say(JSON.stringify("[info]   Duration: 00:00:04.00, start: 0.000000"));
-  /** One progress block on descriptor 3, where `-progress pipe:3` sends it. */
-  const progress = (outTimeUs: number): string =>
-    `require("node:fs").writeSync(3, "out_time_us=${outTimeUs}\\nprogress=end\\n");`;
 
   const standIns: readonly { name: string; statements: readonly string[]; code: string | null }[] =
     [
@@ -2469,19 +2470,19 @@ describe("dl-125: a fast-start file stored to exactly a sample's first byte", ()
         // The variant declares 4 s: a rule that took it for the container's
         // duration would see a gap of 3 s here.
         name: "a progress snapshot and no Duration line",
-        statements: [OUT, progress(1_000_000), later(200, "process.exit(0);")],
+        statements: [OUT, progress125(1_000_000), later(200, "process.exit(0);")],
         code: null,
       },
       // The owner's 0.25 s, pinned from both sides: the real cuts above sit at
       // about 1.6 s and 0.029 s, which a threshold anywhere between would pass.
       {
         name: "a Duration of 4 s and an out_time of 3.76 s, 0.24 s short",
-        statements: [DURATION_4S, OUT, progress(3_760_000), later(200, "process.exit(0);")],
+        statements: [DURATION_4S, OUT, progress125(3_760_000), later(200, "process.exit(0);")],
         code: null,
       },
       {
         name: "a Duration of 4 s and an out_time of 3.74 s, 0.26 s short",
-        statements: [DURATION_4S, OUT, progress(3_740_000), later(200, "process.exit(0);")],
+        statements: [DURATION_4S, OUT, progress125(3_740_000), later(200, "process.exit(0);")],
         code: "DOWNLOAD_FAILED",
       },
     ];
@@ -2490,20 +2491,20 @@ describe("dl-125: a fast-start file stored to exactly a sample's first byte", ()
     test.skipIf(process.platform === "win32")(
       `stand-in: ${standIn.name}, exit 0, ends ${standIn.code ?? "done"}`,
       async () => {
-        const media = await engineWith({ ffmpegPath: await standIn125(standIn.statements) }).stream({
-          jobId: "dl-125-stand-in",
-          variant: large(`${origin.origin}/large/faststart.mp4`),
-          requestContext: CONTEXT,
-        });
+        const media = await engineWith({ ffmpegPath: await standIn125(standIn.statements) }).stream(
+          {
+            jobId: "dl-125-stand-in",
+            variant: large(`${origin.origin}/large/faststart.mp4`),
+            requestContext: CONTEXT,
+          },
+        );
         media.body.resume();
         const ended = await media.done.then(
           (outcome) => ({ code: null, bytes: outcome.bytes }),
           (error: unknown) => ({ code: AppError.from(error).code, bytes: null }),
         );
         expect(ended).toEqual(
-          standIn.code === null
-            ? { code: null, bytes: 4096 }
-            : { code: standIn.code, bytes: null },
+          standIn.code === null ? { code: null, bytes: 4096 } : { code: standIn.code, bytes: null },
         );
       },
       30_000,

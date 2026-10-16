@@ -584,9 +584,9 @@ export function sampleStarts(file: Buffer): number[] {
       }));
       let sample = 0;
       for (let chunk = 1; chunk <= offsets.length && sample < count; chunk += 1) {
-        const run = runs.findLast((entry) => entry.firstChunk <= chunk);
+        const perChunk = runs.findLast((entry) => entry.firstChunk <= chunk)?.perChunk ?? 0;
         let at = offsets[chunk - 1] ?? 0;
-        for (let k = 0; k < (run?.perChunk ?? 0) && sample < count; k += 1) {
+        for (let k = 0; k < perChunk && sample < count; k += 1) {
           starts.push(at);
           at += sizeOf(sample);
           sample += 1;

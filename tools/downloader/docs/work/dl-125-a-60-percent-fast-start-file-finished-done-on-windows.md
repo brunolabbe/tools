@@ -675,3 +675,117 @@ request #490's thread, one comment each.
   a scratch path.
 
 `status` stays `ready`. No source or test was changed.
+
+### 2026-10-16 — built: the 0.25 s rule (Opus 5.5, builder)
+
+The owner selected dl-125 for the 2026-10-16 batch. That settles the 2026-10-15
+"Record now, build later". The Decision is unchanged.
+
+**The failing test came first, in commit `43eda60c`, before any source change.**
+It is a new `describe` at the end of `engine/test/stream.test.ts`, "dl-125: a
+fast-start file stored to exactly a sample's first byte".
+
+- It has its own origin, which answers as dl-103's 60% `answer` does.
+- It reads through `exchange`.
+- It asserts three things together: `done` is `DOWNLOAD_FAILED`, the visitor's
+  response is `aborted`, and ffmpeg logged no `partial file` and no early end.
+  The third is the measured condition, so a run that drifted onto the
+  `PARTIAL_FILE` path would fail the test rather than pass it on another
+  verdict.
+
+`sampleStarts` is now in `engine/test/helpers/media.ts`, at the end of the
+file. It was lifted from probe PR #492's `detect.mts` at `fd58776c`.
+
+Before the fix, 25 fresh `npx vitest run` processes ran
+`tools/downloader/engine/test/stream.test.ts -t "dl-125"`:
+
+```
+25 × a cut at the sample start nearest 60% fails DOWNLOAD_FAILED, the visitor's response cut
+25 × stand-in: a Duration of 4 s and an out_time of 3.74 s, 0.26 s short, exit 0, ends DOWNLOAD_FAILED
+25 ✓ control: a cut at the final sample start, about 0.029 s short, still completes
+25 ✓ stand-in: a Duration of 4 s and an out_time of 3.76 s, 0.24 s short, exit 0, ends done
+25 ✓ stand-in: a progress snapshot and no Duration line, exit 0, ends done
+25 ✓ stand-in: a tagged Duration line and no progress snapshot, exit 0, ends done
+25 ✓ stand-in: no Duration line and no progress snapshot, exit 0, ends done
+```
+
+So the boundary case failed 25 of 25 runs. Every failure read the same way,
+for example:
+
+```
+{"done":618944,"aborted":false,"ffmpeg":[],"evidence":{"cut":620152,"wholeBytes":1031564,"received":618944,"outTimeSec":2.36,"status":200}}
+```
+
+Across the 25 runs, `out_time` was 2.36 to 2.44 s against the container's 4 s.
+That is a gap of 1.56 to 1.64 s.
+
+**The fix is in commit `fb697690`, in `engine/src/stream.ts`.**
+
+- `containerDurationSec` takes the first `Duration` line that parses, on every
+  run. `learnedDurationSec` is now set from it only when `mediaDurationSec` is
+  null, so its role in progress reporting is unchanged.
+- The rule sits in `done`'s completion handler, after the `endedEarly` and
+  `partialAt` checks and before `body.end()`. It fails `DOWNLOAD_FAILED` when
+  the run is progressive, has both a `Duration` and a snapshot's `out_time`,
+  and the gap exceeds `SHORT_OF_DECLARED_SEC` (0.25). The constant's comment
+  cites this ticket's measurement.
+
+After the fix, the same loop gave 25 ✓ for each of the seven tests, in 25 of 25
+processes.
+
+**What the brief did not say.**
+
+- **A live capture is excluded** (`context.liveDurationSec === null`). Its `-t`
+  limit ends the output short of the container on purpose. Without the
+  exclusion, an existing test fails. "dl-96: no expected total where the
+  output is not the source copied > a live capture" streams `prog4` with
+  `liveDurationSec: 2`, and fails with "The source ended before the whole
+  video arrived." I measured that by removing the exclusion and restoring it
+  from the commit.
+- **Two more stand-ins pin the 0.25 s.** One has a gap of 0.24 s and ends
+  `done`. The other has a gap of 0.26 s and ends `DOWNLOAD_FAILED`. The real
+  cuts sit at about 1.6 s and 0.029 s, so any threshold between those would
+  pass them.
+- **A separate `audioUrl` (Build 1's question).** The video input is opened
+  first, so its `Duration` is the one taken. With `audioOnly` and a separate
+  audio rendition, only the audio input opens, so its `Duration` is taken.
+  Three existing tests stream a progressive variant with a separate
+  `audioUrl` from `pair5` and `prog4`. All three pass under the rule, in the
+  86 of 86 whole-file run below. That is these fixtures only; no real source
+  was tried.
+- **The reference can be forged by the source.** dl-96's gate F2 showed that
+  a metadata key holding a newline can forge a `  Duration:` line, and
+  ffmpeg prints metadata before the real `Duration`. A forged long duration
+  now fails that job `DOWNLOAD_FAILED`. Only the source's own author can do
+  that, to their own download, which a broken file would do anyway.
+  Recorded, not acted on.
+
+**Mutations the tests catch.** Each was applied to `stream.ts` and restored
+from `fb697690`.
+
+- **The verdict moved after `await finished(body, …)`.** The boundary test
+  fails, on `aborted` alone:
+  `{"done":"DOWNLOAD_FAILED","aborted":false,…}`.
+- **The rule reads `mediaDurationSec ?? containerDurationSec`.** The variant's
+  4 s is then taken for the container's. "stand-in: a progress snapshot and no
+  Duration line" fails, 1 failed of 7.
+
+**Build 4.** dl-103's 5% and 60% cases now pass their engine a
+`capturingLogger`. Their failure message carries the `partial file` and
+`Stream ends prematurely` lines. Their assertions are unchanged.
+
+**Runs.**
+
+```
+$ npx vitest run tools/downloader/engine/test/stream.test.ts
+Tests  86 passed (86)
+$ npm test -- --project downloader
+Test Files  119 passed | 1 skipped (120)
+Tests  2572 passed | 2 skipped (2574)
+```
+
+**Not measured here.** The pull request's Windows leg is the reading for the
+Windows `Done when` line; this entry was written before it ran. Real sources
+were not tried, nor any of the coverage limits the Decision lists.
+
+**Fold-in.** None. Nothing else already specified became free with this change.
