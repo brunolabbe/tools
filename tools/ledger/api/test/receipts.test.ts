@@ -861,7 +861,7 @@ function itemReader(...proposals: ReceiptProposal[]): {
   };
 }
 
-function lines(target: App): { amount_cents: number; charged_to: string | null }[] {
+function storedLines(target: App): { amount_cents: number; charged_to: string | null }[] {
   return homeBooks(target)
     .prepare("SELECT amount_cents, charged_to FROM period_lines ORDER BY id")
     .all() as { amount_cents: number; charged_to: string | null }[];
@@ -919,7 +919,7 @@ describe("a receipt's items (lg-10)", () => {
     expect(response.statusCode, response.body).toBe(200);
     const filing = response.json<ReceiptFiling>();
     // 24,76 $ less 15,54 $: excluded + shared = total.
-    expect(lines(target)).toEqual([{ amount_cents: 922, charged_to: null }]);
+    expect(storedLines(target)).toEqual([{ amount_cents: 922, charged_to: null }]);
     expect(filing.chargeLineId).toBeNull();
     expect(filing.proposal).toEqual(marked("shared", "not-shared"));
     expect(
@@ -1025,7 +1025,7 @@ describe("a receipt's items (lg-10)", () => {
     const filing = response.json<ReceiptFiling>();
     expect(filing.chargeLineId).toBeNull();
     // 22,07 $ + 17,98 $ × 14,975 % = 24,762505 $ → 24,76 $: the whole receipt.
-    expect(lines(target)).toEqual([{ amount_cents: 2_476, charged_to: "sam" }]);
+    expect(storedLines(target)).toEqual([{ amount_cents: 2_476, charged_to: "sam" }]);
   });
 
   test("a tip stays shared", async () => {
@@ -1038,7 +1038,7 @@ describe("a receipt's items (lg-10)", () => {
     });
 
     expect(response.statusCode, response.body).toBe(200);
-    expect(lines(target)).toEqual([{ amount_cents: 922 + 300, charged_to: null }]);
+    expect(storedLines(target)).toEqual([{ amount_cents: 922 + 300, charged_to: null }]);
   });
 
   test("refuses a receipt of which nothing is shared or the other's, and files nothing", async () => {
