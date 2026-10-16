@@ -46,8 +46,9 @@ the allowlist is the only configuration in which its data model is coherent.
    application from `TOOLS`, so a later `--apply` does not recreate the login
    the owner removed. The script never deletes, so it cannot remove the live
    application itself, and it must not learn to: that refusal is argued in its
-   header. The `api/files/*` Bypass becomes redundant once nothing is gated;
-   decide whether it goes too, and keep `scripts/test/cloudflare-setup.test.ts`
+   header. The `api/files/*` Bypass becomes redundant once nothing is gated; it
+   goes too (the owner's answer, 2026-10-16, in the Log), so the downloader has
+   no Access application at all. Keep `scripts/test/cloudflare-setup.test.ts`
    asserting the downloader's intended shape and the planner's unchanged one.
 2. **`docs/02-DEPLOYMENT.md`** — rewrite step 4 and "When you want it genuinely
    public". Step 4 currently says the service "is unsafe without it". It should
@@ -71,7 +72,9 @@ the allowlist is the only configuration in which its data model is coherent.
    the widget a `cloudflare-setup.mjs --apply` rather than a dashboard click.
 5. **The owner deletes the downloader's Access application** on the dashboard.
    This is outward-facing and hard to take back quietly, so it is the owner's
-   action, not an agent's. The ticket's Log records who did it and when.
+   action, not an agent's. The ticket's Log records who did it and when. **Delete
+   the live `api/files/*` Bypass application in the same visit**: the script
+   never deletes, so it stays until someone does.
 6. **The owner turns on Cloudflare Web Analytics for `downloader.oludoi.com`**
    (automatic setup) on the dashboard, in the same sitting as step 5. It counts
    visitors, and [dl-57](./dl-57-a-record-of-how-probes-and-downloads-end.md)
@@ -121,3 +124,11 @@ the allowlist is the only configuration in which its data model is coherent.
   one thing dl-50 could not measure — whether the beacon's report is refused
   under `connect-src 'self'` — because it can only be seen on the live
   hostname once the new policy is deployed.
+- 2026-10-16 — The owner answered Build 1's open decision (via the orchestrator,
+  which recommended the first option). Question: once the downloader has no
+  Access application, does the `api/files/*` Bypass application go too? Options:
+  (a) remove it, so the script stops creating it, the test asserts the
+  downloader has no Access application at all, and deleting the live Bypass joins
+  the owner's step-5 dashboard visit; (b) keep it, inert while nothing is gated
+  and ready if a login returns. **The owner chose (a).** Build 1 and step 5 above
+  now say so. The script still never learns to delete.
