@@ -20,7 +20,9 @@
  * Nothing here deletes. Widening or removing an Access policy is the operator's
  * decision — see "When you want it genuinely public" in 02-DEPLOYMENT.md — and
  * a script that can take the login off is a script that can take the login off
- * by accident.
+ * by accident. That is why the downloader's entry below is empty and the live
+ * applications it used to have are still there on a host set up earlier: the
+ * script cannot remove them, so the owner deletes them on the dashboard (dl-49).
  *
  * Default is a plan. `--apply` is the only thing that writes.
  *
@@ -54,10 +56,14 @@ const API = "https://api.cloudflare.com/client/v4";
  * The `access` shapes are the part that is a decision rather than a fact, and
  * each one is argued in docs/02-DEPLOYMENT.md:
  *
- *  - the downloader gets a **second** application on `api/files/*` with a
- *    Bypass policy, because that path's authorisation is a 256-bit capability
- *    token (`tools/downloader/api/src/jobs/tokens.ts`) and gating it would
- *    defeat the shareable link it exists to be.
+ *  - the downloader gets **no application at all** (dl-49). It is public, and
+ *    what stands in for a login is the app's own — the human check, the
+ *    per-client limits, streaming instead of storing (dl-50 to dl-54). Its
+ *    `api/files/*` Bypass went with the login: that path's authorisation is a
+ *    256-bit capability token (`tools/downloader/api/src/jobs/tokens.ts`) and
+ *    it was only ever a hole through a gate that no longer exists. A host that
+ *    has not applied those safeguards puts the login back by hand, from the
+ *    dashboard steps in docs/02-DEPLOYMENT.md.
  *  - the planner gets **no** bypass. It has no capability tokens and no owner
  *    model at all, so every visitor shares one store. The allowlist is not a
  *    precaution around that data model; it is the only configuration in which
@@ -74,11 +80,8 @@ export const TOOLS = [
     tool: "downloader",
     subdomain: "downloader",
     service: "http://downloader:8080",
-    access: [
-      { suffix: "", name: "downloader", decision: "allow" },
-      { suffix: "/api/files/*", name: "downloader download links", decision: "bypass" },
-    ],
-    // The human check that replaces the login when Access comes off (dl-49). Its
+    access: [],
+    // The human check that replaces the login now Access is off (dl-49). Its
     // one allowed domain is this tool's own hostname, so a site key lifted from
     // the page cannot mint tokens anywhere else. Only a tool with a field here
     // gets a widget, which is why the planner and the ledger need nothing.
@@ -317,9 +320,10 @@ export function verifyPath(accountId) {
  * login. Do those in the obvious order and the endpoint is live and open for
  * however long the remaining calls take — seconds on a good day, indefinitely
  * if one of them fails and someone walks away. On a host whose cloudflared is
- * already connected that window is real exposure, and for the downloader the
- * docs are explicit about what an open instance is for: a machine that will
- * fetch any URL a stranger names.
+ * already connected that window is real exposure, and for the planner (one store
+ * for every visitor) and the ledger (a household's bank history) the docs are
+ * explicit that an open instance is not an acceptable state. The downloader has
+ * no application to order, so it is not in this argument (dl-49).
  *
  * Inverted, the failure mode is harmless: a policy guarding a hostname that
  * does not resolve yet.
