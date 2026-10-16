@@ -180,5 +180,8 @@ probes(() => server)`. The bodies are otherwise the same. The `vi.mock` that
   and is not folded. `dl-49` and `dl-125` are unrelated.
 
   **CI duration, Done when 3.** Before: 623 s `npm test` (the figure in the
-  Why section, from the audit's CI run; not re-measured here). After: see the
-  next line when the draft pull request's run has finished.
+  Why section, from the audit's CI run; not re-measured here). After: unverified.
+  The draft pull request (#499) at 4e7b1f4d had its `test (ubuntu-latest)` leg
+  still in progress about four minutes after the push, and the builder did not
+  wait longer. Its duration is not in this Log. Read it from the leg's own run
+  once it has finished: `gh run view --job <id> --json jobs`, then `--log`.
