@@ -1897,8 +1897,12 @@ describe("dl-103: an unanswered seek probe", () => {
     await blind?.close();
   });
 
-  async function outcomeOf(label: string, variant: MediaVariant): Promise<Outcome> {
-    return engineWith()
+  async function outcomeOf(
+    label: string,
+    variant: MediaVariant,
+    ffmpegLines?: string[],
+  ): Promise<Outcome> {
+    return engineWith(ffmpegLines === undefined ? {} : { logger: capturingLogger(ffmpegLines) })
       .stream({ jobId: label, variant, requestContext: CONTEXT })
       .then(
         async (media): Promise<Outcome> => {
@@ -2030,11 +2034,17 @@ describe("dl-103: an unanswered seek probe", () => {
         response.end(stored.subarray(start, end + 1));
         return true;
       };
+      const lines: string[] = [];
       const outcome = await outcomeOf(
         `dl-103-short-${percent}`,
         large(`${blind.origin}/large/faststart.mp4`),
+        lines,
       );
-      expect(stoppedWith(outcome), JSON.stringify(outcome)).toBe("DOWNLOAD_FAILED");
+      // dl-125: ffmpeg's own words ride on a failure, so a recurrence on a CI
+      // leg says which mechanism it was — `partial file` logged and missed, or
+      // a cut on a sample boundary, where ffmpeg logs neither.
+      const ffmpeg = lines.filter((line) => /partial file|Stream ends prematurely/u.test(line));
+      expect(stoppedWith(outcome), JSON.stringify({ outcome, ffmpeg })).toBe("DOWNLOAD_FAILED");
     }, 60_000);
   }
 
@@ -2312,4 +2322,191 @@ describe("dl-108 round 1: the count the card is given", () => {
     expect(originConnectionsOf(stats("parallel", 4))).toBe(4);
     expect(originConnectionsOf(stats("parallel", 3))).toBe(3);
   });
+});
+
+/**
+ * dl-125. A fast-start file stored so that it ends exactly at a sample's first
+ * byte makes ffmpeg log no `partial file` and no early end, and exit 0: every
+ * such cut past the first two of a fixture copy ended `done`, 816 of 816 on
+ * Linux and 544 of 544 on Windows (the ticket's Log). dl-103's rule — a short
+ * source is `DOWNLOAD_FAILED`, never `done` — had nothing to read. The owner's
+ * answer of 2026-10-15: fail a progressive run whose container declares more
+ * than 0.25 s past ffmpeg's last `out_time`, and leave a run with no
+ * `Duration` line or no progress snapshot `done`, as it was.
+ *
+ * Imported here rather than at the top so this block moves no line above it.
+ */
+describe("dl-125: a fast-start file stored to exactly a sample's first byte", () => {
+  let whole: Buffer;
+  let starts: number[];
+  /** What the origin has: a prefix of `whole`, which it serves as all there is. */
+  let stored = Buffer.alloc(0);
+  let shortOrigin: FixtureServer;
+
+  beforeAll(async () => {
+    const { sampleStarts } = await import("./helpers/media.ts");
+    await ensureLargeFixture();
+    whole = await fs.readFile(path.join(fixtureRoot, "large", "faststart.mp4"));
+    starts = sampleStarts(whole);
+    // Answered as dl-103's 60% case answers: a `206` whose `content-range`
+    // total and `content-length` declare exactly the bytes stored.
+    shortOrigin = await startFixtureServer((request, response) => {
+      if (
+        request.headers.referer !== CONTEXT.headers["Referer"] ||
+        request.headers.cookie !== CONTEXT.headers["Cookie"]
+      ) {
+        response.writeHead(403).end("forbidden");
+        return;
+      }
+      const range = /^bytes=(\d+)-(\d*)$/u.exec(request.headers.range ?? "");
+      const start = range === null ? 0 : Number(range[1]);
+      const end =
+        range === null || range[2] === ""
+          ? stored.length - 1
+          : Math.min(Number(range[2]), stored.length - 1);
+      response.writeHead(range === null ? 200 : 206, {
+        "content-type": "video/mp4",
+        ...(range === null ? {} : { "content-range": `bytes ${start}-${end}/${stored.length}` }),
+        "content-length": String(end - start + 1),
+      });
+      response.end(stored.subarray(start, end + 1));
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await shortOrigin?.close();
+  });
+
+  /** The visitor's side of a stream of `whole` stored to `cut`, and how `done` ended. */
+  async function storedTo(label: string, cut: number) {
+    stored = whole.subarray(0, cut);
+    const lines: string[] = [];
+    const engine = engineWith({ logger: capturingLogger(lines) });
+    let done: Promise<{ bytes: number; durationSec: number | null } | string> =
+      Promise.resolve("never opened");
+    const received = await exchange(
+      label,
+      () =>
+        engine.stream({
+          jobId: label,
+          variant: large(`${shortOrigin.origin}/large/faststart.mp4`),
+          requestContext: CONTEXT,
+        }),
+      (media) => {
+        done = media.done.then(
+          (outcome) => outcome,
+          (error: unknown) => AppError.from(error).code,
+        );
+      },
+    );
+    const outcome = await done;
+    return {
+      done: typeof outcome === "string" ? outcome : outcome.bytes,
+      aborted: received.aborted,
+      // What ffmpeg said about the cut: nothing, on this condition.
+      ffmpeg: lines.filter((line) => /partial file|Stream ends prematurely/u.test(line)),
+      evidence: {
+        cut,
+        wholeBytes: whole.length,
+        received: received.bytes,
+        outTimeSec: typeof outcome === "string" ? null : outcome.durationSec,
+        status: received.status,
+      },
+    };
+  }
+
+  test("a cut at the sample start nearest 60% fails DOWNLOAD_FAILED, the visitor's response cut", async () => {
+    const cut = starts.find((at) => at >= whole.length * 0.6);
+    expect(cut, `${starts.length} sample starts in ${whole.length} bytes`).toBeDefined();
+    const result = await storedTo("dl-125-boundary-60", cut as number);
+    // Before the fix: `done` resolved with every byte stored, `aborted` false,
+    // and ffmpeg said nothing; about 1.6 s of the 4 s never arrived.
+    expect(
+      { done: result.done, aborted: result.aborted, ffmpeg: result.ffmpeg },
+      JSON.stringify(result),
+    ).toEqual({ done: "DOWNLOAD_FAILED", aborted: true, ffmpeg: [] });
+  }, 60_000);
+
+  test("control: a cut at the final sample start, about 0.029 s short, still completes", async () => {
+    // The accepted miss, pinned from the other side: a gap under 0.25 s.
+    const cut = starts.at(-1);
+    expect(cut).toBeGreaterThan(whole.length * 0.9);
+    const result = await storedTo("dl-125-boundary-last", cut as number);
+    expect(
+      { done: result.done, aborted: result.aborted, ffmpeg: result.ffmpeg },
+      JSON.stringify(result),
+    ).toEqual({ done: result.evidence.received, aborted: false, ffmpeg: [] });
+  }, 60_000);
+
+  async function standIn125(statements: readonly string[]): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(outputDir, "stand-in-125-"));
+    const script = path.join(dir, "ffmpeg");
+    await fs.writeFile(script, [`#!${process.execPath}`, ...statements, ""].join("\n"), {
+      mode: 0o755,
+    });
+    return script;
+  }
+
+  /** Tagged, as `level+info` makes ffmpeg write it; an untagged one never reaches `onInfoLine`. */
+  const DURATION_4S = say(JSON.stringify("[info]   Duration: 00:00:04.00, start: 0.000000"));
+  /** One progress block on descriptor 3, where `-progress pipe:3` sends it. */
+  const progress = (outTimeUs: number): string =>
+    `require("node:fs").writeSync(3, "out_time_us=${outTimeUs}\\nprogress=end\\n");`;
+
+  const standIns: readonly { name: string; statements: readonly string[]; code: string | null }[] =
+    [
+      {
+        name: "no Duration line and no progress snapshot",
+        statements: [OUT, later(200, "process.exit(0);")],
+        code: null,
+      },
+      {
+        name: "a tagged Duration line and no progress snapshot",
+        statements: [DURATION_4S, OUT, later(200, "process.exit(0);")],
+        code: null,
+      },
+      {
+        // The variant declares 4 s: a rule that took it for the container's
+        // duration would see a gap of 3 s here.
+        name: "a progress snapshot and no Duration line",
+        statements: [OUT, progress(1_000_000), later(200, "process.exit(0);")],
+        code: null,
+      },
+      // The owner's 0.25 s, pinned from both sides: the real cuts above sit at
+      // about 1.6 s and 0.029 s, which a threshold anywhere between would pass.
+      {
+        name: "a Duration of 4 s and an out_time of 3.76 s, 0.24 s short",
+        statements: [DURATION_4S, OUT, progress(3_760_000), later(200, "process.exit(0);")],
+        code: null,
+      },
+      {
+        name: "a Duration of 4 s and an out_time of 3.74 s, 0.26 s short",
+        statements: [DURATION_4S, OUT, progress(3_740_000), later(200, "process.exit(0);")],
+        code: "DOWNLOAD_FAILED",
+      },
+    ];
+
+  for (const standIn of standIns) {
+    test.skipIf(process.platform === "win32")(
+      `stand-in: ${standIn.name}, exit 0, ends ${standIn.code ?? "done"}`,
+      async () => {
+        const media = await engineWith({ ffmpegPath: await standIn125(standIn.statements) }).stream({
+          jobId: "dl-125-stand-in",
+          variant: large(`${origin.origin}/large/faststart.mp4`),
+          requestContext: CONTEXT,
+        });
+        media.body.resume();
+        const ended = await media.done.then(
+          (outcome) => ({ code: null, bytes: outcome.bytes }),
+          (error: unknown) => ({ code: AppError.from(error).code, bytes: null }),
+        );
+        expect(ended).toEqual(
+          standIn.code === null
+            ? { code: null, bytes: 4096 }
+            : { code: standIn.code, bytes: null },
+        );
+      },
+      30_000,
+    );
+  }
 });

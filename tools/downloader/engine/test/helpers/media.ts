@@ -504,3 +504,95 @@ export async function packetDigests(file: string): Promise<string[]> {
   if (ran.code !== 0) throw new Error(`framemd5 exited ${ran.code}: ${ran.stderr.slice(-2000)}`);
   return ran.stdout.split("\n").filter((line) => line !== "" && !line.startsWith("#"));
 }
+
+/** One MP4 box: its type, and where its payload starts and the box ends. */
+interface Box {
+  type: string;
+  start: number;
+  end: number;
+}
+
+function childBoxes(file: Buffer, start: number, end: number): Box[] {
+  const boxes: Box[] = [];
+  let at = start;
+  while (at + 8 <= end) {
+    let size = file.readUInt32BE(at);
+    const type = file.toString("latin1", at + 4, at + 8);
+    let header = 8;
+    if (size === 1) {
+      size = Number(file.readBigUInt64BE(at + 8));
+      header = 16;
+    } else if (size === 0) {
+      size = end - at;
+    }
+    if (size < header) break;
+    boxes.push({ type, start: at + header, end: at + size });
+    at += size;
+  }
+  return boxes;
+}
+
+function firstBox(boxes: readonly Box[], type: string): Box | undefined {
+  return boxes.find((box) => box.type === type);
+}
+
+/**
+ * Every sample's first byte in `file`, across every track, sorted (dl-125).
+ *
+ * Read off the `moov`'s own sample tables — `stco` or `co64` for where each
+ * chunk starts, `stsc` for how many samples each chunk holds, `stsz` for each
+ * sample's size — so no ffprobe is needed, which `ffmpeg-static` does not ship.
+ * Lifted from dl-125's Windows probe (`detect.mts`, probe PR #492), which
+ * measured that a fast-start file stored to exactly one of these offsets makes
+ * ffmpeg log nothing at all and exit 0.
+ */
+export function sampleStarts(file: Buffer): number[] {
+  const starts: number[] = [];
+  for (const moov of childBoxes(file, 0, file.length).filter((box) => box.type === "moov")) {
+    for (const trak of childBoxes(file, moov.start, moov.end).filter((b) => b.type === "trak")) {
+      const mdia = firstBox(childBoxes(file, trak.start, trak.end), "mdia");
+      const minf = mdia && firstBox(childBoxes(file, mdia.start, mdia.end), "minf");
+      const stbl = minf && firstBox(childBoxes(file, minf.start, minf.end), "stbl");
+      if (stbl === undefined) continue;
+      const tables = childBoxes(file, stbl.start, stbl.end);
+      const stsz = firstBox(tables, "stsz");
+      const stsc = firstBox(tables, "stsc");
+      const stco = firstBox(tables, "stco");
+      const co64 = firstBox(tables, "co64");
+      if (stsz === undefined || stsc === undefined) continue;
+      // Each table's payload opens with a version-and-flags word.
+      const fixed = file.readUInt32BE(stsz.start + 4);
+      const count = file.readUInt32BE(stsz.start + 8);
+      const sizeOf = (sample: number): number =>
+        fixed !== 0 ? fixed : file.readUInt32BE(stsz.start + 12 + sample * 4);
+      const offsets: number[] = [];
+      if (stco !== undefined) {
+        const chunks = file.readUInt32BE(stco.start + 4);
+        for (let i = 0; i < chunks; i += 1) offsets.push(file.readUInt32BE(stco.start + 8 + i * 4));
+      } else if (co64 !== undefined) {
+        const chunks = file.readUInt32BE(co64.start + 4);
+        for (let i = 0; i < chunks; i += 1) {
+          offsets.push(Number(file.readBigUInt64BE(co64.start + 8 + i * 8)));
+        }
+      } else {
+        continue;
+      }
+      const entries = file.readUInt32BE(stsc.start + 4);
+      const runs = Array.from({ length: entries }, (_, i) => ({
+        firstChunk: file.readUInt32BE(stsc.start + 8 + i * 12),
+        perChunk: file.readUInt32BE(stsc.start + 12 + i * 12),
+      }));
+      let sample = 0;
+      for (let chunk = 1; chunk <= offsets.length && sample < count; chunk += 1) {
+        const run = runs.findLast((entry) => entry.firstChunk <= chunk);
+        let at = offsets[chunk - 1] ?? 0;
+        for (let k = 0; k < (run?.perChunk ?? 0) && sample < count; k += 1) {
+          starts.push(at);
+          at += sizeOf(sample);
+          sample += 1;
+        }
+      }
+    }
+  }
+  return [...new Set(starts)].toSorted((a, b) => a - b);
+}
