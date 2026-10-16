@@ -375,8 +375,10 @@ total:
 The person taps the items that are not shared. **The code, not the model,
 computes what comes off.** That is each excluded item's price, its deposit, and
 its GST and QST at the rates in effect on the receipt's date. The rates are
-dated configuration, because they change. The shared amount is the total minus
-that, so it always reconciles with what was paid.
+dated configuration, because they change: a table in `books` chosen by the
+receipt's date, so that a rate change is a code change (decided by the owner on
+2026-10-16, over a stored setting with its own screen). The shared amount is the
+total minus that, so it always reconciles with what was paid.
 
 Taxes printed on a receipt are computed on the subtotal, so recomputing one
 item's share can differ by a cent. The excluded part is rounded once, half-up,

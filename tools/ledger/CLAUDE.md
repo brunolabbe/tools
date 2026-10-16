@@ -38,7 +38,10 @@ the settlement: the matching rule, cumulative, with charges, and which closed
 period's deposit a paste has brought in (lg-6), and the reader of the old
 workbook, from plain cell grids `api` builds out of the `.xlsx` (lg-7), and the history's series, one per chart on the stats screen (lg-9), and the
 receipt check — whether a proposal's subtotal, GST and QST make its total — and
-which stored rows a receipt may document (lg-8). The name is `books` because
+which stored rows a receipt may document (lg-8), and what a receipt's items take
+off its shared amount, at the GST and QST rates in effect on its date
+(`splitReceipt` and the dated `SALES_TAX_RATES` table, lg-10: a rate change is an
+entry added there). The name is `books` because
 `ledger` is the tool. **`receipts`** is the receipt reader (lg-8): Claude Haiku
 5.5 through Anthropic's SDK, given its key and model by `api`, and reading no
 environment itself.
@@ -227,7 +230,12 @@ model beside that button; a receipt with anything filed from it is not read
 again. Filing is a third request and the only one that writes the books: a line
 paid by **whoever uploaded the photo**, or the receipt attached to the row it
 documents. A photo of several receipts files each as its own `part`, once; a row
-is documented by one receipt (`ROW_ALREADY_DOCUMENTED`). A photo is never
+is documented by one receipt (`ROW_ALREADY_DOCUMENTED`). **A receipt's items
+must make its total or it is not filed** (`RECEIPT_DOES_NOT_ADD_UP`, lg-10): the
+line is what the card was charged less what the books compute its not-shared and
+other's items to cost, and the other's part is a charge line of its own; on a row
+every item is shared. The model proposes each item's category from the list and
+nothing else; a category not in it is dropped, never refused. A photo is never
 logged, and **no test calls a real model**: `createApp` takes a
 `receiptReader`, and every test that reads hands in a fake
 (`api/test/receipts.test.ts`); `receipts/test` answers the real reader from

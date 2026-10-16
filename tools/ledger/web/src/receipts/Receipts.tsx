@@ -58,6 +58,8 @@ export const FLAG_LABELS: Record<ReceiptFlag, string> = {
 
 /** One item's fields, as typed. */
 interface ItemDraft {
+  /** The list's key: an item has no id until filed, and the list adds and removes. */
+  key: number;
   text: string;
   price: string;
   taxable: boolean;
@@ -89,8 +91,16 @@ const NEXT_SHARE: Record<ItemShare, ItemShare> = {
   theirs: "shared",
 };
 
+let lastItemKey = 0;
+
+function itemKey(): number {
+  lastItemKey += 1;
+  return lastItemKey;
+}
+
 function itemDraftOf(item: ReceiptItem): ItemDraft {
   return {
+    key: itemKey(),
     text: item.text,
     price: centsText(item.price),
     taxable: item.taxable,
@@ -437,6 +447,7 @@ export function Receipts(): React.ReactElement {
     setDraft((before) => {
       const current = before ?? form;
       const blank: ItemDraft = {
+        key: itemKey(),
         text: "",
         price: "",
         taxable: false,
@@ -567,9 +578,7 @@ export function Receipts(): React.ReactElement {
             {form.items.map((item, index) => {
               const name = item.text.trim() === "" ? `item ${String(index + 1)}` : item.text;
               return (
-                // Items have no id until filed; every field is controlled, so a
-                // removal that shifts the keys shows each item's own values.
-                <li key={index} className={`item ${item.share}`}>
+                <li key={item.key} className={`item ${item.share}`}>
                   <input
                     aria-label={`Text of ${name}`}
                     value={item.text}
