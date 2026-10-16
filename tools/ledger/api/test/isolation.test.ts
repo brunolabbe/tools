@@ -268,7 +268,15 @@ const echoReader: ReceiptReader = {
   async read(photo) {
     const merchant = Buffer.from(photo.bytes.subarray(4)).toString("utf8");
     return [
-      { merchant, date: "2026-07-20", subtotal: 12_345, gst: null, qst: null, total: 12_345 },
+      {
+        merchant,
+        date: "2026-07-20",
+        subtotal: 12_345,
+        gst: null,
+        qst: null,
+        total: 12_345,
+        items: [],
+      },
     ];
   },
 };
@@ -640,6 +648,17 @@ const WRITES: Write[] = [
         gst: null,
         qst: null,
         total: h.lineCents,
+        // An item carrying the household's word, so its table is swept too (lg-10).
+        items: [
+          {
+            text: `${h.word} article`,
+            price: h.lineCents,
+            taxable: false,
+            deposit: null,
+            spendingCategoryId: null,
+            share: "shared",
+          },
+        ],
       };
       const url = ROUTES.receiptFile.replace(":id", String(written.receiptId));
       await post(

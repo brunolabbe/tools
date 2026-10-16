@@ -12,7 +12,7 @@ describe("the schema's migrations", () => {
   test("migration 1 stores the statement rows and the imports they came from", () => {
     const db = open();
 
-    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()
@@ -82,7 +82,7 @@ describe("the schema's migrations", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
     expect(db.prepare("SELECT count(*) AS n FROM statement_imports").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -102,7 +102,7 @@ describe("the schema's migrations", () => {
     migrate(db);
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
     expect(db.prepare("SELECT source FROM statement_imports").all()).toEqual([{ source: "paste" }]);
     expect(db.prepare("SELECT note FROM statement_rows").all()).toEqual([{ note: null }]);
     expect(() =>
@@ -145,6 +145,42 @@ describe("migration 8's receipt filings", () => {
 
     expect(() => filing.run(2)).toThrow(/UNIQUE/u);
     expect(db.prepare("SELECT count(*) AS n FROM receipt_filings").get()).toEqual({ n: 1 });
+    db.close();
+  });
+});
+
+describe("migration 9's receipt items (lg-10)", () => {
+  test("keeps a filing stored before it, with no charge and no items, and refuses an item's unknown share", () => {
+    const db = new Database(":memory:");
+    migrate(db, 8);
+    db.prepare("INSERT INTO people (id, added_at) VALUES ('alex', '2026-10-01')").run();
+    db.prepare(
+      `INSERT INTO period_lines (person_id, date, amount_cents, source, entered_at, entered_by)
+       VALUES ('alex', '2026-10-04', 2650, 'receipt', '2026-10-05T00:00:00.000Z', 'alex')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO receipts (photo, media_type, bytes, uploaded_at, uploaded_by)
+       VALUES ('a.jpg', 'image/jpeg', 64, '2026-10-02T00:00:00.000Z', 'alex')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO receipt_filings (receipt_id, part, period_line_id, filed_at, filed_by)
+       VALUES (1, 1, 1, '2026-10-05T00:00:00.000Z', 'alex')`,
+    ).run();
+
+    migrate(db);
+
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.prepare("SELECT period_line_id, charge_line_id FROM receipt_filings").all()).toEqual([
+      { period_line_id: 1, charge_line_id: null },
+    ]);
+    expect(db.prepare("SELECT count(*) AS n FROM receipt_items").get()).toEqual({ n: 0 });
+    const item = db.prepare(
+      `INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, share)
+       VALUES (1, ?, 'PAIN', 349, 0, ?)`,
+    );
+    expect(() => item.run(1, "shared")).not.toThrow();
+    expect(() => item.run(2, "half")).toThrow(/CHECK/u);
+    expect(() => item.run(1, "theirs")).toThrow(/UNIQUE/u);
     db.close();
   });
 });

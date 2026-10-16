@@ -22,7 +22,7 @@
  * inbox's (lg-4), the next is the salaries' (lg-5), the next four are the
  * periods' (lg-6), the next is the spending categories' (lg-15), the next
  * five are the household directory's (lg-20, and lg-22's four ahead of it),
- * and the last six are the receipts' (lg-8).
+ * the next six are the receipts' (lg-8), and the last is their items' (lg-10).
  */
 
 import {
@@ -191,6 +191,14 @@ export const LEDGER_ERROR_CODES = [
    * (gate 1, F3); the caller files this one as a line, or not at all.
    */
   "ROW_ALREADY_DOCUMENTED",
+  // --- Receipt items (lg-10) ---
+  /**
+   * The receipt's items, their deposits and its taxes do not make its total, to
+   * the cent (or it has items and no total). What is shared is computed from the
+   * items, so it is shown for correction and filed only once they add up — never
+   * on the model's word (`docs/00-ANALYSIS.md` §6).
+   */
+  "RECEIPT_DOES_NOT_ADD_UP",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -240,6 +248,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   RECEIPT_UNREADABLE: "The receipt could not be read. Type it in instead.",
   ROW_ALREADY_DOCUMENTED:
     "That row already has a receipt. It may have been attached since it was offered.",
+  RECEIPT_DOES_NOT_ADD_UP:
+    "The items, deposits and taxes do not add up to the total. Correct the receipt before filing it.",
 };
 
 /**

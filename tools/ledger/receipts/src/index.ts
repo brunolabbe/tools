@@ -1,6 +1,6 @@
 /**
  * `@ledger/receipts` — the receipt reader (lg-8), and the only package in the
- * tool that talks to a model. lg-10 extends the same call to items and
+ * tool that talks to a model. lg-10 extended the same call to items and
  * categories.
  */
 
@@ -11,4 +11,10 @@ export {
   RECEIPT_PROMPT,
   createModelReader,
 } from "./reader.ts";
-export type { ModelReaderOptions, ReaderLogger, ReceiptPhoto, ReceiptReader } from "./reader.ts";
+export type {
+  CategoryChoice,
+  ModelReaderOptions,
+  ReaderLogger,
+  ReceiptPhoto,
+  ReceiptReader,
+} from "./reader.ts";

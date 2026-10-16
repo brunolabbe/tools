@@ -35,8 +35,8 @@ import Anthropic, {
 } from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages";
-import { AppError } from "@ledger/contract";
-import type { ReceiptMediaType, ReceiptProposal } from "@ledger/contract";
+import { AppError, MAX_RECEIPT_ITEMS } from "@ledger/contract";
+import type { ReceiptItem, ReceiptMediaType, ReceiptProposal } from "@ledger/contract";
 import { z } from "zod";
 
 /** A photo as it was uploaded: its bytes, and the type its first bytes say it is. */
@@ -45,11 +45,25 @@ export interface ReceiptPhoto {
   mediaType: ReceiptMediaType;
 }
 
-/** The seam: a photo in, a proposal per receipt read in it out. */
+/** A spending category the model may propose for an item: lg-15's list, as it stands. */
+export interface CategoryChoice {
+  id: number;
+  name: string;
+}
+
+/**
+ * The seam: a photo in, a proposal per receipt read in it out. `categories` is
+ * the list an item's category is proposed from (lg-10); an item proposed
+ * anything else arrives with none (the owner's answer of 2026-10-16).
+ */
 export interface ReceiptReader {
   /** The model that reads, which the screen names before the photo is sent. */
   readonly model: string;
-  read(photo: ReceiptPhoto, signal?: AbortSignal): Promise<ReceiptProposal[]>;
+  read(
+    photo: ReceiptPhoto,
+    signal?: AbortSignal,
+    categories?: readonly CategoryChoice[],
+  ): Promise<ReceiptProposal[]>;
 }
 
 /** The measured model, and the default. */
@@ -59,13 +73,26 @@ export const DEFAULT_RECEIPT_MODEL = "claude-haiku-5-5";
 export const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 
 /**
- * The prompt the measurement ran, less what lg-10 adds: the items, the deposits
- * and the handwritten amounts. A photo that is not a printed receipt gives no
- * proposal, and the person types it in.
+ * The prompt the measurement ran, and what lg-10 adds to it: the items, their
+ * deposits and a category for each, from the household's list. A photo that is
+ * not a printed receipt gives no proposal, and the person types it in. The
+ * handwritten amounts the measurement also asked for are left out: nothing reads
+ * them.
+ *
+ * The lg-10 lines are unmeasured against real photos: no key was available to
+ * the build, and the reconciliation check is what catches an item misread.
  */
 export const RECEIPT_PROMPT = `Read this photo of one or more Québec receipts. All money is in integer cents (12,49 $ -> 1249; a refund is negative).
 For each printed receipt: the merchant, the date, the subtotal, GST (TPS), QST (TVQ) and total exactly as printed (null when the line is absent or unreadable).
+Also each item line, in the order printed: its text, its price, whether it is marked taxable (a tax code such as T, F, FP or TPS/TVQ beside it), and the deposit (consigne) printed for it, folded into the item it follows rather than listed as an item of its own (null when it has none). A discount is an item with a negative price.
+Propose a category for each item from the list given, by its exact name, or null when none fits. Compute nothing: read what is printed.
 If the photo is not a printed receipt, such as a handwritten note, return no receipts.`;
+
+/** The prompt as sent: the measured one, then the household's categories. */
+function promptWith(categories: readonly CategoryChoice[]): string {
+  const names = categories.map((category) => category.name);
+  return `${RECEIPT_PROMPT}\nCategories: ${JSON.stringify(names)}`;
+}
 
 const cents = z.number().int().nullable();
 
@@ -84,11 +111,21 @@ const readingSchema = z.object({
       gst: cents.describe("TPS / GST"),
       qst: cents.describe("TVQ / QST"),
       total: cents,
+      items: z.array(
+        z.object({
+          text: z.string(),
+          price: cents,
+          taxable: z.boolean(),
+          deposit: cents.describe("consigne"),
+          category: z.string().nullable(),
+        }),
+      ),
     }),
   ),
 });
 
 type ReadReceipt = z.infer<typeof readingSchema>["receipts"][number];
+type ReadItem = ReadReceipt["items"][number];
 
 /** A billion dollars: past it, a value is a misread, not an amount. */
 const MAX_CENTS = 100_000_000_000;
@@ -112,7 +149,34 @@ function merchant(value: string | null): string | null {
   return trimmed === "" ? null : trimmed.slice(0, 200);
 }
 
-function toProposal(read: ReadReceipt): ReceiptProposal {
+/** A name as compared with the list: case, accents' encoding and spacing aside. */
+function folded(name: string): string {
+  return name.normalize("NFC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("fr-CA");
+}
+
+/**
+ * An item as the contract has it, or `null` for a line with no price or no text
+ * read: it is left out rather than guessed, and the items then do not make the
+ * total, which the check flags for the person to correct. A category not in the
+ * list is dropped, never the item (the owner's answer of 2026-10-16). Every item
+ * is `shared`: which are not is the person's to say.
+ */
+function toItem(read: ReadItem, categories: ReadonlyMap<string, number>): ReceiptItem | null {
+  const price = amount(read.price);
+  const text = read.text.trim().slice(0, 200);
+  if (price === null || text === "") return null;
+  return {
+    text,
+    price,
+    taxable: read.taxable,
+    deposit: amount(read.deposit),
+    spendingCategoryId:
+      read.category === null ? null : (categories.get(folded(read.category)) ?? null),
+    share: "shared",
+  };
+}
+
+function toProposal(read: ReadReceipt, categories: ReadonlyMap<string, number>): ReceiptProposal {
   return {
     merchant: merchant(read.merchant),
     date: day(read.date),
@@ -120,6 +184,7 @@ function toProposal(read: ReadReceipt): ReceiptProposal {
     gst: amount(read.gst),
     qst: amount(read.qst),
     total: amount(read.total),
+    items: read.items.slice(0, MAX_RECEIPT_ITEMS).flatMap((item) => toItem(item, categories) ?? []),
   };
 }
 
@@ -179,7 +244,7 @@ export function createModelReader(options: ModelReaderOptions): ReceiptReader {
 
   return {
     model,
-    async read(photo, signal) {
+    async read(photo, signal, categories = []) {
       let message: Message;
       try {
         message = await client.messages.create(
@@ -199,7 +264,7 @@ export function createModelReader(options: ModelReaderOptions): ReceiptReader {
                       data: Buffer.from(photo.bytes).toString("base64"),
                     },
                   },
-                  { type: "text", text: RECEIPT_PROMPT },
+                  { type: "text", text: promptWith(categories) },
                 ],
               },
             ],
@@ -209,13 +274,18 @@ export function createModelReader(options: ModelReaderOptions): ReceiptReader {
       } catch (error: unknown) {
         throw failure(error, logger);
       }
-      return reading(message, logger);
+      const byName = new Map(categories.map((category) => [folded(category.name), category.id]));
+      return reading(message, logger, byName);
     },
   };
 }
 
 /** The proposals in a reply, or `RECEIPT_UNREADABLE` when it holds no reading. */
-function reading(message: Message, logger: ReaderLogger | undefined): ReceiptProposal[] {
+function reading(
+  message: Message,
+  logger: ReaderLogger | undefined,
+  categories: ReadonlyMap<string, number>,
+): ReceiptProposal[] {
   // `refusal` and `max_tokens` can leave text that does not match the schema,
   // or matches it with half a receipt; neither is read from.
   if (message.stop_reason !== "end_turn") {
@@ -237,7 +307,7 @@ function reading(message: Message, logger: ReaderLogger | undefined): ReceiptPro
     });
     throw new AppError("RECEIPT_UNREADABLE");
   }
-  return checked.data.receipts.map(toProposal);
+  return checked.data.receipts.map((receipt) => toProposal(receipt, categories));
 }
 
 /**
