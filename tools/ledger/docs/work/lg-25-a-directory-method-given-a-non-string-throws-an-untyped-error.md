@@ -226,3 +226,42 @@ wording difference: the gate wrote `addMember({ person: 7 })` as a `TypeError` a
   does not list lg-24 either, so this file adds no roadmap row.
 - 2026-10-15 — `depends_on: []`. The reproduction runs on what is on `main`, and the
   change touches only `directory.ts` and its test, which lg-24 does not.
+- 2026-10-16 — Built on `lg-25-directory-type-guards` from `origin/main` at 76ce7d52,
+  in commit 817d7527. `directory.ts` refuses a non-string before any string method or
+  statement runs, in `addMember` (`household`, `address`, `person`), `removeMember`
+  (`address`), `membershipOf` (`address`) and `addHousehold` (`at`, `by`; `at` by
+  `instanceof Date`). Each goes through `refuse()`, so the code is `BAD_REQUEST`, the
+  code `refuse()` already uses; no reason to change it was found. The messages name the
+  field and carry no value. The email refusal keeps its sentence.
+- 2026-10-16 — The brief was wrong in one place. Build step 1 says strings are checked
+  with `typeof`, which read literally refuses `addMember({ household: null })` as
+  `BAD_REQUEST`. That contradicts Done-when 2 and the Decision's "keeps its current
+  `HOUSEHOLD_NOT_FOUND`". The build follows Done-when 2: a missing household (`null` or
+  `undefined`) goes to the lookup and answers `HOUSEHOLD_NOT_FOUND`; any other
+  non-string household (`{}`, `7`) is `BAD_REQUEST`. The two tests that pin it are in
+  `directory.test.ts`.
+- 2026-10-16 — Tests appended at the end of `directory.test.ts`, under "a directory
+  method given a value that is not of its type": 14 refusal rows, and the null and
+  undefined household. Each refusal asserts the code and that `members()`,
+  `history("home")` and `households()` read the same before and after. Against
+  `origin/main`'s `directory.ts` (checked out from 76ce7d52 for the check, then
+  restored from 817d7527): `npx vitest run tools/ledger/api/test/directory.test.ts` gave
+  `Tests 14 failed | 21 passed (35)`. On the branch it gives `Tests 35 passed (35)`.
+- 2026-10-16 — Reproduction rerun on the branch, the script from the Reproduction
+  section with `addHousehold({ by: 7 })` added. Every row is `AppError` with
+  `BAD_REQUEST`, except `addMember({ household: null })` and
+  `addMember({ household: undefined })` (`HOUSEHOLD_NOT_FOUND`) and the `history` and
+  `household` rows, which are unchanged. `rows after:` is `[{"id":"home","name":"Home"}]`.
+  One row is not covered: `addHousehold({ at: new Date("x") })` is still a `RangeError`
+  (`Invalid time value`), because an invalid `Date` is an instance of `Date`. It is
+  outside the typing check this ticket asks for, and it is not fixed here.
+- 2026-10-16 — Found, not fixed, and outside the answered Decision. The Decision names
+  `addHousehold`'s `at` and `by`, and the same shape is left in two other methods:
+  `addMember({ at: null })` is a `TypeError` (`toISOString`), and
+  `addMember({ by: null })`, `removeMember({ address, by: null })` and
+  `removeMember({ address, at: null })` (with a member that stands) are a `TypeError`
+  or a `SqliteError` `SQLITE_CONSTRAINT_NOTNULL`. Each rolls back, so nothing is stored.
+  They were not added here, because the owner was asked about `addHousehold` only. That
+  is an open decision for the orchestrator: widen this branch, or file a sibling ticket.
+  `removeMember({ household: 7 })` returns `MEMBER_NOT_FOUND`, which is typed, so it was
+  left.
