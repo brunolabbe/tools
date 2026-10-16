@@ -69,4 +69,25 @@ _Categories_).
    and the receipt still reconciles: shared + not shared + charged = total.
 6. Gates green.
 
+## Decisions — answered 2026-10-16 by the owner at dispatch, not open
+
+Two gaps in the Build, put to the owner by the orchestrator through
+`AskUserQuestion`, each with the orchestrator's recommendation first, and each
+answered with it. Neither is a contract decision.
+
+**1. The question was:** what happens when the model proposes a category that is
+not in lg-15's list? Options: **(a)** drop the proposal — that line arrives with
+no proposed category, the person picks one when confirming, the merchant's last
+category still comes first when there is one, and nothing is refused; **(b)**
+refuse the read — the whole receipt read fails with a typed error. **The answer:
+(a), drop the proposal.**
+
+**2. The question was:** where do the dated GST and QST rates live (Build 2)?
+Options: **(a)** a dated table in `books` — replace the `GST_RATE` and `QST_RATE`
+constants in `tools/ledger/books/src/receipts.ts` (`const GST_RATE = 5_000;`,
+`const QST_RATE = 9_975;`) with a table chosen by the receipt's date, which the
+existing reconciliation check reads too, so that a rate change is a code change;
+**(b)** stored configuration in the database (a migration, a route and a
+screen). **The answer: (a), a dated table in `books`.**
+
 ## Log
