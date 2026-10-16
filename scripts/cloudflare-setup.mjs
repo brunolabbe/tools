@@ -184,9 +184,9 @@ export function planDns(existingRecords, desiredNames, tunnelId) {
 /**
  * Which Access applications are missing.
  *
- * Matched on the application's own domain string, path included — the two
- * downloader applications differ only by that path, and matching on name would
- * treat them as one.
+ * Matched on the application's own domain string, path included — two
+ * applications on one host can differ only by that path (the downloader's pair
+ * did, before dl-49), and matching on name would treat them as one.
  */
 export function planAccess(existingApps, desiredApps) {
   const create = [];
@@ -329,8 +329,16 @@ export function verifyPath(accountId) {
  * does not resolve yet.
  *
  * The widget goes last. It exposes nothing, so it has no place in that argument,
- * and last means that if it is the call that fails, everything that guards the
- * host is already in place and a re-run retries only the widget.
+ * and last means that if it is the call that fails, the planner's and the
+ * ledger's applications are already in place and a re-run retries only the
+ * widget.
+ *
+ * That ordering does not protect the downloader (dl-49). It has no application,
+ * so its hostname answers as soon as the ingress and DNS calls land, and its
+ * widget guards nothing until the two keys are in the host's `.env` and the
+ * container has restarted. The operator puts them there before the downloader
+ * is up; docs/02-DEPLOYMENT.md says so under "Steps 2 and 3, in one command"
+ * and again in step 4.
  */
 export function applyOrder(plan) {
   return [

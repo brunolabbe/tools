@@ -418,6 +418,9 @@ test("applications already live are not written again, and no downloader login i
   });
   const beforeRun = await runSetup(before, "--apply");
   expect(beforeRun.error).toBeUndefined();
+  // Present as well as absent: without this, a run that returned before the access
+  // section printed anything would pass every assertion below.
+  expect(beforeRun.out).toContain("ok       access  planner.example.com (allow)");
   expect(beforeRun.out).not.toContain("access  downloader");
   expect(before.writes.filter((w) => w.includes("/access/apps"))).toEqual([]);
 });

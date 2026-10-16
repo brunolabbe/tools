@@ -323,6 +323,16 @@ for as long as the remaining calls take, which on a host whose `cloudflared` is
 already connected is real exposure. This way round, the worst case is a policy
 guarding a name that does not resolve yet.
 
+**That argument covers the planner and the ledger, not the downloader.** The
+downloader has no application to order, so its hostname answers the moment the
+ingress and DNS calls land, and the widget the script creates after them guards
+nothing until its two keys are in `.env` and the container has been restarted.
+On a host that serves the downloader without a login, put
+`TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` in `.env` **before the downloader
+container is up** (see [step 4](#4--bring-it-up)), or run the script before
+`cloudflared` is connected to a running downloader. Otherwise the downloader is
+open, with no human check, from the first routed request until you restart it.
+
 **Read step 2 before running it either way.** The script encodes which tools get
 a login at all and which must never have a Bypass rule; the argument for that is
 below, and it is not a preference.
@@ -384,10 +394,13 @@ spend the host. Each is a ticket you can read:
   `curl -sS https://downloader.example.com/api/config` answers a `siteKey`, not
   `null`, and a `POST /api/probe` with no `humanCheckToken` answers `403`
   `HUMAN_CHECK_FAILED`.
-- **No client can hold every slot**
+- **A cap on what one address holds**
   ([dl-51](../tools/downloader/docs/work/dl-51-one-client-holds-every-job-slot.md)):
-  `MAX_JOBS_PER_CLIENT` and `MAX_PROBES_PER_CLIENT` per address, and a bounded
-  queue behind them.
+  `MAX_JOBS_PER_CLIENT` bounds the jobs one address has running or waiting, and
+  `MAX_PROBES_PER_CLIENT` its probes, with a bounded queue behind them. On this
+  instance `MAX_JOBS_PER_CLIENT` equals `MAX_CONCURRENT_JOBS` (2) by the owner's
+  choice, so **one address can still hold both job slots**. See
+  [the table](#tightening-it-past-one-user).
 - **Limits sized for strangers**
   ([dl-52](../tools/downloader/docs/work/dl-52-limits-for-anonymous-traffic.md)):
   the per-minute rates and concurrency that `compose.downloader.prod.yaml` sets
@@ -562,6 +575,12 @@ docker compose logs -f cloudflared
 
 No `-f` flags, because `COMPOSE_FILE` names the fragments, and every command
 below assumes it.
+
+**If this host serves the downloader without a login, `TURNSTILE_SITE_KEY` and
+`TURNSTILE_SECRET_KEY` must already be in `.env` before this `up -d`.** With them
+empty the app starts and answers anyone with no human check at all, and the
+setup script's widget does not help until the keys are pasted and the container
+restarted. A host behind Access can leave them empty.
 
 No `--build`: this host pulls released images rather than compiling them. The
 downloader's first pull is long — its image carries Playwright's Chromium and

@@ -184,3 +184,22 @@ the allowlist is the only configuration in which its data model is coherent.
     The comments in `compose.downloader.prod.yaml` and `.env.example` that call
     the check-off state "right behind a login" are still true of a host that keeps
     one, so they were left alone.
+- 2026-10-16 — Builder, fix round for gate 1 at 34fcfac1 (F1, F2, F5, F6; F3 and F4
+  not touched).
+  - F1: the ordering argument ("Access first, then routing") no longer covers the
+    downloader, which has no application, so its hostname answers as soon as the
+    routing lands and its widget guards nothing until the keys are in `.env` and
+    the container has restarted. `docs/02-DEPLOYMENT.md` now says so under
+    "Steps 2 and 3, in one command" and again in step 4 (both Turnstile lines in
+    `.env` before the downloader container is up), and the `applyOrder` comment no
+    longer says the widget's failure leaves "everything that guards the host" in
+    place. The script's order is unchanged. **Open for the owner, not done here:**
+    making the app refuse probes when the keys are absent in production (fail
+    closed) would close the gap in code.
+  - F2: the dl-51 bullet said no client can hold every slot. It now says
+    `MAX_JOBS_PER_CLIENT` bounds jobs running or waiting per address, that on this
+    instance it equals `MAX_CONCURRENT_JOBS` (2) by the owner's choice, so one
+    address can still hold both job slots, and links the table.
+  - F5: the `planAccess` doc comment no longer says the downloader has two
+    applications. F6: the `before` run now also asserts the `ok access
+planner.example.com (allow)` line.
