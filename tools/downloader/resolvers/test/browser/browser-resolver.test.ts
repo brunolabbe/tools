@@ -13,8 +13,9 @@ import { AppError } from "@downloader/contract";
 import type { ErrorCode, ProbeResult, ProbeStageEvent, ResolveOptions } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { BrowserPool } from "../../src/browser/pool.ts";
-import { BrowserResolver } from "../../src/resolvers/browser.ts";
-import type { BrowserResolverLogger } from "../../src/resolvers/browser.ts";
+import type * as provoke from "../../src/browser/provoke.ts";
+import { BrowserResolver, MIN_WAIT_MS } from "../../src/resolvers/browser.ts";
+import type { BrowserResolverLogger, BrowserResolverOptions } from "../../src/resolvers/browser.ts";
 import {
   drmHlsParser,
   recordingDashParser,
@@ -26,6 +27,22 @@ import { startFixtureServer } from "./helpers/fixture-server.ts";
 import type { FixtureServer } from "./helpers/fixture-server.ts";
 import { PROGRESSIVE_FILE_BYTES, startProgressiveServer } from "./helpers/progressive-server.ts";
 import type { ProgressiveServer } from "./helpers/progressive-server.ts";
+import { STREAM_WAITS } from "./helpers/stream-waits.ts";
+
+// Records the `minWaitMs` each quiet wait is handed (dl-115), and changes nothing:
+// the default can only be read where the resolver passes it on, and a timing
+// bound cannot tell 1200 from a default that merely lands near it.
+const quietWaitCalls = vi.hoisted(() => [] as { minWaitMs: number }[]);
+vi.mock("../../src/browser/provoke.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof provoke>();
+  return {
+    ...actual,
+    waitForQuiet: (...args: Parameters<typeof actual.waitForQuiet>) => {
+      quietWaitCalls.push({ minWaitMs: args[0].minWaitMs });
+      return actual.waitForQuiet(...args);
+    },
+  };
+});
 
 const PROBE_TIMEOUT_MS = 25_000;
 const TEST_TIMEOUT_MS = 90_000;
@@ -37,6 +54,16 @@ const TEST_TIMEOUT_MS = 90_000;
  * would shorten the wait below the base rule's.
  */
 const NO_EMPTY_FLOOR_MS = 1200;
+/**
+ * The quiet rule a builder uses unless its caller says the test expects a stream
+ * (dl-115): only those take `STREAM_WAITS`. A shorter wait in a test that expects
+ * no media, or an error, would make it pass more easily. A test that expects a
+ * stream and also asserts that something was not pressed or not requested may
+ * take it: the presses happen during provocation, before the quiet wait, and
+ * every request these fixtures make on a press is made on the click itself.
+ */
+type Waits = Pick<BrowserResolverOptions, "quietMs" | "minWaitMs">;
+const BASE_WAITS: Waits = { quietMs: 1200 };
 
 let server: FixtureServer;
 let pool: BrowserPool;
@@ -104,7 +131,7 @@ describe("BrowserResolver", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       const result = await probe("/mse.html", resolver);
 
       // The page reports the scheme of video.src in its title. Proving it was
@@ -144,7 +171,7 @@ describe("BrowserResolver", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       // Nothing is fetched until the overlay is gone and the button is clicked,
       // so reaching a variant at all proves both steps ran.
       const result = await probe("/hls.html", resolver);
@@ -162,7 +189,7 @@ describe("BrowserResolver", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const dash = recordingDashParser();
-      const resolver = new BrowserResolver({ pool, dashParser: dash.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, dashParser: dash.parser, ...STREAM_WAITS });
       const result = await probe("/dash.html", resolver);
 
       // Matched on Content-Type alone — the URL has no extension at all.
@@ -181,7 +208,7 @@ describe("BrowserResolver", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       const result = await probe("/iframe-parent.html", resolver);
 
       expect(result.title).toBe("Conference talk — embedded player");
@@ -197,7 +224,7 @@ describe("BrowserResolver", () => {
         pool,
         hlsParser: throwingHlsParser,
         dashParser: throwingDashParser,
-        quietMs: 1200,
+        ...STREAM_WAITS,
       });
       const result = await probe("/mse.html", resolver);
 
@@ -212,7 +239,7 @@ describe("BrowserResolver", () => {
 
   test("works with the real parsers wired in", { timeout: TEST_TIMEOUT_MS }, async () => {
     // No injection: whatever dl-1 has landed is exercised for real.
-    const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+    const resolver = new BrowserResolver({ pool, ...STREAM_WAITS });
     // The one probe that asks for a locale (dl-113): the default-locale probe
     // above only shows "en", which a fr-CA header also contains.
     const result = await probe("/mse.html", resolver, options({ locale: "fr-CA" }));
@@ -253,7 +280,7 @@ describe("BrowserResolver", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
         server.requests.length = 0;
         const result = await probe("/related-card.html", resolver);
 
@@ -272,7 +299,7 @@ describe("BrowserResolver", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
         // A first-qualifying (rather than largest) chooser would land the
         // click on the small, listener-less decoy, and the real player would
         // never be clicked at all.
@@ -351,7 +378,7 @@ describe("BrowserResolver", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
         const result = await probe("/guard-fragment.html", resolver);
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
       },
@@ -362,7 +389,7 @@ describe("BrowserResolver", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
         const result = await probe("/guard-script-redirect.html", resolver);
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
       },
@@ -373,7 +400,7 @@ describe("BrowserResolver", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
         const result = await probe("/guard-router-rewrite.html?utm_source=newsletter", resolver);
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
       },
@@ -392,7 +419,7 @@ describe("BrowserResolver", () => {
         // alone cannot tell the two apart, since nothing navigates again
         // after it (see the Log).
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
         const result = await probe("/guard-redirect-then-fragment", resolver);
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
       },
@@ -405,7 +432,7 @@ describe("BrowserResolver", () => {
     // One row stays as the proof the guard is wired to it.
     test("adding ?t= on play is not a departure", { timeout: TEST_TIMEOUT_MS }, async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       const result = await probe("/guard-query.html?rewrite=t", resolver);
       expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
     });
@@ -417,7 +444,7 @@ describe("BrowserResolver", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
         server.requests.length = 0;
         const result = await probe("/cross-origin-card.html", resolver);
 
@@ -446,7 +473,7 @@ describe("BrowserResolver", () => {
         const resolver = new BrowserResolver({
           pool,
           hlsParser: hls.parser,
-          quietMs: 1200,
+          ...STREAM_WAITS,
           confirmAge: true,
         });
         server.requests.length = 0;
@@ -509,7 +536,7 @@ describe("BrowserResolver", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
         server.requests.length = 0;
         const result = await probe("/modal-escape.html", resolver);
 
@@ -578,12 +605,12 @@ describe("BrowserResolver", () => {
       const GATE = "/age-gate-overlay.html";
       const MASTER = "/media/mse/master.m3u8";
 
-      function confirming(): BrowserResolver {
+      function confirming(waits: Waits = BASE_WAITS): BrowserResolver {
         const hls = recordingHlsParser();
         return new BrowserResolver({
           pool,
           hlsParser: hls.parser,
-          quietMs: 1200,
+          ...waits,
           confirmAge: true,
           emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
         });
@@ -613,7 +640,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async () => {
           server.requests.length = 0;
-          const result = await probe(GATE, confirming());
+          const result = await probe(GATE, confirming(STREAM_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain("/beacon/age-confirmed");
@@ -629,7 +656,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async (_name, query) => {
           server.requests.length = 0;
-          const result = await probe(`${GATE}?${query}`, confirming());
+          const result = await probe(`${GATE}?${query}`, confirming(STREAM_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain("/beacon/age-confirmed");
@@ -677,7 +704,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async () => {
           server.requests.length = 0;
-          const result = await probe(`${GATE}?shadow`, confirming());
+          const result = await probe(`${GATE}?shadow`, confirming(STREAM_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain("/beacon/age-confirmed");
@@ -689,7 +716,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async () => {
           server.requests.length = 0;
-          const result = await probe(`${GATE}?decoy`, confirming());
+          const result = await probe(`${GATE}?decoy`, confirming(STREAM_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain("/beacon/age-confirmed");
@@ -706,12 +733,12 @@ describe("BrowserResolver", () => {
       // What a click behind a cover that never clears may wait (dl-118).
       const BLOCKED_CLICK_MS = 300;
 
-      function confirming(clickTimeoutMs?: number): BrowserResolver {
+      function confirming(clickTimeoutMs?: number, waits: Waits = BASE_WAITS): BrowserResolver {
         const hls = recordingHlsParser();
         return new BrowserResolver({
           pool,
           hlsParser: hls.parser,
-          quietMs: 1200,
+          ...waits,
           confirmAge: true,
           emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
           ...(clickTimeoutMs === undefined ? {} : { clickTimeoutMs }),
@@ -737,7 +764,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async (_name, pathname, pressed) => {
           server.requests.length = 0;
-          const result = await probe(pathname, confirming());
+          const result = await probe(pathname, confirming(undefined, STREAM_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).not.toContain(pressed);
@@ -754,7 +781,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async (_name, pathname) => {
           server.requests.length = 0;
-          const result = await probe(pathname, confirming());
+          const result = await probe(pathname, confirming(undefined, STREAM_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(beacons()).toEqual([]);
@@ -786,7 +813,10 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async () => {
           server.requests.length = 0;
-          const result = await probe("/age-inline-gate-plus-cookie.html", confirming());
+          const result = await probe(
+            "/age-inline-gate-plus-cookie.html",
+            confirming(undefined, STREAM_WAITS),
+          );
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain("/beacon/age-confirmed");
@@ -801,7 +831,10 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async () => {
           server.requests.length = 0;
-          const result = await probe("/age-false-signup-age-button.html", confirming());
+          const result = await probe(
+            "/age-false-signup-age-button.html",
+            confirming(undefined, STREAM_WAITS),
+          );
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain("/beacon/age-dropdown");
@@ -854,12 +887,12 @@ describe("BrowserResolver", () => {
     describe("gates built as links, and the dl-48 preference, as gate round 2 measured them (dl-83)", () => {
       const MASTER = "/media/mse/master.m3u8";
 
-      function confirming(): BrowserResolver {
+      function confirming(waits: Waits = BASE_WAITS): BrowserResolver {
         const hls = recordingHlsParser();
         return new BrowserResolver({
           pool,
           hlsParser: hls.parser,
-          quietMs: 1200,
+          ...waits,
           confirmAge: true,
           emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
         });
@@ -885,7 +918,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async (_name, pathname, shown) => {
           server.requests.length = 0;
-          const result = await probe(pathname, confirming());
+          const result = await probe(pathname, confirming(STREAM_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain(shown);
@@ -919,7 +952,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async (_name, pathname, shown) => {
           server.requests.length = 0;
-          const result = await probe(pathname, confirming());
+          const result = await probe(pathname, confirming(STREAM_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain(shown);
@@ -1053,7 +1086,7 @@ describe("stage narration", () => {
       const resolver = new BrowserResolver({
         pool,
         hlsParser: hls.parser,
-        quietMs: 1200,
+        ...STREAM_WAITS,
         emptyMinWaitMs: 9000,
       });
       const seen: ProbeStageEvent[] = [];
@@ -1149,7 +1182,7 @@ describe("the surface click reaches a player inside an open shadow root (dl-61)"
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       server.requests.length = 0;
       // The page's only video is inside an open shadow root and starts only
       // on `click`: a chooser that sees light-DOM videos alone never clicks.
@@ -1165,7 +1198,7 @@ describe("the surface click reaches a player inside an open shadow root (dl-61)"
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       server.requests.length = 0;
       // The same shadow-root player as above, embedded from the secondary origin:
       // the index branch of `clickChosenVideo`, not the marked-element one. A
@@ -1187,7 +1220,7 @@ describe("the surface click reaches a player inside an open shadow root (dl-61)"
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       server.requests.length = 0;
       const result = await probe("/shadow-card.html", resolver);
 
@@ -1203,7 +1236,7 @@ describe("PLAY_SCRIPT reaches a shadow-root player that only starts on play() (d
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       server.requests.length = 0;
       // The page's only video is inside an open shadow root and starts only
       // when something calls `.play()` on it: a chooser that stops at the
@@ -1229,7 +1262,7 @@ describe("a progressive file is not demoted to a segment (dl-78)", () => {
   });
 
   async function probeFile(pathname: string): Promise<ProbeResult> {
-    const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+    const resolver = new BrowserResolver({ pool, ...STREAM_WAITS });
     return await resolver.resolve(new URL(files.url(pathname)), options());
   }
 
@@ -1260,7 +1293,7 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       const result = await probe("/untyped-hls-text.html", resolver);
 
       expect(result.variants[0]?.protocol).toBe("hls");
@@ -1310,7 +1343,7 @@ describe("a consent dialog whose button no vendor selector matches (dl-82)", () 
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       server.requests.length = 0;
       const result = await probe(
         `/consent-label.html?label=${encodeURIComponent("Sono d'accordo")}`,
@@ -1358,7 +1391,7 @@ describe("the widened consent labels are pressed only inside a consent container
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       server.requests.length = 0;
       const result = await probe("/consent-inline-strip.html", resolver);
 
@@ -1373,12 +1406,13 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
 
   async function press(
     pathname: string,
+    waits: Waits = BASE_WAITS,
   ): Promise<{ outcome: ProbeResult | AppError; requests: string[] }> {
     const hls = recordingHlsParser();
     const resolver = new BrowserResolver({
       pool,
       hlsParser: hls.parser,
-      quietMs: 1200,
+      ...waits,
       emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
     });
     server.requests.length = 0;
@@ -1425,7 +1459,7 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
     "reaches a bottom consent bar past a sticky header's notice",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const { outcome, requests } = await press("/consent-header-then-bar.html");
+      const { outcome, requests } = await press("/consent-header-then-bar.html", STREAM_WAITS);
 
       expect(requests).toContain("/beacon/consent-accepted");
       expect(requests).not.toContain("/beacon/header-notice");
@@ -1438,7 +1472,7 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
     "presses a consent bar before a newsletter dialog that comes first in the document",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const { outcome, requests } = await press("/consent-order-dialog.html");
+      const { outcome, requests } = await press("/consent-order-dialog.html", STREAM_WAITS);
 
       const consentAt = requests.indexOf("/beacon/consent-accepted");
       const newsletterAt = requests.indexOf("/beacon/newsletter-hocapito");
@@ -1456,7 +1490,7 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
     "presses a widened label inside a role=dialog in a cross-origin frame",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const { outcome, requests } = await press("/consent-xo-dialog.html");
+      const { outcome, requests } = await press("/consent-xo-dialog.html", STREAM_WAITS);
 
       expect(requests).toContain("/beacon/xo-accepted");
       expect((outcome as ProbeResult).variants[0]?.url).toBe(server.secondaryUrl(MASTER));
@@ -1521,7 +1555,7 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       const resolver = new BrowserResolver({
         pool,
         hlsParser: hls.parser,
-        quietMs: 1200,
+        ...STREAM_WAITS,
         emptyMinWaitMs: 9000,
       });
       const startTime = Date.now();
@@ -1597,8 +1631,17 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
   function resolverWith(
     hls = recordingHlsParser(),
     emptyMinWaitMs = NO_EMPTY_FLOOR_MS,
+    waits: Waits = BASE_WAITS,
   ): BrowserResolver {
-    return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, emptyMinWaitMs });
+    return new BrowserResolver({ pool, hlsParser: hls.parser, ...waits, emptyMinWaitMs });
+  }
+
+  /** The same resolver for a page that must yield a stream, so it may wait less (dl-115). */
+  function streamingWith(
+    hls = recordingHlsParser(),
+    emptyMinWaitMs = NO_EMPTY_FLOOR_MS,
+  ): BrowserResolver {
+    return resolverWith(hls, emptyMinWaitMs, STREAM_WAITS);
   }
 
   // Not `pointermove`: headless Chromium sends one at (0,0) while a page loads,
@@ -1612,7 +1655,7 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
       server.requests.length = 0;
       // `<div><img></div>`: no `<video>`, no label, nothing to click. Until an
       // input arrives the page asks for no media at all.
-      const result = await probe("/input-gated-player.html?on=wheel", resolverWith());
+      const result = await probe("/input-gated-player.html?on=wheel", streamingWith());
 
       expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
       expect(server.requests).toContain("/media/hls/master.m3u8");
@@ -1642,7 +1685,7 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
     { timeout: TEST_TIMEOUT_MS },
     async (_name, pathname) => {
       server.requests.length = 0;
-      const result = await probe(pathname, resolverWith());
+      const result = await probe(pathname, streamingWith());
 
       expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
     },
@@ -1655,7 +1698,7 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
       server.requests.length = 0;
       // No `<video>`, no play-ish selector or text, no link: the box itself is
       // the only thing a person could press.
-      const result = await probe("/player-box-click-only.html", resolverWith());
+      const result = await probe("/player-box-click-only.html", streamingWith());
 
       expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
     },
@@ -1704,7 +1747,7 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
         const result = await probe(
           `/player-poster-related-grid.html?delay=${String(delay)}`,
           // The shipped floor (`EMPTY_MIN_WAIT_MS`, 9 s), which a request at 3 s needs.
-          resolverWith(undefined, 9000),
+          streamingWith(undefined, 9000),
         );
 
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
@@ -1717,7 +1760,7 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         server.requests.length = 0;
-        const result = await probe("/player-autostart-related-grid.html", resolverWith());
+        const result = await probe("/player-autostart-related-grid.html", streamingWith());
 
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
         expect(server.requests).not.toContain("/beacon/card-clicked");
@@ -1753,7 +1796,7 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         server.requests.length = 0;
-        const result = await probe("/player-box-billboard.html", resolverWith());
+        const result = await probe("/player-box-billboard.html", streamingWith());
 
         expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
         expect(server.requests).not.toContain("/beacon/billboard-clicked");
@@ -1795,7 +1838,7 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         server.requests.length = 0;
-        const result = await probe("/cross-origin-scroll-player.html", resolverWith());
+        const result = await probe("/cross-origin-scroll-player.html", streamingWith());
 
         expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
         expect(server.requests).toContain("/media/related/master.m3u8");
@@ -1807,7 +1850,7 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         server.requests.length = 0;
-        const result = await probe("/cross-origin-play-only.html", resolverWith());
+        const result = await probe("/cross-origin-play-only.html", streamingWith());
 
         expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
         expect(server.requests).toContain("/media/related/master.m3u8");
@@ -1819,7 +1862,7 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         server.requests.length = 0;
-        const result = await probe("/ad-frame-with-real-hls.html", resolverWith());
+        const result = await probe("/ad-frame-with-real-hls.html", streamingWith());
 
         // Adaptive outranks nothing here: both are HLS masters, so what decides
         // is which was requested, and the ad's is never asked for.
@@ -1837,8 +1880,17 @@ describe("a click-only player box beside a press that did not start a player (dl
   function resolverWith(
     hls = recordingHlsParser(),
     emptyMinWaitMs = NO_EMPTY_FLOOR_MS,
+    waits: Waits = BASE_WAITS,
   ): BrowserResolver {
-    return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, emptyMinWaitMs });
+    return new BrowserResolver({ pool, hlsParser: hls.parser, ...waits, emptyMinWaitMs });
+  }
+
+  /** The same resolver for a page that must yield a stream, so it may wait less (dl-115). */
+  function streamingWith(
+    hls = recordingHlsParser(),
+    emptyMinWaitMs = NO_EMPTY_FLOOR_MS,
+  ): BrowserResolver {
+    return resolverWith(hls, emptyMinWaitMs, STREAM_WAITS);
   }
 
   // `ctl=none`, no control at all, was the first row here until dl-113: every row
@@ -1856,7 +1908,7 @@ describe("a click-only player box beside a press that did not start a player (dl
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       server.requests.length = 0;
-      const result = await probe("/box-with-control.html?ctl=autoplay", resolverWith());
+      const result = await probe("/box-with-control.html?ctl=autoplay", streamingWith());
 
       expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
       expect(server.requests).toContain("/beacon/control-autoplay");
@@ -1899,7 +1951,7 @@ describe("a click-only player box beside a press that did not start a player (dl
       // shipped floor; a centre click on the wrapper would land on the embed.
       // Its button holds only a glyph, no word PLAY_TEXT matches, so the label
       // path cannot cover for isPlayPress.
-      const result = await probe("/box-xo-embed.html", resolverWith(undefined, 9000));
+      const result = await probe("/box-xo-embed.html", streamingWith(undefined, 9000));
 
       expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
       expect(server.requests).not.toContain("/beacon/embed-surface-clicked");
@@ -1914,7 +1966,7 @@ describe("a click-only player box beside a press that did not start a player (dl
       // The button is named "Play" and has no id, class or attribute that
       // isPlayPress counts: provokeFrame's labelClicked is the only thing that
       // reports it pressed (dl-123).
-      const result = await probe("/box-xo-embed-label.html", resolverWith(undefined, 9000));
+      const result = await probe("/box-xo-embed-label.html", streamingWith(undefined, 9000));
 
       expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
       expect(server.requests).not.toContain("/beacon/embed-surface-clicked");
@@ -2023,10 +2075,73 @@ describe("a page that abandons a fetched playlist (dl-111)", () => {
       // timing: `sniff.test.ts` pins the cap without a browser, and a
       // duration here would measure the machine.
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
       const result = await probe("/abandoned-body.html", resolver);
 
       expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+    },
+  );
+});
+
+describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)", () => {
+  /**
+   * How long the quiet wait lasted on a page whose stream is captured before it
+   * begins. The wait is timed from the `network-quiet` stage to the
+   * `settle-requests` one that follows it, as the dl-105 test does, so page load
+   * and provocation are outside it. `quietMs` is small so that only the minimum
+   * can hold the wait: the page's last request is a second old by then.
+   */
+  async function quietWait(
+    minWaitMs: number | undefined,
+  ): Promise<{ waitedMs: number; handedMs: number | undefined }> {
+    const resolver = new BrowserResolver({
+      pool,
+      hlsParser: recordingHlsParser().parser,
+      quietMs: 200,
+      ...(minWaitMs === undefined ? {} : { minWaitMs }),
+    });
+    let stopwatch: (() => number) | undefined;
+    let waitedMs: number | undefined;
+    quietWaitCalls.length = 0;
+    await probe(
+      "/mse.html",
+      resolver,
+      options({
+        onStage: (event) => {
+          if (event.stage === "network-quiet") stopwatch = startStopwatch();
+          if (event.stage === "settle-requests") waitedMs = stopwatch?.();
+        },
+      }),
+    );
+    expect(waitedMs).toBeDefined();
+    expect(quietWaitCalls).toHaveLength(1);
+    return { waitedMs: waitedMs ?? Number.NaN, handedMs: quietWaitCalls[0]?.minWaitMs };
+  }
+
+  test("the default is 1200 ms", () => {
+    expect(MIN_WAIT_MS).toBe(1200);
+  });
+
+  test(
+    "a resolver given no minWaitMs hands the wait MIN_WAIT_MS, and holds it that long",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { waitedMs, handedMs } = await quietWait(undefined);
+
+      // Exactly the constant: a default that skips it, 2400 say, fails here and
+      // not on a timing bound a slow runner could cross.
+      expect(handedMs).toBe(MIN_WAIT_MS);
+      expect(waitedMs).toBeGreaterThanOrEqual(MIN_WAIT_MS);
+    },
+  );
+
+  test(
+    "a minWaitMs below it is the one the wait is handed",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { handedMs } = await quietWait(STREAM_WAITS.minWaitMs);
+
+      expect(handedMs).toBe(STREAM_WAITS.minWaitMs);
     },
   );
 });

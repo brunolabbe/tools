@@ -63,7 +63,7 @@ const FALLBACK_CHROME_MAJOR = "141";
 /** Network silence that counts as "the player has settled". */
 const DEFAULT_QUIET_MS = 2500;
 /** Never conclude "no media" before the page has had a fair chance to ask. */
-const MIN_WAIT_MS = 1200;
+export const MIN_WAIT_MS = 1200;
 /**
  * dl-80: extended minimum wait when the collector holds no playable (non-segment)
  * media. Pages with pre-roll ads from blocked hosts, countdown timers, or delayed
@@ -143,6 +143,14 @@ export interface BrowserResolverOptions {
   dashParser?: DashParser;
   quietMs?: number;
   /**
+   * dl-115: the least the quiet wait lasts once a playable hit is captured.
+   * Defaults to `MIN_WAIT_MS`. Overridable so a test that expects a stream does
+   * not pay 1200 ms for a page whose last request landed 900 ms before the wait
+   * began. A test that expects no media must leave it alone: there a shorter wait
+   * makes the verdict easier to reach, not harder to miss.
+   */
+  minWaitMs?: number;
+  /**
    * dl-80: minimum wait time when the collector holds no playable media.
    * Defaults to `EMPTY_MIN_WAIT_MS`. Overridable so tests expecting
    * `NO_MEDIA_FOUND` quickly do not pay the full floor.
@@ -200,6 +208,7 @@ export class BrowserResolver implements Resolver {
   readonly #hlsParser: HlsParser;
   readonly #dashParser: DashParser;
   readonly #quietMs: number;
+  readonly #minWaitMs: number;
   readonly #emptyMinWaitMs: number;
   readonly #clickTimeoutMs: number | undefined;
   readonly #confirmAge: boolean;
@@ -222,6 +231,7 @@ export class BrowserResolver implements Resolver {
     this.#hlsParser = options.hlsParser ?? parseHls;
     this.#dashParser = options.dashParser ?? parseDash;
     this.#quietMs = options.quietMs ?? DEFAULT_QUIET_MS;
+    this.#minWaitMs = options.minWaitMs ?? MIN_WAIT_MS;
     this.#emptyMinWaitMs = options.emptyMinWaitMs ?? EMPTY_MIN_WAIT_MS;
     this.#clickTimeoutMs = options.clickTimeoutMs;
     this.#confirmAge = options.confirmAge ?? false;
@@ -391,7 +401,7 @@ export class BrowserResolver implements Resolver {
       collector,
       deadline: deadline - TEARDOWN_RESERVE_MS,
       quietMs: this.#quietMs,
-      minWaitMs: MIN_WAIT_MS,
+      minWaitMs: this.#minWaitMs,
       emptyMinWaitMs: this.#emptyMinWaitMs,
       signal: options.signal,
       // Nothing after a departure is worth waiting for (dl-55).
