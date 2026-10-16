@@ -280,6 +280,25 @@ export const SAME_OFFSET_ENDS_EARLY = /Stream ends prematurely at (\d+)/iu;
 const PARTIAL_VERDICT_MS = 2_000;
 
 /**
+ * How far short of its container's declared duration a progressive run may end
+ * before it is a short source (dl-125), in seconds.
+ *
+ * `PARTIAL_FILE` misses one short source: a fast-start file stored so that it
+ * ends exactly at a sample's first byte. ffmpeg then logs no `partial file` and
+ * no early end, and exits 0. Measured on ffmpeg 6.1.1 and Windows's
+ * `ffmpeg-static`: every such cut past the first two of a fixture copy ended
+ * `done`, 816 of 816 and 544 of 544. So once ffmpeg exits clean, the container's
+ * own `Duration` is set against its last `out_time`. The owner chose 0.25 s on
+ * 2026-10-15, from dl-125's measurements on both platforms. It caught 94.1% of those
+ * cuts, and failed none of 90 whole-source runs, whose largest gap was
+ * 0.067 s (one 15 fps frame). It misses only a cut that loses the last 0.25 s
+ * or less. It was **not** measured against real sources. Low or variable
+ * frame rates, edit lists, or a container that declares more than the tracks
+ * the engine maps could each put a whole file past it.
+ */
+const SHORT_OF_DECLARED_SEC = 0.25;
+
+/**
  * The connection a line came from: the address in ffmpeg's `[http @ …]` prefix,
  * `0x557cbe02b840` on Linux, `0000019e45be7ec0` on Windows (CI run 35404674345).
  * On ffmpeg 6.1.1 an early end and its reconnect carry the same address, and a
@@ -751,6 +770,10 @@ async function attempt(
   // duration before its first output byte and says so at info level (dl-96).
   // Until then the percent stays null, as it must.
   let learnedDurationSec: number | null = null;
+  // What the container itself declares, read whatever the variant says: the
+  // reference `SHORT_OF_DECLARED_SEC` measures a progressive run against
+  // (dl-125). A resolver's duration is not the file's, and may be rounded.
+  let containerDurationSec: number | null = null;
 
   let feeder: RangeFeeder | null = null;
   if (splittable(request, deps, context)) {
@@ -887,11 +910,12 @@ async function attempt(
       });
     },
     onInfoLine: (line) => {
-      if (mediaDurationSec !== null || learnedDurationSec !== null) return;
+      if (containerDurationSec !== null) return;
       // The first line that parses. Inputs are described in order, so that is
       // the video's unless its input says `N/A`; a later input is a separate
       // audio rendition or a subtitle track, timed against the same video.
-      learnedDurationSec = durationFromInfoLine(line);
+      containerDurationSec = durationFromInfoLine(line);
+      if (mediaDurationSec === null) learnedDurationSec = containerDurationSec;
     },
     onStderrLine: (line) => {
       logger.debug("ffmpeg", { line });
@@ -1025,6 +1049,24 @@ async function attempt(
       // A `partial file` with no early end at its offset by the time ffmpeg
       // finished: the source was short (`PARTIAL_FILE`).
       if (partialAt !== null) throw shortSource();
+      // dl-125: a short source ffmpeg said nothing about, because the file
+      // stops exactly at a sample's first byte. Only when both ends of the
+      // measure are there: with no `Duration` line or no progress snapshot the
+      // run stays `done`, as it was (the owner's answer of 2026-10-15). A live
+      // capture ends at its limit on purpose, so it is not measured.
+      const declaredSec = containerDurationSec;
+      const outTimeUs = result.lastSnapshot?.outTimeUs ?? null;
+      if (
+        progressive &&
+        context.liveDurationSec === null &&
+        declaredSec !== null &&
+        outTimeUs !== null &&
+        declaredSec - outTimeUs / 1_000_000 > SHORT_OF_DECLARED_SEC
+      ) {
+        throw new AppError("DOWNLOAD_FAILED", "The source ended before the whole video arrived.", {
+          details: { ...partialDetails(), declaredSec, outTimeSec: outTimeUs / 1_000_000 },
+        });
+      }
       body.end();
       // Every chunk through the counter, not merely out of ffmpeg: a slow
       // reader leaves the last few queued on the writable side. A reader that
