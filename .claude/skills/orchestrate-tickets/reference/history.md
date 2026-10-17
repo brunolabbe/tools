@@ -5582,3 +5582,34 @@ Total $51.2550, active 5h30m49s (rates read 2026-10-10). Orchestrator row is a f
 - A builder that found the dispatch over-claiming the owner's answer (lg-27: the 10 000 remainder does not flip a sign) built the answer as worded and raised it; the owner re-chose on the real case.
 - Gates that drove base and head through the HTTP API on the same random households (lg-23: 7 of 310 differ at gate 1, 0 of 610 at gate 2), which found a class the builder's own oracle property test could not reach.
 - Re-asking an owner answer when a gate brought an option the owner had not seen (lg-23 salaries); the owner kept the first answer, now on both options.
+
+### Batch 2026-10-17 (tools-a6, pl-56 measured) — base b9f01370
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| #509 | open, ready | Sonnet 5.5 / high | builder-standard | pl-56 build, live run + round 1 | 20m34s / 1h17m45s | 0 | $2.6038 |
+| #509 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | pl-56 gates 1–2 | 20m18s / 52m07s | 0 | $4.0413 |
+| #509 | open, ready | Sonnet 5.5 / high | fixer | pl-56 four fixes at landing + landing | 4m21s / 4m06s | 0 | $0.4824 |
+| — | — | Opus 5.5 / high | orchestrator | tools-a6 | 19m14s / 2h37m18s | 1 | $3.4908 |
+
+Total $10.6184, active 1h04m27s (rates read 2026-10-10). Orchestrator row is a floor, read before close. No seam map: one ticket, owner-selected, no planner pull request open.
+
+**Tickets:**
+
+- pl-56 → #509: gate 1 FAIL (two highs on the Log's conclusions, not its numbers: 18 false locations counted as 1, and option 1's city figures assumed an extract holding Rome and Vienna where the documented one is `quebec-latest`), gate 2 CONCERNS (reversal clause uncosted, plus three lows, all four fixed at landing by owner choice). Recommendation moved from option 1 to option 3 in round 1; the owner chose option 3, so no hours build tickets were filed.
+
+**Defects in the skill:**
+
+1. `roles/common.md`, "Your scratch directory" — forbids a gate from listing the ticket's scratch root ("a gate must not see a builder's files"), with no exception for a measurement ticket whose uncommitted raw data the gate must re-derive the tables from; both pl-56 gates were handed `build/scratch/` and each flagged the conflict. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -n "never list"` → `59:under your own subdirectory (\`build/\`, \`gate-<n>/\`, \`land/\`), and never list the`.
+2. `review-ticket/gate.md`, "Severity and the gate" — has no grade for a measurement ticket whose `Done when` lines ("the Log carries the tables", "options with costs") are literally met while the conclusion drawn from correct numbers is wrong; pl-56's gate 1 graded two such findings `high` by analogy to a coverage claim. Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n -i "measure"` → lines 18, 72 and 79, none grading a wrong conclusion.
+3. `SKILL.md`, step 9 ("A gate cannot write its report to a file") — again this batch the gate wrote its own section file (second batch running, after 2026-10-16's item 1). Reproduction: `ls -la <scratch>/pl-56/gate-1/gate-1@8e79a014.md` → `-rw-r--r-- 1 pwuser pwuser 10345 Oct 17 16:26`, written by the gate; the gate also reported a "changed on disk since you last read it" notice right after its own edit, which `roles/reviewer.md` › "Returning the gate" does not explain.
+4. `roles/reviewer.md`, "When you are woken to re-gate" — scopes the re-gate to the round's own commits but does not tell it to check that a merged-in path its earlier findings cited survived the merge; pl-56's F2 rested on `docs/02-DEPLOYMENT.md`, which the round's merge of `main` touched. Reproduction: `git diff --name-only 8e79a014 32af4a87 | grep -v ^tools/planner | wc -l` → `15`; `git diff --name-only 8e79a014 32af4a87 | grep -c '^docs/02-DEPLOYMENT.md'` → `1`.
+5. `roles/builder.md`, "Before you report" — prescribes `npm run format` after touching any `.md`, which rewrites the whole repo, while the next line bans `lint:fix` for rewriting files outside the branch. Not observed to dirty the tree this batch. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n -e "npm run format" -e "lint:fix"` → lines 62–63; the builder's `npm run format` printed `1105 files`.
+6. `roles/builder.md`, "When you are resumed with findings" — step 1 is `git merge --ff-only origin/<branch>`; it does not point to merging a `main` that moved since the build, which was the actual work on pl-56's resume (merge `9e157902`), covered only under "Before you report". Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n "ff-only"` → `149:1. \`git fetch origin\`, then \`git merge --ff-only origin/<branch>\``; `git log --merges --oneline 8e79a014..32af4a87` → the merge of `origin/main`.
+7. `reference/records.md`, "Fixed at landing" — the `<command that shows it fixed>` form matches the Log entry that quotes the removed phrase (second batch running, after 2026-10-16's item 7). Reproduction: `git show c140a768:tools/planner/docs/work/pl-56-measure-opening-hours-coverage.md | grep -c "wants to run"` → `3` and `… | grep -c "4 of 27"` → `4`, every hit in the landing's own entries; the lander scoped each with `sed '/^### The owner/q' <ticket> | grep -c`.
+
+**Worked, and worth keeping:**
+
+- A gate on a measurement ticket that recomputed every table from the committed record with its own script and replayed every raw reply through production `locate` on base and head (`cmp` exit 0): it cleared the numbers and put the whole FAIL on the conclusions.
+- Asking the owner the one fact a high turned on (the deployed extract) before the round, and holding the source decision until gate 2: the owner chose once, from the re-costed numbers.
+- A builder told not to keep its recommendation for continuity changed it from option 1 to option 3 in round 1, and named the one fact that would reverse it.
