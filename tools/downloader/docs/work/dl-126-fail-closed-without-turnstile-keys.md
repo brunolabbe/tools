@@ -215,6 +215,43 @@ Step 3's option 2 and Decision 2's contract question no longer apply.
 - **findings** · the hunt returned 8; 5 carried, 3 dropped.
 - NFR: security ✓ (no key value in the real stderr; fails closed) · performance n/a · reliability: F2 (a keyless host becomes an outage on the tag bump, by design) · maintainability: F1, F4.
 
+### Gate 2
+
+**Gate: CONCERNS**: 2026-10-17 · `f2c343d9..f2c5fc44` (round commits `340e513b`, `89b2a3d2` and `f2c5fc44`) · Opus 5.5, re-gate of the round only
+
+| Done when                                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 5. A refusal names the variable and never a key value; a test over captured logger output proves it | **proven**: `api/test/human-check.test.ts` › "main.ts, spawned with REQUIRE_HUMAN_CHECK on, exits 1 and writes a refusal with no key value" ✓. It spawns the real `main.ts` for four env shapes and asserts on the captured stdout and stderr: exit `1`, `"msg":"failed to start"`, `"code":"INTERNAL"`, the missing names, and neither test key. It is the only test that goes red when `main.ts`'s startup line also writes `process.env["TURNSTILE_SECRET_KEY"]` (1 failed, 19 passed, of 20) |
+| 8. A container with the setting and no keys does not serve a probe                                  | **unproven (gate)**: unchanged. No container was run. The PR's `docker` job (pass, `f2c5fc44`) runs `compose.downloader.yaml`, which does not carry the setting                                                                                                                                                                                                                                                                                                                                  |
+
+Done when 1–4, 6 and 7 stand as gate 1 graded them. On this head: `npm run check` exits 0. `npm test -- --project downloader`: 124 of 125 files passed (1 skipped), 2590 of 2592 tests passed (2 skipped). On PR #505 at `f2c5fc44`, every check passes, `test (windows-latest, informational)` included.
+
+**Gate 1's findings:**
+
+- **F1 (med, Done when 5): fixed.** Verified by two mutations:
+  - With `main.ts`'s startup line made to also write the secret from the env, the spawn test alone goes red: `expected '{"level":"error",…' not to contain '1x0000000000000000000000000000000AA'`.
+  - With the one-key message made to print the key, three tests go red, the spawn test among them, as the builder said.
+- **F2 (med): fixed.** "Updating and rolling back" in `docs/02-DEPLOYMENT.md` now has "Upgrading past dl-126 stops a downloader whose `.env` has no Turnstile keys", which gives both remedies and says a blank or unset entry does not opt out. It also has "Rolling back past dl-126 reopens a host with no keys". The title stays non-breaking, per the owner.
+- **F3 (low): fixed.** In the real stderr of all four boots, both hints now say "set REQUIRE_HUMAN_CHECK=false and leave both empty". The one-key hint without the setting keeps "unset both", which is right there. "a refusal under REQUIRE_HUMAN_CHECK says to set it to false, never to unset it" pins both hints. The compose comment, `.env.example` and the ARCHITECTURE row now say that under `:-true` only an explicit `false` opts out. Ignoring whitespace, that row is the only content change in the reformatted table.
+- **F4 (low): fixed.** `refusalFor()` throws "loadApiConfig did not refuse". With the no-key throw removed, the leak test now fails (5 failed, 15 passed, of 20); at gate 1 it stayed green.
+- **F5 (low): fixed.** The new Log entry accepts the figure and records the final spec against base `config.ts` as `5 failed | 15 passed (20)`. I measured the same: 5 failed, 15 passed, of 20. The round-0 entry is left standing and is corrected by the new one.
+
+**New, in the round's lines:**
+
+- **low** · `nfr:reliability`, no live leak · **F6**: on its regression path the spawn test stops the process with a single `child.kill("SIGKILL")` after a fixed 45 s. That is not a tree kill, and the failure costs 45 s. I measured that path with base `config.ts`:
+  - Two of the four spawns booted (the one-key cases refuse even at base). Each listened on three ports, 127.0.0.1 and 0.0.0.0 among them.
+  - At t+20 s they had no child processes: no chrome, no ffmpeg.
+  - After the kill, `ps` showed no `api/src/main.ts` process.
+  - No file was left under `tools/downloader/api` (`git status --ignored` was the same before and after).
+  - The test failed in 45 015 ms, inside its 90 s limit.
+
+  So nothing is orphaned today. The root rule is bent only on a path that runs when the test is already failing. It would orphan children if boot ever starts a long-lived child before it listens. A cheaper shape is to kill as soon as stdout shows `"msg":"listening"`.
+
+- **low** · false in the safe direction · **F7**: the upgrade note says "Do this **before** the `docker compose pull` that moves the tag, or expect the outage between the pull and the edit". `pull` does not recreate the container; the outage starts at the `docker compose up -d` that follows. Nothing relies on the distinction, and the advice errs early.
+- **findings** · the round's hunt returned 2; 2 carried, 0 dropped. Gate 1's five: 5 fixed.
+- **No `high`.** CONCERNS comes only from Done when 8, `unproven (gate)`. F6 and F7 are `low`; no Done when line depends on either.
+- NFR: security ✓ (the real stderr carries no key value; a main.ts-level leak is now caught) · performance: F6 (45 s to fail; about 1.6 s green) · reliability: F6 · maintainability ✓.
+
 ## Log
 
 - 2026-10-17 — Filed from dl-49's gate 1 (Opus 5.5, 2026-10-16) on PR #496,
