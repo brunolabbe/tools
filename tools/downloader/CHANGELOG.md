@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.0](https://github.com/brunolabbe/tools/compare/downloader-v0.9.0...downloader-v0.10.0) (2026-10-17)
+
+
+### Features
+
+* **downloader:** narrate the re-probe's stages on the job card (dl-110) ([#453](https://github.com/brunolabbe/tools/issues/453)) ([091d4d5](https://github.com/brunolabbe/tools/commit/091d4d59f5063cc06b4484846cf954a62df48239))
+* **downloader:** say on the job card when a source is read on parallel connections (dl-108) ([#451](https://github.com/brunolabbe/tools/issues/451)) ([84c899e](https://github.com/brunolabbe/tools/commit/84c899e4128bc148753733f93d39cd2a3bc7e5d4))
+
+
+### Fixes
+
+* **downloader:** fail a progressive run that ends short of its container (dl-125) ([#497](https://github.com/brunolabbe/tools/issues/497)) ([ec7c0f8](https://github.com/brunolabbe/tools/commit/ec7c0f8754ce645f21ab425f75eb7418fdf47a32))
+* **downloader:** refuse to boot without Turnstile keys when REQUIRE_HUMAN_CHECK is set (dl-126) ([#505](https://github.com/brunolabbe/tools/issues/505)) ([9e15790](https://github.com/brunolabbe/tools/commit/9e1579021da7fffc243bad2385897d82ac4b69e2))
+
 ## [0.9.0](https://github.com/brunolabbe/tools/compare/downloader-v0.8.1...downloader-v0.9.0) (2026-10-12)
 
 
