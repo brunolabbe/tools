@@ -167,43 +167,71 @@ describe("membership", () => {
     directory.close();
   });
 
-  test("a third person name is refused as HOUSEHOLD_FULL, by the code and by the schema", () => {
+  // lg-23 replaced lg-20's two tests that refused a third person name: the books
+  // settle between any number of people, so the directory holds any number.
+  test("a third, a fourth and a fifth person name are taken, by the code and by the schema", () => {
     const directory = withHousehold();
-    directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
-    directory.addMember({ household: "home", address: SAM, person: "sam", ...CHANGE });
-
-    expect(
-      code(() =>
-        directory.addMember({ household: "home", address: CASEY, person: "casey", ...CHANGE }),
-      ),
-    ).toBe("HOUSEHOLD_FULL");
-    expect(directory.membershipOf(CASEY)).toBeUndefined();
-
     const db = raw();
-    insert(db, { address: ALEX, person: "alex" });
-    insert(db, { address: SAM, person: "sam" });
-    expect(() => insert(db, { address: CASEY, person: "casey" })).toThrow(/HOUSEHOLD_FULL/u);
+    const people = ["alex", "sam", "casey", "dana", "eli"];
+    for (const person of people) {
+      const address = `${person}@example.test`;
+      directory.addMember({ household: "home", address, person, ...CHANGE });
+      insert(db, { address, person });
+    }
+
+    expect(directory.people("home")).toEqual(people.toSorted());
+    expect(directory.membershipOf(CASEY)).toEqual({ household: "home", person: "casey" });
+    expect(db.prepare("SELECT count(DISTINCT person) AS n FROM current_members").get()).toEqual({
+      n: 5,
+    });
     directory.close();
     db.close();
   });
 
-  test("a name the household held once still counts, so a third never reaches the books", () => {
-    // The books keep every name they have held (a name is permanent), and
-    // settle between two people: sam's records outlive sam's removal.
+  test("with sam removed, casey is added as a third name, and sam stays a name the household held", () => {
+    // The books keep every name they have held (a name is permanent): sam's
+    // records outlive sam's removal, and casey joins beside them.
     const directory = withHousehold();
     directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
     directory.addMember({ household: "home", address: SAM, person: "sam", ...CHANGE });
     directory.removeMember({ address: SAM, ...CHANGE });
 
-    expect(
-      code(() =>
-        directory.addMember({ household: "home", address: CASEY, person: "casey", ...CHANGE }),
-      ),
-    ).toBe("HOUSEHOLD_FULL");
-    // sam may come back, under any address.
-    directory.addMember({ household: "home", address: CASEY, person: "sam", ...CHANGE });
-    expect(directory.membershipOf(CASEY)).toEqual({ household: "home", person: "sam" });
+    directory.addMember({ household: "home", address: CASEY, person: "casey", ...CHANGE });
+
+    expect(directory.membershipOf(CASEY)).toEqual({ household: "home", person: "casey" });
+    expect(directory.history("home").map((change) => change.person)).toEqual([
+      "alex",
+      "sam",
+      "sam",
+      "casey",
+    ]);
     directory.close();
+  });
+
+  test("migration 4 drops the cap a directory at migration 3 still holds, its records unchanged", () => {
+    const db = new Database(":memory:");
+    migrateDirectory(db, 3);
+    db.prepare(
+      "INSERT INTO households (id, name, created_at, created_by) VALUES ('home', 'Home', 'x', 'operator')",
+    ).run();
+    insert(db, { address: ALEX, person: "alex" });
+    insert(db, { address: SAM, person: "sam" });
+    // At migration 3 the third name is lg-20's refusal; the test would pass
+    // without migration 4 only if the cap had never been there.
+    expect(() => insert(db, { address: CASEY, person: "casey" })).toThrow(/HOUSEHOLD_FULL/u);
+    const before = db.prepare("SELECT * FROM memberships ORDER BY id").all();
+
+    migrateDirectory(db);
+
+    expect(db.pragma("user_version", { simple: true })).toBe(4);
+    expect(db.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(before);
+    insert(db, { address: CASEY, person: "casey" });
+    expect(db.prepare("SELECT person FROM current_members ORDER BY person").all()).toEqual([
+      { person: "alex" },
+      { person: "casey" },
+      { person: "sam" },
+    ]);
+    db.close();
   });
 
   test("a removal ends the membership and copies what it ended; the address may then be added again", () => {
@@ -364,7 +392,7 @@ describe("a record is never replaced", () => {
         "INSERT OR REPLACE INTO households (id, name, created_at, created_by) VALUES ('home', 'Elsewhere', 'x', 'raw')",
       ),
     ).toThrow(/appended, never replaced/u);
-    expect(db.pragma("user_version", { simple: true })).toBe(3);
+    expect(db.pragma("user_version", { simple: true })).toBe(4);
     db.close();
   });
 
@@ -468,7 +496,7 @@ describe("a household id is never NULL", () => {
       directory.close();
 
       const after = new Database(file);
-      expect(after.pragma("user_version", { simple: true })).toBe(3);
+      expect(after.pragma("user_version", { simple: true })).toBe(4);
       expect(after.prepare("SELECT * FROM households ORDER BY id").all()).toEqual(households);
       expect(after.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(memberships);
       refusesNullIds(after);

@@ -7,10 +7,10 @@
  * **The mortgage bucket is not shared money** (§4). Every cent in it is one
  * person's deposit that no payment has used yet, so its whole balance is
  * attributed: a row filed to a person is that person's, and a joint row — the
- * payment itself, or a rebate — is split in half between the two. With deposits
- * filed to people and payments joint, that is exactly
- * `own = deposits − ½ × payments`, and the own amounts sum to the balance with
- * nothing left over as "common".
+ * payment itself, or a rebate — is split evenly between everyone, in half
+ * between two. With deposits filed to people and payments joint, that is exactly
+ * `own = deposits − ½ × payments` for two, and the own amounts sum to the
+ * balance with nothing left over as "common".
  *
  * **The odd cent.** Half of an odd number of cents is not a number of cents. The
  * split is done **once, on the cumulative joint total**, never per payment, so a
@@ -51,7 +51,7 @@ export interface MortgagePosition {
   balanceCents: number;
   /** One entry per person, in id order. They sum to `balanceCents`, to the cent. */
   own: OwnMoney[];
-  /** `null` when the two are level, or when there are not exactly two people. */
+  /** `null` when the two with the most are level, or when there are fewer than two people. */
   lead: Lead | null;
 }
 
@@ -126,12 +126,15 @@ export function mortgageAsOf(
   return { balanceCents, own, lead: leadOf(own) };
 }
 
+/**
+ * The person with the most of their own money, and their margin over the next
+ * (lg-23, Question 2 A). For two people that is lg-5's lead exactly.
+ */
 function leadOf(own: readonly OwnMoney[]): Lead | null {
-  const [first, second] = own;
-  if (own.length !== 2 || first === undefined || second === undefined) return null;
-  if (first.ownCents === second.ownCents) return null;
-  const [ahead, behind] = first.ownCents > second.ownCents ? [first, second] : [second, first];
-  return { personId: ahead.personId, byCents: ahead.ownCents - behind.ownCents };
+  const [ahead, next] = own.toSorted((a, b) => b.ownCents - a.ownCents);
+  if (ahead === undefined || next === undefined) return null;
+  if (ahead.ownCents === next.ownCents) return null;
+  return { personId: ahead.personId, byCents: ahead.ownCents - next.ownCents };
 }
 
 /** The buffer's balance as of `asOf`, and what each person has put into it by then. */

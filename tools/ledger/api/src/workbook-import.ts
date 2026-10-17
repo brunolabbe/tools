@@ -547,10 +547,26 @@ function compare(
 
 function describeSettlement(figures: SettlementFigures | null): string {
   if (figures === null) return "no ratio in effect";
-  if (figures.payerId === null) return "nobody owes";
-  const deposit =
-    figures.depositCents === null ? "pays directly" : `deposits ${money(figures.depositCents)}`;
-  return `${figures.payerId} ${deposit} (net ${money(figures.netCents)}), ${figures.formula}`;
+  const { deposits, transfers } = figures;
+  if (deposits !== null && deposits.length === 0 && transfers.length === 0) return "nobody owes";
+  // Between two people, the line lg-7 printed.
+  const [only, more] = transfers;
+  const [deposit, another] = deposits ?? [];
+  const onePayer = deposit === undefined || only === undefined || deposit.personId === only.fromId;
+  if (more === undefined && another === undefined && (deposit ?? only) !== undefined && onePayer) {
+    const payer = deposit?.personId ?? only?.fromId ?? "";
+    const what =
+      deposit === undefined ? "pays directly" : `deposits ${money(deposit.depositCents)}`;
+    return `${payer} ${what} (net ${money(only?.cents ?? 0)}), ${figures.formula}`;
+  }
+  const direct = transfers
+    .map((transfer) => `${transfer.fromId} to ${transfer.toId} ${money(transfer.cents)}`)
+    .join(", ");
+  const asked =
+    deposits === null
+      ? `pays directly: ${direct}`
+      : `${deposits.map((each) => `${each.personId} deposits ${money(each.depositCents)}`).join(", ")} (net ${direct === "" ? "nothing" : direct})`;
+  return `${asked}, ${figures.formula}`;
 }
 
 export function importWorkbook(

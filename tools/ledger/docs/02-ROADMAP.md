@@ -73,6 +73,10 @@ detail and the numbers behind each.
     addresses as the outer gate, and the directory decides which household an
     admitted address is in. Still no login of the tool's own. The reasons and
     the measurements are in `00-ANALYSIS.md` §7.
+  - _Amended on 2026-10-12:_ **a household of any number of people.** The
+    ratio, the matching rule and the mortgage bucket's lead are generalised
+    past two, and a ratio between different people waits for a close (lg-23;
+    `00-ANALYSIS.md` §5, _More than two people_).
 
 ## Phase 0 — Scaffold ✅
 
@@ -140,10 +144,12 @@ transcribing by hand.
 
 ## Phase 6 — More than one household
 
-| Ticket                                                                  | What                                                    |
-| ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| [lg-20](./work/lg-20-the-household-directory.md)                        | who belongs to which household, from a database         |
-| [lg-21](./work/lg-21-books-per-household.md)                            | one file of books per household                         |
-| [lg-22](./work/lg-22-manage-households-from-the-app.md)                 | households and members managed from the app             |
-| [lg-23](./work/lg-23-a-household-of-more-than-two.md)                   | a household of more than two people                     |
-| [repo-98](../../../docs/work/repo-98-open-the-ledgers-access-policy.md) | the policy opened to any proven address, if ever wanted |
+| Ticket                                                                  | What                                                          |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [lg-20](./work/lg-20-the-household-directory.md)                        | who belongs to which household, from a database               |
+| [lg-21](./work/lg-21-books-per-household.md)                            | one file of books per household                               |
+| [lg-22](./work/lg-22-manage-households-from-the-app.md)                 | households and members managed from the app                   |
+| [lg-23](./work/lg-23-a-household-of-more-than-two.md)                   | any number of people: ratio, settlement, lead, directory      |
+| [lg-29](./work/lg-29-a-blank-salary-is-not-in-the-years-ratio.md)       | a blank salary leaves a person out of the year's ratio        |
+| [lg-30](./work/lg-30-name-whose-a-receipt-items-charge-is.md)           | a receipt item charged to a named person, among more than two |
+| [repo-98](../../../docs/work/repo-98-open-the-ledgers-access-policy.md) | the policy opened to any proven address, if ever wanted       |

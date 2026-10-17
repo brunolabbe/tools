@@ -53,10 +53,8 @@ const OWED: SettlementFigures = {
   formula: "v3",
   ratioId: 1,
   shares: SHARES,
-  payerId: "alex",
-  recipientId: "sam",
-  depositCents: 15_000,
-  netCents: 6_000,
+  deposits: [{ personId: "alex", depositCents: 15_000 }],
+  transfers: [{ fromId: "alex", toId: "sam", cents: 6_000 }],
 };
 
 const OPEN: OpenPeriodResponse = {
@@ -123,8 +121,21 @@ function closed(id: number, end: string, status: ClosedPeriod["deposit"]["status
     end,
     closedAt: `${end}T20:00:00.000Z`,
     closedBy: "sam",
-    settlement: { ...OWED, depositCents: id * 1_000 },
-    deposit: { status, rowId: status === "matched" ? 99 : null },
+    settlement: { ...OWED, deposits: [{ personId: "alex", depositCents: id * 1_000 }] },
+    deposit: {
+      status,
+      deposits:
+        status === "matched" || status === "expected" || status === "folded"
+          ? [
+              {
+                personId: "alex",
+                depositCents: id * 1_000,
+                status,
+                rowId: status === "matched" ? 99 : null,
+              },
+            ]
+          : [],
+    },
   };
 }
 
@@ -458,6 +469,95 @@ test("the line form offers the list, and sends none when none is picked", async 
   await waitFor(() =>
     expect(addLine).toHaveBeenCalledWith(
       expect.objectContaining({ category: null, spendingCategoryId: null }),
+    ),
+  );
+});
+
+// lg-23: a household of more than two people.
+const THREE: SettlementFigures = {
+  formula: "v3",
+  ratioId: 2,
+  shares: [
+    { personId: "alex", partsPerMillion: 500_000, salaryId: 3 },
+    { personId: "casey", partsPerMillion: 250_000, salaryId: 4 },
+    { personId: "sam", partsPerMillion: 250_000, salaryId: 5 },
+  ],
+  deposits: [
+    { personId: "alex", depositCents: 22_000 },
+    { personId: "casey", depositCents: 2_000 },
+  ],
+  transfers: [
+    { fromId: "alex", toId: "casey", cents: 4_000 },
+    { fromId: "alex", toId: "sam", cents: 6_000 },
+  ],
+};
+
+test("between three people, the close names every deposit and every transfer", async () => {
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchOpenPeriod).mockResolvedValue({ ...OPEN, settlement: THREE });
+  render(<Periods />);
+  await screen.findByRole("heading", { name: "Close the period" });
+
+  const card = section("Close the period");
+  expect(
+    within(card).getByText("alex deposits 220.00 $ and casey deposits 20.00 $ into the buffer."),
+  ).toBeTruthy();
+  expect(
+    within(card).getByText("Or directly: alex pays casey 40.00 $ and alex pays sam 60.00 $."),
+  ).toBeTruthy();
+});
+
+test("between three people, a close each deposit of which is seen apart lists only the one not yet seen", async () => {
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchPeriods).mockResolvedValue([
+    {
+      ...closed(5, "2027-01-31", "expected"),
+      settlement: THREE,
+      deposit: {
+        status: "expected",
+        deposits: [
+          { personId: "alex", depositCents: 22_000, status: "matched", rowId: 12 },
+          { personId: "casey", depositCents: 2_000, status: "expected", rowId: null },
+        ],
+      },
+    },
+  ]);
+  render(<Periods />);
+  await screen.findByRole("heading", { name: "Deposits not seen yet" });
+
+  const card = section("Deposits not seen yet");
+  expect(within(card).getByText("casey, for the period ending 2027-01-31")).toBeTruthy();
+  expect(within(card).queryByText("alex, for the period ending 2027-01-31")).toBeNull();
+});
+
+test("between three people, a charge names whose it was", async () => {
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(addLine).mockResolvedValue({
+    id: 21,
+    personId: "sam",
+    date: "2026-09-12",
+    amountCents: 1_000,
+    category: null,
+    spendingCategoryId: null,
+    note: null,
+    source: "manual",
+    chargedTo: "casey",
+    supersedes: null,
+    enteredAt: "2026-09-12T12:00:00.000Z",
+    enteredBy: "sam",
+  });
+  render(<Periods />);
+  const form = await screen.findByRole("form", { name: "Add a line" });
+
+  fireEvent.change(within(form).getByLabelText("Date"), { target: { value: "2026-09-12" } });
+  fireEvent.change(within(form).getByLabelText("Amount"), { target: { value: "10" } });
+  fireEvent.click(within(form).getByLabelText("This was someone else's"));
+  fireEvent.change(within(form).getByLabelText("Whose it was"), { target: { value: "casey" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Add the line" }));
+
+  await waitFor(() =>
+    expect(addLine).toHaveBeenCalledWith(
+      expect.objectContaining({ personId: "sam", chargedTo: "casey" }),
     ),
   );
 });

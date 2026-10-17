@@ -536,6 +536,33 @@ const MIGRATIONS: readonly string[] = [
   -- migration has none.
   ALTER TABLE receipt_filings ADD COLUMN charge_line_id INTEGER REFERENCES period_lines (id);
   `,
+
+  // 10 — a settlement between more than two people (lg-23): its deposits and
+  // transfers, one row each, written with the period and never after.
+  `
+  -- A close whose settlement is between two people still records it in the
+  -- periods row itself, exactly as before. One between more leaves payer_id and
+  -- recipient_id NULL and net_cents 0 there, deposit_cents NULL when only the
+  -- transfers can settle it and 0 otherwise, and writes its figures here. A
+  -- period with no row in either table settled as its periods row says.
+  CREATE TABLE settlement_deposits (
+    period_id INTEGER NOT NULL REFERENCES periods (id),
+    person_id TEXT NOT NULL REFERENCES people (id),
+    deposit_cents INTEGER NOT NULL CHECK (deposit_cents > 0),
+    PRIMARY KEY (period_id, person_id)
+  );
+
+  CREATE TABLE settlement_transfers (
+    id INTEGER PRIMARY KEY,
+    period_id INTEGER NOT NULL REFERENCES periods (id),
+    from_id TEXT NOT NULL REFERENCES people (id),
+    to_id TEXT NOT NULL REFERENCES people (id),
+    cents INTEGER NOT NULL CHECK (cents > 0),
+    CHECK (from_id <> to_id)
+  );
+
+  CREATE INDEX settlement_transfers_period ON settlement_transfers (period_id, id);
+  `,
 ];
 
 /**

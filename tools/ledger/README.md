@@ -98,8 +98,8 @@ npm run household:ledger -- remove <address>
 npm run household:ledger -- list
 ```
 
-A household holds two people, each behind any number of addresses, and a name
-it has held stays one of its two. Every address must also be on the ledger's
+A household holds any number of people, each behind any number of addresses,
+and a name it has held stays in its books. Every address must also be on the ledger's
 Access policy. Each household's books are a file of their own,
 `households/<id>.db` in the data directory, which the API makes, migrates and
 fills with the household's names the first time it needs it (lg-21); so back up

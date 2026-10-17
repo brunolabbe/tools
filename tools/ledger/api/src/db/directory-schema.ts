@@ -141,6 +141,14 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
     WHEN NEW.id IS NULL
     BEGIN SELECT RAISE(ABORT, 'a household has an id'); END;
   `,
+  // 4 — a household holds any number of people (lg-23).
+  `
+  -- Migration 1's cap of two person names a household has ever held goes: the
+  -- books now settle between any number of people. A name is still permanent
+  -- in the books (00-ANALYSIS.md §7); what changes is that a third is not one
+  -- too many.
+  DROP TRIGGER memberships_two_people;
+  `,
 ];
 
 /** Brings a directory up to `target`, every migration by default. */

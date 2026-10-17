@@ -162,7 +162,9 @@ describe("an admin", () => {
     expect((await send(app, SAM, "GET", ROUTES.me)).json<MeResponse>().person.household).toBe(AWAY);
   });
 
-  test("is told which reason refused an address: in a household already, or a third person", async () => {
+  // lg-23: lg-22's admin was also told "a third person"; a household now holds
+  // any number, so a third is added.
+  test("is told why an address in a household already is refused, and adds a third person", async () => {
     const { app, directory } = await start();
     const before = directorySnapshot(directory);
 
@@ -170,19 +172,21 @@ describe("an admin", () => {
       address: ALEX,
       person: "kim",
     });
-    const third = await send(app, ADMIN, "POST", of("adminMembers", HOUSEHOLD), {
-      address: CASEY,
-      person: "casey",
-    });
 
     expect(taken.statusCode).toBe(409);
     expect(taken.json<ErrorResponse>().error).toMatchObject({
       code: "ADDRESS_ALREADY_A_MEMBER",
       message: expect.stringContaining(`"${HOUSEHOLD}"`),
     });
-    expect(third.statusCode).toBe(409);
-    expect(third.json<ErrorResponse>().error.code).toBe("HOUSEHOLD_FULL");
     expect(directorySnapshot(directory)).toBe(before);
+
+    const third = await send(app, ADMIN, "POST", of("adminMembers", HOUSEHOLD), {
+      address: CASEY,
+      person: "casey",
+    });
+
+    expect(third.statusCode, third.body).toBe(200);
+    expect(directory.membershipOf(CASEY)).toEqual({ household: HOUSEHOLD, person: "casey" });
   });
 
   test("is refused a household or a member that is not there, and nothing changes", async () => {
@@ -288,8 +292,9 @@ describe("a member", () => {
     const add = async (address: string, person: string) =>
       await send(app, SAM, "POST", of("householdMembers", HOUSEHOLD), { address, person });
 
-    // In another household; in this one; a third person, with a free address.
-    const answers = [await add(KIM, "sam"), await add(ALEX, "sam"), await add(CASEY, "casey")];
+    // In another household; in this one. A third person with a free address is
+    // no longer a reason (lg-23): a household holds any number.
+    const answers = [await add(KIM, "sam"), await add(ALEX, "sam")];
 
     for (const answer of answers) {
       expect(answer.statusCode).toBe(409);
@@ -298,6 +303,9 @@ describe("a member", () => {
       for (const mark of [AWAY, "kim", "two", "belongs"]) expect(answer.body).not.toContain(mark);
     }
     expect(directorySnapshot(directory)).toBe(before);
+
+    const third = await add(CASEY, "casey");
+    expect(third.statusCode, third.body).toBe(200);
   });
 
   test("can remove nobody, through any route", async () => {

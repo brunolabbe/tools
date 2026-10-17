@@ -14,7 +14,7 @@
  * effect, and until then the ratio in effect is the one confirmed before.
  */
 
-import { ratioFromSalaries, ratioInEffect } from "@ledger/books";
+import { dayAfter, ratioFromSalaries, ratioInEffect } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type {
   ConfirmRatioRequest,
@@ -86,11 +86,11 @@ function yearSalaries(db: Database, year: number): Salary[] {
   ).map(toSalary);
 }
 
-/** The ratio a year's salaries give, if the year holds one for each of two people. */
+/** The ratio a year's salaries give, once the year holds them for two people or more (lg-23). */
 function proposalFor(salaries: readonly Salary[], today: string): RatioProposal | null {
-  if (salaries.length !== 2) return null;
+  if (salaries.length < 2) return null;
   const byPerson = new Map(salaries.map((salary) => [salary.personId, salary.id]));
-  // Two zero salaries give no ratio; nothing to propose, and nothing wrong with the entry.
+  // Salaries of zero give no ratio; nothing to propose, and nothing wrong with the entry.
   if (salaries.every((salary) => salary.amountCents === 0)) return null;
   return {
     effectiveFrom: today,
@@ -189,11 +189,50 @@ function sameShares(a: readonly RatioShare[], b: readonly RatioShare[]): boolean
   );
 }
 
+function peopleOf(ratio: Ratio): string {
+  return ratio.shares.map((share) => share.personId).join("\n");
+}
+
+/**
+ * People change only at a close (lg-23, Question 3 A): a ratio whose people
+ * differ from the open period's does not take effect inside it, so every
+ * stretch a settlement weighs has the same people throughout. The open period's
+ * people are those of the ratio in effect on its first day — the day after the
+ * last close; before any close, the books' earliest ratio's, the first period
+ * running from the beginning. Refused rather than deferred to the next period:
+ * a ratio confirmed and then silently not used would show one ratio on the
+ * salaries screen and settle at another. Asked after the new ratio is written,
+ * inside its transaction, so a refusal leaves nothing behind; only a breach the
+ * new ratio takes part in is refused, so an older one never blocks a confirm.
+ */
+function requireSamePeopleInOpenPeriod(db: Database, confirmed: Ratio): void {
+  const { end } = db.prepare("SELECT max(end_date) AS end FROM periods").get() as {
+    end: string | null;
+  };
+  const start = end === null ? null : dayAfter(end);
+  const ratios = currentRatios(db);
+  const inside = ratios.filter((ratio) => start === null || ratio.effectiveFrom > start);
+  const anchor = (start === null ? ratios[0] : ratioInEffect(ratios, start)) ?? inside[0];
+  if (anchor === undefined) return;
+  const breaches = inside.filter((ratio) => peopleOf(ratio) !== peopleOf(anchor));
+  const involved =
+    anchor.id === confirmed.id ? breaches.length > 0 : breaches.some((r) => r.id === confirmed.id);
+  if (!involved) return;
+  throw new AppError(
+    "BAD_REQUEST",
+    start === null
+      ? "A ratio between different people takes effect only at a period's close. Close the first period, then confirm it from the day after."
+      : `A ratio between different people takes effect only at a period's close: from ${start}, the open period's first day, or from after the open period is closed.`,
+  );
+}
+
 /**
  * Confirms the ratio the named salary records give, from `effectiveFrom`. The
  * records must stand — a salary corrected since the proposal is
- * `SALARY_NOT_FOUND` — and be one year's, one for each of two people. The ratio
- * is derived again here from the records, never taken from the caller.
+ * `SALARY_NOT_FOUND` — and be one year's, one for each of two people or more.
+ * The ratio is derived again here from the records, never taken from the
+ * caller. A ratio that changes who is in it waits for a close
+ * (`requireSamePeopleInOpenPeriod`).
  */
 export function confirmRatio(context: SalaryContext, request: ConfirmRatioRequest): Ratio {
   return context.db
@@ -238,6 +277,7 @@ export function confirmRatio(context: SalaryContext, request: ConfirmRatioReques
       const [stored] = readRatios(context.db, "WHERE id = ?", ratioId);
       if (stored === undefined)
         throw new AppError("INTERNAL", "A confirmed ratio did not read back.");
+      requireSamePeopleInOpenPeriod(context.db, stored);
       return stored;
     })
     .immediate();
