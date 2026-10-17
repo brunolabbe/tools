@@ -249,6 +249,86 @@ The answers are above. Build after lg-22 has merged.
 - **findings** · the hunt returned 12: 4 carried (F1 to F4), 8 dropped.
 - NFR: security ✓ (no new route; SQL is parameterised; the refusal sits behind the existing auth) · performance ✓ (two small queries per closed period per read; the matching is O(n log n)) · reliability ✓ (a close is one immediate transaction; migrations are atomic, measured by forcing migration 10 to fail midway) · maintainability — F1 to F3.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-17 · `4143a88..66a6063` (round: `9b155a7`, `08b1604`; the merge of main at `9e15790` is not the round) · Sonnet 5.5, depth full
+
+Gate 1's F1 to F3 are fixed. F4 was left as recorded. I found nothing above a med and no `high`. There are two new meds and two new lows, all in lines this round touched. No `Done when` line of lg-23 depends on any of them, so they are recorded rather than opening a round. Each has a fully stated fix.
+
+| Done when                                                                 | Proof at `66a6063`                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2. For two people the new settlement equals `settleStretches` to the cent | **proven, and the intent now holds too.** `books/test/household-settlement.test.ts` › "names who owes whom, paid directly, as lg-6 did (the gate's reproduction)" and "over 5 000 histories that leave a residual of a fraction of a cent, it is lg-6's settlement" assert it. At the API layer it is **verified**, not asserted: see F1 and N1.                                   |
+| 6. Gates green                                                            | `npm run check` exit 0; ledger project 1157 of 1157 in 62 files (1138 at gate 1; the rest is the merged lg-26 tests and the round's new ones). PR #508 on this head: `check` ×2, `docker`, `codeql`, `CodeQL`, `changes`, `dependency-review` and `test (ubuntu-latest)` pass. `test (windows-latest, informational)` was still pending when I stopped, so it is read, not graded. |
+
+Done when 1, 3, 4 and 5 are untouched by the round. Their specs pass in the full run.
+
+**Verdicts on gate 1**
+
+- **F1, fixed.**
+  - The `minimal` history now answers `{"payerId":"alex","recipientId":"sam","depositCents":null,"netCents":0}`, which is the base's answer.
+  - 40 000 random two-person histories against the base tree's `settleStretches`: 0 mismatches. 93 of them reached the class.
+  - The API differential (60, 250 and 300 histories, seeds 5, 11 and 23; 3 411 closes): 0 of 610 histories differ, against 7 of 310 at gate 1. 16 closes in 12 histories were in the class.
+  - The fix fires only for exactly two named people. I compared `settleHousehold` at this head with gate 1's on 40 000 histories each of 3, 4 and 5 people, including a closing ratio that leaves someone out: 0 of 120 000 changed. Of the 40 000 two-person histories, 220 changed, every one "nobody" becoming one 0-cent direct transfer.
+  - `property.mts` rerun, 100 000 per size: no zero-sum failure, no non-positive deposit and no standing over a cent. The worst standing is 0.749681, 0.989028 and 0.999994 cent for 3, 4 and 5.
+  - Red then green: with `books/src/settlement.ts` put back to gate 1's version, the two new books tests fail (`trial 6`, as the Log says); restored, 11 of 11 pass.
+- **F2, fixed by refusing.**
+  - `api/test/receipts.test.ts` › "an item marked as the other's, among more than two › is refused, and nothing is filed" fails with `api/src/receipts.ts` put back to gate 1's version, and passes at the head. It asserts 400 `BAD_REQUEST`, "more than two people" in the message, and 0 rows in `period_lines` and `receipt_filings`.
+  - The companion "a receipt with nothing marked as the other's still files" passes.
+  - The web test "among three people, an item cycles between shared and not shared only, and the receipt is nobody's" fails with `Receipts.tsx` put back to gate 1's version. That put-back also removed lg-26's two lines, so lg-26's own web test failed beside it; that second failure is my artefact.
+  - Judgement on the hidden "This was X's" checkbox, which goes beyond the finding's words: it is within F2's shape and not a scope change. F2 named that checkbox and the `chargedTo: theirs ? other : null` send as the same first-other pick. Leaving it would have kept the wrong-person charge on the whole receipt.
+  - It does remove a control from the receipts screen for households of more than two. The API still accepts a named `chargedTo` for the whole line. The Log and lg-30 both record it.
+  - "More than two" counts every name the books hold, departed ones included, so a household with two current members and one departed name loses both controls. That follows from names being permanent, and the owner should hear it.
+- **F3, fixed.** `web/test/stats.test.tsx` › "a one-cent deposit with nothing to pay directly still says who owes whom" fails with `Cards.tsx` put back to gate 1's version (`sam owes` against `sam owes alex`) and passes at the head.
+- **F4, not fixed, left as recorded by the owner.** Unchanged, low.
+
+**New findings**
+
+- **med** · no `Done when` of lg-23 depends on it · **N1. The API half of the F1 fix is untested.**
+  - The change to `settledOf` in `api/src/periods.ts` (a stored direct-only period's transfer stands even at 0.00) has no assertion.
+  - Reproduction: `git checkout 4143a888 -- tools/ledger/api/src/periods.ts`, then `npm test -- --project ledger` prints `Tests 1157 passed (1157)`, the same as the head.
+  - With that revert, driving gate 1's history through the HTTP API gives close 2 `settlement: {"deposits":null,"transfers":[]}` instead of `transfers:[{"fromId":"alex","toId":"sam","cents":0}]`. The screen's sentence would then read "Paid directly: ." This is F1's symptom coming back at the layer the household sees, with every test green. The Log's red/green covers `settleHousehold` only.
+  - The history, with the amounts in cents:
+    - salaries alex 2 000 000 and sam 1 000 000 for 2027, ratio from 2027-01-01;
+    - lines alex 2 on 2027-01-10 and sam 1 on 2027-01-11;
+    - close `{start: null, end: "2027-01-31"}`;
+    - salaries alex 1 and sam 0 for 2028, ratio from 2027-02-01;
+    - close `{start: "2027-02-01", end: "2027-02-28"}`.
+  - Expect for close 2: `deposits: null`, `transfers: [{fromId: "alex", toId: "sam", cents: 0}]`, `deposit.status: "direct"`, and the stored row `payer_id` alex, `recipient_id` sam, `deposit_cents` NULL, `net_cents` 0.
+  - Base and head give the same stored rows (`api-class.mts`).
+  - Fix: one test at the end of `api/test/periods.test.ts`.
+- **med** · no `Done when` of lg-23 depends on it · **N2. lg-29's premise "The API needs no change" is false for a person with a salary already on record.**
+  - Build 3 says to check that `proposalFor` still holds. Done when 1 is a web test, where the API is mocked.
+  - The proposal is built from every standing salary of the year (`yearSalaries`). Entering alex and casey after an entry that included sam still proposes sam:
+    - entry 1 (three people): `[["alex",555556],["casey",444444],["sam",0]]`
+    - entry 2 (sam left out): `[["alex",555556],["casey",444444],["sam",0]]`
+    - from `blank.mts` on the head.
+  - The form pre-fills the amounts on record, so blanking sam's field is exactly this case.
+  - As written, lg-29 would pass its mocked web test and not deliver what the owner chose.
+  - Fix at landing: put the measured fact in lg-29's Why and Build 3, and make Done when 1 an API test (enter three, then two, and read the proposal).
+  - Whether the proposal becomes scoped to the entry changes the documented meaning of `SalaryEntryResponse.proposal`. lg-29's builder should raise that rather than settle it.
+- **low** · **N3. lg-30 is rated `standard`.** `docs/01-TICKETS.md` says a `needs-decision` filing rates its recommended option, and that "a one-line change to a contract is `hard`".
+  - Both of lg-30's options change the contract. The recommended option A also changes `ReceiptProposal`, `receipt_items` and `splitReceipt`.
+  - `npm run status -- --show lg-30` prints `difficulty standard`.
+  - The commit that records the answer re-rates it (dl-102's precedent), so it costs nothing until a dispatch.
+- **low** · **N4. The line added to the ledger `CLAUDE.md` receipts rule is undirected by name.** It reads: `With more than two people "the other's" names nobody, so it is refused until an item can say whose (lg-23, lg-30).`
+  - Build 6 names the person-name rule and the roadmap row. F2's remedy names no page.
+  - It keeps the sentence before it true: "the other's part is a charge line of its own" would be false for three people without it.
+  - It is accurate, checked by the API and web tests above. It adds two lines to a page every ledger session loads, and it points at lg-30 so it is found when lg-30 lands.
+  - Keep it. Graded low only because nothing directed it.
+
+**Carried and checked**
+
+- **The merge resolution** in `web/test/receipts.test.tsx` dropped nothing. Per distinct line, merged count equals ours plus theirs minus base for the whole file (454 + 459 − 438 = 475 lines). `Receipts.tsx` and `02-ROADMAP.md`, which both sides touched, check the same way (`mergecheck.mjs`).
+- **lg-29 and lg-30.**
+  - `npm run status -- --show` parses both (exit 0). lg-30 reads "waiting on a decision"; `npm run status -- --json` exits 0, which is the CI gate.
+  - The ids are free: no other ref adds an lg-29 or lg-30 ticket, and `git grep` finds no reference to them on main or on lg-27's branch. lg-28 is taken by lg-27's branch, and the numbering skips it correctly.
+  - lg-29 carries the owner's "Blank = not in ratio" and names the rejected alternative. It states the cost: a forgotten salary now leaves the person out silently.
+  - lg-30 carries the owner's "refuse now, file 'name whose'" and the contract-change question, with options A (recommended) and B. It records the hidden whole-receipt checkbox as part of what the ticket can restore.
+  - The only defects are N2 and N3.
+- **The lg-23 Log** annotates the earlier false claim in place ("false for one class at this commit; corrected in round 1 below, gate 1 F1"). The `Done when` lines and the frontmatter are unchanged by the round. The Log's differential claim (0 of 310) reproduces.
+- **findings** · the re-gate returned 4 new (N1 to N4), 0 dropped. F1 to F3 fixed, F4 unchanged.
+- NFR: security ✓ (the refusal is behind the existing auth, and the change adds no input surface) · performance n/a · reliability — N1 (a regression guard) · maintainability — N1 to N4.
+
 ## Log
 
 - 2026-10-12 — Filed from the owner's answer on lg-20's cap. Read at filing:
