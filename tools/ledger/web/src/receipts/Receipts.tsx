@@ -405,6 +405,12 @@ export function Receipts(): React.ReactElement {
   const flags = checkReceipt(proposal);
   const payer = receipt.uploadedBy;
   const other = people.find((person) => person !== payer) ?? null;
+  // Among more than two, "the other's" would name nobody: the API refuses it
+  // until an item can say whose (lg-30), so the screen does not offer it, and
+  // what was someone else's is a charge line on the period screen (lg-23).
+  const several = people.filter((person) => person !== payer).length > 1;
+  const nextShare = (share: ItemShare): ItemShare =>
+    several && NEXT_SHARE[share] === "theirs" ? "shared" : NEXT_SHARE[share];
   const offered = merchantFirst(categories, stage.merchantCategoryId);
   // An item whose text or price is not one yet is left out of the proposal.
   const itemsUnread = proposal.items.length !== form.items.length;
@@ -519,7 +525,7 @@ export function Receipts(): React.ReactElement {
                 amountCents: charged,
                 spendingCategoryId,
                 note: form.merchant.trim() === "" ? null : form.merchant.trim(),
-                chargedTo: theirs ? other : null,
+                chargedTo: theirs && !several ? other : null,
               }
             : { to: "row", rowId: destination },
       });
@@ -608,7 +614,7 @@ export function Receipts(): React.ReactElement {
                   <button
                     type="button"
                     aria-label={`${name}, ${shareLabel(item.share)}`}
-                    onClick={() => setItem(index, { share: NEXT_SHARE[item.share] })}
+                    onClick={() => setItem(index, { share: nextShare(item.share) })}
                   >
                     {shareLabel(item.share)}
                   </button>
@@ -637,8 +643,9 @@ export function Receipts(): React.ReactElement {
           </div>
           {split !== null && (
             <output aria-label="What is shared">
-              Not shared {formatCents(split.notSharedCents)} · {shareLabel("theirs")}{" "}
-              {formatCents(split.chargedCents)} · Shared {formatCents(split.sharedCents)}
+              Not shared {formatCents(split.notSharedCents)} ·{" "}
+              {several ? "" : `${shareLabel("theirs")} ${formatCents(split.chargedCents)} · `}
+              Shared {formatCents(split.sharedCents)}
             </output>
           )}
           {itemsUnread && <p className="hint bad">{unfileable}</p>}
@@ -652,14 +659,21 @@ export function Receipts(): React.ReactElement {
           noneLabel="None"
           onChange={setSpendingCategoryId}
         />
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={theirs}
-            onChange={(event) => setTheirs(event.target.checked)}
-          />
-          {other === null ? "This was the other person's" : `This was ${other}'s`}
-        </label>
+        {several ? (
+          <p className="muted hint">
+            Something on it was someone else&rsquo;s? Leave it not shared here, and add it on the
+            period screen as a line charged to them.
+          </p>
+        ) : (
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={theirs}
+              onChange={(event) => setTheirs(event.target.checked)}
+            />
+            {other === null ? "This was the other person's" : `This was ${other}'s`}
+          </label>
+        )}
         <div className="actions">
           <button type="button" disabled={busy} onClick={() => fileAs("line")}>
             File as {payer}&rsquo;s line

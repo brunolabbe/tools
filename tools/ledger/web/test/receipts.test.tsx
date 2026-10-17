@@ -435,3 +435,19 @@ test("keeps an item left out off a joint-account row, before asking the server",
   expect(said).not.toContain("line");
   expect(fileReceipt).not.toHaveBeenCalled();
 });
+
+// lg-23 gate 1, F2: among more than two, "the other's" names nobody, so the
+// screen does not offer it, on an item or on the whole receipt.
+test("among three people, an item cycles between shared and not shared only, and the receipt is nobody's", async () => {
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  await readBasket();
+
+  expect(shared()).toBe("Not shared 0.00 $ · Shared 24.76 $");
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
+  expect(shared()).toBe("Not shared 15.54 $ · Shared 9.22 $");
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Not shared" }));
+  expect(screen.getByRole("button", { name: "BIERE 6X355, Shared" })).toBeTruthy();
+
+  expect(screen.queryByLabelText(/^This was/u)).toBeNull();
+  expect(screen.getByText(/as a line charged to them/u)).toBeTruthy();
+});

@@ -779,7 +779,12 @@ export interface SettlementFigures {
    * share of zero, so that only the transfers can settle it.
    */
   deposits: SettlementDeposit[] | null;
-  /** The same, paid directly instead: from those who owe to those owed. */
+  /**
+   * The same, paid directly instead: from those who owe to those owed, each
+   * more than nothing. One exception keeps lg-6's record: between two people,
+   * when `deposits` is `null` and what is owed rounds to nothing, the one
+   * transfer is of 0 cents and still names who owes whom.
+   */
   transfers: SettlementTransfer[];
 }
 

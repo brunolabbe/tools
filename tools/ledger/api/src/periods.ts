@@ -398,9 +398,11 @@ function settledOf(db: Database, period: PeriodColumns): Settled {
   }
   const { payer_id: payer, recipient_id: recipient, deposit_cents: deposit } = period;
   if (payer === null || recipient === null) return { deposits: [], transfers: [] };
-  const direct =
-    period.net_cents > 0 ? [{ fromId: payer, toId: recipient, cents: period.net_cents }] : [];
-  if (deposit === null) return { deposits: null, transfers: direct };
+  const transfer = { fromId: payer, toId: recipient, cents: period.net_cents };
+  const direct = period.net_cents > 0 ? [transfer] : [];
+  // Settled only directly, the one transfer stands even at 0.00: it names who
+  // owed whom, as lg-6 recorded it (lg-23 gate 1, F1).
+  if (deposit === null) return { deposits: null, transfers: [transfer] };
   return {
     deposits: deposit > 0 ? [{ personId: payer, depositCents: deposit }] : [],
     transfers: direct,

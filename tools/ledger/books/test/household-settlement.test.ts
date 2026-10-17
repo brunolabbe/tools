@@ -312,3 +312,76 @@ describe("a person who joins or leaves at a boundary", () => {
     expect(settled.transfers).toEqual([{ fromId: "alex", toId: "sam", cents: 6_000 }]);
   });
 });
+
+// lg-23 gate 1, F1: a sub-cent residual owed to someone whose share is now zero.
+// lg-6 named the payer and the recipient, to be paid 0.00 directly; the owner
+// chose on 2026-10-17 to keep that reading between two people.
+describe("between two people, less than half a cent owed to a share of zero", () => {
+  test("names who owes whom, paid directly, as lg-6 did (the gate's reproduction)", () => {
+    const first = [
+      { personId: "alex", partsPerMillion: 666_667 },
+      { personId: "sam", partsPerMillion: 333_333 },
+    ];
+    const closing = [
+      { personId: "alex", partsPerMillion: 1_000_000 },
+      { personId: "sam", partsPerMillion: 0 },
+    ];
+    const stretches: Stretch[] = [
+      {
+        ratio: first,
+        contributions: [
+          { personId: "alex", cents: 2 },
+          { personId: "sam", cents: 1 },
+        ],
+        charges: [],
+      },
+      { ratio: closing, contributions: [], charges: [] },
+    ];
+
+    const expected = {
+      formula: "v3",
+      payerId: "alex",
+      recipientId: "sam",
+      depositCents: null,
+      netCents: 0,
+    };
+    expect(settleStretchesV3(stretches, closing)).toEqual(expected);
+    expect(settleStretches(stretches, closing)).toEqual(expected);
+    expect(settleHousehold(stretches, closing)).toEqual({
+      formula: "v3",
+      people: ["alex", "sam"],
+      deposits: null,
+      transfers: [{ fromId: "alex", toId: "sam", cents: 0 }],
+    });
+  });
+
+  test("over 5 000 histories that leave a residual of a fraction of a cent, it is lg-6's settlement", () => {
+    // Tiny amounts at a ratio that does not divide them leave a fraction of a
+    // cent owed; the close then moves to a ratio giving one of the two nothing.
+    const next = generator(31);
+    const people = ["alex", "sam"];
+    let residual = 0;
+    for (let trial = 0; trial < 5_000; trial++) {
+      const stretches: Stretch[] = Array.from({ length: 1 + next(3) }, () => {
+        const ratio = ratioFromSalaries(
+          people.map((personId) => ({ personId, amountCents: 1 + next(3_000_000) })),
+        );
+        const contributions = people.map((personId) => ({ personId, cents: next(6) }));
+        return { ratio, contributions, charges: [] };
+      });
+      const zero = next(2) === 0 ? "alex" : "sam";
+      const closing = people.map((personId) => ({
+        personId,
+        partsPerMillion: personId === zero ? 0 : 1_000_000,
+      }));
+      stretches.push({ ratio: closing, contributions: [], charges: [] });
+      const expected = settleStretchesV3(stretches, closing);
+
+      expect(settleStretches(stretches, closing), `trial ${String(trial)}`).toEqual(expected);
+      if (expected.depositCents === null && expected.netCents === 0) residual++;
+    }
+    // The draw reaches the class: a payer named, paid nothing, directly.
+    // 401 of the 5 000 at seed 31.
+    expect(residual).toBeGreaterThan(300);
+  });
+});

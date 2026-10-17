@@ -723,9 +723,17 @@ const FORMULA_WORDS = {
 function who(period: ClosedPeriod): string {
   const { deposits, transfers } = period.settlement;
   if (transfers.length === 0) {
-    // A deposit of a cent can stand where the direct amount rounds to nothing.
-    const [deposit] = deposits ?? [];
-    return deposit === undefined ? "Even" : `${personLabel(deposit.personId)} owes`;
+    // A deposit of a cent can stand where the direct amount rounds to nothing;
+    // between two, whom it is owed to is the ratio's other person (gate 1, F3).
+    const [deposit, another] = deposits ?? [];
+    if (deposit === undefined) return "Even";
+    const others = period.settlement.shares
+      .map((share) => share.personId)
+      .filter((person) => person !== deposit.personId);
+    const [recipient] = others;
+    return another === undefined && others.length === 1 && recipient !== undefined
+      ? `${personLabel(deposit.personId)} owes ${personLabel(recipient)}`
+      : `${personLabel(deposit.personId)} owes`;
   }
   return transfers
     .map((transfer) => `${personLabel(transfer.fromId)} owes ${personLabel(transfer.toId)}`)

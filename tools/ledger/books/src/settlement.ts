@@ -110,7 +110,12 @@ export interface HouseholdSettlement {
    * into shared money would never reach them, so only the transfers settle it.
    */
   deposits: SettlementDeposit[] | null;
-  /** The same, paid directly: from those who owe to those owed, at most one fewer than the people. */
+  /**
+   * The same, paid directly: from those who owe to those owed, at most one
+   * fewer than the people, each more than nothing — but for one case. Between
+   * two people, when only a transfer can settle it and it rounds to nothing,
+   * the one transfer is of 0 cents: lg-6 named the payer and the recipient there.
+   */
   transfers: SettlementTransfer[];
 }
 
@@ -328,7 +333,17 @@ export function settleHousehold(
     (personId) => (closing.get(personId) ?? 0n) === 0n && (nets.get(personId) ?? 0n) < 0n,
   );
   if (unreachable) {
-    return transfers.length === 0 ? nobody : { ...nobody, deposits: null, transfers };
+    if (transfers.length > 0) return { ...nobody, deposits: null, transfers };
+    // Between two, lg-6 named who owes whom even when what is owed rounds to
+    // nothing: a period settled only directly, at 0.00. A residual of a fraction
+    // of a cent, left by earlier periods at another ratio, reaches it. Kept so a
+    // household of two closes unchanged (lg-23 gate 1, F1; owner, 2026-10-17).
+    const owing = people.find((personId) => (nets.get(personId) ?? 0n) > 0n);
+    const owed = people.find((personId) => (nets.get(personId) ?? 0n) < 0n);
+    if (people.length === 2 && owing !== undefined && owed !== undefined) {
+      return { ...nobody, deposits: null, transfers: [{ fromId: owing, toId: owed, cents: 0 }] };
+    }
+    return nobody;
   }
   // Less than half a cent owed is what paying a rounded figure leaves behind,
   // and it rounds to nothing. It names nobody: a payer at 0.00 would be asked to
