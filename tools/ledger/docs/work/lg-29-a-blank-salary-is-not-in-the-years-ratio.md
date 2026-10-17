@@ -3,7 +3,7 @@ id: lg-29
 tool: ledger
 title: A blank salary means the person is not in that year's ratio
 kind: work-package
-status: ready
+status: done
 milestone: P6
 depends_on: [lg-23]
 difficulty: standard
@@ -78,6 +78,72 @@ depend on the directory rather than the books.
 2. A web test: a field holding text that is not an amount is still refused, and
    nothing is sent.
 3. Gates green.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-17 · `6b42ee19..5ad36f38` · Opus 5.5, depth standard
+
+| Done when                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. API: enter alex, casey and sam, then alex and casey only, and the proposal is between alex and casey | `api/test/salaries.test.ts` › "the proposal is between the people entered, not every salary the year holds" ✓. The assertion on `second.proposal` shares equals `[["alex",555556],["casey",444444]]`. When only `enterSalaries` in `api/src/salaries.ts` is reverted to the base, this test fails with its two lg-29 companions (3 of 16, `npx vitest run tools/ledger/api/test/salaries.test.ts`).                                                                                                                                                                  |
+| 2. Web: a field holding text that is not an amount is still refused, and nothing is sent                | `web/test/salaries.test.tsx` › "text that is not an amount is refused even beside a blank, and nothing is sent (lg-29)" ✓. It asserts the alert matches `casey's salary is not an amount` and that `enterSalaries` is not called. Mutation `skip-bad` (skip any field that does not parse) turns it red, with "an amount that is not one is refused before anything is sent" (2 of 7). Reverting the blank-skip alone leaves this test green, because the refusal it pins is older than lg-29. That revert turns the other two lg-29 web tests red instead (2 of 7). |
+| 3. Gates green                                                                                          | verified — `npm run check` exit 0. `npm test -- --project ledger`: 1179 of 1179, 62 files. PR #515 at 5ad36f38: `check` ×2, `docker`, `codeql`, `CodeQL`, `test (ubuntu-latest)`, `dependency-review` and `changes` all SUCCESS. `test (windows-latest, informational)` was IN_PROGRESS when read. It is read, not graded, and the diff touches nothing that depends on the platform.                                                                                                                                                                                |
+
+- **med** · no `Done when` line depends on it · **open decision** · A person left out of an entry is put back on the next correction without anyone touching their field. `typedFor` in `web/src/salaries/Salaries.tsx` pre-fills every salary on record for the year. It runs on every year change and on every load of the screen, and the left-out person's salary stays on record by the owner's choice. So the exclusion lasts one save. The next time anyone opens that year to correct someone else, the departed person is sent again and comes back into the proposal. The screen says "A blank salary leaves that person out of the year's ratio. The salary already on record for them, if any, is kept." That reads as a lasting exclusion, which the code does not keep. The falsehood runs in the unsafe direction: someone who trusts it can confirm a proposal that has brought the person back in. Two things soften it: the proposal's shares are on screen before confirming, and lg-23's people check refuses a change of people mid-period. Reproduction is `zz-gate-probe.test.tsx` (path below), copied into `tools/ledger/web/test/` and run with `npx vitest run`, using three people with 2025 salaries on record:
+  ```
+  a sam cleared: sent=[["alex",5000000],["casey",4000000]] alert=-
+    sam field after save: ''
+    sam field after year 2024 -> 2025: '10000.00 $'
+  b alex corrected later, nothing else touched: sent=[["alex",5200000],["casey",4000000],["sam",1000000]] alert=-
+  ```
+  Options, not re-opening the API choice the owner settled:
+  - **(a) Recommended:** reword the on-screen line to say that the amount comes back pre-filled whenever the year is opened, and must be cleared again each time. One JSX paragraph plus the regex in the existing web test. It can be fixed at the landing.
+  - **(b)** Pre-fill only the people in the ratio in effect, or in the year's last confirmed ratio. That changes form behaviour, needs its own tests, and would be a ticket.
+  - "Clear left-out salaries" was rejected by the owner and is not offered again.
+- **low** · `nfr:maintainability` · Some prose still describes the proposal as coming from the whole year's salaries. The false direction is the safe one: the field's own comment directly beneath states the truth.
+  - In `@ledger/contract`, the `SalaryEntryResponse` interface comment says "the year's salaries as they now stand, and the ratio they give". `SalaryEntry` says "a year's salaries, one per person". Changing either needs owner authorisation: only the `proposal` comment was authorised.
+  - The header of `api/src/routes/salaries.ts` says "files a year's salaries and answers with the ratio they give". This one is free to fix.
+- **dropped** · An API correction that names fewer people now proposes fewer people. This is the owner's "Scope proposal to entry", and no live caller is hurt. Measured with `zz-gate-probe.test.ts` against the real app (`createApp` with three members):
+  - At head, correcting sam alone gives `proposal=null`; at base it gave `[["alex",454546],["casey",363636],["sam",181818]]`.
+  - Correcting casey and sam gives `[["casey",615385],["sam",384615]]`. Confirming that from 2025-06-01 is refused with 400 "A ratio between different people takes effect only at a period's close…", which is lg-23's check.
+  - A web-shaped correction that sends all three proposes and confirms a three-way ratio.
+  - Callers enumerated: the web screen, which always sends every pre-filled field and refuses fewer than two; `workbook-import.ts`, which reads `entered.salaries` and never `proposal`; and the api tests. `tools/ledger/e2e` holds only `README.md` and `tsconfig.json`.
+  - Not a defect.
+- **dropped** · A household of one person can no longer save a salary from the screen, because of the fewer-than-two refusal. Build 1 asks for that refusal in so many words.
+- **dropped** · Two salaries of "0" plus a blank are sent, come back with `proposal: null` and show no message. The behaviour is the same at base. It was there before this branch, not part of this change.
+- **findings** · the hunt returned 5; 2 carried, 3 dropped.
+- Contract: `git diff 6b42ee19..5ad36f38 -- tools/ledger/contract` is 1 file, +6 −1. The only change is the doc comment on `SalaryEntryResponse.proposal`, which the owner authorised. Its claim "`null` until the entry names at least two people, not all of them zero" matches `proposalFor` applied to the entry-filtered salaries.
+- Invariants walked: contract edits (authorised, above); no cross-tool import; `AppError` unchanged; no new tests to register (existing spec files); no new workspace dependency or Dockerfile change; style (no `any` or `console`, `import type` kept separate). Skipped as out of reach of the diff: shell and process trees, redaction, SSRF, progress, routes enumeration.
+- NFR: security n/a (the API schema is unchanged, with no new input) · performance n/a (one `Set` filter per entry) · reliability: F1 above · maintainability: the low above.
+
+---
+
+**Web form attacks.** All run through the probe, against a mocked API client:
+
+- `"   "`, a tab plus newline, and a non-breaking space are all treated as blank (`String.trim`).
+- `"0"` and `" 0 "` are sent as 0.
+- `"$"` is refused with "sam's salary is not an amount".
+- `"-5"` is refused.
+- alex `"0"` with the other two blank is refused with "…at least two".
+- A pre-filled amount cleared by the user is left out of the entry, and the API keeps the record and lists it, as the screen says.
+- A person with no record left blank is left out.
+
+**The ticket's Log, read as a document under review:**
+
+- Its claim that the new API tests failed 3 of 3 before the change matches my revert.
+- "The web tests were not run red against the base separately" is honest, and I have now run them red (above).
+- The one changed existing test, "keeps the earlier record…", still asserts the same proposal `[600000, 400000]` and the same records. It passes both with and without the API change.
+
+**Open decision for the orchestrator:** F1, option (a) or (b) as above. I recommend (a), fixed at the landing.
+
+**Not measured:** the Windows informational leg (in progress when read), and any real-browser run, since the ledger has no e2e specs.
+
+**Files** (scratch, for the builder or lander to re-run; each takes the tree as an argument or is copied into the package's `test/`):
+
+- /tmp/claude-1000/-workspaces-tools/d93517c8-09aa-4ca5-bad3-f8598ec8ba87/scratchpad/lg-29/gate-1/zz-gate-probe.test.ts (API probe, copy into `tools/ledger/api/test/`; writes to `$PROBE_OUT`)
+- /tmp/claude-1000/-workspaces-tools/d93517c8-09aa-4ca5-bad3-f8598ec8ba87/scratchpad/lg-29/gate-1/zz-gate-probe.test.tsx (web probe, copy into `tools/ledger/web/test/`)
+- /tmp/claude-1000/-workspaces-tools/d93517c8-09aa-4ca5-bad3-f8598ec8ba87/scratchpad/lg-29/gate-1/mutate-web.mjs (`node mutate-web.mjs <tree> no-skip|skip-bad|no-min|no-trim`). `no-trim` and `no-min` each turn one lg-29 web test red (1 of 7).
+- /tmp/claude-1000/-workspaces-tools/d93517c8-09aa-4ca5-bad3-f8598ec8ba87/scratchpad/lg-29/gate-1/run-ledger.sh
 
 ## Log
 
