@@ -150,7 +150,7 @@ sections, in the same pull request as the fix. Name them in the finding.
 
 | Severity | Means |
 | --- | --- |
-| **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested — including a test that passes when the thing it claims to prove is broken, and shipped text that promises a guarantee the code does not keep (a bound, a guard order, a coverage claim), so that a reader relying on it is unsafe |
+| **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested — including a test that passes when the thing it claims to prove is broken, and shipped text that promises a guarantee the code does not keep (a bound, a guard order, a coverage claim), so that a reader relying on it is unsafe; and, on a measurement ticket, a conclusion the owner will choose from that the numbers do not support, even when every number is right and every `Done when` line is literally met (pl-56 gate 1; owner, 2026-10-17) — a `med` when nothing the owner chooses rests on it |
 | **med** | An acceptance line unproven, a rule bent with no reason given, a defect behind a condition that will occur, a new branch in a file with no test file of its own |
 | **low** | Style, a missing fixture, a defect with no live call site, and shipped text or a comment that is false in the safe direction or about a detail nothing relies on |
 
@@ -187,15 +187,26 @@ hypothetical with no caller as `low`, and say "no live call site" in the bullet.
   the branch asserts the opposite of the line**. A test older than the branch
   that contradicts the literal line (dl-80's `elapsedMs >= 9000` against
   dl-111's first Done when) is a contradiction in the brief, not in the build,
-  and belongs here. The row names the two facts that contradict. It is one
+  and belongs here. Two more cases are this entry: a brief silent on a case
+  the build had to decide (lg-10's joint-account row, where "joint" appears
+  nowhere above the Log), and a measurement of the gate's own that turns a risk
+  the brief's Decision lists as unmeasured into a regression (dl-125: 9 of 37
+  sources, against the Decision's "low or variable frame rates"). The row names the two facts that contradict. It is one
   finding, a `med` that the line depends on, so the
   decision goes to the owner before any round (`orchestrate-tickets`, step 6),
   and it does not force FAIL: the verdict is CONCERNS unless something else is
   higher. **A test that asserts the opposite of an acceptance line is a
   `high`, and the gate is FAIL**: the build is then wrong about the line, not
-  faithful to a brief that was.
+  faithful to a brief that was. Not when the test asserts what the owner's
+  recorded amendment of that line says — on the ticket, dated, naming who —
+  and only the line's words were never changed: that line is stale, a `med` the
+  line depends on, fixed by rewording it (dl-125 gate 2: Done when 2's "more
+  than 0.25 s" beside the amended rule's test).
 - **PASS** — every acceptance line proven, verified or **awaiting**, nothing
-  above low.
+  above low. On a slice that lands `in-flight`, rows **unproven (scope)** do not
+  stop it: write `PASS for the slice`, with the number of scope rows in the
+  verdict line (dl-49 gate 2: "PASS for the slice (four rows `unproven
+  (scope)`)").
 - **WAIVED** — never yours to write. A human waives, names themself and says why.
 
 **A review never edits the ticket's `status` frontmatter or its brief.** FAIL is

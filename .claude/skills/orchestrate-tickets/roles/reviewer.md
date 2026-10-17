@@ -51,13 +51,30 @@ confirm it. So read in this order:
   on the tree is refused (lg-20). Restore with
   `git checkout <head sha> -- <path>`, and rebuild. A spec of your own runs only
   under a project's `include`: copy it into the package's `test/`, run it, and
-  remove it before you report (lg-18). When you need a second tree,
-  `git worktree add --detach <scratch>/<name> <sha>`, then farm and
-  `npm run build` in it, and `git worktree remove --force` it before you report;
-  a `git archive` copy has no `dist` and the farm's links are relative, so its
+  remove it before you report (lg-18). Such a spec reports by appending to a
+  file in your scratch directory (`appendFileSync`): its `console.log` lines
+  did not appear in a ledger project run (lg-23). When you need a second tree,
+  `git worktree add --detach /workspaces/tools/.claude/worktrees/gate-<id>-<n> <sha>`,
+  then farm and `npm run build` in it, and `git worktree remove --force` it
+  before you report. Not under your scratch directory, nor anywhere outside
+  `/workspaces/tools`: the farm's links resolve to the shared `node_modules`,
+  and TypeScript can name a type from there as its package only when that
+  directory is an ancestor's `node_modules`, so a tree under `/tmp` fails
+  `npm run check` with TS2883 at `tools/ledger/api/test/helpers/households.ts`
+  even at the base sha (lg-23; re-run 2026-10-17 at `f3b9776b`: build exit 0,
+  typecheck exit 1, that one error — lg-33 removes it), where the same sha
+  beside the agent worktrees passes. The farm fills the toplevel of the
+  directory it runs in and the cwd resets between calls, so a `cd` in one call
+  and the farm in the next re-farms your own tree and exits 0 (lg-25): put both
+  in one script in your scratch directory and run it with `bash <file>`. A
+  `git archive` copy has no `dist` and the farm's links are relative, so its
   suites resolve nothing (four gates this period), and `git clone --local`
   fails across devices. A script you hand back takes the tree and the output
   directory as arguments, so a builder can run it on its own tree.
+- **Run a new wall-clock assertion ten times before you pass it** — one spec
+  file, `-t` the test, seconds a run. dl-115's gate 1 passed a bound on one run
+  that failed 1 in 10 (its gate 2's `repeat.summary`: run 1 exit 1, runs 2–10
+  exit 0).
 - **Enumerate, never sample**, and report the population you covered against the
   population that exists.
 - **Read the pull request's CI** when your dispatch names one, as `common.md`'s
@@ -91,11 +108,22 @@ confirm it. So read in this order:
   `## Review` for gate 1, `### Gate <n>` for a later one — and name the path in
   your report. The lander commits that file as it stands — or, when the branch
   only files a ticket or records a decision on one, posts it on the pull
-  request thread (`gate.md`, `records.md`). Your final message is the full
-  report: you cannot write it to a file (the harness refuses a subagent
-  writing a report file), the orchestrator files it for the lander to post, and
-  its text reaches the orchestrator HTML-escaped and is not what lands. Write
-  nowhere else: your worktree must be clean when you report.
+  request thread (`gate.md`, `records.md`). **Write the full report to a
+  second file beside it, `gate-<n>@<short head sha>.full.md`**: the section
+  pasted in as its first part — not retyped — then the reasoning, the
+  enumerations and the reproductions. The lander posts that file on the pull
+  request thread. The one file name the harness refuses a subagent is
+  `report.md`, in any directory ("Subagents should return findings as text";
+  measured 2026-10-17 with one body under four names, that name alone
+  refused), so never use it. Your final message is the full report's text as
+  well, for the orchestrator to route; the two files are the record, and the
+  orchestrator compares the section in the full file with the section file and
+  sends a difference back to you (lg-26). Write nowhere else: your worktree
+  must be clean when you report.
+- **A remedy you state is a claim.** Run it on the input that found the defect
+  and on one hostile input of your own, or state a direction instead of a
+  remedy: dl-125's gate 2 stated one F5 remedy, and it was itself quadratic on
+  another line (2,566.5 ms against the builder's variant at 0.1 ms).
 - **Your findings in full**, each with its reproduction: the command, its
   output, and the premises as premises, so whoever fixes it can run it rather
   than implement your reading of it.
@@ -133,7 +161,11 @@ its output.
   unfixed keeps its number and severity — a verdict, not a new finding, and
   never counted twice (dl-111).
 - **A new problem in the lines this round touched is a finding; nothing else is
-  in scope.** Do not re-run the whole review.
+  in scope.** Do not re-run the whole review. One exception: re-read at the new
+  head any path an earlier finding of yours rests on that the round's merge of
+  `main` touched (`git diff --name-only <gated sha> <new sha> -- <path>`):
+  pl-56's F2 rested on `docs/02-DEPLOYMENT.md`, and the round's merge changed
+  it.
 - Return **one new `### Gate <n>` file**. Earlier sections are not yours to
   re-issue or edit: each names the sha it gated and stays as written.
 - **Say plainly whether anything you found is a `high`.** A third gate runs only
