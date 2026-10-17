@@ -60,9 +60,6 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   MEMBER_NOT_ADDED: 409,
   HOUSEHOLD_NOT_FOUND: 404,
   MEMBER_NOT_FOUND: 404,
-  // lg-20: a third person named into a household of two, which is a conflict
-  // with what the directory holds rather than a request it could not read.
-  HOUSEHOLD_FULL: 409,
   // lg-8: an upload that is not an image is a media type refused; a receipt
   // filed once is a conflict with what is stored; no model configured is the
   // service unable to do this one thing, which retrying will not change until

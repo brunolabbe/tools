@@ -118,3 +118,14 @@ setting Linux to 2.5 now.
   `sed -n '/^## Why/,/^## Build/p' tools/downloader/docs/work/dl-127-*.md | tr '\n' ' ' | tr -s ' ' | grep -o -F '3.450 to 3.476' | wc -l` → 1.
 - 2026-10-17 — Fixed at landing by owner choice: gate 2, low — "runs 4 to 6 passed; the Log does not say for runs 1 and 2".
   `sed -n '/^## Why/,/^## Build/p' tools/downloader/docs/work/dl-127-*.md | tr '\n' ' ' | tr -s ' ' | grep -o -F 'does not say for runs 1 and 2' | wc -l` → 1.
+- 2026-10-17 — Owner answer on when the measurement runs. Question, asked through
+  AskUserQuestion: "If dl-127 is in: when does its ~2h10m exclusive measurement
+  run?" Options offered: **"Last, after other builds"** (recommended) — dispatch
+  it once every other builder and gate in the batch has finished its local
+  `npm test` runs, so nothing skews its ratios and it slows nobody else; **"First,
+  alone"** — run it before anything else, every other ticket waits about 2 h;
+  **"Leave it out"** — not in this batch. Chosen: **"Last, after other builds"**,
+  and dl-127 was left out of the batch that recorded this. For whoever schedules
+  it: run the two-arm measurement only once no other builder's or gate's local
+  test run is active on the machine, and last in its batch. Status is unchanged
+  and the measurement has not been run.

@@ -66,12 +66,13 @@ function closed(id: number, end: string, formula: ClosedPeriod["settlement"]["fo
       formula,
       ratioId: 1,
       shares: [],
-      payerId: "sam",
-      recipientId: "alex",
-      depositCents: 1000,
-      netCents: 600,
+      deposits: [{ personId: "sam", depositCents: 1000 }],
+      transfers: [{ fromId: "sam", toId: "alex", cents: 600 }],
     },
-    deposit: { status: "matched", rowId: null },
+    deposit: {
+      status: "matched",
+      deposits: [{ personId: "sam", depositCents: 1000, status: "matched", rowId: null }],
+    },
   } satisfies ClosedPeriod;
 }
 

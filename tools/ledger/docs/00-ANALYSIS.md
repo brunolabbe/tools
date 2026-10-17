@@ -315,6 +315,36 @@ over contributions since the two were last even, each period weighed at the
 ratio it closed with, and rounded once. The workbook's two are `v1` and `v2`,
 imported as they happened (lg-6 defines the three; lg-7 imports the two).
 
+### More than two people
+
+_Decided by the owner on 2026-10-12, in lg-23: the matching rule, generalised._
+Per person, with `r_i` their share and `e_i` what they have put in, plus the
+charges owed to them, less the charges they owe:
+
+```
+net_i = r_i × Σe − e_i                      (they sum to zero; > 0 owes)
+into the buffer:  person i deposits net_i + r_i × K,
+                  K = max(−net_i / r_i) over everyone with a share
+directly:         each net, paid as transfers from those who owe to those owed
+```
+
+Everyone short tops up until every contribution stands at the ratio, and the
+person furthest ahead for their share deposits nothing, so a close asks for up
+to one fewer deposit than there are people. For two people `net_A` is the `net`
+above, and the deposits are `net / (1 − r)` and `−net / r`: the same figures to
+the cent, so the formula stays `v3`. `net_i` is linear, so a person a period's
+ratio does not name simply has no share of that period, and a person who has
+left keeps what they are owed. Someone owed who has no share now cannot be
+reached through the buffer, and that close is settled by transfers alone.
+Deposits are rounded together, so that after them every contribution stands at
+its share to within a cent: rounding each alone, half-up, misses that from four
+people on.
+
+**People change only at a close.** A ratio whose people differ from the open
+period's does not take effect inside it, so every period is weighed with the
+same people throughout; confirming one is refused, and it is confirmed from
+the open period's first day, or after the close.
+
 ### Numbers
 
 - **Money is integer cents.**
@@ -495,8 +525,7 @@ entirely.
   stored on rules and classifications, and nothing else. Nothing removes one,
   so a renamed or departed person stays a person: listed by `/api/people`,
   asked for on the salaries screen, and given a share of the mortgage's joint
-  rows. So the directory counts a name toward the household's two once it has
-  held it, whether or not it holds it now. Changing an address is safe;
+  rows. Removing an address never removes a name from the books (lg-23). Changing an address is safe;
   changing the name it stands under is not. Retiring a person is future work,
   for when someone first needs it.
 
@@ -509,12 +538,11 @@ of the Access policy, if the owner ever wants the ledger open.
 
 _Decided by the owner on 2026-10-12._ A second household, a couple with a joint
 account of their own, uses the same deployment with books of its own. Each
-household sees only its own books. The two-person domain is unchanged:
-a household is still exactly two people, a ratio and a settlement, and the
-directory holds it to that: at most two person names in a household, each
-behind any number of addresses. `books/src/ratio.ts` refuses a ratio that is
-not between two salaries and `books/src/buckets.ts` settles nothing but two,
-so a third name would break the books of whoever added it.
+household sees only its own books. A household is any number of people, each
+behind any number of addresses, with a ratio and a settlement between all of
+them: _decided by the owner on 2026-10-12_ ("A household could have 3, 4, 5 if
+needed"), and built in lg-23, which lifted lg-20's cap of two person names (§5,
+_More than two people_).
 
 **One SQLite file per household, not a household column.** Measured on
 `main` at `9d0e2ea6`, a column would have reached 15 tables, 9 views and 71
@@ -547,9 +575,8 @@ admin, and the membership it has, if any; every books route refuses an
 identity with no membership. An admin who adds themselves to a
 household can read it, as anyone with the host always could, so each household
 sees its own member history, including who added whom. A member who is refused
-an address — one in another household already, or a third person — is told
-only that it cannot be added: the reason would let any member ask whether an
-address uses the ledger.
+an address — one in a household already — is told only that it cannot be
+added: the reason would let any member ask whether an address uses the ledger.
 
 **Access keeps its allowlist, and the directory decides who is in.** The
 ledger's Access policy goes on admitting listed addresses — every household's

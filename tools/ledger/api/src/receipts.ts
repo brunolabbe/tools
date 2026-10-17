@@ -482,11 +482,22 @@ function fileLines(
       "More comes off this receipt than the card was charged. Check the amount charged and the items.",
     );
   }
-  const other = [...context.people].find((person) => person !== payer) ?? null;
+  const others = [...context.people].filter((person) => person !== payer);
+  const [other = null] = others;
   if (split.chargedCents !== 0 && other === null) {
     throw new AppError(
       "BAD_REQUEST",
       "There is nobody else in the household to charge an item to.",
+    );
+  }
+  // An item's share says "the other's" and names nobody, which only means one
+  // person when there are two. Naming whose is a contract change of its own
+  // (lg-30); until then a charge among more is a line on the period screen,
+  // which names whose it was (lg-23 gate 1, F2; owner, 2026-10-17).
+  if (split.chargedCents !== 0 && others.length > 1) {
+    throw new AppError(
+      "BAD_REQUEST",
+      "With more than two people in the household, an item cannot be marked as the other's. File the receipt with that item not shared, and add what was theirs as a line in the period, charged to them.",
     );
   }
 

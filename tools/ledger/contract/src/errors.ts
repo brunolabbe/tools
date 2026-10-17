@@ -142,22 +142,17 @@ export const LEDGER_ERROR_CODES = [
    */
   "ADDRESS_ALREADY_A_MEMBER",
   /**
-   * What a member is told when the address they asked to add cannot be added,
-   * whether it is in a household already or would be a third person. The
-   * reason would let any member ask whether an address uses the ledger.
+   * What a member is told when the address they asked to add cannot be added
+   * because it is in a household already. The reason would let any member ask
+   * whether an address uses the ledger.
    */
   "MEMBER_NOT_ADDED",
   /** The household named is not in the directory. */
   "HOUSEHOLD_NOT_FOUND",
   /** The address named is not a member of the household named, or of any. */
   "MEMBER_NOT_FOUND",
-  /**
-   * The household already has two people, and the address names a third. The
-   * books are two people's: a ratio is between two salaries and a settlement is
-   * between two people, so a third name would break them. A further address for
-   * a person already in the household is not a third person.
-   */
-  "HOUSEHOLD_FULL",
+  // lg-20's HOUSEHOLD_FULL, a third person refused, left with the cap in lg-23:
+  // the books settle between any number of people.
   // --- Receipts (lg-8) ---
   /**
    * The upload's first bytes are not a JPEG, a PNG or a WebP image, whatever it
@@ -238,7 +233,6 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   MEMBER_NOT_ADDED: "That address cannot be added to this household.",
   HOUSEHOLD_NOT_FOUND: "There is no such household.",
   MEMBER_NOT_FOUND: "That address is not a member of this household.",
-  HOUSEHOLD_FULL: "A household holds two people, and this one already has both.",
   RECEIPT_NOT_AN_IMAGE: "That is not a photo. Take one, or choose a JPEG, PNG or WebP image.",
   RECEIPT_NOT_FOUND: "There is no such receipt.",
   RECEIPT_ALREADY_FILED:

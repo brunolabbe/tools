@@ -42,6 +42,7 @@ import {
 } from "./helpers/classification.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import type { PasteRow } from "./helpers/paste.ts";
+import { asTwo, oneDeposit } from "./helpers/settlement.ts";
 import { history, render } from "./helpers/workbook.ts";
 
 let app: App | undefined;
@@ -450,7 +451,7 @@ describe("migration 7 rebuilds the classifications (lg-17)", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.pragma("user_version", { simple: true })).toBe(10);
     expect(before).toHaveLength(4);
     expect(db.prepare(`SELECT ${COLUMNS} FROM classifications ORDER BY id`).all()).toEqual(before);
     expect(
@@ -501,7 +502,7 @@ describe("migration 7 rebuilds the classifications (lg-17)", () => {
     applyMigrations(db);
     db.exec("COMMIT");
 
-    expect(db.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.pragma("user_version", { simple: true })).toBe(10);
     expect(db.prepare("SELECT count(*) AS n FROM classifications").get()).toEqual({ n: 4 });
     db.close();
   });
@@ -691,8 +692,8 @@ describe("every reader of the standing classification answers an automatic filin
       start: "2026-03-05",
       end: "2026-03-31",
     });
-    expect(closed.settlement).toMatchObject({ payerId: "alex", depositCents: 15000 });
-    expect(closed.deposit).toEqual({ status: "expected", rowId: null });
+    expect(asTwo(closed.settlement)).toMatchObject({ payerId: "alex", depositCents: 15000 });
+    expect(oneDeposit(closed.deposit)).toEqual({ status: "expected", rowId: null });
 
     // The deposit arrives by paste at the usual amount, and history files it.
     stretch.push(transfer(4));
@@ -700,7 +701,7 @@ describe("every reader of the standing classification answers an automatic filin
 
     expect(standing(target, idAt(3))).toMatchObject({ source: "auto", person_id: "alex" });
     const [after] = (await get<PeriodsResponse>(target, ROUTES.periods)).periods;
-    expect(after?.deposit).toEqual({ status: "matched", rowId: idAt(3) });
+    expect(oneDeposit(after?.deposit)).toEqual({ status: "matched", rowId: idAt(3) });
   });
 
   describe("the workbook import reads a row history filed as it reads one a person filed", () => {

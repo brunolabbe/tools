@@ -1,7 +1,7 @@
 /**
  * Adding an address to a household as a person (lg-22), on the member's screen
  * and on the admin's. The person is a name the household already has, or a
- * new one while it has fewer than two; the API is what refuses a third.
+ * new one: a household holds any number of people (lg-23).
  *
  * Whoever adds an address is told it must also be admitted on the ledger's
  * Access policy, which the operator does in the Cloudflare dashboard

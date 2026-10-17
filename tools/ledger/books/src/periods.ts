@@ -27,11 +27,17 @@
  * day — it would leave a difference whenever the ratio changed at the boundary.
  */
 
-import type { DepositStatus } from "@ledger/contract";
+import type { DepositOutcome, DepositStatus, SettlementDeposit } from "@ledger/contract";
 import { daysInMonth } from "./months.ts";
 import type { Share } from "./ratio.ts";
-import { CURRENT_FORMULA, settleStretches } from "./settlement.ts";
-import type { Charge, PersonCents, Settlement, Stretch } from "./settlement.ts";
+import { CURRENT_FORMULA, settleHousehold, settleStretches } from "./settlement.ts";
+import type {
+  Charge,
+  HouseholdSettlement,
+  PersonCents,
+  Settlement,
+  Stretch,
+} from "./settlement.ts";
 
 /** A period's days, `yyyy-mm-dd`. `start: null` is the first period, from the beginning. */
 export interface PeriodSpan {
@@ -151,7 +157,8 @@ export function enteredLate(
  * being where the two were last even) computes: every line and deposit dated in
  * any of them, each weighed at its own period's ratio — a deposit that `settles`
  * a period at that period's — and the total divided by the recipient's share at
- * the last period's ratio.
+ * the last period's ratio. Between two people; `cumulativeHouseholdSettlement`
+ * is the same between any number.
  */
 export function cumulativeSettlement(
   periods: readonly WeighedPeriod[],
@@ -168,6 +175,31 @@ export function cumulativeSettlement(
       netCents: 0,
     };
   }
+  return settleStretches(periodStretches(periods, lines, deposits), closing.ratio);
+}
+
+/**
+ * `cumulativeSettlement` between any number of people (lg-23): a person a
+ * period's ratio does not name has no share in that period's stretch.
+ */
+export function cumulativeHouseholdSettlement(
+  periods: readonly WeighedPeriod[],
+  lines: readonly LineInput[],
+  deposits: readonly DepositInput[],
+): HouseholdSettlement {
+  const closing = periods.at(-1);
+  if (closing === undefined) {
+    return { formula: CURRENT_FORMULA, people: [], deposits: [], transfers: [] };
+  }
+  return settleHousehold(periodStretches(periods, lines, deposits), closing.ratio);
+}
+
+/** One stretch per period: what is dated in it, weighed at its ratio. */
+function periodStretches(
+  periods: readonly WeighedPeriod[],
+  lines: readonly LineInput[],
+  deposits: readonly DepositInput[],
+): Stretch[] {
   const contributions: PersonCents[][] = periods.map(() => []);
   const charges: Charge[][] = periods.map(() => []);
   for (const line of lines) {
@@ -195,21 +227,20 @@ export function cumulativeSettlement(
     const index = settled >= 0 ? settled : dated;
     contributions[index]?.push({ personId: deposit.personId, cents: deposit.amountCents });
   }
-  const stretches: Stretch[] = periods.map((period, index) => ({
+  return periods.map((period, index) => ({
     ratio: period.ratio,
     contributions: contributions[index] ?? [],
     charges: charges[index] ?? [],
   }));
-  return settleStretches(stretches, closing.ratio);
 }
 
 /** A closed period's recorded settlement, as the matcher needs it. */
 export interface Expectation {
   periodId: number;
-  /** The period's last day: the deposit is dated on or after it. */
+  /** The period's last day: a deposit is dated on or after it. */
   end: string;
-  payerId: string | null;
-  depositCents: number | null;
+  /** What its settlement asked into the buffer; empty when nobody owed, `null` when only transfers could settle it. */
+  deposits: readonly SettlementDeposit[] | null;
 }
 
 /** A current-expenses row filed to a person, which could be a settlement's deposit. */
@@ -222,27 +253,31 @@ export interface CandidateRow {
 
 export interface DepositMatch {
   periodId: number;
+  /** The period's: `matched` once every deposit it asked for is. */
   status: DepositStatus;
-  /** The row that brought the deposit in, when `status` is `matched`. */
-  rowId: number | null;
+  /** Each deposit it asked for, in its order. */
+  deposits: DepositOutcome[];
 }
 
 /**
- * What became of each closed period's expected deposit (`expectations` oldest
+ * What became of each closed period's expected deposits (`expectations` oldest
  * first; `rows` in the account's order).
  *
- * A deposit is **matched** by a row filed to the payer in the buffer, dated on
+ * A deposit is **matched** by a row filed to its person in the buffer, dated on
  * or after the period's end, for the expected amount within a cent. Each row
  * matches one deposit at most, and **the newest expectation chooses first**:
  * a close is cumulative, so when an earlier deposit was never made the later
  * close asks for it again, and the one payment that follows settles the later
  * close, not the earlier. A deposit made on time is dated before the later
- * period ends, where the later close cannot take it.
+ * period ends, where the later close cannot take it. A close between more than
+ * two people asks for several deposits (lg-23), each matched alone.
  *
  * One not matched is **expected** while its period is the last closed, and
  * **folded** once a later period has closed, since that close asked for it
- * again. `none` is a period that settled at nothing, and `direct` one whose
- * recipient's share was zero, which no deposit into shared money can settle.
+ * again; a period is `matched` when every deposit it asked for is, and
+ * otherwise takes the status of those still missing. `none` is a period that
+ * settled at nothing, and `direct` one where someone owed had a share of zero,
+ * which no deposit into shared money can settle.
  */
 export function matchDeposits(
   expectations: readonly Expectation[],
@@ -250,29 +285,35 @@ export function matchDeposits(
 ): DepositMatch[] {
   const taken = new Set<number>();
   const matches = expectations.map((expectation, index): DepositMatch => {
-    const { periodId, payerId, depositCents } = expectation;
-    if (payerId === null) return { periodId, status: "none", rowId: null };
-    if (depositCents === null) return { periodId, status: "direct", rowId: null };
-    const last = index === expectations.length - 1;
-    return { periodId, status: last ? "expected" : "folded", rowId: null };
+    const { periodId, deposits } = expectation;
+    if (deposits === null) return { periodId, status: "direct", deposits: [] };
+    if (deposits.length === 0) return { periodId, status: "none", deposits: [] };
+    const missing = index === expectations.length - 1 ? "expected" : "folded";
+    return {
+      periodId,
+      status: missing,
+      deposits: deposits.map((deposit) => ({ ...deposit, status: missing, rowId: null })),
+    };
   });
   for (let index = expectations.length - 1; index >= 0; index--) {
     const expectation = expectations[index];
     const match = matches[index];
     if (expectation === undefined || match === undefined) continue;
     if (match.status !== "expected" && match.status !== "folded") continue;
-    const { payerId, depositCents, end } = expectation;
-    const row = rows.find(
-      (candidate) =>
-        !taken.has(candidate.id) &&
-        candidate.personId === payerId &&
-        candidate.date >= end &&
-        depositCents !== null &&
-        Math.abs(candidate.amountCents - depositCents) <= 1,
-    );
-    if (row === undefined) continue;
-    taken.add(row.id);
-    matches[index] = { ...match, status: "matched", rowId: row.id };
+    const outcomes = match.deposits.map((outcome): DepositOutcome => {
+      const row = rows.find(
+        (candidate) =>
+          !taken.has(candidate.id) &&
+          candidate.personId === outcome.personId &&
+          candidate.date >= expectation.end &&
+          Math.abs(candidate.amountCents - outcome.depositCents) <= 1,
+      );
+      if (row === undefined) return outcome;
+      taken.add(row.id);
+      return { ...outcome, status: "matched", rowId: row.id };
+    });
+    const every = outcomes.every((outcome) => outcome.status === "matched");
+    matches[index] = { ...match, status: every ? "matched" : match.status, deposits: outcomes };
   }
   return matches;
 }

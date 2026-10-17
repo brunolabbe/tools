@@ -2,7 +2,7 @@
  * A line entered by hand (lg-6): who paid, when, how much, and what. Ticking
  * "this was the other person's" makes it a **charge**: not shared at all, owed
  * in full by the other person (`docs/00-ANALYSIS.md` §5, _Charges between the
- * two_).
+ * two_) — by whichever person it names, in a household of more than two (lg-23).
  */
 
 import { useId, useState } from "react";
@@ -48,7 +48,11 @@ export function LineForm({
   const [note, setNote] = useState("");
   const [theirs, setTheirs] = useState(false);
 
-  const other = people.find((personId) => personId !== payer) ?? null;
+  // With more than two people the charge names whose it was (lg-23); with two
+  // it can only be the other's, and the form reads as it always did.
+  const others = people.filter((personId) => personId !== payer);
+  const [chosen, setChosen] = useState("");
+  const other = others.includes(chosen) ? chosen : (others[0] ?? null);
 
   const submit = (event: React.SyntheticEvent): void => {
     event.preventDefault();
@@ -125,8 +129,28 @@ export function LineForm({
           checked={theirs}
           onChange={(event) => setTheirs(event.target.checked)}
         />
-        {other === null ? "This was the other person's" : `This was ${other}'s`}
+        {others.length > 1
+          ? "This was someone else's"
+          : other === null
+            ? "This was the other person's"
+            : `This was ${other}'s`}
       </label>
+      {theirs && others.length > 1 && (
+        <>
+          <label htmlFor={`${id}-theirs`}>Whose it was</label>
+          <select
+            id={`${id}-theirs`}
+            value={other ?? ""}
+            onChange={(event) => setChosen(event.target.value)}
+          >
+            {others.map((personId) => (
+              <option key={personId} value={personId}>
+                {personId}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
       <div className="actions">
         <button type="submit" disabled={busy}>
           Add the line

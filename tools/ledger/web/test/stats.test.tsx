@@ -249,12 +249,13 @@ function closed(
       formula,
       ratioId: 1,
       shares: [],
-      payerId: "alex",
-      recipientId: "sam",
-      depositCents: netCents * 2,
-      netCents,
+      deposits: [{ personId: "alex", depositCents: netCents * 2 }],
+      transfers: [{ fromId: "alex", toId: "sam", cents: netCents }],
     },
-    deposit: { status: "expected", rowId: null },
+    deposit: {
+      status: "expected",
+      deposits: [{ personId: "alex", depositCents: netCents * 2, status: "expected", rowId: null }],
+    },
   };
 }
 
@@ -622,4 +623,37 @@ test("on a 360px phone a line chart is drawn 360px wide and a long column chart 
   // 24 columns at 28px, and the axis, do not fit in 360px; the chart is wider and scrolls.
   expect(Number(slider(fixed).getAttribute("width"))).toBeGreaterThan(360);
   expect(slider(fixed).closest(".chart-scroll")).not.toBeNull();
+});
+
+// lg-23 gate 1, F3: a deposit of a cent where the direct amount rounds to
+// nothing still names whom it is owed to, between two people.
+test("a one-cent deposit with nothing to pay directly still says who owes whom", async () => {
+  const period = closed(4, "2026-02-28", "v3", 0);
+  vi.mocked(fetchSettlementsStats).mockResolvedValue({
+    range: NONE,
+    periods: [
+      {
+        ...period,
+        settlement: {
+          ...period.settlement,
+          shares: [
+            { personId: "alex", partsPerMillion: 800_000, salaryId: 1 },
+            { personId: "sam", partsPerMillion: 200_000, salaryId: 2 },
+          ],
+          deposits: [{ personId: "sam", depositCents: 1 }],
+          transfers: [],
+        },
+      },
+    ],
+  });
+  render(<Stats />);
+  const settlements = await card("Settlements");
+
+  fireEvent.click(settlements.getByRole("button", { name: "Show as a table" }));
+
+  const rows = within(settlements.getByRole("table")).getAllByRole("row");
+  expect(rows.map((row) => row.textContent)).toEqual([
+    "ClosedFormulaWho owesDirectInto the buffer",
+    "2026-02-28v3sam owes alex0.00 $0.01 $",
+  ]);
 });

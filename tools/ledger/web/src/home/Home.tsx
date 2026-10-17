@@ -20,6 +20,21 @@ type Load =
   | { state: "failed"; message: string }
   | { state: "ready"; buckets: BucketsResponse };
 
+/**
+ * Who has paid extra into the mortgage bucket. Between two people, as lg-5 said
+ * it; between more, the one with most and their margin over the next (lg-23).
+ */
+export function leadSentence(mortgage: BucketsResponse["mortgage"]): string {
+  const two = mortgage.own.length <= 2;
+  if (mortgage.lead === null) {
+    return two ? "Both have paid the same." : "The two who have paid the most are level.";
+  }
+  const by = formatCents(mortgage.lead.byCents);
+  return two
+    ? `${mortgage.lead.personId} has paid ${by} more.`
+    : `${mortgage.lead.personId} has paid the most, ${by} more than the next.`;
+}
+
 export function Home(): React.ReactElement {
   const [load, setLoad] = useState<Load>({ state: "loading" });
 
@@ -57,11 +72,7 @@ export function Home(): React.ReactElement {
             </li>
           ))}
         </ul>
-        <p className="lead">
-          {mortgage.lead === null
-            ? "Both have paid the same."
-            : `${mortgage.lead.personId} has paid ${formatCents(mortgage.lead.byCents)} more.`}
-        </p>
+        <p className="lead">{leadSentence(mortgage)}</p>
         <p className="muted hint">In the bucket: {formatCents(mortgage.balanceCents)}</p>
       </section>
       <section className="card" aria-labelledby="buffer-heading">

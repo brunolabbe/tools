@@ -20,12 +20,12 @@
  * appends, signed with the address that made it. A new household's books are made the way lg-21 makes
  * any household's: the first time a request or a probe needs them.
  *
- * **A member is told only that an address cannot be added**, whether it is in a
- * household already or would be a third person (`MEMBER_NOT_ADDED`): the reason
- * would let any member ask which household holds an address. An admin is told
- * which. What it does not hide is that an address is taken at all: a free
- * address added under a name the household already holds succeeds, so success
- * and refusal tell a member whether an address is in some household. The owner
+ * **A member is told only that an address cannot be added**, not that it is in
+ * a household already (`MEMBER_NOT_ADDED`): the reason would let any member ask
+ * which household holds an address. An admin is told it. What it does not hide
+ * is that an address is taken at all: a free address succeeds, under any name
+ * since a household holds any number of people (lg-23), so success and
+ * refusal tell a member whether an address is in some household. The owner
  * accepted that on 2026-10-13 (lg-22's gate 1, F6): any answer that tells an
  * add from a refusal carries it, and an add that succeeds is a record naming
  * the member who made it.
@@ -104,10 +104,7 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
       const body: HouseholdMember = { address: added.address, person: added.person };
       return body;
     } catch (error: unknown) {
-      if (
-        error instanceof AppError &&
-        (error.code === "ADDRESS_ALREADY_A_MEMBER" || error.code === "HOUSEHOLD_FULL")
-      ) {
+      if (error instanceof AppError && error.code === "ADDRESS_ALREADY_A_MEMBER") {
         throw new AppError("MEMBER_NOT_ADDED");
       }
       throw error;

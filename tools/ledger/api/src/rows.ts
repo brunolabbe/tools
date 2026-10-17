@@ -38,7 +38,10 @@ interface StoredRowColumns {
 /**
  * Whether the spending chart counts this row: filed to the current expenses and
  * to nobody, so a joint row that took money out of the buffer. One definition for
- * the chart's sums and for the list opened from them, so the two cannot drift.
+ * which rows the chart's sums and the list opened from them take in. It does not
+ * make the two agree on how much of a row goes to which category: a row with a
+ * receipt is split by its items in the chart (lg-27) and listed whole under its
+ * own category here, until lg-28.
  */
 export function countsAsSpending(row: StoredRow): boolean {
   const filed = row.classification;

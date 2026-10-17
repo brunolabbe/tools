@@ -104,8 +104,10 @@ describe("the mortgage bucket", () => {
 
     expect(position.own.map((person) => person.personId)).toEqual(["alex", "casey", "sam"]);
     expect(sumOwn(position)).toBe(position.balanceCents);
-    // Three people: who is "ahead" of whom is not a question the screen asks.
-    expect(position.lead).toBeNull();
+    // Three people (lg-23, Question 2 A): the one with most, by their margin
+    // over the next — sam's 113 333 over alex's 33 333, not over casey's −45 433.
+    expect(position.own.map((person) => person.ownCents)).toEqual([33333, -45433, 113333]);
+    expect(position.lead).toEqual({ personId: "sam", byCents: 80000 });
   });
 
   // A uniform history would hold this by accident: here every payment is a
@@ -187,5 +189,39 @@ describe("the buffer", () => {
       personId: "alex",
       contributedCents: 55000,
     });
+  });
+});
+
+// lg-23, Question 2 A: the lead between more than two people.
+describe("the mortgage bucket's lead, between more than two", () => {
+  const people = ["alex", "casey", "sam"];
+
+  test("is the one with most, by their margin over the next and not over the last", () => {
+    const rows = [
+      row("2026-03-01", 30000, "mortgage", "alex"),
+      row("2026-03-01", 50000, "mortgage", "casey"),
+      row("2026-03-01", 10000, "mortgage", "sam"),
+    ];
+
+    expect(mortgageAsOf(rows, people, "2026-03-31").lead).toEqual({
+      personId: "casey",
+      byCents: 20000,
+    });
+  });
+
+  test("is nobody when the two with the most are level, though a third is behind", () => {
+    const rows = [
+      row("2026-03-01", 30000, "mortgage", "alex"),
+      row("2026-03-01", 30000, "mortgage", "casey"),
+      row("2026-03-01", 10000, "mortgage", "sam"),
+    ];
+
+    expect(mortgageAsOf(rows, people, "2026-03-31").lead).toBeNull();
+  });
+
+  test("is nobody for one person alone", () => {
+    const rows = [row("2026-03-01", 100, "mortgage", "alex")];
+
+    expect(mortgageAsOf(rows, [], "2026-03-31").lead).toBeNull();
   });
 });

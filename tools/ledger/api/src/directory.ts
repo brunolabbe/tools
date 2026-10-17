@@ -221,9 +221,9 @@ export class Directory {
   /**
    * Adds an address to a household under a person's name. Refused as
    * `ADDRESS_ALREADY_A_MEMBER` when the address is in a household already —
-   * this one included — and as `HOUSEHOLD_FULL` when the name would be the
-   * household's third. Both sentences are for an admin or the operator; a
-   * member is told neither (`routes/households.ts`).
+   * this one included — a sentence for an admin or the operator; a member is
+   * not told it (`routes/households.ts`). A household holds any number of
+   * people (lg-23), so a new name is never refused for being one more.
    */
   addMember(member: { household: string; address: string; person: string } & Change): Member {
     // lg-25: a caller past the request schema can pass anything, and each of these
@@ -254,14 +254,7 @@ export class Directory {
             `That address already belongs to the household "${standing.household}", as ${standing.person}. Remove it first.`,
           );
         }
-        // Every name the household has ever held, current or not (the schema's
-        // `memberships_two_people` says why).
-        const named = (
-          this.#db
-            .prepare("SELECT DISTINCT person FROM memberships WHERE household_id = ?")
-            .all(member.household) as { person: string }[]
-        ).map((row) => row.person);
-        if (!named.includes(person) && named.length >= 2) throw new AppError("HOUSEHOLD_FULL");
+        // A household holds any number of names (lg-23): nothing is counted.
         this.#record({ address, household: member.household, person }, "add", member);
         return { address, household: member.household, person };
       })

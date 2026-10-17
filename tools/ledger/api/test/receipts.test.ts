@@ -94,12 +94,14 @@ async function start(
     lines?: string[];
     logger?: AppLogger;
     apiKey?: string;
+    /** The household's members, alex and sam by default. */
+    members?: Parameters<typeof memberDirectory>[0];
   } = {},
 ): Promise<App> {
   if (options.files === true) dataDir = mkdtempSync(path.join(tmpdir(), "ledger-receipts-"));
   const lines = options.lines;
   app = await createApp({
-    directory: memberDirectory(),
+    directory: memberDirectory(options.members),
     config: {
       dataDir: dataDir ?? ":memory:",
       access: accessConfig(),
@@ -1293,5 +1295,50 @@ describe("a cycle in a line's corrections (lg-10 gate 2, N2)", () => {
     );
 
     expect(merchantCategory(db, "Pharmaprix", new Set([GROCERIES]))).toBe(GROCERIES);
+  });
+});
+
+// lg-23 gate 1, F2: in a household of three, "the other's" names nobody. It
+// charged the first person who was not the payer; it is refused until an item
+// can name whose it was (lg-30).
+describe("an item marked as the other's, among more than two", () => {
+  const three = [
+    [ALEX, "alex"],
+    ["casey@example.test", "casey"],
+    [SAM, "sam"],
+  ] as const;
+
+  test("is refused, and nothing is filed", async () => {
+    const target = await start({ members: three });
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: marked("shared", "theirs", "not-shared"),
+      destination: asLine(2_476, { spendingCategoryId: GROCERIES }),
+    });
+
+    expect(response.statusCode, response.body).toBe(400);
+    expect(response.json<ErrorResponse>().error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("more than two people"),
+    });
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
+      n: 0,
+    });
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM receipt_filings").get()).toEqual({
+      n: 0,
+    });
+  });
+
+  test("a receipt with nothing marked as the other's still files", async () => {
+    const target = await start({ members: three });
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: marked("shared", "not-shared", "shared"),
+      destination: asLine(2_476, { spendingCategoryId: GROCERIES }),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
   });
 });
