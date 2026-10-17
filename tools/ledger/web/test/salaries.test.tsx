@@ -158,3 +158,69 @@ test("a salary corrected under the proposal says what the server said", async ()
     "That salary is not the one on record.",
   );
 });
+
+test("a blank salary leaves the person out of the entry, and the screen says so (lg-29)", async () => {
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  entered.mockResolvedValue({
+    salaries: [salary(3, "alex", 2026, 6_000_000), salary(4, "casey", 2026, 4_000_000)],
+    proposal: {
+      effectiveFrom: "2026-10-03",
+      shares: [
+        { personId: "alex", partsPerMillion: 600_000, salaryId: 3 },
+        { personId: "casey", partsPerMillion: 400_000, salaryId: 4 },
+      ],
+    },
+  });
+  render(<Salaries />);
+  await screen.findByLabelText("Year");
+  expect(
+    screen.getByText(/A blank salary leaves that person out of the year’s ratio/u),
+  ).toBeTruthy();
+
+  fireEvent.change(field("Year"), { target: { value: "2026" } });
+  fireEvent.change(field("alex’s salary"), { target: { value: "60000" } });
+  fireEvent.change(field("casey’s salary"), { target: { value: "40000" } });
+  fireEvent.change(field("sam’s salary"), { target: { value: "   " } });
+  fireEvent.click(screen.getByRole("button", { name: "Save salaries" }));
+
+  await waitFor(() =>
+    expect(entered).toHaveBeenCalledWith({
+      year: 2026,
+      salaries: [
+        { personId: "alex", amountCents: 6_000_000 },
+        { personId: "casey", amountCents: 4_000_000 },
+      ],
+    }),
+  );
+  expect(await screen.findByText("alex 60.0000 % · casey 40.0000 %")).toBeTruthy();
+});
+
+test("text that is not an amount is refused even beside a blank, and nothing is sent (lg-29)", async () => {
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  render(<Salaries />);
+  await screen.findByLabelText("Year");
+
+  fireEvent.change(field("alex’s salary"), { target: { value: "60000" } });
+  fireEvent.change(field("casey’s salary"), { target: { value: "lots" } });
+  fireEvent.change(field("sam’s salary"), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save salaries" }));
+
+  expect((await screen.findByRole("alert")).textContent).toMatch(
+    /casey's salary is not an amount/u,
+  );
+  expect(entered).not.toHaveBeenCalled();
+});
+
+test("fewer than two salaries is refused, and nothing is sent (lg-29)", async () => {
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  render(<Salaries />);
+  await screen.findByLabelText("Year");
+
+  fireEvent.change(field("alex’s salary"), { target: { value: "60000" } });
+  fireEvent.change(field("casey’s salary"), { target: { value: "" } });
+  fireEvent.change(field("sam’s salary"), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save salaries" }));
+
+  expect((await screen.findByRole("alert")).textContent).toMatch(/at least two/u);
+  expect(entered).not.toHaveBeenCalled();
+});

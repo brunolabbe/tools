@@ -100,3 +100,48 @@ depend on the directory rather than the books.
       with measurements.
   - **Chosen: "Scope proposal to entry".** That authorises rewording
     `SalaryEntryResponse.proposal`'s doc comment, and no other contract change.
+- 2026-10-17 — Built (Sonnet 5.5). The proposal is scoped to the entry, and a
+  blank salary leaves the person out.
+  - **API.** `enterSalaries` in `api/src/salaries.ts` still stores the entry and
+    still answers with every salary the year holds in `salaries`, but builds
+    `proposal` from the people the entry names. A left-out person's salary on
+    record is not erased.
+  - **Contract.** The doc comment on `SalaryEntryResponse.proposal` says so. No
+    other contract line changed. This changes the documented meaning of a
+    contract field, by the owner's answer above.
+  - **Web.** `Salaries.tsx` skips a field that is blank or only spaces, still
+    refuses text that is not an amount, and refuses an entry of fewer than two
+    ("A ratio is between two people or more. Enter a salary for at least two.").
+    The screen says that a blank leaves the person out and that a salary already
+    on record is kept.
+  - **N2, reproduced.** `blank.mts` rebuilt from the Log of lg-23, with alex
+    5 000 000, casey 4 000 000 and sam 0 in entry 1. Before (lg-23's gate, on
+    lg-23's head): entry 2 proposed `[["alex",555556],["casey",444444],["sam",0]]`.
+    On this head: `entry 1 (three people) proposal people: [["alex",555556],["casey",444444],["sam",0]]`
+    and `entry 2 (sam left out) proposal people: [["alex",555556],["casey",444444]]`.
+  - **Done when 1.** `api/test/salaries.test.ts`, "the proposal is between the
+    people entered, not every salary the year holds", enters alex 5 000 000,
+    casey 4 000 000 and sam 1 000 000, then alex and casey only. It failed before
+    the change with `expected [ [ 'alex', 500000 ], …(2) ] to deeply equal [ [ 'alex', 555556 ], …(1) ]`
+    (3 of its 3 new tests failed) and passes after. Sam's share is 10 % rather
+    than the ticket's 0, so the three-person proposal differs visibly from the
+    two-person one. Two companions: confirming that proposal stores a ratio of
+    alex and casey, and an entry of alex alone proposes nothing though the year
+    holds three salaries.
+  - **Done when 2.** `web/test/salaries.test.tsx`, "text that is not an amount is
+    refused even beside a blank, and nothing is sent (lg-29)", and the existing
+    "an amount that is not one is refused before anything is sent". Beside them:
+    "a blank salary leaves the person out of the entry, and the screen says so"
+    and "fewer than two salaries is refused, and nothing is sent". The web tests
+    were not run red against the base separately.
+  - **One test had to change.** `api/test/salaries.test.ts`, "keeps the earlier
+    record, and the earlier ratio still reads as in effect for its own dates",
+    corrected sam's salary by sending sam alone and read a proposal between alex
+    and sam. Under the owner's answer that entry proposes nothing, so it now
+    sends alex's unchanged salary beside sam's correction (and asserts alex's
+    record is not filed twice). The behaviour it pins, a correction keeps the
+    earlier record, is unchanged.
+  - **The brief had wrong:** nothing beyond what the landing already corrected.
+    Folded in: nothing. No other small, specified piece became free; the roadmap
+    row for lg-29 already says "a blank salary leaves a person out of the year's
+    ratio".
