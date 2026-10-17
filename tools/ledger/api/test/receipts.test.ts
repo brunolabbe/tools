@@ -1342,3 +1342,40 @@ describe("an item marked as the other's, among more than two", () => {
     expect(response.statusCode, response.body).toBe(200);
   });
 });
+
+// lg-32: with every item taken off, the parts rounded apart came to a cent more
+// than the card was charged and the filing was refused as "more comes off".
+describe("a receipt with nothing left shared (lg-32)", () => {
+  test("files the charge alone, where the parts rounded apart come to a cent over", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: marked("not-shared", "theirs", "not-shared"),
+      destination: asLine(2_476),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json<ReceiptFiling>().chargeLineId).toBeNull();
+    // The six-pack, 15,54 $, is the whole line; the rest is the payer's own.
+    expect(storedLines(target)).toEqual([{ amount_cents: 1_554, charged_to: "sam" }]);
+  });
+
+  test("still refuses a receipt that charged less than the items came to", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+
+    const refused = await file(target, receipt.id, {
+      proposal: marked("not-shared", "theirs", "not-shared"),
+      destination: asLine(2_470),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error).toMatchObject({
+      code: "BAD_REQUEST",
+      message:
+        "More comes off this receipt than the card was charged. Check the amount charged and the items.",
+    });
+    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+  });
+});

@@ -107,3 +107,37 @@ change what the other person owes by a cent to fix the payer's own rounding.
     too (G3: `measure2.mts` gives `RECEIPT_DOES_NOT_ADD_UP` when the refund's
     deposit is left positive). The rule is now an owner's answer, no longer only
     the filing's recommendation.
+- 2026-10-17 — Built, on `a04a1c96`. The guard is in `splitReceipt`
+  (`books/src/receipts.ts`) and nowhere else; `fileLines` is unchanged, since a
+  shared amount of 0 already files the charge alone.
+  - **The rule as written.** Let `together` be the payment less
+    `sharedAmount(receipt, [...not-shared, ...theirs])`. When the parts rounded
+    apart leave the shared amount nonzero at the opposite sign to the payment, and
+    `together` is zero or the payment's sign, the difference is rounding: it goes
+    onto `notSharedCents` and `sharedCents` is 0. The two parts are each rounded
+    once, so the difference is at most a cent. Where `together` is also over
+    (`2,475` charged: -1 together, -2 apart), nothing is adjusted and the caller
+    refuses it as before.
+  - **Build 1's second branch is not built, and cannot be reached here.** "With no
+    not-shared items, take it off the largest charge" needs two rounded charge
+    amounts to disagree with their sum. This function has one `theirs` amount,
+    rounded once, so with no not-shared amount `together` and apart are the same
+    number. lg-30 makes the charges several; that is where the branch is
+    reachable and testable, and `splitReceipt`'s comment says so. Any
+    not-shared amount of 0 (every not-shared item priced 0) is treated as there
+    being none, so the adjustment is not applied there either.
+  - **Measured.** Before the change, on the three new tests that reach it:
+    `npx vitest run tools/ledger/books/test/receipts.test.ts
+tools/ledger/api/test/receipts.test.ts -t "lg-32"` gave 3 failed | 2 passed
+    of 108: the API test `BAD_REQUEST` "More comes off this receipt…" and the two
+    books tests `sharedCents: -1` (the refund `+1`). After it, both whole files:
+    108 passed of 108 (api resolves books through `dist`, so `books` was rebuilt
+    between the two states, and the built `receipts.js` was grepped for the new
+    `sharedAmount(receipt, [...notShared` call). Mutation: with the `together`
+    condition made always true, "still shows more than was charged, where the
+    parts together come to more" failed (1 failed | 55 passed of 56, books file);
+    the mutation was then restored by editing it back.
+  - **Not asked of this ticket, seen in passing.** With a tip and the same marks
+    (`2,776` charged) the parts apart leave 299 shared where together they leave
+    300, a cent of the same rounding but at the payment's sign. The Build's rule
+    is about the sign, so it is left alone and nothing refuses it.
