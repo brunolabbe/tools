@@ -179,9 +179,11 @@ function receiptsOnRows(db: Database): Map<number, { date: string | null; items:
  * at least one item is split by its items' categories instead (lg-27): each
  * category's cost is its items' own, taxes and deposits included, and what the
  * card was charged beyond that — rounding, any tip — goes to the largest
- * (`splitByCategory`). The row's own category is then not counted. A row whose
- * receipt has no items stays whole under its own category, as does a row with no
- * receipt.
+ * (`splitByCategory`). The row's own category is then not counted. A row stays
+ * whole under its own category when it has no receipt, when its receipt has no
+ * items, when a person gave the row a category of its own (an override wins), and
+ * when the remainder would turn the largest category the other way round (a
+ * partly paid basket, a refund row).
  */
 export function spendingStats(
   db: Database,
@@ -193,7 +195,13 @@ export function spendingStats(
     const receipts = receiptsOnRows(db);
     for (const row of listRows(db, { spendingOnly: true, limit: Number.MAX_SAFE_INTEGER }).rows) {
       const documented = receipts.get(row.id);
-      const split = documented === undefined ? [] : splitByCategory(-row.amountCents, documented);
+      // A person's own category for the row wins over the receipt's items (the
+      // owner's answer of 2026-10-17): the items are never edited, so the override
+      // is the one way left to correct how the chart files a receipted row.
+      const split =
+        documented === undefined || row.spendingCategory?.source === "override"
+          ? []
+          : splitByCategory(-row.amountCents, documented);
       if (split.length === 0) {
         entries.push({
           date: row.date,

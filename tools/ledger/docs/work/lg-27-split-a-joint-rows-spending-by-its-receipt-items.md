@@ -35,6 +35,10 @@ sentences at it.
 category. The remainder, which is the rounding plus any tip, goes to the largest
 category. The options are kept below as they were asked.
 
+**The owner added a guard on 2026-10-17 (gate 1, F3):** when the remainder would
+change the sign of the largest category, the row is charted whole under its own
+category, as before.
+
 **How do a row's taxes, deposits and any tip divide among its items' categories?**
 The row's amount is the card's charge. Its items are prices, deposits and a
 taxable mark, and the printed GST and QST cover the taxable items together.
@@ -93,8 +97,8 @@ By rule (a):
   `receipt_filings.row_id` and `receipt_items` once (`receiptsOnRows`) and uses
   the split in place of the row's whole amount when it answers any; otherwise
   the row is whole as before. `spendingStats`' comment is corrected.
-  - The lg-10 basket (bread 3,49 $, six-pack with deposit and taxes 15,53525 $,
-    soap 5,73725 $) costs 24,77 $ item by item against the 24,76 $ printed, so
+  - The lg-10 basket (bread 3,49 $, six-pack with deposit and taxes 15,5352525 $,
+    soap 5,7372525 $) costs 24,77 $ item by item against the 24,76 $ printed, so
     the rounding alone takes a cent off the six-pack: 3,49 / 15,53 / 5,74. With a
     3,00 $ tip on top the six-pack is 18,53 $. Both are asserted in
     `books/test/receipts.test.ts` and, through the route, in
@@ -109,3 +113,45 @@ By rule (a):
     with the slice's amount, which changes `RowsResponse`'s contract and the
     screen, and is a decision, not a piece already specified. Left for the
     orchestrator to file or ask.
+- 2026-10-17 — Gate 1 (`8e50f0d4..89ad8b02`) failed with F1 (high), F2 and F3
+  (med), F4 and F5 (low). The owner answered each through `AskUserQuestion`, each
+  option the gate's recommended one, and the round applies them:
+  - **F1: reword and file lg-28.** The `rowsQuerySchema` comment in
+    `contract/src/api.ts` and the `countsAsSpending` comment in `api/src/rows.ts`
+    said the chart and its list cannot drift; both now say the list files a
+    receipted row under its own category until
+    [lg-28](./lg-28-make-the-spending-drill-down-follow-a-receipts-split.md).
+    Rejected: making the list follow the split in this branch (it changes
+    `RowsResponse`). The comments are comment-only edits; `RowsResponse` is
+    untouched.
+  - **F2: an override wins over the split.** `spendingStats` charts a row whole
+    when `row.spendingCategory.source` is `override`, since `receipt_items` is
+    never edited and the override is the one correction left. Rejected: keeping
+    the split and offering no override on a receipted row; rewording lg-18.
+    Cost: overriding a receipted row drops its whole split.
+  - **F3: guard on a sign flip.** `splitByCategory` answers `[]` (so the caller
+    keeps the row whole) when the remainder would change the sign of the largest
+    category; the sentence is added to the Decision above. Rejected: spreading
+    the remainder in proportion; keeping it and saying so.
+  - **F5: fixed.** The exact costs are 15,5352525 $ and 5,7372525 $, in the
+    block comment of `books/test/receipts.test.ts` and in this Log.
+  - **F4: left as recorded**, as the coordinator asked. The gate's example
+    (10,00 $, 10,00 $ and a −15,00 $ discount in category 5, charged 8,00 $ with
+    a 3,00 $ tip) is not changed by the guard: the largest category is the
+    discount, −15,00 $ becomes −12,00 $, the sign is the same, so the guard does
+    not fire.
+  - **Not covered by the guard, and said so:** the gate's third case, a 100,00 $
+    charge against a 24,77 $ basket (a remainder of 75,23 $), does not change the
+    largest category's sign (15,54 $ becomes 90,77 $), so by the owner's wording
+    it is still split. `books/test/receipts.test.ts` › "a remainder is still
+    split when it leaves the largest category's sign alone" pins that. Whether to
+    chart it whole too is an open decision for the owner (reported, not settled).
+  - Tests, each failing without its fix (the fix removed, the two tests'
+    spec files run, then restored): F3 in books, "a basket part paid by card
+    gives no split" and "a purchase's receipt on a refund row gives no split",
+    and through the route "a basket part paid by card, and one filed on a refund
+    row, chart whole (F3)"; F2 "an override on a receipted row moves the chart:
+    the row charts whole under it (F2)". With both fixes removed, 4 failed and 68
+    passed of 72.
+  - Fold-in: lg-28 is filed, not folded in, since it changes `RowsResponse` and
+    the screen (a decision the owner already took).

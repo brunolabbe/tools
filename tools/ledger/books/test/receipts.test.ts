@@ -347,8 +347,8 @@ describe("the shipped rate table (lg-10 gate 1, F6)", () => {
 
 describe("a joint-account row's amount, split by its items' categories (lg-27)", () => {
   // Each item's own cost, as `sharedAmount` takes one off: bread 3,49 $; the six-pack
-  // with its deposit and both taxes 15,53525 $ → 15,54 $; the soap with its taxes
-  // 5,73725 $ → 5,74 $. Together 24,77 $, a cent over the 24,76 $ the card was charged.
+  // with its deposit and both taxes 15,5352525 $ → 15,54 $; the soap with its taxes
+  // 5,7372525 $ → 5,74 $. Together 24,77 $, a cent over the 24,76 $ the card was charged.
   const BY_ITEM = { date: BASKET.date, items: BASKET.items };
 
   test("two or more categories chart as amounts that sum to the row's amount, to the cent", () => {
@@ -458,6 +458,31 @@ describe("a joint-account row's amount, split by its items' categories (lg-27)",
     expect(on("2026-07-01", 2_650)).toEqual([
       { categoryId: 3, cents: 1_160 },
       { categoryId: 1, cents: 1_490 },
+    ]);
+  });
+});
+
+describe("the guard on a remainder that turns the largest category over (lg-27 gate 1, F3)", () => {
+  const BASKET_AT = (amount: number) =>
+    splitByCategory(amount, { date: BASKET.date, items: BASKET.items });
+
+  test("a basket part paid by card gives no split, where it gave Alcohol −4,23 $", () => {
+    // 5,00 $ on the card, the rest by gift card: 15,54 $ + (5,00 − 24,77) $ is below zero.
+    expect(BASKET_AT(500)).toEqual([]);
+  });
+
+  test("a purchase's receipt on a refund row gives no split", () => {
+    // The row is +24,76 $, so the amount spent is −24,76 $: the six-pack would be −33,99 $.
+    expect(BASKET_AT(-2_476)).toEqual([]);
+  });
+
+  test("a remainder is still split when it leaves the largest category's sign alone", () => {
+    // 100,00 $ charged for a 24,77 $ basket is a large remainder but not a sign
+    // change; the owner's guard is the sign, so the six-pack takes 90,77 $.
+    expect(BASKET_AT(10_000)).toEqual([
+      { categoryId: 1, cents: 349 },
+      { categoryId: 2, cents: 9_077 },
+      { categoryId: 3, cents: 574 },
     ]);
   });
 });

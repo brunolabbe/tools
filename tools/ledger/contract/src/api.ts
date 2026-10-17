@@ -970,9 +970,11 @@ export interface StoredRow {
  * `GET /api/rows`: stored rows, newest first. `spendingCategory` keeps the
  * uncategorised (`none`) or one category's by id. `from` and `to` are days, both
  * inclusive. `scope=spending` keeps the rows the spending chart counts: filed
- * to the current expenses and to nobody, so a list opened from the chart sums to
- * the slice it was opened from less the card lines in that slice, which are not
- * rows. `offset` and `limit` page the result (100 by default); `total` is how
+ * to the current expenses and to nobody. A list opened from the chart does not
+ * always sum to the slice it was opened from: it leaves out the card lines in
+ * that slice, which are not rows, and it files a row under the row's own
+ * category even when its receipt's items split the row across several (lg-27;
+ * lg-28 is the drill-down that follows the split). `offset` and `limit` page the result (100 by default); `total` is how
  * many match before either.
  */
 export const rowsQuerySchema = z

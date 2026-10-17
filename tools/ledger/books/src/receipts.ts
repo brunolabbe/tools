@@ -299,6 +299,7 @@ export interface CategoryAmount {
  *
  * An item with no category is a category of its own, `null`. A receipt with no
  * items has nothing to divide by and answers none: the caller keeps the row whole.
+ * So does a split whose difference would change the largest category's sign.
  * The result is in the order the categories first appear in the items, and a
  * category that comes to nothing is left out. `amountCents` is signed as the
  * receipt is — a purchase positive, a refund negative.
@@ -327,6 +328,15 @@ export function splitByCategory(
   }
   const rounded = slices.reduce((sum, slice) => sum + slice.cents, 0);
   const target = slices[largest];
-  if (target !== undefined) target.cents += amountCents - rounded;
+  if (target !== undefined) {
+    const adjusted = target.cents + amountCents - rounded;
+    // The remainder is meant to be the rounding and a tip. One that turns the
+    // largest category the other way round is neither — a basket part paid for, or
+    // a purchase's receipt on a refund's row — and charting it would raise a
+    // category the row lowered (the owner's guard, 2026-10-17): the caller keeps
+    // the row whole.
+    if (target.cents !== 0 && Math.sign(adjusted) !== Math.sign(target.cents)) return [];
+    target.cents = adjusted;
+  }
   return slices.filter((slice) => slice.cents !== 0);
 }

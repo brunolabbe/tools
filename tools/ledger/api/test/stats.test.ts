@@ -550,8 +550,11 @@ function marketRow(day: string, name: string, amountCents: number): PasteRow {
   };
 }
 
-/** Four rows on one account: two with a basket, one with a receipt of no items, one with none. */
-async function startWithReceipts(): Promise<App> {
+/**
+ * Four rows on one account — A, B, C and D, in that order — and the `more` the
+ * test asks for after them. Which hold a receipt is each test's to file.
+ */
+async function startWithReceipts(more: PasteRow[] = []): Promise<App> {
   const target = await startApp();
   await addRule(target, rule("Achat /Marché *", null, "current-expenses"));
   const groceries = await categoryId(target, "Groceries");
@@ -568,6 +571,7 @@ async function startWithReceipts(): Promise<App> {
           marketRow("11", "B", -2_776),
           marketRow("12", "C", -2_000),
           marketRow("13", "D", -1_000),
+          ...more,
         ],
         500_000,
       ),
@@ -658,5 +662,40 @@ describe("GET /api/stats/spending, for a row with a receipt (lg-27)", () => {
 
     expect(await chart(target)).toEqual(before);
     expect(before.get(1)).toBe(2_476 + 2_776 + 2_000 + 1_000);
+  });
+});
+
+describe("GET /api/stats/spending, for a receipted row, after gate 1 (lg-27)", () => {
+  test("an override on a receipted row moves the chart: the row charts whole under it (F2)", async () => {
+    const target = await startWithReceipts();
+    const pharmacy = await categoryId(target, "Pharmacy");
+    attach(target, rowOf(target, "A"), BASKET_ITEMS);
+    expect((await chart(target)).get(2)).toBe(1_553);
+
+    await post(target, ROUTES.spendingCategoryOverrides, {
+      rowId: rowOf(target, "A"),
+      spendingCategoryId: pharmacy,
+    });
+    const after = await chart(target);
+
+    // The 24,76 $ is the override's, and the basket's alcohol and soap are gone from the chart.
+    expect(after.get(pharmacy)).toBe(2_476);
+    expect([after.get(2), after.get(3)]).toEqual([undefined, undefined]);
+    expect(after.get(1)).toBe(2_776 + 2_000 + 1_000);
+  });
+
+  test("a basket part paid by card, and one filed on a refund row, chart whole (F3)", async () => {
+    const target = await startWithReceipts([
+      marketRow("14", "E", -500),
+      marketRow("15", "F", 2_476),
+    ]);
+    attach(target, rowOf(target, "E"), BASKET_ITEMS);
+    attach(target, rowOf(target, "F"), BASKET_ITEMS);
+
+    const charted = await chart(target);
+
+    // Neither row turns the six-pack negative: each stays under its own category.
+    expect([charted.get(2), charted.get(3)]).toEqual([undefined, undefined]);
+    expect(charted.get(1)).toBe(2_476 + 2_776 + 2_000 + 1_000 + 500 - 2_476);
   });
 });
