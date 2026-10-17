@@ -328,9 +328,8 @@ null` as a two-person filing does (to the one other current member); and the
    2); the two make 2,476. The same on the refund: every `BASKET` price, deposit,
    tax and the total negated, `-2,476` charged, the same marks: casey's line is -923 and
    sam's is -1,553, which make -2,476 (sam's is the largest in size, casey's the
-   largest by value). _Regression:_ a fixture where the excess shows with the
-   people rounded together too (more is charged than was paid, with one person
-   charged or several) is refused with the existing `BAD_REQUEST` ("More comes
+   largest by value). _Regression:_ a payment under the printed total (with one
+   person charged or several) is refused with the existing `BAD_REQUEST` ("More comes
    off this receipt than the card was charged. …"), as now.
 8. **`splitReceipt`** (`books/test/receipts.test.ts`): `charges` has one entry
    per distinct `chargedTo`, in first-printed order; `sharedCents +
@@ -566,3 +565,18 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     supersedes, since lg-32's 2,307 receipt shows its excess together and now
     files. A builder pins the regression with a payment under the printed total.
     The line is for the orchestrator to reword if it reads as wrong.
+- 2026-10-17 — The owner answered Done when 7's wording, through
+  `AskUserQuestion` (relayed by the orchestrator to this ticket's builder, who
+  records it here before any source changes):
+  - Question: "lg-30's Done when 7 regression clause reads 'a fixture where the
+    excess shows with the people rounded together too (more is charged than was
+    paid, with one person charged or several) is refused'; after the
+    printed-total rule, the 2,307 receipt shows an excess rounded together yet
+    must file, so should the line change?"
+  - **"Reword to printed total" (recommended by lg-32's lander):** the lead
+    phrase becomes "a payment under the printed total (with one person charged
+    or several) is refused…", so the line cannot be read as the superseded
+    together test.
+  - "Leave as is".
+  - **Chosen: "Reword to printed total".** Done when 7's regression clause now
+    reads so; nothing else in the line changed.
