@@ -122,7 +122,10 @@ function sharesOf(ratio: readonly Share[]): Map<string, bigint> {
   let total = 0;
   for (const { personId, partsPerMillion } of ratio) {
     if (shares.has(personId) || !Number.isSafeInteger(partsPerMillion) || partsPerMillion < 0) {
-      throw new AppError("INTERNAL", "A ratio names each person once, with a share of zero or more.");
+      throw new AppError(
+        "INTERNAL",
+        "A ratio names each person once, with a share of zero or more.",
+      );
     }
     shares.set(personId, BigInt(partsPerMillion));
     total += partsPerMillion;
@@ -185,9 +188,11 @@ function roundHalfUp(numerator: bigint, denominator: bigint): number {
  * Exact deposits, each `numerator / denominator` cents, rounded to whole cents
  * so that after them every contribution stands at its share to within a cent.
  *
- * Rounding each alone, half-up, does not promise that past four people: a
+ * Rounding each alone, half-up, does not promise that past three people: a
  * person's standing moves by their own rounding and by their share of everyone
- * else's, and with five people the second can pass a cent. So the deposits are
+ * else's — the one furthest ahead, who deposits nothing, by their share of all
+ * of them — and with four people the second can pass a cent (lg-23's Log has
+ * the measurement). So the deposits are
  * rounded together. As many are rounded up as the sum of their fractions rounds
  * to, half-up — so the rounding of the total, `S`, is within half a cent — and a
  * deposit is rounded up only if `r_i × S − (its own rounding)` stays within a
@@ -280,7 +285,7 @@ function transfersOf(
     .filter((personId) => (nets.get(personId) ?? 0n) < 0n)
     .map((personId) => ({ personId, left: -(nets.get(personId) ?? 0n) }));
   const transfers: SettlementTransfer[] = [];
-  for (let from = 0, to = 0; from < owing.length && to < owed.length; ) {
+  for (let from = 0, to = 0; from < owing.length && to < owed.length;) {
     const payer = owing[from];
     const payee = owed[to];
     if (payer === undefined || payee === undefined) break;
@@ -405,7 +410,8 @@ export function settleStretches(
       }
     }
     for (const { owedBy, owedTo } of stretch.charges) {
-      const between = (owedBy === first && owedTo === second) || (owedBy === second && owedTo === first);
+      const between =
+        (owedBy === first && owedTo === second) || (owedBy === second && owedTo === first);
       if (!between) {
         throw new AppError("BAD_REQUEST", "A charge is between the two people of the ratio.");
       }

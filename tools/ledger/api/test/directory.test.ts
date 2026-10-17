@@ -181,9 +181,9 @@ describe("membership", () => {
 
     expect(directory.people("home")).toEqual(people.toSorted());
     expect(directory.membershipOf(CASEY)).toEqual({ household: "home", person: "casey" });
-    expect(
-      db.prepare("SELECT count(DISTINCT person) AS n FROM current_members").get(),
-    ).toEqual({ n: 5 });
+    expect(db.prepare("SELECT count(DISTINCT person) AS n FROM current_members").get()).toEqual({
+      n: 5,
+    });
     directory.close();
     db.close();
   });
@@ -226,9 +226,11 @@ describe("membership", () => {
     expect(db.pragma("user_version", { simple: true })).toBe(4);
     expect(db.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(before);
     insert(db, { address: CASEY, person: "casey" });
-    expect(
-      db.prepare("SELECT person FROM current_members ORDER BY person").all(),
-    ).toEqual([{ person: "alex" }, { person: "casey" }, { person: "sam" }]);
+    expect(db.prepare("SELECT person FROM current_members ORDER BY person").all()).toEqual([
+      { person: "alex" },
+      { person: "casey" },
+      { person: "sam" },
+    ]);
     db.close();
   });
 

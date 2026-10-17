@@ -91,3 +91,28 @@ test("says what the server said when the figures cannot be read", async () => {
 
   expect((await screen.findByRole("alert")).textContent).toBe("The ledger API is not answering.");
 });
+
+// lg-23: three people, the lead is the one with most over the next.
+test("between three people, says who has paid the most and by how much over the next", async () => {
+  const three = {
+    balanceCents: 19999,
+    own: [
+      { personId: "alex", ownCents: 26666 },
+      { personId: "casey", ownCents: -23334 },
+      { personId: "sam", ownCents: 16667 },
+    ],
+    lead: { personId: "alex", byCents: 9999 },
+  };
+  buckets.mockResolvedValue({ ...FIGURES, mortgage: three });
+
+  render(<Home />);
+
+  expect(
+    await screen.findByText("alex has paid the most, 99.99 $ more than the next."),
+  ).toBeTruthy();
+  cleanup();
+
+  buckets.mockResolvedValue({ ...FIGURES, mortgage: { ...three, lead: null } });
+  render(<Home />);
+  expect(await screen.findByText("The two who have paid the most are level.")).toBeTruthy();
+});

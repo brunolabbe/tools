@@ -134,7 +134,10 @@ describe("between three, four and five people", () => {
         const where = `${String(size)} people, trial ${String(trial)}`;
 
         const nets = netsOf(stretches);
-        expect([...nets.values()].reduce((sum, net) => sum + net, 0n), where).toBe(0n);
+        expect(
+          [...nets.values()].reduce((sum, net) => sum + net, 0n),
+          where,
+        ).toBe(0n);
 
         const settled = settleHousehold(stretches, closing);
         expect(settled.deposits, where).not.toBeNull();

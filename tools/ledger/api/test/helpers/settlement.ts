@@ -16,13 +16,18 @@ export interface TwoPersonSettlement {
 }
 
 export function asTwo(figures: SettlementFigures | null | undefined): TwoPersonSettlement {
-  if (figures === null || figures === undefined) throw new AppError("INTERNAL", "No settlement to read.");
+  if (figures === null || figures === undefined)
+    throw new AppError("INTERNAL", "No settlement to read.");
   const people = figures.shares.map((share) => share.personId);
-  if (people.length !== 2) throw new AppError("INTERNAL", `A settlement between ${String(people.length)}.`);
+  if (people.length !== 2)
+    throw new AppError("INTERNAL", `A settlement between ${String(people.length)}.`);
   const [transfer, extra] = figures.transfers;
   const [deposit, another] = figures.deposits ?? [];
   if (extra !== undefined || another !== undefined) {
-    throw new AppError("INTERNAL", "A two-person settlement has one deposit and one transfer at most.");
+    throw new AppError(
+      "INTERNAL",
+      "A two-person settlement has one deposit and one transfer at most.",
+    );
   }
   const payerId = deposit?.personId ?? transfer?.fromId ?? null;
   return {

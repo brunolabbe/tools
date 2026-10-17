@@ -552,11 +552,11 @@ function describeSettlement(figures: SettlementFigures | null): string {
   // Between two people, the line lg-7 printed.
   const [only, more] = transfers;
   const [deposit, another] = deposits ?? [];
-  const onePayer =
-    deposit === undefined || only === undefined || deposit.personId === only.fromId;
+  const onePayer = deposit === undefined || only === undefined || deposit.personId === only.fromId;
   if (more === undefined && another === undefined && (deposit ?? only) !== undefined && onePayer) {
     const payer = deposit?.personId ?? only?.fromId ?? "";
-    const what = deposit === undefined ? "pays directly" : `deposits ${money(deposit.depositCents)}`;
+    const what =
+      deposit === undefined ? "pays directly" : `deposits ${money(deposit.depositCents)}`;
     return `${payer} ${what} (net ${money(only?.cents ?? 0)}), ${figures.formula}`;
   }
   const direct = transfers
@@ -565,7 +565,7 @@ function describeSettlement(figures: SettlementFigures | null): string {
   const asked =
     deposits === null
       ? `pays directly: ${direct}`
-      : `${deposits.map((deposit) => `${deposit.personId} deposits ${money(deposit.depositCents)}`).join(", ")} (net ${direct === "" ? "nothing" : direct})`;
+      : `${deposits.map((each) => `${each.personId} deposits ${money(each.depositCents)}`).join(", ")} (net ${direct === "" ? "nothing" : direct})`;
   return `${asked}, ${figures.formula}`;
 }
 

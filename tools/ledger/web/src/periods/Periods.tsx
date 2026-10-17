@@ -47,24 +47,67 @@ type Load =
   | { state: "failed"; message: string }
   | ({ state: "ready" } & Loaded);
 
-/** Who deposits what, in one sentence, and the direct transfer it equals. */
+/** "a, b and c". */
+function listed(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts.at(-1) ?? ""}`;
+}
+
+/**
+ * Who deposits what, in one sentence, and the direct transfers it equals.
+ * Between two people, lg-6's sentences; between more, the same said of each
+ * deposit and each transfer (lg-23).
+ */
 export function settlementSentence(settlement: SettlementFigures): {
   lead: string;
   hint: string | null;
 } {
-  const { payerId, recipientId, depositCents, netCents } = settlement;
-  if (payerId === null || recipientId === null) {
-    return { lead: "Nobody owes anything: the two stand at the ratio.", hint: null };
-  }
-  if (depositCents === null) {
+  const { deposits, transfers, shares } = settlement;
+  const people = new Set(shares.map((share) => share.personId));
+  for (const { personId } of deposits ?? []) people.add(personId);
+  for (const { fromId, toId } of transfers) people.add(fromId).add(toId);
+  const two = people.size <= 2;
+  const direct = listed(
+    transfers.map(({ fromId, toId, cents }) => `${fromId} pays ${toId} ${formatCents(cents)}`),
+  );
+  if (deposits !== null && deposits.length === 0 && transfers.length === 0) {
     return {
-      lead: `${payerId} pays ${recipientId} ${formatCents(netCents)} directly.`,
-      hint: `${recipientId}'s share of the buffer is zero, so a deposit into it cannot settle this.`,
+      lead: two
+        ? "Nobody owes anything: the two stand at the ratio."
+        : "Nobody owes anything: everyone stands at the ratio.",
+      hint: null,
     };
   }
+  const [transfer] = transfers;
+  if (deposits === null) {
+    if (two && transfer !== undefined) {
+      return {
+        lead: `${transfer.fromId} pays ${transfer.toId} ${formatCents(transfer.cents)} directly.`,
+        hint: `${transfer.toId}'s share of the buffer is zero, so a deposit into it cannot settle this.`,
+      };
+    }
+    return {
+      lead: `Paid directly: ${direct}.`,
+      hint: "Someone owed has no share of the buffer, so a deposit into it cannot settle this.",
+    };
+  }
+  const [deposit] = deposits;
+  if (two && deposit !== undefined && deposits.length === 1) {
+    const recipient = transfer?.toId ?? [...people].find((person) => person !== deposit.personId);
+    return {
+      lead: `${deposit.personId} deposits ${formatCents(deposit.depositCents)} into the buffer.`,
+      hint: `Or pays ${recipient ?? ""} ${formatCents(transfer?.cents ?? 0)} directly.`,
+    };
+  }
+  const into = listed(
+    deposits.map(
+      ({ personId, depositCents }) => `${personId} deposits ${formatCents(depositCents)}`,
+    ),
+  );
   return {
-    lead: `${payerId} deposits ${formatCents(depositCents)} into the buffer.`,
-    hint: `Or pays ${recipientId} ${formatCents(netCents)} directly.`,
+    lead:
+      deposits.length === 0 ? "Nothing to deposit into the buffer." : `${into} into the buffer.`,
+    hint: transfers.length === 0 ? null : `Or directly: ${direct}.`,
   };
 }
 
@@ -194,7 +237,15 @@ export function Periods(): React.ReactElement {
     }, {});
   };
 
-  const expected = closed.filter((period) => period.deposit.status === "expected");
+  // Each deposit a close asked for and no paste has brought in yet: one per
+  // person, so a close between more than two can be part seen (lg-23).
+  const expected = closed
+    .filter((period) => period.deposit.status === "expected")
+    .flatMap((period) =>
+      period.deposit.deposits
+        .filter((deposit) => deposit.status === "expected")
+        .map((deposit) => ({ period, deposit })),
+    );
   const chosenEnd = end ?? open.end;
   // The period after one closed today starts tomorrow: nothing to close yet.
   const empty = open.start !== null && chosenEnd < open.start;
@@ -324,12 +375,12 @@ export function Periods(): React.ReactElement {
           <p className="muted hint">Every deposit asked for has come in with a paste.</p>
         ) : (
           <ul className="figures">
-            {expected.map((period) => (
-              <li key={period.id}>
+            {expected.map(({ period, deposit }) => (
+              <li key={`${String(period.id)}-${deposit.personId}`}>
                 <span>
-                  {period.settlement.payerId}, for the period ending {period.end}
+                  {deposit.personId}, for the period ending {period.end}
                 </span>
-                <span className="amount">{formatCents(period.settlement.depositCents ?? 0)}</span>
+                <span className="amount">{formatCents(deposit.depositCents)}</span>
               </li>
             ))}
           </ul>

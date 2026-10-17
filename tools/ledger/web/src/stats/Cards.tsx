@@ -716,11 +716,33 @@ const FORMULA_WORDS = {
   v3: "the tool's formula",
 } as const;
 
+/**
+ * Who owes whom, from the transfers that would settle it directly; between
+ * more than two people, each of them (lg-23).
+ */
 function who(period: ClosedPeriod): string {
-  const { payerId, recipientId } = period.settlement;
-  return payerId === null || recipientId === null
-    ? "Even"
-    : `${personLabel(payerId)} owes ${personLabel(recipientId)}`;
+  const { deposits, transfers } = period.settlement;
+  if (transfers.length === 0) {
+    // A deposit of a cent can stand where the direct amount rounds to nothing.
+    const [deposit] = deposits ?? [];
+    return deposit === undefined ? "Even" : `${personLabel(deposit.personId)} owes`;
+  }
+  return transfers
+    .map((transfer) => `${personLabel(transfer.fromId)} owes ${personLabel(transfer.toId)}`)
+    .join(", ");
+}
+
+/** What a direct payment would have moved in all: every transfer. */
+function directCents(period: ClosedPeriod): number {
+  return period.settlement.transfers.reduce((sum, transfer) => sum + transfer.cents, 0);
+}
+
+/** What the buffer was asked for in all, or `null` when only direct payment could settle it. */
+function intoBufferCents(period: ClosedPeriod): number | null {
+  const { deposits } = period.settlement;
+  return deposits === null
+    ? null
+    : deposits.reduce((sum, deposit) => sum + deposit.depositCents, 0);
 }
 
 export function SettlementsCard({ range }: { range: StatsRange }): React.ReactElement {
@@ -739,10 +761,10 @@ export function SettlementsCard({ range }: { range: StatsRange }): React.ReactEl
                 period.end,
                 period.settlement.formula,
                 who(period),
-                formatCents(period.settlement.netCents),
-                period.settlement.depositCents === null
+                formatCents(directCents(period)),
+                intoBufferCents(period) === null
                   ? "only direct"
-                  : formatCents(period.settlement.depositCents),
+                  : formatCents(intoBufferCents(period) ?? 0),
               ]),
             }}
             empty={periods.length === 0 ? "No period was closed in this range." : null}
@@ -760,7 +782,7 @@ export function SettlementsCard({ range }: { range: StatsRange }): React.ReactEl
                   key: "net",
                   label: "Direct transfer",
                   color: slotColor(1),
-                  values: periods.map((period) => period.settlement.netCents),
+                  values: periods.map(directCents),
                 },
               ]}
               mode="grouped"
@@ -773,9 +795,9 @@ export function SettlementsCard({ range }: { range: StatsRange }): React.ReactEl
                 return [
                   `Formula ${period.settlement.formula}: ${FORMULA_WORDS[period.settlement.formula]}.`,
                   `${who(period)}.`,
-                  period.settlement.depositCents === null
+                  intoBufferCents(period) === null
                     ? "Only a direct transfer can settle it."
-                    : `Into the buffer instead: ${formatCents(period.settlement.depositCents)}.`,
+                    : `Into the buffer instead: ${formatCents(intoBufferCents(period) ?? 0)}.`,
                 ];
               }}
             />

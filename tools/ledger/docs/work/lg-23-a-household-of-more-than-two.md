@@ -158,7 +158,7 @@ The answers are above. Build after lg-22 has merged.
    stays `v3` for two people, and a household of two reads and closes unchanged.
 3. **The mortgage bucket**: `lead` is the person with most and their margin
    over the next (Question 2 A). `proposalFor` proposes for N salaries.
-4. **The directory.** The next free directory migration (migration 2 is lg-22's) drops the cap's trigger (migration
+4. **The directory.** Directory migration 4 (2 is lg-22's, 3 is lg-24's) drops the cap's trigger (migration
    1 stays as shipped, appended never edited), the class stops counting names,
    `HOUSEHOLD_FULL` leaves `@ledger/contract` (approved with the answers) and
    the host command's text changes. lg-20's tests for the cap change with it,
@@ -221,3 +221,106 @@ The answers are above. Build after lg-22 has merged.
   The grep does not show the number itself. Migration 2 is the entry commented
   `// 2 — a record is never replaced (lg-20's gate, F2; lg-22).` in the array
   above, and the comment has no word "migration" for the grep to match.
+- 2026-10-17 — Built on `8e50f0d4`, branch `lg-23-households`.
+
+  **What the brief had wrong.** Build 4's "the next free directory migration"
+  is 4, not 3: lg-24 took 3 (`// 3 — a household is never added without an id
+(lg-24)` in `api/src/db/directory-schema.ts` on `8e50f0d4`). Build 4 now says
+  so. Question 1 said "the person furthest ahead for their share deposits
+  nothing"; that holds, but its claim that rounding each deposit once, half-up,
+  is enough does not past three people. Measured with a scratch search over
+  200 000 skewed five-person histories (seed 7): rounding each deposit alone
+  left someone 1 444 620 millionths of a cent off their share, against 999 370
+  for the rounding built. The reason is the person furthest ahead: they deposit
+  nothing and move by their share of every other deposit's rounding. Four is
+  already enough: with each deposit rounded alone, the four-person property test
+  fails at trial 1207 with `casey: expected 1046539 to be less than or equal to
+1000000`. So `roundDeposits` (in `books/src/settlement.ts`) rounds the deposits
+  together. As many go up as the sum of their fractions rounds to, half-up, so
+  the total is off by half a cent at most. A deposit goes up, or down, only if
+  that keeps its person within a cent. There are always enough of each to
+  choose from. The argument, with `f_i` a fraction, `r_i` a share and `S` the
+  total rounding: going down, `S` is in (−½, 0] and `c` deposits must go up; if
+  fewer than `c` had `f_i ≥ r_i·|S|`, then `Σf < (c − 1) + |S|·Σr ≤ c − 1 + |S|`.
+  That is below `Σf = c + |S|`, a contradiction. Going up is the mirror. With one
+  fraction to round this is half-up, which is every two-person settlement.
+
+  **The derivation, checked first.** `settleHousehold` computes `net_i` per
+  stretch and the deposits `net_i + r_i·K`. `settleStretches` is now that,
+  read in lg-6's shape (`asPair`). `books/test/settlement.test.ts` is unchanged
+  (`git diff --stat 8e50f0d4 -- tools/ledger/books/test/settlement.test.ts` prints
+  nothing), and all 30 of its tests pass against it. lg-6's formula as it stood is
+  kept as a test oracle (`books/test/helpers/two-person-v3.ts`). The property test
+  compares against it over 5 000 two-person histories. Each has one to four
+  stretches at varied ratios, a share of zero in one ratio in ten, and charges
+  both ways. Over that draw more than 4 000 owe and more than 50 settle only
+  directly.
+
+  **Build 5: refused, not deferred.** A ratio whose people differ from the open
+  period's is refused when it is confirmed, as `BAD_REQUEST`, with the open
+  period's first day in the sentence. `requireSamePeopleInOpenPeriod` is in
+  `api/src/salaries.ts`, and it runs inside the confirm's transaction, so nothing
+  is stored. Deferring would show one ratio on the salaries screen and settle at
+  another, with nothing saying so. The open period's people are those of the
+  ratio in effect on its first day, the day after the last close. Before any
+  close they are the earliest ratio's: the first period runs from the beginning.
+  So a change of people before the first close is refused too, unless it replaces
+  the first ratio on its own day. Only a breach the new ratio is part of is
+  refused, so an older one can never block a confirm. The refusal reuses
+  `BAD_REQUEST`, as every other ratio refusal in `books/src/ratio.ts` does. The
+  error taxonomy gains nothing and no `Done when` line changed.
+
+  **The record.** A close between exactly two people writes its `periods` row
+  as before and nothing else. A test reads the stored row: `payer_id` alex,
+  `recipient_id` sam, `deposit_cents` 15 000, `net_cents` 6 000, and no rows in
+  the new tables. A close between more is books migration 10's
+  `settlement_deposits` and `settlement_transfers`. Its `periods` row says
+  nobody, with `deposit_cents` NULL when only transfers settle it. "More" counts
+  everyone the settlement names: a two-person ratio with a person who has left
+  and is still owed is a three-person settlement. The formula stays `v3` for
+  every close. Between two people the figures equal lg-6's to the cent, and a
+  `v4` would have meant rebuilding `periods` for its CHECK. The contract's
+  `SettlementFigures` swaps `payerId`, `recipientId`, `depositCents` and
+  `netCents` for `deposits` (or `null`) and `transfers`. `ClosedPeriod.deposit`
+  swaps `rowId` for `deposits`, one outcome per person. `matchDeposits` matches
+  each deposit to its own person's row.
+
+  **A person outside the closing ratio** has a share of zero in it. Their nets
+  still count. If they are owed, the close is settled by transfers alone
+  (`deposits: null`), as lg-6 did when the recipient's share was zero. The
+  reproduction's close is that case: casey's 30.00 in January, at alex and sam's
+  ratio.
+
+  **Folded in.** `web/src/periods/LineForm.tsx`: with more than two people a
+  charge asks whose it was, where it used to name the first other person. Lifting
+  the cap made that a wrong charge. The settlement sentences, the deposits-not-seen
+  list, the stats card and the home screen's lead read the new shape, and a
+  two-person household's text is unchanged. **Not folded in:** the salaries
+  screen still asks a salary of every person the books name, a person who has
+  left included. A blank meaning "not in this year's ratio" would change what a
+  blank means, so it is a question, not a fold-in.
+
+  **Done when**, each with its test:
+
+  1. `api/test/more-than-two.test.ts`, "with sam removed and casey added, the
+     buckets, the open period and a close all answer 200". It uses the
+     directory's own `removeMember` and `addMember` and drops no trigger. The
+     mortgage reads alex 26 666, casey −23 334, sam 16 667, with `lead` alex by
+     9 999.
+  2. The unchanged `books/test/settlement.test.ts` (30 tests), and
+     `books/test/household-settlement.test.ts`, "over 5 000 histories of varied
+     salaries, stretches, ratio changes and charges".
+  3. `books/test/household-settlement.test.ts`, "for %i people the nets sum to
+     zero…", for 3, 4 and 5 people with 3 000 histories each. A fixed five-person
+     case also fails if each deposit is rounded alone.
+  4. `api/test/directory.test.ts`, "a third, a fourth and a fifth person name are
+     taken, by the code and by the schema". It replaces lg-20's "a third person
+     name is refused as HOUSEHOLD_FULL…" and "a name the household held once
+     still counts…". "migration 4 drops the cap a directory at migration 3 still
+     holds" refuses casey at 3 and takes casey at 4. lg-22's tests changed with
+     it: `api/test/households.test.ts`, the admin's "third person" case and the
+     member's, and `api/test/household-command.test.ts`.
+  5. `api/test/more-than-two.test.ts`, "a ratio between different people from
+     inside the open period is refused, and nothing is stored", with two
+     companions and a before-any-close case. With the check disabled, 3 of the 6
+     tests in that file fail.

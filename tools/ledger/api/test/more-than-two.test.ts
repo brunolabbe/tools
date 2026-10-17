@@ -21,7 +21,14 @@ import type {
 import type { Directory } from "../src/directory.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { ALEX, HOUSEHOLD, SAM, accessConfig, homeBooks, memberDirectory } from "./helpers/access.ts";
+import {
+  ALEX,
+  HOUSEHOLD,
+  SAM,
+  accessConfig,
+  homeBooks,
+  memberDirectory,
+} from "./helpers/access.ts";
 import { addRule, pasteStatement } from "./helpers/classification.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import type { PasteRow } from "./helpers/paste.ts";
@@ -73,7 +80,11 @@ async function start(): Promise<{ target: App; directory: Directory }> {
   const directory = memberDirectory();
   const target = await createApp({
     directory,
-    config: { dataDir: ":memory:", logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
+    config: {
+      dataDir: ":memory:",
+      logLevel: "silent",
+      access: accessConfig({ devIdentity: ALEX }),
+    },
     now: () => NOW,
   });
   app = target;
@@ -92,7 +103,12 @@ async function send(target: App, method: "GET" | "POST", url: string, payload?: 
   });
 }
 
-async function ok<T>(target: App, method: "GET" | "POST", url: string, payload?: object): Promise<T> {
+async function ok<T>(
+  target: App,
+  method: "GET" | "POST",
+  url: string,
+  payload?: object,
+): Promise<T> {
   const response = await send(target, method, url, payload);
   expect(response.statusCode, response.body).toBe(200);
   return response.json<T>();
@@ -106,7 +122,10 @@ async function confirm(
 ): Promise<{ statusCode: number; body: string }> {
   const entered = await ok<SalaryEntryResponse>(target, "POST", ROUTES.salaries, {
     year: Number(effectiveFrom.slice(0, 4)),
-    salaries: Object.entries(salaries).map(([personId, amountCents]) => ({ personId, amountCents })),
+    salaries: Object.entries(salaries).map(([personId, amountCents]) => ({
+      personId,
+      amountCents,
+    })),
   });
   const named = new Set(Object.keys(salaries));
   return await send(target, "POST", ROUTES.ratios, {
@@ -131,9 +150,9 @@ function line(personId: string, date: string, amountCents: number): PeriodLineDr
 
 /** alex and sam, a ratio of 0.6, sam's 100.00 on a card, and the period to 2026-12-31 closed. */
 async function twoPeopleClosed(target: App): Promise<ClosedPeriod> {
-  expect((await confirm(target, "2026-01-01", { alex: 6_000_000, sam: 4_000_000 })).statusCode).toBe(
-    200,
-  );
+  expect(
+    (await confirm(target, "2026-01-01", { alex: 6_000_000, sam: 4_000_000 })).statusCode,
+  ).toBe(200);
   await ok(target, "POST", ROUTES.periodLines, line("sam", "2026-12-10", 10_000));
   return await ok<ClosedPeriod>(target, "POST", ROUTES.periodClose, {
     start: null,
@@ -267,7 +286,10 @@ describe("a close between three people", () => {
     });
     expect(listed(target, "settlement_deposits")).toEqual(
       deposits.map((deposit) =>
-        expect.objectContaining({ person_id: deposit.personId, deposit_cents: deposit.depositCents }),
+        expect.objectContaining({
+          person_id: deposit.personId,
+          deposit_cents: deposit.depositCents,
+        }),
       ),
     );
     // Read back as it was recorded, never recomputed.
@@ -333,9 +355,9 @@ describe("people change only at a close", () => {
 
   test("before any close, a ratio between different people than the first is refused", async () => {
     const { target, directory } = await start();
-    expect((await confirm(target, "2026-01-01", { alex: 6_000_000, sam: 4_000_000 })).statusCode).toBe(
-      200,
-    );
+    expect(
+      (await confirm(target, "2026-01-01", { alex: 6_000_000, sam: 4_000_000 })).statusCode,
+    ).toBe(200);
     directory.addMember({ household: HOUSEHOLD, address: CASEY, person: "casey", ...CHANGE });
 
     const later = await confirm(target, "2026-06-01", {
@@ -352,7 +374,9 @@ describe("people change only at a close", () => {
     // period then has these three people throughout.
     const replacing = await send(target, "POST", ROUTES.ratios, {
       effectiveFrom: "2026-01-01",
-      salaryIds: (await ok<{ salaries: { id: number; year: number }[] }>(target, "GET", ROUTES.salaries)).salaries
+      salaryIds: (
+        await ok<{ salaries: { id: number; year: number }[] }>(target, "GET", ROUTES.salaries)
+      ).salaries
         .filter((salary) => salary.year === 2026)
         .map((salary) => salary.id),
     });

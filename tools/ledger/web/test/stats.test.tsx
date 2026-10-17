@@ -249,12 +249,13 @@ function closed(
       formula,
       ratioId: 1,
       shares: [],
-      payerId: "alex",
-      recipientId: "sam",
-      depositCents: netCents * 2,
-      netCents,
+      deposits: [{ personId: "alex", depositCents: netCents * 2 }],
+      transfers: [{ fromId: "alex", toId: "sam", cents: netCents }],
     },
-    deposit: { status: "expected", rowId: null },
+    deposit: {
+      status: "expected",
+      deposits: [{ personId: "alex", depositCents: netCents * 2, status: "expected", rowId: null }],
+    },
   };
 }
 

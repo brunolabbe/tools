@@ -26,7 +26,10 @@ function pairOf(ratio: readonly Share[]): [Share, Share] {
 function owedMicro(stretch: Stretch, first: string, second: string): bigint {
   const [a, b] = pairOf(stretch.ratio);
   if (a.personId !== first || b.personId !== second) {
-    throw new AppError("BAD_REQUEST", "Every ratio in a settlement is between the same two people.");
+    throw new AppError(
+      "BAD_REQUEST",
+      "Every ratio in a settlement is between the same two people.",
+    );
   }
   const firstShare = BigInt(a.partsPerMillion);
   const secondShare = BigInt(b.partsPerMillion);
@@ -49,7 +52,10 @@ function roundHalfUp(numerator: bigint, denominator: bigint): number {
   return Number((2n * numerator + denominator) / (2n * denominator));
 }
 
-export function settleStretchesV3(stretches: readonly Stretch[], ratio: readonly Share[]): Settlement {
+export function settleStretchesV3(
+  stretches: readonly Stretch[],
+  ratio: readonly Share[],
+): Settlement {
   const [first, second] = pairOf(ratio);
   const owed = stretches.reduce(
     (sum, stretch) => sum + owedMicro(stretch, first.personId, second.personId),

@@ -33,8 +33,9 @@ specific rule winning (lg-4, lg-16), `fromHistory`, which offers what a person
 answered before (lg-16), `autoFile`, which files a row no rule's pattern matches
 on its description's three latest answers, within amount limits (lg-17), `spendingCategory`, which gives a row its spending
 category (lg-15), and
-what each bucket holds as of a date and the ratio from two salaries (lg-5), and
-the settlement: the matching rule, cumulative, with charges, and which closed
+what each bucket holds as of a date and the ratio from the salaries (lg-5), and
+the settlement: the matching rule, cumulative, with charges, between any number
+of people (lg-23), and which closed
 period's deposit a paste has brought in (lg-6), and the reader of the old
 workbook, from plain cell grids `api` builds out of the `.xlsx` (lg-7), and the history's series, one per chart on the stats screen (lg-9), and the
 receipt check — whether a proposal's subtotal, GST and QST make its total — and
@@ -205,9 +206,15 @@ has a table twin, and a figure is never only in a hover.
 directory (`api/src/directory.ts`, a SQLite file of its own with its own
 migrations in `api/src/db/directory-schema.ts`) holds households and who belongs
 to each: appended, never edited, with the schema refusing an `UPDATE` or a
-`DELETE`. An address is in at most one household, and **a household holds at
-most two person names, ever** — the books settle between two people, and a name
-stays in them once there — refused as `HOUSEHOLD_FULL`. Each household's
+`DELETE`. An address is in at most one household, and **a household holds any
+number of person names** (lg-23; lg-20's cap of two, `HOUSEHOLD_FULL`, is gone):
+the books settle between everyone in them, and a name stays in them once there.
+Removing an address never removes a name. **People change only at a close**: a
+ratio whose people differ from the open period's is refused if it would take
+effect inside it (`confirmRatio` in `api/src/salaries.ts`), so every period is
+weighed with the same people. A settlement between two is recorded in its
+`periods` row as it always was; one between more writes `settlement_deposits`
+and `settlement_transfers` beside it. Each household's
 `people` table (lg-5), in its own books, is filled from its members' names when
 the file is opened and whenever a request shows a name it lacks
 (`createEnroller` in `api/src/people.ts`, never waiting on another process's

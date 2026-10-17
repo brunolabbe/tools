@@ -166,7 +166,10 @@ describe("closing a period", () => {
     expect(oneDeposit(after?.deposit).rowId).toEqual(expect.any(Number));
     // The deposit is a contribution like any other: the open period now stands
     // exactly at the ratio.
-    expect(asTwo((await open(target)).settlement)).toMatchObject({ payerId: null, depositCents: 0 });
+    expect(asTwo((await open(target)).settlement)).toMatchObject({
+      payerId: null,
+      depositCents: 0,
+    });
   });
 
   test("a deposit two cents off, or filed to someone else, is not the one expected", async () => {
@@ -203,7 +206,10 @@ describe("closing a period", () => {
     expect(latest?.deposit.status).toBe("matched");
     // Never made, and asked for again by the second close.
     expect(earlier?.deposit.status).toBe("folded");
-    expect(asTwo((await open(target)).settlement)).toMatchObject({ payerId: null, depositCents: 0 });
+    expect(asTwo((await open(target)).settlement)).toMatchObject({
+      payerId: null,
+      depositCents: 0,
+    });
   });
 
   test("what was owed before a ratio change carries over as money", async () => {
@@ -217,7 +223,11 @@ describe("closing a period", () => {
     const { settlement } = await open(target);
 
     // The closed period keeps the ratio it recorded: 60 owed, not 50.
-    expect(asTwo(settlement)).toMatchObject({ payerId: "alex", netCents: 6_000, depositCents: 12_000 });
+    expect(asTwo(settlement)).toMatchObject({
+      payerId: "alex",
+      netCents: 6_000,
+      depositCents: 12_000,
+    });
     expect(settlement?.shares[0]?.partsPerMillion).toBe(500_000);
   });
 
