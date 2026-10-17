@@ -90,6 +90,25 @@ function taxesFit(
 }
 
 /**
+ * Whether the items marked taxable, taken as the taxable part, give both taxes as
+ * printed (lg-26): the same arithmetic as `taxesFit`, with the part fixed
+ * instead of searched for. A tax not printed counts as zero, so an item marked
+ * taxable on a receipt with no tax lines does not fit. A refund is checked as its
+ * magnitudes.
+ */
+function taxableFits(
+  items: readonly ReceiptItem[],
+  gst: number,
+  qst: number,
+  rates: SalesTaxRates,
+): boolean {
+  const taxable = Math.abs(items.reduce((sum, item) => sum + (item.taxable ? item.price : 0), 0));
+  const [gstLow, gstHigh] = taxableRange(Math.abs(gst), rates.gst);
+  const [qstLow, qstHigh] = taxableRange(Math.abs(qst), rates.qst);
+  return taxable >= Math.max(gstLow, qstLow) && taxable <= Math.min(gstHigh, qstHigh);
+}
+
+/**
  * What is wrong with a proposal, as flags; none when its parts add up.
  *
  * - Subtotal + GST + QST = total, to the cent.
@@ -100,6 +119,11 @@ function taxesFit(
  * - **Items, with their deposits and the taxes, make the total** (lg-10), when
  *   there are items. A tax not printed counts as none. This is the one flag that
  *   blocks filing (`itemsAddUp`).
+ * - **The Taxable marks give the printed taxes** (lg-26), when there are items:
+ *   the prices of the items marked taxable are a taxable part that gives both
+ *   taxes. Both taxes `null` count as printed zero here, so a mark on a receipt
+ *   with no tax lines is flagged. Not raised beside `tax-differs`, which says
+ *   more; not raised with one tax missing, which `tax-missing` says.
  * - A field not read is flagged, never guessed at.
  */
 export function checkReceipt(
@@ -129,6 +153,15 @@ export function checkReceipt(
     !taxesFit(gst, qst, subtotal, ratesOn(proposal.date, table))
   ) {
     flags.push("tax-differs");
+  }
+  // When no taxable part fits, `tax-differs` already says so and the marks are not the cause.
+  if (
+    proposal.items.length > 0 &&
+    (gst === null) === (qst === null) &&
+    !flags.includes("tax-differs") &&
+    !taxableFits(proposal.items, gst ?? 0, qst ?? 0, ratesOn(proposal.date, table))
+  ) {
+    flags.push("taxable-differs");
   }
   return flags;
 }

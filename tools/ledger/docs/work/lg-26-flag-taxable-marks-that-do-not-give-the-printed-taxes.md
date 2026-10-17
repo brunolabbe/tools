@@ -116,3 +116,35 @@ nobody charged, and nothing flags it.
     → `1`;
   - `sed -n '/^## Done when/,/^## Log/p' <this file> | grep -c "no tax lines and the milk marked taxable"`
     → `1`.
+- 2026-10-17 — Built. The flag is `taxable-differs`: `RECEIPT_FLAGS` in
+  `contract/src/receipts.ts`, `taxableFits` and a block at the end of
+  `checkReceipt` in `books/src/receipts.ts` (`taxableRange` is reused as it is),
+  and its label in `FLAG_LABELS` in `web/src/receipts/Receipts.tsx`, which names no
+  rate. Non-blocking: `unfileable` still reads only `items-differ`. Decisions the
+  brief left open:
+  - **Not raised beside `tax-differs`.** When no taxable part at all gives the
+    printed taxes, no choice of marks can fix it, and "check which items are
+    taxable" would send the person to the wrong box. This also leaves the
+    existing `tax-differs` expectations in `books/test/receipts.test.ts`
+    (`["tax-differs"]`, with items) as they were. Not raised on `signs-differ`
+    either, which returns before the tax checks, nor with one tax missing.
+  - A tax `null` beside a tax present stays `tax-missing`'s alone; both `null`
+    count as zero, so the zero-tax range `taxableRange(0, rate)` is `[-10, 9]`
+    cents and an untaxed receipt (sum 0) passes.
+  - `reader.ts`'s comment on the unmeasured lg-10 lines said the flag that would
+    catch a misread mark was lg-26; it now says the flag exists (comment only, not
+    the prompt). Folded in as the change this branch made stale.
+  - The trap (a store that rounds tax per line) was not met: no fixture here rounds
+    per line, so nothing is recorded beyond the brief's note.
+    Red then green: with `proposal.items.length > 0` mutated to `< 0` and `books`
+    rebuilt (`grep -c taxable-differs tools/ledger/books/dist/receipts.js` → `1`),
+    `npx vitest run tools/ledger/books/test/receipts.test.ts tools/ledger/web/test/receipts.test.tsx`
+    → `5 failed | 49 passed (54)` (four `books` tests in "the taxable marks (lg-26)"
+    and the `web` one); restored, same command → `54 passed (54)`.
+    `npm test -- --project ledger` → `Test Files 60 passed (60)`, `Tests 1123 passed
+(1123)`; `npm run check` exit 0. Done when 1 is "flags the six-pack misread as
+    not taxable, and not the basket as printed" (and the bread's twin); 2 is "does
+    not flag items all untaxed on a receipt with no tax lines"; 3 is "flags a
+    taxable mark on a receipt with no tax lines, both taxes counting as zero"; 4 is
+    `web/test/receipts.test.tsx` "shows the Taxable check when a mark does not give
+    the printed taxes, and still files (lg-26)".

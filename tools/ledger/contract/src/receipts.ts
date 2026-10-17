@@ -129,6 +129,10 @@ export const receiptProposalSchema = z.strictObject({
  * - `tax-differs`: no taxable part of the subtotal gives both taxes, GST at 5 %
  *   and QST at 9.975 %, each rounded to the cent.
  * - `signs-differ`: some parts are a purchase and some a refund.
+ * - `taxable-differs` (lg-26): the prices of the items marked taxable, taken as
+ *   the taxable part, do not give both printed taxes; a receipt with items and no
+ *   tax lines counts both as zero. It points at the Taxable boxes, and does not
+ *   block filing.
  * - `items-differ` (lg-10): the items, their deposits and the two taxes do not
  *   make the total, to the cent. Unlike the others it **blocks filing**: the
  *   shared amount is computed from the items, so items that do not add up would
@@ -145,6 +149,7 @@ export const RECEIPT_FLAGS = [
   "tax-differs",
   "signs-differ",
   "items-differ",
+  "taxable-differs",
 ] as const;
 export type ReceiptFlag = (typeof RECEIPT_FLAGS)[number];
 
