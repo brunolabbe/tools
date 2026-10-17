@@ -215,6 +215,52 @@ three Québec briefs. 604 were proposed by a specialist other than
 - **findings** · the hunt returned 11; 8 carried (2 high, 2 med, 4 low), 3 dropped.
 - NFR: security ✓ (no credential-shaped string; `live-records` passes) · performance n/a · reliability: F1, F2 · maintainability: low items above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-17 · `8e79a014..32af4a87`, round `8e973611` only (the merge brings `main`'s dl-126 and lg-26 and touches nothing under `tools/planner`) · Opus 5.5, depth full · no Nominatim requests, since the firewall is closed
+
+`<gate-2>` is this gate's scratch directory (`scratchpad/pl-56/gate-2/`) and `<raw>` the run's uncommitted replies. The scripts take the record or tree and `<raw>` as arguments.
+
+**Gate 1's findings**
+
+- **F1 (high), the false-location count: fixed.** Every one of the 74 located kept-kind rows has a `reading`, and none is `unread`. The excluded and unlocated rows have `null`. Per category: named-premises 35, kind-of-place 19, settlement-to-premises 14, wrong-continent 3, neighbourhood-to-premises 1, arguable-landmark 2. That is gate 1's classification, row for row. The reading table recomputes from the record (rows, hits, objects, objects with hits): 35/13/25/9, 19/0/12/0, 14/1/13/1, 3/0/3/0, 1/0/1/0, 2/0/1/0. Option 1 now carries the name-guard cost.
+- **F2 (high), the extract: fixed.** Each row's `displayName` equals the chosen raw row's `display_name`, and `insideQuebecExtract` equals the regex applied again, on all 200 located rows: 0 mismatches. The only rows outside the extract that mention Canada are in Nova Scotia and Ontario, so the regex misses no Québec row. The documented-extract table recomputes: 163/6/3.7%/86/4, 74/5/6.8%/36/3, 46/5/10.9%/30/3, city 0, named premises 17/4/23.5%/11/2. Option 1 is costed both ways and labelled with the owner's "I don't know offhand". `compose.planner.yaml` feeds `OSM_EXTRACT_URL` to `tile_urls`, `PBF_URL` and `OVERPASS_PLANET_URL`, as the Log says. After the merge, `docs/02-DEPLOYMENT.md` still names `quebec-latest.osm.pbf`.
+- **F3 (med), the "floor" claim: fixed.** The claim is withdrawn. The parks-restored row recomputes at 102/14/13.7%/60/10, and the range is stated as 13.7%–37.1%, depending on one choice and one reading. Leaving out the 14-of-104 variant is fine.
+- **F4 (med), the bare-name lever: fixed.** The bare-name claim is withdrawn and the endonym lever replaces it. I wrote my own re-choice script: all 32 declined replies, Rome→Roma and Vienna→Wien in the locality and in the trip destination, through the head's `chooseGeocoderResult`. It gives `{ declined: 32, located: 26, withHours: 12, seasonal: 3 }`, matching the builder's figures. The seasonal three are Musei Capitolini, Schönbrunn and Centrale Montemartini. Command: `node --import tsx <gate-2>/endonym.mts <tree> <raw>`.
+- **Low, `run.log`: fixed.** `run.log` now has 1,018 lines and `grep -vc " 200 q="` prints 0. The two controls are in `controls.log`. The record's `lastRequestAt` is `2026-10-17T16:03:46.961Z`, the harness's own last request.
+- **Low, firewall times: fixed in part.** The closing time, about 16:50Z, is recorded. The opening time is still missing, because the owner gave none and nothing else holds it.
+- **Low, places that already carry coordinates: fixed.** The Log records them and leaves them, as graded.
+- **Low, other walkers over `fixtures/live/`: fixed.** The harness header and the Log both say any other walker must skip `hours-coverage/`.
+
+**The offline regeneration.** I compared the record at `8e79a014` with the one at `8e973611` (`node <gate-2>/verify.mjs <old> <new> <raw>`):
+
+- Same 1,019 keys in the same order.
+- 0 changes to any field that existed before. 3 fields added: `displayName`, `insideQuebecExtract`, `reading`. None removed.
+- The only header change is `lastRequestAt`.
+- The new fields match the raw replies (above).
+- Every planet figure in the Log and in the open decision recomputes from the record:
+  - 1,019/15/1.5%/119/11 and 200/15/7.5%/119/11;
+  - 74/14/18.9%/54/10, and its city-brief subset 22/9/40.9%/19/7;
+  - named premises 35/13/37.1%/25/9;
+  - named premises in city briefs 15/9/60.0% (7 of 12 objects), in the other briefs 20/4/20.0% (2 of 13).
+
+**Reruns at `32af4a87`**
+
+- `npm run build` exit 0, then `npm run check` exit 0.
+- The four suites (`live-records`, `live-gate`, `grounding-valhalla`, `grounding-fixtures`): 274 of 274.
+- The harness with `PLANNER_LIVE_RUN` unset exits 1, with the refusal printed.
+- `npx vitest list --project planner --filesOnly` is identical to gate 1's base list: 77 files, empty `diff`.
+- PR #509 on `32af4a87`: every check is green except `test (ubuntu-latest)` and `test (windows-latest, informational)`, which were still running when read. No acceptance line depends on them; each line was verified locally.
+
+**New findings, in the lines this round touched**
+
+- **med** · no `Done when` line depends on it; it bears on the recommendation. The reversal condition is right in its first clause and uncosted in its second. "If the owner runs … an extract holding the cities" follows from the numbers. "…or wants to run…, option 1 with the name guard is the cheapest way to start" does not. Option 1's "one extra call per run, no re-import" holds only for an extract that already holds the cities. Moving to one means re-importing Valhalla, Nominatim and Overpass on a larger region. That is a bigger operator step than the one the Log counts against option 2, and `docs/02-DEPLOYMENT.md` › "1 — Choose the extract" warns about it: "a province is a comfortable afternoon and a continent is not". The remedy is to cost the "wants to run" branch, or to drop it so that the reversal reads only "if the deployed `OSM_EXTRACT_URL` already holds the cities". Option 3 itself still follows from the corrected numbers: 2 objects on the documented extract, and on a wide one a 15-row city sample behind an unbuilt guard.
+- **low** · "the seasons half is 4 of 27" uses the harness's regex. That regex counts two holiday-closure values as seasons: Musei Capitolini's and Centrale Montemartini's `Dec 24,31 …; Jan 01 off`. Only 2 of 27 are season ranges (Ljubljana Castle and Schönbrunn). The Log calls them "dated closures" in the same paragraph, so the overstatement is labelled. It also runs in the direction that makes option 3 safer.
+- **low** · the `READING_OF_KEPT_ROWS` comment says the reading was "independently re-read by the first gate (it agreed on the 35 named premises)". Gate 1's classification came first, at `8e79a014`, and the map equals it on all 74 rows. Nothing on record shows a second, independent read. This is false about provenance, which nothing relies on.
+- **low** · the Log says "Round 2 reruns are in the next section" and "Checks after the changes are in the report that follows this push". No section of the Log carries round-2 check results; the second sentence points outside the repo. The reruns above are the record.
+- **findings** · the round's hunt returned 4; 4 carried (1 med, 3 low), 0 dropped. Of gate 1's 8: 7 fixed, 1 fixed in part (the firewall's opening time, which the owner holds). There is no `high`.
+- NFR: security ✓ (`live-records` passes on the regenerated record) · performance n/a · reliability ✓ · maintainability: lows above.
+
 ## Log
 
 **2026-10-17 — Measured, and corrected after gate 1 (round 2 below). Of 1,019
