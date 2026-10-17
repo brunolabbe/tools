@@ -145,3 +145,17 @@ depend on the directory rather than the books.
     Folded in: nothing. No other small, specified piece became free; the roadmap
     row for lg-29 already says "a blank salary leaves a person out of the year's
     ratio".
+- 2026-10-17 — Fixed at landing by owner choice: gate 1, med F1 (a), "reword the
+  on-screen line to say that the amount comes back pre-filled whenever the year
+  is opened, and must be cleared again each time". The line and the regex in the
+  existing web test now say it. `npx vitest run tools/ledger/web/test/salaries.test.tsx`
+  → the test "a blank salary leaves the person out of the entry, and the screen
+  says so (lg-29)" failed with the new regex against the old line (1 failed, 6
+  passed of 7) and passes with the new line (7 passed of 7).
+- 2026-10-17 — Fixed at landing by owner choice: gate 1, low — "The header of
+  `api/src/routes/salaries.ts` says 'files a year's salaries and answers with the
+  ratio they give'", reworded to say the proposal is between the people the entry
+  names; the two `@ledger/contract` comments the same finding names were not
+  authorised and are untouched. `grep -n "between the people the entry names" tools/ledger/api/src/routes/salaries.ts`
+  → `5: * between the people the entry names, as a proposal; ...` (a comment: no
+  test can fail, so the evidence is the finding's own quotation).

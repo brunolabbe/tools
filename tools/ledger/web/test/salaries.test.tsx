@@ -174,7 +174,9 @@ test("a blank salary leaves the person out of the entry, and the screen says so 
   render(<Salaries />);
   await screen.findByLabelText("Year");
   expect(
-    screen.getByText(/A blank salary leaves that person out of the year’s ratio/u),
+    screen.getByText(
+      /A blank salary leaves that person out of the year’s ratio.*comes back pre-filled whenever the year is opened, and must be cleared again each time/u,
+    ),
   ).toBeTruthy();
 
   fireEvent.change(field("Year"), { target: { value: "2026" } });

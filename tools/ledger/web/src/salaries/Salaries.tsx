@@ -168,8 +168,9 @@ export function Salaries(): React.ReactElement {
       </p>
 
       <p className="muted">
-        A blank salary leaves that person out of the year&rsquo;s ratio. The salary already on
-        record for them, if any, is kept.
+        A blank salary leaves that person out of the year&rsquo;s ratio. A salary already on record
+        for them comes back pre-filled whenever the year is opened, and must be cleared again each
+        time; the one on record is kept.
       </p>
 
       <form className="rule-form" onSubmit={save}>
