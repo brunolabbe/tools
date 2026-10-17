@@ -580,3 +580,88 @@ notSharedCents + chargedCents` equals the payment in each case the existing
   - "Leave as is".
   - **Chosen: "Reword to printed total".** Done when 7's regression clause now
     reads so; nothing else in the line changed.
+- 2026-10-17 — Built, on `495a5b7a` (lg-32 merged as #519), in `6bf1a453`
+  (contract and `splitReceipt`) and `c6e7cec1` (API, migration 11, screen, docs).
+  What the brief had wrong, and the choices it left to the builder:
+  - **"Up to 2 cents" holds to four parts, not past them.** Each part rounded
+    once is off by at most half a cent and the printed total by under a cent, so
+    `k` parts overshoot by under `k / 2 + 1`: at most `ceil(k / 2)` cents. Measured
+    on random receipts whose printed taxes are the rates' own (`checkReceipt`
+    clean), paid the total, every item taken off: 2 parts never over 1 cent; 3
+    parts reach 2 (50 of 49,500); 6 to 10 parts, each item its own, reach 3 (4 to
+    52 receipts in about 80,000 each). The gate's "2 cents with four or more
+    parts" was low by one part: three reach it. `splitReceipt` takes
+    `ceil(parts / 2)` (`roundingBound`), which is the Build's 2 for three or four
+    parts and 3 for five or more; past it the excess is refused, so printed taxes
+    that are not the marks' (an item marked taxable on a receipt with no tax
+    lines) are not absorbed. "five people's parts can round 3 cents over the
+    total, and that is still rounding" fails under a fixed 2-cent cap, and "an
+    excess larger than rounding can make is not adjusted" fails with no cap
+    (mutations below). **Open for the orchestrator:** the bound is arithmetic, not
+    an owner's answer; a fixed 2 cents is the other reading.
+  - **"Nothing left shared" is read by items**, as Build 2 defines it: no item
+    is `shared`. A receipt with a `shared` item that costs nothing beside the
+    2,307 receipt is refused, as lg-32 refused it ("a receipt with something
+    still shared takes no adjustment"). Whether some receipt with a shared item
+    that lg-32's together test filed is now refused was not measured.
+  - **lg-32's tests, kept true.** In `books/test/receipts.test.ts`: "takes the
+    cent the parts were rounded apart by off the not-shared amount", "does the
+    same for the refund of it, negated", "still shows more than was charged,
+    where the parts together come to more" and the COUPON test each gained the
+    one `charges` entry their `toEqual` now meets, and nothing else; the third's
+    2,475 is under the printed total, which a comment now says is the reason. The
+    two API tests are unchanged and pass. lg-32's together test is gone from the
+    guard, replaced in place, not beside it.
+  - **Build 5 named `api/src/stats.ts`**; the `ReceiptItem` literal is in
+    `api/src/slices.ts` (lg-28 moved it there). And "a type error names any
+    other" missed one: `receipts/test/reader.test.ts`'s "returns each item as
+    read, shared, …" compares the reader's items with `toEqual` on untyped
+    literals, so only the ledger suite found it (1 failed of 1229); it now
+    expects `chargedTo: null`.
+  - **Storage: a rebuild, migration 7's pattern.** The header of
+    `api/src/db/schema.ts` says nothing issues an `UPDATE`, and a backfill of two
+    added columns is one; the rebuild copies with `INSERT … SELECT`, proves the
+    copy, and carries two CHECKs: a name only on a `theirs` item, and a line only
+    with a name. "Every `theirs` item has a name" is not a CHECK (a free one filed
+    before this has none) and is kept by `fileReceipt`.
+  - **Members reach `fileReceipt` as a fourth argument** from the route
+    (`context.directory.people(household)`), not through `ruleContext`.
+  - **lg-23's two tests rewritten in place**, the rest added at the end: API "is
+    refused, and nothing is filed" is now "files a charge to each person the
+    items name (lg-30)" (Done when 1); web "among three people, an item cycles
+    between shared and not shared only, and the receipt is nobody's" is now
+    "among three people, an item cycles to someone else's and names whose it is"
+    (Done when 11).
+  - **Words that changed for two people too.** The "said" line after filing is
+    built from `filing.charges`, so a two-person receipt whose only line is the
+    charge now ends "…and sam's items as a charge." where it said only "Filed as
+    alex's line in the period."; and "Nothing on this receipt is shared or the
+    other's" reads "…or someone else's". The "nobody else in the household"
+    refusal now meets any `theirs` item, a free one included, as Build 3 says.
+  - **A given name is checked before anything is written** (`chargedToOf`), not
+    only by `addLine`: a free `theirs` item files no line for `addLine` to check.
+    For a priced item the two give the same words, so Done when 5's payer and
+    unknown-name tests cannot tell them apart.
+  - **Residual, as Build 4 named it, untested:** a whole-receipt `chargedTo` on a
+    filing before this whose `theirs` items cost nothing has its shared line read
+    as the charge by the backfill.
+  - **Docs.** `CLAUDE.md`'s receipts paragraph says what a `theirs` item names.
+    `00-ANALYSIS.md` "Charges between the two" does call a receipt item's charge
+    the other person's, so it gains one sentence pointing to lg-30.
+  - **Fold-in: none.** `npm run status -- --tool ledger`: 1 open of 30, this one.
+  - **Measured.** The branch's four touched specs against the parent's source
+    (the source diff reversed, `contract` and `books` rebuilt, `dist` grepped for
+    `roundingBound`: 0): 57 failed | 114 passed of 171, every new test among the
+    failures; the API ones fail first on the parent's strict item schema
+    (`The filing is not valid: check proposal.`), which the Done when preamble
+    expects. Restored and rebuilt: 171 passed of 171. `splitReceipt` with every
+    `theirs` item rounded together: Done when 8's case answers `sharedCents` 349
+    and `chargedCents` 2,127 against 348 and 2,128. Mutations, each undone:
+    no `notShared.length > 0` condition, 5 failed of 70; no largest-charge
+    branch, 6 failed; largest by value, 1 failed (the refund); no printed-total
+    test, 1 failed (the 2,313 payment); no nothing-shared test, 1 failed; a
+    2-cent cap, 1 failed; no cap, 1 failed; the route passing every name the books
+    hold, 1 failed (the departed member); a 0-cent charge filing a line, 1 failed
+    (500); `chargeLineId` always the first charge, 4 failed; the backfill taking
+    any line, 3 failed of 11. lg-32's `notShared.length > 0` is no longer an
+    equivalent mutant.
