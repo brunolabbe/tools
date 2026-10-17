@@ -648,7 +648,9 @@ notSharedCents + chargedCents` equals the payment in each case the existing
   - **Docs.** `CLAUDE.md`'s receipts paragraph says what a `theirs` item names.
     `00-ANALYSIS.md` "Charges between the two" does call a receipt item's charge
     the other person's, so it gains one sentence pointing to lg-30.
-  - **Fold-in: none.** `npm run status -- --tool ledger`: 1 open of 30, this one.
+  - **Fold-in: none.** `npm run status -- --tool ledger`: 1 open of 30, this one,
+    at the base. lg-33 to lg-36, filed on `main` since, touch nothing this branch
+    changed (lg-36's helper is `api/test/helpers/households.ts`).
   - **Measured.** The branch's four touched specs against the parent's source
     (the source diff reversed, `contract` and `books` rebuilt, `dist` grepped for
     `roundingBound`: 0): 57 failed | 114 passed of 171, every new test among the
