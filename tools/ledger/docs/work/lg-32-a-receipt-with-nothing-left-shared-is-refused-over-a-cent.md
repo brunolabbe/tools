@@ -125,7 +125,12 @@ change what the other person owes by a cent to fix the payer's own rounding.
     number. lg-30 makes the charges several; that is where the branch is
     reachable and testable, and `splitReceipt`'s comment says so. Any
     not-shared amount of 0 (every not-shared item priced 0) is treated as there
-    being none, so the adjustment is not applied there either.
+    being none, so the adjustment is not applied there either. **WITHDRAWN — do
+    not cite this sentence, nor the claim above that the branch "cannot be
+    reached here"** as it was written (builder's error, found by gate 1's F2): a
+    not-shared amount of 0 does not mean no not-shared items. Mixed-sign items of
+    opposite tax treatment can be present and round to 0 cents, and they were
+    refused. The guard now runs on the items; see the "Fixed at landing" entry.
   - **Measured.** Before the change, on the three new tests that reach it:
     `npx vitest run tools/ledger/books/test/receipts.test.ts
 tools/ledger/api/test/receipts.test.ts -t "lg-32"` gave 3 failed | 2 passed
@@ -141,3 +146,27 @@ tools/ledger/api/test/receipts.test.ts -t "lg-32"` gave 3 failed | 2 passed
     (`2,776` charged) the parts apart leave 299 shared where together they leave
     300, a cent of the same rounding but at the payment's sign. The Build's rule
     is about the sign, so it is left alone and nothing refuses it.
+- 2026-10-17 — Fixed at landing by owner choice: gate 1, F2 — "Build 1's second
+  branch can be reached, and the comment saying it cannot is false. Not-shared
+  items whose amount rounds to 0 are still refused." The guard runs on the
+  not-shared **items** (`notShared.length > 0`), not on their amount; the cent
+  comes off the not-shared amount when there are not-shared items, and off the
+  largest charge when there are none, which one charge cannot reach here.
+  `splitReceipt`'s header no longer says the case "cannot arise yet" for an amount
+  of 0, and the Build entry's two false sentences above are withdrawn in place.
+  - Reproduced first, at the gated head `f72a51c0`: `npx vitest run
+tools/ledger/books/test/receipts.test.ts tools/ledger/api/test/receipts.test.ts
+-t "gate 1 F2"` → 2 failed | 108 skipped of 110 (books `sharedCents: -1`, the API
+    `BAD_REQUEST` "More comes off this receipt…"). After: the same two files whole →
+    110 passed of 110 (`books` rebuilt between, the built `receipts.js` grepped for
+    `notShared.length > 0`).
+  - Mutation, on a committed tree: restoring the old condition `notSharedCents !==
+0` → 2 failed | 108 passed of 110, the two new tests. Deleting the condition
+    outright (`if (roundingOnly)`) → 110 passed of 110: an equivalent mutant, since
+    with no not-shared items `together` and the parts apart are the same number, so
+    `roundingOnly` is already false; the condition documents that, and nothing can
+    pin it until lg-30 gives several charges.
+  - **F1 is not fixed here, by owner choice (option D, overriding the gate's A):**
+    lg-30's Build 2 now states the printed-total rule and the 2,307 and 2,314
+    receipts, and its builder replaces this ticket's `together` test in the same
+    guard. This ticket's code and its gate record keep F1 as the gate wrote it.

@@ -127,8 +127,34 @@ may vary if the Log says what changed and why.
    amount is 0. When the shared amount computed with every item that comes off
    (the not-shared ones and every `theirs` one) rounded together is zero or has
    the payment's sign, but the one computed with the parts rounded apart has the
-   opposite sign, the excess is rounding and nothing else. **Take it off the
-   not-shared amount when there is one** (owner, 2026-10-17, Log): that part is
+   opposite sign, the excess is rounding and nothing else. **That test is
+   superseded** (owner, 2026-10-17, Log, on gate 1 of lg-32, F1): the rounding is
+   judged against the **printed total**, not against the items rounded together.
+   The items rounded together are exact taxes rounded once, and a till prints GST
+   and QST each rounded separately, so the printed total can sit a cent either
+   side of that number, and the old test cannot tell a real shortfall from the
+   till's rounding. The rule, for a receipt with **nothing left shared** (every
+   item is not shared or `theirs`, so `itemsAddUp` guarantees the items make the
+   printed total): when the payment is **at or beyond the printed total, at its
+   sign**, whatever the parts rounded apart leave over the payment is rounding, up
+   to 2 cents (one from printed against exact taxes, one from rounding the parts
+   apart), and the shared amount is 0. When the payment is **under the total**,
+   in size at its sign, nothing is adjusted and the receipt is refused with the
+   existing message. Two receipts the rule must handle, each a 10,00 $ taxable
+   item not shared and a taxable item `theirs`, `checkReceipt` raising nothing on
+   either (measured through `splitReceipt` on lg-32's branch after its F2 fix, which still
+   has the old test):
+   - **10,07 $ `theirs`, GST 100, QST 200, total 2,307, paid 2,307.** The parts
+     apart are 1,150 and 1,158, which is 2,308 against 2,307 paid, and the items
+     together leave -1, so the old test sees a real excess and refuses it: the
+     failure lg-32's Why describes. The payment is the total, so the cent is
+     rounding: not shared 1,149, charged 1,158, shared 0, and the filing is 200.
+   - **10,12 $ `theirs`, GST 101, QST 201, total 2,314, paid 2,313.** The old
+     test files it on lg-32's branch (not shared 1,149, charged 1,164, shared 0).
+     The payment is a cent under the printed total, so it is **refused**,
+     `BAD_REQUEST` with the existing message.
+
+   **Take it off the not-shared amount when there is one** (owner, 2026-10-17, Log): that part is
    the payer's own, no line records it and nobody owes it, so the cent costs no
    one anything. **With no not-shared items, take it off the charge largest in
    size** (by `Math.abs`, as `splitByCategory` compares), the earlier on a tie,
@@ -138,12 +164,16 @@ may vary if the Log says what changed and why.
    (deposit included), every item `theirs`, casey on items 1 and 3 and sam on
    item 2, gives -923 and -1,554 and a shared amount of +1, and sam's is the
    largest in size, so it becomes -1,553. That is the guard `splitByCategory` uses
-   for its largest category. **lg-32 states the same rule for a receipt with no
-   charged person at all, and its build is this guard**: whichever of the two
-   tickets merges second extends the one guard and does not add another. With
-   one person charged and nothing not shared the two computations are the same
-   number, so nothing changes there, and an excess the together-rounding shows
-   too is still the person's mistake and is still refused.
+   for its largest category. **lg-32 builds the guard for a receipt with no charged
+   person at all, with the old together test** (it merged that way on the owner's
+   answer to its F1, Log), so this ticket's builder **replaces that test with the
+   printed-total one above in the same guard** and does not add a second guard.
+   With one person charged and nothing not shared the parts-computations are the
+   same number, but the printed-total test still decides lg-32's two receipts
+   above; a payment under the printed total is the person's mistake and is still
+   refused. Where lg-32's own tests pin the old test, this ticket's builder keeps
+   them true or rewrites them, and says which in the Log.
+
 3. **`api/src/receipts.ts`, `fileReceipt` and `fileLines`.**
    - Resolve each `theirs` item's name first, inside the transaction and before
      anything is written: a given `chargedTo` is used as given; a `null` is the
@@ -508,3 +538,31 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     `measure2.mts`: with the deposit not negated, `RECEIPT_DOES_NOT_ADD_UP`.
   - Not applied: nothing was refuted. Done when 17 is the old 16, renumbered by
     the new 16.
+- 2026-10-17 — Build 2's rounding test reworded to judge against the printed
+  total, on lg-32's gate 1, F1, and the owner's answer (through `AskUserQuestion`,
+  as put). This entry is in lg-32's pull request; only the ticket text changed
+  here, the rule is this ticket's builder's to write.
+  - **The finding (F1, `med`, no `Done when` line depends on it).** lg-32's
+    guard decides "rounding" by the items taken off, taxes exact, against the
+    payment, never against the printed total. Measured by the gate on 180,000
+    two-item receipts with every item taken off: paying exactly the total, 13,825
+    are newly filed and 12,890 are still refused; paying a cent under it, 7,985
+    are newly filed that the base refused. The two receipts in Build 2 are its
+    reproductions (F1 ran them through the API at lg-32's gated head).
+  - Options as put: **(A, the gate's recommendation)** widen lg-32's rule in its
+    own branch, with the same rewording here; **(D, offered by the orchestrator)**
+    land lg-32 as built and fix it in this ticket; **(B)** land lg-32 and file a
+    follow-up; **(C)** accept the refusal for a printed-tax cent.
+  - **Chosen: D, which overrides the gate's A.** lg-32's code is unchanged for
+    F1 and its gate record keeps F1 as written, unfixed; this ticket's Build 2
+    now states the printed-total rule and the two receipts. Where the cent goes is
+    still "not-shared first" (the earlier answer stands).
+  - **Done when, checked and not edited.** 16's numbers (not shared 348, casey
+    1,554, sam 574, 2,476 paid against a 2,476 total) and 7's (923 and 1,553; the
+    refund) are unchanged by the rule: each pays the printed total. 7's regression
+    clause names "the excess shows with the people rounded together too (more is
+    charged than was paid)": its parenthetical is a payment under the total, which
+    the new rule still refuses, but the lead phrase names the test this entry
+    supersedes, since lg-32's 2,307 receipt shows its excess together and now
+    files. A builder pins the regression with a payment under the printed total.
+    The line is for the orchestrator to reword if it reads as wrong.
