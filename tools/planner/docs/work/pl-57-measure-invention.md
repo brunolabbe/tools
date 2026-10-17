@@ -497,7 +497,10 @@ located (71.1%). Of those 86, **81 exist** and 5 are the five defects above
 been wrong 94% of the time.
 
 _The three units, side by side._ (Added in round 1 after gate 1; every figure
-is printed by the harness, `sampleByObject` and the tables above.)
+in the last four rows is printed by the harness, `sampleByObject` and the
+tables above; the first two rows, per draw (5 of 150) and per key (5 of 121),
+are not in the harness output, which prints the per-family table and the two
+strata, not their totals.)
 
 | unit                                         | not confirmed             |
 | -------------------------------------------- | ------------------------- |
@@ -511,10 +514,10 @@ is printed by the harness, `sampleByObject` and the tables above.)
 Population-weighted, the stratum is 53 of the 207 named premises (25.6%) and
 the rest 154 (74.4%). That gives about 4.3% per key (0.256 x 10.7% + 0.744 x
 2.2%) and about 6.0% per object (the rest is 1 object of 39, 2.6%: the Bonaventure
-Island keys). Five of the 28 stratum keys are parks (four Parc national de la
+Island keys). Six of the 28 stratum keys are parks (four Parc national de la
 Gaspésie keys and Parc du Bic), whose `exists` confirms the park and not a
-lodging premises; without the three parks' objects the stratum is 3 of 14
-objects, 21.4% (7.6–47.6), from gate 1's reproduction. All of these are small
+lodging premises; without the three parks' objects the stratum is 3 of 16
+objects, 18.8% (6.6–43.0), from gate 1's reproduction. All of these are small
 counts: the stratum's interval rests on three events.
 
 _What the brief had wrong or left out._ (1) It says to draw 50 per family and
@@ -570,11 +573,11 @@ chosen here. The numbers are the ones above.
    populations, two answers:
    - **Loop on for every specialist** (population-weighted over the named
      premises, the stratum at its 25.6% share): about 6.0% per object, 4.3% per
-     key. It does not clear the bar; at 4 defects in 58 objects it is about 15
-     searches per defect found.
+     key. It does not clear the bar; at 4 defects in 58 objects (the unweighted
+     per-object figure, 6.9%) it is about 15 searches per defect found.
    - **Loop on for `lodging` and `food` only** (the stratum's own rate): 3 of 19
      objects, 15.8% (5.5–37.6). It **clears both legs**, barely: the lower bound
-     of 5.5% rests on three events, five of the stratum's 28 keys are parks, and
+     of 5.5% rests on three events, six of the stratum's 28 keys are parks, and
      the stratum is a sample of 19. It is about 6 to 7 searches per defect found.
 
    The earlier version of this option argued from the pooled 1.4% lower bound,
@@ -615,3 +618,47 @@ article, a 2023 release) show a place exists and not that it operates, so
 
 **Defects met in the skill's pages** are in the builder's report to the
 orchestrator, not here.
+
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, finding 1 — "the Log's
+  units paragraph says 'without the three parks' objects the stratum is 3 of 14
+  objects, 21.4% (7.6–47.6)'. It should say 3 of 16, 18.8% (6.6–43.0)."
+  Counted in the text before these entries (the ticket cut at its first "Fixed
+  at landing" line, then `grep -c` of each phrase): `stratum is 3 of 14$` 1
+  before, 0 after; `21.4% (7.6` 1 before, 0 after; `18.8% (6.6–43.0)` 0
+  before, 1 after; `stratum is 3 of 16$` 0 before, 1 after. The record is Log
+  wording only and was not regenerated.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, finding 2 — "'Five of
+  the 28 stratum keys are parks', in the units paragraph and in option 3,
+  should be six." Counted the same way: `Five of the 28 stratum keys` 1
+  before, 0 after; `five of the stratum's 28` 1 before, 0 after;
+  `Six of the 28 stratum keys` 1 after; `six of the stratum's 28` 1 after. The
+  parenthetical after the units-paragraph count still lists five parks (four Parc national de la
+  Gaspésie keys and Parc du Bic); the gate's finding names the count and not
+  the list, so the list was left as written and does not name the sixth,
+  `forillon national park|gaspé`.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, finding 3 — "two
+  figures are labelled wrongly: the units table is said to be 'every figure
+  printed by the harness', but its per-key total (5 of 121, 4.1%, 1.8–9.3) is
+  not in the harness output; 'about 15 searches per defect found' sits under
+  the population-weighted bullet but is computed from the unweighted 4 of 58."
+  The table's lead-in now says the last four rows are printed by the harness
+  and the first two are not; the "about 15" is labelled as the unweighted
+  per-object figure (6.9%). Check mode printed the per-family table, the two
+  strata (28 and 93 keys) and the per-object line (58 objects, 4 of 58; stratum
+  19 objects, 3 of 19), and not the per-draw total (5 of 150, 3.3%) either:
+  `grep -c "3\.3%\|4\.1%\|5 of 121\|5 of 150"` on its output → 0. The per-draw
+  row is the lander's finding beyond the gate's, which named only the per-key
+  total. Counted the same way: `^is printed by the harness, ` 1 before, 0
+  after; `in the last four rows is printed` 1 after;
+  `defects in 58 objects it is about 15` 1 before, 0 after;
+  `(the unweighted$` 1 after. "About 6 to 7 per defect" was left alone.
+- 2026-10-17 — Owner's answer to the open decision (step 7, which existence
+  check to build, if any). The options put on 2026-10-17 were option 1, make
+  `lodging` and `food` proposals specific first, then re-measure the stratum
+  and choose between a scoped lookup and closing the item; option 3, a lookup
+  scoped to `lodging` and `food`, built now; option 4, close §5 item 3; or
+  decide later. Option 2 was not offered, because this Log found nothing to
+  support it. **The owner chose option 1**, the builder's recommendation, so
+  nothing was overridden. The cost of the live re-measure run was stated as
+  unmeasured. Nothing of option 1 is built here. A follow-up ticket for it
+  will be filed separately, not in this pull request.
