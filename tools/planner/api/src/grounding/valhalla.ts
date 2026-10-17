@@ -127,7 +127,7 @@ const USER_AGENT = "webtools-planner/1.0 (+https://github.com/webtools)";
  * captured at, and because the cost is a longer JSON body from a service on
  * the same box, not another request.
  */
-const GEOCODER_RESULT_LIMIT = 10;
+export const GEOCODER_RESULT_LIMIT = 10;
 
 /**
  * How far apart two results may sit and still be taken for one place.
@@ -642,7 +642,7 @@ function trimSlash(url: string): string {
  * documents. Nothing is parsed *out* of `locality` — the contract's rule — it
  * is passed along as the prose it is.
  */
-function placeQuery(place: Place): string {
+export function placeQuery(place: Place): string {
   return [place.name, place.locality]
     .map((part) => (part ?? "").trim())
     .filter((part) => part !== "")
@@ -788,7 +788,7 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 /** One geocoder result this code can use: where it is, and what it says it is. */
-interface GeocoderResult {
+export interface GeocoderResult {
   coordinates: Coordinates;
   /**
    * Nominatim's own prose for the place — `"Percé, Le Rocher-Percé,
@@ -807,6 +807,13 @@ interface GeocoderResult {
    * settlement tiebreak.
    */
   addressType: string;
+  /**
+   * The reply row as received, untouched. Nothing in `locate` reads it; it is
+   * here so a caller that chose a row with `chooseGeocoderResult` can read the
+   * rest of what the geocoder said about it (`osm_id`, `extratags`) without
+   * matching the row back to the reply by position.
+   */
+  raw: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -822,7 +829,7 @@ interface GeocoderResult {
  * list, and the rows around it are still answers. Before pl-34 only `body[0]`
  * was read, so a malformed first row meant the whole reply was `null`.
  */
-function geocoderResults(body: unknown): GeocoderResult[] {
+export function geocoderResults(body: unknown): GeocoderResult[] {
   if (!Array.isArray(body)) return [];
 
   const results: GeocoderResult[] = [];
@@ -845,6 +852,7 @@ function geocoderResults(body: unknown): GeocoderResult[] {
       coordinates: parsed.data,
       displayName: typeof displayName === "string" ? displayName : "",
       addressType: typeof addressType === "string" ? addressType : "",
+      raw: entry as Record<string, unknown>,
     });
   }
   return results;
@@ -989,20 +997,20 @@ function geocoderResults(body: unknown): GeocoderResult[] {
  * cannot: it is additive by construction, which is what lets pl-34's ten
  * captures be re-run as a regression test rather than re-argued.
  */
-function chooseResult(
+export function chooseGeocoderResult(
   results: readonly GeocoderResult[],
   place: Place,
   trip: TripContext | undefined,
-): Coordinates | null {
+): GeocoderResult | null {
   const hints = hintsFrom(place.locality);
   if (hints.length > 0) {
     const shortlist = bestMatches(results, hints);
-    const located = agreedPoint(shortlist);
+    const located = agreedResult(shortlist);
     if (located !== null) return located;
 
     // The locality has already said where; `addresstype` may now say what kind.
     // See the header — this is the only place it is allowed to run.
-    const settled = agreedPoint(
+    const settled = agreedResult(
       shortlist.filter((each) => SETTLEMENT_ADDRESS_TYPES.has(each.addressType)),
     );
     if (settled !== null) return settled;
@@ -1010,22 +1018,37 @@ function chooseResult(
     // The locality narrowed and the tiebreak could not finish: the trip gets
     // the last word, over `shortlist` and not over the settlement subset. See
     // the header for why that distinction is argued rather than measured.
-    return agreedPoint(bestMatches(shortlist, hintsFrom(trip?.destination ?? null)));
+    return agreedResult(bestMatches(shortlist, hintsFrom(trip?.destination ?? null)));
   }
 
   // Nothing on the *place* narrows a reply to a bare name, so it has to speak
   // for itself first: either its rows are one place, or the trip gets a turn.
-  const agreed = agreedPoint(results);
+  const agreed = agreedResult(results);
   if (agreed !== null) return agreed;
 
   // pl-37, and no `SETTLEMENT_ADDRESS_TYPES` line follows this one on purpose.
-  // An empty hint list makes `bestMatches` empty and `agreedPoint` `null`, so a
+  // An empty hint list makes `bestMatches` empty and `agreedResult` `null`, so a
   // request with no trip context needs no check of its own here.
-  return agreedPoint(bestMatches(results, hintsFrom(trip?.destination ?? null)));
+  return agreedResult(bestMatches(results, hintsFrom(trip?.destination ?? null)));
 }
 
 /**
- * The point these results agree on, or `null` if they do not agree on one.
+ * `chooseGeocoderResult`'s answer as the point `locate` returns — the same
+ * choice, reduced to its coordinates. `chooseGeocoderResult` exists so a caller
+ * that needs the chosen row itself (pl-56's harness reads its `osm_type`,
+ * `osm_id` and tags) does not need a second chooser that could pick differently.
+ */
+function chooseResult(
+  results: readonly GeocoderResult[],
+  place: Place,
+  trip: TripContext | undefined,
+): Coordinates | null {
+  return chooseGeocoderResult(results, place, trip)?.coordinates ?? null;
+}
+
+/**
+ * The result these results agree on (the first of them), or `null` if they do not
+ * agree on one.
  *
  * "Agree" is measured from the first of them rather than pairwise, which is
  * the same claim for the purpose — a set every member of which is within
@@ -1034,14 +1057,14 @@ function chooseResult(
  * nothing, which is why every caller can hand this a filtered list without
  * checking it first.
  */
-function agreedPoint(results: readonly GeocoderResult[]): Coordinates | null {
+function agreedResult(results: readonly GeocoderResult[]): GeocoderResult | null {
   const best = results[0];
   if (best === undefined) return null;
 
   const agree = results.every(
     (each) => haversineMetres(best.coordinates, each.coordinates) <= SAME_PLACE_METRES,
   );
-  return agree ? best.coordinates : null;
+  return agree ? best : null;
 }
 
 /**
