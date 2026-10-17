@@ -82,3 +82,30 @@ By rule (a):
 - 2026-10-17 — Owner answered the Decision through `AskUserQuestion` with
   options (a), (b) and (c) as written, (a) recommended, and chose (a).
   `status: ready`. Done when 2 puts the tip in the largest category.
+- 2026-10-17 — Built by rule (a). `splitByCategory(amountCents, { date, items }, table)`
+  is at the end of `tools/ledger/books/src/receipts.ts`, additive, so it reuses
+  the private `itemsCost` and `roundCents` without exporting them or touching
+  `checkReceipt` and `taxableRange` (lg-26 edits those). Each category's items
+  are summed exactly, then rounded once, half-up; the difference from the row's
+  amount goes to the category with the largest magnitude, the earlier of two
+  equal; an item with no category is `null`; a category that comes to nothing is
+  dropped; a receipt with no items answers `[]`. `spendingStats` reads
+  `receipt_filings.row_id` and `receipt_items` once (`receiptsOnRows`) and uses
+  the split in place of the row's whole amount when it answers any; otherwise
+  the row is whole as before. `spendingStats`' comment is corrected.
+  - The lg-10 basket (bread 3,49 $, six-pack with deposit and taxes 15,53525 $,
+    soap 5,73725 $) costs 24,77 $ item by item against the 24,76 $ printed, so
+    the rounding alone takes a cent off the six-pack: 3,49 / 15,53 / 5,74. With a
+    3,00 $ tip on top the six-pack is 18,53 $. Both are asserted in
+    `books/test/receipts.test.ts` and, through the route, in
+    `api/test/stats.test.ts`.
+  - **Not folded in, and it is a real gap:** the lg-18 drill-down
+    (`GET /api/rows?scope=spending&spendingCategory=<id>`) lists a row under the
+    row's own category, so it does not follow the split. Measured with a basket
+    row attached on top of the test's three other rows: the chart says
+    Groceries 61,25 $, Alcohol 15,53 $, Household 5,74 $; the lists say
+    Groceries 82,52 $, Alcohol 0, Household 0 (`PROBE` test, run once and
+    removed). A list that matches the chart has to show a row once per slice,
+    with the slice's amount, which changes `RowsResponse`'s contract and the
+    screen, and is a decision, not a piece already specified. Left for the
+    orchestrator to file or ask.

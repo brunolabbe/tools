@@ -21,6 +21,7 @@ import {
   salariesByYear,
   settlementsInRange,
   spendingByPeriod,
+  splitByCategory,
 } from "@ledger/books";
 import type { SpendingEntry, SpendingSpan, StatRow } from "@ledger/books";
 import type {
@@ -30,6 +31,7 @@ import type {
   FixedItemsResponse,
   MortgageOwnResponse,
   MortgagePaymentsResponse,
+  ReceiptItem,
   SalariesStatsResponse,
   SettlementsStatsResponse,
   SpendingStatsResponse,
@@ -121,6 +123,50 @@ export function bufferStats(
   }))();
 }
 
+interface ItemOfRow {
+  row_id: number;
+  date: string | null;
+  price_cents: number;
+  taxable: 0 | 1;
+  deposit_cents: number | null;
+  spending_category_id: number | null;
+  share: ReceiptItem["share"];
+}
+
+/**
+ * The receipts filed on joint-account rows, by row (lg-27): each one's date, for
+ * the rates, and its items in the order printed. A receipt filed with no items
+ * has no entry here, so its row is read whole.
+ */
+function receiptsOnRows(db: Database): Map<number, { date: string | null; items: ReceiptItem[] }> {
+  const found = db
+    .prepare(
+      `SELECT receipt_filings.row_id, receipt_filings.date, receipt_items.price_cents,
+              receipt_items.taxable, receipt_items.deposit_cents,
+              receipt_items.spending_category_id, receipt_items.share
+       FROM receipt_filings
+       JOIN receipt_items ON receipt_items.filing_id = receipt_filings.id
+       WHERE receipt_filings.row_id IS NOT NULL
+       ORDER BY receipt_filings.id, receipt_items.position`,
+    )
+    .all() as ItemOfRow[];
+  const byRow = new Map<number, { date: string | null; items: ReceiptItem[] }>();
+  for (const item of found) {
+    const held = byRow.get(item.row_id) ?? { date: item.date, items: [] };
+    held.items.push({
+      // The split does not read an item's words, and nothing here shows them.
+      text: "",
+      price: item.price_cents,
+      taxable: item.taxable === 1,
+      deposit: item.deposit_cents,
+      spendingCategoryId: item.spending_category_id,
+      share: item.share,
+    });
+    byRow.set(item.row_id, held);
+  }
+  return byRow;
+}
+
 /**
  * Spending: the period lines the cards paid, and the joint rows that took money
  * out of the buffer (or put a refund back). A row nobody has filed is not yet
@@ -129,10 +175,13 @@ export function bufferStats(
  * period line's is its own `spendingCategoryId`, with its free text left in the
  * uncategorised detail.
  *
- * A joint-account row with a receipt attached is to be split by its receipt
- * items' categories, its own then not counted (lg-9's Build). lg-10 stores the
- * items (`receipt_items`), but how a row's taxes and any tip divide among its
- * items' categories is not decided, so every row here is still whole (lg-27).
+ * A joint-account row with a receipt filed on it (`receipt_filings.row_id`) and
+ * at least one item is split by its items' categories instead (lg-27): each
+ * category's cost is its items' own, taxes and deposits included, and what the
+ * card was charged beyond that — rounding, any tip — goes to the largest
+ * (`splitByCategory`). The row's own category is then not counted. A row whose
+ * receipt has no items stays whole under its own category, as does a row with no
+ * receipt.
  */
 export function spendingStats(
   db: Database,
@@ -141,14 +190,29 @@ export function spendingStats(
 ): SpendingStatsResponse {
   return db.transaction(() => {
     const entries: SpendingEntry[] = [];
+    const receipts = receiptsOnRows(db);
     for (const row of listRows(db, { spendingOnly: true, limit: Number.MAX_SAFE_INTEGER }).rows) {
-      entries.push({
-        date: row.date,
-        amountCents: -row.amountCents,
-        categoryId: row.spendingCategory?.id ?? null,
-        label: row.category,
-        source: "account",
-      });
+      const documented = receipts.get(row.id);
+      const split = documented === undefined ? [] : splitByCategory(-row.amountCents, documented);
+      if (split.length === 0) {
+        entries.push({
+          date: row.date,
+          amountCents: -row.amountCents,
+          categoryId: row.spendingCategory?.id ?? null,
+          label: row.category,
+          source: "account",
+        });
+        continue;
+      }
+      for (const slice of split) {
+        entries.push({
+          date: row.date,
+          amountCents: slice.cents,
+          categoryId: slice.categoryId,
+          label: row.category,
+          source: "account",
+        });
+      }
     }
     for (const line of currentLines(db)) {
       entries.push({

@@ -531,3 +531,132 @@ describe("GET /api/rows, as the spending chart opens a period (lg-18)", () => {
     }
   });
 });
+
+// --- lg-27: a joint-account row with a receipt, split by its items' categories ---
+
+/** Bread, zero-rated; a six-pack, taxable, with its deposit; soap, taxable. Its items cost 24,77 $. */
+const BASKET_ITEMS = [
+  { price: 349, taxable: 0, deposit: null, category: 1 },
+  { price: 1_299, taxable: 1, deposit: 60, category: 2 },
+  { price: 499, taxable: 1, deposit: null, category: 3 },
+];
+
+function marketRow(day: string, name: string, amountCents: number): PasteRow {
+  return {
+    date: `2026-09-${day}`,
+    category: "Épicerie",
+    description: `Achat /Marché ${name}`,
+    amountCents,
+  };
+}
+
+/** Four rows on one account: two with a basket, one with a receipt of no items, one with none. */
+async function startWithReceipts(): Promise<App> {
+  const target = await startApp();
+  await addRule(target, rule("Achat /Marché *", null, "current-expenses"));
+  const groceries = await categoryId(target, "Groceries");
+  await post(target, ROUTES.spendingCategoryMap, {
+    desjardinsCategory: "Épicerie",
+    spendingCategoryId: groceries,
+  });
+  await pasteStatement(
+    target,
+    renderPaste(
+      withBalances(
+        [
+          marketRow("10", "A", -2_476),
+          marketRow("11", "B", -2_776),
+          marketRow("12", "C", -2_000),
+          marketRow("13", "D", -1_000),
+        ],
+        500_000,
+      ),
+    ),
+  );
+  return target;
+}
+
+function rowOf(target: App, name: string): number {
+  return (
+    homeBooks(target)
+      .prepare("SELECT id FROM statement_rows WHERE description = ?")
+      .get(`Achat /Marché ${name}`) as { id: number }
+  ).id;
+}
+
+/** Files a receipt on a row as `fileReceipt` stores it. */
+function attach(target: App, rowId: number, items: typeof BASKET_ITEMS): void {
+  const db = homeBooks(target);
+  const photo = db
+    .prepare(
+      "INSERT INTO receipts (photo, media_type, bytes, uploaded_at, uploaded_by) VALUES (?, 'image/jpeg', 64, ?, 'alex')",
+    )
+    .run(`photo-${String(rowId)}`, "2026-10-03T09:30:00Z");
+  const filing = db
+    .prepare(
+      "INSERT INTO receipt_filings (receipt_id, part, merchant, date, total_cents, row_id, filed_at, filed_by) VALUES (?, 1, 'Marché Exemple', '2026-09-10', 2476, ?, ?, 'alex')",
+    )
+    .run(photo.lastInsertRowid, rowId, "2026-10-03T09:30:00Z");
+  for (const [index, item] of items.entries()) {
+    db.prepare(
+      "INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, deposit_cents, spending_category_id, share) VALUES (?, ?, 'x', ?, ?, ?, ?, 'shared')",
+    ).run(filing.lastInsertRowid, index + 1, item.price, item.taxable, item.deposit, item.category);
+  }
+}
+
+async function chart(target: App): Promise<Map<number | null, number>> {
+  const { periods } = await get<SpendingStatsResponse>(target, ROUTES.statsSpending);
+  expect(periods).toHaveLength(1);
+  return new Map(periods[0]?.categories.map((slice) => [slice.categoryId, slice.cents]));
+}
+
+describe("GET /api/stats/spending, for a row with a receipt (lg-27)", () => {
+  test("a row with a basket charts as the basket's categories, summing to the row to the cent", async () => {
+    const target = await startWithReceipts();
+    const before = await chart(target);
+    // Without a receipt, every row is whole under Groceries.
+    expect(before.get(1)).toBe(2_476 + 2_776 + 2_000 + 1_000);
+
+    attach(target, rowOf(target, "A"), BASKET_ITEMS);
+    const after = await chart(target);
+
+    // The items cost 24,77 $ to the 24,76 $ charged: the cent comes off the six-pack, the largest.
+    expect([after.get(1), after.get(2), after.get(3)]).toEqual([
+      349 + 2_776 + 2_000 + 1_000,
+      1_553,
+      574,
+    ]);
+    expect([...after.values()].reduce((sum, cents) => sum + cents, 0)).toBe(
+      [...before.values()].reduce((sum, cents) => sum + cents, 0),
+    );
+  });
+
+  test("a tip on top of the receipt's total charts under the largest category", async () => {
+    const target = await startWithReceipts();
+    attach(target, rowOf(target, "B"), BASKET_ITEMS);
+
+    const chartOf = await chart(target);
+
+    // The card was charged 27,76 $ for a 24,76 $ basket: the 3,00 $ tip is the alcohol's.
+    expect([chartOf.get(2), chartOf.get(3)]).toEqual([1_853, 574]);
+    expect(chartOf.get(1)).toBe(2_476 + 349 + 2_000 + 1_000);
+  });
+
+  test("a row with no receipt, and one whose receipt has no items, chart whole as before", async () => {
+    const target = await startWithReceipts();
+    const before = await chart(target);
+    homeBooks(target)
+      .prepare(
+        "INSERT INTO receipts (photo, media_type, bytes, uploaded_at, uploaded_by) VALUES ('photo-c', 'image/jpeg', 64, '2026-10-03T09:30:00Z', 'alex')",
+      )
+      .run();
+    homeBooks(target)
+      .prepare(
+        "INSERT INTO receipt_filings (receipt_id, part, merchant, date, total_cents, row_id, filed_at, filed_by) VALUES (1, 1, 'Marché Exemple', '2026-09-12', 2000, ?, '2026-10-03T09:30:00Z', 'alex')",
+      )
+      .run(rowOf(target, "C"));
+
+    expect(await chart(target)).toEqual(before);
+    expect(before.get(1)).toBe(2_476 + 2_776 + 2_000 + 1_000);
+  });
+});
