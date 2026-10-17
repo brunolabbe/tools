@@ -152,4 +152,7 @@ transcribing by hand.
 | [lg-23](./work/lg-23-a-household-of-more-than-two.md)                   | any number of people: ratio, settlement, lead, directory      |
 | [lg-29](./work/lg-29-a-blank-salary-is-not-in-the-years-ratio.md)       | a blank salary leaves a person out of the year's ratio        |
 | [lg-30](./work/lg-30-name-whose-a-receipt-items-charge-is.md)           | a receipt item charged to a named person, among more than two |
+| [lg-33](./work/lg-33-rename-a-person.md)                                | a person renamed by an admin, the id kept                     |
+| [lg-34](./work/lg-34-change-a-members-address-in-one-step.md)           | a member's address changed in one step                        |
+| [lg-35](./work/lg-35-retire-a-person-at-the-next-close.md)              | a person retired, or brought back, from the next close        |
 | [repo-98](../../../docs/work/repo-98-open-the-ledgers-access-policy.md) | the policy opened to any proven address, if ever wanted       |

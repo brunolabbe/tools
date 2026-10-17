@@ -79,6 +79,13 @@ or architecture note it comes from. If nobody can say why, it is not ready.
 The brief. Self-contained enough to paste into an agent without further
 context — numbered steps, named files, the traps worth knowing in advance.
 
+## Decision — open
+
+Optional: only on a ticket that poses a question. The question, its options and
+their costs. Once settled the heading reads
+`## Decision — answered <date> by <who>`, and the answer, with the options it
+was chosen from, stays under it.
+
 ## Done when
 
 Acceptance, in terms someone else can check. "Tests prove X" or "this command
