@@ -257,3 +257,50 @@ neither key refuses to boot, naming the variables` with `expected
     by the filing; not done here. Done when 8 (a container built and run) was not
     run: it is a container build and no gate was asked for one on this machine,
     so it stays `unproven (gate)`.
+- 2026-10-17 — Round 1, after gate 1 (Opus 5.5, `8e50f0d4..f2c343d9`, FAIL). The
+  owner answered each open decision through `AskUserQuestion` on 2026-10-17, from
+  the options the gate and the builder offered:
+  - **F1** (Done when 5): "Spawn test over real stderr", over rewording the Done
+    when line. A test now spawns the real `main.ts`.
+  - **F2** (upgrade and rollback): "Upgrade note only", over also marking the title
+    breaking (`fix(downloader)!:`). The title stays non-breaking; the notes are in
+    `docs/02-DEPLOYMENT.md`, "Updating and rolling back".
+  - **Compose default**: "Overridable :-true + fix hints", over a literal `"true"`.
+    `${REQUIRE_HUMAN_CHECK:-true}` stays, and F3 is fixed in this round.
+  - **F1, done.** `human-check.test.ts`, "main.ts, spawned with
+    REQUIRE_HUMAN_CHECK on, exits 1 and writes a refusal with no key value":
+    four env shapes, `node --import tsx api/src/main.ts`, `shell: false`, asserts
+    exit 1, `"msg":"failed to start"`, `"code":"INTERNAL"`, the missing variable
+    names, and neither Cloudflare test key anywhere in stdout or stderr. Proven
+    able to fail: with the one-key message mutated to print `rawSecretKey`, it
+    went red (`expected '{"level":"error","time":… not to contain
+'1x0000000000000000000000000000000AA'`) along with two in-process tests.
+    **Cost:** green it is about 2 s for the four spawns together. Against the old
+    `config.ts` the same test takes 45 s and fails, because the process starts and
+    listens until the test's own kill timer fires.
+  - **F2, done.** Two paragraphs after "Rolling back is the same three commands":
+    upgrading past dl-126 stops a host with no keys (both keys in, or
+    `REQUIRE_HUMAN_CHECK=false`; an unset or blank entry does not opt out; do it
+    before the pull that moves the tag), and rolling back past it reopens a
+    keyless host.
+  - **F3, reproduced and fixed.** `compose-matrix.sh` from gate 1, `docker compose
+config` over the three-file stack: `unset` and `blank` both give
+    `REQUIRE_HUMAN_CHECK: "true"`, `false`, `false` with a trailing space, quoted
+    and with a trailing comment give `"false"`, and `0` gives `"0"`. Both boot
+    hints now say `REQUIRE_HUMAN_CHECK=false` and leave both keys empty, the
+    one-key hint only when the setting is on (without it, "unset both" is still
+    right); the compose comment, `.env.example` and the ARCHITECTURE row say that
+    under the compose default only an explicit `false` opts out. A test pins both
+    hints. That matrix is also the first time the compose edit was parsed; round 0
+    reported it unmeasured.
+  - **F4, reproduced and fixed.** The no-key leak assertion ran inside a bare
+    `try`/`catch`, so a throw that never came passed it. A `refusalFor()` helper
+    fails the test when `loadApiConfig` does not throw. Proven: against the base
+    `config.ts` the rewritten test went red where the old one could not.
+  - **F5, the gate is right.** Round 0's "1 failed | 17 passed" was measured
+    before I added the `ture` assertion to "unset or off leaves the open
+    default", and the entry above was not updated. Against the base `config.ts` the
+    final spec gives, with the round's tests included, `Tests 5 failed | 15 passed
+(20)`; of round 0's four tests, two fail on the old code (the Done when 1
+    test, and "unset or off" on its `ture` line) and two pass (the both-keys test, and the old leak test, which is F4). Round 0's
+    figure above stands as a record of the earlier state.
