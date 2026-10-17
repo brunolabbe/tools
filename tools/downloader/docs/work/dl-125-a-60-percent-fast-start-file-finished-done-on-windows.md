@@ -116,12 +116,18 @@ assuming the match:
 - Gap > 2% of declared
 - Resolver duration, not container
 
-The owner chose **"Gap > 0.25 s fails"**. In full:
+The owner chose **"Gap > 0.25 s fails"**. In full, as amended by gate 1's
+answers of 2026-10-17 (below):
 
-- The rule applies to progressive sources only.
-- It applies after ffmpeg exits 0 with no `partial file` verdict.
-- `done` fails `DOWNLOAD_FAILED` when the container's declared duration minus
-  ffmpeg's last `out_time` exceeds 0.25 s.
+- The rule applies to progressive sources only, and not to `audioOnly`.
+- It applies after ffmpeg exits 0 with no `partial file` verdict, and not when
+  ffmpeg logs `Estimating duration from bitrate`.
+- `done` fails `DOWNLOAD_FAILED` when the reference minus ffmpeg's last
+  `out_time` exceeds the slack.
+  - The reference is the container's declared duration, or the capture limit
+    (`liveDurationSec`) when that is smaller.
+  - The slack is 0.25 s, or four frame intervals when the video's frame rate
+    is known and that is longer (below 16 fps).
 - The engine reads the container's `Duration` line on every run.
 
 **What 0.25 s catches and misses, as measured:**
@@ -134,7 +140,9 @@ The owner chose **"Gap > 0.25 s fails"**. In full:
   gap: Windows 6.010 / 6.001 / 0.009, Linux 6.008 / 6.001 / 0.007). The largest
   gap was 0.067 s.
 - Within its coverage, it misses only a truncation that loses the last 0.25 s
-  or less.
+  or less. _Since 2026-10-17 it also misses two more:_ a truncation that loses
+  no more than a low-frame-rate video's last four frames, and any `audioOnly`
+  truncation (F1, below).
 
 **The rule does not cover:**
 
@@ -142,16 +150,24 @@ The owner chose **"Gap > 0.25 s fails"**. In full:
 - a progressive run with no `Duration` line or no progress snapshot (the next
   answer).
 
-**What the false-failure side was not measured against:**
+**What the false-failure side was not measured against:** _Updated
+2026-10-17._ Gate 1 and gate 2 have since measured four of the five items
+this list named:
+
+- low frame rates (1 to 30 fps);
+- a static-tail variable frame rate;
+- an edit-list trim;
+- a declared duration longer than the tracks the engine maps (an audio track
+  shorter than the video, read `audioOnly`).
+
+The rule was narrowed for the classes that failed. Still unmeasured:
 
 - real sources;
-- low or variable frame rates;
-- edit lists;
-- a declared duration longer than the tracks the engine maps
-  (`-map 0:v:0? -map 0:a:0?`);
-- resolver durations rounded to whole seconds.
+- resolver durations rounded to whole seconds (the rule reads the container's
+  duration, not the resolver's).
 
-Each could put a whole source's gap past 0.25 s.
+The one false failure known to remain is video-only FLV below 20 fps (F7,
+below).
 
 **A run the rule cannot measure.** "What should such a run do?" (a progressive
 run with no `Duration` line, or no progress snapshot) had three options:
@@ -215,6 +231,25 @@ liveDurationSec)`
   keep it. A capture limit is no exemption: a short source under a limit is
   still short.
 
+**Gate 2's answer, 2026-10-17.** Relayed by the orchestrator. Gate 2 (Sonnet
+5.5) ran at `f682086a`.
+
+- **F7: video-only FLV.** Even narrowed, the rule still fails complete
+  video-only FLV files with B-frames below 20 fps:
+  - 8, 12 and 15 fps fail;
+  - 24 fps and above ends `done`;
+  - FLV with audio ends `done`.
+
+  The flv demuxer's `Duration` adds a two-frame start offset to the
+  three-frame reorder lag, five frames in all. The question was "What should
+  happen?", with two options:
+  - Land, record as known
+  - Raise the constant to 6
+
+  The owner chose **"Land, record as known"**, the gate's recommendation.
+  Video-only FLV with B-frames below 20 fps is a **known false failure** of
+  the rule: such a file stops downloading.
+
 ## Build
 
 The rule and the condition it targets are settled (Decision, above). Build the
@@ -236,12 +271,21 @@ mechanism, not this one: bring it back.
 2. **Apply the rule where the other short-source verdicts are.** It goes in
    `done`'s completion handler, after the `endedEarly` and `partialAt` checks
    and before `body.end()`. Fail a progressive run with `DOWNLOAD_FAILED` when
-   the container's duration minus the last progress snapshot's `out_time`
-   exceeds 0.25 s, so the visitor sees a cut connection and not a complete
-   response. Name the 0.25 s as a constant whose comment cites this ticket's
-   measurement. A run with no container `Duration` or no progress snapshot
-   stays `done`, as today (the owner's answer in the Decision): the rule
-   applies only when both are present.
+   the reference minus the last progress snapshot's `out_time` exceeds the
+   slack, so the visitor sees a cut connection and not a complete response.
+   - The reference is the container's duration, or the capture limit when that
+     is smaller.
+   - The slack is 0.25 s, or four frame intervals when the video's frame rate
+     is known and that is longer.
+   - The rule is skipped for `audioOnly`, and when ffmpeg says it estimated
+     the duration.
+
+   _This is the amended rule, from the Decision's answers of 2026-10-17._ Name
+   the 0.25 s as a constant whose comment cites this ticket's measurement.
+   A run with no container `Duration` or no progress snapshot stays `done`, as
+   today (the owner's answer in the Decision): the rule applies only when both
+   are present.
+
 3. **Test it on the measured condition.**
    - **The failing case.**
      - Add a new `describe` at the end of `engine/test/stream.test.ts`, with
@@ -305,10 +349,16 @@ mechanism, not this one: bring it back.
 - The Log records the measured condition the fix targets, and says the filed
   run's mechanism is unmeasured. Done: the Log entries of 2026-10-15 and the
   Decision above.
-- A progressive run that exits 0 with no `partial file`, and whose container
-  duration exceeds its last `out_time` by more than 0.25 s, ends
-  `DOWNLOAD_FAILED`, and the visitor's response is aborted, not completed
-  (`received.aborted` through `exchange`).
+- A progressive run, not `audioOnly` and with no estimated duration, ends
+  `DOWNLOAD_FAILED` with the visitor's response aborted, not completed
+  (`received.aborted` through `exchange`), when:
+  - it exits 0 with no `partial file`;
+  - its reference (the container's duration, or a smaller capture limit)
+    exceeds its last `out_time` by more than its slack (0.25 s, or four frame
+    intervals when the frame rate is known and that is longer).
+
+  _Reworded 2026-10-17 to the amended rule._
+
 - The exact-sample-start cut fails in every one of at least 25 fresh-process
   runs before the fix, logged as failures over runs, and passes after.
 - The final-sample-start control and the three stand-ins (no `Duration` line
@@ -843,9 +893,10 @@ to the 2026-10-16 entry:
   exemption.
 - Its sentence on the forged reference said the source's author could fail
   only "their own download". That is imprecise: a forged `Duration` fails the
-  download for whoever fetches that file. Gate 1 confirmed the forged row
-  still fails after this round, `DOWNLOAD_FAILED` with 32400 s declared
-  against 3.99 s.
+  download for whoever fetches that file. _Corrected after gate 2:_ gate 1
+  measured the forged row at `c8b20624`, before this round. Gate 2 measured
+  it after, at `f682086a`: `DOWNLOAD_FAILED`, with 32400 s declared against
+  3.99 s.
 
 **The tests came first, in commit `674ad96e`.** They are a nested `describe`,
 "gate 1: the rule narrowed, and measured against a capture limit", added at
@@ -924,3 +975,98 @@ Tests  313 passed (313)
   win32. Whether ffmpeg-static prints the same `Stream … fps` line and
   `Estimating duration` warning is read from that leg, not from here.
 - **Real sources.** The new rule was not tried on any.
+
+_Read after the push:_ the Windows leg passed at `f682086a`, run 38993596444,
+with `stream.test.ts` at 94 tests and 21 skipped.
+
+### 2026-10-17 — gate 2's findings applied (Opus 5.5, builder)
+
+Gate 2 (Sonnet 5.5) at `f682086a` returned CONCERNS, with no high finding.
+F2, F3 and F4 were fixed; F1 was fixed in part. The owner answered F7, and the
+Decision records the answer. By rule, no third gate follows.
+
+**F5: the frame-rate parse, now linear.** Commit `7c7eee4a` replaces the one
+pattern with two: an anchored stream-line test (`STREAM_VIDEO`), then a plain
+search (`FPS`).
+
+**The gate's stated remedy had the same flaw in another shape.** Its anchor
+was `^\s*Stream #\d+:\d+[^:]*: Video: `. Its `\d+[^:]*` can split a long
+stream index in every way. Measured with `node linear.mjs` on 60 KB lines:
+
+```
+stream index of 60000 digits, no colon   STREAM_VIDEO(gate) 2521.4 ms   variant 0.1 ms   round-1 3271.6 ms
+gate's line: 7000 x ': Video: '           STREAM_VIDEO(gate) 0.0 ms      variant 0.0 ms   round-1 166.2 ms
+```
+
+So the committed anchor is `^\s*Stream #\d+:\d+(?:[^:\d][^:]*)?: Video: `:
+what follows the index must open with a non-digit.
+
+The second search, `/, (\d+(?:\.\d+)?) fps,/u`, is linear. On six 60 KB
+lines with many `, ` and digits and no ` fps,`, it took 0.0 to 0.2 ms each.
+
+**Real lines read the same.** `node compare.mjs` ran on 49 fixtures: gate 1's
+`fx` directory, the large fixture copies, and the forged file. It compared
+190 real `Stream` lines, 72 of them carrying an fps. The round-1 pattern, the
+gate's remedy and the committed variant agreed on all of them, with 0
+disagreements.
+
+**Tests.** A nested `describe` at the end of the dl-125 block, "gate 2: the
+frame-rate parse", holds four stand-ins. All four skip on win32.
+
+- "F5: thirty 63 KB forged `Stream … Video:` lines with no fps cost nothing,
+  and the run ends done": the gate's line.
+- "F5: three forged `Stream #0:` lines with a 60,000-digit index cost
+  nothing, and the run ends done": the shape the gate's remedy missed.
+- "F8: at 1 fps, 3.5 s short of a 4 s Duration is inside four frames of
+  slack, and ends done".
+- "F8: at 1 fps, 4.5 s short of a 5 s Duration is past four frames, and fails
+  DOWNLOAD_FAILED".
+
+The gate suggested a 4 s Duration with `out_time` 0.5 and 0.1. With a 4 s
+Duration no `out_time` leaves a gap over 4 s, so the outer case uses a 5 s
+Duration.
+
+The stand-ins write with `fs.writeSync(2, …)`, not `process.stderr.write`. The
+asynchronous write delivered 3 of 30 lines before the stand-in exited
+(`probe-f5.mts`: `info lines 3`, then `info lines 30, regex total 5113.5 ms`
+with the synchronous write).
+
+**Each test was shown red** by a mutation (`mutate-r3.mjs`) and restored from
+`7c7eee4a`. The tree was clean afterwards.
+
+| Mutation   | What changed                        | Result                 | Failing tests                          |
+| ---------- | ----------------------------------- | ---------------------- | -------------------------------------- |
+| `round1`   | the parse put back as at `f682086a` | `2 failed \| 2 passed` | both F5 tests, at 5166 ms and 10122 ms |
+| `gate`     | the gate's anchor as written        | `1 failed \| 3 passed` | the digit-index F5 test, at 8006 ms    |
+| `reorder3` | `REORDER_FRAMES = 3`                | `1 failed \| 3 passed` | the inner F8 test                      |
+| `reorder5` | `REORDER_FRAMES = 5`                | `1 failed \| 3 passed` | the outer F8 test                      |
+| `noparse`  | the frame rate never read           | `1 failed \| 3 passed` | the inner F8 test                      |
+
+With the fix, all four pass. The two F5 tests take 265 ms and 238 ms.
+
+**F6.** The Decision's rule bullets, Build 2 and `Done when` 2 now state the
+amended rule. The "not measured against" list now says what gates 1 and 2
+measured.
+
+**F7.** The owner's answer is in the Decision. Video-only FLV below 20 fps is
+listed as a known false failure, both there and in the `stream.ts` comment.
+
+**F9.** The `stream.ts` comment now records three forgeable inputs:
+
+- a forged `Duration`;
+- a forged `Stream … Video: …, 0.0001 fps` line, which buys unbounded slack
+  (40,000 s);
+- a forged `[warning] Estimating duration from bitrate`, which skips the rule.
+
+Each lets that file through no worse than before dl-125. None does more than
+the forged `Duration` already could.
+
+**F10.** Corrected in place, in the entry above.
+
+**Runs.**
+
+```
+$ npm test -- tools/downloader/engine
+Test Files  16 passed (16)
+Tests  317 passed (317)
+```
