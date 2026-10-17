@@ -345,6 +345,16 @@ describe("GET /api/config with keys configured", () => {
   });
 });
 
+/** The error `loadApiConfig` throws for `env`; fails the test when it throws nothing. */
+function refusalFor(env: NodeJS.ProcessEnv): AppError {
+  try {
+    loadApiConfig({}, env);
+  } catch (error: unknown) {
+    return AppError.from(error);
+  }
+  throw new Error("loadApiConfig did not refuse");
+}
+
 describe("the settings", () => {
   test("both keys turn the check on, and neither leaves it off", () => {
     expect(
@@ -425,16 +435,6 @@ describe("the settings", () => {
       loadApiConfig({ turnstile: undefined }, { REQUIRE_HUMAN_CHECK: "true" }).turnstile,
     ).toBeUndefined();
   });
-
-  /** The error `loadApiConfig` throws for `env`; fails the test when it throws nothing. */
-  const refusalFor = (env: NodeJS.ProcessEnv): AppError => {
-    try {
-      loadApiConfig({}, env);
-    } catch (error: unknown) {
-      return AppError.from(error);
-    }
-    throw new Error("loadApiConfig did not refuse");
-  };
 
   test("the thrown refusal under REQUIRE_HUMAN_CHECK carries variable names and no key value", () => {
     // The text `main.ts` writes is checked for real by the spawn test below;
