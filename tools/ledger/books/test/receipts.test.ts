@@ -12,6 +12,7 @@ import {
   matchReceipt,
   ratesOn,
   sharedAmount,
+  splitByCategory,
   splitReceipt,
 } from "../src/index.ts";
 import type { MatchableRow, SalesTaxRates } from "../src/index.ts";
@@ -531,5 +532,147 @@ describe("the taxable marks beside printed taxes that disagree (lg-26, round 1)"
 
     expect(checkReceipt(taxable(5))).toEqual([]);
     expect(checkReceipt(taxable(6))).toEqual(["taxable-differs"]);
+  });
+});
+
+describe("a joint-account row's amount, split by its items' categories (lg-27)", () => {
+  // Each item's own cost, as `sharedAmount` takes one off: bread 3,49 $; the six-pack
+  // with its deposit and both taxes 15,5352525 $ → 15,54 $; the soap with its taxes
+  // 5,7372525 $ → 5,74 $. Together 24,77 $, a cent over the 24,76 $ the card was charged.
+  const BY_ITEM = { date: BASKET.date, items: BASKET.items };
+
+  test("two or more categories chart as amounts that sum to the row's amount, to the cent", () => {
+    const split = splitByCategory(2_476, BY_ITEM);
+
+    // The cent the items' own taxes add comes off the largest category, the six-pack's.
+    expect(split).toEqual([
+      { categoryId: 1, cents: 349 },
+      { categoryId: 2, cents: 1_553 },
+      { categoryId: 3, cents: 574 },
+    ]);
+    expect(split.reduce((sum, slice) => sum + slice.cents, 0)).toBe(2_476);
+  });
+
+  test("a tip charted on top of the total goes to the largest category", () => {
+    const split = splitByCategory(2_476 + 300, BY_ITEM);
+
+    // 15,54 $ rounded, plus the 3,00 $ tip, less the cent the items run over.
+    expect(split).toEqual([
+      { categoryId: 1, cents: 349 },
+      { categoryId: 2, cents: 1_853 },
+      { categoryId: 3, cents: 574 },
+    ]);
+    expect(split.reduce((sum, slice) => sum + slice.cents, 0)).toBe(2_776);
+  });
+
+  test("items of one category are summed before they are rounded, once", () => {
+    // 0,03 $ taxable is 3,4 ¢ with its taxes: 3 ¢ alone, and 6,9 ¢ → 7 ¢ for two.
+    const penny = { ...item(2), price: 3 };
+
+    const together = splitByCategory(7, { date: BASKET.date, items: [penny, penny] });
+    const apart = splitByCategory(7, {
+      date: BASKET.date,
+      items: [penny, { ...penny, spendingCategoryId: 1 }],
+    });
+
+    expect(together).toEqual([{ categoryId: 3, cents: 7 }]);
+    // Rounded apart they make 6 ¢; the cent left over goes to the first of two equal.
+    expect(apart).toEqual([
+      { categoryId: 3, cents: 4 },
+      { categoryId: 1, cents: 3 },
+    ]);
+  });
+
+  test("an item with no category is a category of its own, and a tie goes to the earlier", () => {
+    const split = splitByCategory(2_000, {
+      date: BASKET.date,
+      items: [
+        { ...item(0), price: 999, spendingCategoryId: null },
+        { ...item(0), price: 999, spendingCategoryId: 4 },
+      ],
+    });
+
+    expect(split).toEqual([
+      { categoryId: null, cents: 1_001 },
+      { categoryId: 4, cents: 999 },
+    ]);
+  });
+
+  test("a refund splits as a purchase does, with its signs", () => {
+    const refund = BASKET.items.map((one) => ({
+      ...one,
+      price: -one.price,
+      deposit: one.deposit === null ? null : -one.deposit,
+    }));
+
+    const split = splitByCategory(-2_476, { date: BASKET.date, items: refund });
+
+    expect(split).toEqual([
+      { categoryId: 1, cents: -349 },
+      { categoryId: 2, cents: -1_553 },
+      { categoryId: 3, cents: -574 },
+    ]);
+  });
+
+  test("a category that comes to nothing is left out, and a receipt with no items answers none", () => {
+    const free = { ...item(0), price: 0, spendingCategoryId: 4 };
+
+    expect(splitByCategory(349, { date: BASKET.date, items: [item(0), free] })).toEqual([
+      { categoryId: 1, cents: 349 },
+    ]);
+    expect(splitByCategory(2_650, { date: BASKET.date, items: [] })).toEqual([]);
+  });
+
+  test("reads the rates in effect on the receipt's date", () => {
+    const changed: SalesTaxRates[] = [
+      { from: "2013-01-01", gst: 5_000, qst: 9_975 },
+      { from: "2026-07-01", gst: 5_000, qst: 10_975 },
+    ];
+    // 10,00 $ of soap, taxable, is 11,50 $ before the change and 11,60 $ after;
+    // the 15,00 $ of bread is the larger, so it absorbs whatever is left over.
+    const items = [
+      { ...item(2), price: 1_000 },
+      { ...item(0), price: 1_500 },
+    ];
+    const on = (date: string, amount: number) => splitByCategory(amount, { date, items }, changed);
+
+    expect(on("2026-06-30", 2_650)).toEqual([
+      { categoryId: 3, cents: 1_150 },
+      { categoryId: 1, cents: 1_500 },
+    ]);
+    expect(on("2026-07-01", 2_660)).toEqual([
+      { categoryId: 3, cents: 1_160 },
+      { categoryId: 1, cents: 1_500 },
+    ]);
+    // The same amount on the other side of the change: the soap moves, the bread pays.
+    expect(on("2026-07-01", 2_650)).toEqual([
+      { categoryId: 3, cents: 1_160 },
+      { categoryId: 1, cents: 1_490 },
+    ]);
+  });
+});
+
+describe("the guard on a remainder that turns the largest category over (lg-27 gate 1, F3)", () => {
+  const BASKET_AT = (amount: number) =>
+    splitByCategory(amount, { date: BASKET.date, items: BASKET.items });
+
+  test("a basket part paid by card gives no split, where it gave Alcohol −4,23 $", () => {
+    // 5,00 $ on the card, the rest by gift card: 15,54 $ + (5,00 − 24,77) $ is below zero.
+    expect(BASKET_AT(500)).toEqual([]);
+  });
+
+  test("a purchase's receipt on a refund row gives no split", () => {
+    // The row is +24,76 $, so the amount spent is −24,76 $: the six-pack would be −33,99 $.
+    expect(BASKET_AT(-2_476)).toEqual([]);
+  });
+
+  test("a remainder is still split when it leaves the largest category's sign alone", () => {
+    // 100,00 $ charged for a 24,77 $ basket is a large remainder but not a sign
+    // change; the owner's guard is the sign, so the six-pack takes 90,77 $.
+    expect(BASKET_AT(10_000)).toEqual([
+      { categoryId: 1, cents: 349 },
+      { categoryId: 2, cents: 9_077 },
+      { categoryId: 3, cents: 574 },
+    ]);
   });
 });

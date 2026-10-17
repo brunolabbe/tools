@@ -6,7 +6,8 @@
  * personal-card spending, with the settlement closing one computes (lg-6); and
  * the spending category a bank row has (lg-15); and what a person answered
  * before, offered (lg-16) or filed on (lg-17); and the history's series (lg-9);
- * and whether a receipt adds up, and which rows it may document (lg-8).
+ * and whether a receipt adds up, and which rows it may document (lg-8);
+ * and a row's amount divided among its receipt's item categories (lg-27).
  */
 
 export { formatCents, parseAmountCents, parseTypedAmountCents } from "./amount.ts";
@@ -82,9 +83,16 @@ export {
   matchReceipt,
   ratesOn,
   sharedAmount,
+  splitByCategory,
   splitReceipt,
 } from "./receipts.ts";
-export type { MatchableRow, ReceiptSplit, RowMatch, SalesTaxRates } from "./receipts.ts";
+export type {
+  CategoryAmount,
+  MatchableRow,
+  ReceiptSplit,
+  RowMatch,
+  SalesTaxRates,
+} from "./receipts.ts";
 export { parseStatement } from "./statement.ts";
 export type { ParsedStatement, StatementRow } from "./statement.ts";
 export {

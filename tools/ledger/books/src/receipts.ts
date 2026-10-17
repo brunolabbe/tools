@@ -323,3 +323,67 @@ export function matchReceipt(
     .filter((match) => match.daysApart <= days)
     .toSorted((a, b) => a.daysApart - b.daysApart || a.row.id - b.row.id);
 }
+
+/** One slice of a row's amount: the spending category an item chose (`null` for none) and its cents. */
+export interface CategoryAmount {
+  categoryId: number | null;
+  cents: number;
+}
+
+/**
+ * A joint-account row's amount divided among its receipt items' spending
+ * categories (lg-27, the owner's answer of 2026-10-17).
+ *
+ * **Each item costs what `sharedAmount` takes off for an excluded one** — price,
+ * deposit, and GST and QST on a taxable price at the rates on the receipt's date
+ * — summed per category and rounded once, half-up. What the card was charged and
+ * those figures do not make the same number: the printed taxes are on the
+ * taxable items together, so the items' own can differ by a cent, and a tip
+ * is printed under the total. The difference goes to the largest category, by
+ * the size of its amount; of two equal ones, to the one whose item came first.
+ * So the slices always make `amountCents`, to the cent, and the tip charts where
+ * the most was spent.
+ *
+ * An item with no category is a category of its own, `null`. A receipt with no
+ * items has nothing to divide by and answers none: the caller keeps the row whole.
+ * So does a split whose difference would change the largest category's sign.
+ * The result is in the order the categories first appear in the items, and a
+ * category that comes to nothing is left out. `amountCents` is signed as the
+ * receipt is — a purchase positive, a refund negative.
+ */
+export function splitByCategory(
+  amountCents: number,
+  receipt: { date: string | null; items: readonly ReceiptItem[] },
+  table: readonly SalesTaxRates[] = SALES_TAX_RATES,
+): CategoryAmount[] {
+  if (receipt.items.length === 0) return [];
+  const rates = ratesOn(receipt.date, table);
+  const byCategory = new Map<number | null, ReceiptItem[]>();
+  for (const item of receipt.items) {
+    const held = byCategory.get(item.spendingCategoryId) ?? [];
+    held.push(item);
+    byCategory.set(item.spendingCategoryId, held);
+  }
+  const slices: CategoryAmount[] = [...byCategory.entries()].map(([categoryId, items]) => ({
+    categoryId,
+    cents: roundCents(itemsCost(items, rates)),
+  }));
+  // Strictly greater, so a tie stays with the earlier category.
+  let largest = 0;
+  for (const [index, slice] of slices.entries()) {
+    if (Math.abs(slice.cents) > Math.abs(slices[largest]?.cents ?? 0)) largest = index;
+  }
+  const rounded = slices.reduce((sum, slice) => sum + slice.cents, 0);
+  const target = slices[largest];
+  if (target !== undefined) {
+    const adjusted = target.cents + amountCents - rounded;
+    // The remainder is meant to be the rounding and a tip. One that turns the
+    // largest category the other way round is neither — a basket part paid for, or
+    // a purchase's receipt on a refund's row — and charting it would raise a
+    // category the row lowered (the owner's guard, 2026-10-17): the caller keeps
+    // the row whole.
+    if (target.cents !== 0 && Math.sign(adjusted) !== Math.sign(target.cents)) return [];
+    target.cents = adjusted;
+  }
+  return slices.filter((slice) => slice.cents !== 0);
+}
