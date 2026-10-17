@@ -1185,3 +1185,65 @@ describe("a receipt's items (lg-10)", () => {
     expect(answer.proposals[0]?.merchantCategoryId).toBe(ALCOHOL);
   });
 });
+
+// --- lg-10 gate 1's findings ---
+
+describe("a merchant's last category, corrected (lg-10 gate 1, F3)", () => {
+  test("is the category of the line as it now stands, not as it was filed", async () => {
+    const PHARMACY = 4;
+    const fake = itemReader({ ...BASKET, merchant: "Pharmaprix", items: [] });
+    const target = await start({ reader: fake.reader });
+    const before = await uploaded(target);
+    const filed = await file(target, before.id, {
+      proposal: { ...READ, merchant: "Pharmaprix" },
+      destination: asLine(2_650, { spendingCategoryId: GROCERIES }),
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    // The person corrects the line: it was the pharmacy, not groceries.
+    const corrected = await target.server.inject({
+      method: "POST",
+      url: ROUTES.periodLine.replace(":id", String(filed.json<ReceiptFiling>().periodLineId)),
+      headers: as(ALEX),
+      payload: {
+        personId: "alex",
+        date: "2026-10-04",
+        amountCents: 2_650,
+        category: null,
+        spendingCategoryId: PHARMACY,
+        note: "Pharmaprix",
+        chargedTo: null,
+      },
+    });
+    expect(corrected.statusCode, corrected.body).toBe(200);
+    const next = await uploaded(target);
+
+    const answer = (await read(target, next.id)).json<ReadReceiptResponse>();
+
+    expect(answer.proposals[0]?.merchantCategoryId).toBe(PHARMACY);
+  });
+});
+
+describe("a joint-account row's items (lg-10 gate 1, F1)", () => {
+  test("refuses an item marked as the other's on a row, files nothing, and says the row is shared whole", async () => {
+    const target = await start();
+    await pasteRows(target);
+    const receipt = await uploaded(target);
+
+    const refused = await file(target, receipt.id, {
+      proposal: {
+        ...BASKET,
+        total: 2_476,
+        items: [BASKET.items[0], { ...BASKET.items[1], share: "theirs" }, BASKET.items[2]],
+      },
+      destination: { to: "row", rowId: chargeRow(target) },
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    const message = refused.json<ErrorResponse>().error.message;
+    expect(message).toContain("shared whole");
+    // A line is paid by whoever uploaded the photo, which a row's purchase was not.
+    expect(message).not.toContain("line");
+    expect([count(target, "receipt_filings"), count(target, "receipt_items")]).toEqual([0, 0]);
+    expect(count(target, "period_lines")).toBe(0);
+  });
+});

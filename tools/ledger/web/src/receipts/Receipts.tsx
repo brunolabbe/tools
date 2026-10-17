@@ -503,7 +503,7 @@ export function Receipts(): React.ReactElement {
     }
     if (destination !== "line" && proposal.items.some((item) => item.share !== "shared")) {
       setProblem(
-        "A receipt on a joint-account row is shared whole: file it as a line to leave items out.",
+        "A receipt on a joint-account row is shared whole: every item on it stays shared.",
       );
       return;
     }

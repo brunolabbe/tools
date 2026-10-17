@@ -80,7 +80,11 @@ export const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
  * them.
  *
  * The lg-10 lines are unmeasured against real photos: no key was available to
- * the build, and the reconciliation check is what catches an item misread.
+ * the build. The reconciliation check catches a misread price or deposit, which
+ * stops the items making the total. It does **not** catch a misread taxable
+ * mark: the items still add up, the money moves between shared and not, and
+ * only the person, who sees a Taxable box per item, can catch it (lg-10 gate 1,
+ * F2; the flag that would is lg-26).
  */
 export const RECEIPT_PROMPT = `Read this photo of one or more Québec receipts. All money is in integer cents (12,49 $ -> 1249; a refund is negative).
 For each printed receipt: the merchant, the date, the subtotal, GST (TPS), QST (TVQ) and total exactly as printed (null when the line is absent or unreadable).

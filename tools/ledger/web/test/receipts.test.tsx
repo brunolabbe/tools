@@ -429,6 +429,9 @@ test("keeps an item left out off a joint-account row, before asking the server",
   fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
   fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
 
-  expect((await screen.findByRole("alert")).textContent).toContain("shared whole");
+  const said = (await screen.findByRole("alert")).textContent ?? "";
+  expect(said).toContain("shared whole");
+  // Never sent to file it as a line: a line is paid by whoever took the photo (gate 1, F1).
+  expect(said).not.toContain("line");
   expect(fileReceipt).not.toHaveBeenCalled();
 });

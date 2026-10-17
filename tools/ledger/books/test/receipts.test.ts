@@ -328,3 +328,18 @@ describe("the dated rates (lg-10)", () => {
     expect(ratesOn("2026-10-04")).toEqual({ from: "2013-01-01", gst: 5_000, qst: 9_975 });
   });
 });
+
+/** Oldest first, each day once: `ratesOn` takes the last entry whose day has come. */
+function inOrder(table: readonly SalesTaxRates[]): boolean {
+  return table.every((rates, index) => index === 0 || (table[index - 1]?.from ?? "") < rates.from);
+}
+
+describe("the shipped rate table (lg-10 gate 1, F6)", () => {
+  test("is oldest first, with each day once", () => {
+    expect(inOrder(SALES_TAX_RATES)).toBe(true);
+    // The check can fail: an entry added out of order, or a day given twice.
+    const added = { from: "2027-01-01", gst: 5_000, qst: 9_975 };
+    expect(inOrder([added, ...SALES_TAX_RATES])).toBe(false);
+    expect(inOrder([...SALES_TAX_RATES, ...SALES_TAX_RATES])).toBe(false);
+  });
+});

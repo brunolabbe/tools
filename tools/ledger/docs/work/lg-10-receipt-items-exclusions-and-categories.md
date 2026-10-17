@@ -65,8 +65,9 @@ _Categories_).
    proves it.
 3. A rate change mid-year uses the rate in effect on the receipt's date.
 4. A merchant's previous category is proposed first on its next receipt.
-5. An item marked as the other's produces a charge equal to its excluded amount,
-   and the receipt still reconciles: shared + not shared + charged = total.
+5. On a period line, an item marked as the other's produces a charge equal to its
+   excluded amount, and the receipt still reconciles: shared + not shared +
+   charged = total. (On a joint-account row every item is shared: decision 3.)
 6. Gates green.
 
 ## Decisions — answered 2026-10-16 by the owner at dispatch, not open
@@ -89,6 +90,49 @@ constants in `tools/ledger/books/src/receipts.ts` (`const GST_RATE = 5_000;`,
 existing reconciliation check reads too, so that a rate change is a code change;
 **(b)** stored configuration in the database (a migration, a route and a
 screen). **The answer: (a), a dated table in `books`.**
+
+## Decisions after gate 1 — answered 2026-10-17 by the owner, not open
+
+Gate 1 (at `be6e4053`) returned CONCERNS with no `high`. The orchestrator put
+these to the owner through `AskUserQuestion`, labelled here by the gate's finding
+numbers and numbered on from the two above. They also settle the three open
+decisions in the builder's first report: its (1) is decision 3, its (2) is
+decision 6, and its (3) is amended by decision 4.
+
+**3 (F1). The question was:** an item marked not shared, or the other's, on a
+receipt attached to a joint-account row is refused with a 400, and the brief
+never says what a row should do. Options: **(a)** keep the refusal, record it
+here, reword Done when 5 to "on a period line", and change the refusal's text, in
+the API and on the screen, to say a receipt on a row is shared whole without
+pointing at a line; **(b)** allow both on a row, which needs a rule for who owes
+whom for money that left the joint account. **The answer: (a)**, the builder's
+recommendation and the gate's.
+
+**4 (F3). The question was:** a merchant's last category reads the line as it
+was filed, so a correction of that line (`correctLine`) is ignored. Options:
+**(a)** follow the `supersedes` chain to the line's standing version; **(b)**
+leave it as filed and say so. **The answer: (a)**, the gate's recommendation. It
+amends the builder's own definition of "its last category".
+
+**5 (F2). The question was:** a misread taxable mark moves money between shared
+and not shared and nothing flags it, while the reader's comment said the
+reconciliation catches an item misread. Options: **(a)** correct the comment
+now and file a ticket for a non-blocking flag; **(b)** add the flag in this
+round; **(c)** correct the comment only. **The answer: (a)**, the gate's
+recommendation. The ticket is
+[lg-26](./lg-26-flag-taxable-marks-that-do-not-give-the-printed-taxes.md).
+
+**6 (F5). The question was:** lg-9 (Build 1) and lg-15 (Build 7) promise a joint
+row's spending split by its receipt items' categories "once lg-10 lands", and
+nothing owns that work. Options: **(a)** file a ticket for it and point both
+sentences at it; **(b)** leave both tickets as they read. **The answer: (a)**,
+the builder's recommendation and the gate's. The ticket is
+[lg-27](./lg-27-split-a-joint-rows-spending-by-its-receipt-items.md), and its
+allocation rule is its own Decision.
+
+Gate 1's F6 (the shipped rate table is asserted ordered by no test) is fixed in
+the same round. F4 (the rates written out in `FLAG_LABELS["tax-differs"]` and in
+the contract's doc for `tax-differs`) stays recorded and is not fixed.
 
 ## Log
 
@@ -190,3 +234,61 @@ as lg-8 had bumped it. The rerun of that file gave 24 of 24.
 **Not measured.** No red/green by mutating the source: the harness's classifier
 refused a temporary edit to `itemsAddUp`. Each new test's failure before this
 branch is implied by the behaviour not existing on `main`; no command showed it.
+(Gate 1 then ran seven mutations of its own, and none survived.)
+
+### 2026-10-17 — gate 1's round (Claude Opus 5.5, builder), gate re-check pending
+
+This round answers gate 1's findings, as the owner decided them above:
+
+- **F1 (decision 3).** Done when 5 now reads "on a period line". The refusal on a
+  row, in `fileReceipt` and on the screen, now says "A receipt on a joint-account
+  row is shared whole: every item on it stays shared." It no longer sends the
+  person to file the receipt as a line. New test: `api/test/receipts.test.ts` ›
+  "a joint-account row's items (lg-10 gate 1, F1)" › "refuses an item marked as
+  the other's on a row, files nothing, and says the row is shared whole". The
+  web row test now also asserts the text names no line.
+- **F3 (decision 4).** `merchantCategory` follows the `supersedes` chain from the
+  filed line to its newest version, with a recursive CTE. New test:
+  `api/test/receipts.test.ts` › "a merchant's last category, corrected (lg-10
+  gate 1, F3)" › "is the category of the line as it now stands, not as it was
+  filed". It corrects a filed Pharmaprix line from Groceries to Pharmacy through
+  `POST /api/period-lines/:id`.
+- **A removed line is open.** The chain from a removed line ends on the
+  retirement, which copies the line's last category, so that category still
+  counts. No test pins it either way. Whether a removed line should still count
+  is open, in the builder's report.
+- **F2 (decision 5).** The reader's comment now says the reconciliation catches
+  a misread price or deposit, not a misread taxable mark. Filed
+  [lg-26](./lg-26-flag-taxable-marks-that-do-not-give-the-printed-taxes.md).
+  The reproduction was re-run here with the gate's `taxable-mark.mjs`: as
+  printed, flags `[]` and shared 922; the six-pack misread, flags `[]` and
+  shared 1 117.
+- **F5 (decision 6).** Filed
+  [lg-27](./lg-27-split-a-joint-rows-spending-by-its-receipt-items.md). lg-9's
+  Build 1 sentence, lg-15's Build 7 sentence and the `spendingStats` comment
+  now point at it.
+- **F6.** New test: `books/test/receipts.test.ts` › "the shipped rate table
+  (lg-10 gate 1, F6)" › "is oldest first, with each day once". Its helper is
+  also shown to be false on a table with an entry out of order and on one with a
+  day given twice.
+
+**Red first.**
+
+- The F1 and F3 tests were run against this branch's source at `be6e4053`,
+  before any fix:
+  `npx vitest run tools/ledger/api/test/receipts.test.ts -t "gate 1"` gave
+  "expected 1 to be 4" for F3 and "expected 'A receipt on a joint-account row is
+  s…' not to contain 'line'" for F1, so 2 failed. Both pass after the fix.
+- The web assertion's red is the old text, read with
+  `git show be6e4053:tools/ledger/web/src/receipts/Receipts.tsx`: "…shared
+  whole: file it as a line to leave items out.".
+- The F6 test is a guard on a table already in order, so it cannot fail against
+  `be6e4053`. Its two `false` cases show the check can fail.
+
+**Commands.**
+
+- `npx vitest run` on the four touched specs gave 110 of 110: books 31, reader
+  19, api 46, web 14.
+- `npm test -- --project ledger` gave 1 086 of 1 086, 60 files.
+- `npm run check` exited 0, and `node scripts/status.mjs --json` exited 0 with
+  lg-26 and lg-27 in.

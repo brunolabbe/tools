@@ -261,6 +261,12 @@ function withOfferedCategories(
  * merchant is compared folded, as a rule compares a description, so case,
  * accents and spacing do not make another merchant. A category retired since is
  * not proposed.
+ *
+ * **The line is read as it now stands** (the owner's answer of 2026-10-17, gate
+ * 1's F3): a correction supersedes the line the filing named, so the chain of
+ * `supersedes` is followed to its newest version. A line since removed ends its
+ * chain on the retirement, which copies the line, so its last category still
+ * counts; whether it should is an open question on lg-10's Log.
  */
 export function merchantCategory(
   db: Database,
@@ -269,11 +275,20 @@ export function merchantCategory(
 ): number | null {
   if (merchant === null) return null;
   const wanted = normalizeDescription(merchant);
+  // A version is superseded at most once (`period_lines_supersedes`), so the
+  // chain from the filed line is a single path, and its deepest step is newest.
   const filings = db
     .prepare(
-      `SELECT receipt_filings.id, receipt_filings.merchant, period_lines.spending_category_id AS line_category
+      `SELECT receipt_filings.id, receipt_filings.merchant,
+         (WITH RECURSIVE chain (id, category, depth) AS (
+            SELECT id, spending_category_id, 0 FROM period_lines
+            WHERE id = receipt_filings.period_line_id
+            UNION ALL
+            SELECT newer.id, newer.spending_category_id, chain.depth + 1
+            FROM period_lines newer JOIN chain ON newer.supersedes = chain.id
+          )
+          SELECT category FROM chain ORDER BY depth DESC LIMIT 1) AS line_category
        FROM receipt_filings
-       LEFT JOIN period_lines ON period_lines.id = receipt_filings.period_line_id
        WHERE receipt_filings.merchant IS NOT NULL
        ORDER BY receipt_filings.id DESC`,
     )
@@ -332,9 +347,9 @@ export function receiptMatches(
  * confirmed, its items with it (lg-10).
  *
  * Items must make the total, or nothing is filed (`RECEIPT_DOES_NOT_ADD_UP`).
- * Each item's category must be in the list. On a row every item is shared:
- * the money left the joint account, so there is no payer for an item to stay
- * with, and what an item the other's would owe, and to whom, is not decided.
+ * Each item's category must be in the list. On a row every item is shared (the
+ * owner's answer of 2026-10-17): the money left the joint account, so there is
+ * no payer for an item to stay with, nor one the other's would owe.
  */
 export function fileReceipt(
   context: PeriodContext,
@@ -364,7 +379,7 @@ export function fileReceipt(
         if (proposal.items.some((item) => item.share !== "shared")) {
           throw new AppError(
             "BAD_REQUEST",
-            "A receipt on a joint-account row is shared whole: file it as a line to leave items out.",
+            "A receipt on a joint-account row is shared whole: every item on it stays shared.",
           );
         }
         const row = context.db

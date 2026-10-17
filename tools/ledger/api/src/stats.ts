@@ -132,8 +132,7 @@ export function bufferStats(
  * A joint-account row with a receipt attached is to be split by its receipt
  * items' categories, its own then not counted (lg-9's Build). lg-10 stores the
  * items (`receipt_items`), but how a row's taxes and any tip divide among its
- * items' categories is not decided, so every row here is still whole (lg-10's
- * Log).
+ * items' categories is not decided, so every row here is still whole (lg-27).
  */
 export function spendingStats(
   db: Database,
