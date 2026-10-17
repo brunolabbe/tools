@@ -6,7 +6,7 @@ kind: work-package
 status: ready
 milestone: P6
 depends_on: [lg-23]
-difficulty: standard
+difficulty: hard
 ---
 
 # lg-30 — Name whose a receipt item's charge is, among more than two people
@@ -100,16 +100,16 @@ may vary if the Log says what changed and why.
      beside a shared line, or the first of them when there are several, and
      `null` when nothing was shared. So a two-person filing reads as before,
      with `charges` added.
-   - `PeopleResponse` gains `members: string[]`: the names the household's
-     current members stand under, a subset of `people` (which keeps holding
-     every name the books have, departed ones included). The Why's "count
-     current members" needs it; the web has no other way to tell.
+   - Nothing else in the contract changes. In particular `PeopleResponse` stays
+     as it is: the owner chose on 2026-10-17 not to add a `members` field, and the
+     screen counts current members from the household record (step 6).
    - Update the comments on `ItemShare`, `ReceiptDestination` and
      `ReceiptFiling.chargeLineId`, which say "the other person".
 2. **`books/src/receipts.ts`, `splitReceipt`.** Return
    `charges: { personId: string | null; cents: number }[]`, one entry per
    distinct `chargedTo` among the `theirs` items, in the order first printed
-   (`null` is its own entry, which only the web's preview meets), and keep
+   (`null` is its own entry, which only the web's preview meets) and whatever
+   its cents, a zero included (step 3 files no line for it), and keep
    `chargedCents` as their sum so `sharedCents + notSharedCents + chargedCents`
    still equals what was paid. Each person's cents is computed the way
    `sharedAmount` computes an excluded set: that person's items together, price,
@@ -124,18 +124,24 @@ may vary if the Log says what changed and why.
    shared amount computed with every `theirs` item rounded together (what
    `splitReceipt` returns today) is zero or has the payment's sign, but the one
    computed with the people rounded apart has the opposite sign, the excess is
-   rounding and nothing else: take it off the largest charge, the earlier on a
-   tie, and the shared amount is 0. That is the guard `splitByCategory` uses for
-   its largest category. With one person charged the two computations are the
+   rounding and nothing else: take it off the charge that is largest **in size**
+   (by `Math.abs`, as `splitByCategory` compares), the earlier on a tie, moving
+   that charge toward zero by the excess, and the shared amount is 0. On a refund
+   the charges are negative: `BASKET` negated, every item `theirs`, casey on
+   items 1 and 3 and sam on item 2, gives -923 and -1,554 and a shared amount of
+   +1, and sam's is the largest in size, so it becomes -1,553. That is the guard
+   `splitByCategory` uses for its largest category. With one person charged the two computations are the
    same number, so nothing changes there, and an excess the together-rounding
    shows too is still the person's mistake and is still refused.
 3. **`api/src/receipts.ts`, `fileReceipt` and `fileLines`.**
    - Resolve each `theirs` item's name first, inside the transaction and before
      anything is written: a given `chargedTo` is used as given; a `null` is the
      household's one current member who is not the payer, and is a `BAD_REQUEST`
-     that says to name whose when there are several, and the existing "nobody
-     else in the household" one when there is none. Store and answer the
-     resolved name, never `null`, on a `theirs` item.
+     whose message contains "name whose" when there are several (the line's own
+     words, so a test can pin them), and the existing "nobody else in the
+     household" one when there is none. Store and answer the resolved name,
+     never `null`, on a `theirs` item (items stored before this change whose
+     charge came to nothing are the one exception, step 4).
    - The route passes the household's current members (`directory.people(household)`,
      as `books.ts` already reads it) in alongside the period context; `fileLines`
      today reads `context.people`, which holds every name ever enrolled, and that
@@ -148,7 +154,12 @@ may vary if the Log says what changed and why.
    - **Lift lg-23's refusal** (the `others.length > 1` branch in `fileLines`, and
      its message).
    - File one charge line per person from `split.charges`, after the shared
-     line, in `split.charges` order. Each carries that person's cents, `chargedTo`
+     line, in `split.charges` order, **except for an entry that comes to 0 cents:
+     that files no line** (`period_lines.amount_cents` has `CHECK (amount_cents <>
+0)`, and `fileLines`' own header says a part that comes to nothing files no
+     line). A free or netted-out item marked `theirs` is stored with its resolved
+     `charged_to` and no `charge_line_id`, and is not in `charges`. Each line
+     carries that person's cents, `chargedTo`
      that person, and its category when all of that person's items share one,
      else the destination's, as the one charge does today. `periodLineId` is
      still the first line filed; `chargeLineId` is the first charge filed beside
@@ -161,23 +172,34 @@ may vary if the Log says what changed and why.
    only. `ALTER TABLE … ADD COLUMN` cannot carry a CHECK that every `theirs`
    item has a name over rows that do not yet, so either keep the invariant in
    `fileReceipt` and test it, or rebuild the table as migration 7 did; the
-   builder picks and the Log says which. Backfill every stored `theirs` item
-   from its filing: `charge_line_id` is `receipt_filings.charge_line_id`, else
-   `period_line_id` (when nothing was shared the one line is the charge), and
-   `charged_to` is that line's own `charged_to`, read from the row the filing
-   names, not from a later version of it. `toFiling` builds `charges` from the
-   items, distinct by line. `receipt_filings.charge_line_id` keeps being written.
-5. **`PeopleResponse.members`** (`api/src/routes/rules.ts`, the `ROUTES.people`
-   handler): `directory.people(household)` for the caller's household, beside
-   `knownPeople`.
-6. **Reader and other literals.** `receipts/src/reader.ts` builds its items with
+   builder picks and the Log says which. A `theirs` item with no
+   `charge_line_id` means its charge came to nothing. Backfill every stored
+   `theirs` item from its filing: `charge_line_id` is
+   `receipt_filings.charge_line_id`; else `period_line_id` **only when that
+   line's own `charged_to` is not null** (when nothing was shared the one line
+   is the charge, and it is charged to the other person; a shared line, which
+   lg-10 filed alone when the `theirs` items came to 0, has `charged_to` null
+   unless the whole receipt was marked as the other's, and must not be taken
+   for a charge); else the item keeps both columns null. `charged_to` is that
+   line's own `charged_to`, read from the row the filing names, not from a later
+   version of it. The residual this leaves, a whole-receipt `chargedTo` on a
+   filing whose `theirs` items cost nothing, reads its shared line as the
+   charge; the Log names it. `toFiling` builds `charges` from the items that
+   have a `charge_line_id`, distinct by line. `receipt_filings.charge_line_id`
+   keeps being written.
+5. **Reader and other literals.** `receipts/src/reader.ts` builds its items with
    `chargedTo: null`; `api/src/stats.ts` builds `ReceiptItem` literals for
    `splitByCategory` and does the same. A type error names any other.
-7. **`web/src/receipts/Receipts.tsx`, `web/src/api/rules.ts`.**
-   - `fetchPeople` keeps its signature for the callers that want every name; the
-     receipt screen takes the household's current members from a second function
-     (or a changed return) reading `members`, and counts those, where it counts
-     `people` today: `several`, `other`.
+6. **`web/src/receipts/Receipts.tsx`.**
+   - Current members come from the household record that lg-22 built, not from a
+     contract change: the screen calls `fetchMe` (`person.household`, as
+     `periods/Periods.tsx` does) and then `fetchHousehold(person.household)`
+     (`GET /api/households/:id`, which answers a member their own household), and
+     takes the distinct `members[].person` as the current members. It uses
+     those, in place of `fetchPeople`'s every name, where it counts `people`
+     today (`several`, `other`), and offers them in both pickers. The tests in
+     `web/test/receipts.test.tsx` that mock `fetchPeople` mock `fetchMe` and
+     `fetchHousehold` instead.
    - **With one other current member** the screen is as it is now: an item cycles
      shared, not shared, `${other}'s`, and sends `share: "theirs", chargedTo: null`.
    - **With more than one**, the cycle includes `theirs` again (remove the
@@ -195,13 +217,13 @@ may vary if the Log says what changed and why.
      already takes `destination.chargedTo`, so this is the screen only.
      (Unchanged and not widened: a whole-receipt `chargedTo` and a `theirs` item
      to the same person file a shared line and a charge both to them, as now.)
-8. **Docs.** `tools/ledger/CLAUDE.md` (the receipts paragraph's sentence "With
+7. **Docs.** `tools/ledger/CLAUDE.md` (the receipts paragraph's sentence "With
    more than two people 'the other's' names nobody, so it is refused until an
    item can say whose (lg-23, lg-30)") says what is true afterwards.
    `tools/ledger/docs/00-ANALYSIS.md` "Charges between the two" needs a line only
    if its text says a charge is to _the_ other person of a receipt item; check
    and say in the Log either way.
-9. Rewrite lg-23's two tests that pin the refusal
+8. Rewrite lg-23's two tests that pin the refusal
    (`api/test/receipts.test.ts`, "an item marked as the other's, among more than
    two"; `web/test/receipts.test.tsx`, "among three people, an item cycles…") to
    the behaviour below. Add the new tests at the end of their files.
@@ -210,7 +232,13 @@ may vary if the Log says what changed and why.
 
 Test names are the builder's; a line is proved by a test that fails on the
 parent of the change and passes on it, and the Log says which command showed
-each.
+each. **Two kinds of clause are outside that**, because the parent already
+satisfies them, and are marked _regression_ where they occur: a refusal the
+parent already makes, and a refusal the parent makes with the same words. A
+`strictObject` item schema refuses any `chargedTo` today as `unrecognized_keys`
+(`The filing is not valid: check proposal.`), so a request carrying `chargedTo`
+is refused with zero rows on the parent whatever it names; a refusal is proved
+new only by its message, or by a paired request that is accepted.
 
 1. **API, three people, two names.** Alex, casey and sam in the household, alex
    uploaded, `BASKET` marked with item 2 `theirs` to casey and item 3 `theirs` to
@@ -223,18 +251,28 @@ household" tools/ledger/api/src tools/ledger/web/src` prints nothing, and
    the lg-23 refusal test is gone or inverted to line 1.
 3. **A `theirs` item with no name among three: refused.** The same request with
    `chargedTo: null` on a `theirs` item, in a household of three current
-   members: `BAD_REQUEST`, zero rows in `period_lines` and in `receipt_filings`.
+   members: `BAD_REQUEST` whose message contains "name whose" (on the parent the
+   message is "The filing is not valid: check proposal."), zero rows in
+   `period_lines` and in `receipt_filings`.
 4. **Two people keep their requests and results.** The existing lg-10 test "an
    item marked as the other's becomes a charge…" passes with its request
    unchanged except for the field `chargedTo: null` its helper now writes, and
-   with `periodLineId`, `chargeLineId` and the three lines' amounts and
-   `charged_to` exactly as it asserts today; `charges` is `[sam]` with
+   with `periodLineId`, `chargeLineId` and the two lines it asserts (348 shared
+   and 1,554 `charged_to` sam) exactly as it asserts them today; `charges` is `[sam]` with
    `chargeLineId`'s id; the stored item says `charged_to` sam.
-5. **Refused combinations, four requests each filing nothing** (zero rows in
-   `period_lines` and `receipt_filings` after each): `chargedTo` naming the
-   payer; `chargedTo` naming a name the books do not hold; `chargedTo` on a
-   `shared` item and on a `not-shared` item (the schema refuses both, which are
-   two requests); a `theirs` item on a `to: "row"` destination.
+5. **Refused combinations, each filing nothing** (zero rows in `period_lines`
+   and `receipt_filings` after each), pinned by message:
+   - `chargedTo` naming the payer: "A charge is owed by the other person, not by
+     whoever paid." (`requireLinePeople`).
+   - `chargedTo` naming a name the books do not hold: "That person is not one of
+     the household." (`requireKnownPerson`).
+   - `chargedTo` on a `shared` item and on a `not-shared` item, two requests:
+     "The filing is not valid: check proposal." Same words as the parent's, so
+     each of these two is proved only as a pair with line 1: the same name on a
+     `theirs` item is accepted, on these two it is refused.
+   - _Regression:_ a `theirs` item on a `to: "row"` destination: "A receipt on a
+     joint-account row is shared whole: every item on it stays shared." The
+     parent refuses it with the same words.
 6. **A departed name.** A household whose books hold three names and whose
    directory holds two current members files a `theirs` item with `chargedTo:
 null` as a two-person filing does (to the one other current member); and the
@@ -243,10 +281,14 @@ null` as a two-person filing does (to the one other current member); and the
    `theirs` to casey and item 2 to sam, 2,476 charged, in a household of three:
    200, two charge lines and no shared one. `periodLineId` is casey's line (923),
    `chargeLineId` is `null`, `charges` has two entries, and sam's line is 1,553
-   (the cent the rounding overshot comes off the largest charge, Build 2); the
-   two make 2,476. And a fixture where the excess shows with the people rounded
-   together too (more is charged than was paid, with one person charged or
-   several) is refused with the existing `BAD_REQUEST`, as now.
+   (the cent the rounding overshot comes off the charge largest in size, Build
+   2); the two make 2,476. The same on the refund: every `BASKET` price, tax and
+   the total negated, `-2,476` charged, the same marks: casey's line is -923 and
+   sam's is -1,553, which make -2,476 (sam's is the largest in size, casey's the
+   largest by value). _Regression:_ a fixture where the excess shows with the
+   people rounded together too (more is charged than was paid, with one person
+   charged or several) is refused with the existing `BAD_REQUEST` ("More comes
+   off this receipt than the card was charged. …"), as now.
 8. **`splitReceipt`** (`books/test/receipts.test.ts`): `charges` has one entry
    per distinct `chargedTo`, in first-printed order; `sharedCents +
 notSharedCents + chargedCents` equals the payment in each case the existing
@@ -256,31 +298,47 @@ notSharedCents + chargedCents` equals the payment in each case the existing
    against a `splitReceipt` that rounds every `theirs` item together and watch
    it fail.
 9. **Migration 11** (`api/test/schema.test.ts`): a database built at version 10
-   holding two filings with `theirs` items, one with a shared line and a
-   charge line and one with the charge as its only line, migrates; each `theirs` item in
-   those two filings then has `charged_to` and `charge_line_id` equal to its
-   filing's charge line's, and `toFiling` answers `chargeLineId` as before and
-   a one-entry `charges`.
-10. **`GET /api/people` answers `members`**: a household whose books hold three
-    names and whose directory holds two current members answers `people` with
-    three and `members` with the two (the people route's tests, with the
-    departed name added through `enrollPeople`).
+   holding three filings with `theirs` items migrates: one with a shared line
+   and a charge line, one with the charge as its only line, and one whose
+   `theirs` item is priced 0 (lg-10 filed only a shared line, with
+   `charge_line_id` null and `charged_to` null on it). After it, each `theirs`
+   item in the first two filings has `charged_to` and `charge_line_id` equal to
+   its filing's charge line's, and `toFiling` answers `chargeLineId` as before
+   and a one-entry `charges`; the third has both columns null and `charges` is
+   `[]`, and its shared line is not listed as a charge.
+10. **The screen counts current members from the household record**
+    (`web/test/receipts.test.tsx`): opening the receipt screen calls `fetchMe`
+    and then `fetchHousehold` with the `household` that `fetchMe` answered, and
+    does not call `fetchPeople`; the people it counts are the distinct
+    `members[].person` of that answer. `ROUTES.people` and `PeopleResponse` are
+    unchanged: `git diff origin/main -- tools/ledger/api/src/routes/rules.ts`
+    is empty and `PeopleResponse` in `contract/src/api.ts` has the one field it
+    has today.
 11. **Web, three current members** (`web/test/receipts.test.tsx`): tapping an
     item through its cycle reaches `theirs`; a select named `Whose is <item>`
     offers the two other members and not the payer; choosing sam on one item and
     casey on another, and filing, calls `fileReceipt` with those two names on
     those two items; "What is shared" shows both charges; the message after
     filing names both.
-12. **Web, two current members and one departed name:** the screen is the
-    two-person one: no `Whose is` select, no "someone else's" checkbox, the
-    cycle reaches `${other}'s`, and the request carries `chargedTo: null`.
+12. **Web, two current members and one departed name:** the household record's
+    `members` answers two names while its `history` also names a third who has
+    left. The screen is the two-person one: no "Whose is" select, no "someone
+    else's" checkbox, the cycle reaches `${other}'s`, and the `theirs` item in
+    the request carries `chargedTo: null`.
 13. **Web, whole-receipt picker, three current members:** the checkbox reads
     "This was someone else's", a "Whose it was" select offers the two other
     members, and ticking it and choosing one files `destination.chargedTo` as
     that name; the lg-23 hint ("as a line charged to them") is gone.
 14. **Docs:** `grep -n "refused until an item can say whose" tools/ledger/CLAUDE.md`
     prints nothing.
-15. `npm run check` and the ledger suite (`npm test -- --project ledger`) pass at
+15. **A `theirs` item that costs nothing files no charge line** (API): `BASKET`
+    with a fourth item priced 0, not taxable, no deposit, marked `theirs` to
+    casey in a household of three, the other three items shared: 200, one line
+    (the shared one), `charges` is `[]`, `chargeLineId` is `null`, and the stored
+    item says `charged_to` casey with `charge_line_id` null. On the parent the
+    same request is refused, since the item carries `chargedTo`, so this is
+    proved new.
+16. `npm run check` and the ledger suite (`npm test -- --project ledger`) pass at
     the branch's head; the pull request's own CI is green.
 
 ## Log
@@ -316,10 +374,12 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     rules out replacing it, so Build adds `charges` and keeps `chargeLineId`'s
     meaning. This is a contract addition the owner's answer covers in direction
     but not in its exact shape; it is written into Build 1 for the gate to see.
-  - **The Why's "count current members" needs a contract addition too:**
-    `GET /api/people` returns `knownPeople` (every name ever enrolled), and the
-    web has no other route to the directory, so Build 1 adds
-    `PeopleResponse.members`.
+  - **The brief's "count current members" was wrong that the web had no other
+    route to the directory** (this entry first claimed it needed a
+    `PeopleResponse.members` addition). `GET /api/people` returns `knownPeople`,
+    every name ever enrolled, but `GET /api/households/:id` (lg-22) answers a
+    member their own household's current members. Withdrawn by gate 1's F1; see
+    the later entry.
   - **A rounding point the brief did not mention**, measured with
     `splitReceipt` on `BASKET` (`PAIN` 349, `BIERE` 1,299 + 60 deposit, `SAVON`
     499, 2,476 paid), run through `npx tsx` against `books/src/receipts.ts`:
@@ -336,8 +396,54 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     the refusal would be wrong about a cent of rounding, but the gate should
     read it.
   - **`difficulty: standard` is probably low now.** Build touches `contract`
-    (three additions), `books`, `api` (a migration with a backfill and a changed
+    (two additions, after F1), `books`, `api` (a migration with a backfill and a changed
     filing), `receipts`, and `web`, and the rounding and the backfill are
     judgement. `docs/01-TICKETS.md` rates a contract change by judgement, not by
-    diff size. It is left at `standard` as the dispatch asked; `hard` is what
-    this reads as.
+    diff size. It was left at `standard` as the dispatch asked; `hard` is what
+    this reads as. (Superseded in the next entry.)
+- 2026-10-17 — Gate 1 (round 1) returned FAIL on `f0d197d3`, and the owner
+  answered its decisions through `AskUserQuestion`. Recorded as put:
+  - **F1, `PeopleResponse.members`.** The gate found it was a contract addition
+    beyond the owner's answer, and that the screen can count current members
+    from the household record (lg-22). Options: "Drop members" (recommended by
+    the gate), "Approve members", "Back to needs-decision". **Chosen: "Drop
+    members".** Build 1's `members` bullet and the old Build 5 are removed; Build
+    6 (the screen) reads `fetchMe` then `fetchHousehold`; Done when 10 now asks
+    for that. The only contract changes left are the two option A covers
+    (`ReceiptItem.chargedTo`, `ReceiptFiling.charges`).
+  - **F6, difficulty.** Options: "Re-rate to hard" (recommended by the
+    orchestrator), "Keep standard". **Chosen: "Re-rate to hard"**, and the
+    frontmatter now says `difficulty: hard`. The dispatch that told the first
+    builder not to change it was wrong: `docs/01-TICKETS.md` says to rate the
+    judgement the work needs "once the decision is answered", and that is when
+    the answer is recorded.
+  - **F8, a defect found on the way.** Options: "File as lg-32/lg-33", "Leave
+    it". **Chosen: file it**, as lg-32 (the id was assigned by the orchestrator;
+    `node scripts/next-id.mjs lg` names lg-31 as next free on this branch, held
+    elsewhere). It is in this pull request. lg-30's Build keeps the case
+    refused, as the floor requires; lg-32 is the fix.
+- 2026-10-17 — The gate's other findings, applied as stated. Each was
+  reproduced on this tree first:
+  - **F2** (`node --import tsx strict.mts $PWD`, the gate's script): today's
+    `fileReceiptRequestSchema` refuses every item carrying `chargedTo`, null
+    included, as `unrecognized_keys proposal.items.0`, so Done when 3 and 5
+    passed on the parent. The preamble of Done when now names the two clauses the
+    parent already satisfies; 3 pins the new "name whose" message; 5 pins each
+    refusal's message and marks the row case as a regression clause; 7's second
+    clause is marked _regression_. The two non-`theirs` refusals have the
+    parent's own words, so they are proved only as a pair with line 1.
+  - **F3**: Done when 4 says two lines (348 shared, 1,554 to sam); the 574 was
+    arithmetic. Fixed.
+  - **F4** (`measure.mts`: "zero-priced theirs item" gives `chargedCents` 0,
+    `sharedCents` 2,476): Build 3 files no line for a 0-cent entry
+    (`period_lines.amount_cents` has `CHECK (amount_cents <> 0)`), Build 4's
+    backfill links the period line as the charge only when its `charged_to` is
+    not null, and Done when 9 and 15 test both. **A residual the Build names:** a
+    whole-receipt `chargedTo` on a filing whose `theirs` items cost nothing still
+    has a shared line with `charged_to` set, and the backfill reads it as the
+    charge. Three conditions at once; not tested.
+  - **F5** (`measure.mts`: "refund idx0,2" -923, "refund idx1" -1,554, together
+    -2,476): Build 2 says "largest in size", works the refund (casey -923, sam
+    -1,554 to -1,553, shared +1 to 0), and Done when 7 tests it.
+  - **F7**: Done when 12 says "the `theirs` item in the request carries".
+  - Not applied: nothing was refuted.
