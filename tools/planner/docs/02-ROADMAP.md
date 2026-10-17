@@ -209,6 +209,26 @@ one means search results and search results mean URLs from outside. Filed early
 because the lift is the interesting part of that work and is worth having thought
 through before the ticket that needs it exists.
 
+**§5's second item, opening hours and seasons, was decided in shape on
+2026-10-17 and is not built.** It is a check pass after the fan-out, the shape
+pl-27 gave travel time, and not tool use on `ModelProvider`: a specialist
+proposes, code finds out when the place is open, and the composer places or
+drops the item. A pass cannot cause a specialist to propose something else, and
+that cost was accepted. The source is still undecided, because two findings
+at filing undercut the obvious one. The deployed Nominatim's default import
+style keeps no `opening_hours` tag. And the one real corridor capture carries
+hours on 4 of its 72 attractions. So the next ticket measures before anything
+is built:
+
+8. **How often the map knows** — opening-hours coverage over the 1,019 places
+   the recorded live runs proposed, city against rural, ending in the source
+   decision as options. → [pl-56](./work/pl-56-measure-opening-hours-coverage.md)
+
+The build tickets (contract, a parser for OSM's `opening_hours`, a time-of-day
+clock in the packer, which today sums minute budgets and holds no clock, the
+lookup, and the plan view) are filed once pl-56's number is in. Writing them
+now would be the fiction the end of this page warns about.
+
 ## Phase 4 — Revision is the product
 
 Pin an item, name the days a re-plan may touch, re-run a slice with two
@@ -296,6 +316,9 @@ Short, and each one is a real decision someone has to make rather than a gap:
   what the fan-out already proposed. Nothing a specialist would have proposed
   differently _had it known_ is reachable from here, which is exactly the half
   §5's amendment and [pl-29](./work/pl-29-detours-along-a-leg.md) are about.
+  **Answered for opening hours on 2026-10-17: a pass**, accepting that cost
+  (see the end of Phase 3). It stays open for existence, the item where a
+  specialist that knew would most plausibly have proposed differently.
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough — pl-5 built exactly that and pl-16 now
