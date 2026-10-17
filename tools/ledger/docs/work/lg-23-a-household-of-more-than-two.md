@@ -3,7 +3,7 @@ id: lg-23
 tool: ledger
 title: A household of more than two people
 kind: work-package
-status: ready
+status: done
 milestone: P6
 depends_on: [lg-20, lg-22]
 difficulty: hard
@@ -187,6 +187,67 @@ The answers are above. Build after lg-22 has merged.
 5. A test proves that a ratio with a different set of people cannot take effect
    inside an open period.
 6. Gates green.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-17 · `8e50f0d..4143a88` · Sonnet 5.5, depth full
+
+| Done when                                                                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. With `sam` removed and `casey` added (no trigger dropped), `/api/buckets`, `/api/periods/open` and `POST /api/periods/close` answer 200              | `api/test/more-than-two.test.ts` › "with sam removed and casey added, the buckets, the open period and a close all answer 200" ✓. It asserts the three status codes, the mortgage figures (alex 26 666, casey −23 334, sam 16 667, lead alex by 9 999) and the close's transfers. I reran it on a populated database migrated from the base: 200, 200 and 200.                           |
+| 2. For two people the new settlement equals `settleStretches` to the cent on the existing tests, unchanged, and on a property test over varied salaries | **proven as worded.** `books/test/settlement.test.ts` is byte-unchanged and its 30 tests pass. `books/test/household-settlement.test.ts` › "over 5 000 histories of varied salaries, stretches, ratio changes and charges" ✓. **Its intent is contradicted in one class of two-person history that this test never draws: F1, a med this line depends on.**                              |
+| 3. For three, four and five people the nets sum to zero, nobody deposits a negative amount, every contribution stands at its share to within a cent     | `books/test/household-settlement.test.ts` › "for %i people the nets sum to zero, nobody deposits a negative amount, and after the deposits everyone stands at their share to within a cent" ✓ for 3, 4 and 5. Three assertions carry the three clauses: the nets sum to `0n`; each deposit is greater than 0; the standing after the deposits is at most 1 000 000 millionths of a cent. |
+| 4. A household can hold more than two names; the test that a third is refused is replaced by one asserting it is not                                    | `api/test/directory.test.ts` › "a third, a fourth and a fifth person name are taken, by the code and by the schema" ✓ and "migration 4 drops the cap a directory at migration 3 still holds, its records unchanged" ✓. Companions that changed with it: `households.test.ts` and `household-command.test.ts`.                                                                            |
+| 5. A test proves a ratio with a different set of people cannot take effect inside an open period                                                        | `api/test/more-than-two.test.ts` › "a ratio between different people from inside the open period is refused, and nothing is stored" ✓. It asserts 400 `BAD_REQUEST`, the first day in the message, the ratios list equal to before, and the open period still alex and sam. With the call removed, 3 of the file's 6 tests fail, this one among them.                                    |
+| 6. Gates green                                                                                                                                          | PR #508's checks on the gated head all pass: `check` ×2, `test (ubuntu-latest)`, `test (windows-latest, informational)`, `docker`, `codeql`, `CodeQL`, `changes`, `dependency-review` ✓. Locally the ledger project is 1138 of 1138 in 62 files. The base is 1114 of 1114 in 60 files.                                                                                                   |
+
+- **med** · Done when 2 depends on it · **F1. A two-person close differs from lg-6 when the closing ratio gives the person owed a share of zero and what is owed is under half a cent.**
+  - Base `settleStretches` returns payer, recipient, `depositCents: null` and `netCents: 0`, so the period is stored as "direct" (`payer_id` set, `deposit_cents` NULL) and the screen says "alex pays sam 0.00 $ directly".
+  - The head returns nobody: `payerId: null`, `recipientId: null`, `depositCents: 0`, `netCents: 0`. The period is stored as "none" and the screen says "Nobody owes anything".
+  - No cent figure differs. The record, the deposit status and the sentence do.
+  - It is reachable in ordinary use. A household settles earlier periods to the cent at one ratio, then moves to a ratio with a zero share, and a rounding remainder of a fraction of a cent stays owed.
+  - The base source comment says that case "never rounds away". That holds for one stretch only.
+  - The builder's oracle property test cannot find it, because its histories never leave a sub-cent residual. The Log's "Between two people the figures equal lg-6's to the cent" is false for this class.
+  - Reproduction, books level, with `books/src/index.ts` of each tree:
+    - stretch 1: ratio alex 666 667 and sam 333 333; contributions alex 2 cents and sam 1 cent
+    - stretch 2: ratio alex 1 000 000 and sam 0; no lines
+    - call `settleStretches([s1, s2], ratio2)`
+    - base: `{"formula":"v3","payerId":"alex","recipientId":"sam","depositCents":null,"netCents":0}`
+    - head: `{"formula":"v3","payerId":null,"recipientId":null,"depositCents":0,"netCents":0}`
+  - Through the API I drove the same random two-person households through `/api/salaries`, `/api/ratios`, `/api/periods/lines`, `/api/periods/close` and a deposit paste, at the base and at the head, and compared every answer. Seed 5: 60 histories, 334 closes. Seed 11: 250 histories, 1 386 closes. 7 of 310 histories differ. Every first difference is this class, and the later ones follow from it. The generator makes a zero share one ratio in six, so the rate is inflated.
+  - **Open decision.**
+    - **(A)** Restore lg-6's result for this class. When exactly two people are named, someone owed has a zero share and every transfer rounds to nothing, return payer, recipient, `deposits: null` and zero. Add a residual-drawing case to the property generator.
+    - **(B)** Keep "nobody owes", which is arguably the better reading. Reword Done when 2 and the Log's claim, add a test pinning the new reading, and accept that the stored status becomes "none" where lg-6 stored "direct".
+    - Recommendation: **A**, because the ticket's promise is that a household of two "reads and closes unchanged". B can be its own ticket.
+    - If the owner reads Done when 2 as strict equality of the returned settlement, F1 is a `high` and the gate is FAIL.
+- **med** · no Done when depends on it · **F2. A receipt item marked "the other's" is charged to the first person who is not the payer, and there is no way to choose another.**
+  - It is the same shape the builder fixed in `LineForm.tsx` ("lifting the cap made that a wrong charge"). The receipts path was neither fixed nor mentioned.
+  - API: `fileLines` in `api/src/receipts.ts` sets `other` to the first person not the payer and files the charge line with `chargedTo: other`.
+  - Web: `web/src/receipts/Receipts.tsx` does the same with `people.find((person) => person !== payer)`. It labels the checkbox and each item "This was alex's" and sends `chargedTo: theirs ? other : null`.
+  - In a household of alex, casey and sam, a receipt filed by alex always charges casey.
+  - Reproduction: copy `api/test/receipts.test.ts` to a scratch name inside `api/test`, then replace `directory: memberDirectory(),` with `directory: memberDirectory([[ALEX, "alex"], ["casey@example.test", "casey"], [SAM, "sam"]]),`. Run `npx vitest run <copy> -t "an item marked as the other's becomes a charge"`. It fails on `- "charged_to": "sam"` against `+ "charged_to": "casey"`. Delete the copy afterwards.
+  - **Open decision.**
+    - **(1)** In this ticket, refuse a "theirs" item when the household has more than two people, with a message that says to file the charge as a line. The web hides the choice for more than two. No contract change.
+    - **(2)** Name whose: a person on the item or on the filing. That is a contract change, so the owner's, and a ticket of its own.
+    - Recommendation: **(1)** now, **(2)** filed.
+    - The sibling lg-27 reads receipt items. I did not check it for the same assumption.
+- **low** · **F3. In a two-person household the settlements card loses the recipient in one case.**
+  - The case is a deposit of at least 1 cent where the direct amount rounds to 0.
+  - Base renders "sam owes alex". The head renders "sam owes", from `who()` in `web/src/stats/Cards.tsx`.
+  - So the Log's "a two-person household's text is unchanged" is false in this case. It is false in the safe direction: nothing relies on it.
+  - Render of `<SettlementsCard>` with `deposits: [{sam, 1}], transfers: []` gives "2026-02-28 v3 sam owes 0.00 $ 0.01 $". The same case in the base tree's old shape gives "sam owes alex".
+  - The fix is to derive the recipient from `shares`, as `settlementSentence` in `Periods.tsx` already does.
+- **low** · no live call site · **F4.** The multi-person branch of `describeSettlement` in `api/src/workbook-import.ts` has no test. The two-person lines it prints are asserted in `workbook-import.test.ts`. The importer reads a two-person workbook, so the branch is not reached in practice.
+- **dropped** · The direct transfers can leave a person up to 1.97 cents off at five people (up to (n−1)/2 cents). Each transfer is rounded half-up on its own and a piece under half a cent is dropped. No acceptance line bounds it, and the next close asks again.
+- **dropped** · Deposits non-null although a zero-share person is owed 0.000243 cent (1 of 250 000, five people). That amount rounds to nothing, so it is correct.
+- **dropped** · TS2883 in `api/test/helpers/households.ts` when `npm run check` ran in my scratch merge trees. It is environmental, a path-depth artefact, and it reproduces on the base sha. It is recorded as a process-page defect in the report.
+- **dropped** · A different-people ratio dated at or before the last close is accepted when it is the ratio in effect on the open period's first day. The open period still has uniform people, so it is consistent with Build 5. The closed periods keep their recorded ratios.
+- **dropped** · A future-dated different-people ratio is refused. That is stricter than needed but is the "refuse, not defer" choice the Log records.
+- **dropped** · The salaries screen still demands a salary from a person who has left. The builder flagged it and it is a product decision. Entering 0 works, because a zero share keeps the person in the ratio. It is relayed as an open decision in the report.
+- **dropped** · The previous build reads a three-person close as "nobody owes", and nothing guards against opening a newer database with an older build. That is the repo-wide convention for irreversible migrations. Two-person closes written by the head read identically in the base (measured), and all households today are two-person.
+- **dropped** · `BAD_REQUEST` with a specific sentence at the raise site. The Build 5 refusal follows the ledger's convention, with 39 such sites at the head. It is an existing code and not a defect.
+- **findings** · the hunt returned 12: 4 carried (F1 to F4), 8 dropped.
+- NFR: security ✓ (no new route; SQL is parameterised; the refusal sits behind the existing auth) · performance ✓ (two small queries per closed period per read; the matching is O(n log n)) · reliability ✓ (a close is one immediate transaction; migrations are atomic, measured by forcing migration 10 to fail midway) · maintainability — F1 to F3.
 
 ## Log
 
