@@ -183,6 +183,38 @@ reader can see that log from CI today. Build 4 now has the two dl-103 cases'
 failure messages carry the engine's ffmpeg `partial file` and
 `Stream ends prematurely` lines.
 
+**Gate 1's two answers, 2026-10-17.** Both were relayed by the orchestrator.
+Gate 1 (Sonnet 5.5) ran at `c8b20624`. The gate's report holds the
+measurements; the 2026-10-17 Log entry holds this round's.
+
+- **F1: whole files the rule failed.** The question was "What should
+  happen?", with two options:
+  - Narrow the rule
+  - Land as decided
+
+  The owner chose **"Narrow the rule"**, which the gate and the orchestrator
+  had recommended. It **amends the 0.25 s answer above** in three ways:
+  - Below 16 fps, the threshold is four frame intervals when the video's frame
+    rate is known, `max(0.25 s, 4 × 1/fps)`.
+  - The rule does not apply to `audioOnly`.
+  - The rule does not apply when ffmpeg logs `Estimating duration from
+bitrate`.
+
+  The cost the owner accepted: an `audioOnly` source cut at a sample boundary
+  is no longer caught, and neither is a cut that loses no more than a
+  low-frame-rate video's last four frames (4 s at 1 fps).
+
+- **F2: the capture-limit exemption.** The builder added an exemption for runs
+  with `liveDurationSec`. The question had two options:
+  - Drop the exemption, and measure against `min(container Duration,
+liveDurationSec)`
+  - Keep the exemption, and reword `Done when` 2
+
+  The owner chose **"Drop the exemption"**. That was the gate's and the
+  orchestrator's recommendation, and it overrode the builder's, which was to
+  keep it. A capture limit is no exemption: a short source under a limit is
+  still short.
+
 ## Build
 
 The rule and the condition it targets are settled (Decision, above). Build the
@@ -286,6 +318,17 @@ mechanism, not this one: bring it back.
 - On the pull request's own Windows leg, the new test and the dl-103 60% case
   both pass.
 - `npm run check` and the downloader project's tests pass.
+- _Added 2026-10-17, from gate 1's answers._ These complete sources end
+  `done`:
+  - an 8 fps video with B-frames;
+  - an `audioOnly` read whose audio is shorter than its video;
+  - an MP3 whose duration ffmpeg estimated;
+  - a 2 s capture of the 4 s file.
+
+  These cuts end `DOWNLOAD_FAILED` with the response aborted: the sample-start
+  cut under 3 s and 3600 s capture limits. An HLS stream with the same gap ends
+  `done`. A cut one byte past the sample start shows `partial file` in the
+  capture.
 
 ## Log
 
@@ -789,3 +832,95 @@ Windows `Done when` line; this entry was written before it ran. Real sources
 were not tried, nor any of the coverage limits the Decision lists.
 
 **Fold-in.** None. Nothing else already specified became free with this change.
+
+### 2026-10-17 — gate 1's findings applied (Opus 5.5, builder)
+
+Gate 1 (Sonnet 5.5) at `c8b20624` returned CONCERNS, with no high finding. The
+owner answered F1 and F2; the Decision records both answers. Two corrections
+to the 2026-10-16 entry:
+
+- Its "a live capture is excluded" is **superseded**. F2 dropped the
+  exemption.
+- Its sentence on the forged reference said the source's author could fail
+  only "their own download". That is imprecise: a forged `Duration` fails the
+  download for whoever fetches that file. Gate 1 confirmed the forged row
+  still fails after this round, `DOWNLOAD_FAILED` with 32400 s declared
+  against 3.99 s.
+
+**The tests came first, in commit `674ad96e`.** They are a nested `describe`,
+"gate 1: the rule narrowed, and measured against a capture limit", added at
+the end of the dl-125 block.
+
+- Its fixtures come from a new helper, `generateCompleteButShortOfDeclared` in
+  `helpers/media.ts`, which builds them with the suite's ffmpeg. No binary is
+  committed.
+- `storedTo` takes `JobOptions`, and records a refusal that comes before the
+  first byte.
+
+Against the round-1 engine, `npx vitest run
+tools/downloader/engine/test/stream.test.ts -t "dl-125"` gave `5 failed | 10
+passed`:
+
+```
+F1: a whole 8 fps video with B-frames … → {"code":"DOWNLOAD_FAILED",…"declaredSec":10,"outTimeSec":9.625}
+F1: a whole file read audioOnly … → {"code":"DOWNLOAD_FAILED",…"declaredSec":4,"outTimeSec":3.482993}
+F1: a whole MP3 whose duration ffmpeg estimated … → {"code":"DOWNLOAD_FAILED",…"declaredSec":15.19,"outTimeSec":10.004898}
+F2: … under a 3 s capture limit … → {"done":623982,"aborted":false,…"outTimeSec":2.36}
+F2: … under a 3600 s capture limit … → {"done":623982,"aborted":false,…"outTimeSec":2.36}
+```
+
+The MP3 test does not read `audioOnly`. So the only thing that can let it
+through is the estimate.
+
+**The fix is in commit `6431340d`, in `engine/src/stream.ts`.**
+
+- `frameIntervalSec` comes from the first `[info]` `Stream #…: Video: …, N fps`
+  line (`VIDEO_FPS`).
+- `durationEstimated` is set by `DURATION_ESTIMATED` on a stderr line.
+- The slack is `max(SHORT_OF_DECLARED_SEC, REORDER_FRAMES × frame interval)`,
+  with `REORDER_FRAMES = 4`.
+- The rule is skipped for `context.audioOnly` and for an estimated duration.
+- The reference is `min(containerDurationSec, liveDurationSec ?? ∞)`, and the
+  `liveDurationSec === null` exemption is gone.
+
+After the fix, the same command gave 15 of 15.
+
+**Three tests were green before the fix, so each was made red by a mutation**
+(`mutate-r2.mjs`). Each mutation was restored from `6431340d`, and the tree
+was clean afterwards.
+
+| Mutation | What changed                                                | Result                  | Failing test                                                                     |
+| -------- | ----------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------- |
+| `clip`   | the reference back to `containerDurationSec`, with no `min` | `1 failed \| 14 passed` | "F2: a 2 s capture of the whole 4 s file is not short, and completes"            |
+| `noprog` | `progressive &&` deleted                                    | `1 failed \| 14 passed` | "F3: the same 0.26 s gap on an HLS stream is not read, and ends done"            |
+| `nolog`  | the engine's `logger.debug("ffmpeg", …)` deleted            | `1 failed \| 14 passed` | "F4: one byte past that sample start, the capture holds ffmpeg's `partial file`" |
+
+Under `nolog`, the boundary test's `ffmpeg: []` still passed. F4 exists for
+exactly that.
+
+**Gate 1's own rows, re-run at `6431340d`** with its `run-fps.sh` and
+`run-cases.sh`. Every row ended `done` except the forged one:
+
+- the frame-rate rows: `vo8`, `vo10`, `vo1-bf0`, `fps1`, `fps2` and `fps4`, and
+  `vo12` through `vo30`;
+- `audio-short` read `audioOnly`;
+- the estimated MP3;
+- the controls.
+
+The forged row still ends `DOWNLOAD_FAILED`.
+
+**Runs.**
+
+```
+$ npm test -- tools/downloader/engine
+Test Files  16 passed (16)
+Tests  313 passed (313)
+```
+
+**Not measured.** Two things:
+
+- **The Windows leg of this round.** On Windows the three F1 fixtures and
+  the F2 and F4 cuts run with `ffmpeg-static`. The HLS stand-in skips on
+  win32. Whether ffmpeg-static prints the same `Stream … fps` line and
+  `Estimating duration` warning is read from that leg, not from here.
+- **Real sources.** The new rule was not tried on any.
