@@ -391,3 +391,23 @@ The answers are above. Build after lg-22 has merged.
   still says who owes whom", failed with `Cards.tsx` taken back to `4143a888`.
 
   **F4: left as recorded.** The finding states no change to make.
+
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, N1 — "The API half of
+  the F1 fix is untested." The fix is one test at the end of
+  `api/test/periods.test.ts`, "less than half a cent owed to a share of zero ›
+  is read back as a direct transfer of 0.00 from alex to sam".
+  `npx vitest run tools/ledger/api/test/periods.test.ts -t "share of zero"` →
+  `Tests 1 passed | 47 skipped (48)`. The same command with
+  `tools/ledger/api/src/periods.ts` checked out from `4143a888` →
+  `AssertionError: expected [] to deeply equal [ { fromId: 'alex', …(2) } ]`,
+  `Tests 1 failed | 47 skipped (48)`.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, N2 — "lg-29's premise
+  'The API needs no change' is false for a person with a salary already on
+  record." lg-29's Why now carries the measured fact, Build 3 says the API needs
+  a change, and Done when 1 is an API test.
+  `grep -c "The API needs no change" tools/ledger/docs/work/lg-29-a-blank-salary-is-not-in-the-years-ratio.md`
+  → `0`; `grep -c "The API needs a change" …` → `1`. In the same commit, by owner
+  choice: lg-30 says that "more than two" in lg-23's refusal counts departed
+  names, and that lg-30 should count current members. The line added to the
+  ledger `CLAUDE.md` (gate 2, N4) is kept. lg-30's difficulty (gate 2, N3) is
+  left as it is, to be re-rated when its answer is recorded.

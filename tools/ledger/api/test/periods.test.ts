@@ -946,3 +946,44 @@ describe("GET /api/period-lines, as the spending chart opens a period (lg-19)", 
     }
   });
 });
+
+// lg-23 gate 2, N1: lg-6 recorded a period settled only directly even when the
+// debt rounded to 0.00, naming who owed whom; the API reads it back that way.
+describe("less than half a cent owed to a share of zero", () => {
+  test("is read back as a direct transfer of 0.00 from alex to sam", async () => {
+    const target = await start(undefined, () => new Date("2027-03-15T12:00:00Z"));
+    const confirm = async (year: number, effectiveFrom: string, alex: number, sam: number) => {
+      const entered = await post<SalaryEntryResponse>(target, ROUTES.salaries, {
+        year,
+        salaries: [
+          { personId: "alex", amountCents: alex },
+          { personId: "sam", amountCents: sam },
+        ],
+      });
+      await post(target, ROUTES.ratios, {
+        effectiveFrom,
+        salaryIds: entered.salaries.map((salary) => salary.id),
+      });
+    };
+    // alex 666 667, sam 333 333: alex's 2 cents and sam's 1 leave a millionth of a cent.
+    await confirm(2027, "2027-01-01", 2_000_000, 1_000_000);
+    await addLine(target, draft("alex", "2027-01-10", 2));
+    await addLine(target, draft("sam", "2027-01-11", 1));
+    await close(target, null, "2027-01-31");
+    // Then sam, who is owed it, has no share of the buffer.
+    await confirm(2028, "2027-02-01", 1, 0);
+
+    const second = await close(target, "2027-02-01", "2027-02-28");
+
+    expect(second.settlement.deposits).toBeNull();
+    expect(second.settlement.transfers).toEqual([{ fromId: "alex", toId: "sam", cents: 0 }]);
+    expect(second.deposit.status).toBe("direct");
+    expect(
+      homeBooks(target)
+        .prepare(
+          "SELECT payer_id, recipient_id, deposit_cents, net_cents FROM periods WHERE id = ?",
+        )
+        .get(second.id),
+    ).toEqual({ payer_id: "alex", recipient_id: "sam", deposit_cents: null, net_cents: 0 });
+  });
+});

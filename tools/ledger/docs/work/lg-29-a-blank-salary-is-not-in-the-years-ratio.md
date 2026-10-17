@@ -21,6 +21,22 @@ to leave someone out of a year's ratio is to enter 0. They then stay among the
 ratio's people with a share of zero, and that is what lg-23's "people change
 only at a close" check compares.
 
+**Leaving a person out of the entry is not enough on its own.** The API builds
+the proposal from every standing salary of the year (`yearSalaries` in
+`api/src/salaries.ts`), not from the entry. So a person who already has a salary
+on record for that year stays in the proposal when a later entry leaves them out.
+The form pre-fills the amounts on record, so blanking sam's field is exactly this
+case. lg-23's gate 2 measured it (N2) with `blank.mts` on lg-23's head:
+
+```
+entry 1 (three people) proposal people: [["alex",555556],["casey",444444],["sam",0]]
+entry 2 (sam left out) proposal people: [["alex",555556],["casey",444444],["sam",0]]
+```
+
+Whether the proposal becomes scoped to the entry changes the documented meaning
+of `SalaryEntryResponse.proposal` in `@ledger/contract`. Whoever builds this
+raises that as a question rather than settling it.
+
 lg-23's builder raised it, and the owner answered on 2026-10-17 through
 `AskUserQuestion`. The owner chose this over "Leave as is", then kept the choice
 when asked again against the gate's alternative below.
@@ -47,14 +63,18 @@ depend on the directory rather than the books.
    out of the entry. A field that holds text that is not an amount is still
    refused, as now. Refuse the entry when fewer than two salaries remain.
 2. Say on the screen that a blank leaves the person out of the year's ratio.
-3. The API needs no change: `enterSalaries` takes any subset of the household's
-   people, and `proposalFor` proposes for two or more (lg-23). Check that it
-   still holds.
+3. The API needs a change. `enterSalaries` takes any subset of the household's
+   people, but the proposal is built from every standing salary of the year
+   (`yearSalaries`), so a person left out of an entry who already has a salary
+   that year is still proposed (Why, gate 2's N2). Scoping the proposal to the
+   entry changes what `SalaryEntryResponse.proposal` is documented to mean; raise
+   that as a question before building it.
 
 ## Done when
 
-1. A web test: with alex, casey and sam on the form and sam's field blank, the
-   entry sent names alex and casey only, and the proposal shown is between them.
+1. An API test: enter salaries for alex, casey and sam for a year, then enter
+   only alex's and casey's for the same year, and read the proposal. It is
+   between alex and casey.
 2. A web test: a field holding text that is not an amount is still refused, and
    nothing is sent.
 3. Gates green.
@@ -62,3 +82,6 @@ depend on the directory rather than the books.
 ## Log
 
 - 2026-10-17 — Filed by lg-23's builder in round 1, from the owner's answer.
+- 2026-10-17 — At lg-23's landing, by owner choice, applied lg-23 gate 2's N2:
+  Build 3's premise "the API needs no change" was false. The measured fact is now
+  in Why and Build 3, and Done when 1 is an API test.

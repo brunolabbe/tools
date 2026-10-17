@@ -30,6 +30,10 @@ item cannot be marked as the other's…"), and the screen does not offer it. A
 charge among more than two people is filed instead as a line on the period
 screen, which names whose it was.
 
+"More than two" in lg-23's refusal counts every name the books hold, departed
+ones included, so this ticket should count the household's current members
+instead (owner, 2026-10-17: acceptable until lg-30).
+
 The whole-receipt `chargedTo` on a line destination already names a person in
 the contract. The screen hides that choice too among more than two, so this
 ticket can give it a picker as well.
