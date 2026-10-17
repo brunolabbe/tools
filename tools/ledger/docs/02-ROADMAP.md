@@ -144,10 +144,12 @@ transcribing by hand.
 
 ## Phase 6 — More than one household
 
-| Ticket                                                                  | What                                                     |
-| ----------------------------------------------------------------------- | -------------------------------------------------------- |
-| [lg-20](./work/lg-20-the-household-directory.md)                        | who belongs to which household, from a database          |
-| [lg-21](./work/lg-21-books-per-household.md)                            | one file of books per household                          |
-| [lg-22](./work/lg-22-manage-households-from-the-app.md)                 | households and members managed from the app              |
-| [lg-23](./work/lg-23-a-household-of-more-than-two.md)                   | any number of people: ratio, settlement, lead, directory |
-| [repo-98](../../../docs/work/repo-98-open-the-ledgers-access-policy.md) | the policy opened to any proven address, if ever wanted  |
+| Ticket                                                                  | What                                                          |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [lg-20](./work/lg-20-the-household-directory.md)                        | who belongs to which household, from a database               |
+| [lg-21](./work/lg-21-books-per-household.md)                            | one file of books per household                               |
+| [lg-22](./work/lg-22-manage-households-from-the-app.md)                 | households and members managed from the app                   |
+| [lg-23](./work/lg-23-a-household-of-more-than-two.md)                   | any number of people: ratio, settlement, lead, directory      |
+| [lg-29](./work/lg-29-a-blank-salary-is-not-in-the-years-ratio.md)       | a blank salary leaves a person out of the year's ratio        |
+| [lg-30](./work/lg-30-name-whose-a-receipt-items-charge-is.md)           | a receipt item charged to a named person, among more than two |
+| [repo-98](../../../docs/work/repo-98-open-the-ledgers-access-policy.md) | the policy opened to any proven address, if ever wanted       |

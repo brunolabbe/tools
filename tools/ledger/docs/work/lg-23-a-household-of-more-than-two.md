@@ -278,7 +278,8 @@ The answers are above. Build after lg-22 has merged.
   nobody, with `deposit_cents` NULL when only transfers settle it. "More" counts
   everyone the settlement names: a two-person ratio with a person who has left
   and is still owed is a three-person settlement. The formula stays `v3` for
-  every close. Between two people the figures equal lg-6's to the cent, and a
+  every close. Between two people the figures equal lg-6's to the cent (false
+  for one class at this commit; corrected in round 1 below, gate 1 F1), and a
   `v4` would have meant rebuilding `periods` for its CHECK. The contract's
   `SettlementFigures` swaps `payerId`, `recipientId`, `depositCents` and
   `netCents` for `deposits` (or `null`) and `transfers`. `ClosedPeriod.deposit`
@@ -324,3 +325,69 @@ The answers are above. Build after lg-22 has merged.
      inside the open period is refused, and nothing is stored", with two
      companions and a before-any-close case. With the check disabled, 3 of the 6
      tests in that file fail.
+
+- 2026-10-17 — Round 1, after gate 1 (Sonnet 5.5, xhigh) graded `8e50f0d..4143a88`
+  CONCERNS: two meds, two lows. The owner answered three questions that day
+  through `AskUserQuestion`:
+  - **F1:** (A) "Restore lg-6's result". The rejected option was (B): keep
+    "nobody owes" and reword Done when 2.
+  - **F2:** "Refuse for >2 now, file 'name whose'". The rejected option was
+    naming whose in this round, which is a contract change. The follow-up is
+    filed as [lg-30](./lg-30-name-whose-a-receipt-items-charge-is.md), as
+    `needs-decision`, because the contract change is the owner's to approve.
+  - **The builder's salaries question:** "File a ticket", over "Leave as is".
+    Asked again against the gate's alternative, the owner kept "Blank = not in
+    ratio". Filed as [lg-29](./lg-29-a-blank-salary-is-not-in-the-years-ratio.md),
+    with the gate's alternative named there as rejected: list only the people
+    who currently hold an address, and enter 0 meanwhile.
+
+  **F1, fixed.** The earlier claim "between two people the figures equal lg-6's
+  to the cent" was false for one class. When the closing ratio gives the person
+  owed a share of zero, and what earlier periods left owed is under half a cent,
+  lg-6 named the payer and the recipient, to be paid 0.00 directly. The build
+  returned nobody. No cent differed, but the record, the deposit status and the
+  sentence did. lg-6's comment "never rounds away" holds for one stretch only.
+  - `settleHousehold` now returns `deposits: null` and one transfer of 0 cents
+    between the two in that case. `asPair` reads it as lg-6 did.
+  - `settledOf` in `api/src/periods.ts` reads a stored direct-only period's
+    transfer even at 0.00.
+  - The contract's `transfers` doc names the exception.
+  - Red then green, in `books/test/household-settlement.test.ts`:
+    - "names who owes whom, paid directly, as lg-6 did (the gate's
+      reproduction)" failed before the fix with
+      `expected { formula: 'v3', payerId: null, …(3) } to deeply equal …`.
+    - "over 5 000 histories that leave a residual of a fraction of a cent, it is
+      lg-6's settlement" failed at `trial 6` before the fix. The draw reaches
+      the class in 401 of its 5 000 histories.
+  - The gate's `minimal.mts` on the fixed tree printed
+    `head {"formula":"v3","payerId":"alex","recipientId":"sam","depositCents":null,"netCents":0}`,
+    which is the base's answer.
+  - The gate's `differential.mts`, compared with its base runs by `jclass.mjs`,
+    printed `histories 60, closes 334, histories that differ 0` (seed 5) and
+    `histories 250, closes 1386, histories that differ 0` (seed 11). That is
+    0 of 310, against 7 at `4143a88`.
+
+  **F2, fixed by refusing.** `fileLines` in `api/src/receipts.ts` refuses a
+  receipt with any item marked as the other's when the household names more than
+  two people. The refusal is `BAD_REQUEST`, the code the ledger uses at its other
+  raise sites; no code was added. `web/src/receipts/Receipts.tsx` then stops
+  offering "the other's", both on an item (the tap cycles between shared and not
+  shared) and on the whole receipt. In their place it says what was someone
+  else's goes on the period screen as a charge line.
+  - Red then green:
+    - `api/test/receipts.test.ts`, "an item marked as the other's, among more
+      than two › is refused, and nothing is filed". This is the gate's
+      reproduction with alex, casey and sam, now expecting the refusal.
+    - `web/test/receipts.test.tsx`, "among three people, an item cycles between
+      shared and not shared only, and the receipt is nobody's".
+    - Both failed with `api/src/receipts.ts` and `Receipts.tsx` taken back to
+      `4143a888`.
+  - A control, "a receipt with nothing marked as the other's still files",
+    passes on both.
+
+  **F3, fixed.** The settlements card names the recipient of a one-cent deposit
+  whose direct amount rounds to nothing, taking it from the ratio's other person.
+  `web/test/stats.test.tsx`, "a one-cent deposit with nothing to pay directly
+  still says who owes whom", failed with `Cards.tsx` taken back to `4143a888`.
+
+  **F4: left as recorded.** The finding states no change to make.

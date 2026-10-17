@@ -241,7 +241,8 @@ is documented by one receipt (`ROW_ALREADY_DOCUMENTED`). **A receipt's items
 must make its total or it is not filed** (`RECEIPT_DOES_NOT_ADD_UP`, lg-10): the
 line is what the card was charged less what the books compute its not-shared and
 other's items to cost, and the other's part is a charge line of its own; on a row
-every item is shared. The model proposes each item's category from the list and
+every item is shared. With more than two people "the other's" names nobody, so it
+is refused until an item can say whose (lg-23, lg-30). The model proposes each item's category from the list and
 nothing else; a category not in it is dropped, never refused. A photo is never
 logged, and **no test calls a real model**: `createApp` takes a
 `receiptReader`, and every test that reads hands in a fake
