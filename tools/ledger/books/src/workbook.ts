@@ -14,8 +14,8 @@
  *   detail, `E` person, `F` the account's running balance, `G` amount, `H`
  *   note. A row whose `B` is a date is a movement; a row with `Solde reporté`
  *   in it is a carry-over, one per bucket, and is verified, never imported.
- *   Above the first movement, a row labelled `Solde …` or `Total` in `C` or
- *   `D` is the sheet's own summary of its buckets, and is not read (lg-37).
+ *   Above the first movement, a row labelled `Solde …` or `Total` in `C` is
+ *   the sheet's own summary of its buckets, and is not read (lg-37).
  *   Anything else (a header, a blank) is not a row of the account.
  * - **Period sheets** (`$ (…)`): row 1 names the two people, each over the
  *   column that holds their amounts; row 6 holds the start and, once closed,
@@ -331,13 +331,12 @@ function isCarryOver(sheet: Sheet, row: number): boolean {
  * the sheet. It restates the rows, so it is neither imported nor a problem.
  */
 function isSummary(sheet: Sheet, row: number): boolean {
-  for (const column of [COLUMN.C, COLUMN.D]) {
-    const text = textOf(cellAt(sheet, row, column));
-    if (text === null) continue;
-    const key = folded(text);
-    if (key.startsWith("solde") || key.startsWith("total")) return true;
-  }
-  return false;
+  // `C` only: `D` is a movement's free-text detail, and a detail that starts
+  // with "Solde" on a row whose date is unreadable is money, not a summary.
+  const text = textOf(cellAt(sheet, row, COLUMN.C));
+  if (text === null) return false;
+  const key = folded(text);
+  return key.startsWith("solde") || key.startsWith("total");
 }
 
 /** `date` with its year replaced by `year`, or `null` when that day does not exist (29 February). */
@@ -646,8 +645,8 @@ function rowTexts(sheet: Sheet, row: number): string[] {
   return texts;
 }
 
-/** A reference to a cell of the same sheet: not after a `!`, and not a function's name. */
-const SAME_SHEET_CELL = /(?<![\w$!.'])\$?([A-Z]{1,3})\$?(\d+)(?![\w(!])/gu;
+/** A reference to a cell of the same sheet: not after a `!` or a range's `:`, and not a function's name. */
+const SAME_SHEET_CELL = /(?<![\w$!.':])\$?([A-Z]{1,3})\$?(\d+)(?![\w(!])/gu;
 
 /**
  * The arithmetic a deposit is computed from: its own formula, and when that
@@ -753,6 +752,7 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
 
   const lines: WorkbookLine[] = [];
   const totals = new Map<string, number>();
+  let totalRow = FIRST_LINE;
   let settlement: WorkbookSettlement | null = null;
   let ended = false;
   // The summary rows are read from row 2, since the household's sheets keep
@@ -775,6 +775,7 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
         const total = numberOf(cellAt(sheet, row, column));
         if (total !== null) totals.set(personId, toCents(total));
       }
+      totalRow = row;
       if (row >= FIRST_LINE) ended = true;
       continue;
     }
@@ -808,7 +809,7 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
       );
     } else {
       out.problems.push(
-        `${cellRef(sheet.name, 8, column)}: ${personId}'s lines add up to ${formatCentsPlain(sum)}, but the sheet's total says ${formatCentsPlain(total)}.`,
+        `${cellRef(sheet.name, totalRow, column)}: ${personId}'s lines add up to ${formatCentsPlain(sum)}, but the sheet's total says ${formatCentsPlain(total)}.`,
       );
     }
   }

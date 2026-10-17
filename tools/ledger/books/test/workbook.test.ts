@@ -408,7 +408,7 @@ describe("reading the workbook's own layout", () => {
     );
 
     expect(reading.problems).toContain(
-      "'$ (A)'!C8: alex's lines add up to 120.00, but the sheet's total says 125.00.",
+      "'$ (A)'!C2: alex's lines add up to 120.00, but the sheet's total says 125.00.",
     );
   });
 
@@ -525,12 +525,81 @@ describe("reading the workbook's own layout", () => {
       { people },
     );
 
+    const openTouching = readWorkbook(
+      [
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        sheet("$ (B)", [
+          [null, null, "Alex", "Sam"],
+          [],
+          [],
+          [],
+          [],
+          [null, null, d("2022-08-31")],
+        ]),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
     expect(touching.problems).not.toContainEqual(expect.stringContaining("overlap"));
+    expect(openTouching.problems).not.toContainEqual(expect.stringContaining("overlap"));
     expect(overlapping.problems).toContain(
       "'$ (B)'!A6: $ (B) starts on 2022-06-15, before $ (A) ends on 2022-08-31; periods do not overlap.",
     );
     expect(openInside.problems).toContain(
       "'$ (B)'!A6: $ (B) starts on 2022-06-15, before $ (A) ends on 2022-08-31; periods do not overlap.",
     );
+  });
+
+  test("a deposit's own formula is followed only to cells of its own sheet", () => {
+    // C2 divides, so a formula that reads it is v1; one that only names another
+    // sheet's C2, alone or as a range's far end, reads nothing here.
+    const grid = (formula: string): Sheet =>
+      sheet("$ (A)", [
+        [null, null, "Alex", "Sam"],
+        [null, "Équivalence", { formula: "D5/2", result: 1 }],
+        [],
+        [],
+        [],
+        [null, null, d("2022-04-01"), d("2022-08-31")],
+        [],
+        [null, "Épicerie", null, 300],
+        [null, "Montant à déposer", { formula, result: 380 }],
+      ]);
+    const read = (formula: string): string | undefined =>
+      readWorkbook([grid(formula), ACCUEIL], { people }).periods[0]?.settlement?.formula;
+
+    expect(read("C2-D8")).toBe("v1");
+    expect(read("Accueil!C2-D8")).toBeUndefined();
+    expect(read("SUM(Accueil!B2:C2)-D8")).toBeUndefined();
+  });
+
+  test("a summary row below the lines ends them: nothing under it is a line", () => {
+    const below = sheet("$ (A)", [
+      [null, null, "Alex", "Sam"],
+      [],
+      [],
+      [],
+      [],
+      [null, null, d("2022-04-01"), d("2022-08-31")],
+      [],
+      [null, "Épicerie", null, 300],
+      [null, "Montant à déposer", { formula: "D8/Accueil!B2-C8", result: 500 }],
+      [null, "Calcul", 999, 999],
+    ]);
+    const reading = readWorkbook([below, ACCUEIL], { people });
+
+    expect(reading.periods[0]?.lines.map((line) => line.row)).toEqual([8]);
+  });
+
+  test("a detail that starts like a summary, on a row with no readable date, is still money", () => {
+    const rows: Input[][] = [
+      [null, "2022-03-09", "Hypothèque", "Solde de tout compte", "Sam", 800, 300],
+      [null, "Date", "Compte", "Détail", "Personne", "Solde", "Montant"],
+      [null, d("2022-03-01"), "Hypothèque", "Versement", "Alex", 500, 500],
+    ];
+    const reading = readWorkbook([sheet("2022", rows), ACCUEIL], { people });
+
+    expect(reading.problems).toContain("2022!B1: an amount with no date.");
   });
 });
