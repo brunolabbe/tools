@@ -1,6 +1,6 @@
 {
  "rubric": {
-  "written": "2026-10-17, before any place was classified and before the sample was drawn. The classification uses only the string the specialist wrote (name and locality) and general knowledge; it never uses a web lookup, because whether the place is real is what the sample measures.",
+  "written": "2026-10-17. The rules were written down while the list of places was being read for the first time, one rule as each case first arrived; the class of each place was then written to this file after the whole list had been read. The rubric was not fixed before any place was seen. The sample is drawn from this file, so it came after the classification. The classification uses only the string the specialist wrote (name and locality) and general knowledge; it never uses a web lookup, because whether the place is real is what the sample measures.",
   "classes": {
    "named-premises": {
     "definition": "A proper name that picks out one establishment, site or attraction: something with a door, a gate or a visit. Includes a named natural feature visited as an attraction (a rock, a mountain, a lake, a cape), a named square, a trail or wharf with its own name, and a national park when the candidate is a visit.",
@@ -3408,7 +3408,9 @@
   },
   "parc national de la gaspésie (mont-albert sector)|sainte-anne-des-monts, québec": {
    "class": "named-premises",
-   "edge": []
+   "edge": [
+    "park-visit"
+   ]
   },
   "baie-des-chaleurs motels and cottages|carleton-sur-mer, québec": {
    "class": "kind-of-place",

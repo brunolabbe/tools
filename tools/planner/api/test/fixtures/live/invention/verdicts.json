@@ -1,7 +1,7 @@
 {
  "runDate": "2026-10-17",
  "budget": {
-  "written": "Fixed before the first query, from the ticket: a place that came back under the first query it was given is `exists`, `exists-elsewhere` or `closed` on that evidence. A place may be called `not-found` only after every query below and the OSM result in pl-56's record. `not-found` means the search did not find it, never that it does not exist. Search tool: WebSearch (standard mode), with WebFetch for pages worth reading; both from a general-purpose agent. Entities that several sampled keys share (Forillon National Park, Grande-Grave, the Percé Rock and Bonaventure Island park, the Mont-Albert sector) were searched once and the result applied to each key, with each key's own locality judged separately.",
+  "written": "Taken from the ticket before the first query: a place that came back under the first query it was given is `exists`, `exists-elsewhere` or `closed` on that evidence. A place may be called `not-found` only after every query below and the OSM result in pl-56's record. `not-found` means the search did not find it, never that it does not exist. Search tool: WebSearch (standard mode), with WebFetch for pages worth reading; both from a general-purpose agent. Entities that several sampled keys share (Forillon National Park, Grande-Grave, the Percé Rock and Bonaventure Island park, the Mont-Albert sector) were searched once and the result applied to each key, with each key's own locality judged separately.",
   "queriesBeforeNotFound": [
    "1. the name with its locality, as the candidate wrote them",
    "2. the name alone, in quotation marks",
@@ -200,7 +200,7 @@
     {
      "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
      "readOn": "2026-10-17",
-     "note": "The island is off Percé and boats leave from Percé. The candidate's locality is the town of Bonaventure, a different municipality on the Baie-des-Chaleurs. Likely cause: the island's own name. Seen in the search result."
+     "note": "The island is off Percé, and the Percé tourist office's directory lists it as a sector of the park reached from Percé (it does not name the dock). The candidate's locality is the town of Bonaventure, a different municipality on the Baie-des-Chaleurs. Likely cause: the island's own name. Seen in the search result."
     }
    ],
    "actualLocality": "Percé, Québec",
@@ -215,7 +215,7 @@
     {
      "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
      "readOn": "2026-10-17",
-     "note": "The island is off Percé and boats leave from Percé. The candidate's locality is the town of Bonaventure, a different municipality on the Baie-des-Chaleurs. Likely cause: the island's own name. Seen in the search result."
+     "note": "The island is off Percé, and the Percé tourist office's directory lists it as a sector of the park reached from Percé (it does not name the dock). The candidate's locality is the town of Bonaventure, a different municipality on the Baie-des-Chaleurs. Likely cause: the island's own name. Seen in the search result."
     }
    ],
    "actualLocality": "Percé, Québec",
@@ -665,11 +665,11 @@
     {
      "url": "https://gentologie.com/en/?p=60611",
      "readOn": "2026-10-17",
-     "note": "Fetched. Lists Monsieur Émile Smokehouse, 574 route d'Irlande, Percé, QC G0C 2L0; the page does not mention Gaspé. The first two queries found nothing; the third found this page."
+     "note": "Fetched. Lists Monsieur Émile Smokehouse, 574 route d'Irlande, Percé, QC G0C 2L0; the page does not mention Gaspé. The page shows a publication date of 2025-08-28 and an update of 2026-07-24 (fetched again 2026-10-17). The first two queries found nothing; the third found this page."
     }
    ],
    "actualLocality": "Percé, Québec",
-   "note": "Real, in Percé, which is not Gaspé. The article is undated on the page, so whether it still operates is not established; the verdict is on the town only."
+   "note": "Real, in Percé, which is not Gaspé. The page was published 2025-08-28 and updated 2026-07-24, so it is recent; whether the smokehouse operates today is not otherwise established."
   },
   "galleria borghese|rome": {
    "verdict": "exists",
@@ -817,8 +817,8 @@
   "grande-grève campground, forillon national park|gaspé, québec": {
    "verdict": "not-found",
    "queries": [
-    "Grande-Grève campground Forillon National Park",
-    "\"Grève\" \"Grande-Grève\" camping Forillon \"Grande-Grève campground\"",
+    "Grande-Grève campground Forillon National Park Gaspé, Québec",
+    "\"Grande-Grève campground\"",
     "camping Grande-Grève parc Forillon terrain de camping Parcs Canada"
    ],
    "evidence": [
@@ -826,6 +826,11 @@
      "url": "https://www.parks.canada.ca/pn-np/qc/forillon/visit",
      "readOn": "2026-10-17",
      "note": "Parks Canada trip planning: the park's camping areas are Petit-Gaspé (southern area), Des-Rosiers and Cap-Bon-Ami (northern area). No Grande-Grève campground. Grande-Grève is the name of the boulevard and the southern sector, which Petit-Gaspé is on. Private campgrounds on that boulevard (Camping Baie de Gaspé, Camping Parc Nature Gaspé) are not in the park. Seen in the search result."
+    },
+    {
+     "url": "https://pcweb2.azureedge.net/-/media/pn-np/qc/forillon/Visit/2026/camping-petitgaspe-otentik.pdf",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada map of Camping Petit-Gaspé (2026): a pebble beach labelled Grande-Grave beside the campground. Seen in the search result for query 2. Queries 1 and 2 were re-run as the budget is written after the first gate; the first run had left the locality off query 1 and put extra terms in query 2. Neither found a campground of that name."
     }
    ],
    "note": "The name matches no campground. The nearest real object is Petit-Gaspé on boulevard de Grande-Grève, which is a different name."

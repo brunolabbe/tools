@@ -254,7 +254,9 @@ and their sizes:
 _Provenance of the rubric, stated plainly._ The rules were written down as I
 read the list for the first time, one rule when its first case arrived, and
 `classification.json` was written after the whole list was read; **I did not
-write the rubric before seeing any place**. What holds is that the sample was
+write the rubric before seeing any place**. (The record's `rubric.written` said
+"before any place was classified" until gate 1 found that false; it now gives
+this account.) What holds is that the sample was
 drawn after the classification, from the committed file, and that no class was
 changed after the sample existed. The classification uses the string only and
 general knowledge, never a lookup: whether a place is real is what the sample
@@ -263,7 +265,7 @@ rule in the record; counts are rows):
 
 | rule                                                                    | rows           |
 | ----------------------------------------------------------------------- | -------------- |
-| park-visit (a national park or a sector of it, proposed as a visit)     | 32             |
+| park-visit (a national park or a sector of it, proposed as a visit)     | 33             |
 | park-area (a park only ever an endpoint of a `between`)                 | 8              |
 | established-descriptive-name (Ljubljana Castle, Percé Rock, lighthouse) | 13             |
 | natural-feature visited as an attraction                                | 16             |
@@ -273,6 +275,28 @@ rule in the record; counts are rows):
 | placeholder ("to be chosen", "e.g.")                                    | 44             |
 | transit-node (airport, station, terminal, trailhead, departure point)   | 42             |
 | branded-category (oTENTik)                                              | 4              |
+
+_Sensitivity after gate 1 (round 1), not a reclassification._ Gate 1 ruled on
+all 53 lodging and food `named-premises` rows and found four things in rows
+that were not sampled: (a) 8 `lodging` rows are `named-premises` only because a
+park is a visit (the four Mont-Albert-sector keys, the bare
+`parc national de la gaspésie|sainte-anne-des-monts, québec`, and three
+`parc national du bic` keys) but name only the park, as a place for "a
+campground or chalet in park X"; `forillon national park campground` is
+`kind-of-place`, and the gate rules these `kind-of-place` too; (b)
+`percé wharf / parc national de l'île-bonaventure-et-du-rocher-percé` is tagged
+`two-sites`, but `percé wharf` is `kind-of-place`, so the rule does not apply;
+(c) `discovery and visitors centre, parc national de la gaspésie` is
+`named-premises` while `parc national de la gaspésie visitor centre` is
+`kind-of-place`; (d) one Mont-Albert-sector key lacked its `park-visit` tag
+(added; the park-visit count above is 33, a tag only). **Under the gate's ruling
+on (a), `lodging` names a premises in 20 of 320 places (6.3%) and 30 of 402
+mentions (7.5%); `food` is unchanged at 25 of 259.** The owner chose to keep the
+classification and the sample as they are (2026-10-17), because the harness
+draws only from `named-premises` and moving any one row changes the drawn
+sample: so the 28 below stays the stratum, and the 20 is a sensitivity line
+beside it, not a new denominator. It strengthens the finding that lodging and
+food are unspecific.
 
 _How much the `named-premises` figure moves._ It is 207 by the rubric. Dropping
 the 13 established-descriptive names gives 194. Letting the 34
@@ -357,14 +381,22 @@ Fisher-Yates over the sorted keys (`mulberry32`), seed **20261017** for Haiku,
 20261018 for Opus, 20261019 for Sonnet. Eligible: Haiku 102, Opus 101, Sonnet
 53, so all three drew 50 (Sonnet 50 of 53). That is 150 family-draws on **121
 distinct places**; 23 were drawn under more than one family (17 under two, 6
-under three) and are checked once, counted once per family. The drawn keys are in the record (`sample`).
+under three) and are checked once, counted once per family. The drawn keys are
+in the record (`sample`). **A departure from the brief:** it says a verdict
+counts "once per family that named it"; the harness counts it once per family
+that _drew_ it. Under the brief's reading 18 key-family pairs would be added,
+all of them `exists`, so Haiku would read 3 of 58 not confirmed instead of 3 of
+50 and Opus 2 of 60 instead of 2 of 50. I kept the harness's reading: a place a
+family named but did not draw is not a draw from that family's population.
 
 _Step 5, the checks._ The search budget is in `verdicts.json` (`budget`), and
 each row carries every query run. It was fixed before the first query: a place
 that comes back under the first query is judged on that; `not-found` takes all
 three queries (name with locality, name alone in quotes, name in the local
 language) and pl-56's OSM result, which the record copies in as `osm`. I ran
-**62 distinct queries and 3 fetches** for **59 real-world objects**: the 121
+**62 distinct queries and 3 fetches** (then, in round 1, two re-run
+queries and one re-fetch) for **58 real-world objects**, counted in the record
+(`sampleByObject`) as the keys that share a first query: the 121
 keys collapse onto far fewer objects (Forillon National Park alone is 8 keys,
 Grande-Grave 8, the Percé Rock and Bonaventure park 11), so an object was
 searched once and each key's own locality judged separately. Almost every
@@ -375,7 +407,10 @@ check that a place is operating today beyond what that page said. Every row's ev
 the gate can open the URLs.
 
 _Step 6, the verdicts._ Wilson 95% intervals beside each rate; fifty draws is
-wide, and a 0 of 50 reads as "under 7.1%", not zero.
+wide, and a 0 of 50 reads as "under 7.1%", not zero. **Read the "all 150
+draws" row with care:** the 150 are not independent trials. They are 121 keys
+(23 drawn under two or three families), and those are 58 objects, so its
+interval is narrower than the data supports. The honest units are below.
 
 | family        | n   | exists                 | exists-elsewhere   | closed             | not-found          | not confirmed     |
 | ------------- | --- | ---------------------- | ------------------ | ------------------ | ------------------ | ----------------- |
@@ -408,15 +443,20 @@ Gaspésie` — **exists-elsewhere**, Haiku. Candidates: "Bonaventure Island boat
    `claude-opus-5-5-low/set-b-run-1`). A smokehouse of that name is at 574 route d'Irlande, **Percé**, per
    `gentologie.com/en/?p=60611`, fetched 2026-10-17. Queries 1 and 2 found
    nothing; query 3 ("fumoir Gaspé saumon fumé hareng boutique Monsieur Émile")
-   found the page. Percé is not Gaspé. The page is undated, so whether it still
-   operates is not established.
+   found the page. Percé is not Gaspé. The page shows a publication date of
+   2025-08-28 and an update of 2026-07-24, so it is recent; whether the
+   smokehouse operates today is not otherwise established.
 3. `Grande-Grève campground, Forillon National Park | Gaspé, Québec` —
    **not-found**, Haiku. Candidate: "Grande-Grève
    campground in Forillon National Park" (`lodging`, `pl-40-7-lodging-2`,
-   `claude-haiku-5-5-low/set-b-run-1`). Queries: "Grande-Grève campground Forillon
-   National Park"; `"Grève" "Grande-Grève" camping Forillon "Grande-Grève
-campground"`; "camping Grande-Grève parc Forillon terrain de camping Parcs
-   Canada". OSM (pl-56): not located. Parks Canada's trip-planning page names
+   `claude-haiku-5-5-low/set-b-run-1`). Queries, **as the budget is written**
+   (re-run in round 1: the first run left the locality off query 1 and padded
+   query 2, a deviation gate 1 found; the verdict did not change):
+   "Grande-Grève campground Forillon National Park Gaspé, Québec";
+   `"Grande-Grève campground"`; "camping Grande-Grève parc Forillon terrain de
+   camping Parcs Canada". OSM (pl-56): not located. Query 2 returned a Parks
+   Canada map of Camping Petit-Gaspé with a beach labelled Grande-Grave beside
+   it. Parks Canada's trip-planning page names
    the park's campgrounds as Petit-Gaspé (southern area) and Des-Rosiers and
    Cap-Bon-Ami (northern area), and Grande-Grève is the boulevard and sector
    Petit-Gaspé sits on. **We did not find it**; the likelier reading is a real
@@ -456,12 +496,33 @@ located (71.1%). Of those 86, **81 exist** and 5 are the five defects above
 (precision 5.8%, 2.5–12.9). A map-based label would have caught every defect and
 been wrong 94% of the time.
 
+_The three units, side by side._ (Added in round 1 after gate 1; every figure
+is printed by the harness, `sampleByObject` and the tables above.)
+
+| unit                                         | not confirmed             |
+| -------------------------------------------- | ------------------------- |
+| per draw (150 family-draws, not independent) | 5 of 150, 3.3% (1.4–7.6)  |
+| per key (121 distinct keys)                  | 5 of 121, 4.1% (1.8–9.3)  |
+| per object (58 objects)                      | 4 of 58, 6.9% (2.7–16.4)  |
+| per object, `lodging` or `food` stratum      | 3 of 19, 15.8% (5.5–37.6) |
+| per key, `lodging` or `food` stratum         | 3 of 28, 10.7% (3.7–27.2) |
+| per key, other specialists                   | 2 of 93, 2.2% (0.6–7.5)   |
+
+Population-weighted, the stratum is 53 of the 207 named premises (25.6%) and
+the rest 154 (74.4%). That gives about 4.3% per key (0.256 x 10.7% + 0.744 x
+2.2%) and about 6.0% per object (the rest is 1 object of 39, 2.6%: the Bonaventure
+Island keys). Five of the 28 stratum keys are parks (four Parc national de la
+Gaspésie keys and Parc du Bic), whose `exists` confirms the park and not a
+lodging premises; without the three parks' objects the stratum is 3 of 14
+objects, 21.4% (7.6–47.6), from gate 1's reproduction. All of these are small
+counts: the stratum's interval rests on three events.
+
 _What the brief had wrong or left out._ (1) It says to draw 50 per family and
 that fewer takes all; Sonnet had 53, so the Sonnet draw is 94% of its
 population, not a sample of it. (2) Dedupe on `name|locality` makes the 121 keys
-a much smaller set of objects (59 searched), so the rates above are per key, as
-the Build says, and per object they would be higher: 4 objects of 59 are
-defects, 6.8% (2.7–16.2). (3) It says the rubric is "written first". It was
+a much smaller set of objects (58 searched), so the rates in the family table
+are per draw, not per key as an earlier line of this Log said, and per object
+they are higher: 4 objects of 58 are defects, 6.9% (2.7–16.4). (3) It says the rubric is "written first". It was
 written during the first read, as above. (4) Fact 2's 2-of-544 was not
 re-measured; it is context.
 
@@ -484,8 +545,11 @@ chosen here. The numbers are the ones above.
    that it is a kind of place. They are 578 of the 1,019 places (56.7%) and
    only 53 named premises between them. It is a prompt and schema change, it
    needs one live run to prove (pl-40's harness, the run's cost is not measured
-   here), and it is the precondition of every other option: today about 4 of 5
-   proposals cannot be checked by anything, a search or a map. It also gives
+   here), and it is the precondition of every other option for these two
+   specialists: of their 724 accepted candidates, 579 (80.0%) name only a
+   kind of place, which neither a search nor a map can check. (Across all 2,090
+   accepted candidates it is 751, 35.9%; the 80% is `lodging` and `food` only,
+   and options 2 and 3 are not as blind elsewhere.) It also gives
    the missing measurement: a new run's `lodging` and `food` named premises are
    the sample this one lacks.
 2. **A check pass after the fan-out**, labelling and never dropping. On these
@@ -496,27 +560,58 @@ chosen here. The numbers are the ones above.
    pass, a store and a UI state for a label that is wrong more often than right.
 3. **A specialist looks it up itself**: tool use on `ModelProvider`, a multi-turn
    budget, a scripted tool loop, with web search a metered vendor plus
-   [pl-26](./pl-26-lift-the-ssrf-guard.md). This run took about 1.05 queries per
-   object, and a recorded run names about 7 named-premises mentions
-   (804 over 111 runs). At the measured 3.3% (upper bound 7.6%) any-defect rate
-   that is about 30 searches per defect fixed (13 at the upper bound); inside
-   `lodging` or `food` it is 3 in 28, about 9 per defect. My judgement, not a
-   measurement: it earns its cost only if the rate among named premises, with
-   the lodging and food ones weighted properly, is above about 10% with the
-   lower bound above 5%. Nothing here reaches that: the pooled lower bound is
-   1.4%.
-4. **Close §5's item 3**, no build. The rate that would justify any build is
-   not here: 145 of 150 sampled draws exist (96.7%), 3 are in the wrong town
-   (2.0%), 1 closed, 1 not found, and none was shown not to exist. What would
-   reopen it: a named-premises sample that is mostly `lodging` and `food`
-   (this one is 28 of 121) that again shows about 1 in 10 not confirmed, or a
-   closed or not-found count above 1 in 20 on a larger one. Option 1's run is how to get
-   that sample.
+   [pl-26](./pl-26-lift-the-ssrf-guard.md). This run took about 1.07 searches
+   per object (62 queries over 58 objects), and a recorded run names about 7
+   named-premises mentions (804 over 111 runs). **The bar I use, with its unit
+   and weighting named before it is compared (my judgement, not a
+   measurement):** a loop earns its cost when the not-confirmed rate **per
+   object** is above about 10% with the 95% lower bound above 5%, and the rate
+   is the one for the population the loop would be switched on for. Two
+   populations, two answers:
+   - **Loop on for every specialist** (population-weighted over the named
+     premises, the stratum at its 25.6% share): about 6.0% per object, 4.3% per
+     key. It does not clear the bar; at 4 defects in 58 objects it is about 15
+     searches per defect found.
+   - **Loop on for `lodging` and `food` only** (the stratum's own rate): 3 of 19
+     objects, 15.8% (5.5–37.6). It **clears both legs**, barely: the lower bound
+     of 5.5% rests on three events, five of the stratum's 28 keys are parks, and
+     the stratum is a sample of 19. It is about 6 to 7 searches per defect found.
 
-**Recommendation:** option 1, with item 3 left closed as a build until its run
-gives a lodging and food sample large enough to read; options 2 and 3 are not
-supported by these numbers. If the owner would rather not spend a live run,
-option 4 is the honest alternative.
+   The earlier version of this option argued from the pooled 1.4% lower bound,
+   which is neither weighting, and said nothing here reaches the bar. That was
+   wrong for the scoped loop.
+
+4. **Close §5's item 3**, no build. The population-weighted case is not here:
+   per object 4 of 58 (6.9%, 2.7–16.4) and about 6.0% weighted, no closed or
+   not-found count above 2 of 150 draws, 3 draws in the wrong town, and none
+   shown not to exist. But the scoped case in option 3 clears the bar on three
+   events, so closing item 3 outright leaves a signal unexamined. What would
+   reopen it: a `lodging` and `food` named-premises sample larger than this
+   one's 19 objects (option 1's run is how to get it) that again shows 10% or
+   more not confirmed per object with a lower bound above 5%.
+
+**Recommendation:** option 1, unchanged, but for a different reason than the
+first version gave. It is still the precondition (80% of `lodging` and `food`
+candidates are uncheckable), and it is cheap. What changed is what follows it:
+option 3 **scoped to `lodging` and `food`** is no longer ruled out by these
+numbers, only unproven on three events. So the sequence I recommend is option
+1, re-measure the stratum on its named premises, then decide between a scoped
+option 3 and option 4 on that sample. Option 2 is not supported by anything
+here. If the owner would rather not spend a live run, option 4 is defensible
+only for the population-weighted case, not the scoped one. This remains the
+owner's decision.
+
+_Round 1 (after gate 1 at 88fb17a6)._ Fixed: the three meds above (the units
+and the bar, the 80% population, `rubric.written`); the per-family counting
+departure; 58 objects and the arithmetic (13.8 and 9.8 are gate figures, and
+the Log now counts searches per defect _found_); the Fumoir date and the
+Bonaventure note; the doc-comment placement; and Grande-Grève's queries, re-run
+as written. Not changed, by the owner's choice: the classification and the
+sample (the sensitivity line above). Gate 1 also noted that the evidence field
+is named `readOn` though 119 of 121 rows were read from a search-result
+snippet; the Log already says so, and several sources (a 2018 listing, a 2019
+article, a 2023 release) show a place exists and not that it operates, so
+`closed` may be undercounted.
 
 **Defects met in the skill's pages** are in the builder's report to the
 orchestrator, not here.

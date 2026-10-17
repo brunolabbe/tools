@@ -559,7 +559,6 @@ export interface InventionRecord {
   sample: Record<string, string[]>;
   budget: VerdictsFile["budget"];
   verdictTables: Record<string, VerdictTable>;
-  /** pl-56's OSM `located` against this record's classes and verdicts. */
   /**
    * The distinct sampled places split by whether `lodging` or `food` proposed
    * them: the two specialists whose proposals were emptiest in pl-56.
@@ -568,6 +567,18 @@ export interface InventionRecord {
     string,
     { places: number; counts: Record<string, number>; notConfirmed: string }
   >;
+  /**
+   * The same sample counted per real-world object. An object is the set of keys
+   * whose verdicts were reached by the same first query, since the search was run
+   * once for them; it is "not confirmed" if any of its keys is not `exists`, and
+   * in the lodging-or-food stratum if any of its keys was proposed by one.
+   */
+  sampleByObject: {
+    objects: number;
+    notConfirmed: string;
+    lodgingOrFood: { objects: number; notConfirmed: string };
+  };
+  /** pl-56's OSM `located` against this record's classes and verdicts. */
   osmCrossTabs: {
     locatedByClass: Record<string, { located: number; total: number }>;
     /** Over the distinct sampled places: verdict → located / not located by OSM. */
@@ -575,6 +586,35 @@ export interface InventionRecord {
   };
   unchecked: string[];
   rows: unknown[];
+}
+
+const badCount = (cells: { bad: boolean }[]): number => cells.filter((cell) => cell.bad).length;
+
+export function buildObjects(
+  places: NamedPlace[],
+  checks: Record<string, Check>,
+  sampled: Set<string>,
+): InventionRecord["sampleByObject"] {
+  const objects = new Map<string, { bad: boolean; stratum: boolean }>();
+  for (const place of places) {
+    const check = checks[place.key];
+    if (!sampled.has(place.key) || check === undefined) continue;
+    const id = check.queries[0] ?? place.key;
+    const cell = objects.get(id) ?? { bad: false, stratum: false };
+    cell.bad ||= check.verdict !== "exists";
+    cell.stratum ||= "lodging" in place.specialists || "food" in place.specialists;
+    objects.set(id, cell);
+  }
+  const all = [...objects.values()];
+  const stratum = all.filter((cell) => cell.stratum);
+  return {
+    objects: all.length,
+    notConfirmed: `${badCount(all)} of ${all.length}, ${rate(badCount(all), all.length)}`,
+    lodgingOrFood: {
+      objects: stratum.length,
+      notConfirmed: `${badCount(stratum)} of ${stratum.length}, ${rate(badCount(stratum), stratum.length)}`,
+    },
+  };
 }
 
 export function buildSpecialistGroups(
@@ -689,6 +729,7 @@ export function buildRecord(inputs: {
     budget: verdicts.budget,
     verdictTables: buildVerdictTables(sample, verdicts.checks),
     sampleBySpecialistGroup: buildSpecialistGroups(places, verdicts.checks, sampled),
+    sampleByObject: buildObjects(places, verdicts.checks, sampled),
     osmCrossTabs: buildOsmCrossTabs(places, classification, verdicts.checks, sampled, hoursByKey),
     unchecked,
     rows,
@@ -800,6 +841,12 @@ export function render(record: InventionRecord): string {
         cell.notConfirmed,
       ]),
     ),
+  );
+  out.push(
+    `per object (first query as the id): ${record.sampleByObject.objects} objects, not confirmed ` +
+      `${record.sampleByObject.notConfirmed}; lodging or food stratum ` +
+      `${record.sampleByObject.lodgingOrFood.objects} objects, not confirmed ` +
+      record.sampleByObject.lodgingOrFood.notConfirmed,
   );
   out.push(`sampled places with no verdict: ${record.unchecked.length}`);
   return out.join("\n\n");
