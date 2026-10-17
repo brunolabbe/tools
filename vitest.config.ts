@@ -25,7 +25,7 @@ export default defineConfig({
     // At the root, not per project: vitest 4 resolves a project's worker count
     // from the project's own maxWorkers, then the root's, then the core count
     // (resolveMaxWorkers in vitest's cli-api chunk), and no project sets one.
-    ...(process.env.CI ? { maxWorkers: 6 } : {}),
+    ...(process.env.CI ? { maxWorkers: 4 } : {}),
     projects: [
       {
         test: {

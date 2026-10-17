@@ -226,3 +226,16 @@ skipped (5819)`. The leg is informational, so the run's conclusion reads
   samples: 222 s, 229 s, 231 s and 235 s, against 274 s and 266 s on `main`.
   Done when 3 is still not met on the Windows leg, for the reason in the
   correction above.
+- 2026-10-17 — The owner answered the open decision in the 2026-10-17 entry
+  above, relayed by the orchestrator, from AskUserQuestion. Question: the
+  six-worker Windows leg failed `parallel-ranges.test.ts` in 2 of 6 attempts
+  (the entry above), so what should the number be before landing. Options
+  offered: **"Lower to 4, re-measure"** (recommended), which sets `maxWorkers`
+  to 4 under `CI` and measures both legs again against the same `main`
+  baseline; **"Land at 6, file the flake"**, which lands the six-worker setting
+  and files the Windows flake as a new ticket; **"More samples at 6"**, which
+  takes more six-worker runs before deciding; and **"Close it"**, which makes
+  no change and records the figures. Chosen: **"Lower to 4, re-measure"**. The
+  owner picks the number and whether to land from the four-worker figures; the
+  builder does not. `maxWorkers` is 4 under `CI` from this commit, and the
+  measurement that follows is recorded in the next entry.
