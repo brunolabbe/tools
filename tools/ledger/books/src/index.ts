@@ -133,6 +133,7 @@ export type {
   WorkbookFigures,
   WorkbookLine,
   WorkbookPeriod,
+  PeriodDeposit,
   WorkbookReading,
   WorkbookSettlement,
 } from "./workbook.ts";

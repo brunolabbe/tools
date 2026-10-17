@@ -602,4 +602,44 @@ describe("reading the workbook's own layout", () => {
 
     expect(reading.problems).toContain("2022!B1: an amount with no date.");
   });
+
+  test("a closed period's deposit is found by payer and amount, from two weeks before its end", () => {
+    const reading = readWorkbook(
+      [
+        year("2022", [
+          // Fifteen days before $ (B) ends: one day too early to be its deposit.
+          ["2022-12-16", "Dép. Courantes", "Dépôt", "Alex", 312, 132],
+          ["2022-09-05", "Dép. Courantes", "Dépôt", "Alex", 180, 180],
+        ]),
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        summarised("$ (B)", "2022-08-31", "2022-12-31", V2_SUMMARY),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(reading.deposits).toEqual([
+      {
+        sheet: "$ (A)",
+        payerId: "alex",
+        askedCents: 18_000,
+        from: "2022-08-17",
+        paid: { sheet: "2022", row: 3, date: "2022-09-05" },
+      },
+      { sheet: "$ (B)", payerId: "alex", askedCents: 13_200, from: "2022-12-17", paid: null },
+    ]);
+  });
+
+  test("the right amount from the other person does not pay a period's deposit", () => {
+    const reading = readWorkbook(
+      [
+        year("2022", [["2022-09-05", "Dép. Courantes", "Dépôt", "Sam", 180, 180]]),
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(reading.deposits.map((deposit) => deposit.paid)).toEqual([null]);
+  });
 });

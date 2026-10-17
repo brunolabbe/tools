@@ -172,6 +172,22 @@ export interface WorkbookPeriod {
   ratio: Share[] | null;
 }
 
+/**
+ * What a closed period asked, and the deposit in the year sheets that paid
+ * it: the payer's movement of exactly that amount, from two weeks before the
+ * period's end up to the next period's end. Reported, never refused (lg-37):
+ * a deposit can be paid net of a correction, or not reach the workbook at all.
+ */
+export interface PeriodDeposit {
+  sheet: string;
+  payerId: string;
+  askedCents: number;
+  /** The first day searched. */
+  from: string;
+  /** The movement that paid it, or `null` when none of that amount was found. */
+  paid: { sheet: string; row: number; date: string } | null;
+}
+
 export interface WorkbookReading {
   /** Every movement, oldest first, each filed as it will be stored. */
   movements: Movement[];
@@ -184,6 +200,8 @@ export interface WorkbookReading {
   /** Closed periods, oldest first. */
   periods: WorkbookPeriod[];
   open: WorkbookPeriod | null;
+  /** One per closed period that asked somebody for money, oldest first. */
+  deposits: PeriodDeposit[];
   salaries: { personId: string; amountCents: number }[];
   /** Sheets read as none of the above, and so not imported. */
   ignored: string[];
@@ -863,6 +881,42 @@ function orderPeriods(read: readonly WorkbookPeriod[], out: WorkbookReading): vo
   out.open = current ?? null;
 }
 
+/**
+ * Two weeks before the end: the household has paid a day early, and nothing
+ * measured needed more. Up to the next period's end, since a late deposit is
+ * still this period's until the next one closes.
+ */
+const DEPOSIT_LEAD_DAYS = 14;
+
+function daysBefore(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+}
+
+function findDeposits(out: WorkbookReading): void {
+  for (const [index, period] of out.periods.entries()) {
+    const settlement = period.settlement;
+    if (settlement === null || settlement.payerId === null || settlement.depositCents === 0)
+      continue;
+    const payerId = settlement.payerId;
+    const from = daysBefore(period.end ?? period.start, DEPOSIT_LEAD_DAYS);
+    const until = out.periods[index + 1]?.end ?? null;
+    const paid = out.movements.find(
+      (movement) =>
+        movement.personId === payerId &&
+        movement.amountCents === settlement.depositCents &&
+        movement.date >= from &&
+        (until === null || movement.date <= until),
+    );
+    out.deposits.push({
+      sheet: period.sheet,
+      payerId,
+      askedCents: settlement.depositCents,
+      from,
+      paid: paid === undefined ? null : { sheet: paid.sheet, row: paid.row, date: paid.date },
+    });
+  }
+}
+
 // --- Accueil ---
 
 /**
@@ -927,6 +981,7 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
     outOfOrder: [],
     periods: [],
     open: null,
+    deposits: [],
     salaries: [],
     ignored: [],
     checks: [],
@@ -969,6 +1024,7 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
   );
 
   orderPeriods(periods, out);
+  findDeposits(out);
   if (accueil === undefined)
     out.problems.push("The workbook has no Accueil sheet, so no salaries.");
   else readSalaries(accueil, people, out);

@@ -58,6 +58,11 @@ In `books/src/workbook.ts`:
    one was found). A period may start on the day the previous one ends,
    because the real sheets share that boundary day.
 
+6. Report each closed period's deposit: the payer's movement of exactly the
+   amount asked, from two weeks before the period's end up to the next
+   period's end. Report "paid" or "not paid in the workbook". Never refuse
+   (the owner chose this on 2026-10-17, see the Log).
+
 Also move the fixtures to the real layout (Accueil in both suites), and
 correct §8.
 
@@ -73,6 +78,9 @@ correct §8.
   A second `Salaires` row is refused, and so is a missing one.
 - Overlapping periods are refused, whether closed or open, and touching ones
   are accepted.
+- Each closed period's deposit is reported as paid when the payer's movement
+  of that amount falls in the window, and as not paid otherwise: too early,
+  by the other person, or a different amount. Neither case refuses.
 - Run against the owner's corrected workbook, the reader reports no problems.
 
 ## Review
@@ -139,3 +147,14 @@ No `high`. FAIL is the rule's, for two unproven rows: one clause of Done when 5 
   - Decision A was taken as (a): Done when 6 is `awaiting`. The dry run was
     repeated outside the repository on the fixed head, and every verification
     held. It is repeated by the owner on the merged code.
+- 2026-10-17, the deposit report (Build step 6), added after gate 1 at the
+  owner's request. The dry run had passed while one period's sheet asked for
+  far less than had been deposited: correcting that sheet's start date had
+  cut its month count, and with it every recurring line. The owner first
+  chose to refuse on a mismatch. Measured against the real file, two of five
+  periods would have refused legitimately: one was paid net of a correction,
+  and the newest one's deposit is not in the workbook. So the owner chose to
+  report instead. The two-week lead before the end comes from the real file,
+  where two deposits landed a day early. Each condition of the match (lead,
+  payer, amount) is proven by a mutation that turns a test red. No second
+  gate, by the owner's choice: the round is small and mutation-tested.
