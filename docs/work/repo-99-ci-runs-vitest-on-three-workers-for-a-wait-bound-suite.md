@@ -135,3 +135,59 @@ CI only**. Local runs keep vitest's default.
   and report the durations with their run ids, plus any flake and the test it
   names, before landing. The owner picks the number and whether to land from
   those figures; the builder does not choose either.
+- 2026-10-17 — Built at the owner's answer above: `maxWorkers` is 6 under `CI`
+  only, at the root of `vitest.config.ts`, in `4d72b248`. Draft PR #514, head
+  `4d72b248`, `mergeTree` probe conflicts with #513 (see below). Done when 1:
+  the resolved config from `createVitest` (vitest 4.1.10), read back in both
+  states. Unset, `CI` absent: root `test.maxWorkers` is `undefined` and every
+  project's is `undefined`. `CI=1`: root `6`, projects `undefined`. Done when 2:
+  the `npm test` step, read per leg with `gh run view <id> --json jobs`, and
+  the vitest `Duration` line from `--job <id> --log`.
+  - Baseline is `main` at `6b42ee19`, run 39058961193, the latest push run
+    whose unit jobs ran on both legs (`9e157902`'s run 39048517864 is the
+    earlier one; `b9f01370`, `8e50f0d4`, `38e9b541` and `99e7f72d` skipped
+    their unit matrix; `2ec0be09`'s run was cancelled). Same tests as the
+    PR: 5819, 285 files. Two reruns were taken on it, one per leg, so its
+    figures rest on two samples per leg, not one.
+  - `npm test`, `main` `6b42ee19` (no `maxWorkers`): ubuntu 274 s (attempt 1,
+    18:40:47 to 18:45:21) and 266 s (attempt 3, 19:08:36 to 19:13:02); Windows
+    472 s (attempt 1, 18:41:09 to 18:49:01) and 428 s (attempt 2, 18:57:04 to
+    19:04:12).
+  - `npm test`, PR #514 run 39059607797 at `4d72b248` (`maxWorkers` 6): ubuntu
+    222 s (attempt 1, 18:48:09 to 18:51:51) and 229 s (attempt 2, a rerun of
+    the ubuntu leg, 18:56:33 to 19:00:22); Windows 363 s (attempt 1, 18:48:17 to
+    18:54:20) and 304 s (attempt 3, a rerun of the Windows leg, 19:02:04 to
+    19:07:08). The vitest Duration lines are 221.26, 228.05, 356.65 and 303.19 s,
+    within 7 s of the step times above.
+  - Means: ubuntu 270 s to 226 s (about 16 per cent less); Windows 450 s to 334 s
+    (about 26 per cent less). Each side's two samples do not overlap on either
+    leg, but two samples a side is thin, and the spread on Windows is wide: the
+    earlier `main` run `9e157902` (run 39048517864, 5772 tests, a smaller tree)
+    measured 359 s on Windows, inside the PR's range, and 262 s on ubuntu.
+  - Summed test time rose on ubuntu with six workers, 670 s on `main` against
+    894 s and 912 s on the PR: each test runs slower while sharing four vCPUs.
+    The wall clock still fell.
+  - Done when 3, the flake: none. All four PR attempts passed on both legs. The
+    test named on 2026-10-12, `parallel-ranges.test.ts` ("dl-98: the feeder's
+    own limits"), passed on Windows attempt 1 (80.9 s) and attempt 3 (77.0 s),
+    and on ubuntu attempt 2 (77.2 s). The 2026-10-12 Windows failure does not
+    recur in two Windows attempts at six workers, which is two samples, not a
+    rate. The first `main` run after merge is still owed (Done when 3, second
+    half), so Done when 3 stays unticked.
+  - What the brief had wrong, after dl-117: the slowest file is no longer the
+    one that set the wall clock. On the PR, the slowest file on ubuntu is
+    `tools/downloader/engine/test/parallel-ranges.test.ts`, 77 s, and on Windows
+    it is `scripts/test/review-record.test.ts`, 111 s (attempt 3). The "~620 s
+    one-file floor" and "three workers cannot finish under 410 s" lines describe
+    the suite before dl-117 and no longer hold.
+  - `CI=true` on this run is not re-read here: no step in `ci.yml` prints the
+    environment, and the 2026-10-12 entry's reading (run 38262465552) is the
+    only one. The ubuntu leg's six-worker effect on summed time is consistent
+    with it, but that is an inference, not a reading.
+  - `mergeTree` in `npm run preflight` conflicts with #513 (`log-2026-10-17-pl-56`)
+    on `.claude/skills/orchestrate-tickets/reference/history.md`. That file is
+    not touched by this branch: #513's base predates `fff14d54` (#512), which
+    edits the same file on `main`, so the conflict is #513's to resolve. The
+    rest of preflight passes at `4d72b248`: `npm run check` and `npm test` ok,
+    `ciCommands` ok, `review` ok, `title` ok (`ci` is hidden in
+    `release-please-config.json`).
