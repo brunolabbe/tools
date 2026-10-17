@@ -52,9 +52,10 @@ and nothing else.
    the difference is rounding and nothing else. Take it off the **not-shared**
    amount when there is one: that part is the payer's own, no line records it and
    nobody owes it, so the cent costs no one anything. With no not-shared items,
-   take it off the charge that is largest in size, the earlier on a tie, as
-   lg-30's Build 2 does for several charged people; if lg-30 has merged, this
-   is one guard, not two, so extend that one.
+   take it off the charge that is largest in size, the earlier on a tie. **This
+   is the rule lg-30's Build 2 states, word for word** (owner, 2026-10-17, Log):
+   the two tickets do not differ, in either merge order. Whichever merges second
+   extends the one guard already there; there are never two.
 2. The shared amount is then 0 and `fileLines` files the charge alone, with no
    shared line, as it already does for a receipt of which only the other's part
    is left.
@@ -75,7 +76,7 @@ change what the other person owes by a cent to fix the payer's own rounding.
 2. A `splitReceipt` test (`books/test/receipts.test.ts`) on the same proposal:
    `sharedCents` 0, `notSharedCents` 922, `chargedCents` 1,554, which make the
    2,476 paid. On `6b42ee19` it answers -1, 923 and 1,554.
-3. The refund of it: every price, tax and the total of `BASKET` negated, the
+3. The refund of it: every price, deposit, tax and the total of `BASKET` negated, the
    same marks, -2,476 charged: `sharedCents` 0, `notSharedCents` -922,
    `chargedCents` -1,554.
 4. _Regression:_ a receipt that really charges more than was paid (the same
@@ -91,3 +92,18 @@ change what the other person owes by a cent to fix the payer's own rounding.
   Build's choice of where the cent goes (not-shared first, then the largest
   charge) is the filing's recommendation, not an owner decision; a builder who
   finds a reason against it raises it.
+- 2026-10-17 — Gate 2 on lg-30 found that lg-30's Build 2 and this ticket's
+  Build 1 disagreed on the same receipt (G4), and the owner chose through
+  `AskUserQuestion`. As put:
+  - Question: "lg-30 and the new lg-32 disagree on where a leftover rounding cent
+    goes … Which rule should both tickets state?"
+  - **"Not-shared first" (recommended by the gate and by this ticket's filer):**
+    off the payer's not-shared amount when there is one, else off the charge
+    largest in size.
+  - "Always the largest charge".
+  - "Keep the refusal".
+  - **Chosen: "Not-shared first".** This ticket's rule is unchanged; Build 1 now
+    says lg-30's Build 2 states the same one, and Done when 3 negates the deposit
+    too (G3: `measure2.mts` gives `RECEIPT_DOES_NOT_ADD_UP` when the refund's
+    deposit is left positive). The rule is now an owner's answer, no longer only
+    the filing's recommendation.

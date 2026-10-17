@@ -117,22 +117,33 @@ may vary if the Log says what changed and why.
    rounding every `theirs` item together; the shared line takes the difference,
    as it does for every other rounding in this function, so the three parts
    always make the payment. **One exception, measured on `BASKET`** (Log): when
-   every item of a receipt is charged, rounding apart can overshoot the payment
-   (casey's items 1 and 3 are 923, sam's item 2 is 1,554, and together they are
-   2,477 against 2,476 paid), which would leave the shared amount at -1 and
-   `fileLines` would refuse it as "more comes off than was charged". When the
-   shared amount computed with every `theirs` item rounded together (what
-   `splitReceipt` returns today) is zero or has the payment's sign, but the one
-   computed with the people rounded apart has the opposite sign, the excess is
-   rounding and nothing else: take it off the charge that is largest **in size**
-   (by `Math.abs`, as `splitByCategory` compares), the earlier on a tie, moving
-   that charge toward zero by the excess, and the shared amount is 0. On a refund
-   the charges are negative: `BASKET` negated, every item `theirs`, casey on
-   items 1 and 3 and sam on item 2, gives -923 and -1,554 and a shared amount of
-   +1, and sam's is the largest in size, so it becomes -1,553. That is the guard
-   `splitByCategory` uses for its largest category. With one person charged the two computations are the
-   same number, so nothing changes there, and an excess the together-rounding
-   shows too is still the person's mistake and is still refused.
+   rounding the parts apart (the not-shared items, and each charged person's)
+   overshoots the payment, the shared amount would be -1 and `fileLines` would
+   refuse it as "more comes off than was charged" on a receipt that adds up. Two
+   receipts show it. Every item charged: casey's items 1 and 3 are 923, sam's
+   item 2 is 1,554, and together they are 2,477 against 2,476 paid. And a mixed
+   one: item 1 not shared (349), item 2 casey's (1,554), item 3 sam's (574), which
+   are 2,477 again, while the three rounded together are 2,476 and the shared
+   amount is 0. When the shared amount computed with every item that comes off
+   (the not-shared ones and every `theirs` one) rounded together is zero or has
+   the payment's sign, but the one computed with the parts rounded apart has the
+   opposite sign, the excess is rounding and nothing else. **Take it off the
+   not-shared amount when there is one** (owner, 2026-10-17, Log): that part is
+   the payer's own, no line records it and nobody owes it, so the cent costs no
+   one anything. **With no not-shared items, take it off the charge largest in
+   size** (by `Math.abs`, as `splitByCategory` compares), the earlier on a tie,
+   moving that charge toward zero by the excess. Either way the shared amount is 0. So the mixed receipt gives not shared 348, casey 1,554, sam 574, shared 0;
+   and the every-item-charged one, with no not-shared amount to take it from, gives
+   casey 923, sam 1,553. On a refund the amounts are negative: `BASKET` negated
+   (deposit included), every item `theirs`, casey on items 1 and 3 and sam on
+   item 2, gives -923 and -1,554 and a shared amount of +1, and sam's is the
+   largest in size, so it becomes -1,553. That is the guard `splitByCategory` uses
+   for its largest category. **lg-32 states the same rule for a receipt with no
+   charged person at all, and its build is this guard**: whichever of the two
+   tickets merges second extends the one guard and does not add another. With
+   one person charged and nothing not shared the two computations are the same
+   number, so nothing changes there, and an excess the together-rounding shows
+   too is still the person's mistake and is still refused.
 3. **`api/src/receipts.ts`, `fileReceipt` and `fileLines`.**
    - Resolve each `theirs` item's name first, inside the transaction and before
      anything is written: a given `chargedTo` is used as given; a `null` is the
@@ -192,8 +203,10 @@ may vary if the Log says what changed and why.
    `splitByCategory` and does the same. A type error names any other.
 6. **`web/src/receipts/Receipts.tsx`.**
    - Current members come from the household record that lg-22 built, not from a
-     contract change: the screen calls `fetchMe` (`person.household`, as
-     `periods/Periods.tsx` does) and then `fetchHousehold(person.household)`
+     contract change: the screen calls `fetchMe` from
+     `web/src/api/me.ts` (it answers `MeResponse`, so `person.household`; not the
+     `fetchMe` in `web/src/api/periods.ts`, which `periods/Periods.tsx` imports and
+     which answers a bare person id) and then `fetchHousehold(person.household)`
      (`GET /api/households/:id`, which answers a member their own household), and
      takes the distinct `members[].person` as the current members. It uses
      those, in place of `fetchPeople`'s every name, where it counts `people`
@@ -282,8 +295,8 @@ null` as a two-person filing does (to the one other current member); and the
    200, two charge lines and no shared one. `periodLineId` is casey's line (923),
    `chargeLineId` is `null`, `charges` has two entries, and sam's line is 1,553
    (the cent the rounding overshot comes off the charge largest in size, Build
-   2); the two make 2,476. The same on the refund: every `BASKET` price, tax and
-   the total negated, `-2,476` charged, the same marks: casey's line is -923 and
+   2); the two make 2,476. The same on the refund: every `BASKET` price, deposit,
+   tax and the total negated, `-2,476` charged, the same marks: casey's line is -923 and
    sam's is -1,553, which make -2,476 (sam's is the largest in size, casey's the
    largest by value). _Regression:_ a fixture where the excess shows with the
    people rounded together too (more is charged than was paid, with one person
@@ -308,12 +321,14 @@ notSharedCents + chargedCents` equals the payment in each case the existing
    `[]`, and its shared line is not listed as a charge.
 10. **The screen counts current members from the household record**
     (`web/test/receipts.test.tsx`): opening the receipt screen calls `fetchMe`
-    and then `fetchHousehold` with the `household` that `fetchMe` answered, and
-    does not call `fetchPeople`; the people it counts are the distinct
-    `members[].person` of that answer. `ROUTES.people` and `PeopleResponse` are
-    unchanged: `git diff origin/main -- tools/ledger/api/src/routes/rules.ts`
-    is empty and `PeopleResponse` in `contract/src/api.ts` has the one field it
-    has today.
+    (the one in `web/src/api/me.ts`) and then `fetchHousehold` with the
+    `household` that `fetchMe` answered, and does not call `fetchPeople`; the
+    people it counts are the distinct `members[].person` of that answer.
+    `ROUTES.people` and `PeopleResponse` are unchanged: an API test shows `GET
+/api/people` answers exactly the one key `people`, and `PeopleResponse` in
+    `contract/src/api.ts` has the one field it has today. (No clause pins a file
+    diff: `api/src/routes/rules.ts` holds `ruleContext`, which Build 3 may extend
+    to pass the current members in.)
 11. **Web, three current members** (`web/test/receipts.test.tsx`): tapping an
     item through its cycle reaches `theirs`; a select named `Whose is <item>`
     offers the two other members and not the payer; choosing sam on one item and
@@ -338,7 +353,17 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     item says `charged_to` casey with `charge_line_id` null. On the parent the
     same request is refused, since the item carries `chargedTo`, so this is
     proved new.
-16. `npm run check` and the ledger suite (`npm test -- --project ledger`) pass at
+16. **A cent of rounding on a mixed receipt comes off the not-shared amount**
+    (`books/test/receipts.test.ts`, and an API filing of it): `BASKET` with item
+    1 not shared, item 2 `theirs` to casey and item 3 `theirs` to sam, 2,476
+    charged, in a household of three. `splitReceipt` answers `notSharedCents` 348,
+    casey 1,554, sam 574 and `sharedCents` 0, which make the 2,476 paid (the parts
+    rounded apart are 349, 1,554 and 574, which is 2,477). The filing is 200 with
+    two charge lines, casey's 1,554 and sam's 574, and no shared line. (The
+    parent's `splitReceipt` rounds the `theirs` items together and answers
+    `notSharedCents` 349 and `chargedCents` 2,127, measured; a filing that names
+    casey and sam is refused there, so the filing is proved new.)
+17. `npm run check` and the ledger suite (`npm test -- --project ledger`) pass at
     the branch's head; the pull request's own CI is green.
 
 ## Log
@@ -447,3 +472,39 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     -1,554 to -1,553, shared +1 to 0), and Done when 7 tests it.
   - **F7**: Done when 12 says "the `theirs` item in the request carries".
   - Not applied: nothing was refuted.
+- 2026-10-17 — Gate 2 (round 2) on `baa2a910`, and the owner's answer to its G4.
+  Gate 1's and gate 2's full reports are on pull request #516's thread, as
+  comments (no record is committed here: the ticket stays `ready`, so none is
+  landed, and `--land` is not run). Each finding was reproduced on this tree
+  first:
+  - **G4, where a leftover rounding cent goes** (`measure2.mts`, "mixed": item 1
+    not shared 349, casey 1,554, sam 574 are 2,477 against 2,476 paid; the three
+    together are 0 shared). lg-30's Build 2 took it off casey and lg-32 off the
+    not-shared part, so the answer depended on merge order. The owner answered
+    through `AskUserQuestion`, as put:
+    - Question: "lg-30 and the new lg-32 disagree on where a leftover rounding
+      cent goes … Which rule should both tickets state?"
+    - **"Not-shared first" (recommended by the gate and by lg-32's filer):** off
+      the payer's not-shared amount when there is one, else off the charge largest
+      in size. The cent costs nobody, since no line records the not-shared part.
+    - "Always the largest charge": one rule for every case, but it moves what
+      someone owes by a cent to fix the payer's own rounding.
+    - "Keep the refusal": the receipt stays refused over a cent.
+    - **Chosen: "Not-shared first".** Build 2 now says it, and Done when 16 pins
+      the mixed receipt: not shared 348, casey 1,554, sam 574, shared 0. Those
+      four numbers were checked, not copied: `measure2.mts` gives the parts 349,
+      1,554 and 574 and the together-shared 0, so taking the one cent off 349 gives 348. lg-32 says the same rule and that its build is the same guard.
+  - **G1:** Done when 10 no longer pins `git diff origin/main --
+…/routes/rules.ts` is empty. `rules.ts` holds `ruleContext`, which every
+    `ruleContext(context, request)` caller uses, including the filing route's;
+    Build 3 may extend it. The clause asks for `GET /api/people` answering exactly
+    the key `people`, and `PeopleResponse` as it is.
+  - **G2:** Build 6 and Done when 10 name `web/src/api/me.ts`
+    (`grep -n "fetchMe" tools/ledger/web/src/api/*.ts`: `me.ts` answers
+    `MeResponse`, `periods.ts` a string). The gate's parenthetical, that
+    `App.tsx` already holds `me` and could pass `household` down, is left as the
+    author's call, as the dispatch said.
+  - **G3:** Done when 7's refund negates every price, deposit, tax and the total.
+    `measure2.mts`: with the deposit not negated, `RECEIPT_DOES_NOT_ADD_UP`.
+  - Not applied: nothing was refuted. Done when 17 is the old 16, renumbered by
+    the new 16.
