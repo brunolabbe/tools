@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: [dl-117]
 difficulty: mechanical
+awaiting: Done when 3, second half — the first push run of ci.yml on main after the merge whose unit matrix runs shows each test (...) job and its Run npm test step passing in gh run view <id> --json jobs, the informational Windows job included
 ---
 
 # repo-99 — CI runs vitest on three workers for a wait-bound suite
