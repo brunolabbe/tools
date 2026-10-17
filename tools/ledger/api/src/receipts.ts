@@ -17,24 +17,42 @@
  *
  * All of it in the caller's own household's books and photos (lg-21): the route
  * passes `booksOf(request)` and the household the identity check attached.
+ *
+ * **Items** (lg-10). A read proposes each item line with a category from the
+ * household's list, and names the category this merchant was last given. A
+ * filing with items is refused unless they make the total
+ * (`RECEIPT_DOES_NOT_ADD_UP`); then what is not shared and what is the other's
+ * come off the line, computed by the books from the items (`splitReceipt`), and
+ * the other's part is filed as a charge of its own. The items are stored with
+ * the filing.
  */
 
-import { checkReceipt, matchReceipt } from "@ledger/books";
+import {
+  checkReceipt,
+  itemsAddUp,
+  matchReceipt,
+  normalizeDescription,
+  splitReceipt,
+} from "@ledger/books";
 import type { MatchableRow } from "@ledger/books";
 import { AppError, MAX_RECEIPTS_PER_PHOTO } from "@ledger/contract";
 import type {
   FileReceiptRequest,
+  ItemShare,
   ReadReceiptResponse,
   Receipt,
   ReceiptFiling,
+  ReceiptItem,
   ReceiptMatchesResponse,
   ReceiptMediaType,
+  ReceiptProposal,
 } from "@ledger/contract";
-import type { ReceiptReader } from "@ledger/receipts";
+import type { CategoryChoice, ReceiptReader } from "@ledger/receipts";
 import type { Database } from "better-sqlite3";
 import { addLine } from "./periods.ts";
 import type { PeriodContext } from "./periods.ts";
 import type { PhotoStore } from "./receipt-photos.ts";
+import { requireSpendingCategory, spendingCategories } from "./spending-categories.ts";
 
 /**
  * The type a photo's first bytes say it is, or `null`. Never the name it was
@@ -73,6 +91,35 @@ interface FilingColumns {
   row_id: number | null;
   filed_at: string;
   filed_by: string;
+  charge_line_id: number | null;
+}
+
+interface ItemColumns {
+  text: string;
+  price_cents: number;
+  taxable: 0 | 1;
+  deposit_cents: number | null;
+  spending_category_id: number | null;
+  share: ItemShare;
+}
+
+function toItem(columns: ItemColumns): ReceiptItem {
+  return {
+    text: columns.text,
+    price: columns.price_cents,
+    taxable: columns.taxable === 1,
+    deposit: columns.deposit_cents,
+    spendingCategoryId: columns.spending_category_id,
+    share: columns.share,
+  };
+}
+
+function itemsOf(db: Database, filingId: number): ReceiptItem[] {
+  return (
+    db
+      .prepare("SELECT * FROM receipt_items WHERE filing_id = ? ORDER BY position")
+      .all(filingId) as ItemColumns[]
+  ).map(toItem);
 }
 
 function toReceipt(columns: ReceiptColumns): Receipt {
@@ -85,7 +132,7 @@ function toReceipt(columns: ReceiptColumns): Receipt {
   };
 }
 
-function toFiling(columns: FilingColumns): ReceiptFiling {
+function toFiling(db: Database, columns: FilingColumns): ReceiptFiling {
   return {
     id: columns.id,
     receiptId: columns.receipt_id,
@@ -97,8 +144,10 @@ function toFiling(columns: FilingColumns): ReceiptFiling {
       gst: columns.gst_cents,
       qst: columns.qst_cents,
       total: columns.total_cents,
+      items: itemsOf(db, columns.id),
     },
     periodLineId: columns.period_line_id,
+    chargeLineId: columns.charge_line_id,
     rowId: columns.row_id,
     filedAt: columns.filed_at,
     filedBy: columns.filed_by,
@@ -164,16 +213,109 @@ export async function readReceipt(
   const filed = context.db.prepare("SELECT id FROM receipt_filings WHERE receipt_id = ?").get(id);
   if (filed !== undefined) throw new AppError("RECEIPT_ALREADY_FILED");
   if (reader === undefined) throw new AppError("RECEIPT_READER_UNCONFIGURED");
+  const offered: CategoryChoice[] = spendingCategories(context.db)
+    .filter((category) => !category.retired)
+    .map(({ id: categoryId, name }) => ({ id: categoryId, name }));
   const bytes = await context.photos.load(context.household, receipt.photo);
-  const proposals = await reader.read({ bytes, mediaType: receipt.media_type }, signal);
+  const proposals = await reader.read({ bytes, mediaType: receipt.media_type }, signal, offered);
+  const ids = new Set(offered.map((category) => category.id));
   return {
     receiptId: receipt.id,
     model: reader.model,
     // No more than a photo can file, each as its part (gate 2, N2).
-    proposals: proposals
-      .slice(0, MAX_RECEIPTS_PER_PHOTO)
-      .map((proposal) => ({ proposal, flags: checkReceipt(proposal) })),
+    proposals: proposals.slice(0, MAX_RECEIPTS_PER_PHOTO).map((read) => {
+      const proposal = withOfferedCategories(read, ids);
+      return {
+        proposal,
+        flags: checkReceipt(proposal),
+        merchantCategoryId: merchantCategory(context.db, proposal.merchant, ids),
+      };
+    }),
   };
+}
+
+/**
+ * The proposal with any item category not in the list dropped (the owner's
+ * answer of 2026-10-16): the reader already drops a name it was not offered, and
+ * this holds whatever reader is plugged in to the same, by id.
+ */
+function withOfferedCategories(
+  proposal: ReceiptProposal,
+  offered: ReadonlySet<number>,
+): ReceiptProposal {
+  return {
+    ...proposal,
+    items: proposal.items.map((item) =>
+      item.spendingCategoryId === null || offered.has(item.spendingCategoryId)
+        ? item
+        : { ...item, spendingCategoryId: null },
+    ),
+  };
+}
+
+/**
+ * The spending category a merchant's receipts were last given (lg-10), which the
+ * screen proposes first. Newest filing first, the first that was given one
+ * decides: the category of the line it became, when the person gave it one,
+ * otherwise the one most of its items were given (the earlier on a tie). The
+ * merchant is compared folded, as a rule compares a description, so case,
+ * accents and spacing do not make another merchant. A category retired since is
+ * not proposed.
+ *
+ * **The line is read as it now stands** (the owner's answer of 2026-10-17, gate
+ * 1's F3): a correction supersedes the line the filing named, so the chain of
+ * `supersedes` is followed to its newest version. **A line since removed still
+ * sets its merchant's category** (the owner's answer of 2026-10-17, gate 2's
+ * N1): its chain ends on the retirement, which copies the line, and a removal
+ * undoes an entry, not what the merchant sells.
+ *
+ * The walk stops at a depth of 10 000 (gate 2's N2). Nothing in the tool writes
+ * a cycle into `supersedes`, but nothing in the schema refuses one either, and a
+ * file edited by hand that holds one would otherwise never return from a
+ * synchronous query.
+ */
+export function merchantCategory(
+  db: Database,
+  merchant: string | null,
+  offered: ReadonlySet<number>,
+): number | null {
+  if (merchant === null) return null;
+  const wanted = normalizeDescription(merchant);
+  // A version is superseded at most once (`period_lines_supersedes`), so the
+  // chain from the filed line is a single path, and its deepest step is newest.
+  const filings = db
+    .prepare(
+      `SELECT receipt_filings.id, receipt_filings.merchant,
+         (WITH RECURSIVE chain (id, category, depth) AS (
+            SELECT id, spending_category_id, 0 FROM period_lines
+            WHERE id = receipt_filings.period_line_id
+            UNION ALL
+            SELECT newer.id, newer.spending_category_id, chain.depth + 1
+            FROM period_lines newer JOIN chain ON newer.supersedes = chain.id
+            WHERE chain.depth < 10000
+          )
+          SELECT category FROM chain ORDER BY depth DESC LIMIT 1) AS line_category
+       FROM receipt_filings
+       WHERE receipt_filings.merchant IS NOT NULL
+       ORDER BY receipt_filings.id DESC`,
+    )
+    .all() as { id: number; merchant: string; line_category: number | null }[];
+  const mostItems = db.prepare(
+    `SELECT spending_category_id AS category FROM receipt_items
+     WHERE filing_id = ? AND spending_category_id IS NOT NULL
+     GROUP BY spending_category_id
+     ORDER BY count(*) DESC, min(position)
+     LIMIT 1`,
+  );
+  for (const filing of filings) {
+    if (normalizeDescription(filing.merchant) !== wanted) continue;
+    const category =
+      filing.line_category ??
+      (mostItems.get(filing.id) as { category: number } | undefined)?.category ??
+      null;
+    if (category !== null) return offered.has(category) ? category : null;
+  }
+  return null;
 }
 
 /**
@@ -209,7 +351,12 @@ export function receiptMatches(
  * a photo of two receipts files twice (gate 1, F2). A line is paid by
  * whoever uploaded the photo, and entered by whoever confirms; a row is only
  * documented, and gains no line. Either way the filing records the proposal as
- * confirmed, which lg-10 reads its items against.
+ * confirmed, its items with it (lg-10).
+ *
+ * Items must make the total, or nothing is filed (`RECEIPT_DOES_NOT_ADD_UP`).
+ * Each item's category must be in the list. On a row every item is shared (the
+ * owner's answer of 2026-10-17): the money left the joint account, so there is
+ * no payer for an item to stay with, nor one the other's would owe.
  */
 export function fileReceipt(
   context: PeriodContext,
@@ -225,24 +372,23 @@ export function fileReceipt(
       if (filed !== undefined) throw new AppError("RECEIPT_ALREADY_FILED");
 
       const { destination, proposal } = request;
+      // Items that do not make the total are corrected first, never filed (lg-10).
+      if (!itemsAddUp(proposal)) throw new AppError("RECEIPT_DOES_NOT_ADD_UP");
+      for (const item of proposal.items) {
+        requireSpendingCategory(context.db, item.spendingCategoryId);
+      }
       let periodLineId: number | null = null;
+      let chargeLineId: number | null = null;
       let rowId: number | null = null;
       if (destination.to === "line") {
-        const line = addLine(
-          context,
-          {
-            personId: receipt.uploaded_by,
-            date: destination.date,
-            amountCents: destination.amountCents,
-            category: null,
-            spendingCategoryId: destination.spendingCategoryId,
-            note: destination.note,
-            chargedTo: destination.chargedTo,
-          },
-          "receipt",
-        );
-        periodLineId = line.id;
+        [periodLineId, chargeLineId] = fileLines(context, receipt.uploaded_by, request);
       } else {
+        if (proposal.items.some((item) => item.share !== "shared")) {
+          throw new AppError(
+            "BAD_REQUEST",
+            "A receipt on a joint-account row is shared whole: every item on it stays shared.",
+          );
+        }
         const row = context.db
           .prepare("SELECT id FROM statement_rows WHERE id = ?")
           .get(destination.rowId);
@@ -256,8 +402,8 @@ export function fileReceipt(
 
       const result = context.db
         .prepare(
-          `INSERT INTO receipt_filings (receipt_id, part, merchant, date, subtotal_cents, gst_cents, qst_cents, total_cents, period_line_id, row_id, filed_at, filed_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO receipt_filings (receipt_id, part, merchant, date, subtotal_cents, gst_cents, qst_cents, total_cents, period_line_id, charge_line_id, row_id, filed_at, filed_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -269,15 +415,125 @@ export function fileReceipt(
           proposal.qst,
           proposal.total,
           periodLineId,
+          chargeLineId,
           rowId,
           context.now().toISOString(),
           context.personId,
         );
+      const filingId = Number(result.lastInsertRowid);
+      const insertItem = context.db.prepare(
+        `INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, deposit_cents, spending_category_id, share)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const [index, item] of proposal.items.entries()) {
+        insertItem.run(
+          filingId,
+          index + 1,
+          item.text,
+          item.price,
+          item.taxable ? 1 : 0,
+          item.deposit,
+          item.spendingCategoryId,
+          item.share,
+        );
+      }
       return toFiling(
+        context.db,
         context.db
           .prepare("SELECT * FROM receipt_filings WHERE id = ?")
-          .get(Number(result.lastInsertRowid)) as FilingColumns,
+          .get(filingId) as FilingColumns,
       );
     })
     .immediate();
+}
+
+/**
+ * The lines a receipt filed as a line becomes (lg-10), as `[line, charge]`:
+ *
+ * - **the shared line**: what the card was charged, less what is not shared
+ *   and what is the other's, each computed from the items (`splitReceipt`). A
+ *   receipt the person marked as the other's whole (`chargedTo`) is still one
+ *   line, charged to them, as lg-8 filed it.
+ * - **the charge**: the other's items, owed in full by the other person to
+ *   whoever uploaded the photo, under their category when they share one.
+ *
+ * A part that comes to nothing files no line, and the first line filed is the
+ * one the filing names first. A receipt of which nothing is left to file — every
+ * item not shared and no tip — is refused: it is nobody's business but the
+ * payer's, and a filing must name a line.
+ */
+function fileLines(
+  context: PeriodContext,
+  payer: string,
+  request: FileReceiptRequest,
+): [number, number | null] {
+  const { destination, proposal } = request;
+  if (destination.to !== "line") throw new AppError("INTERNAL", "Only a line is split.");
+  const split =
+    proposal.items.length === 0
+      ? { sharedCents: destination.amountCents, notSharedCents: 0, chargedCents: 0 }
+      : splitReceipt(proposal, undefined, destination.amountCents);
+  if (
+    split.sharedCents !== 0 &&
+    Math.sign(split.sharedCents) !== Math.sign(destination.amountCents)
+  ) {
+    throw new AppError(
+      "BAD_REQUEST",
+      "More comes off this receipt than the card was charged. Check the amount charged and the items.",
+    );
+  }
+  const other = [...context.people].find((person) => person !== payer) ?? null;
+  if (split.chargedCents !== 0 && other === null) {
+    throw new AppError(
+      "BAD_REQUEST",
+      "There is nobody else in the household to charge an item to.",
+    );
+  }
+
+  const filed: number[] = [];
+  if (split.sharedCents !== 0) {
+    const line = addLine(
+      context,
+      {
+        personId: payer,
+        date: destination.date,
+        amountCents: split.sharedCents,
+        category: null,
+        spendingCategoryId: destination.spendingCategoryId,
+        note: destination.note,
+        chargedTo: destination.chargedTo,
+      },
+      "receipt",
+    );
+    filed.push(line.id);
+  }
+  if (split.chargedCents !== 0) {
+    const theirs = proposal.items.filter((item) => item.share === "theirs");
+    const [first] = theirs;
+    const alike =
+      first !== undefined &&
+      theirs.every((item) => item.spendingCategoryId === first.spendingCategoryId);
+    const charge = addLine(
+      context,
+      {
+        personId: payer,
+        date: destination.date,
+        amountCents: split.chargedCents,
+        category: null,
+        spendingCategoryId: alike ? first.spendingCategoryId : destination.spendingCategoryId,
+        note: destination.note,
+        chargedTo: other,
+      },
+      "receipt",
+    );
+    filed.push(charge.id);
+  }
+  const [line, charge] = filed;
+  if (line === undefined) {
+    throw new AppError(
+      "BAD_REQUEST",
+      "Nothing on this receipt is shared or the other's, so there is nothing to file.",
+    );
+  }
+  return [line, charge ?? null];
 }

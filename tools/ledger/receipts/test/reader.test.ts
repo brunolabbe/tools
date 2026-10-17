@@ -81,8 +81,17 @@ const TWO_RECEIPTS = JSON.stringify({
       gst: 50,
       qst: 100,
       total: 2_650,
+      items: [],
     },
-    { merchant: "  ", date: "2026-02-30", subtotal: 1_899, gst: null, qst: null, total: 1_899 },
+    {
+      merchant: "  ",
+      date: "2026-02-30",
+      subtotal: 1_899,
+      gst: null,
+      qst: null,
+      total: 1_899,
+      items: [],
+    },
   ],
 });
 
@@ -110,7 +119,11 @@ describe("the model reader", () => {
         data: Buffer.from(PHOTO.bytes).toString("base64"),
       },
     });
-    expect(content?.content[1]).toEqual({ type: "text", text: RECEIPT_PROMPT });
+    // No list given, so the list sent is empty (lg-10).
+    expect(content?.content[1]).toEqual({
+      type: "text",
+      text: `${RECEIPT_PROMPT}\nCategories: []`,
+    });
     const config = request?.body["output_config"] as { format: { type: string } };
     expect(config.format.type).toBe("json_schema");
   });
@@ -138,9 +151,18 @@ describe("the model reader", () => {
         gst: 50,
         qst: 100,
         total: 2_650,
+        items: [],
       },
       // A blank merchant and a day that does not exist are not read.
-      { merchant: null, date: null, subtotal: 1_899, gst: null, qst: null, total: 1_899 },
+      {
+        merchant: null,
+        date: null,
+        subtotal: 1_899,
+        gst: null,
+        qst: null,
+        total: 1_899,
+        items: [],
+      },
     ]);
   });
 
@@ -197,5 +219,132 @@ describe("the model reader", () => {
     expect(() =>
       createModelReader({ provider: "anthropic", apiKey: " ", fetch: answering().fetch }),
     ).toThrow(expect.objectContaining({ code: "RECEIPT_READER_UNCONFIGURED" }));
+  });
+});
+
+// --- lg-10: the items, and a category for each from the household's list ---
+
+const CATEGORIES = [
+  { id: 1, name: "Groceries" },
+  { id: 2, name: "Alcohol" },
+  { id: 3, name: "Household" },
+];
+
+/** One receipt of four lines: a category in the list, one in another case, one not in it, none. */
+const WITH_ITEMS = JSON.stringify({
+  receipts: [
+    {
+      merchant: "Marché Exemple",
+      date: "2026-10-04",
+      subtotal: 2_207,
+      gst: 90,
+      qst: 179,
+      total: 2_476,
+      items: [
+        { text: "PAIN", price: 349, taxable: false, deposit: null, category: "Groceries" },
+        { text: "BIERE 6X355", price: 1_299, taxable: true, deposit: 60, category: " alcohol " },
+        { text: "SAVON", price: 499, taxable: true, deposit: null, category: "Toiletries" },
+        { text: "RABAIS", price: -100, taxable: false, deposit: null, category: null },
+      ],
+    },
+  ],
+});
+
+describe("the model reader's items (lg-10)", () => {
+  test("sends the household's categories by name with the prompt", async () => {
+    const api = answering(() => message(WITH_ITEMS));
+
+    await reader(api.fetch).read(PHOTO, undefined, CATEGORIES);
+
+    const [content] = (api.sent[0]?.body["messages"] ?? []) as {
+      content: Record<string, unknown>[];
+    }[];
+    expect(content?.content[1]).toEqual({
+      type: "text",
+      text: `${RECEIPT_PROMPT}\nCategories: ["Groceries","Alcohol","Household"]`,
+    });
+  });
+
+  test("returns each item as read, shared, with its category from the list or none", async () => {
+    const api = answering(() => message(WITH_ITEMS));
+
+    const [proposal] = await reader(api.fetch).read(PHOTO, undefined, CATEGORIES);
+
+    expect(proposal?.items).toEqual([
+      {
+        text: "PAIN",
+        price: 349,
+        taxable: false,
+        deposit: null,
+        spendingCategoryId: 1,
+        share: "shared",
+      },
+      {
+        text: "BIERE 6X355",
+        price: 1_299,
+        taxable: true,
+        deposit: 60,
+        spendingCategoryId: 2,
+        share: "shared",
+      },
+      // "Toiletries" is not in the list: the item stays, its category is dropped.
+      {
+        text: "SAVON",
+        price: 499,
+        taxable: true,
+        deposit: null,
+        spendingCategoryId: null,
+        share: "shared",
+      },
+      {
+        text: "RABAIS",
+        price: -100,
+        taxable: false,
+        deposit: null,
+        spendingCategoryId: null,
+        share: "shared",
+      },
+    ]);
+  });
+
+  test("leaves out an item with no price or no text read, rather than guessing one", async () => {
+    const api = answering(() =>
+      message(
+        JSON.stringify({
+          receipts: [
+            {
+              merchant: "Marché Exemple",
+              date: "2026-10-04",
+              subtotal: 349,
+              gst: null,
+              qst: null,
+              total: 349,
+              items: [
+                { text: "PAIN", price: 349, taxable: false, deposit: null, category: null },
+                { text: "ILLISIBLE", price: null, taxable: false, deposit: null, category: null },
+                { text: "  ", price: 120, taxable: false, deposit: null, category: null },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    const [proposal] = await reader(api.fetch).read(PHOTO, undefined, CATEGORIES);
+
+    expect(proposal?.items.map((item) => item.text)).toEqual(["PAIN"]);
+  });
+
+  test("proposes no category at all when it is given no list", async () => {
+    const api = answering(() => message(WITH_ITEMS));
+
+    const [proposal] = await reader(api.fetch).read(PHOTO);
+
+    expect(proposal?.items.map((item) => item.spendingCategoryId)).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
   });
 });

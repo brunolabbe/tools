@@ -642,3 +642,47 @@ svg.chart .selected-band {
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--border);
 }
+
+/* lg-10: a receipt's items, one per block on a phone, each tapped through
+   shared, not shared and the other's. What is not shared is muted and what is
+   the other's is marked, so the state reads without the button's word. */
+.items {
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 0.5rem;
+  padding: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.items ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.items .item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.items .item > input {
+  flex: 1 1 6rem;
+  min-width: 0;
+}
+
+.items .item.not-shared > input {
+  color: var(--muted);
+}
+
+.items .item.theirs {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.5rem;
+}

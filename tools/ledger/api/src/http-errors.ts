@@ -75,6 +75,9 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   RECEIPT_UNREADABLE: 422,
   // Gate 1, F3: a row documented once, like a receipt filed once.
   ROW_ALREADY_DOCUMENTED: 409,
+  // lg-10: items that do not make the total are the receipt as sent, which the
+  // person corrects, like an unreadable one.
+  RECEIPT_DOES_NOT_ADD_UP: 422,
 };
 
 /**

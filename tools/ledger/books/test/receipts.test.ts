@@ -4,9 +4,17 @@
  */
 
 import { describe, expect, test } from "vitest";
-import type { ReceiptProposal } from "@ledger/contract";
-import { RECEIPT_MATCH_DAYS, checkReceipt, matchReceipt } from "../src/index.ts";
-import type { MatchableRow } from "../src/index.ts";
+import type { ReceiptItem, ReceiptProposal } from "@ledger/contract";
+import {
+  RECEIPT_MATCH_DAYS,
+  SALES_TAX_RATES,
+  checkReceipt,
+  matchReceipt,
+  ratesOn,
+  sharedAmount,
+  splitReceipt,
+} from "../src/index.ts";
+import type { MatchableRow, SalesTaxRates } from "../src/index.ts";
 
 /**
  * 15,00 $ of zero-rated groceries and 10,00 $ taxable: GST 0,50 $, QST 0,9975 $
@@ -19,6 +27,7 @@ const GROCERIES: ReceiptProposal = {
   gst: 50,
   qst: 100,
   total: 2_650,
+  items: [],
 };
 
 describe("the arithmetic check", () => {
@@ -123,5 +132,214 @@ describe("the row match", () => {
     expect(matchReceipt(rows, { amountCents: 2_650, date: "2026-10-30" })).toEqual([
       { row: rows[0], daysApart: 3 },
     ]);
+  });
+});
+
+// --- lg-10: items, what comes off the shared amount, and the dated rates ---
+
+/**
+ * Bread, zero-rated; a six-pack, taxable, with its 0,60 $ deposit; soap,
+ * taxable. Taxable 17,98 $: GST 0,899 $ → 0,90 $, QST 1,7935 $ → 1,79 $. The
+ * subtotal holds the deposit, so it is 22,07 $, and the total 24,76 $.
+ */
+const BASKET: ReceiptProposal = {
+  merchant: "Marché Exemple",
+  date: "2026-10-04",
+  subtotal: 2_207,
+  gst: 90,
+  qst: 179,
+  total: 2_476,
+  items: [
+    {
+      text: "PAIN",
+      price: 349,
+      taxable: false,
+      deposit: null,
+      spendingCategoryId: 1,
+      share: "shared",
+    },
+    {
+      text: "BIERE 6X355",
+      price: 1_299,
+      taxable: true,
+      deposit: 60,
+      spendingCategoryId: 2,
+      share: "shared",
+    },
+    {
+      text: "SAVON",
+      price: 499,
+      taxable: true,
+      deposit: null,
+      spendingCategoryId: 3,
+      share: "shared",
+    },
+  ],
+};
+
+/** `BASKET`'s item at `index`, which the tests know is there. */
+function item(index: number): ReceiptItem {
+  const found = BASKET.items[index];
+  if (found === undefined) throw new Error(`no item ${String(index)}`);
+  return found;
+}
+
+describe("the items (lg-10)", () => {
+  test("a receipt whose items, deposits and taxes make its total passes the check", () => {
+    expect(checkReceipt(BASKET)).toEqual([]);
+  });
+
+  test("flags items a cent short of the total, and only that", () => {
+    const short = { ...BASKET, items: [{ ...item(0), price: 348 }, item(1), item(2)] };
+
+    expect(checkReceipt(short)).toEqual(["items-differ"]);
+  });
+
+  test("flags items with no total to make", () => {
+    expect(checkReceipt({ ...BASKET, total: null })).toEqual(["total-missing", "items-differ"]);
+  });
+
+  test("takes a taxable excluded item and its deposit off the shared amount, to the cent", () => {
+    // 12,99 $ + 0,60 $ + 12,99 $ × 14,975 % = 15,5352525 $ → 15,54 $, rounded once.
+    const { excludedCents, sharedCents } = sharedAmount(BASKET, [1]);
+
+    expect(excludedCents).toBe(1_554);
+    expect(sharedCents).toBe(922);
+    expect(excludedCents + sharedCents).toBe(BASKET.total);
+  });
+
+  test("charges no tax on a deposit, nor on a zero-rated item", () => {
+    const untaxed = { ...BASKET, items: [item(0), { ...item(1), taxable: false }, item(2)] };
+
+    // 12,99 $ + 0,60 $, untaxed; and 3,49 $, untaxed.
+    expect(sharedAmount(untaxed, [1]).excludedCents).toBe(1_359);
+    expect(sharedAmount(untaxed, [0]).excludedCents).toBe(349);
+  });
+
+  test("rounds the excluded part once, half-up", () => {
+    // 20,00 $ × 14,975 % is 2,995 $ exactly: 22,995 $ → 23,00 $.
+    const receipt: ReceiptProposal = {
+      ...BASKET,
+      subtotal: 2_000,
+      gst: 100,
+      qst: 200,
+      total: 2_300,
+      items: [{ ...item(2), price: 2_000 }],
+    };
+    const refund: ReceiptProposal = {
+      ...receipt,
+      subtotal: -2_000,
+      gst: -100,
+      qst: -200,
+      total: -2_300,
+      items: [{ ...item(2), price: -2_000 }],
+    };
+
+    expect(sharedAmount(receipt, [0])).toEqual({ excludedCents: 2_300, sharedCents: 0 });
+    // Half a cent away from zero, either way.
+    expect(sharedAmount(refund, [0])).toEqual({ excludedCents: -2_300, sharedCents: 0 });
+  });
+
+  test("refuses to share a receipt whose items do not add up", () => {
+    expect(() => sharedAmount({ ...BASKET, total: 2_477 }, [1])).toThrow(
+      expect.objectContaining({ code: "RECEIPT_DOES_NOT_ADD_UP" }),
+    );
+  });
+
+  test("splits three ways, each part off computed alike, and the three make the total", () => {
+    const marked: ReceiptProposal = {
+      ...BASKET,
+      items: [item(0), { ...item(1), share: "theirs" }, { ...item(2), share: "not-shared" }],
+    };
+
+    const split = splitReceipt(marked);
+
+    // The six-pack is charged exactly what it would come off as not shared.
+    expect(split.chargedCents).toBe(sharedAmount(BASKET, [1]).excludedCents);
+    // 4,99 $ + 0,7472525 $ → 5,74 $.
+    expect(split.notSharedCents).toBe(574);
+    expect(split.sharedCents + split.notSharedCents + split.chargedCents).toBe(BASKET.total);
+  });
+
+  test("leaves a tip in the shared part", () => {
+    const marked = {
+      ...BASKET,
+      items: BASKET.items.map((each) => ({ ...each, share: "not-shared" as const })),
+    };
+
+    const split = splitReceipt(marked, SALES_TAX_RATES, 2_476 + 300);
+
+    // Every item off, rounded once: 22,07 $ + 17,98 $ × 14,975 % = 24,762505 $ → 24,76 $.
+    expect(split.notSharedCents).toBe(2_476);
+    expect(split.sharedCents).toBe(300);
+  });
+});
+
+describe("the dated rates (lg-10)", () => {
+  /** An invented change: QST to 10,975 % from 1 July 2026. */
+  const CHANGED: SalesTaxRates[] = [
+    { from: "2013-01-01", gst: 5_000, qst: 9_975 },
+    { from: "2026-07-01", gst: 5_000, qst: 10_975 },
+  ];
+
+  /** 10,00 $ of wine, taxable, and 10,00 $ of bread; the QST at the date's rate. */
+  function receiptOn(date: string, qst: number): ReceiptProposal {
+    return {
+      merchant: "Marché Exemple",
+      date,
+      subtotal: 2_000,
+      gst: 50,
+      qst,
+      total: 2_050 + qst,
+      items: [
+        { ...item(2), text: "VIN", price: 1_000 },
+        { ...item(0), price: 1_000 },
+      ],
+    };
+  }
+
+  test("a rate change mid-year uses the rate in effect on the receipt's date", () => {
+    const before = receiptOn("2026-06-30", 100);
+    const after = receiptOn("2026-07-01", 110);
+
+    // 10,00 $ + 0,50 $ + 0,9975 $ → 11,50 $; then 10,00 $ + 0,50 $ + 1,0975 $ → 11,60 $.
+    expect(sharedAmount(before, [0], CHANGED)).toEqual({
+      excludedCents: 1_150,
+      sharedCents: 1_000,
+    });
+    expect(sharedAmount(after, [0], CHANGED)).toEqual({
+      excludedCents: 1_160,
+      sharedCents: 1_000,
+    });
+  });
+
+  test("the check reads the same dated rates", () => {
+    const after = receiptOn("2026-07-01", 110);
+
+    expect(checkReceipt(after, CHANGED)).toEqual([]);
+    expect(checkReceipt(receiptOn("2026-06-30", 110), CHANGED)).toEqual(["tax-differs"]);
+    // The table in force has no such change, so the same receipt does not fit it.
+    expect(checkReceipt(after)).toEqual(["tax-differs"]);
+  });
+
+  test("takes the latest rates for a receipt with no date, and the first for one before the table", () => {
+    expect(ratesOn(null, CHANGED)).toBe(CHANGED[1]);
+    expect(ratesOn("2010-05-01", CHANGED)).toBe(CHANGED[0]);
+    expect(ratesOn("2026-10-04")).toEqual({ from: "2013-01-01", gst: 5_000, qst: 9_975 });
+  });
+});
+
+/** Oldest first, each day once: `ratesOn` takes the last entry whose day has come. */
+function inOrder(table: readonly SalesTaxRates[]): boolean {
+  return table.every((rates, index) => index === 0 || (table[index - 1]?.from ?? "") < rates.from);
+}
+
+describe("the shipped rate table (lg-10 gate 1, F6)", () => {
+  test("is oldest first, with each day once", () => {
+    expect(inOrder(SALES_TAX_RATES)).toBe(true);
+    // The check can fail: an entry added out of order, or a day given twice.
+    const added = { from: "2027-01-01", gst: 5_000, qst: 9_975 };
+    expect(inOrder([added, ...SALES_TAX_RATES])).toBe(false);
+    expect(inOrder([...SALES_TAX_RATES, ...SALES_TAX_RATES])).toBe(false);
   });
 });

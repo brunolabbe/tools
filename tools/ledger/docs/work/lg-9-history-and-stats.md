@@ -29,9 +29,11 @@ append-only records, so this ticket computes and draws. It stores nothing new.
      by month. Categories come from
      [lg-15](./lg-15-spending-categories-on-bank-rows.md)'s one list, on bank
      rows and on period lines. A joint-account row with a receipt attached
-     (lg-8) is split by its receipt items' categories once
-     [lg-10](./lg-10-receipt-items-exclusions-and-categories.md) lands, and its
-     own category is then not counted. A row or line with no category charts
+     (lg-8) is to be split by its receipt items' categories, its own category
+     then not counted. That split is
+     [lg-27](./lg-27-split-a-joint-rows-spending-by-its-receipt-items.md)'s, not
+     lg-10's, which stored the items and left the allocation undecided
+     (repointed 2026-10-17). A row or line with no category charts
      as uncategorised; a period line stored before lg-15, or imported by lg-7,
      shows its free text in the detail. Read a row's category from what lg-15
      built and do not recompute it: `listRows` in `api/src/rows.ts` answers it

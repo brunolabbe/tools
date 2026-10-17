@@ -129,9 +129,10 @@ export function bufferStats(
  * period line's is its own `spendingCategoryId`, with its free text left in the
  * uncategorised detail.
  *
- * A joint-account row with a receipt attached is split by its receipt items'
- * categories once lg-10 lands, and its own category is then not counted; no
- * receipt is stored yet, so every row here is whole.
+ * A joint-account row with a receipt attached is to be split by its receipt
+ * items' categories, its own then not counted (lg-9's Build). lg-10 stores the
+ * items (`receipt_items`), but how a row's taxes and any tip divide among its
+ * items' categories is not decided, so every row here is still whole (lg-27).
  */
 export function spendingStats(
   db: Database,

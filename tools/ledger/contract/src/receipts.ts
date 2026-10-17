@@ -10,6 +10,10 @@
  *
  * Every amount is in cents. A refund is negative, as the models measured on lg-8
  * read one.
+ *
+ * lg-10 adds the items: each line of the receipt, whether it is shared, and its
+ * spending category, so that what one person alone pays for comes off the shared
+ * amount (`docs/00-ANALYSIS.md` §6, _Items that are not shared_).
  */
 
 import { z } from "zod";
@@ -32,6 +36,41 @@ export type ReceiptMediaType = (typeof RECEIPT_MEDIA_TYPES)[number];
 export const MAX_RECEIPT_PHOTO_BYTES = 7 * 1024 * 1024;
 
 /**
+ * What becomes of one item (lg-10). A person taps an item through the three.
+ *
+ * - `shared`: the default, and all a reader ever answers.
+ * - `not-shared`: it stays with whoever paid, and comes off the shared amount.
+ * - `theirs`: the other person's, and becomes a charge they owe in full; it
+ *   comes off the shared amount exactly as a `not-shared` item does.
+ */
+export const ITEM_SHARES = ["shared", "not-shared", "theirs"] as const;
+export type ItemShare = (typeof ITEM_SHARES)[number];
+
+/**
+ * One item line of a receipt (lg-10), as read and then as the person confirmed
+ * it. The reader reads the text, the price, the taxable mark and the deposit,
+ * and proposes a category; it decides no `share`, and computes nothing.
+ */
+export interface ReceiptItem {
+  text: string;
+  /** As printed. A discount or a returned item is negative. */
+  price: number;
+  /** Marked taxable on the receipt: GST and QST are charged on its price. */
+  taxable: boolean;
+  /** The deposit (`consigne`) printed for it, or `null`. A deposit carries no tax. */
+  deposit: number | null;
+  /**
+   * A category from lg-15's list: the model's proposal until the person
+   * confirms. `null` when it proposed none, or one that is not in the list.
+   */
+  spendingCategoryId: number | null;
+  share: ItemShare;
+}
+
+/** Far past any grocery receipt's lines; a reading past it is cut there. */
+export const MAX_RECEIPT_ITEMS = 200;
+
+/**
  * What a reader proposes from one receipt in a photo. A photo can hold more than
  * one (lg-8 measured two side by side), so a reader returns a list. Every field
  * is `null` when it was not read: a receipt with no tax lines has `gst` and `qst`
@@ -47,12 +86,27 @@ export interface ReceiptProposal {
   /** TVQ. */
   qst: number | null;
   total: number | null;
+  /**
+   * The item lines, in the order printed (lg-10). Empty for a receipt typed in
+   * without them, or one whose items were not read: such a receipt is filed on
+   * its total, as lg-8 filed every receipt.
+   */
+  items: ReceiptItem[];
 }
 
 /** A billion dollars: far past any receipt, and well inside a safe integer. */
 const MAX_CENTS = 100_000_000_000;
 
 const cents = z.number().int().min(-MAX_CENTS).max(MAX_CENTS);
+
+export const receiptItemSchema = z.strictObject({
+  text: z.string().trim().min(1).max(200),
+  price: cents,
+  taxable: z.boolean(),
+  deposit: cents.nullable(),
+  spendingCategoryId: z.number().int().positive().nullable(),
+  share: z.enum(ITEM_SHARES),
+}) satisfies z.ZodType<ReceiptItem>;
 
 export const receiptProposalSchema = z.strictObject({
   merchant: z.string().trim().min(1).max(200).nullable(),
@@ -61,7 +115,9 @@ export const receiptProposalSchema = z.strictObject({
   gst: cents.nullable(),
   qst: cents.nullable(),
   total: cents.nullable(),
-}) satisfies z.ZodType<ReceiptProposal>;
+  // A proposal sent with no items is filed on its total, as lg-8 filed one.
+  items: z.array(receiptItemSchema).max(MAX_RECEIPT_ITEMS).default([]),
+}) satisfies z.ZodType<ReceiptProposal, unknown>;
 
 /**
  * What the arithmetic check (`checkReceipt` in `books`) says of a proposal. It
@@ -73,6 +129,13 @@ export const receiptProposalSchema = z.strictObject({
  * - `tax-differs`: no taxable part of the subtotal gives both taxes, GST at 5 %
  *   and QST at 9.975 %, each rounded to the cent.
  * - `signs-differ`: some parts are a purchase and some a refund.
+ * - `items-differ` (lg-10): the items, their deposits and the two taxes do not
+ *   make the total, to the cent. Unlike the others it **blocks filing**: the
+ *   shared amount is computed from the items, so items that do not add up would
+ *   file an amount nobody paid (`RECEIPT_DOES_NOT_ADD_UP`).
+ *
+ * The taxes are checked at the rates in effect on the receipt's date
+ * (`ratesOn` in `books`).
  */
 export const RECEIPT_FLAGS = [
   "total-missing",
@@ -81,6 +144,7 @@ export const RECEIPT_FLAGS = [
   "parts-differ",
   "tax-differs",
   "signs-differ",
+  "items-differ",
 ] as const;
 export type ReceiptFlag = (typeof RECEIPT_FLAGS)[number];
 
@@ -88,6 +152,12 @@ export type ReceiptFlag = (typeof RECEIPT_FLAGS)[number];
 export interface CheckedProposal {
   proposal: ReceiptProposal;
   flags: ReceiptFlag[];
+  /**
+   * The spending category this merchant's receipts were last given (lg-10), which
+   * the screen proposes first; `null` for a merchant never categorised, or none
+   * read. A category retired since is not proposed.
+   */
+  merchantCategoryId: number | null;
 }
 
 /**
@@ -114,8 +184,17 @@ export interface ReceiptFiling {
   part: number;
   /** The proposal as the person confirmed it. */
   proposal: ReceiptProposal;
-  /** The line it became, or `null` when it was attached to a row. */
+  /**
+   * The line it became, or `null` when it was attached to a row. It carries the
+   * shared amount (lg-10); when nothing on the receipt is shared but some of it
+   * is the other's, it is the charge.
+   */
   periodLineId: number | null;
+  /**
+   * The charge the other person's items became (lg-10), when the receipt also
+   * left a shared line; `null` otherwise.
+   */
+  chargeLineId: number | null;
   /** The stored row it documents, or `null` when it became a line. */
   rowId: number | null;
   filedAt: string;
@@ -191,6 +270,12 @@ export interface ReceiptMatchesResponse {
  * photo, never by whoever names it here, so the line takes no `personId`.
  * `amountCents` is what the card was charged, which a tip printed under the
  * total makes differ from it.
+ *
+ * With items (lg-10) the line is not `amountCents`: the API takes off what is
+ * not shared and what is the other's, computed from the items (`splitReceipt`
+ * in `books`), files the rest as the line, and files the other's part as a
+ * charge of its own. A tip stays shared. A receipt attached to a row is shared
+ * whole: its items carry categories, and none may be `not-shared` or `theirs`.
  */
 export type ReceiptDestination =
   | {

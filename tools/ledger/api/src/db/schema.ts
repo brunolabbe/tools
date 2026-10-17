@@ -508,6 +508,34 @@ const MIGRATIONS: readonly string[] = [
   -- purchase must not both attach to it (gate 1, F3).
   CREATE UNIQUE INDEX receipt_filings_row ON receipt_filings (row_id) WHERE row_id IS NOT NULL;
   `,
+
+  // 9 — a receipt's items, each shared, not shared or the other's, with its
+  // spending category, and the charge the other's items became (lg-10).
+  `
+  -- The items as the person confirmed them, written with the filing and never
+  -- after. What they took off the shared amount is not stored: it is on the
+  -- lines the filing names, as the amounts filed.
+  CREATE TABLE receipt_items (
+    id INTEGER PRIMARY KEY,
+    filing_id INTEGER NOT NULL REFERENCES receipt_filings (id),
+    -- In the order printed, from 1.
+    position INTEGER NOT NULL CHECK (position >= 1),
+    text TEXT NOT NULL,
+    price_cents INTEGER NOT NULL,
+    taxable INTEGER NOT NULL CHECK (taxable IN (0, 1)),
+    -- The consigne printed for it; it carries no tax.
+    deposit_cents INTEGER,
+    spending_category_id INTEGER REFERENCES spending_categories (id),
+    share TEXT NOT NULL CHECK (share IN ('shared', 'not-shared', 'theirs')),
+    UNIQUE (filing_id, position)
+  );
+
+  -- The charge the other person's items became, when the receipt also left a
+  -- shared line in period_line_id. When nothing on it was shared, the charge is
+  -- period_line_id itself and this is NULL; every filing stored before this
+  -- migration has none.
+  ALTER TABLE receipt_filings ADD COLUMN charge_line_id INTEGER REFERENCES period_lines (id);
+  `,
 ];
 
 /**

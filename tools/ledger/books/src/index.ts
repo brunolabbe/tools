@@ -73,8 +73,18 @@ export type {
   SpendingSpan,
   StatRow,
 } from "./stats.ts";
-export { RECEIPT_MATCH_DAYS, checkReceipt, matchReceipt } from "./receipts.ts";
-export type { MatchableRow, RowMatch } from "./receipts.ts";
+export {
+  RATE_SCALE,
+  RECEIPT_MATCH_DAYS,
+  SALES_TAX_RATES,
+  checkReceipt,
+  itemsAddUp,
+  matchReceipt,
+  ratesOn,
+  sharedAmount,
+  splitReceipt,
+} from "./receipts.ts";
+export type { MatchableRow, ReceiptSplit, RowMatch, SalesTaxRates } from "./receipts.ts";
 export { parseStatement } from "./statement.ts";
 export type { ParsedStatement, StatementRow } from "./statement.ts";
 export {

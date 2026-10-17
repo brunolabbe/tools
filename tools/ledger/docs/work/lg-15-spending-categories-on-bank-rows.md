@@ -64,7 +64,9 @@ so the two can never be read for each other.
    - the period-line form picks from the list.
 7. **What lg-9 reads**, written into its Build in the same change: a joint-account
    row with a receipt attached (lg-8) is split by its receipt items' categories
-   (lg-10) and its own spending category is not counted; a period line with no
+   and its own spending category is not counted (lg-10 stores the items;
+   [lg-27](./lg-27-split-a-joint-rows-spending-by-its-receipt-items.md) is the
+   split, repointed 2026-10-17); a period line with no
    list category, which is every line stored before this ticket and every line
    lg-7 imports, charts as uncategorised, its text shown in the detail.
 8. **Traps.**

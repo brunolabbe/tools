@@ -46,6 +46,7 @@ const READ: ReceiptProposal = {
   gst: 50,
   qst: 100,
   total: 2_650,
+  items: [],
 };
 
 beforeEach(() => {
@@ -58,7 +59,7 @@ beforeEach(() => {
   vi.mocked(readReceipt).mockResolvedValue({
     receiptId: 3,
     model: "claude-haiku-5-5",
-    proposals: [{ proposal: READ, flags: [] }],
+    proposals: [{ proposal: READ, flags: [], merchantCategoryId: null }],
   });
   vi.mocked(fileReceipt).mockResolvedValue({
     id: 1,
@@ -66,6 +67,7 @@ beforeEach(() => {
     part: 1,
     proposal: READ,
     periodLineId: 9,
+    chargeLineId: null,
     rowId: null,
     filedAt: "x",
     filedBy: "alex",
@@ -118,6 +120,7 @@ test("typing it in never sends the photo, and starts the date at the upload's", 
         gst: null,
         qst: null,
         total: 1_250,
+        items: [],
       },
       destination: {
         to: "line",
@@ -203,8 +206,12 @@ test("asks which receipt, when the photo holds two", async () => {
     receiptId: 3,
     model: "claude-haiku-5-5",
     proposals: [
-      { proposal: READ, flags: [] },
-      { proposal: { ...READ, merchant: "Quincaillerie", total: 999 }, flags: ["parts-differ"] },
+      { proposal: READ, flags: [], merchantCategoryId: null },
+      {
+        proposal: { ...READ, merchant: "Quincaillerie", total: 999 },
+        flags: ["parts-differ"],
+        merchantCategoryId: null,
+      },
     ],
   });
   await takePhoto();
@@ -237,8 +244,8 @@ test("files each receipt in a photo of two, and goes back to the one not filed y
     receiptId: 3,
     model: "claude-haiku-5-5",
     proposals: [
-      { proposal: READ, flags: [] },
-      { proposal: second, flags: ["parts-differ"] },
+      { proposal: READ, flags: [], merchantCategoryId: null },
+      { proposal: second, flags: ["parts-differ"], merchantCategoryId: null },
     ],
   });
   await takePhoto();
@@ -259,4 +266,172 @@ test("files each receipt in a photo of two, and goes back to the one not filed y
   // Both filed: nothing more to pick, and no second read.
   expect(screen.queryByRole("button", { name: /Quincaillerie|Marché/u })).toBeNull();
   expect(readReceipt).toHaveBeenCalledTimes(1);
+});
+
+// --- lg-10: the items ---
+
+/**
+ * Bread, zero-rated; a six-pack, taxable, with its deposit; soap, taxable: the
+ * total 24,76 $. The six-pack with its deposit and taxes is 15,54 $.
+ */
+const BASKET: ReceiptProposal = {
+  merchant: "Marché Exemple",
+  date: "2026-10-04",
+  subtotal: 2_207,
+  gst: 90,
+  qst: 179,
+  total: 2_476,
+  items: [
+    {
+      text: "PAIN",
+      price: 349,
+      taxable: false,
+      deposit: null,
+      spendingCategoryId: 1,
+      share: "shared",
+    },
+    {
+      text: "BIERE 6X355",
+      price: 1_299,
+      taxable: true,
+      deposit: 60,
+      spendingCategoryId: 2,
+      share: "shared",
+    },
+    {
+      text: "SAVON",
+      price: 499,
+      taxable: true,
+      deposit: null,
+      spendingCategoryId: null,
+      share: "shared",
+    },
+  ],
+};
+
+async function readBasket(merchantCategoryId: number | null = null): Promise<void> {
+  vi.mocked(fetchSpendingCategories).mockResolvedValue([
+    { id: 1, name: "Groceries", retired: false, createdAt: "x", createdBy: "migration" },
+    { id: 2, name: "Alcohol", retired: false, createdAt: "x", createdBy: "migration" },
+  ]);
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 3,
+    model: "claude-haiku-5-5",
+    proposals: [{ proposal: BASKET, flags: [], merchantCategoryId }],
+  });
+  await takePhoto();
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await waitFor(() => expect(field("Total").value).toBe("24.76"));
+}
+
+function shared(): string {
+  return screen.getByLabelText("What is shared").textContent ?? "";
+}
+
+test("a tap cycles an item through shared, not shared and the other's, and the amounts follow live", async () => {
+  await readBasket();
+
+  expect(shared()).toBe("Not shared 0.00 $ · sam's 0.00 $ · Shared 24.76 $");
+
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
+  expect(shared()).toBe("Not shared 15.54 $ · sam's 0.00 $ · Shared 9.22 $");
+
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Not shared" }));
+  expect(shared()).toBe("Not shared 0.00 $ · sam's 15.54 $ · Shared 9.22 $");
+
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, sam's" }));
+  expect(screen.getByRole("button", { name: "BIERE 6X355, Shared" })).toBeTruthy();
+});
+
+test("files the items as marked, on what the card was charged", async () => {
+  vi.mocked(fileReceipt).mockResolvedValue({
+    id: 1,
+    receiptId: 3,
+    part: 1,
+    proposal: BASKET,
+    periodLineId: 9,
+    chargeLineId: 10,
+    rowId: null,
+    filedAt: "x",
+    filedBy: "alex",
+  });
+  await readBasket();
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Not shared" }));
+
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  const request = vi.mocked(fileReceipt).mock.calls[0]?.[1];
+  expect(request?.proposal.items.map((item) => item.share)).toEqual(["shared", "theirs", "shared"]);
+  // The API takes the parts off: the form sends what the card was charged.
+  expect(request?.destination).toMatchObject({ to: "line", amountCents: 2_476 });
+  expect(
+    await screen.findByText("Filed as alex's line in the period, and sam's items as a charge."),
+  ).toBeTruthy();
+});
+
+test("each item's category is editable, and the merchant's last category is proposed first", async () => {
+  await readBasket(2);
+
+  // The line takes the merchant's category, and every picker lists it first.
+  expect((screen.getByLabelText("Spending category") as HTMLSelectElement).value).toBe("2");
+  const picker = screen.getByLabelText("Category of SAVON") as HTMLSelectElement;
+  expect([...picker.options].map((option) => option.text)).toEqual([
+    "None",
+    "Alcohol",
+    "Groceries",
+  ]);
+  // The model proposed none for the soap; the person picks one.
+  expect(picker.value).toBe("");
+  fireEvent.change(picker, { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(
+    vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items.map((item) => item.spendingCategoryId),
+  ).toEqual([1, 2, 1]);
+});
+
+test("items that do not add up to the total are shown for correction and not filed", async () => {
+  await readBasket();
+
+  fireEvent.change(field("Price of PAIN"), { target: { value: "3.48" } });
+
+  expect(
+    screen.getByText(
+      "The items, deposits and taxes do not add up to the total. Correct them to file.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByLabelText("What is shared")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(fileReceipt).not.toHaveBeenCalled();
+
+  fireEvent.change(field("Price of PAIN"), { target: { value: "3.49" } });
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+});
+
+test("keeps an item left out off a joint-account row, before asking the server", async () => {
+  vi.mocked(fetchReceiptMatches).mockResolvedValue([
+    {
+      rowId: 41,
+      date: "2026-10-03",
+      description: "Achat /Marché Exemple",
+      amountCents: -2_476,
+      daysApart: 1,
+    },
+  ]);
+  await readBasket();
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
+
+  const said = (await screen.findByRole("alert")).textContent ?? "";
+  expect(said).toContain("shared whole");
+  // Never sent to file it as a line: a line is paid by whoever took the photo (gate 1, F1).
+  expect(said).not.toContain("line");
+  expect(fileReceipt).not.toHaveBeenCalled();
 });

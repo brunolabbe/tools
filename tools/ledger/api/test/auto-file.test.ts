@@ -450,7 +450,7 @@ describe("migration 7 rebuilds the classifications (lg-17)", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
     expect(before).toHaveLength(4);
     expect(db.prepare(`SELECT ${COLUMNS} FROM classifications ORDER BY id`).all()).toEqual(before);
     expect(
@@ -501,7 +501,7 @@ describe("migration 7 rebuilds the classifications (lg-17)", () => {
     applyMigrations(db);
     db.exec("COMMIT");
 
-    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
     expect(db.prepare("SELECT count(*) AS n FROM classifications").get()).toEqual({ n: 4 });
     db.close();
   });

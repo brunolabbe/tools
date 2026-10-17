@@ -26,6 +26,7 @@ import type { ReceiptReader } from "@ledger/receipts";
 import { loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
 import type { AppLogger } from "../src/logger.ts";
+import { merchantCategory } from "../src/receipts.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
 import {
@@ -58,6 +59,7 @@ const READ: ReceiptProposal = {
   gst: 50,
   qst: 100,
   total: 2_650,
+  items: [],
 };
 
 /** A reader that proposes `READ`, and a second receipt a cent off, and counts its calls. */
@@ -351,8 +353,12 @@ describe("reading a receipt", () => {
       receiptId: receipt.id,
       model: "fake-haiku",
       proposals: [
-        { proposal: READ, flags: [] },
-        { proposal: { ...READ, merchant: "Quincaillerie", total: 2_651 }, flags: ["parts-differ"] },
+        { proposal: READ, flags: [], merchantCategoryId: null },
+        {
+          proposal: { ...READ, merchant: "Quincaillerie", total: 2_651 },
+          flags: ["parts-differ"],
+          merchantCategoryId: null,
+        },
       ],
     });
   });
@@ -780,5 +786,512 @@ describe("a read of more receipts than can be filed (gate 2, N2)", () => {
     expect(answer.proposals.at(-1)?.proposal.merchant).toBe(
       `Marchand ${String(MAX_RECEIPTS_PER_PHOTO)}`,
     );
+  });
+});
+
+// --- lg-10: items, what comes off the shared amount, and categories ---
+
+/** Migration 6's seeded list, by the ids it gave. */
+const GROCERIES = 1;
+const ALCOHOL = 2;
+const HOUSEHOLD = 3;
+
+/**
+ * Bread, zero-rated; a six-pack, taxable, with its 0,60 $ deposit; soap,
+ * taxable. Taxable 17,98 $: GST 0,90 $, QST 1,79 $; the total 24,76 $. The
+ * six-pack alone, with its deposit and taxes, is 15,5352525 $ → 15,54 $.
+ */
+const BASKET: ReceiptProposal = {
+  merchant: "Marché Exemple",
+  date: "2026-10-04",
+  subtotal: 2_207,
+  gst: 90,
+  qst: 179,
+  total: 2_476,
+  items: [
+    {
+      text: "PAIN",
+      price: 349,
+      taxable: false,
+      deposit: null,
+      spendingCategoryId: GROCERIES,
+      share: "shared",
+    },
+    {
+      text: "BIERE 6X355",
+      price: 1_299,
+      taxable: true,
+      deposit: 60,
+      spendingCategoryId: ALCOHOL,
+      share: "shared",
+    },
+    {
+      text: "SAVON",
+      price: 499,
+      taxable: true,
+      deposit: null,
+      spendingCategoryId: HOUSEHOLD,
+      share: "shared",
+    },
+  ],
+};
+
+/** `BASKET` with each item's share as given, in order. */
+function marked(...shares: ReceiptProposal["items"][number]["share"][]): ReceiptProposal {
+  return {
+    ...BASKET,
+    items: BASKET.items.map((item, index) => ({ ...item, share: shares[index] ?? "shared" })),
+  };
+}
+
+/** A reader that answers `proposals` and keeps the categories it was offered. */
+function itemReader(...proposals: ReceiptProposal[]): {
+  reader: ReceiptReader;
+  offered: { id: number; name: string }[][];
+} {
+  const offered: { id: number; name: string }[][] = [];
+  return {
+    offered,
+    reader: {
+      model: "fake-haiku",
+      async read(_photo, _signal, categories = []) {
+        offered.push([...categories]);
+        return proposals;
+      },
+    },
+  };
+}
+
+function storedLines(target: App): { amount_cents: number; charged_to: string | null }[] {
+  return homeBooks(target)
+    .prepare("SELECT amount_cents, charged_to FROM period_lines ORDER BY id")
+    .all() as { amount_cents: number; charged_to: string | null }[];
+}
+
+describe("a receipt's items (lg-10)", () => {
+  test("a receipt whose items do not add up to its total cannot be filed, and files once corrected", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+    // The bread misread a cent short: 24,75 $ of items and taxes against 24,76 $.
+    const short = {
+      ...BASKET,
+      items: BASKET.items.map((item, index) => (index === 0 ? { ...item, price: 348 } : item)),
+    };
+
+    const refused = await file(target, receipt.id, {
+      proposal: short,
+      destination: asLine(2_476),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.json<ErrorResponse>().error.code).toBe("RECEIPT_DOES_NOT_ADD_UP");
+    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+    expect(count(target, "receipt_items")).toBe(0);
+
+    const corrected = await file(target, receipt.id, {
+      proposal: BASKET,
+      destination: asLine(2_476),
+    });
+    expect(corrected.statusCode, corrected.body).toBe(200);
+  });
+
+  test("refuses items with no total to make, and files nothing", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+
+    const refused = await file(target, receipt.id, {
+      proposal: { ...BASKET, total: null },
+      destination: asLine(2_476),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(count(target, "receipt_filings")).toBe(0);
+  });
+
+  test("an item not shared, with its deposit and taxes, comes off the line, to the cent", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+
+    const response = await file(target, receipt.id, {
+      proposal: marked("shared", "not-shared"),
+      destination: asLine(2_476, { spendingCategoryId: GROCERIES }),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const filing = response.json<ReceiptFiling>();
+    // 24,76 $ less 15,54 $: excluded + shared = total.
+    expect(storedLines(target)).toEqual([{ amount_cents: 922, charged_to: null }]);
+    expect(filing.chargeLineId).toBeNull();
+    expect(filing.proposal).toEqual(marked("shared", "not-shared"));
+    expect(
+      homeBooks(target)
+        .prepare(
+          "SELECT position, text, price_cents, taxable, deposit_cents, spending_category_id, share FROM receipt_items ORDER BY position",
+        )
+        .all(),
+    ).toEqual([
+      {
+        position: 1,
+        text: "PAIN",
+        price_cents: 349,
+        taxable: 0,
+        deposit_cents: null,
+        spending_category_id: GROCERIES,
+        share: "shared",
+      },
+      {
+        position: 2,
+        text: "BIERE 6X355",
+        price_cents: 1_299,
+        taxable: 1,
+        deposit_cents: 60,
+        spending_category_id: ALCOHOL,
+        share: "not-shared",
+      },
+      {
+        position: 3,
+        text: "SAVON",
+        price_cents: 499,
+        taxable: 1,
+        deposit_cents: null,
+        spending_category_id: HOUSEHOLD,
+        share: "shared",
+      },
+    ]);
+  });
+
+  test("an item marked as the other's becomes a charge equal to its excluded amount, and the receipt still reconciles", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: marked("shared", "theirs", "not-shared"),
+      destination: asLine(2_476, { spendingCategoryId: GROCERIES }),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const filing = response.json<ReceiptFiling>();
+    const stored = homeBooks(target)
+      .prepare(
+        "SELECT id, person_id, amount_cents, charged_to, spending_category_id, source FROM period_lines ORDER BY id",
+      )
+      .all() as { id: number; amount_cents: number }[];
+    // The six-pack: exactly what it would come off as not shared, 15,54 $.
+    expect(stored).toEqual([
+      {
+        id: filing.periodLineId,
+        person_id: "alex",
+        amount_cents: 348,
+        charged_to: null,
+        spending_category_id: GROCERIES,
+        source: "receipt",
+      },
+      {
+        id: filing.chargeLineId,
+        person_id: "alex",
+        amount_cents: 1_554,
+        charged_to: "sam",
+        spending_category_id: ALCOHOL,
+        source: "receipt",
+      },
+    ]);
+    // Shared + not shared (the soap, 5,74 $) + charged = total.
+    const [shared, charged] = stored.map((line) => line.amount_cents);
+    expect((shared ?? 0) + 574 + (charged ?? 0)).toBe(BASKET.total);
+    const open = await target.server.inject({
+      method: "GET",
+      url: `${ROUTES.periodOpen}?end=2026-10-31`,
+      headers: as(ALEX),
+    });
+    expect(
+      open
+        .json<OpenPeriodResponse>()
+        .lines.map((line) => [line.lineId, line.amountCents, line.chargedTo]),
+    ).toEqual([
+      [filing.periodLineId, 348, null],
+      [filing.chargeLineId, 1_554, "sam"],
+    ]);
+  });
+
+  test("a receipt of only the other's items files the charge as its line", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: marked("theirs", "theirs", "theirs"),
+      destination: asLine(2_476),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const filing = response.json<ReceiptFiling>();
+    expect(filing.chargeLineId).toBeNull();
+    // 22,07 $ + 17,98 $ × 14,975 % = 24,762505 $ → 24,76 $: the whole receipt.
+    expect(storedLines(target)).toEqual([{ amount_cents: 2_476, charged_to: "sam" }]);
+  });
+
+  test("a tip stays shared", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+
+    const response = await file(target, receipt.id, {
+      proposal: marked("shared", "not-shared"),
+      destination: asLine(2_476 + 300),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(storedLines(target)).toEqual([{ amount_cents: 922 + 300, charged_to: null }]);
+  });
+
+  test("refuses a receipt of which nothing is shared or the other's, and files nothing", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+
+    const refused = await file(target, receipt.id, {
+      proposal: marked("not-shared", "not-shared", "not-shared"),
+      destination: asLine(2_476),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+  });
+
+  test("a receipt on a joint-account row keeps its items' categories, and refuses an item left out", async () => {
+    const target = await start();
+    await pasteRows(target);
+    const first = await uploaded(target);
+    const second = await uploaded(target);
+    const rowOf = (amount: number): number =>
+      (
+        homeBooks(target)
+          .prepare("SELECT id FROM statement_rows WHERE amount_cents = ?")
+          .get(amount) as { id: number }
+      ).id;
+
+    const refused = await file(target, first.id, {
+      proposal: marked("shared", "not-shared"),
+      destination: { to: "row", rowId: rowOf(-2_650) },
+    });
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(count(target, "receipt_filings")).toBe(0);
+
+    const kept = await file(target, second.id, {
+      proposal: BASKET,
+      destination: { to: "row", rowId: rowOf(-2_650) },
+    });
+    expect(kept.statusCode, kept.body).toBe(200);
+    expect(kept.json<ReceiptFiling>().proposal.items).toEqual(BASKET.items);
+    expect(count(target, "period_lines")).toBe(0);
+  });
+
+  test("refuses an item whose category is not in the list, and files nothing", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+    const proposal = {
+      ...BASKET,
+      items: BASKET.items.map((item, index) =>
+        index === 0 ? { ...item, spendingCategoryId: 99 } : item,
+      ),
+    };
+
+    const refused = await file(target, receipt.id, { proposal, destination: asLine(2_476) });
+
+    expect(refused.statusCode, refused.body).toBe(404);
+    expect(refused.json<ErrorResponse>().error.code).toBe("SPENDING_CATEGORY_NOT_FOUND");
+    expect(count(target, "period_lines")).toBe(0);
+  });
+
+  test("the model is offered the list as it stands, and a category not in it arrives as none", async () => {
+    const offList = {
+      ...BASKET,
+      items: BASKET.items.map((item, index) =>
+        index === 2 ? { ...item, spendingCategoryId: 99 } : item,
+      ),
+    };
+    const fake = itemReader(offList);
+    const target = await start({ reader: fake.reader });
+    const retired = await target.server.inject({
+      method: "POST",
+      url: ROUTES.spendingCategoryRetire.replace(":id", String(HOUSEHOLD)),
+      headers: as(ALEX),
+    });
+    expect(retired.statusCode, retired.body).toBe(200);
+    const receipt = await uploaded(target);
+
+    const answer = (await read(target, receipt.id)).json<ReadReceiptResponse>();
+
+    // Household was retired, so it is not offered.
+    expect(fake.offered[0]?.map((category) => category.name)).toEqual([
+      "Groceries",
+      "Alcohol",
+      "Pharmacy",
+      "Restaurant",
+      "Other",
+    ]);
+    expect(answer.proposals[0]?.proposal.items.map((item) => item.spendingCategoryId)).toEqual([
+      GROCERIES,
+      ALCOHOL,
+      null,
+    ]);
+    expect(answer.proposals[0]?.flags).toEqual([]);
+  });
+
+  test("a merchant's previous category is proposed first on its next receipt", async () => {
+    const fake = itemReader(
+      { ...BASKET, merchant: "MARCHE  exemple" },
+      { ...BASKET, merchant: "Quincaillerie" },
+    );
+    const target = await start({ reader: fake.reader });
+    const before = await uploaded(target);
+    const never = (await read(target, before.id)).json<ReadReceiptResponse>();
+    expect(never.proposals.map((proposal) => proposal.merchantCategoryId)).toEqual([null, null]);
+
+    const filed = await file(target, before.id, {
+      proposal: BASKET,
+      destination: asLine(2_476, { spendingCategoryId: GROCERIES }),
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    const next = await uploaded(target);
+
+    const answer = (await read(target, next.id)).json<ReadReceiptResponse>();
+
+    // The same merchant, written differently, gets Groceries; another gets none.
+    expect(answer.proposals.map((proposal) => proposal.merchantCategoryId)).toEqual([
+      GROCERIES,
+      null,
+    ]);
+  });
+
+  test("a merchant last filed on a row is proposed the category most of its items were given", async () => {
+    const fake = itemReader(BASKET);
+    const target = await start({ reader: fake.reader });
+    await pasteRows(target);
+    const first = await uploaded(target);
+    // Groceries first, then Alcohol twice: the most, not the first.
+    const proposal = {
+      ...BASKET,
+      items: BASKET.items.map((item, index) => ({
+        ...item,
+        spendingCategoryId: index === 0 ? GROCERIES : ALCOHOL,
+      })),
+    };
+    const filed = await file(target, first.id, {
+      proposal,
+      destination: { to: "row", rowId: chargeRow(target) },
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    const next = await uploaded(target);
+
+    const answer = (await read(target, next.id)).json<ReadReceiptResponse>();
+
+    expect(answer.proposals[0]?.merchantCategoryId).toBe(ALCOHOL);
+  });
+});
+
+// --- lg-10 gate 1's findings ---
+
+describe("a merchant's last category, corrected (lg-10 gate 1, F3)", () => {
+  test("is the category of the line as it now stands, not as it was filed", async () => {
+    const PHARMACY = 4;
+    const fake = itemReader({ ...BASKET, merchant: "Pharmaprix", items: [] });
+    const target = await start({ reader: fake.reader });
+    const before = await uploaded(target);
+    const filed = await file(target, before.id, {
+      proposal: { ...READ, merchant: "Pharmaprix" },
+      destination: asLine(2_650, { spendingCategoryId: GROCERIES }),
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    // The person corrects the line: it was the pharmacy, not groceries.
+    const corrected = await target.server.inject({
+      method: "POST",
+      url: ROUTES.periodLine.replace(":id", String(filed.json<ReceiptFiling>().periodLineId)),
+      headers: as(ALEX),
+      payload: {
+        personId: "alex",
+        date: "2026-10-04",
+        amountCents: 2_650,
+        category: null,
+        spendingCategoryId: PHARMACY,
+        note: "Pharmaprix",
+        chargedTo: null,
+      },
+    });
+    expect(corrected.statusCode, corrected.body).toBe(200);
+    const next = await uploaded(target);
+
+    const answer = (await read(target, next.id)).json<ReadReceiptResponse>();
+
+    expect(answer.proposals[0]?.merchantCategoryId).toBe(PHARMACY);
+  });
+});
+
+describe("a joint-account row's items (lg-10 gate 1, F1)", () => {
+  test("refuses an item marked as the other's on a row, files nothing, and says the row is shared whole", async () => {
+    const target = await start();
+    await pasteRows(target);
+    const receipt = await uploaded(target);
+
+    const refused = await file(target, receipt.id, {
+      proposal: {
+        ...BASKET,
+        total: 2_476,
+        items: [BASKET.items[0], { ...BASKET.items[1], share: "theirs" }, BASKET.items[2]],
+      },
+      destination: { to: "row", rowId: chargeRow(target) },
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    const message = refused.json<ErrorResponse>().error.message;
+    expect(message).toContain("shared whole");
+    // A line is paid by whoever uploaded the photo, which a row's purchase was not.
+    expect(message).not.toContain("line");
+    expect([count(target, "receipt_filings"), count(target, "receipt_items")]).toEqual([0, 0]);
+    expect(count(target, "period_lines")).toBe(0);
+  });
+});
+
+// --- lg-10 gate 2's findings, fixed at landing ---
+
+describe("a merchant's last category, removed (lg-10 gate 2, N1)", () => {
+  test("a line since removed still sets its merchant's category", async () => {
+    const fake = itemReader({ ...BASKET, merchant: "Pharmaprix", items: [] });
+    const target = await start({ reader: fake.reader });
+    const before = await uploaded(target);
+    const filed = await file(target, before.id, {
+      proposal: { ...READ, merchant: "Pharmaprix" },
+      destination: asLine(2_650, { spendingCategoryId: GROCERIES }),
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    const removed = await target.server.inject({
+      method: "POST",
+      url: ROUTES.periodLineRetire.replace(":id", String(filed.json<ReceiptFiling>().periodLineId)),
+      headers: as(ALEX),
+    });
+    expect(removed.statusCode, removed.body).toBe(200);
+    expect(count(target, "period_lines")).toBe(2);
+    const next = await uploaded(target);
+
+    const answer = (await read(target, next.id)).json<ReadReceiptResponse>();
+
+    // The owner's answer of 2026-10-17: a removal undoes an entry, not its category.
+    expect(answer.proposals[0]?.merchantCategoryId).toBe(GROCERIES);
+  });
+});
+
+describe("a cycle in a line's corrections (lg-10 gate 2, N2)", () => {
+  test("still answers when a hand-edited file makes a line supersede itself", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+    const filed = await file(target, receipt.id, {
+      proposal: { ...READ, merchant: "Pharmaprix" },
+      destination: asLine(2_650, { spendingCategoryId: GROCERIES }),
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    const db = homeBooks(target);
+    // Nothing in the tool writes this; only a file edited by hand, or corrupt, holds it.
+    db.prepare("UPDATE period_lines SET supersedes = id WHERE id = ?").run(
+      filed.json<ReceiptFiling>().periodLineId,
+    );
+
+    expect(merchantCategory(db, "Pharmaprix", new Set([GROCERIES]))).toBe(GROCERIES);
   });
 });
