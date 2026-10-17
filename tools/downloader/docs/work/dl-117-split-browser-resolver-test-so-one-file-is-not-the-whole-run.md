@@ -212,7 +212,9 @@ probes(() => server)`. The bodies are otherwise the same. The `vi.mock` that
 
   **B. Cold Chromium start.** Six files start six Chromiums at once. On a cold
   machine 3 of 124 tests hit the 25 s `PROBE_TIMEOUT_MS` in 1 of 4 six-file
-  runs (gate 1, F2); CI is unaffected. Options were: record only, or a follow-up
+  runs (gate 1, F2; the cause, a cold Chromium start, is inferred and not
+  measured, and two of those four runs also ran `parallel-ranges.test.ts` as a
+  seventh file); CI is unaffected. Options were: record only, or a follow-up
   ticket comparing a cold start on the base file and the split (a pool warm-up
   in each `beforeAll`, or a longer first-probe budget). The owner chose **record
   only, file neither** (recommended). Nothing is filed; the reproduction is gate
@@ -224,3 +226,6 @@ tools/downloader/resolvers/test/browser/browser-resolver-` on a machine that
   dl-61: 10, dl-68: 3, dl-105: 1). The owner chose **record only, file
   neither** (the recommended option). The old-to-new map in the 2026-10-16 entry
   is the only conversion; nothing on `main` checks the pins.
+
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, low — "the dl-117 Log's B entry says 'On a cold machine 3 of 124 tests hit the 25 s `PROBE_TIMEOUT_MS`'. Gate 1 gave the cold start as an inferred cause, not measured, and two of the four runs it counts also ran `parallel-ranges.test.ts` as a seventh file."
+  `sed -n '/^- 2026-10-17 — Owner answers/,/^- 2026-10-17 — Fixed/p' tools/downloader/docs/work/dl-117-*.md | tr '\n' ' ' | tr -s ' ' | grep -o -F 'is inferred and not measured' | wc -l` → 1.
