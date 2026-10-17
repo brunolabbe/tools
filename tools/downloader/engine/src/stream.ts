@@ -292,11 +292,35 @@ const PARTIAL_VERDICT_MS = 2_000;
  * 2026-10-15, from dl-125's measurements on both platforms. It caught 94.1% of those
  * cuts, and failed none of 90 whole-source runs, whose largest gap was
  * 0.067 s (one 15 fps frame). It misses only a cut that loses the last 0.25 s
- * or less. It was **not** measured against real sources. Low or variable
- * frame rates, edit lists, or a container that declares more than the tracks
- * the engine maps could each put a whole file past it.
+ * or less. It was **not** measured against real sources.
+ *
+ * **Narrowed on 2026-10-17** (the owner's answer to dl-125's gate 1, F1),
+ * because whole files did cross it. Of 37 whole sources the gate built, 9
+ * failed, and the rule now passes 8 of them; the ninth forges its own
+ * `Duration`. The rule now:
+ *
+ *  - widens to `REORDER_FRAMES` frame intervals when the video's frame rate is
+ *    known. `out_time` trails the container by the muxer's reorder delay:
+ *    three frames with libx264's B-frames (0.375 s at 8 fps), one without
+ *    (1 s at 1 fps). This replaces the owner's 0.25 s below 16 fps;
+ *  - is skipped for `audioOnly`, whose output ends with the audio track
+ *    while the container declares the longest track (4 s against 3.48 s);
+ *  - is skipped when ffmpeg says `DURATION_ESTIMATED`. A VBR MP3 with no
+ *    Xing header declared 15.19 s for 10 s.
+ *
+ * The cost is short sources the rule no longer catches: an `audioOnly` cut on
+ * a sample boundary, and a cut that loses no more than the last four frames
+ * (4 s at 1 fps).
  */
 const SHORT_OF_DECLARED_SEC = 0.25;
+/** Frame intervals of slack: libx264's reorder delay of three frames, and one spare. */
+const REORDER_FRAMES = 4;
+
+/** An input's video stream and its frame rate, from ffmpeg's `[info]` stream line. */
+const VIDEO_FPS = /^\s*Stream #\d+:\d+.*: Video: .*?, (\d+(?:\.\d+)?) fps,/u;
+
+/** ffmpeg's warning that the `Duration` it printed was guessed, not read. */
+const DURATION_ESTIMATED = /Estimating duration from bitrate/iu;
 
 /**
  * The connection a line came from: the address in ffmpeg's `[http @ …]` prefix,
@@ -774,6 +798,10 @@ async function attempt(
   // reference `SHORT_OF_DECLARED_SEC` measures a progressive run against
   // (dl-125). A resolver's duration is not the file's, and may be rounded.
   let containerDurationSec: number | null = null;
+  // The first video stream's frame interval, and whether ffmpeg guessed the
+  // duration: both narrow that rule (dl-125's gate 1, F1).
+  let frameIntervalSec: number | null = null;
+  let durationEstimated = false;
 
   let feeder: RangeFeeder | null = null;
   if (splittable(request, deps, context)) {
@@ -910,6 +938,11 @@ async function attempt(
       });
     },
     onInfoLine: (line) => {
+      if (frameIntervalSec === null) {
+        // The first video stream described is the input's, before the output's.
+        const fps = Number(VIDEO_FPS.exec(line)?.[1]);
+        if (fps > 0) frameIntervalSec = 1 / fps;
+      }
       if (containerDurationSec !== null) return;
       // The first line that parses. Inputs are described in order, so that is
       // the video's unless its input says `N/A`; a later input is a separate
@@ -920,6 +953,7 @@ async function attempt(
     onStderrLine: (line) => {
       logger.debug("ffmpeg", { line });
       stderrTail = `${stderrTail}${line}\n`.slice(-STDERR_TAIL_CHARS);
+      if (DURATION_ESTIMATED.test(line)) durationEstimated = true;
       if (!sawCertificateRejection) sawCertificateRejection = isTlsVerificationFailure(line);
       if (STREAM_ENDED_EARLY.test(line)) endedEarly.add(connectionOf(line) ?? line);
       else if (WILL_RECONNECT.test(line)) endedEarly.delete(connectionOf(line) ?? line);
@@ -1052,16 +1086,23 @@ async function attempt(
       // dl-125: a short source ffmpeg said nothing about, because the file
       // stops exactly at a sample's first byte. Only when both ends of the
       // measure are there: with no `Duration` line or no progress snapshot the
-      // run stays `done`, as it was (the owner's answer of 2026-10-15). A live
-      // capture ends at its limit on purpose, so it is not measured.
-      const declaredSec = containerDurationSec;
+      // run stays `done`, as it was (the owner's answer of 2026-10-15). A
+      // capture limit ends the output early on purpose, so the run is measured
+      // against the smaller of the two (the owner's answer of 2026-10-17): a
+      // limit is no exemption, and a short source under one is still short.
+      const declaredSec =
+        containerDurationSec === null
+          ? null
+          : Math.min(containerDurationSec, context.liveDurationSec ?? Number.POSITIVE_INFINITY);
       const outTimeUs = result.lastSnapshot?.outTimeUs ?? null;
+      const slackSec = Math.max(SHORT_OF_DECLARED_SEC, REORDER_FRAMES * (frameIntervalSec ?? 0));
       if (
         progressive &&
-        context.liveDurationSec === null &&
+        !context.audioOnly &&
+        !durationEstimated &&
         declaredSec !== null &&
         outTimeUs !== null &&
-        declaredSec - outTimeUs / 1_000_000 > SHORT_OF_DECLARED_SEC
+        declaredSec - outTimeUs / 1_000_000 > slackSec
       ) {
         throw new AppError("DOWNLOAD_FAILED", "The source ended before the whole video arrived.", {
           details: { ...partialDetails(), declaredSec, outTimeSec: outTimeUs / 1_000_000 },
