@@ -332,16 +332,25 @@ export async function render(fixture: Fixture): Promise<Buffer> {
       sheet.getCell(`D${String(row)}`).value = period.deposit.sam;
   }
 
+  // As the household's Accueil has it (lg-37): names heading columns, the
+  // salaries in a labelled row under them, and the names again over a
+  // calculator whose figures are not salaries.
   const home = book.addWorksheet("Accueil");
-  home.getCell("A3").value = "Salaires";
-  home.getCell("A4").value = "Alex";
-  home.getCell("B4").value = fixture.salaries.alex;
-  home.getCell("A5").value = "Sam";
-  home.getCell("B5").value = fixture.salaries.sam;
-  home.getCell("C4").value = {
-    formula: "B4/(B4+B5)",
+  home.getCell("C2").value = "Alex";
+  home.getCell("D2").value = "Sam";
+  home.getCell("B4").value = "Salaires bruts";
+  home.getCell("C4").value = fixture.salaries.alex;
+  home.getCell("D4").value = fixture.salaries.sam;
+  home.getCell("B5").value = "Facteur équivalence";
+  home.getCell("C5").value = {
+    formula: "C4/(C4+D4)",
     result: fixture.salaries.alex / (fixture.salaries.alex + fixture.salaries.sam),
   };
+  home.getCell("C8").value = "Alex";
+  home.getCell("D8").value = "Sam";
+  home.getCell("B9").value = "Équivalence avec un total";
+  home.getCell("C9").value = 900;
+  home.getCell("D9").value = 600;
 
   const labels = book.addWorksheet("Labels");
   labels.addRow(["Personnes", "Comptes", "Détails"]);
