@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/brunolabbe/tools/compare/planner-v0.8.1...planner-v0.9.0) (2026-10-17)
+
+
+### Features
+
+* **planner:** default the model to Sonnet 5.5, on pl-40's measurement (pl-40) ([#464](https://github.com/brunolabbe/tools/issues/464)) ([34c2cba](https://github.com/brunolabbe/tools/commit/34c2cba41a56262b985d38ca3e5c58239b9ed527))
+* **planner:** give the run-cost report a thinking-token row, priced never (pl-52) ([#467](https://github.com/brunolabbe/tools/issues/467)) ([6d879b2](https://github.com/brunolabbe/tools/commit/6d879b2682e7e7cef34479cb944ce5e3413a0d69))
+
 ## [0.8.1](https://github.com/brunolabbe/tools/compare/planner-v0.8.0...planner-v0.8.1) (2026-10-07)
 
 
