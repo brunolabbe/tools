@@ -667,6 +667,30 @@ Rolling back is the same three commands with the previous version in `.env`, and
 takes as long as a pull. Which versions exist, and how one gets cut, are in
 [03-RELEASING.md](./03-RELEASING.md).
 
+**Upgrading past dl-126 stops a downloader whose `.env` has no Turnstile keys.**
+[`compose.downloader.prod.yaml`](../compose.downloader.prod.yaml) now sets
+`REQUIRE_HUMAN_CHECK` on, and with it on the API refuses to boot unless
+`TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are both set. The container
+exits at start, `docker compose logs downloader` names the two variables, and
+the downloader serves nothing until one of these is done in `.env`, followed by
+`docker compose up -d`:
+
+- put both keys in, which is the answer for a host that serves the downloader
+  without a login; or
+- set `REQUIRE_HUMAN_CHECK=false`, for a host that is still behind Access and
+  has no keys on purpose. An unset or blank entry does not do it: the compose
+  file turns both into `true`, and only an explicit `false` opts out.
+
+Do this **before** the `docker compose pull` that moves the tag, or expect the
+outage between the pull and the edit. `git pull` brings the new compose file
+without moving the tag, so the setting can already be on while the old image
+runs; the old image ignores it.
+
+**Rolling back past dl-126 reopens a host with no keys.** An image from before it
+does not read `REQUIRE_HUMAN_CHECK`, so on empty keys it starts and serves
+probes and jobs with no human check at all. Put the keys in first, or keep the
+host behind Access until the tag is moved forward again.
+
 Each tool's volume carries its state across the restart. The downloader's holds
 the job database and nothing else: every file streams to the visitor who opened
 its link as ffmpeg produces it, and no copy is written anywhere (dl-53). A

@@ -20,6 +20,9 @@
  *  - the token reaches no log line and no stored row.
  */
 
+import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { AppError, ROUTES } from "@downloader/contract";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { loadApiConfig } from "../src/config.ts";
@@ -423,24 +426,116 @@ describe("the settings", () => {
     ).toBeUndefined();
   });
 
-  test("a refusal under REQUIRE_HUMAN_CHECK carries variable names and never a key value", () => {
-    // `main.ts` writes `message` and `details` to stderr when `createApp`
-    // throws, so that is the text checked. The one-key case has a value that
-    // could leak; the no-key case has none, and its text must not carry one of
-    // Cloudflare's published keys either.
+  /** The error `loadApiConfig` throws for `env`; fails the test when it throws nothing. */
+  const refusalFor = (env: NodeJS.ProcessEnv): AppError => {
+    try {
+      loadApiConfig({}, env);
+    } catch (error: unknown) {
+      return AppError.from(error);
+    }
+    throw new Error("loadApiConfig did not refuse");
+  };
+
+  test("the thrown refusal under REQUIRE_HUMAN_CHECK carries variable names and no key value", () => {
+    // The text `main.ts` writes is checked for real by the spawn test below;
+    // this is the same property one level down, over the error itself. The
+    // one-key case has a value that could leak, the no-key case has none, and
+    // neither may carry one of Cloudflare's published keys.
     const oneKey = { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SECRET_KEY: PASS_SECRET };
-    expect(() => loadApiConfig({}, oneKey)).toThrow(/TURNSTILE_SITE_KEY is not set/u);
+    expect(refusalFor(oneKey).message).toMatch(/TURNSTILE_SITE_KEY is not set/u);
     for (const env of [oneKey, { REQUIRE_HUMAN_CHECK: "true" }]) {
-      try {
-        loadApiConfig({}, env);
-      } catch (error: unknown) {
-        const refusal = AppError.from(error);
-        const written = JSON.stringify({ error: refusal.message, details: refusal.details });
-        expect(written).not.toContain(PASS_SECRET);
-        expect(written).not.toContain(PASS_SITE_KEY);
-      }
+      const refusal = refusalFor(env);
+      const written = JSON.stringify({ error: refusal.message, details: refusal.details });
+      expect(written).not.toContain(PASS_SECRET);
+      expect(written).not.toContain(PASS_SITE_KEY);
     }
   });
+
+  test("a refusal under REQUIRE_HUMAN_CHECK says to set it to false, never to unset it", () => {
+    // The shipped compose file defaults the setting to true, so an unset or
+    // blank `.env` entry still means on and a hint that said "unset" would send
+    // the operator into a second refusal. Only `=false` opts out there.
+    const hints = [
+      refusalFor({ REQUIRE_HUMAN_CHECK: "true" }),
+      refusalFor({ REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SECRET_KEY: PASS_SECRET }),
+    ].map((refusal) => String(refusal.details?.["hint"]));
+    for (const hint of hints) {
+      expect(hint).toContain("REQUIRE_HUMAN_CHECK=false");
+      expect(hint).not.toMatch(/\bunset\b/u);
+    }
+    // Without the setting the one-key hint is the old one: there is nothing to
+    // set to false, and unsetting both keys is exactly how the check goes off.
+    expect(String(refusalFor({ TURNSTILE_SECRET_KEY: PASS_SECRET }).details?.["hint"])).toContain(
+      "unset both",
+    );
+  });
+
+  // The real `main.ts`, not a copy of what it writes: no logger exists yet when
+  // `createApp` fails, so the entry point formats the startup failure itself,
+  // and only a spawned process reads that line as an operator's container log does.
+  test("main.ts, spawned with REQUIRE_HUMAN_CHECK on, exits 1 and writes a refusal with no key value", async () => {
+    const API_DIR = fileURLToPath(new URL("..", import.meta.url));
+    const base: NodeJS.ProcessEnv = {};
+    for (const [name, value] of Object.entries(process.env)) {
+      if (!name.startsWith("TURNSTILE_") && name !== "REQUIRE_HUMAN_CHECK") base[name] = value;
+    }
+    base["DATABASE_PATH"] = ":memory:";
+    base["PORT"] = "0";
+
+    const boot = async (env: Record<string, string>) => {
+      const child = spawn(
+        process.execPath,
+        ["--import", "tsx", path.join(API_DIR, "src", "main.ts")],
+        {
+          cwd: API_DIR,
+          env: { ...base, ...env },
+          shell: false,
+          windowsHide: true,
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString("utf8")));
+      child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString("utf8")));
+      // The boot fails before it listens; a process still up is a regression.
+      const timer = setTimeout(() => child.kill("SIGKILL"), 45_000);
+      const code = await new Promise<number | null>((resolve) => child.once("close", resolve));
+      clearTimeout(timer);
+      return { code, stdout, stderr };
+    };
+
+    const cases: Array<{ env: Record<string, string>; names: string[] }> = [
+      {
+        env: { REQUIRE_HUMAN_CHECK: "true" },
+        names: ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"],
+      },
+      {
+        env: { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: "" },
+        names: ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"],
+      },
+      {
+        env: { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SECRET_KEY: PASS_SECRET },
+        names: ["TURNSTILE_SITE_KEY"],
+      },
+      {
+        env: { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SITE_KEY: PASS_SITE_KEY },
+        names: ["TURNSTILE_SECRET_KEY"],
+      },
+    ];
+    const results = await Promise.all(cases.map(({ env }) => boot(env)));
+
+    results.forEach((result, index) => {
+      const written = `${result.stdout}${result.stderr}`;
+      // Non-vacuous: a process that wrote nothing, or started, fails here.
+      expect(result.code, written).toBe(1);
+      expect(result.stderr).toContain('"msg":"failed to start"');
+      expect(result.stderr).toContain('"code":"INTERNAL"');
+      for (const name of cases[index]?.names ?? []) expect(result.stderr).toContain(name);
+      expect(written).not.toContain(PASS_SECRET);
+      expect(written).not.toContain(PASS_SITE_KEY);
+    });
+  }, 90_000);
 });
 
 describe("the token is a credential", () => {

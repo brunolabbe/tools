@@ -512,7 +512,9 @@ function turnstile(
       "REQUIRE_HUMAN_CHECK is set, but TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY are not.",
       {
         details: {
-          hint: "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together, or unset REQUIRE_HUMAN_CHECK to leave the check off (a self-hosted instance behind a login).",
+          // `=false`, not "unset": the shipped compose file defaults the setting to
+          // true, so an unset or blank `.env` entry would refuse a second time.
+          hint: "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together, or set REQUIRE_HUMAN_CHECK=false and leave both empty to serve with the check off (a self-hosted instance behind a login).",
         },
       },
     );
@@ -521,7 +523,9 @@ function turnstile(
     const missing = siteKey === "" ? "TURNSTILE_SITE_KEY" : "TURNSTILE_SECRET_KEY";
     throw new AppError("INTERNAL", `${missing} is not set; the human check needs both keys.`, {
       details: {
-        hint: "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together to turn the check on, or unset both to leave it off.",
+        hint: required
+          ? "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together to turn the check on, or set REQUIRE_HUMAN_CHECK=false and leave both empty to serve with the check off."
+          : "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together to turn the check on, or unset both to leave it off.",
       },
     });
   }

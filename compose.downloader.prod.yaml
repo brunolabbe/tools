@@ -110,7 +110,8 @@ services:
       # off, and with it on the API also refuses to start with neither key, so a
       # host that lost its keys is down rather than open to anyone with the
       # check off. A host that is still behind Access, and has no keys on
-      # purpose, sets `REQUIRE_HUMAN_CHECK=false` in `.env`.
+      # purpose, sets `REQUIRE_HUMAN_CHECK=false` in `.env`; an unset or blank
+      # entry is `true` here (`:-`), so only an explicit `false` opts out.
       # See `.env.prod.example`.
       REQUIRE_HUMAN_CHECK: "${REQUIRE_HUMAN_CHECK:-true}"
       TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:-}"
