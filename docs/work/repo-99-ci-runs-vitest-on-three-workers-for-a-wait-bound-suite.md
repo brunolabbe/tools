@@ -239,3 +239,40 @@ skipped (5819)`. The leg is informational, so the run's conclusion reads
   owner picks the number and whether to land from the four-worker figures; the
   builder does not. `maxWorkers` is 4 under `CI` from this commit, and the
   measurement that follows is recorded in the next entry.
+- 2026-10-17 — Measured at four workers under `CI`, on `c21900ea` (run
+  39070012677, attempt 1) and its whole-run rerun (attempt 2). Resolved config,
+  read back as before: `CI=1` gives root `test.maxWorkers=4`; unset gives
+  `undefined`. `npm test` step durations, start to completion, from
+  `gh run view --attempt <n> --json jobs`, with the vitest Duration in brackets:
+  - ubuntu: 273 s (attempt 1, 21:14:19 to 21:18:52) [272.70 s]; 232 s (attempt
+    2, 21:22:02 to 21:25:54) [231.91 s]. Both `Test Files 284 passed | 1 skipped
+(285)`, `Tests 5817 passed | 2 skipped (5819)`.
+  - Windows (informational): 363 s (attempt 1, 21:14:33 to 21:20:36) [361.53 s];
+    340 s (attempt 2, 21:21:52 to 21:27:32) [338.13 s]. Both `Test Files 283
+passed | 2 skipped (285)`, `Tests 5758 passed | 61 skipped (5819)`.
+  - No failure on any of the four legs. `parallel-ranges.test.ts`, the dl-98
+    flake, passed on both Windows attempts (73.9 s and 72.4 s).
+  - Samples per leg: two at four workers. The same `main` baseline as the
+    entries above, run 39058961193 at `6b42ee19`: ubuntu 274 s and 266 s;
+    Windows 472 s and 428 s. Six-worker PR figures are in the entries above:
+    ubuntu 222, 229, 231 and 235 s; Windows 363, 304, 362 s passing and 378 s
+    failing.
+  - Means, `npm test` step: ubuntu `main` 270 s, six workers 229 s, four workers
+    253 s. Windows `main` 450 s, six workers 352 s over four attempts (343 s
+    over the three that passed), four workers 352 s. At four workers, ubuntu is
+    about 6 per cent under `main` against about 15 per cent at six, and Windows
+    is about 22 per cent under `main`. The ubuntu four-worker samples (232 s and
+    273 s) straddle the six-worker range (222 to 235 s); the Windows four-worker
+    samples (340 s and 363 s) sit below both `main` samples (428 s and 472 s).
+  - Summed test time, from the Duration lines: ubuntu 796 s and 716 s at four
+    workers, against 670 s on `main` and 894 s and 912 s at six. Windows 985 s
+    and 923 s at four, against 1070 s on `main` and 1094 to 1264 s at six.
+  - Flake tally at six workers on Windows is unchanged by these runs: 2
+    failures in 6 attempts. At four workers, 0 failures in 2 attempts. Two
+    attempts each cannot decide whether four workers is free of the flake.
+  - Main moved to `37819249` while this branch was built. The baseline is
+    still `6b42ee19`, as the owner's dispatch names; the comparison is not
+    against the newer `main`. The PR's merge base stays `6b42ee19`.
+  - Done when 3 is still not met on the six-worker figures above. At four
+    workers, the two Windows attempts and their flake result are the evidence
+    the owner asked for; the first `main` run after merge is still owed.
