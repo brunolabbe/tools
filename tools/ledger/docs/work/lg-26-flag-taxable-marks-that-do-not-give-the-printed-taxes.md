@@ -176,8 +176,10 @@ nobody charged, and nothing flags it.
     right** (the brief's trap, which the first entry said no fixture showed): items
     1,54 $ and 1,22 $, both taxable, print GST 0,14 $ and QST 0,27 $ and give
     `["taxable-differs"]`; test "a store that rounds tax per line can raise it on
-    marks that are right". Gate 1 measured 641 of 20000 synthetic receipts. It does
-    not block filing.
+    marks that are right". Gate 2 measured it on 20000 synthetic per-line receipts
+    with right marks: 6483 at prices of 0,50 to 15,49 $ (6265 alone, 218 beside
+    `tax-differs`), about a third of that store's receipts, and 2360 at 0,10 to
+    4,09 $ (740 alone, 1620 beside `tax-differs`). It does not block filing.
   - **Correction to the first entry:** the zero-tax range is `[-10, 9]` cents for
     GST alone; QST's is `[-5, 5]` and the check takes the intersection, so 0 to 5
     cents taxable on a receipt with no tax lines passes and 6 is flagged
@@ -187,3 +189,18 @@ nobody charged, and nothing flags it.
     gets `taxable-differs` beside `items-differ` and `parts-differ`. (c) does not
     change it, since both taxes `null` never raise `tax-differs`; it clears when the
     taxes are typed in, and `items-differ` already blocks filing.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, new low — "Gate 1
+  measured 641 of 20000 synthetic receipts. That is gate 1's figure, and gate 1
+  scoped it badly: it came from a small-price sample (0,10 to 4,09 $). On
+  receipts priced 0,50 to 15,49 $, the branch raises `taxable-differs` on 6483 of
+  20000 per-line receipts whose marks are right. The text understates how much
+  noise the flag makes, but nothing is blocked and no guarantee rests on the
+  figure. Fix: quote the range, or the two figures, instead of 641." The round 1
+  entry now quotes both figures. The patterns below use a bracket so that this
+  entry does not match its own check:
+  - `grep -c "Gate 1 measured 6[4]1" <this file>` → `0`;
+  - `grep -c "6483 at prices of 0,50 to 15,4[9]" <this file>` → `1`, and
+    `grep -c "2360 at 0,10 t[o]" <this file>` → `1`.
+
+  The null-tax low (a receipt whose tax lines are printed but read as `null`) is
+  not fixed, and stays as the round 1 entry records it.
