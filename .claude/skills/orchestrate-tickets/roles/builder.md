@@ -26,7 +26,12 @@ instead.
    `-B`, and never reuse or
    rename an existing branch**: refs are shared across every worktree. If the
    name exists, stop and report. When the base was never pushed, branch off the
-   named local ref and say which you used.
+   named local ref and say which you used. **If the auto-mode classifier denies
+   the checkout** ("Modify Shared Resources": lg-25, and repo-99's records
+   builder), do not try another spelling: stop and report the denial verbatim.
+   The orchestrator puts it to the owner and dispatches you again fresh, since
+   a resume with nothing committed lands in the shared checkout (_Stopping on a
+   stop condition_, below).
 
 ## Scope
 
@@ -42,6 +47,13 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
 - **A ticket you file in this branch is left `ready`**, whether it is the
   branch's own or one folded in beside it; the lander sets its status with the
   record (owner, 2026-10-14; dl-119 and dl-120 both landed `done` that way).
+  The exception is a filing that poses a question its own page says the next
+  agent must not settle: that one is `needs-decision`, its first state in
+  `docs/01-TICKETS.md` (dl-126).
+- **A tool's `CLAUDE.md` is edited only when the Build names the change**
+  (owner, 2026-10-17). A line binds every later session in that tool, so a rule
+  your change establishes goes in your report as a proposed line, and the
+  orchestrator puts it to the owner (lg-23's builder added one unasked).
 - **A `.claude/settings.json` rule or a hook on your branch binds nothing until
   it merges**: the harness reads the shared checkout's copy. Prove one with a
   control on the branch and say so in the Log (repo-95: `gh stack merge --help`
@@ -59,7 +71,8 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
 
 ## Before you report
 
-- `npm run format` after touching any `.md`. Fix lint by hand; never
+- `npx oxfmt <the files you touched>` after touching any `.md`; `npm run
+  format` walks the whole repo (1,105 files on pl-56). Fix lint by hand; never
   `npm run lint:fix`, which rewrites files outside the branch.
 - `npx oxlint <the packages you touched>` and `npm run check` before preflight:
   seconds, against a twelve-minute preflight that stops on one lint line or one
@@ -148,6 +161,8 @@ the gate's own; where they disagree, the disagreement comes back as a finding.
 
 1. `git fetch origin`, then `git merge --ff-only origin/<branch>`: a fixer may
    have pushed since you reported. If it is not a fast-forward, stop and report.
+   Then, if `main` has moved since the build, merge it as _Before you report_
+   says, before the fix (pl-56's round was that merge).
 2. Fix, run the narrowest checks, then preflight, then commit and push.
 3. Report per finding: fixed, with the command that failed before and passes
    after; refuted, with the command and output that refute it; or an open

@@ -118,7 +118,7 @@ the batch cannot proceed, put it to the user at once.
 8. **Re-gate once, scoped to the round.** Wake the same gate with `SendMessage`:
    the sha it gated, the new head, its own findings as it wrote them, and any
    refutation as a command and its output. It reviews the round's own commits
-   only — `git log --no-merges <gated sha>..<new sha>`; a merge from `main`
+   only — `git log --first-parent --no-merges <gated sha>..<new sha>`; a merge from `main`
    inside the range is not the round — and returns one new `### Gate 2`
    section.
 
@@ -137,12 +137,16 @@ the batch cannot proceed, put it to the user at once.
    lander first commits the ticket's `awaiting:` line. Then one command per
    ticket ([reference/records.md](reference/records.md)):
    `node scripts/review-record.mjs --land <ticket-path> <gate files…> --base origin/<base> --status done --title "<PR title>" --branch <branch>`.
-   **A gate cannot write its report to a file** — the harness refuses a
-   subagent writing one ("Subagents should return findings as text", 51 times
-   in six transcripts since 2026-10-10) — so before you dispatch the lander,
-   write each gate's returned report verbatim to
-   `<scratch>/<id>/gate-<n>/report.md` yourself and hand the lander those
-   paths beside the gate files.
+   **A gate writes its section file, never its full report** — the harness
+   has refused a subagent's report file ("Subagents should return findings as
+   text", 51 times in six transcripts to 2026-10-14), and since 2026-10-16
+   every gate has written its `gate-<n>@<sha>.md` as `roles/reviewer.md` asks.
+   So before you dispatch the lander, write each gate's returned report
+   verbatim to `<scratch>/<id>/gate-<n>/report.md` yourself and hand the lander
+   those paths beside the gate files. **The section file and the section in the
+   returned report are one text**: compare them first, and send a difference
+   back to the gate rather than choosing one (lg-26's gate 1 file dropped "by
+   0,10 to 0,90 $" from what it returned; `reference/records.md`).
    **A gate verdict conditional on a CI leg is read before the lander pushes**:
    the landing push cancels the gated sha's run. When the landing changed only
    the ticket file, the landing head's run stands for it, named in the thread

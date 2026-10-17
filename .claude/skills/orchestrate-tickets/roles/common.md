@@ -41,7 +41,13 @@ worktree: several sessions run against this repo at once.
 - **Undo a temporary mutation from a commit, never with `git checkout -- <file>`**,
   which restores the index and discards every uncommitted edit to that file,
   yours included (lg-8's builder lost its three Dockerfile lines that way).
-  Commit first; restore with `git checkout <sha> -- <path>`.
+  Commit first, with a conventional subject such as `test(<scope>): mutation
+  baseline` — the commit-msg hook rejects `wip:` — and restore with
+  `git checkout <sha> -- <path>`.
+- **If the auto-mode classifier denies a temporary source mutation** ("Security
+  Test Removal", lg-10's red/green), do not try another spelling: run the new
+  spec against the base's source in a second tree instead (`reviewer.md`, the
+  second-tree recipe), and say in your report which check that replaced.
 - **End every commit message with the `Co-Authored-By` trailer** your session's
   attribution reminder gives, in the commit that lands it; never rewrite a
   pushed commit, or one a Log cites, to add it (repo-101 moved three cited shas
@@ -57,7 +63,13 @@ worktree: several sessions run against this repo at once.
 
 Your dispatch names one, and it already exists. Write every scratch file there,
 under your own subdirectory (`build/`, `gate-<n>/`, `land/`), and never list the
-ticket's scratch root: a gate must not see a builder's files. A script there is
+ticket's scratch root: a gate must not see a builder's files. **A gate reads
+exactly the paths its dispatch names and nothing else there** — the raw data a
+measurement ticket's tables are re-derived from, say `build/scratch/raw/`
+(owner, 2026-10-17; both pl-56 gates were handed it and flagged the conflict).
+A script you hand to another agent takes the tree and its output directory as
+arguments: dl-115's gate scripts and dl-125's `boundary.mjs` hard-coded both,
+so the next agent could not run them on its own tree. A script there is
 `.mts` — a `.ts` runs as CommonJS with no `package.json` beside it, and
 top-level `await` fails — and it imports worktree modules by absolute path
 through a dynamic `import()`.
@@ -129,7 +141,10 @@ naming the sha in anything you conclude.
 
 One spec file while you work — seconds — and the tool's project once at the end.
 Read the test count on every timing: a suite that cannot load is the fastest
-suite there is.
+suite there is. **After a `timeout` around a test run returns 124**, look for a
+survivor (`ps -eo pid,etimes,pcpu,args | grep vitest`) and kill it by pid:
+lg-10's lander found its vitest still at 93 % CPU 63 s after `timeout -k 5 60
+npx vitest run …` had returned.
 
 ## Your report
 
