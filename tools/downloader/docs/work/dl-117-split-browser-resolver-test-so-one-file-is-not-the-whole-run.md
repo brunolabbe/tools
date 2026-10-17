@@ -166,22 +166,61 @@ probes(() => server)`. The bodies are otherwise the same. The `vi.mock` that
 
   **Citations.** `scripts/citations.mjs` no longer exists. `3a7d8a9f` (#350,
   2026-10-03, ADR 006) deleted it and its gate from `main`, so there was no
-  citations check to run, and nothing reports. The brief's list of nine docs was
-  incomplete. `git grep` finds 39 files, this ticket included, with 196 lines
-  naming `browser-resolver.test.ts`. Of those lines, 17 carry 34 `file:line` pins
+  citations check to run, and nothing reports. The dispatch's list of nine docs was
+  incomplete. `git grep` finds 39 files, this ticket included, with 199 lines
+  (at 17adad5, counted by the gate) naming `browser-resolver.test.ts`. Of those lines, 17 carry 34 `file:line` pins
   into the old file (dl-55: 20, dl-61: 10, dl-68: 3, dl-105: 1), and 29 are `-t`
   commands naming the old path. The rest name the file in prose. The pins now
   resolve to nothing; the map above converts them. Not edited: the finished
   tickets (preflight refuses edits to a `done` ticket with no `## Review`), and
-  `reference/history.md` (the brief's own bar).
+  `reference/history.md` (the dispatch's own bar).
 
   **Fold-in.** Nothing else was made free. `repo-99` depends on this ticket and
   holds the CI worker count; that is a `repo-` change with its own measurement
   and is not folded. `dl-49` and `dl-125` are unrelated.
 
-  **CI duration, Done when 3.** Before: 623 s `npm test` (the figure in the
-  Why section, from the audit's CI run; not re-measured here). After: unverified.
-  The draft pull request (#499) at 4e7b1f4d had its `test (ubuntu-latest)` leg
-  still in progress about four minutes after the push, and the builder did not
-  wait longer. Its duration is not in this Log. Read it from the leg's own run
-  once it has finished: `gh run view --job <id> --json jobs`, then `--log`.
+  **CI duration, Done when 3.** Corrected in place on 2026-10-17 after gate 1;
+  the builder's paragraph gave "Before: 623 s" and "After: unverified". The
+  623 s is the audit's figure from before dl-111, dl-113, dl-114 and dl-115
+  merged, so it predates the trims and is not this change's before. Measured
+  from the runs' own jobs (`gh run view --json jobs`, the `Run npm test` step;
+  the job id of run 38980295983 re-checked for this edit):
+
+  | leg                              | before (no split)                                                                                                              | after, at 17adad5 (run 38980295983, job 117239451601) |
+  | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+  | `ubuntu-latest` `npm test`       | 307 s: run 38979599628 (lg-10, job 117237128243; vitest `Duration` 305.7 s), 307 s: run 38979170308 (dl-125, job 117235755795) | 325 s (`Duration` 323.7 s)                            |
+  | `windows-latest` (informational) | 477 s and 489 s                                                                                                                | 418 s                                                 |
+
+  The base commit's own push run (38976257518) skipped its test matrix as
+  docs-only and is no baseline. So the ubuntu leg went from 307 s to 325 s, not
+  from 623 s to 325 s. That is the null result the Why section predicted: a split
+  adds no workers, and the CI worker count is repo-99, which depends on this
+  ticket.
+
+- 2026-10-17 — Owner answers to the open decisions above, recorded after gate 1.
+  The one in-place correction made then is the CI paragraph above, plus the
+  "dispatch" wording and the 199-line count in **Citations**; this entry is
+  appended.
+
+  **A. `parallel-ranges` "at least 3x faster" failed once locally on Linux at
+  2.97x, beside the full suite.** This ticket did not touch that file, and it is
+  not known whether the split made the failure likelier. Options were: file a
+  `dl-` ticket / keep 3x / set Linux to 2.5 now. The owner chose **file a `dl-`
+  ticket**, the builder's and the gate's recommendation. Filed as
+  [dl-127](./dl-127-parallel-ranges-3x-floor-on-linux-beside-the-suite.md), in
+  this branch, as its own commit.
+
+  **B. Cold Chromium start.** Six files start six Chromiums at once. On a cold
+  machine 3 of 124 tests hit the 25 s `PROBE_TIMEOUT_MS` in 1 of 4 six-file
+  runs (gate 1, F2); CI is unaffected. Options were: record only, or a follow-up
+  ticket comparing a cold start on the base file and the split (a pool warm-up
+  in each `beforeAll`, or a longer first-probe budget). The owner chose **record
+  only, file neither** (recommended). Nothing is filed; the reproduction is gate
+  1's F2: `npx vitest run --project downloader --reporter=default
+tools/downloader/resolvers/test/browser/browser-resolver-` on a machine that
+  has not launched Chromium for several minutes.
+
+  **The 34 old `file:line` pins** into `browser-resolver.test.ts` (dl-55: 20,
+  dl-61: 10, dl-68: 3, dl-105: 1). The owner chose **record only, file
+  neither** (the recommended option). The old-to-new map in the 2026-10-16 entry
+  is the only conversion; nothing on `main` checks the pins.
