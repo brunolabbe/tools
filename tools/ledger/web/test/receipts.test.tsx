@@ -289,6 +289,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: 1,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "BIERE 6X355",
@@ -297,6 +298,7 @@ const BASKET: ReceiptProposal = {
       deposit: 60,
       spendingCategoryId: 2,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "SAVON",
@@ -305,6 +307,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: null,
       share: "shared",
+      chargedTo: null,
     },
   ],
 };

@@ -818,6 +818,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: GROCERIES,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "BIERE 6X355",
@@ -826,6 +827,7 @@ const BASKET: ReceiptProposal = {
       deposit: 60,
       spendingCategoryId: ALCOHOL,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "SAVON",
@@ -834,6 +836,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: HOUSEHOLD,
       share: "shared",
+      chargedTo: null,
     },
   ],
 };
@@ -1386,7 +1389,7 @@ function couponItem(
   taxable: boolean,
   share: "not-shared" | "theirs",
 ): ReceiptProposal["items"][number] {
-  return { text, price, taxable, deposit: null, spendingCategoryId: null, share };
+  return { text, price, taxable, deposit: null, spendingCategoryId: null, share, chargedTo: null };
 }
 
 // lg-32, gate 1 F2: not-shared items are there but their amount rounds to 0.
