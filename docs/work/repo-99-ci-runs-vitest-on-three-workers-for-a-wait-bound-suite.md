@@ -217,3 +217,12 @@ skipped (5819)`. The leg is informational, so the run's conclusion reads
   workers share four vCPUs on Windows. Done when 3 is therefore not met for the
   Windows leg at six workers. The number is not lowered and the test is not
   excluded here, as Build step 3 requires; both choices sit with the owner.
+- 2026-10-17 — The head's own run, read after the correction above: PR run
+  39062702374 at `1b680c5c`, attempt 1, both unit legs. Ubuntu `npm test` 235 s
+  (19:30:55 to 19:34:50), passed. Windows `npm test` 362 s (19:31:01 to
+  19:37:03), Duration 360.73 s, `Tests 5758 passed | 61 skipped (5819)`, and
+  `parallel-ranges.test.ts` passed in 81.1 s. Six-worker tally, Windows: 2
+  failures in 6 attempts, the last one a pass. Ubuntu at six workers, four
+  samples: 222 s, 229 s, 231 s and 235 s, against 274 s and 266 s on `main`.
+  Done when 3 is still not met on the Windows leg, for the reason in the
+  correction above.
