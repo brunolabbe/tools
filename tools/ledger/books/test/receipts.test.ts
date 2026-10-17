@@ -933,9 +933,7 @@ describe("a charge per person (lg-30)", () => {
     for (const [receipt, paid] of cases) {
       const split = splitReceipt(receipt, SALES_TAX_RATES, paid);
       expect(split.sharedCents + split.notSharedCents + split.chargedCents).toBe(paid);
-      expect(split.charges.reduce((sum, charge) => sum + charge.cents, 0)).toBe(
-        split.chargedCents,
-      );
+      expect(split.charges.reduce((sum, charge) => sum + charge.cents, 0)).toBe(split.chargedCents);
     }
   });
 });
@@ -1026,7 +1024,7 @@ describe("the rounding judged against the printed total (lg-30)", () => {
       gst: 50,
       qst: 100,
       total: 1_157,
-      items: [...(TWO_TAXED(1_007).items.slice(1) as ReceiptItem[])],
+      items: TWO_TAXED(1_007).items.slice(1),
     };
     expect(checkReceipt(one)).toEqual([]);
 
@@ -1072,7 +1070,7 @@ describe("the rounding judged against the printed total (lg-30)", () => {
       gst: null,
       qst: null,
       total: 1_000,
-      items: [...(TWO_TAXED(1_000).items.slice(1) as ReceiptItem[])],
+      items: TWO_TAXED(1_000).items.slice(1),
     };
 
     expect(splitReceipt(untaxed).sharedCents).toBe(-150);

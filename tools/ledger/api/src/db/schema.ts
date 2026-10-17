@@ -563,6 +563,74 @@ const MIGRATIONS: readonly string[] = [
 
   CREATE INDEX settlement_transfers_period ON settlement_transfers (period_id, id);
   `,
+
+  // 11 — whose a receipt item is, so a receipt can charge several people (lg-30).
+  // The table is rebuilt as migration 7 rebuilt one: each item is copied with its
+  // id, the two new columns filled from what lg-10 filed, the copy proved, and
+  // only then the old table dropped. A rebuild rather than two added columns
+  // because an added column can carry no CHECK, and these two have one each;
+  // nothing else names this table, so nothing else is made again.
+  `
+  CREATE TABLE receipt_items_v11 (
+    id INTEGER PRIMARY KEY,
+    filing_id INTEGER NOT NULL REFERENCES receipt_filings (id),
+    -- In the order printed, from 1.
+    position INTEGER NOT NULL CHECK (position >= 1),
+    text TEXT NOT NULL,
+    price_cents INTEGER NOT NULL,
+    taxable INTEGER NOT NULL CHECK (taxable IN (0, 1)),
+    -- The consigne printed for it; it carries no tax.
+    deposit_cents INTEGER,
+    spending_category_id INTEGER REFERENCES spending_categories (id),
+    share TEXT NOT NULL CHECK (share IN ('shared', 'not-shared', 'theirs')),
+    -- On a 'theirs' item, whose it is; NULL on every other. The API names every
+    -- 'theirs' item it files (receipts.ts); one filed before this migration whose
+    -- charge came to nothing filed no line to read a name from, and has none.
+    charged_to TEXT REFERENCES people (id),
+    -- The charge line the item's person's items became; NULL when that charge
+    -- came to nothing and filed no line.
+    charge_line_id INTEGER REFERENCES period_lines (id),
+    UNIQUE (filing_id, position),
+    CHECK (charged_to IS NULL OR share = 'theirs'),
+    CHECK (charge_line_id IS NULL OR charged_to IS NOT NULL)
+  );
+
+  -- A filing before lg-30 made one charge, of every 'theirs' item. It is its
+  -- charge_line_id when the receipt also left a shared line; else its one line,
+  -- but only when that line is charged to someone: a shared line, which lg-10
+  -- filed alone when the 'theirs' items came to nothing, is charged to nobody.
+  -- The name is the line's own, as the filing named it, not a later version's.
+  INSERT INTO receipt_items_v11 (id, filing_id, position, text, price_cents, taxable, deposit_cents, spending_category_id, share, charged_to, charge_line_id)
+    SELECT items.id, items.filing_id, items.position, items.text, items.price_cents,
+      items.taxable, items.deposit_cents, items.spending_category_id, items.share,
+      CASE WHEN items.share = 'theirs' THEN charge.charged_to END,
+      CASE WHEN items.share = 'theirs' THEN charge.id END
+    FROM receipt_items items
+    JOIN receipt_filings filings ON filings.id = items.filing_id
+    LEFT JOIN period_lines charge
+      ON charge.id = coalesce(filings.charge_line_id, filings.period_line_id)
+      AND charge.charged_to IS NOT NULL;
+
+  -- The proof: as many items, and none that differs in a column it had.
+  CREATE TEMP TABLE migration_11_copy (
+    kept INTEGER NOT NULL,
+    copied INTEGER NOT NULL,
+    differing INTEGER NOT NULL,
+    CHECK (copied = kept AND differing = 0)
+  );
+  INSERT INTO migration_11_copy SELECT
+    (SELECT count(*) FROM receipt_items),
+    (SELECT count(*) FROM receipt_items_v11),
+    (SELECT count(*) FROM (
+      SELECT id, filing_id, position, text, price_cents, taxable, deposit_cents, spending_category_id, share FROM receipt_items
+      EXCEPT
+      SELECT id, filing_id, position, text, price_cents, taxable, deposit_cents, spending_category_id, share FROM receipt_items_v11
+    ));
+  DROP TABLE migration_11_copy;
+
+  DROP TABLE receipt_items;
+  ALTER TABLE receipt_items_v11 RENAME TO receipt_items;
+  `,
 ];
 
 /**

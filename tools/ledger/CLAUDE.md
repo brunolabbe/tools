@@ -240,9 +240,11 @@ documents. A photo of several receipts files each as its own `part`, once; a row
 is documented by one receipt (`ROW_ALREADY_DOCUMENTED`). **A receipt's items
 must make its total or it is not filed** (`RECEIPT_DOES_NOT_ADD_UP`, lg-10): the
 line is what the card was charged less what the books compute its not-shared and
-other's items to cost, and the other's part is a charge line of its own; on a row
-every item is shared. With more than two people "the other's" names nobody, so it
-is refused until an item can say whose (lg-23, lg-30). The model proposes each item's category from the list and
+someone else's items to cost, and each charged person's part is a charge line of
+its own; on a row every item is shared. **A `theirs` item names whose it is**
+(`chargedTo`, lg-30): with one other current member it may name nobody and means
+them, with more it must name one, and a name is anyone the books hold who is not
+the payer, a member who has left included. The model proposes each item's category from the list and
 nothing else; a category not in it is dropped, never refused. A photo is never
 logged, and **no test calls a real model**: `createApp` takes a
 `receiptReader`, and every test that reads hands in a fake

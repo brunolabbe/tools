@@ -109,16 +109,17 @@ const MAX_CENTS = 100_000_000_000;
 
 const cents = z.number().int().min(-MAX_CENTS).max(MAX_CENTS);
 
-export const receiptItemSchema = z.strictObject({
-  text: z.string().trim().min(1).max(200),
-  price: cents,
-  taxable: z.boolean(),
-  deposit: cents.nullable(),
-  spendingCategoryId: z.number().int().positive().nullable(),
-  share: z.enum(ITEM_SHARES),
-  // Omitted, as every request before lg-30 omits it, it is `null`.
-  chargedTo: z.string().min(1).max(100).nullable().default(null),
-})
+export const receiptItemSchema = z
+  .strictObject({
+    text: z.string().trim().min(1).max(200),
+    price: cents,
+    taxable: z.boolean(),
+    deposit: cents.nullable(),
+    spendingCategoryId: z.number().int().positive().nullable(),
+    share: z.enum(ITEM_SHARES),
+    // Omitted, as every request before lg-30 omits it, it is `null`.
+    chargedTo: z.string().min(1).max(100).nullable().default(null),
+  })
   // A name on an item that is not someone else's would be a charge nobody filed.
   .refine((item) => item.chargedTo === null || item.share === "theirs", {
     path: ["chargedTo"],

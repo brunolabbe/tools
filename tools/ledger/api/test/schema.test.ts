@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
 import { migrate } from "../src/db/schema.ts";
+import { storedFiling } from "../src/receipts.ts";
 
 function open(): Database.Database {
   const db = new Database(":memory:");
@@ -12,7 +13,7 @@ describe("the schema's migrations", () => {
   test("migration 1 stores the statement rows and the imports they came from", () => {
     const db = open();
 
-    expect(db.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.pragma("user_version", { simple: true })).toBe(11);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()
@@ -82,7 +83,7 @@ describe("the schema's migrations", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.pragma("user_version", { simple: true })).toBe(11);
     expect(db.prepare("SELECT count(*) AS n FROM statement_imports").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -102,7 +103,7 @@ describe("the schema's migrations", () => {
     migrate(db);
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.pragma("user_version", { simple: true })).toBe(11);
     expect(db.prepare("SELECT source FROM statement_imports").all()).toEqual([{ source: "paste" }]);
     expect(db.prepare("SELECT note FROM statement_rows").all()).toEqual([{ note: null }]);
     expect(() =>
@@ -169,7 +170,7 @@ describe("migration 9's receipt items (lg-10)", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.pragma("user_version", { simple: true })).toBe(11);
     expect(db.prepare("SELECT period_line_id, charge_line_id FROM receipt_filings").all()).toEqual([
       { period_line_id: 1, charge_line_id: null },
     ]);
@@ -181,6 +182,132 @@ describe("migration 9's receipt items (lg-10)", () => {
     expect(() => item.run(1, "shared")).not.toThrow();
     expect(() => item.run(2, "half")).toThrow(/CHECK/u);
     expect(() => item.run(1, "theirs")).toThrow(/UNIQUE/u);
+    db.close();
+  });
+});
+
+/**
+ * Three filings as lg-10 made them, at version 10: a shared line and a charge;
+ * a charge as the only line; and a free `theirs` item, which filed a shared
+ * line alone, charged to nobody.
+ */
+function atVersion10(): Database.Database {
+  const db = new Database(":memory:");
+  migrate(db, 10);
+  db.prepare("INSERT INTO people (id, added_at) VALUES ('alex', '2026-10-01')").run();
+  db.prepare("INSERT INTO people (id, added_at) VALUES ('sam', '2026-10-01')").run();
+  const line = db.prepare(
+    `INSERT INTO period_lines (person_id, date, amount_cents, charged_to, source, entered_at, entered_by)
+     VALUES ('alex', '2026-10-04', ?, ?, 'receipt', '2026-10-05T00:00:00.000Z', 'alex')`,
+  );
+  line.run(348, null); // 1: filing 1's shared line
+  line.run(1_554, "sam"); // 2: filing 1's charge
+  line.run(1_554, "sam"); // 3: filing 2's charge, its only line
+  line.run(2_476, null); // 4: filing 3's shared line
+  const receipt = db.prepare(
+    `INSERT INTO receipts (photo, media_type, bytes, uploaded_at, uploaded_by)
+     VALUES (?, 'image/jpeg', 64, '2026-10-02T00:00:00.000Z', 'alex')`,
+  );
+  const filing = db.prepare(
+    `INSERT INTO receipt_filings (receipt_id, part, period_line_id, charge_line_id, total_cents, filed_at, filed_by)
+     VALUES (?, 1, ?, ?, 2476, '2026-10-05T00:00:00.000Z', 'alex')`,
+  );
+  const item = db.prepare(
+    `INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, share)
+     VALUES (?, ?, ?, ?, 0, ?)`,
+  );
+  for (const [id, periodLine, chargeLine] of [
+    [1, 1, 2],
+    [2, 3, null],
+    [3, 4, null],
+  ] as const) {
+    receipt.run(`${String(id)}.jpg`);
+    filing.run(id, periodLine, chargeLine);
+  }
+  item.run(1, 1, "PAIN", 349, "shared");
+  item.run(1, 2, "BIERE", 1_299, "theirs");
+  item.run(2, 1, "BIERE", 1_299, "theirs");
+  item.run(2, 2, "SAVON", 499, "not-shared");
+  item.run(3, 1, "PAIN", 349, "shared");
+  item.run(3, 2, "SAC", 0, "theirs");
+  return db;
+}
+
+describe("migration 11's whose (lg-30)", () => {
+  test("fills whose and the charge line of every stored theirs item from its filing", () => {
+    const db = atVersion10();
+
+    migrate(db);
+
+    expect(db.pragma("user_version", { simple: true })).toBe(11);
+    expect(
+      db
+        .prepare(
+          "SELECT id, filing_id, text, share, charged_to, charge_line_id FROM receipt_items ORDER BY id",
+        )
+        .all(),
+    ).toEqual([
+      {
+        id: 1,
+        filing_id: 1,
+        text: "PAIN",
+        share: "shared",
+        charged_to: null,
+        charge_line_id: null,
+      },
+      { id: 2, filing_id: 1, text: "BIERE", share: "theirs", charged_to: "sam", charge_line_id: 2 },
+      { id: 3, filing_id: 2, text: "BIERE", share: "theirs", charged_to: "sam", charge_line_id: 3 },
+      {
+        id: 4,
+        filing_id: 2,
+        text: "SAVON",
+        share: "not-shared",
+        charged_to: null,
+        charge_line_id: null,
+      },
+      {
+        id: 5,
+        filing_id: 3,
+        text: "PAIN",
+        share: "shared",
+        charged_to: null,
+        charge_line_id: null,
+      },
+      { id: 6, filing_id: 3, text: "SAC", share: "theirs", charged_to: null, charge_line_id: null },
+    ]);
+    db.close();
+  });
+
+  test("answers each filing's charge line as before, and its charges", () => {
+    const db = atVersion10();
+
+    migrate(db);
+
+    expect(
+      [1, 2, 3].map((id) => {
+        const filing = storedFiling(db, id);
+        return [filing.periodLineId, filing.chargeLineId, filing.charges];
+      }),
+    ).toEqual([
+      [1, 2, [{ chargedTo: "sam", lineId: 2 }]],
+      [3, null, [{ chargedTo: "sam", lineId: 3 }]],
+      // The shared line is not taken for a charge.
+      [4, null, []],
+    ]);
+    db.close();
+  });
+
+  test("refuses a name on an item that is not someone else's, and a line with no name", () => {
+    const db = atVersion10();
+    migrate(db);
+    const item = db.prepare(
+      `INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, share, charged_to, charge_line_id)
+       VALUES (3, ?, 'X', 1, 0, ?, ?, ?)`,
+    );
+
+    expect(() => item.run(3, "shared", "sam", null)).toThrow(/CHECK/u);
+    expect(() => item.run(3, "theirs", null, 2)).toThrow(/CHECK/u);
+    expect(() => item.run(3, "theirs", "sam", 2)).not.toThrow();
     db.close();
   });
 });

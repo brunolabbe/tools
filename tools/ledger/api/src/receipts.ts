@@ -21,10 +21,11 @@
  * **Items** (lg-10). A read proposes each item line with a category from the
  * household's list, and names the category this merchant was last given. A
  * filing with items is refused unless they make the total
- * (`RECEIPT_DOES_NOT_ADD_UP`); then what is not shared and what is the other's
- * come off the line, computed by the books from the items (`splitReceipt`), and
- * the other's part is filed as a charge of its own. The items are stored with
- * the filing.
+ * (`RECEIPT_DOES_NOT_ADD_UP`); then what is not shared and what is someone
+ * else's come off the line, computed by the books from the items
+ * (`splitReceipt`), and each charged person's part is filed as a charge of its
+ * own, to whoever the item names (lg-30). The items are stored with the filing,
+ * each `theirs` one with whose it was and the charge line it became.
  */
 
 import {
@@ -41,6 +42,7 @@ import type {
   ItemShare,
   ReadReceiptResponse,
   Receipt,
+  ReceiptCharge,
   ReceiptFiling,
   ReceiptItem,
   ReceiptMatchesResponse,
@@ -52,6 +54,7 @@ import type { Database } from "better-sqlite3";
 import { addLine } from "./periods.ts";
 import type { PeriodContext } from "./periods.ts";
 import type { PhotoStore } from "./receipt-photos.ts";
+import { requireKnownPerson } from "./rules.ts";
 import { requireSpendingCategory, spendingCategories } from "./spending-categories.ts";
 
 /**
@@ -101,6 +104,8 @@ interface ItemColumns {
   deposit_cents: number | null;
   spending_category_id: number | null;
   share: ItemShare;
+  charged_to: string | null;
+  charge_line_id: number | null;
 }
 
 function toItem(columns: ItemColumns): ReceiptItem {
@@ -111,15 +116,29 @@ function toItem(columns: ItemColumns): ReceiptItem {
     deposit: columns.deposit_cents,
     spendingCategoryId: columns.spending_category_id,
     share: columns.share,
+    chargedTo: columns.charged_to,
   };
 }
 
-function itemsOf(db: Database, filingId: number): ReceiptItem[] {
-  return (
-    db
-      .prepare("SELECT * FROM receipt_items WHERE filing_id = ? ORDER BY position")
-      .all(filingId) as ItemColumns[]
-  ).map(toItem);
+function itemColumnsOf(db: Database, filingId: number): ItemColumns[] {
+  return db
+    .prepare("SELECT * FROM receipt_items WHERE filing_id = ? ORDER BY position")
+    .all(filingId) as ItemColumns[];
+}
+
+/**
+ * The charge lines a filing made (lg-30), from its items: one per line, in the
+ * order each person's first `theirs` item is printed. A `theirs` item with no
+ * line came to nothing.
+ */
+function chargesOf(items: readonly ItemColumns[]): ReceiptCharge[] {
+  const charges: ReceiptCharge[] = [];
+  for (const item of items) {
+    if (item.charge_line_id === null || item.charged_to === null) continue;
+    if (charges.some((charge) => charge.lineId === item.charge_line_id)) continue;
+    charges.push({ chargedTo: item.charged_to, lineId: item.charge_line_id });
+  }
+  return charges;
 }
 
 function toReceipt(columns: ReceiptColumns): Receipt {
@@ -133,6 +152,7 @@ function toReceipt(columns: ReceiptColumns): Receipt {
 }
 
 function toFiling(db: Database, columns: FilingColumns): ReceiptFiling {
+  const items = itemColumnsOf(db, columns.id);
   return {
     id: columns.id,
     receiptId: columns.receipt_id,
@@ -144,14 +164,24 @@ function toFiling(db: Database, columns: FilingColumns): ReceiptFiling {
       gst: columns.gst_cents,
       qst: columns.qst_cents,
       total: columns.total_cents,
-      items: itemsOf(db, columns.id),
+      items: items.map(toItem),
     },
     periodLineId: columns.period_line_id,
     chargeLineId: columns.charge_line_id,
+    charges: chargesOf(items),
     rowId: columns.row_id,
     filedAt: columns.filed_at,
     filedBy: columns.filed_by,
   };
+}
+
+/** A stored filing, as the API answers it. */
+export function storedFiling(db: Database, id: number): ReceiptFiling {
+  const found = db.prepare("SELECT * FROM receipt_filings WHERE id = ?").get(id) as
+    | FilingColumns
+    | undefined;
+  if (found === undefined) throw new AppError("INTERNAL", "There is no such filing.");
+  return toFiling(db, found);
 }
 
 function storedReceipt(db: Database, id: number): ReceiptColumns {
@@ -356,12 +386,17 @@ export function receiptMatches(
  * Items must make the total, or nothing is filed (`RECEIPT_DOES_NOT_ADD_UP`).
  * Each item's category must be in the list. On a row every item is shared (the
  * owner's answer of 2026-10-17): the money left the joint account, so there is
- * no payer for an item to stay with, nor one the other's would owe.
+ * no payer for an item to stay with, nor one someone else's would owe.
+ *
+ * `members` is the household's current members, from the directory (lg-30): a
+ * `theirs` item that names nobody is the one of them who is not the payer, and
+ * is refused when there are several (`chargedToOf`).
  */
 export function fileReceipt(
   context: PeriodContext,
   id: number,
   request: FileReceiptRequest,
+  members: readonly string[],
 ): ReceiptFiling {
   return context.db
     .transaction(() => {
@@ -371,7 +406,8 @@ export function fileReceipt(
         .get(id, request.part);
       if (filed !== undefined) throw new AppError("RECEIPT_ALREADY_FILED");
 
-      const { destination, proposal } = request;
+      const { destination } = request;
+      let { proposal } = request;
       // Items that do not make the total are corrected first, never filed (lg-10).
       if (!itemsAddUp(proposal)) throw new AppError("RECEIPT_DOES_NOT_ADD_UP");
       for (const item of proposal.items) {
@@ -379,9 +415,20 @@ export function fileReceipt(
       }
       let periodLineId: number | null = null;
       let chargeLineId: number | null = null;
+      let chargeLines = new Map<string, number>();
       let rowId: number | null = null;
       if (destination.to === "line") {
-        [periodLineId, chargeLineId] = fileLines(context, receipt.uploaded_by, request);
+        // Every `theirs` item named before anything is written (lg-30).
+        proposal = {
+          ...proposal,
+          items: proposal.items.map((item) =>
+            item.share === "theirs"
+              ? { ...item, chargedTo: chargedToOf(context, receipt.uploaded_by, item, members) }
+              : item,
+          ),
+        };
+        const lines = fileLines(context, receipt.uploaded_by, destination, proposal);
+        ({ periodLineId, chargeLineId, chargeLines } = lines);
       } else {
         if (proposal.items.some((item) => item.share !== "shared")) {
           throw new AppError(
@@ -422,8 +469,8 @@ export function fileReceipt(
         );
       const filingId = Number(result.lastInsertRowid);
       const insertItem = context.db.prepare(
-        `INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, deposit_cents, spending_category_id, share)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, deposit_cents, spending_category_id, share, charged_to, charge_line_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const [index, item] of proposal.items.entries()) {
         insertItem.run(
@@ -435,6 +482,9 @@ export function fileReceipt(
           item.deposit,
           item.spendingCategoryId,
           item.share,
+          item.chargedTo,
+          // A `theirs` item whose person's charge came to nothing has no line.
+          item.chargedTo === null ? null : (chargeLines.get(item.chargedTo) ?? null),
         );
       }
       return toFiling(
@@ -448,14 +498,68 @@ export function fileReceipt(
 }
 
 /**
- * The lines a receipt filed as a line becomes (lg-10), as `[line, charge]`:
+ * Whose a `theirs` item is (lg-30), before anything is written. A name given is
+ * taken as `POST /api/period-lines` takes one: anyone the books hold who is not
+ * the payer, a member since departed included. `null` is the household's one
+ * current member who is not the payer, as "the other's" always meant with two;
+ * with several it names nobody and is refused, and with none there is nobody to
+ * charge.
+ */
+function chargedToOf(
+  context: PeriodContext,
+  payer: string,
+  item: ReceiptItem,
+  members: readonly string[],
+): string {
+  if (item.chargedTo !== null) {
+    requireKnownPerson(context.people, item.chargedTo);
+    if (item.chargedTo === payer) {
+      throw new AppError(
+        "BAD_REQUEST",
+        "A charge is owed by the other person, not by whoever paid.",
+      );
+    }
+    return item.chargedTo;
+  }
+  const others = [...new Set(members)].filter((person) => person !== payer);
+  const [other] = others;
+  if (other === undefined) {
+    throw new AppError(
+      "BAD_REQUEST",
+      "There is nobody else in the household to charge an item to.",
+    );
+  }
+  if (others.length > 1) {
+    // The item's text is the receipt's, so the refusal does not repeat it.
+    throw new AppError(
+      "BAD_REQUEST",
+      "With more than one other person in the household, name whose each item marked as someone else's is.",
+    );
+  }
+  return other;
+}
+
+/** What a receipt filed as a line became: its lines, and each person's charge. */
+interface FiledLines {
+  /** The first line filed. */
+  periodLineId: number;
+  /** The first charge filed beside a shared line; `null` when nothing was shared. */
+  chargeLineId: number | null;
+  /** Each charged person's line, by name. A charge that came to nothing has none. */
+  chargeLines: Map<string, number>;
+}
+
+/**
+ * The lines a receipt filed as a line becomes (lg-10, lg-30):
  *
  * - **the shared line**: what the card was charged, less what is not shared
- *   and what is the other's, each computed from the items (`splitReceipt`). A
- *   receipt the person marked as the other's whole (`chargedTo`) is still one
+ *   and what is someone else's, each computed from the items (`splitReceipt`). A
+ *   receipt the person marked as one person's whole (`chargedTo`) is still one
  *   line, charged to them, as lg-8 filed it.
- * - **the charge**: the other's items, owed in full by the other person to
- *   whoever uploaded the photo, under their category when they share one.
+ * - **a charge per person**: each person's `theirs` items, owed in full by them
+ *   to whoever uploaded the photo, under their category when they share one, in
+ *   the order each person's first item is printed. Every item is named by now
+ *   (`chargedToOf`).
  *
  * A part that comes to nothing files no line, and the first line filed is the
  * one the filing names first. A receipt of which nothing is left to file — every
@@ -465,13 +569,12 @@ export function fileReceipt(
 function fileLines(
   context: PeriodContext,
   payer: string,
-  request: FileReceiptRequest,
-): [number, number | null] {
-  const { destination, proposal } = request;
-  if (destination.to !== "line") throw new AppError("INTERNAL", "Only a line is split.");
+  destination: Extract<FileReceiptRequest["destination"], { to: "line" }>,
+  proposal: ReceiptProposal,
+): FiledLines {
   const split =
     proposal.items.length === 0
-      ? { sharedCents: destination.amountCents, notSharedCents: 0, chargedCents: 0 }
+      ? { sharedCents: destination.amountCents, charges: [] }
       : splitReceipt(proposal, undefined, destination.amountCents);
   if (
     split.sharedCents !== 0 &&
@@ -480,24 +583,6 @@ function fileLines(
     throw new AppError(
       "BAD_REQUEST",
       "More comes off this receipt than the card was charged. Check the amount charged and the items.",
-    );
-  }
-  const others = [...context.people].filter((person) => person !== payer);
-  const [other = null] = others;
-  if (split.chargedCents !== 0 && other === null) {
-    throw new AppError(
-      "BAD_REQUEST",
-      "There is nobody else in the household to charge an item to.",
-    );
-  }
-  // An item's share says "the other's" and names nobody, which only means one
-  // person when there are two. Naming whose is a contract change of its own
-  // (lg-30); until then a charge among more is a line on the period screen,
-  // which names whose it was (lg-23 gate 1, F2; owner, 2026-10-17).
-  if (split.chargedCents !== 0 && others.length > 1) {
-    throw new AppError(
-      "BAD_REQUEST",
-      "With more than two people in the household, an item cannot be marked as the other's. File the receipt with that item not shared, and add what was theirs as a line in the period, charged to them.",
     );
   }
 
@@ -518,33 +603,46 @@ function fileLines(
     );
     filed.push(line.id);
   }
-  if (split.chargedCents !== 0) {
-    const theirs = proposal.items.filter((item) => item.share === "theirs");
+  const chargeLines = new Map<string, number>();
+  for (const charge of split.charges) {
+    // `period_lines` holds no line of 0, and a part that comes to nothing files none.
+    if (charge.cents === 0) continue;
+    const { personId } = charge;
+    if (personId === null) throw new AppError("INTERNAL", "A charge names nobody.");
+    const theirs = proposal.items.filter(
+      (item) => item.share === "theirs" && item.chargedTo === personId,
+    );
     const [first] = theirs;
     const alike =
       first !== undefined &&
       theirs.every((item) => item.spendingCategoryId === first.spendingCategoryId);
-    const charge = addLine(
+    const line = addLine(
       context,
       {
         personId: payer,
         date: destination.date,
-        amountCents: split.chargedCents,
+        amountCents: charge.cents,
         category: null,
         spendingCategoryId: alike ? first.spendingCategoryId : destination.spendingCategoryId,
         note: destination.note,
-        chargedTo: other,
+        chargedTo: personId,
       },
       "receipt",
     );
-    filed.push(charge.id);
+    chargeLines.set(personId, line.id);
+    filed.push(line.id);
   }
-  const [line, charge] = filed;
-  if (line === undefined) {
+  const [periodLineId] = filed;
+  if (periodLineId === undefined) {
     throw new AppError(
       "BAD_REQUEST",
-      "Nothing on this receipt is shared or the other's, so there is nothing to file.",
+      "Nothing on this receipt is shared or someone else's, so there is nothing to file.",
     );
   }
-  return [line, charge ?? null];
+  const [firstCharge = null] = chargeLines.values();
+  return {
+    periodLineId,
+    chargeLineId: split.sharedCents === 0 ? null : firstCharge,
+    chargeLines,
+  };
 }
