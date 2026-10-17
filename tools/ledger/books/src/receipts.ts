@@ -272,9 +272,11 @@ export interface ReceiptSplit {
  * was paid, together, is still returned with the opposite sign, for the caller to
  * refuse.
  *
- * With no `not-shared` amount the cent would go off the largest charge, the
- * earlier on a tie. There is one charge here, rounded once, so that case cannot
- * arise yet; it belongs to the several charges of lg-30.
+ * With no `not-shared` items the cent would go off the largest charge, the
+ * earlier on a tie. There is one charge here, rounded once, so with nothing
+ * not shared `together` and the parts apart are the same number and that case
+ * cannot arise yet; it belongs to the several charges of lg-30. Not-shared items
+ * that come to 0 cents are still items: the cent goes off them (gate 1, F2).
  */
 export function splitReceipt(
   receipt: ReceiptProposal,
@@ -297,7 +299,7 @@ export function splitReceipt(
     sharedCents !== 0 &&
     Math.sign(sharedCents) !== Math.sign(paidCents) &&
     (together === 0 || Math.sign(together) === Math.sign(paidCents));
-  if (roundingOnly && notSharedCents !== 0) {
+  if (roundingOnly && notShared.length > 0) {
     notSharedCents += sharedCents;
     return { sharedCents: 0, notSharedCents, chargedCents };
   }

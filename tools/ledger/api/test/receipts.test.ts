@@ -1379,3 +1379,36 @@ describe("a receipt with nothing left shared (lg-32)", () => {
     expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
   });
 });
+
+// lg-32, gate 1 F2: not-shared items are there but their amount rounds to 0.
+describe("not-shared items that come to nothing (lg-32, gate 1 F2)", () => {
+  test("files the charge alone, where the not-shared items come to 0 cents", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+    const item = (
+      text: string,
+      price: number,
+      taxable: boolean,
+      share: "not-shared" | "theirs",
+    ) => ({ text, price, taxable, deposit: null, spendingCategoryId: null, share });
+
+    const response = await file(target, receipt.id, {
+      proposal: {
+        ...BASKET,
+        subtotal: 504,
+        gst: 20,
+        qst: 40,
+        total: 564,
+        items: [
+          item("CAFE", 100, false, "not-shared"),
+          item("COUPON", -87, true, "not-shared"),
+          item("FROMAGE", 491, true, "theirs"),
+        ],
+      },
+      destination: asLine(564),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(storedLines(target)).toEqual([{ amount_cents: 565, charged_to: "sam" }]);
+  });
+});

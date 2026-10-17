@@ -733,3 +733,55 @@ describe("a receipt with nothing left shared (lg-32)", () => {
     expect(splitReceipt(marks, SALES_TAX_RATES, 2_470).sharedCents).toBe(-7);
   });
 });
+
+/**
+ * Not-shared items of mixed sign and opposite tax treatment can come to 0 cents
+ * together and still be there: gate 1's F2 on lg-32, the coupon.
+ */
+const COUPON: ReceiptProposal = {
+  merchant: "Marché Exemple",
+  date: "2026-10-04",
+  subtotal: 504,
+  gst: 20,
+  qst: 40,
+  total: 564,
+  items: [
+    {
+      text: "CAFE",
+      price: 100,
+      taxable: false,
+      deposit: null,
+      spendingCategoryId: null,
+      share: "not-shared",
+    },
+    {
+      text: "COUPON",
+      price: -87,
+      taxable: true,
+      deposit: null,
+      spendingCategoryId: null,
+      share: "not-shared",
+    },
+    {
+      text: "FROMAGE",
+      price: 491,
+      taxable: true,
+      deposit: null,
+      spendingCategoryId: null,
+      share: "theirs",
+    },
+  ],
+};
+
+describe("not-shared items that come to nothing (lg-32, gate 1 F2)", () => {
+  test("the cent still comes off the not-shared items, where their amount rounds to 0", () => {
+    // 1,00 $ and -0,87 $ taxed come to -0,028 $, which is 0 cents; the cheese is
+    // 5,6452 $, 5,65 $ rounded, so the parts apart are 5,65 $ against 5,64 $ paid.
+    expect(checkReceipt(COUPON)).toEqual([]);
+    expect(splitReceipt(COUPON)).toEqual({
+      sharedCents: 0,
+      notSharedCents: -1,
+      chargedCents: 565,
+    });
+  });
+});
