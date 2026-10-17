@@ -530,3 +530,207 @@ describe("a household id is never NULL", () => {
     directory.close();
   });
 });
+
+/** A value the signature does not allow, written as the caller would pass it. */
+function untyped<T>(value: unknown): T {
+  return value as T;
+}
+
+/** What a refusal must leave alone: the membership, its history and the households. */
+function stateOf(directory: Directory) {
+  return {
+    members: directory.members(),
+    history: directory.history("home"),
+    households: directory.households(),
+  };
+}
+
+/** The error a call threw, or `undefined` when it returned. */
+function thrown(run: () => unknown): unknown {
+  try {
+    run();
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+}
+
+/** Its text is this marker, so a refusal that echoed the value would contain it. */
+const ECHO = "ECHO-MARKER-lg25";
+const INVALID_DATE = new Date("x");
+
+// lg-25: a method given a value that is not the type its signature names threw an
+// untyped error (a TypeError from a string method, a RangeError or a SqliteError
+// from the driver), or stored a coerced value. Each refusal is BAD_REQUEST, nothing
+// it was given is stored, and the message does not echo the value.
+describe("a directory method given a value that is not of its type", () => {
+  /** A household with one member, so a refusal that stored anything would show. */
+  function withMember(): Directory {
+    const directory = withHousehold();
+    directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
+    return directory;
+  }
+
+  /** Each row: the call's text, the offending value, and the call with that value in its place. */
+  type Refusal = [
+    call: string,
+    value: unknown,
+    run: (directory: Directory, value: unknown) => unknown,
+  ];
+
+  const addMemberAs = (
+    fields: Partial<{ household: string; address: string; person: string; by: string; at: Date }>,
+  ) => ({ household: "home", address: SAM, person: "sam", by: "operator", at: AT, ...fields });
+
+  const REFUSALS: Refusal[] = [
+    [
+      "addMember({ address: null })",
+      null,
+      (d, v) => d.addMember(addMemberAs({ address: untyped<string>(v) })),
+    ],
+    [
+      "addMember({ address: undefined })",
+      undefined,
+      (d, v) => d.addMember(addMemberAs({ address: untyped<string>(v) })),
+    ],
+    [
+      "addMember({ person: null })",
+      null,
+      (d, v) => d.addMember(addMemberAs({ person: untyped<string>(v) })),
+    ],
+    [
+      "addMember({ person: 7 })",
+      7,
+      (d, v) => d.addMember(addMemberAs({ person: untyped<string>(v) })),
+    ],
+    [
+      "addMember({ household: {} })",
+      {},
+      (d, v) => d.addMember(addMemberAs({ household: untyped<string>(v) })),
+    ],
+    [
+      "addMember({ household: 7 })",
+      7,
+      (d, v) => d.addMember(addMemberAs({ household: untyped<string>(v) })),
+    ],
+    ["addMember({ at: null })", null, (d, v) => d.addMember(addMemberAs({ at: untyped<Date>(v) }))],
+    [
+      'addMember({ at: new Date("x") })',
+      INVALID_DATE,
+      (d, v) => d.addMember(addMemberAs({ at: untyped<Date>(v) })),
+    ],
+    [
+      "addMember({ by: null })",
+      null,
+      (d, v) => d.addMember(addMemberAs({ by: untyped<string>(v) })),
+    ],
+    [
+      "addMember({ by: undefined })",
+      undefined,
+      (d, v) => d.addMember(addMemberAs({ by: untyped<string>(v) })),
+    ],
+    ["addMember({ by: 7 })", 7, (d, v) => d.addMember(addMemberAs({ by: untyped<string>(v) }))],
+    [
+      "removeMember({ address: null })",
+      null,
+      (d, v) => d.removeMember({ address: untyped<string>(v), ...CHANGE }),
+    ],
+    [
+      "removeMember({ at: null })",
+      null,
+      (d, v) => d.removeMember({ address: ALEX, by: "operator", at: untyped<Date>(v) }),
+    ],
+    [
+      'removeMember({ at: new Date("x") })',
+      INVALID_DATE,
+      (d, v) => d.removeMember({ address: ALEX, by: "operator", at: untyped<Date>(v) }),
+    ],
+    [
+      "removeMember({ by: null })",
+      null,
+      (d, v) => d.removeMember({ address: ALEX, by: untyped<string>(v), at: AT }),
+    ],
+    [
+      "removeMember({ by: 7 })",
+      7,
+      (d, v) => d.removeMember({ address: ALEX, by: untyped<string>(v), at: AT }),
+    ],
+    ["membershipOf(null)", null, (d, v) => d.membershipOf(untyped<string>(v))],
+    ["membershipOf(undefined)", undefined, (d, v) => d.membershipOf(untyped<string>(v))],
+    [
+      "addHousehold({ at: null })",
+      null,
+      (d, v) => d.addHousehold({ id: "away", name: "Away", by: "operator", at: untyped<Date>(v) }),
+    ],
+    [
+      'addHousehold({ at: "2026-10-12" })',
+      "2026-10-12",
+      (d, v) => d.addHousehold({ id: "away", name: "Away", by: "operator", at: untyped<Date>(v) }),
+    ],
+    [
+      'addHousehold({ at: new Date("x") })',
+      INVALID_DATE,
+      (d, v) => d.addHousehold({ id: "away", name: "Away", by: "operator", at: untyped<Date>(v) }),
+    ],
+    [
+      "addHousehold({ by: null })",
+      null,
+      (d, v) => d.addHousehold({ id: "away", name: "Away", by: untyped<string>(v), at: AT }),
+    ],
+    [
+      "addHousehold({ by: undefined })",
+      undefined,
+      (d, v) => d.addHousehold({ id: "away", name: "Away", by: untyped<string>(v), at: AT }),
+    ],
+    [
+      "addHousehold({ by: 7 })",
+      7,
+      (d, v) => d.addHousehold({ id: "away", name: "Away", by: untyped<string>(v), at: AT }),
+    ],
+  ];
+
+  test.each(REFUSALS)(
+    "%s is refused as BAD_REQUEST, changes nothing, and does not echo the value",
+    (_call, value, run) => {
+      const directory = withMember();
+      const before = stateOf(directory);
+
+      expect(code(() => run(directory, value))).toBe("BAD_REQUEST");
+      expect(stateOf(directory)).toEqual(before);
+
+      const refusal = thrown(() => run(directory, [ECHO]));
+      expect(refusal).toBeInstanceOf(AppError);
+      const message = refusal instanceof AppError ? refusal.message : "";
+      expect(message).not.toBe("");
+      expect(message).not.toContain(ECHO);
+      expect(stateOf(directory)).toEqual(before);
+      directory.close();
+    },
+  );
+
+  // The schema and the lookup already answer a household that names none, and the
+  // ticket keeps that answer: only a value of the wrong type is a refusal.
+  test.each([
+    ["null", null],
+    ["undefined", undefined],
+  ])(
+    "addMember({ household: %s }) still names no household, as HOUSEHOLD_NOT_FOUND",
+    (_label, value) => {
+      const directory = withMember();
+      const before = stateOf(directory);
+
+      expect(
+        code(() =>
+          directory.addMember({
+            household: untyped<string>(value),
+            address: SAM,
+            person: "sam",
+            ...CHANGE,
+          }),
+        ),
+      ).toBe("HOUSEHOLD_NOT_FOUND");
+      expect(stateOf(directory)).toEqual(before);
+      directory.close();
+    },
+  );
+});

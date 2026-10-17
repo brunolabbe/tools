@@ -28,6 +28,8 @@ const RESERVED_IDS = new Set(["con", "prn", "aux", "nul"]);
 
 /** One `@`, something either side, and nothing a list or a shell would split on. */
 const ADDRESS = /^[^\s@,;]+@[^\s@,;]+$/u;
+/** The sentence for an address that is not one, whichever method was given it. */
+const NOT_AN_ADDRESS = "That is not an email address.";
 
 /** How the host command signs the changes it makes; never an address. */
 export const OPERATOR = "operator";
@@ -76,6 +78,19 @@ function refuse(message: string): never {
   throw new AppError("BAD_REQUEST", message);
 }
 
+/**
+ * A change's time and author, refused before any statement runs (lg-25). `at` must
+ * be a valid Date: `new Date("x")` is an instance of Date and still throws a
+ * RangeError in `toISOString`. `by` must be a string: a number was stored as text
+ * (`7` became `"7.0"`), and `null` was refused only by the NOT NULL constraint.
+ */
+function refuseUnlessChange(change: { by: unknown; at: unknown }): void {
+  if (!(change.at instanceof Date) || Number.isNaN(change.at.getTime())) {
+    refuse("The change's time is not a date.");
+  }
+  if (typeof change.by !== "string") refuse("The change's author is not a string.");
+}
+
 export class Directory {
   readonly #db: Database.Database;
 
@@ -120,6 +135,9 @@ export class Directory {
 
   /** The address's household and name now, read from the file on every call. */
   membershipOf(address: string): Membership | undefined {
+    // Typed as a string, but a caller past the schema can pass anything; refused
+    // before `toLowerCase` throws a TypeError (lg-25).
+    if (typeof address !== "string") refuse("The address is not a string.");
     const row = this.#db
       .prepare("SELECT household_id AS household, person FROM current_members WHERE address = ?")
       .get(address.toLowerCase()) as Membership | undefined;
@@ -183,6 +201,8 @@ export class Directory {
     // object whose toString throws, and prints nothing useful for an array.
     if (typeof household.id !== "string") notAnId(typeof (household.id as unknown));
     if (typeof household.name !== "string") notAName();
+    // lg-25: checked before the transaction opens, as the id and name are above.
+    refuseUnlessChange(household);
     const id = household.id.trim();
     const name = household.name.trim();
     if (!isHouseholdId(id)) notAnId(`"${id}"`);
@@ -206,8 +226,20 @@ export class Directory {
    * member is told neither (`routes/households.ts`).
    */
   addMember(member: { household: string; address: string; person: string } & Change): Member {
+    // lg-25: a caller past the request schema can pass anything, and each of these
+    // reached a string method or a statement as an untyped error. A missing
+    // household names none, which the lookup below answers as HOUSEHOLD_NOT_FOUND;
+    // any other non-string is refused before any statement runs (`{}` reached the
+    // driver and threw a RangeError).
+    refuseUnlessChange(member);
+    const household: unknown = member.household;
+    if (household !== undefined && household !== null && typeof household !== "string") {
+      refuse("The household is not a string.");
+    }
+    if (typeof member.address !== "string") refuse("The address is not a string.");
+    if (typeof member.person !== "string") refuse("The person's name is not a string.");
     const address = readAddress(member.address);
-    if (address === undefined) refuse("That is not an email address.");
+    if (address === undefined) refuse(NOT_AN_ADDRESS);
     const person = member.person.trim();
     if (person === "" || person.length > 64) refuse("A person's name is 1 to 64 characters.");
     return this.#db
@@ -243,8 +275,10 @@ export class Directory {
    * the membership it ended.
    */
   removeMember(member: { address: string; household?: string } & Change): Member {
+    refuseUnlessChange(member);
+    if (typeof member.address !== "string") refuse("The address is not a string.");
     const address = readAddress(member.address);
-    if (address === undefined) refuse("That is not an email address.");
+    if (address === undefined) refuse(NOT_AN_ADDRESS);
     return this.#db
       .transaction(() => {
         const standing = this.membershipOf(address);
