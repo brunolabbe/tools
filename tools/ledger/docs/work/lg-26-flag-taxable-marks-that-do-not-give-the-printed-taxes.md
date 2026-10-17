@@ -127,6 +127,75 @@ nobody charged, and nothing flags it.
 - Invariants: contract edited as Build 1 directs; no new error code, spawn, URL, or log line; the test diff only adds (111 lines in `books`, 21 in `web`, 0 deleted), so no existing expectation changed. Skipped as untouched: tool isolation, Dockerfile closure, routes.
 - NFR: security n/a · performance n/a (one reduce per check) · reliability — above · maintainability — above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-17 · `f12d0e06..6c44746c` · Opus 5.5, depth full, round 1 only
+
+| Done when      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1–4            | unchanged by the round: the round's test diff adds tests and deletes none of the gate-1 rows' tests, and all four still pass (`npm test -- --project ledger` 1127 of 1127)                                                                                                                                                                                                                                                      |
+| 5. Gates green | **unproven (gate)** — on `6c44746c`, `check`, `docker`, `codeql`, `CodeQL` and `dependency-review` pass, but `test (ubuntu-latest)` is still pending; `test (windows-latest, informational)` is pending too, and is read, not graded. Locally `npm test -- --project ledger` passes 1127 of 1127 in 60 files, and `npm run check` exits 0. The round changed `books` source, so `f12d0e06`'s green does not stand for this head |
+
+- **Gate 1 med (the `tax-differs` suppression): fixed.** The owner chose option
+  (c). `taxableFits` in `books/src/receipts.ts` now takes `taxesConsistent`;
+  when `tax-differs` is raised, the marks must fit at least one tax. That is
+  the same rule as gate 1's `alt.mjs`. Verified against the branch's own
+  `checkReceipt`:
+  - **Per-line store, prices 0,50 to 15,49 $** (`probe2.mts` and `probe4.mts`).
+    Flipped marks left unflagged: 2628 of 20000 at `f12d0e06`, 0 of 20000 now.
+    Of the 2628 receipts that raise `tax-differs` with the marks right, 218 now
+    also raise `taxable-differs`.
+  - **Store that rounds on the subtotal, QST misread by 0,10 to 0,90 $.**
+    Flipped marks hidden behind `tax-differs`: 20000 of 20000 at `f12d0e06`,
+    0 now. Of 20000 receipts with the marks right, 0 gain a false flag.
+  - **The new test proves the change.** With gate 1's `books/src/receipts.ts`
+    put back, `books/test/receipts.test.ts` › "the taxable marks beside printed
+    taxes that disagree (lg-26, round 1)" › "still names a flipped mark when the
+    printed taxes themselves raise tax-differs" fails: 1 failed of 43.
+  - **The tests rule out option (b).** With option (b) planted (both taxes
+    demanded beside `tax-differs`), 5 of 43 fail: the three existing
+    expectations, "still names a flipped mark…" and "does not blame the marks
+    for a misread tax that the other tax still agrees with".
+  - **The docs match the code.** I checked the contract's doc and the
+    `reader.ts` comment against the code: no items, one tax missing, and mixed
+    signs are not checked, and beside `tax-differs` the marks are named only
+    when they fit neither tax. Each matches `checkReceipt`.
+- **Gate 1 low (per-line rounding, Log note): fixed.** The Log records it, the
+  contract's doc states it, and "a store that rounds tax per line can raise it
+  on marks that are right" pins the 1,54 $ and 1,22 $ example
+  (`toEqual(["taxable-differs"])`). The figure the Log quotes is the new low
+  below.
+- **Gate 1 low (zero-tax range in the Log): fixed.** The Log corrects it, and
+  "lets 5 cents taxable pass on a receipt with no tax lines, and flags 6"
+  asserts both edges. `probe.mts` agrees: 0 to 5 cents pass, and 6 is flagged.
+- **Gate 1 low (both tax lines read as `null`): not fixed, by the owner's
+  choice; it keeps its severity as `low`.** Option (c) does not reach it:
+  `probe3.mts` still gives `["items-differ","parts-differ","taxable-differs"]`
+  with the marks right, and `[]` once the taxes are typed back. The Log's
+  reason (both taxes `null` never raise `tax-differs`) holds.
+- **low** · new, in the Log line the round wrote · "Gate 1 measured 641 of 20000
+  synthetic receipts." That is gate 1's figure, and gate 1 scoped it badly: it
+  came from a small-price sample (0,10 to 4,09 $). On receipts priced 0,50 to
+  15,49 $, the branch raises `taxable-differs` on 6483 of 20000 per-line
+  receipts whose marks are right (`probe4.mts`). Of those, 6265 have no
+  `tax-differs` and 218 are beside it, so the flag fires on about a third of
+  that store's correct receipts. On the small-price sample the figure is 2360
+  of 20000 (740 alone, 1620 beside `tax-differs`). The text understates how
+  much noise the flag makes, but nothing is blocked and no guarantee rests on
+  the figure. Fix: quote the range, or the two figures, instead of 641.
+- **dropped** · the contract's doc says "Beside `tax-differs`, where no marks
+  can give both taxes". That is untrue when `tax-differs` comes from the
+  subtotal cap (the taxes agree with each other, but on more than the
+  subtotal): there the rule loosens to "either", and a flipped mark that leaves
+  the sum inside the GST range but not the QST range goes unnamed. That band is
+  under about 0,20 $, and only exists while the subtotal is misread, which
+  `parts-differ` already flags. Nothing relies on it.
+- **findings** · the round's hunt returned 2; 1 carried, 1 dropped. The four
+  gate-1 findings got the verdicts above and are not counted again.
+- Nothing in this round is `high`.
+- NFR: security n/a · performance n/a · reliability — the low above ·
+  maintainability ✓ (new tests appended at the end of the spec).
+
 ## Log
 
 - 2026-10-17 — Fixed at landing by owner choice: lg-10's gate 2, N3 — "(i) Its
