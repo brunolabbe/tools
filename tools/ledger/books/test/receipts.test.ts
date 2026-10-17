@@ -676,3 +676,112 @@ describe("the guard on a remainder that turns the largest category over (lg-27 g
     ]);
   });
 });
+
+/** The six-pack the other's; the bread and the soap not shared. */
+function NOTHING_LEFT(receipt: ReceiptProposal): ReceiptProposal {
+  return {
+    ...receipt,
+    items: receipt.items.map((each, at) => ({
+      ...each,
+      share: at === 1 ? ("theirs" as const) : ("not-shared" as const),
+    })),
+  };
+}
+
+describe("a receipt with nothing left shared (lg-32)", () => {
+  /** `BASKET` as a refund: every price, deposit, tax and the total negated. */
+  const REFUND: ReceiptProposal = {
+    ...BASKET,
+    subtotal: -2_207,
+    gst: -90,
+    qst: -179,
+    total: -2_476,
+    items: BASKET.items.map((each) => ({
+      ...each,
+      price: -each.price,
+      deposit: each.deposit === null ? null : -each.deposit,
+    })),
+  };
+
+  test("takes the cent the parts were rounded apart by off the not-shared amount", () => {
+    // 3,49 $ + 4,99 $ + 0,7472525 $ → 9,23 $, and 15,54 $, come to 24,77 $ rounded
+    // apart and 24,76 $ rounded together, which is the total: the cent is rounding.
+    expect(splitReceipt(NOTHING_LEFT(BASKET))).toEqual({
+      sharedCents: 0,
+      notSharedCents: 922,
+      chargedCents: 1_554,
+    });
+  });
+
+  test("does the same for the refund of it, negated", () => {
+    expect(splitReceipt(NOTHING_LEFT(REFUND))).toEqual({
+      sharedCents: 0,
+      notSharedCents: -922,
+      chargedCents: -1_554,
+    });
+  });
+
+  test("still shows more than was charged, where the parts together come to more", () => {
+    const marks = NOTHING_LEFT(BASKET);
+
+    // A cent short together too, so the cent is not rounding: -1 together, -2 apart.
+    expect(splitReceipt(marks, SALES_TAX_RATES, 2_475)).toEqual({
+      sharedCents: -2,
+      notSharedCents: 923,
+      chargedCents: 1_554,
+    });
+    expect(splitReceipt(marks, SALES_TAX_RATES, 2_470).sharedCents).toBe(-7);
+  });
+});
+
+/**
+ * Not-shared items of mixed sign and opposite tax treatment can come to 0 cents
+ * together and still be there: gate 1's F2 on lg-32, the coupon.
+ */
+const COUPON: ReceiptProposal = {
+  merchant: "Marché Exemple",
+  date: "2026-10-04",
+  subtotal: 504,
+  gst: 20,
+  qst: 40,
+  total: 564,
+  items: [
+    {
+      text: "CAFE",
+      price: 100,
+      taxable: false,
+      deposit: null,
+      spendingCategoryId: null,
+      share: "not-shared",
+    },
+    {
+      text: "COUPON",
+      price: -87,
+      taxable: true,
+      deposit: null,
+      spendingCategoryId: null,
+      share: "not-shared",
+    },
+    {
+      text: "FROMAGE",
+      price: 491,
+      taxable: true,
+      deposit: null,
+      spendingCategoryId: null,
+      share: "theirs",
+    },
+  ],
+};
+
+describe("not-shared items that come to nothing (lg-32, gate 1 F2)", () => {
+  test("the cent still comes off the not-shared items, where their amount rounds to 0", () => {
+    // 1,00 $ and -0,87 $ taxed come to -0,028 $, which is 0 cents; the cheese is
+    // 5,6452 $, 5,65 $ rounded, so the parts apart are 5,65 $ against 5,64 $ paid.
+    expect(checkReceipt(COUPON)).toEqual([]);
+    expect(splitReceipt(COUPON)).toEqual({
+      sharedCents: 0,
+      notSharedCents: -1,
+      chargedCents: 565,
+    });
+  });
+});

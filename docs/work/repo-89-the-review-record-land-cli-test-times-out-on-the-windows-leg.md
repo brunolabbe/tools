@@ -3,7 +3,7 @@ id: repo-89
 tool: repo
 title: The review-record --land CLI test times out on the Windows CI leg
 kind: fix
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -195,3 +195,30 @@ scripts/test/review-record.test.ts -t "the --land CLI lands"` fails with
     test, whose cause repo-71 did not explain. F2: the unstub sits outside a
     `finally`. F3: a doubled "in" in the `vi.stubEnv` sub-bullet above. They are
     in the gate's record below as the reviewer wrote them.
+- 2026-10-17 — **Closed from CI, by the reading the 2026-10-03 entry named.**
+  Interactive session, docs only, no local test run (dl-127 held the machine).
+  The `--land` CLI case against its `land()` sibling, from
+  `gh run view <id> --job <windows job id> --log`, on the six most recent
+  `ci.yml` runs whose `test (windows-latest, informational)` job ran, plus
+  main's push run at `6b42ee19`. Every one passed:
+
+  | Run         | Head                  | Case (ms) | `land()` sibling (ms) | Case − sibling | File (ms) |
+  | ----------- | --------------------- | --------: | --------------------: | -------------: | --------: |
+  | 39058961193 | main `6b42ee19`       |     4,292 |                 4,586 |           −294 |   129,141 |
+  | 39066268664 | release-please ledger |     5,621 |                 8,380 |         −2,759 |   155,942 |
+  | 39066367835 | lg-28                 |     5,333 |                 5,792 |           −459 |   139,198 |
+  | 39066510434 | lg-29                 |     5,611 |                 9,397 |         −3,786 |   116,419 |
+  | 39070012677 | repo-99               |     3,375 |                 5,194 |         −1,819 |   115,668 |
+  | 39071166215 | repo-99               |     4,937 |                 5,930 |           −993 |   140,447 |
+  | 39073907834 | repo-99               |     4,331 |                 4,663 |           −332 |   122,499 |
+
+  The case ran 3,375–5,621 ms, all far under the 30 s timeout, against
+  5,542–49,088 ms (median 11,266) in the premise's 18 runs. Case minus sibling
+  is now −3,786 to −294 in every run, against −4,325 to +43,466 (median +4,641)
+  then. That is the outcome the 2026-10-03 entry said would name `gh`: the case
+  fell to its sibling and below, so the excess was the real `gh` inside the
+  preflight child, and done-when 1 is met by the experiment rather than by
+  elimination. Done-when 2 is met seven times over. Three of the seven runs are
+  repo-99's branch, which changed CI's worker count; the four before it show the
+  same shape, so the result does not lean on that change. `status: done`; this
+  unblocks repo-100.
