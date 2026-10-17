@@ -343,3 +343,193 @@ describe("the shipped rate table (lg-10 gate 1, F6)", () => {
     expect(inOrder([...SALES_TAX_RATES, ...SALES_TAX_RATES])).toBe(false);
   });
 });
+
+describe("the taxable marks (lg-26)", () => {
+  /** `BASKET` with the item at `index` marked taxable or not, and the six-pack not shared. */
+  function marked(index: number, taxable: boolean): ReceiptProposal {
+    return {
+      ...BASKET,
+      items: BASKET.items.map((each, at) => ({
+        ...each,
+        share: at === 1 ? ("not-shared" as const) : each.share,
+        taxable: at === index ? taxable : each.taxable,
+      })),
+    };
+  }
+
+  /** Zero-rated groceries: no tax lines, and a milk that is marked taxable or not. */
+  function groceries(milkTaxable: boolean): ReceiptProposal {
+    return {
+      merchant: "Marché Exemple",
+      date: "2026-10-04",
+      subtotal: 2_000,
+      gst: null,
+      qst: null,
+      total: 2_000,
+      items: [
+        { ...item(0), text: "LAIT", price: 1_000, taxable: milkTaxable, share: "not-shared" },
+        { ...item(0), text: "PAIN", price: 1_000, taxable: false, share: "shared" },
+      ],
+    };
+  }
+
+  test("flags the six-pack misread as not taxable, and not the basket as printed", () => {
+    expect(checkReceipt(marked(1, true))).toEqual([]);
+    expect(checkReceipt(marked(1, false))).toEqual(["taxable-differs"]);
+    // The money it moves: the misread basket still files, 1,95 $ on the wrong side.
+    expect(splitReceipt(marked(1, false)).sharedCents).toBe(1_117);
+    expect(splitReceipt(marked(1, true)).sharedCents).toBe(922);
+  });
+
+  test("flags the bread misread as taxable", () => {
+    expect(checkReceipt(marked(0, true))).toEqual(["taxable-differs"]);
+  });
+
+  test("does not flag items all untaxed on a receipt with no tax lines", () => {
+    expect(checkReceipt(groceries(false))).toEqual([]);
+  });
+
+  test("flags a taxable mark on a receipt with no tax lines, both taxes counting as zero", () => {
+    expect(checkReceipt(groceries(true))).toEqual(["taxable-differs"]);
+    // The money it moves: 1,50 $ of tax nobody charged comes off the shared part.
+    expect(splitReceipt(groceries(true)).notSharedCents).toBe(1_150);
+    expect(splitReceipt(groceries(false)).notSharedCents).toBe(1_000);
+  });
+
+  test("leaves one tax missing to tax-missing, and no items to no flag", () => {
+    expect(checkReceipt({ ...groceries(true), gst: 50, total: 2_050 })).toEqual(["tax-missing"]);
+    expect(checkReceipt({ ...BASKET, items: [] })).toEqual([]);
+    expect(checkReceipt({ ...groceries(true), items: [] })).toEqual([]);
+  });
+
+  test("leaves taxes no taxable part gives to tax-differs alone", () => {
+    expect(checkReceipt({ ...BASKET, qst: 190, total: 2_487 })).toEqual(["tax-differs"]);
+  });
+
+  test("checks a refund's parts as their magnitudes", () => {
+    const refund: ReceiptProposal = {
+      ...BASKET,
+      subtotal: -2_207,
+      gst: -90,
+      qst: -179,
+      total: -2_476,
+      items: BASKET.items.map((each) => ({
+        ...each,
+        price: -each.price,
+        deposit: each.deposit === null ? null : -each.deposit,
+      })),
+    };
+
+    expect(checkReceipt(refund)).toEqual([]);
+    expect(
+      checkReceipt({
+        ...refund,
+        items: refund.items.map((each, at) => (at === 1 ? { ...each, taxable: false } : each)),
+      }),
+    ).toEqual(["taxable-differs"]);
+  });
+
+  test("reads the rates in effect on the receipt's date", () => {
+    const changed: SalesTaxRates[] = [
+      { from: "2013-01-01", gst: 5_000, qst: 9_975 },
+      { from: "2026-07-01", gst: 5_000, qst: 10_975 },
+    ];
+    // 10,00 $ taxable: GST 0,50 $; QST 0,9975 $ → 1,00 $ before, 1,0975 $ → 1,10 $ after.
+    const wine = (date: string, qst: number): ReceiptProposal => ({
+      ...BASKET,
+      date,
+      subtotal: 2_000,
+      gst: 50,
+      qst,
+      total: 2_050 + qst,
+      items: [
+        { ...item(2), price: 1_000 },
+        { ...item(0), price: 1_000 },
+      ],
+    });
+
+    expect(checkReceipt(wine("2026-06-30", 100), changed)).toEqual([]);
+    expect(checkReceipt(wine("2026-07-01", 110), changed)).toEqual([]);
+    // The right marks, the wrong rate: tax-differs, and not taxable-differs besides.
+    expect(checkReceipt(wine("2026-06-30", 110), changed)).toEqual(["tax-differs"]);
+  });
+});
+
+/** A receipt with no tax lines, for the cases below that vary only its items. */
+const groceriesNoTax: ReceiptProposal = {
+  merchant: "Marché Exemple",
+  date: "2026-10-04",
+  subtotal: 1_000,
+  gst: null,
+  qst: null,
+  total: 1_000,
+  items: [],
+};
+
+describe("the taxable marks beside printed taxes that disagree (lg-26, round 1)", () => {
+  /**
+   * 10,00 $ taxable and 3,49 $ untaxed, from a store whose printed QST (0,97 $)
+   * is not the rate's of the GST's taxable part (0,50 $): `tax-differs`, whatever
+   * the marks. `flipped` marks the 3,49 $ taxable as well.
+   */
+  function disagreeing(flipped: boolean): ReceiptProposal {
+    return {
+      merchant: "Marché Exemple",
+      date: "2026-10-04",
+      subtotal: 1_349,
+      gst: 50,
+      qst: 97,
+      total: 1_496,
+      items: [
+        { ...item(2), text: "VIN", price: 1_000, taxable: true },
+        { ...item(0), text: "PAIN", price: 349, taxable: flipped },
+      ],
+    };
+  }
+
+  test("still names a flipped mark when the printed taxes themselves raise tax-differs", () => {
+    // The marks as read give GST, so they are not the cause and are left alone.
+    expect(checkReceipt(disagreeing(false))).toEqual(["tax-differs"]);
+    // 13,49 $ taxable gives neither tax: the flipped mark is named beside tax-differs.
+    expect(checkReceipt(disagreeing(true))).toEqual(["tax-differs", "taxable-differs"]);
+  });
+
+  test("does not blame the marks for a misread tax that the other tax still agrees with", () => {
+    // BASKET's soap and six-pack give 17,98 $ taxable; a QST read as 1,90 $ is the cause.
+    expect(checkReceipt({ ...BASKET, qst: 190, total: 2_487 })).toEqual(["tax-differs"]);
+  });
+
+  test("a store that rounds tax per line can raise it on marks that are right", () => {
+    // 1,54 $ and 1,22 $, both taxable: GST 0,08 $ + 0,06 $, QST 0,15 $ + 0,12 $, per line.
+    const perLine: ReceiptProposal = {
+      merchant: "Marché Exemple",
+      date: "2026-10-04",
+      subtotal: 276,
+      gst: 14,
+      qst: 27,
+      total: 317,
+      items: [
+        { ...item(2), text: "A", price: 154, taxable: true },
+        { ...item(2), text: "B", price: 122, taxable: true },
+      ],
+    };
+
+    expect(checkReceipt(perLine)).toEqual(["taxable-differs"]);
+  });
+
+  test("lets 5 cents taxable pass on a receipt with no tax lines, and flags 6", () => {
+    // GST's zero range is [-10, 9] cents and QST's [-5, 5]; the check takes both.
+    const taxable = (price: number): ReceiptProposal => ({
+      ...groceriesNoTax,
+      subtotal: 1_000 + price,
+      total: 1_000 + price,
+      items: [
+        { ...item(0), text: "PAIN", price: 1_000, taxable: false },
+        { ...item(0), text: "BONBON", price, taxable: true },
+      ],
+    });
+
+    expect(checkReceipt(taxable(5))).toEqual([]);
+    expect(checkReceipt(taxable(6))).toEqual(["taxable-differs"]);
+  });
+});
