@@ -41,6 +41,11 @@ type Load =
   | { state: "failed"; message: string }
   | { state: "ready"; rows: StoredRow[]; total: number };
 
+/** What a row counts for in the list it is in: its slice of a receipt (lg-28), else its amount. */
+function shown(row: StoredRow): number {
+  return row.sliceCents ?? row.amountCents;
+}
+
 export function PeriodRows({
   period,
   category,
@@ -177,12 +182,20 @@ export function PeriodRows({
               <li key={row.id}>
                 <p className="line">
                   <span className="when">{row.date}</span>
-                  <span className={row.amountCents < 0 ? "amount out" : "amount in"}>
-                    {formatCents(row.amountCents)}
+                  {/* A split row counts here for the part its receipt put under this category. */}
+                  <span className={shown(row) < 0 ? "amount out" : "amount in"}>
+                    {formatCents(shown(row))}
                   </span>
                 </p>
                 <p className="what">{row.description}</p>
                 <p className="muted">{row.category}.</p>
+                {row.sliceCents !== undefined && (
+                  <p className="muted">
+                    Has a receipt: {formatCents(row.sliceCents)} of its{" "}
+                    {formatCents(row.amountCents)} is in this category, the rest in the others its
+                    items chose. A category of its own for the row charts all of it there.
+                  </p>
+                )}
                 <RowSpending
                   description={row.description}
                   spending={row.spendingCategory}

@@ -19,6 +19,7 @@ import type {
 import type { Database } from "better-sqlite3";
 import { currentRules } from "./rules.ts";
 import type { RuleContext } from "./rules.ts";
+import { chartedAs, receiptsOnRows } from "./slices.ts";
 import { requireSpendingCategory, spendingReader } from "./spending-categories.ts";
 
 interface StoredRowColumns {
@@ -38,10 +39,9 @@ interface StoredRowColumns {
 /**
  * Whether the spending chart counts this row: filed to the current expenses and
  * to nobody, so a joint row that took money out of the buffer. One definition for
- * which rows the chart's sums and the list opened from them take in. It does not
- * make the two agree on how much of a row goes to which category: a row with a
- * receipt is split by its items in the chart (lg-27) and listed whole under its
- * own category here, until lg-28.
+ * which rows the chart's sums and the list opened from them take in. How much of
+ * a row goes to which category is `chartedAs`, which both ask, so a list opened
+ * from the chart sums to its slice less the card lines in that slice.
  */
 export function countsAsSpending(row: StoredRow): boolean {
   const filed = row.classification;
@@ -117,16 +117,48 @@ export function listRows(
       spendingCategory: reader.of(row, rule),
     };
   });
-  const matching = rows
-    .filter((row) => query.spendingOnly !== true || countsAsSpending(row))
-    .filter((row) => query.uncategorised !== true || row.spendingCategory === null)
-    .filter(
-      (row) =>
-        query.spendingCategoryId === undefined ||
-        row.spendingCategory?.id === query.spendingCategoryId,
-    );
+  const counted = rows.filter((row) => query.spendingOnly !== true || countsAsSpending(row));
+  const inCategory = query.uncategorised === true || query.spendingCategoryId !== undefined;
+  const matching =
+    query.spendingOnly === true && inCategory
+      ? sliceEntries(db, counted, query)
+      : counted
+          .filter((row) => query.uncategorised !== true || row.spendingCategory === null)
+          .filter(
+            (row) =>
+              query.spendingCategoryId === undefined ||
+              row.spendingCategory?.id === query.spendingCategoryId,
+          );
   const first = query.offset ?? 0;
   return { rows: matching.slice(first, first + (query.limit ?? 100)), total: matching.length };
+}
+
+/**
+ * What a list opened from the chart's slice holds (lg-28): each row under every
+ * category the chart charts it under, the one `chartedAs` that `spendingStats`
+ * asks too. A row charted whole is the row itself; one a receipt divided is a copy
+ * carrying the slice in `sliceCents`, signed as `amountCents` is. Only the chart's
+ * own list is read this way: the screen that works through the uncategorised rows
+ * is about each row's own category, which a split row does not lose.
+ */
+function sliceEntries(
+  db: Database,
+  counted: readonly StoredRow[],
+  query: { uncategorised?: boolean; spendingCategoryId?: number },
+): StoredRow[] {
+  const receipts = receiptsOnRows(db);
+  const entries: StoredRow[] = [];
+  for (const row of counted) {
+    const charted = chartedAs(row, receipts);
+    for (const slice of charted.slices) {
+      if (query.uncategorised === true && slice.categoryId !== null) continue;
+      if (query.spendingCategoryId !== undefined && slice.categoryId !== query.spendingCategoryId) {
+        continue;
+      }
+      entries.push(charted.split ? { ...row, sliceCents: -slice.cents } : row);
+    }
+  }
+  return entries;
 }
 
 /** Appends a row's own spending category; `null` withdraws it. */

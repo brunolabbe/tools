@@ -21,7 +21,6 @@ import {
   salariesByYear,
   settlementsInRange,
   spendingByPeriod,
-  splitByCategory,
 } from "@ledger/books";
 import type { SpendingEntry, SpendingSpan, StatRow } from "@ledger/books";
 import type {
@@ -31,7 +30,6 @@ import type {
   FixedItemsResponse,
   MortgageOwnResponse,
   MortgagePaymentsResponse,
-  ReceiptItem,
   SalariesStatsResponse,
   SettlementsStatsResponse,
   SpendingStatsResponse,
@@ -41,6 +39,7 @@ import type { Database } from "better-sqlite3";
 import { closedPeriods, currentLines, currentRecurring } from "./periods.ts";
 import { knownPeople } from "./people.ts";
 import { listRows } from "./rows.ts";
+import { chartedAs, receiptsOnRows } from "./slices.ts";
 import { currentRatios, currentSalaries } from "./salaries.ts";
 import { spendingCategories } from "./spending-categories.ts";
 
@@ -123,50 +122,6 @@ export function bufferStats(
   }))();
 }
 
-interface ItemOfRow {
-  row_id: number;
-  date: string | null;
-  price_cents: number;
-  taxable: 0 | 1;
-  deposit_cents: number | null;
-  spending_category_id: number | null;
-  share: ReceiptItem["share"];
-}
-
-/**
- * The receipts filed on joint-account rows, by row (lg-27): each one's date, for
- * the rates, and its items in the order printed. A receipt filed with no items
- * has no entry here, so its row is read whole.
- */
-function receiptsOnRows(db: Database): Map<number, { date: string | null; items: ReceiptItem[] }> {
-  const found = db
-    .prepare(
-      `SELECT receipt_filings.row_id, receipt_filings.date, receipt_items.price_cents,
-              receipt_items.taxable, receipt_items.deposit_cents,
-              receipt_items.spending_category_id, receipt_items.share
-       FROM receipt_filings
-       JOIN receipt_items ON receipt_items.filing_id = receipt_filings.id
-       WHERE receipt_filings.row_id IS NOT NULL
-       ORDER BY receipt_filings.id, receipt_items.position`,
-    )
-    .all() as ItemOfRow[];
-  const byRow = new Map<number, { date: string | null; items: ReceiptItem[] }>();
-  for (const item of found) {
-    const held = byRow.get(item.row_id) ?? { date: item.date, items: [] };
-    held.items.push({
-      // The split does not read an item's words, and nothing here shows them.
-      text: "",
-      price: item.price_cents,
-      taxable: item.taxable === 1,
-      deposit: item.deposit_cents,
-      spendingCategoryId: item.spending_category_id,
-      share: item.share,
-    });
-    byRow.set(item.row_id, held);
-  }
-  return byRow;
-}
-
 /**
  * Spending: the period lines the cards paid, and the joint rows that took money
  * out of the buffer (or put a refund back). A row nobody has filed is not yet
@@ -176,7 +131,8 @@ function receiptsOnRows(db: Database): Map<number, { date: string | null; items:
  * uncategorised detail.
  *
  * A joint-account row with a receipt filed on it (`receipt_filings.row_id`) and
- * at least one item is split by its items' categories instead (lg-27): each
+ * at least one item is split by its items' categories instead (lg-27, decided in
+ * `chartedAs`, which the list opened from the chart asks too — lg-28): each
  * category's cost is its items' own, taxes and deposits included, and what the
  * card was charged beyond that — rounding, any tip — goes to the largest
  * (`splitByCategory`). The row's own category is then not counted. A row stays
@@ -194,25 +150,8 @@ export function spendingStats(
     const entries: SpendingEntry[] = [];
     const receipts = receiptsOnRows(db);
     for (const row of listRows(db, { spendingOnly: true, limit: Number.MAX_SAFE_INTEGER }).rows) {
-      const documented = receipts.get(row.id);
-      // A person's own category for the row wins over the receipt's items (the
-      // owner's answer of 2026-10-17): the items are never edited, so the override
-      // is the one way left to correct how the chart files a receipted row.
-      const split =
-        documented === undefined || row.spendingCategory?.source === "override"
-          ? []
-          : splitByCategory(-row.amountCents, documented);
-      if (split.length === 0) {
-        entries.push({
-          date: row.date,
-          amountCents: -row.amountCents,
-          categoryId: row.spendingCategory?.id ?? null,
-          label: row.category,
-          source: "account",
-        });
-        continue;
-      }
-      for (const slice of split) {
+      // How a row is charted is `chartedAs`, which the list opened from the chart asks too.
+      for (const slice of chartedAs(row, receipts).slices) {
         entries.push({
           date: row.date,
           amountCents: slice.cents,
