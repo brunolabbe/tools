@@ -174,10 +174,12 @@ three Québec briefs. 604 were proposed by a specialist other than
 
 ## Log
 
-**2026-10-17 — Measured. Of 1,019 places, 200 locate and 15 carry hours; the
-number the decision turns on is 14 of the 74 located places of a kind that keeps
-hours (18.9%), and the larger loss is upstream of hours.** Builder: Claude
-Sonnet 5.5. Branch `pl-56-hours-coverage`, base `origin/main` b9f01370.
+**2026-10-17 — Measured, and corrected after gate 1 (round 2 below). Of 1,019
+places, 200 locate and 15 carry hours. Of the 74 located places of a kind that
+keeps hours, 14 carry them (18.9%) — but only 35 of the 74 are the place that was
+proposed, and 13 of those 35 carry hours (37%). Whether any of it reaches the
+deployed stack depends on an OSM extract the owner has not named.** Builder:
+Claude Sonnet 5.5. Branch `pl-56-hours-coverage`, base `origin/main` b9f01370.
 
 ### What changed in `src`
 
@@ -258,22 +260,30 @@ true`; the same with `Mo-Fr 09:00-17:00` and `2019-05-05` gives `season: false`,
   `false`; no hours and a null `extratags` both give no hours. The full run's
   15 real hits are the other half of that proof.
 - Full run: 1,013 requests, **every one HTTP 200** (`grep -vc " 200 q=" run.log`
-  → 0), no retry, no 429.
+  → 0, on the harness's own log, which holds only harness requests). Two by-hand
+  control requests (below) are in a separate `controls.log` with times taken from
+  `date`, to the second. No retry, no 429.
 
-**The firewall.** Opened by the owner on 2026-10-17 (time not recorded to me).
-The orchestrator reached it at 2026-10-17T15:40:11Z. I first reached it at
-**2026-10-17T15:44:16Z** (`curl …/status?format=json` → 200). First
-measurement request 15:44:21Z; last harness request **16:03:46Z**; two
-single-request controls by hand (below) at 16:04:25Z and 16:04:27Z, which is
-my **last request: 2026-10-17T16:04:27Z**. 1,020 requests in all (1,013 + 5 +
-2 controls; the 5 sample places are among the 1,018 queries). closed: by the
-owner, time to be recorded
+**The firewall.** Opened by the owner earlier on 2026-10-17; the owner did not
+give me, or the orchestrator, the time. The orchestrator reached it at
+2026-10-17T15:40:11Z. I first reached it at **2026-10-17T15:44:16Z**
+(`curl …/status?format=json` → 200). First measurement request 15:44:21Z; last
+harness request **16:03:46Z**; my two controls at 16:04:25Z and 16:04:27Z, which
+were **my last requests**. 1,020 requests in all from this builder (1,013 + 5
+sample + 2 controls; the 5 sample places are among the 1,018 queries). The gate
+made later requests; its last, per the orchestrator, was at 16:15:49Z, which is
+the last request of the whole ticket. **Closed: by the owner, at about
+2026-10-17T16:50Z** (their answer "Closing it now", given then; the closing
+time itself was not stated).
 
 ### Results
 
 The record is `api/test/fixtures/live/hours-coverage/2026-10-17.json`: 1,019
-rows (matches the count above), the exclusion list, and the first and last
-request times. Tables are the harness's own output.
+rows (matches the count above), the exclusion list, the first and last harness
+request times, and per row the chosen row's `display_name`, whether it is inside
+the documented Québec extract, and (for the 74 located rows of a kind that keeps
+hours) a hand `reading` of whether it is the place proposed. Tables are the
+harness's own output, regenerated from the replies on disk (0 requests).
 
 **Located / not located, with hours, by brief.** A place named under more than
 one brief counts under each, so the columns add to more than 1,019; the last
@@ -372,34 +382,78 @@ one within two years of the run.** So the tag is rarely dated, and where it is
 dated it is 4 years old. The seasons half of §5's item 2 is almost entirely
 not in this data: the other 14 values are weekly patterns, `24/7`, or a single
 range. The season test is a month name, an ISO date or `easter` in the raw
-string; no grammar was parsed.
+string; no grammar was parsed. **That is the count for what `locate` finds
+today.** The 32 places the chooser declines include three more seasonal values
+(Schönbrunn, Musei Capitolini, Centrale Montemartini; below), so the seasons
+half is 4 of 27 if the declines are recovered, not 1 of 15.
 
-**The denominators, both.**
+**The denominators.** The first gate showed one denominator is not enough:
+"a located place of a kind that keeps hours" includes a town resolved to its
+railway station. Three further cuts are in the table, each from the record.
 
-| denominator                             | places | with hours |  rate |
-| --------------------------------------- | -----: | ---------: | ----: |
-| all 1,019 places named                  |  1,019 |         15 |  1.5% |
-| all located                             |    200 |         15 |  7.5% |
-| located, kinds that keep hours          |     74 |         14 | 18.9% |
-| the same, counting each OSM object once |     54 |         10 | 18.5% |
+| denominator                                          | places | with hours |  rate | objects | objects with hours |
+| ---------------------------------------------------- | -----: | ---------: | ----: | ------: | -----------------: |
+| all places named                                     |  1,019 |         15 |  1.5% |     119 |                 11 |
+| all located                                          |    200 |         15 |  7.5% |     119 |                 11 |
+| located, park kinds restored to the denominator      |    102 |         14 | 13.7% |      60 |                 10 |
+| located, kinds that keep hours                       |     74 |         14 | 18.9% |      54 |                 10 |
+| of those, city briefs (multi-city, city-and-culture) |     22 |          9 | 40.9% |      19 |                  7 |
+| of those, **the chosen row is the named premises**   |     35 |         13 | 37.1% |      25 |                  9 |
 
-Counting objects once matters: the 200 located places are **119 distinct OSM
-objects**, because the same museum comes back from `Exploramer, Sainte-Anne-des-Monts`
-and `Exploramer, Sainte-Anne-des-Monts, Québec`. The 15 with hours are **11
-objects**. The 15 are, by mention weight, 35 of 2,594 place mentions (1.3%);
-the 200 located are 1,440 of them (55.5%), because the places that locate are
-the ones named most often (a boundary or a national park, named by many
-candidates).
+"Objects" counts each OSM object once: the 200 located places are **119
+distinct OSM objects**, because the same museum comes back from
+`Exploramer, Sainte-Anne-des-Monts` and `Exploramer, Sainte-Anne-des-Monts, Québec`.
+The 15 with hours are **11 objects**. By mention weight the 15 are 35 of 2,594
+place mentions (1.3%); the 200 located are 1,440 of them (55.5%), because the
+places that locate are the ones named most often.
+
+**What the chosen row is, for the 74 located kept-kind rows** (gate 1 enumerated
+all 74 against `display_name`; I classified them the same way and our counts of
+the 35 named premises agree; the classification is the `reading` column of the
+record and `READING_OF_KEPT_ROWS` in the harness, by query, so it can be
+argued with row by row):
+
+| reading                     | rows | with hours | objects | objects with hours | what it is                                                                                                                                                                                                                                      |
+| --------------------------- | ---: | ---------: | ------: | -----------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `named-premises`            |   35 |         13 |      25 |                  9 | the proposed name is the object's own                                                                                                                                                                                                           |
+| `kind-of-place`             |   19 |          0 |      12 |                  0 | "Motel in Percé", "Hotel near Via Veneto": a kind of place resolved to one arbitrary instance                                                                                                                                                   |
+| `settlement-to-premises`    |   14 |          1 |      13 |                  1 | a town named, a station, church, Telus building, parking lot, brasserie, aerodrome, cégep or university inside it returned (`Rimouski`, `Amqui`, `Gaspé, Gaspé, Gaspésie`, `Toronto, Ontario, Toronto`, `Québec City, QC` → a charging station) |
+| `wrong-continent`           |    3 |          0 |       3 |                  0 | `Resort kids' club` → Phillip Island, Australia; `Resort shallow pool` → Sky Valley, California; `Trailside lodge` → New York State                                                                                                             |
+| `neighbourhood-to-premises` |    1 |          0 |       1 |                  0 | `Salario / Pinciano, Rome` → The Hoxton                                                                                                                                                                                                         |
+| `arguable-landmark`         |    2 |          0 |       1 |                  0 | `Cap-des-Rosiers, …` → the lighthouse: plausible, not what was written                                                                                                                                                                          |
+
+**I was wrong in round 1** to write that one of the 14 hits was a false
+location and "another outside it", giving a range of 13 to 14 of 74. The gate
+read all 74 rows and 39 are not the named place. The hit that is false is still
+one (the charging station named after Québec City, under `settlement-to-premises`);
+the error was in how many _non-hit_ rows are wrong, which matters because an
+hours pass keyed on `locate`'s OSM id would read a station's hours as a town's
+and one arbitrary motel's hours for "a motel in Percé". None of the 19
+`kind-of-place` rows or the other wrong rows but the charging station has
+hours in this sample, so no other wrong hours would have been shown **here**; that is luck of the sample and not
+a property of the method. 18.9% is therefore a number about _kinds_, and 37%
+(13 of 35, 9 of 25 objects) is a number about _named premises_; the decision is
+about the second, and the first is not a floor or a ceiling of it.
+
+One more caveat: 9 of the 1,019 places carry `coordinates` in at least one
+fixture, and `runs/travel.ts` locates only `coordinates === null`, so
+production would not locate those mentions (`node …/gate-1/coords.mjs`). One,
+`Porte Saint-Louis`, is of a kept kind with no hours, which would make the kept
+denominator 73. The effect is negligible and I left it.
 
 **The exclusion list** (in the record under `exclusions`, and as
 `EXCLUDED_KINDS` in the harness). Chosen from what each kind is, not from its
 rate. **That is argued and not proved:** the first full run printed the rates
 beside the kinds before I wrote the list, so the claim "written blind" is not
-available. The check that matters is that only one excluded kind has a place
-with hours, `tourism=viewpoint` (1 of 1, an observatory with `Mo-Su 10:00-17:40`),
-and the ticket names viewpoints itself. A kind that is merely unlikely to have
-hours (an aerodrome, a station, a lighthouse, a motel) stays in, which makes
-the 18.9% a floor for the right denominator rather than a ceiling.
+available. Only one excluded kind has a place with hours, `tourism=viewpoint`
+(1 of 1, an observatory with an entrance and `Mo-Su 10:00-17:40`), and the
+ticket names viewpoints itself. **Round 1 called 18.9% "a floor for the right
+denominator". That is withdrawn:** 125 of the 126 excluded places have no hours,
+and 28 of them are parks (`boundary=national_park` 19, `boundary=protected_area`
+5, `leisure=nature_reserve` 4), whose seasons are what §5's item 2 is about.
+Restoring them to the denominator gives 14 of 102 (13.7%), in the table above.
+So the supported statement is a range that depends on one choice (parks in or
+out) and one reading (named premises or any row): 13.7% to 37.1%.
 
 | pattern                  | why it keeps no hours                                                                                            |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
@@ -440,96 +494,192 @@ chosen trail region`: specialists propose a kind of place at a locality
    deterministic and not a throttle (the same run had 200 rows). **Inferred, not
    measured:** the deployed Nominatim runs the same search code over a smaller
    extract, so it should answer the same `[]`. I could not reach it.
-4. **A false location is among the 15, and another is outside it.** `Québec City, Québec City, QC`
-   chose `amenity=charging_station` way/1491549954 (`24/7`), and the same name
-   with the locality `Québec City, Québec` chose a railway station (no hours). The ladder's settlement
-   tiebreak is `addresstype`-based and a charging station named after the city
-   passed. It is production's behaviour and I did not change it; it means one of
-   the 14 kept-kind hits is a wrong place, so the honest range for the
-   floor-denominator rate is 13 to 14 of 74, 17.6% to 18.9%.
-5. **Unmeasured:** the deployed extract's own age and tag content (the public
-   instance is the planet at today's date; pl-29's Overpass is on the same
-   extract as the deployed Nominatim, per the filing, and holds every tag, but
-   I did not query it); the size of the database an `extratags` re-import
-   adds; and any metered source.
+4. **The chooser returns a premises for a town, and an arbitrary instance for
+   a kind of place.** Covered by the reading table above: 39 of 74 kept-kind
+   rows are not the place proposed, and the single false hit of the 15 is
+   `Québec City, Québec City, QC` → `amenity=charging_station` way/1491549954
+   (`24/7`). The chooser is production's, unchanged by this ticket. That the
+   pl-34 ladder returns a coordinate for these is a fine thing for distance and
+   the wrong thing for hours; it is a cost of option 1 below, not a defect of
+   this ticket.
+5. **The public instance holds the planet; the documented deployment does not.**
+   `docs/02-DEPLOYMENT.md` names `OSM_EXTRACT_URL=…/north-america/canada/quebec-latest.osm.pbf`
+   and `compose.planner.yaml` feeds that one variable to Valhalla, Nominatim
+   (`PBF_URL`) and Overpass (`OVERPASS_PLANET_URL`). **Whether the owner's
+   deployment runs it is unknown: the owner answered "I don't know offhand"
+   (2026-10-17, to the orchestrator's question).** Restricting the record to
+   rows whose chosen `display_name` ends in Québec, Canada (`insideQuebecExtract`
+   in the harness; `node …/gate-1/extract.mjs` reproduces
+   `locatedInQuebec: 163, keptInQuebec: 46, keptInQuebecWithHours: 5`, and
+   `city-brief kept 22 of which in Québec 0`):
+
+   | denominator, documented extract only               | places | with hours |  rate | objects | objects with hours |
+   | -------------------------------------------------- | -----: | ---------: | ----: | ------: | -----------------: |
+   | all located                                        |    163 |          6 |  3.7% |      86 |                  4 |
+   | located, park kinds restored                       |     74 |          5 |  6.8% |      36 |                  3 |
+   | located, kinds that keep hours                     |     46 |          5 | 10.9% |      30 |                  3 |
+   | of those, city briefs                              |      0 |          0 |     — |       0 |                  0 |
+   | of those, **the chosen row is the named premises** |     17 |          4 | 23.5% |      11 |                  2 |
+
+   The 4 hits among 17 named premises are two objects (Exploramer, Musée de la
+   Gaspésie, each under two spellings); the fifth kept-kind hit is the charging
+   station. **Under the documented extract every Rome, Vienna, Trieste, Graz and
+   Ljubljana figure in this Log is a number about a database the deployment
+   would not have.** The deployed `locate` would also answer differently there
+   (a place outside the extract is `[]`), which this table models only by
+   dropping the rows.
+
+6. **The Rome/Vienna declines are a measured lever, and it is moot under the
+   documented extract.** The 32 declined replies hold 13 rows with
+   `opening_hours` (gate 1, `tables.mjs`: `unlocatedReplyWithHours: 13`, all in
+   city briefs). Re-choosing the same replies with the locality's endonym
+   (Rome → Roma, Vienna → Wien, and the same for the trip destination; the same
+   chooser, changed input; a scratch script, not committed) gives `{ declined:
+32, located: 26, withHours: 12, seasonal: 3 }`. The seasonal three are
+   Schönbrunn (`Apr 1-Jun 30,Sep 1-Oct 31 08:00-17:30; Jul 1-Aug 31 …`), Musei
+   Capitolini and Centrale Montemartini (dated closures). `node --import tsx
+…/gate-1/alias.mts <tree> <raw>` reproduces the first four:
+   `Galleria Borghese: locality "Rome" -> declined | "Roma" -> tourism=museum oh=Tu-Su 09:00-19:00`.
+   This is the **measured** lever. Round 1's claim that a bare-name fallback is
+   "the largest lever" was not measured and is withdrawn. What was measured of
+   it: `Parc national de la Gaspésie` bare returns a `leisure=nature_reserve`
+   row, an excluded kind with no `opening_hours`, so it adds nothing to a
+   numerator; `Galleria Doria Pamphilj` bare returns `[]` (gate 1's probe).
+7. **Unmeasured:** the deployed extract (extent and age); pl-29's Overpass (I did
+   not query it; per the filing it is on the same extract as Nominatim and holds
+   every tag); the size of the database an `extratags` re-import adds; any
+   metered source; premises per plan; ids per run.
 
 ### Folded in, and not
 
-Nothing folded in. The one piece of work this made nearly free is the locate
-defect in point 3 (a qualified query returns `[]` where the bare name finds the
-place). It is not small or already specified: whether `locate` should retry with
-the name alone changes pl-34/pl-37's ambiguity guarantees and the cache key, so
-it is a decision and is in the open decision below, not done here. The hours
-build tickets are not filed, as the ticket says.
+Nothing folded in. The one piece of work this made nearly free is a change to
+`locate`: the exonym/endonym decline (point 6) and the qualified-query `[]`
+(point 3). Neither is small or already specified: either changes pl-34/pl-37's
+ambiguity guarantees and the cache key, so each is a decision, and is in the
+open decision below, not done here. The hours build tickets are not filed, as
+the ticket says.
 
 ### Gates
 
-`npm run check` → exit 0. `npx oxlint tools/planner/api` → 0 errors (3
-pre-existing `no-await-in-loop` warnings elsewhere). `npx vitest run
+Round 1: `npm run check` → exit 0. `npx oxlint tools/planner/api` → 0 errors
+(3 pre-existing `no-await-in-loop` warnings elsewhere). `npx vitest run
 …/live-records.test.ts …/live-gate.test.ts …/grounding-valhalla.test.ts` → 3
 files, 257 of 257; `live-records.test.ts` now walks the new record as one more
-case, and no `*.test.ts` was added, so the `planner` project collects the same
-test files. The record carries no credential-shaped string.
+case (257 at head against 256 at base), and no `*.test.ts` was added, so the
+`planner` project collects the same test files. The record carries no
+credential-shaped string. Round 2 reruns are in the next section.
+
+**Where the record lives.** The ticket named `fixtures/live/hours-coverage/`, so
+it stays there. It is not a live-run record (no `briefFixture`, no
+`candidatesAccepted`); `live-records.test.ts` walks every string leaf whatever the
+shape, which is wanted. **Any other walker over `fixtures/live/**` that expects
+live-run records must skip `hours-coverage/`**, as this harness does by name
+prefix (`recordFiles`). The harness's header says so. I did not move the record
+because the ticket's path was explicit and the only consumer that reads
+everything there, the credential test, benefits from reading it.
+
+### Round 2 — gate 1's findings (2026-10-17)
+
+Gate 1 returned FAIL on `8e79a014` for what the Log concluded, not for the
+numbers: its recomputation matched the record on all 1,019 rows. What changed:
+
+- **Reading of the 74 kept rows** (high): added as data and tables above. The
+  false-location count of round 1 is withdrawn.
+- **Extract** (high): the documented `quebec-latest.osm.pbf` table above. The
+  owner does not know which extract is deployed, so the decision below is costed
+  both ways and the recommendation says what it depends on.
+- **"Floor" claim** (med): withdrawn; the parks-restored row is in the
+  denominator table.
+- **Bare-name lever** (med): replaced with the measured endonym lever.
+- **`run.log`** (low): the two hand-typed `control (curl)` lines were removed from
+  the harness's log into `controls.log`; the record's `lastRequestAt` is now the
+  harness's own last request, `2026-10-17T16:03:46.961Z`, and
+  `grep -vc " 200 q=" run.log` prints 0 again.
+- **Firewall** (low): the owner's answer is recorded above.
+- **Coordinates** (low): noted above.
+- **Walker** (low): noted above.
+
+Checks after the changes are in the report that follows this push.
 
 ### OPEN DECISION — where would hours come from, if at all
 
-Owner's choice; I cannot ask. **Recommendation: option 1, built small, with
-the locate question (option 4) put to the owner alongside it.**
+Owner's choice; I cannot ask. **Round 1 recommended option 1. After correcting the
+figures the recommendation is now option 3, for now, and the one fact that would
+reverse it is named below.**
 
-All three options share the same ceiling. Whatever the source, a place needs an
-identity first, and `locate` identifies 200 of 1,019 (119 objects). The
-numbers each option is bought against:
+Every option needs a place identified first, and `locate` identifies 200 of
+1,019 (119 objects) on the public planet. Two facts the first answer left out:
+only 35 of the 74 located kept-kind rows are the place that was proposed, and
+the planet is probably not the deployed extract. The figures each option is
+bought against:
 
-|                                                      | people it would help | measured                                           |
-| ---------------------------------------------------- | -------------------- | -------------------------------------------------- |
-| a located place of a kind that keeps hours has hours | 14 of 74             | 18.9% (13 of 74 if the charging station is struck) |
-| the same, city briefs only                           | 9 of 22              | 40.9%                                              |
-| the same, Québec briefs only                         | 5 of 47              | 10.6%                                              |
-| of everything specialists proposed                   | 15 of 1,019          | 1.5%; 11 objects                                   |
+|                                                        | places | with hours | objects with hours |
+| ------------------------------------------------------ | -----: | ---------: | -----------------: |
+| **Public planet instance** (what the harness measured) |        |            |                    |
+| any located row of a kind that keeps hours             |     74 | 14 (18.9%) |           10 of 54 |
+| same, parks restored                                   |    102 | 14 (13.7%) |           10 of 60 |
+| the chosen row is the named premises                   |     35 | 13 (37.1%) |            9 of 25 |
+| of those, city briefs                                  |     15 |  9 (60.0%) |            7 of 12 |
+| of those, the other briefs                             |     20 |  4 (20.0%) |            2 of 13 |
+| **Documented `quebec-latest.osm.pbf` only**            |        |            |                    |
+| any located row of a kind that keeps hours             |     46 |  5 (10.9%) |            3 of 30 |
+| the chosen row is the named premises                   |     17 |  4 (23.5%) |            2 of 11 |
+| city briefs                                            |      0 |          0 |                  0 |
 
 1. **Build on Overpass by OSM id.** `locate` already receives `osm_type` and
    `osm_id`; the pass asks the Overpass instance pl-29 already runs, batched,
-   for the tags of the located ids: **one extra call per run, no re-import, no
-   change to the deployed geocoder.** Cost in these numbers: at most 119 ids over
-   the whole 111-run corpus (ids per run not measured); it can decide something for ~1.5% of what is proposed overall and ~19% of located premises,
-   about 41% in a city brief. A pass can reject, not cause a different proposal
-   (the owner's framing). Needs a parser for the grammar and "unknown" rendered
-   as unknown, which is a build ticket's problem. Risk: the deployed extract's
-   tags may be older than the public planet I measured (unmeasured).
+   for the located ids' tags: **one extra call per run, no re-import.** What it
+   buys, conditional on the extract:
+   - _If the deployed extract holds the cities (wide):_ hours for 13 of 35
+     named-premises rows, 7 of 12 objects in city briefs, rising by 12 hours
+     rows if `locate` is also taught Roma/Wien (point 6, which is its own
+     decision). A pass can reject, not cause a different proposal.
+   - _If it is the documented Québec extract:_ hours for **2 objects across the
+     111 runs** (Exploramer, Musée de la Gaspésie), none in any city brief,
+     because none of those places exist in it.
+   - **A cost the first answer left out:** an hours pass keyed on `locate`'s OSM
+     id would read a station's hours as a town's and one arbitrary motel's hours
+     for "a motel in Percé". 39 of the 74 located kept-kind rows are not the
+     place proposed. It needs a guard that the chosen object is the _named_
+     premises, which does not exist and is not the pl-34 ladder (that ladder
+     answers "where", not "is this the thing"). The guard's cost is unmeasured;
+     it would also drop `kind-of-place` rows, which is right.
+   - Plus a parser for the grammar and "unknown" rendered as unknown (a build
+     ticket's problem). The deployed extract's tag age is unmeasured.
 2. **Re-import Nominatim with the `extratags` style.** Same coverage as option
-   1, since `extratags` carries the same tag; no extra call at run time, but an
-   operator re-import on every deployment that wants hours, a bigger database
-   (size **not measured** here), and it keeps hours inside the geocoder where
-   the extract's age cannot be separated from `locate`'s. Costs more than 1 for
-   the same numbers; I do not recommend it unless the owner wants to retire
-   Overpass for this tool.
+   1 on either extract (same tag), no extra call at run time, but an operator
+   re-import on every deployment that wants hours, a bigger database (size
+   **not measured**), and the same guard. Costs more than 1 for the same
+   numbers; I do not recommend it unless the owner wants to retire Overpass for
+   this tool.
 3. **Do not build hours from OSM.** The plan-wide `opening-hours` line in
-   `unchecked.ts` stays. This is defensible: 11 objects across a thousand
-   places is thin, the seasons half is 1 of 15 and the tag is never fresh (0 of
-   15 within two years). **What would have to be true for a metered source to be
-   worth reopening:** (a) per-place hours on well over 18.9% of premises kinds
-   in the briefs that matter (cities), on a sample of this size, which this
-   ticket's data cannot yet say for any vendor; (b) an identification route not
-   capped by `locate`'s 20%, since a vendor still needs the place first, so the
-   locate gap in point 1 has to close or the vendor must do its own matching;
-   (c) terms that allow retaining a result for the day §5 gives hours as a
-   cache life, unlike the year pl-28 needed for distances and which collided
-   with the route vendors' retention terms. I read no vendor's terms. (d) a
-   per-lookup price that a plan's premises can carry (not measured: the count
-   of premises per plan).
-4. **Alongside any of them: decide whether `locate` should fall back to the bare
-   name.** It is the largest lever on all three options, and it is not an hours
-   decision. Reproduction: `curl -A '…' 'https://nominatim.openstreetmap.org/search?q=Parc%20national%20de%20la%20Gasp%C3%A9sie%2C%20Sainte-Anne-des-Monts%2C%20Qu%C3%A9bec&format=jsonv2&limit=10'`
-   → `[]`; the same with `q=Parc%20national%20de%20la%20Gasp%C3%A9sie` → one row.
-   A fallback would raise the located count, and with it the hours cap, and it
-   would reopen what pl-34 refused (a confident coordinate from a name that
-   several places share). Not measured: how many of the 787 it would recover. It
-   needs its own ticket and a measurement before the owner is asked to choose.
+   `unchecked.ts` stays. On the documented extract this is clearly right: 2
+   objects. On a wide extract it forgoes 7 city objects in this corpus and a
+   hit rate near 60% on named city premises, in a sample of 15 rows. The seasons
+   half is 1 of 15 (4 of 27 with the endonym fix) and 0 of 15 hours values are
+   dated within two years. **What would have to be true for a metered source to
+   be worth reopening:** (a) per-place hours well above the OSM rate for named
+   city premises, measured on a sample bigger than this one, which nothing here
+   says of any vendor; (b) an identification route not capped by `locate`'s
+   200 of 1,019 (a vendor does its own place matching); (c) terms that allow
+   retaining a result for the day §5 gives hours as a cache life, which is not
+   the year pl-28 needed for distances and which collided with route vendors'
+   retention terms (I read no vendor's terms); (d) a per-lookup price that a
+   plan's premises can carry (premises per plan unmeasured).
+4. **Alongside any of them: `locate` and city names.** The Rome/Vienna decline
+   (point 6) is a measured, small, city-only change to `locate`, and it is moot
+   under the documented extract. It is not an hours decision, and a
+   bare-name fallback is not recommended here at all: it is unmeasured and would
+   reopen what pl-34 refused.
 
-Why 1 over 3: it is the cheapest of the three that keeps the owner's decided
-shape (a check pass), it costs nothing to run when no place locates, and it
-concentrates where §5 says the damage is (a slow week in Rome: 9 of 22 there
-against 5 of 47 on the Québec roads). Why not more than that: the sample is 22
-city places and the claim is "about 40%", not a rate. If the owner's judgement
-is that 1.5% end to end is not worth a parser, option 3 is the honest answer
-and nothing here argues against it.
+**Why 3 now, and what reverses it.** Under the documented extract option 1
+reaches 2 objects, so nothing is worth building; under a wide extract it reaches
+a real number of city premises but needs a name guard nobody has written and a
+sample of 15 rows is all there is. The recommendation therefore depends on one
+fact the owner can read in a minute: `OSM_EXTRACT_URL` in the deployment's
+`.env`. If it is the documented Québec extract, option 3 stands. If the owner
+runs, or wants to run, an extract holding the cities the city briefs name,
+option 1 with the name guard is the cheapest way to start, and I would then
+want the guard measured on a second sample before any ticket is filed. Round 1
+recommended option 1 on figures that were wrong in two ways at once; I am not
+keeping it for continuity.

@@ -32,6 +32,16 @@
  * request per second at most, a `User-Agent` that names the project, no
  * parallelism. The pause below is longer than a second on purpose.
  *
+ * ## The record's home
+ *
+ * The record sits under `api/test/fixtures/live/hours-coverage/` because the
+ * ticket named that path. It is **not a live-run record**: its rows have no
+ * `briefFixture` or `candidatesAccepted`. `live-records.test.ts` walks every
+ * string leaf of every JSON file there whatever its shape, which is what is
+ * wanted of it. **Any other walker over `fixtures/live/**` that expects
+ * live-run records must skip `hours-coverage/`**, as `recordFiles` below does by
+ * name prefix.
+ *
  * ## Environment
  *
  * - `PLANNER_LIVE_RUN=1` — consent.
@@ -196,6 +206,128 @@ export function exclusionReason(kind: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// What the chosen row actually is — a reading, not a computation
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the row `chooseGeocoderResult` picked is the place the specialist
+ * proposed. **Read by hand** from each row's `display_name` against the query,
+ * for the 74 located rows of a kind that keeps hours, and independently
+ * re-read by the first gate (it agreed on the 35 named premises). It is data,
+ * keyed by the query sent, because it cannot be computed: a string match would
+ * be a second chooser. A located row of a kind that keeps hours whose query is
+ * missing here reads `unread`, which the report shows rather than hides.
+ *
+ * - `named-premises` — the proposed name is the returned object's own name.
+ * - `kind-of-place` — "Motel in Percé", "Hotel near Via Veneto": a kind of place
+ *   resolved to one arbitrary instance of it.
+ * - `settlement-to-premises` — a town named, a station, church, university or
+ *   brasserie inside it returned. Fine as a point for distance; the wrong object
+ *   for hours.
+ * - `wrong-continent` — a generic name ("Resort shallow pool") matched on
+ *   another continent.
+ * - `neighbourhood-to-premises` — a district named, a hotel in it returned.
+ * - `arguable-landmark` — "Cap-des-Rosiers", the lighthouse: plausible, not
+ *   what was written.
+ */
+export type Reading =
+  | "named-premises"
+  | "kind-of-place"
+  | "settlement-to-premises"
+  | "wrong-continent"
+  | "neighbourhood-to-premises"
+  | "arguable-landmark"
+  | "unread";
+
+const READING_OF_KEPT_ROWS: Readonly<Record<string, Reading>> = {
+  "Jardins de Métis, Grand-Métis": "named-premises",
+  "Cap-des-Rosiers lighthouse, Gaspé, Québec": "named-premises",
+  "Exploramer, Sainte-Anne-des-Monts": "named-premises",
+  "Ljubljana Castle, Ljubljana": "named-premises",
+  "Graz Hauptbahnhof, Graz": "named-premises",
+  "Jardins de Métis, Grand-Métis, Québec": "named-premises",
+  "Miramare Castle, Trieste": "named-premises",
+  "Caffè San Marco, Trieste": "named-premises",
+  "Cap-des-Rosiers lighthouse, Cap-des-Rosiers, Québec": "named-premises",
+  "Musée de la Gaspésie, Gaspé": "named-premises",
+  "Cap-des-Rosiers lighthouse, Cap-des-Rosiers": "named-premises",
+  "Cap-des-Rosiers lighthouse, Gaspé": "named-premises",
+  "Mercato di Testaccio, Testaccio, Rome": "named-premises",
+  "Mercato Testaccio, Testaccio, Rome": "named-premises",
+  "Buffet da Pepi, Trieste": "named-premises",
+  "Camping de Carleton-sur-Mer, Carleton-sur-Mer, Québec": "named-premises",
+  "Cancún International Airport, Cancún": "named-premises",
+  "Castello di Miramare, Trieste": "named-premises",
+  "Exploramer, Sainte-Anne-des-Monts, Québec": "named-premises",
+  "Flavio al Velavevodetto, Testaccio, Rome": "named-premises",
+  "Géoparc mondial UNESCO de Percé, Percé": "named-premises",
+  "Halifax Stanfield International Airport, Halifax": "named-premises",
+  "Halifax Stanfield International Airport, Halifax, Nova Scotia": "named-premises",
+  "Hotel Savoia Excelsior Palace, Trieste, Italy": "named-premises",
+  "Hotel Slon, Ljubljana, Slovenia": "named-premises",
+  "Leonardo da Vinci–Fiumicino Airport, Fiumicino": "named-premises",
+  "Microbrasserie Le Naufrageur, Carleton-sur-Mer": "named-premises",
+  "Musée de la Gaspésie, Gaspé, Québec": "named-premises",
+  "Ottawa Macdonald-Cartier International Airport, Ottawa": "named-premises",
+  "Ottawa Macdonald-Cartier International Airport, Ottawa, Ontario": "named-premises",
+  "Pit Caribou pub, Percé, Québec": "named-premises",
+  "Porte Saint-Louis, Québec, Québec": "named-premises",
+  "Rivière-du-Loup ferry terminal, Rivière-du-Loup, Québec": "named-premises",
+  "Saint-Siméon ferry terminal, Saint-Siméon, Québec": "named-premises",
+  "Vienna International Airport, Schwechat, Austria": "named-premises",
+  "Gaspé motel, Gaspé, Québec": "kind-of-place",
+  "Gaspé fish shop, Gaspé": "kind-of-place",
+  "Gaspé motel, Gaspé": "kind-of-place",
+  "Gaspé motel, Gaspé, Gaspésie": "kind-of-place",
+  "Gaspé motels, Gaspé, Québec": "kind-of-place",
+  "Hotel in Prati, Rome, Prati": "kind-of-place",
+  "Hotel near Piazza Unità d'Italia, Trieste": "kind-of-place",
+  "Hotel near Trieste Centrale, Trieste": "kind-of-place",
+  "Hotel near Via Veneto, Rome, Ludovisi": "kind-of-place",
+  "Hotel near Wien Hauptbahnhof, Vienna": "kind-of-place",
+  "Matane motels, Matane, Québec": "kind-of-place",
+  "Motel in Bonaventure, Bonaventure": "kind-of-place",
+  "Motel in Bonaventure, Bonaventure, Québec": "kind-of-place",
+  "Motel in Matane, Matane, Québec": "kind-of-place",
+  "Motel in Percé, Percé": "kind-of-place",
+  "Motel in Sainte-Anne-des-Monts, Sainte-Anne-des-Monts": "kind-of-place",
+  "Motel in Sainte-Anne-des-Monts, Sainte-Anne-des-Monts, Québec": "kind-of-place",
+  "Percé motel, Percé": "kind-of-place",
+  "Percé motel, Percé, Québec": "kind-of-place",
+  "Rimouski, Rimouski, Québec": "settlement-to-premises",
+  "Sainte-Flavie, Sainte-Flavie, Québec": "settlement-to-premises",
+  "Carleton-sur-Mer, Carleton-sur-Mer, Québec": "settlement-to-premises",
+  "Amqui, Amqui, Québec": "settlement-to-premises",
+  "Matapédia, Matapédia, Québec": "settlement-to-premises",
+  "Québec City, Québec City, Québec": "settlement-to-premises",
+  "Rimouski, Rimouski, QC": "settlement-to-premises",
+  "Gaspé, Gaspé, Gaspésie": "settlement-to-premises",
+  "Grand-Métis, Grand-Métis, Québec": "settlement-to-premises",
+  "Percé, Percé, Gaspésie": "settlement-to-premises",
+  "Québec City, Québec City, QC": "settlement-to-premises",
+  "Saint-Félicien, Lac-Saint-Jean, Saint-Félicien": "settlement-to-premises",
+  "Saint-Félicien, Lac-Saint-Jean": "settlement-to-premises",
+  "Toronto, Ontario, Toronto": "settlement-to-premises",
+  "Resort kids' club": "wrong-continent",
+  "Resort shallow pool": "wrong-continent",
+  "Trailside lodge": "wrong-continent",
+  "Salario / Pinciano, Rome": "neighbourhood-to-premises",
+  "Cap-des-Rosiers, Cap-des-Rosiers, Québec": "arguable-landmark",
+  "Cap-des-Rosiers, Gaspé, Québec": "arguable-landmark",
+};
+
+/**
+ * The extract `docs/02-DEPLOYMENT.md` names, `quebec-latest.osm.pbf`, holds a
+ * row only if its `display_name` ends in Québec's Canada. The public instance
+ * this harness asks holds the planet, so rows outside it are rows the deployed
+ * stack would not have under that extract. The owner has not said which
+ * extract is deployed (2026-10-17).
+ */
+export function insideQuebecExtract(displayName: string): boolean {
+  return /Québec, (G\d\w \d\w\d, )?Canada$/.test(displayName);
+}
+
+// ---------------------------------------------------------------------------
 // Nominatim, politely
 // ---------------------------------------------------------------------------
 
@@ -317,6 +449,12 @@ export interface HoursRow {
   kind: string | null;
   /** Why this kind keeps no hours, or `null` when it is one that does. */
   excludedBecause: string | null;
+  /** The chosen row's `display_name`, so the extract question can be asked of the record alone. */
+  displayName: string | null;
+  /** Whether that row is inside the documented Québec extract; `null` when nothing was located. */
+  insideQuebecExtract: boolean | null;
+  /** Whether the chosen row is what was proposed; `null` unless located and of a kind that keeps hours. */
+  reading: Reading | null;
   hasOpeningHours: boolean;
   openingHours: string | null;
   hasSeason: boolean;
@@ -374,6 +512,12 @@ export function rowFor(named: NamedPlace, reply: RawReply, runDate: Date): Hours
     type,
     kind,
     excludedBecause: kind === null ? null : exclusionReason(kind),
+    displayName: chosen?.displayName ?? null,
+    insideQuebecExtract: chosen === null ? null : insideQuebecExtract(chosen.displayName),
+    reading:
+      kind === null || exclusionReason(kind) !== null
+        ? null
+        : (READING_OF_KEPT_ROWS[reply.query] ?? "unread"),
     hasOpeningHours: openingHours !== null,
     openingHours,
     hasSeason: openingHours !== null && carriesSeason(openingHours),
@@ -449,6 +593,64 @@ function groupBy(rows: HoursRow[], keys: (row: HoursRow) => string[]): Group[] {
     .map(([name, grouped]) => ({ name, rows: grouped }));
 }
 
+function objectsOf(rows: HoursRow[]): number {
+  return new Set(rows.filter((row) => row.located).map((row) => `${row.osmType}/${row.osmId}`))
+    .size;
+}
+
+const PARK_KINDS: ReadonlySet<string> = new Set([
+  "boundary=national_park",
+  "boundary=protected_area",
+  "leisure=nature_reserve",
+]);
+
+/** The same hours count against each denominator the Log argues about, places and objects. */
+function denominators(rows: HoursRow[], includeUnlocated = true): string {
+  const located = rows.filter((row) => row.located);
+  const kept = located.filter((row) => row.excludedBecause === null);
+  const keptAndParks = located.filter(
+    (row) => row.excludedBecause === null || PARK_KINDS.has(row.kind ?? ""),
+  );
+  const named = kept.filter((row) => row.reading === "named-premises");
+  const city = kept.filter((row) =>
+    Object.keys(row.briefs).some((brief) => brief === "city-and-culture" || brief === "multi-city"),
+  );
+  const cells = (label: string, set: HoursRow[]): (string | number)[] => {
+    const hits = set.filter((row) => row.hasOpeningHours);
+    return [
+      label,
+      set.length,
+      hits.length,
+      pct(hits.length, set.length),
+      objectsOf(set),
+      objectsOf(hits),
+    ];
+  };
+  return table(
+    ["denominator", "places", "with hours", "rate", "objects", "objects with hours"],
+    [
+      ...(includeUnlocated ? [cells("all places named", rows)] : []),
+      cells("all located", located),
+      cells("located, park kinds restored to the denominator", keptAndParks),
+      cells("located, kinds that keep hours", kept),
+      cells("  of those, city briefs (multi-city, city-and-culture)", city),
+      cells("  of those, the chosen row is the named premises", named),
+    ],
+  );
+}
+
+function readingTable(kept: HoursRow[]): string {
+  const labels = [...new Set(kept.map((row) => row.reading ?? "unread"))].toSorted();
+  return table(
+    ["reading", "rows", "with hours", "objects", "objects with hours"],
+    labels.map((label) => {
+      const set = kept.filter((row) => (row.reading ?? "unread") === label);
+      const hits = set.filter((row) => row.hasOpeningHours);
+      return [label, set.length, hits.length, objectsOf(set), objectsOf(hits)];
+    }),
+  );
+}
+
 export function renderReport(rows: HoursRow[]): string {
   const located = rows.filter((row) => row.located);
   const withHours = located.filter((row) => row.hasOpeningHours);
@@ -498,17 +700,15 @@ export function renderReport(rows: HoursRow[]): string {
       ],
     ),
     `\n## Denominators\n`,
-    table(
-      ["denominator", "places", "with hours", "rate"],
-      [
-        ["all located", located.length, withHours.length, pct(withHours.length, located.length)],
-        [
-          "located, kinds that keep hours",
-          kept.length,
-          kept.filter((row) => row.hasOpeningHours).length,
-          pct(kept.filter((row) => row.hasOpeningHours).length, kept.length),
-        ],
-      ],
+    `"Objects" counts each OSM object once: the same museum comes back under several spellings.\n`,
+    denominators(rows),
+    `\n## Kept-kind rows by what the chosen row is\n`,
+    readingTable(kept),
+    `\n## If the deployed extract is the documented \`quebec-latest.osm.pbf\`\n`,
+    `Rows whose chosen \`display_name\` ends in Québec, Canada. Unmeasured: whether the owner runs it.\n`,
+    denominators(
+      rows.filter((row) => row.insideQuebecExtract === true),
+      false,
     ),
   ];
   return parts.join("\n");
