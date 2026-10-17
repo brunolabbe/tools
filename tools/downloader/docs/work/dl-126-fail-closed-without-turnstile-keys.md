@@ -3,7 +3,7 @@ id: dl-126
 tool: downloader
 title: With no Turnstile keys the downloader serves probes with the human check off, in production too
 kind: fix
-status: needs-decision
+status: ready
 milestone: M5
 depends_on: []
 difficulty: standard
@@ -91,9 +91,10 @@ stays open until it is redeployed, and no code change reaches it sooner.
 
 ## Decision
 
-Two open decisions. The builder does not settle either: the first commit on this
-branch records the owner's answer on this ticket and sets `status: ready`, and
-only then is there anything to build.
+**Answered by the owner on 2026-10-17: Decision 1, option 1 (an explicit
+setting); Decision 2, option 1 (refuse at boot).** The setting was offered as
+`REQUIRE_HUMAN_CHECK=true`, and that is its name. The options below are kept as
+they were asked.
 
 ### Decision 1 — what "production" means
 
@@ -160,11 +161,10 @@ only then is there anything to build.
 
 ## Build
 
-Not to be started until Decision 1 and Decision 2 are answered.
+Both decisions are answered (above): `REQUIRE_HUMAN_CHECK`, refused at boot.
+Step 3's option 2 and Decision 2's contract question no longer apply.
 
-1. **First commit:** write the owner's answer on this ticket, with who gave it,
-   the date and the options it was chosen from. Set `status: ready`, and nothing
-   else in the commit.
+1. **Decisions recorded** on 2026-10-17, in their own commit.
 2. **`tools/downloader/api/src/config.ts`**: read the production setting in
    `loadApiConfig`, next to the Turnstile read at around line 630. Trap: the
    `"turnstile" in overrides` branch (around line 628) is how tests turn the check
@@ -204,3 +204,9 @@ and no widget: true`.
   mirrors the one-key refusal and its test. The rating is the filer's, and `hard`
   is the alternative if the owner prefers the boot path, since it changes how the
   whole service starts.
+- 2026-10-17 — Owner answered both decisions through `AskUserQuestion`, each
+  asked with its options as written above, the recommended one first. Decision
+  1: option 1, an explicit setting, offered as `REQUIRE_HUMAN_CHECK=true` set in
+  `compose.downloader.prod.yaml`. Decision 2: option 1, refuse at boot with
+  `AppError("INTERNAL")` naming the missing variables. `status: ready`. #496 has
+  merged (`78b188fc`), so Build step 6's ordering constraint is met.
