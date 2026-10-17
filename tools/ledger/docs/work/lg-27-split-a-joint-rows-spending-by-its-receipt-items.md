@@ -146,6 +146,12 @@ By rule (a):
     it is still split. `books/test/receipts.test.ts` › "a remainder is still
     split when it leaves the largest category's sign alone" pins that. Whether to
     chart it whole too is an open decision for the owner (reported, not settled).
+    **Answered, 2026-10-17:** the owner was asked through `AskUserQuestion`,
+    with the options "Keep the sign guard as worded", "Also: remainder > largest
+    category" and "Also: a threshold I'll name", and chose **keep the sign guard
+    as worded**. The build already matches, and the pinning test stays. The
+    orchestrator's round-1 dispatch had wrongly said the 10 000 case would chart
+    whole; the builder raised that it would not, and this is the answer.
   - Tests, each failing without its fix (the fix removed, the two tests'
     spec files run, then restored): F3 in books, "a basket part paid by card
     gives no split" and "a purchase's receipt on a refund row gives no split",
