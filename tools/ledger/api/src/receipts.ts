@@ -264,9 +264,15 @@ function withOfferedCategories(
  *
  * **The line is read as it now stands** (the owner's answer of 2026-10-17, gate
  * 1's F3): a correction supersedes the line the filing named, so the chain of
- * `supersedes` is followed to its newest version. A line since removed ends its
- * chain on the retirement, which copies the line, so its last category still
- * counts; whether it should is an open question on lg-10's Log.
+ * `supersedes` is followed to its newest version. **A line since removed still
+ * sets its merchant's category** (the owner's answer of 2026-10-17, gate 2's
+ * N1): its chain ends on the retirement, which copies the line, and a removal
+ * undoes an entry, not what the merchant sells.
+ *
+ * The walk stops at a depth of 10 000 (gate 2's N2). Nothing in the tool writes
+ * a cycle into `supersedes`, but nothing in the schema refuses one either, and a
+ * file edited by hand that holds one would otherwise never return from a
+ * synchronous query.
  */
 export function merchantCategory(
   db: Database,
@@ -286,6 +292,7 @@ export function merchantCategory(
             UNION ALL
             SELECT newer.id, newer.spending_category_id, chain.depth + 1
             FROM period_lines newer JOIN chain ON newer.supersedes = chain.id
+            WHERE chain.depth < 10000
           )
           SELECT category FROM chain ORDER BY depth DESC LIMIT 1) AS line_category
        FROM receipt_filings

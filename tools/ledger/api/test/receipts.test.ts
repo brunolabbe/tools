@@ -26,6 +26,7 @@ import type { ReceiptReader } from "@ledger/receipts";
 import { loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
 import type { AppLogger } from "../src/logger.ts";
+import { merchantCategory } from "../src/receipts.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
 import {
@@ -1245,5 +1246,52 @@ describe("a joint-account row's items (lg-10 gate 1, F1)", () => {
     expect(message).not.toContain("line");
     expect([count(target, "receipt_filings"), count(target, "receipt_items")]).toEqual([0, 0]);
     expect(count(target, "period_lines")).toBe(0);
+  });
+});
+
+// --- lg-10 gate 2's findings, fixed at landing ---
+
+describe("a merchant's last category, removed (lg-10 gate 2, N1)", () => {
+  test("a line since removed still sets its merchant's category", async () => {
+    const fake = itemReader({ ...BASKET, merchant: "Pharmaprix", items: [] });
+    const target = await start({ reader: fake.reader });
+    const before = await uploaded(target);
+    const filed = await file(target, before.id, {
+      proposal: { ...READ, merchant: "Pharmaprix" },
+      destination: asLine(2_650, { spendingCategoryId: GROCERIES }),
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    const removed = await target.server.inject({
+      method: "POST",
+      url: ROUTES.periodLineRetire.replace(":id", String(filed.json<ReceiptFiling>().periodLineId)),
+      headers: as(ALEX),
+    });
+    expect(removed.statusCode, removed.body).toBe(200);
+    expect(count(target, "period_lines")).toBe(2);
+    const next = await uploaded(target);
+
+    const answer = (await read(target, next.id)).json<ReadReceiptResponse>();
+
+    // The owner's answer of 2026-10-17: a removal undoes an entry, not its category.
+    expect(answer.proposals[0]?.merchantCategoryId).toBe(GROCERIES);
+  });
+});
+
+describe("a cycle in a line's corrections (lg-10 gate 2, N2)", () => {
+  test("still answers when a hand-edited file makes a line supersede itself", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+    const filed = await file(target, receipt.id, {
+      proposal: { ...READ, merchant: "Pharmaprix" },
+      destination: asLine(2_650, { spendingCategoryId: GROCERIES }),
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    const db = homeBooks(target);
+    // Nothing in the tool writes this; only a file edited by hand, or corrupt, holds it.
+    db.prepare("UPDATE period_lines SET supersedes = id WHERE id = ?").run(
+      filed.json<ReceiptFiling>().periodLineId,
+    );
+
+    expect(merchantCategory(db, "Pharmaprix", new Set([GROCERIES]))).toBe(GROCERIES);
   });
 });

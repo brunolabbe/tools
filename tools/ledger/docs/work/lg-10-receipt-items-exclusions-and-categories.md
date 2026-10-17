@@ -134,6 +134,15 @@ Gate 1's F6 (the shipped rate table is asserted ordered by no test) is fixed in
 the same round. F4 (the rates written out in `FLAG_LABELS["tax-differs"]` and in
 the contract's doc for `tax-differs`) stays recorded and is not fixed.
 
+## Decision after gate 2 — answered 2026-10-17 by the owner, not open
+
+**7 (N1). The question was:** a line since removed still sets its merchant's
+category, because the retirement copies the line. What should happen? Options:
+**(a)** keep counting it; **(b)** skip removed lines, falling back to the
+filing's items and then to older filings. **The answer: (a), keep counting it**,
+the builder's recommendation and the gate's. Gate 2's N2 and N3 were fixed at
+the landing, by the owner's choice of the same day.
+
 ## Log
 
 ### 2026-10-16 — built (Claude Opus 5.5, builder), gate pending
@@ -292,3 +301,17 @@ This round answers gate 1's findings, as the owner decided them above:
 - `npm test -- --project ledger` gave 1 086 of 1 086, 60 files.
 - `npm run check` exited 0, and `node scripts/status.mjs --json` exited 0 with
   lg-26 and lg-27 in.
+
+### 2026-10-17 — landing
+
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, N1 — "Whichever the
+  owner picks, add one test that pins it and rewrite the comment to state it as
+  decided, at the landing." (The answer is decision 7.)
+  `npx vitest run tools/ledger/api/test/receipts.test.ts -t "a line since removed still sets its merchant's category"`
+  → `Tests  1 passed | 47 skipped (48)`.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, N2 — "A
+  `WHERE chain.depth < 10000` on the recursive step closes it."
+  `npx vitest run tools/ledger/api/test/receipts.test.ts -t "still answers when a hand-edited file makes a line supersede itself"`
+  → `Tests  1 passed | 47 skipped (48)`. Before the guard, the same file under
+  `timeout -k 5 60 … -t "gate 2" --pool=threads` → `exit=124`, with no result
+  in 60 s.
