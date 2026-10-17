@@ -5537,3 +5537,48 @@ Total $54.9535, active 7h23m26s (rates read 2026-10-10). Orchestrator row is a f
 - A builder with conditional ship authority stopped and pushed back on a gate's stated remedy with a measurement (dl-125 F5), and the orchestrator re-ran the script before asking.
 - Gates that dry-ran each option before offering it (dl-125 F1/F2, lg-10 F1): every owner answer this batch was the dry-run's recommendation.
 - A slice landed `in-flight` with its live rows `unproven (scope)` (dl-49), which records the gate without claiming the owner's steps.
+
+### Batch 2026-10-17 (tools-c2, dl-126 lg-26 lg-27 lg-23, lg-28 lg-29 lg-30 filed, repo-99 and dl-127 answers recorded) — base 8e50f0d4
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | seam-mapper | seam map, 6 tickets | 1m42s / 1m41s | 0 | $0.1821 |
+| #505 | merged | Sonnet 5.5 / high | builder-standard | dl-126 build + round 1 + landing | 29m47s / 1h29m53s | 0 | $1.8598 |
+| #505 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-126 gates 1–2 | 14m58s / 53m00s | 0 | $2.3641 |
+| #504 | merged | Sonnet 5.5 / high | builder-standard | lg-26 build + round 1 + landing | 15m12s / 1h05m13s | 0 | $1.3691 |
+| #504 | merged | Opus 5.5 / high | ticket-reviewer-opus | lg-26 gates 1–2 | 11m56s / 42m02s | 0 | $2.0257 |
+| #506 | open, ready | Sonnet 5.5 / high | builder-standard | lg-27 build + round 1 + landing + merge after #504 | 23m51s / 1h36m51s | 0 | $2.3949 |
+| #506 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | lg-27 gates 1–2 | 12m04s / 47m34s | 0 | $2.9480 |
+| #508 | open, ready | Opus 5.5 / high | builder-hard | lg-23 build + round 1 + landing | 54m32s / 2h14m10s | 0 | $19.8348 |
+| #508 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | lg-23 gates 1–2 | 41m35s / 1h07m41s | 0 | $7.7416 |
+| #511 | open, ready | Haiku 5.5 / high | builder-mechanical | repo-99 answer recorded (maintenance) | 5m37s / 5m14s | 0 | $0.0183 |
+| #510 | open, ready | Haiku 5.5 / high | builder-mechanical | dl-127 answer recorded (maintenance) | 1m47s / 1m43s | 0 | $0.0167 |
+| — | — | Opus 5.5 / high | orchestrator | tools-c2 | 1h57m48s / 2h24m21s | 0 | $10.4999 |
+
+Total $51.2550, active 5h30m49s (rates read 2026-10-10). Orchestrator row is a floor, read before close.
+
+**Tickets:**
+
+- dl-126 → #505: gate 1 FAIL (med: Done when 5 rebuilt the stderr line rather than capturing it; med: no upgrade note in "Updating and rolling back"; owner chose the spawn test, the note and the overridable compose default), gate 2 CONCERNS (Done when 8 `unproven (gate)`; F7 fixed at landing, F6 recorded). Landing preflight hit a dl-115 timing flake under load, passed on `--only check` rerun.
+- lg-26 → #504: gate 1 CONCERNS (med: suppression beside `tax-differs` hid 2628/20000 flipped marks; owner chose the gate's "fits neither" over the builder's suppression), gate 2 CONCERNS (one new low, fixed at landing; gate 2 corrected gate 1's per-line noise figure from 641 to 6483 of 20000).
+- lg-27 → #506: gate 1 FAIL (high: two shipped comments promised list = chart slice; meds: override no-op on receipted rows, sign flips), gate 2 PASS; owner kept the sign guard as worded after the builder showed the dispatch over-claimed it; held as draft behind #504, merged main at e8b47d01; files lg-28.
+- lg-23 → #508: gate 1 CONCERNS (med: a two-person sub-cent case read "nobody owes" where lg-6 read "direct"; med: receipts charged "the other's" to the first non-payer among three), gate 2 CONCERNS (N1 API test and N2 lg-29 correction fixed at landing; the builder's unasked `tools/ledger/CLAUDE.md` line kept by owner choice); files lg-29, lg-30.
+- repo-99 → #511 and dl-127 → #510: owner answers given at intake recorded, no gate.
+
+**Defects in the skill:**
+
+1. `roles/reviewer.md`, "Returning the gate" — the page says both "Write the section to one file in your scratch directory with the Write tool" and "you cannot write it to a file (the harness refuses a subagent …)"; four of five gates this batch raised it, and `SKILL.md` step 9 states the second as fact. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n "Write the section to one file\|you cannot write it to a file"` → `89:- **Write the section to one file …` and `95:  report: you cannot write it to a file …`.
+2. `SKILL.md`, step 9 ("A gate cannot write its report to a file") — lg-26's gate 1 wrote its own section file, and that file is not the text it returned: it recast the options as prose and dropped "by 0,10 to 0,90 $". The returned text was filed as the record. Reproduction: `diff <(awk '/^---$/{exit} {print}' <scratch>/lg-26/gate-1/report.md | tr -s ' \n' '\n') <(tr -s ' \n' '\n' < <scratch>/lg-26/gate-1/gate-self-written.md.bak) | grep -c '^[<>]'` → `37`. Recurs from the 2026-10-16 entry, item 1.
+3. `roles/reviewer.md`, "What makes a gate worth its cost" ("Reproduce, do not assess") — says to put a second tree under the scratch directory and farm it, but a tree there fails `npm run check` with a false TS2883 even at the base sha; a tree beside the agent worktrees passes. Reproduction (lg-23 gate 1): `bash <scratch>/check-in.sh <scratch>/base <out>` → `tools/ledger/api/test/helpers/households.ts(67,23): error TS2883: The inferred type of 'send' cannot be named without a reference to 'Response' from '../../../../../../../../../../../../../workspaces/tools/node_modules/light-my-request/types/index.js'` and `EXIT 1`; the same sha at `/workspaces/tools/.claude/worktrees/gate-lg23-merge` → `check exit 0`.
+4. `roles/reviewer.md`, "What makes a gate worth its cost" ("Reproduce, do not assess") — a spec of the gate's own copied into a ledger project's `test/` prints nothing from `console.log`, so the page's advice gives silent runs; a file append works. Reproduction (lg-23 gate 1): a two-test scratch spec with `console.log("ROW", …)` → `Tests 2 passed (2)` and no `ROW` line; with `appendFileSync` the lines appear.
+5. `roles/common.md`, "Your worktree" ("Undo a temporary mutation from a commit") — "Commit first" does not say the commit-msg hook rejects a scratch subject, so the obvious baseline commit fails. Reproduction: `node scripts/commit-message.mjs --text "wip: mutation baseline"` → `· "wip" is not a known type …`, `exit=1`.
+6. `reference/records.md`, "Landing" — `--land` runs the full suites after its push, and says nothing of a timing test in a file the branch does not touch failing under the batch's own load; the landing is then pushed but not ready, and the page names no rerun. Reproduction (dl-126): `grep -n "minWaitMs\|1001\|failed at" <scratch>/dl-126/land/land.log` → `45: AssertionError: expected 1001.709182999999 to be greater than or equal to 1200` and `72:--land failed at "preflight"`; `node scripts/preflight.mjs --only check …` then → `preflight passed (only check; the other checks did not run) (exit 0)`.
+7. `reference/records.md`, "Fixed at landing" — "in the landing commit" again could not hold, because `--land` refuses a dirty ticket; all three landers this batch committed the fix and its mark before `--land`. Reproduction: `git log --oneline 6c44746c..0b89c44c` on lg-26 → `611e7547` (fix + mark) before the two record commits. Recurs from the 2026-10-15 entry, item 4.
+8. `roles/builder.md` (no heading covers it) — nothing says whether a builder may edit a tool's `CLAUDE.md`; lg-23's builder added a line to `tools/ledger/CLAUDE.md`'s receipts rule unasked (gate 2 N4, kept by owner choice). Reproduction: `git log --oneline origin/lg-23-households -- tools/ledger/CLAUDE.md | head -1` → `08b1604b docs(ledger): log lg-23 round 1 and file lg-29 and lg-30 (lg-23)`; `grep -ci "CLAUDE.md" .claude/skills/orchestrate-tickets/roles/builder.md` → `0`.
+9. `roles/builder.md`, "Set up" — the auto-mode classifier denied a records-only builder's branch creation ("Modify Shared Resources") and the page has no path for it; it passed on retry once the owner approved. Reproduction (repo-99 records): `git checkout --no-track -b repo-99-record-answer origin/main` → denied by the auto mode classifier, [Modify Shared Resources]. Recurs from the 2026-10-15 entry, item 7.
+
+**Worked, and worth keeping:**
+
+- A builder that found the dispatch over-claiming the owner's answer (lg-27: the 10 000 remainder does not flip a sign) built the answer as worded and raised it; the owner re-chose on the real case.
+- Gates that drove base and head through the HTTP API on the same random households (lg-23: 7 of 310 differ at gate 1, 0 of 610 at gate 2), which found a class the builder's own oracle property test could not reach.
+- Re-asking an owner answer when a gate brought an option the owner had not seen (lg-23 salaries); the owner kept the first answer, now on both options.
