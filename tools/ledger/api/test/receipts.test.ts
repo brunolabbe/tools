@@ -1380,17 +1380,20 @@ describe("a receipt with nothing left shared (lg-32)", () => {
   });
 });
 
+function couponItem(
+  text: string,
+  price: number,
+  taxable: boolean,
+  share: "not-shared" | "theirs",
+): ReceiptProposal["items"][number] {
+  return { text, price, taxable, deposit: null, spendingCategoryId: null, share };
+}
+
 // lg-32, gate 1 F2: not-shared items are there but their amount rounds to 0.
 describe("not-shared items that come to nothing (lg-32, gate 1 F2)", () => {
   test("files the charge alone, where the not-shared items come to 0 cents", async () => {
     const target = await start();
     const receipt = await uploaded(target, ALEX);
-    const item = (
-      text: string,
-      price: number,
-      taxable: boolean,
-      share: "not-shared" | "theirs",
-    ) => ({ text, price, taxable, deposit: null, spendingCategoryId: null, share });
 
     const response = await file(target, receipt.id, {
       proposal: {
@@ -1400,9 +1403,9 @@ describe("not-shared items that come to nothing (lg-32, gate 1 F2)", () => {
         qst: 40,
         total: 564,
         items: [
-          item("CAFE", 100, false, "not-shared"),
-          item("COUPON", -87, true, "not-shared"),
-          item("FROMAGE", 491, true, "theirs"),
+          couponItem("CAFE", 100, false, "not-shared"),
+          couponItem("COUPON", -87, true, "not-shared"),
+          couponItem("FROMAGE", 491, true, "theirs"),
         ],
       },
       destination: asLine(564),
