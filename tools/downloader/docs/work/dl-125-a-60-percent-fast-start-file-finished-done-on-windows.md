@@ -1070,3 +1070,32 @@ $ npm test -- tools/downloader/engine
 Test Files  16 passed (16)
 Tests  317 passed (317)
 ```
+
+### 2026-10-17 — the owner's answer on F5's anchor; landed (Opus 5.5, builder)
+
+**The committed parse departs from gate 2's stated remedy.** Gate 2's F5
+gave one remedy: an anchored test `^\s*Stream #\d+:\d+[^:]*: Video: `, then
+a plain fps search. That anchor is itself quadratic on a forged line with a
+long stream index, because `\d+[^:]*` tries every split of the digits.
+Commit `7c7eee4a` uses `^\s*Stream #\d+:\d+(?:[^:\d][^:]*)?: Video: `
+instead.
+
+The orchestrator re-ran `linear.mjs` on 2026-10-17:
+
+```
+stream index of 60000 digits, no colon … STREAM_VIDEO 2566.5 ms (false)  variant 0.1 ms (false) … round-1 3313.3 ms
+```
+
+**The owner's answer, 2026-10-17, relayed by the orchestrator.** The question
+was "the gate's stated fix for the quadratic fps regex is itself quadratic on
+a forged line with a 60,000-digit stream index … How should it land?", with
+three options:
+
+- Land with the variant
+- Narrow gate 3 on the variant first
+- Gate's anchor as written
+
+The owner chose **"Land with the variant"**, the builder's and the
+orchestrator's recommendation. The variant is code changed after the last
+gate. It was not re-gated, by the owner's choice; gate 2 raised no high
+finding, so by rule no third gate follows.
