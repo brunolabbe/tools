@@ -254,14 +254,57 @@ wording difference: the gate wrote `addMember({ person: 7 })` as a `TypeError` a
   `household` rows, which are unchanged. `rows after:` is `[{"id":"home","name":"Home"}]`.
   One row is not covered: `addHousehold({ at: new Date("x") })` is still a `RangeError`
   (`Invalid time value`), because an invalid `Date` is an instance of `Date`. It is
-  outside the typing check this ticket asks for, and it is not fixed here.
-- 2026-10-16 — Found, not fixed, and outside the answered Decision. The Decision names
-  `addHousehold`'s `at` and `by`, and the same shape is left in two other methods:
-  `addMember({ at: null })` is a `TypeError` (`toISOString`), and
-  `addMember({ by: null })`, `removeMember({ address, by: null })` and
-  `removeMember({ address, at: null })` (with a member that stands) are a `TypeError`
-  or a `SqliteError` `SQLITE_CONSTRAINT_NOTNULL`. Each rolls back, so nothing is stored.
-  They were not added here, because the owner was asked about `addHousehold` only. That
-  is an open decision for the orchestrator: widen this branch, or file a sibling ticket.
-  `removeMember({ household: 7 })` returns `MEMBER_NOT_FOUND`, which is typed, so it was
-  left.
+  outside the typing check this ticket asks for. Fixed in the fix round below.
+- 2026-10-16 — Found in the build, and widened in the fix round below. The Decision
+  named `addHousehold`'s `at` and `by` only, and the same shape was left in
+  `addMember` and `removeMember`: `addMember({ at: null })` was a `TypeError`
+  (`toISOString`); `addMember({ by: null })` and `addMember({ by: undefined })` were a
+  `SqliteError` `SQLITE_CONSTRAINT_NOTNULL`; `removeMember` of a standing member with
+  `at: null` was a `TypeError` and with `by: null` a `SqliteError`. **Correction:** the
+  first draft of this entry said each of these "rolls back, so nothing is stored". That
+  is true of the rows just named, but not of `addMember({ by: 7 })`, which returned
+  normally and stored `"by":"7.0"` in `history("home")`. The gate measured it on
+  `a1c122f5`. `removeMember({ by: 7 })` is refused by the same check now. The earlier
+  line "`removeMember({ household: 7 })` returns `MEMBER_NOT_FOUND`" stands: it is typed.
+- 2026-10-16 — Owner decision on the widening, recorded as asked. **Question** (the
+  gate's F1, put by the coordinator): `addMember` and `removeMember` take an `at` and a
+  `by` that are unguarded; `addMember({ by: 7 })` stores `"by":"7.0"`. The Decision
+  scoped only `addHousehold`. **Options:** (a) widen this PR with an `instanceof Date`
+  check and a `typeof` check in each of the two methods, about 5 refusal rows at the end
+  of the suite, plus the invalid-Date check and the message-echo assertion; (b) file a
+  sibling `lg-` ticket with the two gate scripts as its reproduction; (c) leave it.
+  **Answer:** (a), widen this PR. The orchestrator recommended it, the gate recommended
+  (a), and the owner chose it. **Date:** 2026-10-16. The same answer covers the invalid
+  Date (`new Date("x")`) in `addHousehold` and both change methods, which the builder had
+  raised as its open decision C.
+- 2026-10-16 — Fix round, against the gate's findings on `a1c122f5`. A helper
+  `refuseUnlessChange` checks `at` (a valid `Date`, by `instanceof` and
+  `Number.isNaN(getTime())`) and `by` (a string). `addHousehold`, `addMember` and
+  `removeMember` all call it before any statement runs. Ten new rows were appended at the
+  end of the suite: `addMember({ at: null })`, `({ at: new Date("x") })`, `({ by: null })`,
+  `({ by: undefined })`, `({ by: 7 })`; `removeMember({ at: null })`,
+  `({ at: new Date("x") })`, `({ by: null })`, `({ by: 7 })`; and
+  `addHousehold({ at: new Date("x") })`. Each asserts the code and that `members()`,
+  `history("home")` and `households()` are unchanged. Against `a1c122f5`'s
+  `directory.ts` the new rows are red: `npx vitest run tools/ledger/api/test/directory.test.ts`
+  gave `Tests 10 failed | 35 passed (45)`, all ten the new rows. On the fix:
+  `Tests 45 passed (45)`.
+- 2026-10-16 — F4, the message-echo assertion. Every refusal row now also runs with an
+  array `["ECHO-MARKER-lg25"]` as the offending value. Its `String` is the marker, so a
+  message that interpolated the value would contain it. The row asserts the refusal is an
+  `AppError` with a non-empty message that does not contain the marker. A mutant that
+  adds the value to the address message (`String(member.address)`) turns two rows red:
+  `npx vitest run tools/ledger/api/test/directory.test.ts` gave `Tests 2 failed | 43 passed (45)`.
+- 2026-10-16 — F3, two comments corrected. The `addMember` comment said `{}` "was
+  refused before SQLite binds it". At base `{}` reached the driver and threw a
+  `RangeError`. The `addHousehold` comment said a non-string `by` "was stored as a
+  number". The column is `TEXT`, so `7` became the text `"7.0"`.
+- 2026-10-16 — The reproduction's `addHousehold({ at: new Date("x") })` row is now a
+  `BAD_REQUEST`, not a `RangeError`. `addMember({ by: 7 })` is refused as
+  `BAD_REQUEST` ("The change's author is not a string."). The `rows after:` line is
+  unchanged.
+- 2026-10-16 — Not changed, and outside the Decision. `members(household)` and
+  `people(household)` take an optional `household`. `members({})` and `people({})`
+  throw a `RangeError` at the driver, and nothing in the tree reaches them with a
+  non-string. Found by the gate's `unguarded.mts` probe. The Decision names the write
+  methods, so these are left for the orchestrator to file or decide.
