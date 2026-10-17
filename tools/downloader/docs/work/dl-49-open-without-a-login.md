@@ -203,3 +203,15 @@ the allowlist is the only configuration in which its data model is coherent.
   - F5: the `planAccess` doc comment no longer says the downloader has two
     applications. F6: the `before` run now also asserts the `ok access
 planner.example.com (allow)` line.
+- 2026-10-17 — The owner answered two questions raised by the gates (via the
+  orchestrator). **Fail closed.** Question: dl-49's gate notes an optional code
+  fix, in production the downloader would refuse probes when the Turnstile keys
+  are missing (fail closed), and without it a host that routes before the keys are
+  in `.env` is open; the text fix documents that gap; file a ticket? Options: file
+  a dl- ticket; do not file. **The owner chose to file** (the orchestrator's
+  recommendation). It is being filed as dl-126, on branch
+  `dl-126-file-fail-closed-without-turnstile-keys`; this replaces the 2026-10-16
+  fix-round entry's "Open for the owner" wording for that item, which is left as
+  written above. **Merge timing.** Options: merge once gated; hold as a draft until
+  step 5. **The owner chose to merge once gated**, so the docs and `SECURITY.md`
+  read ahead of the live host until the owner's step 5.
