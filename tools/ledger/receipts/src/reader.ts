@@ -85,7 +85,11 @@ export const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
  * mark: the items still add up and the money moves between shared and not. The
  * `taxable-differs` flag (lg-26) catches a mark that does not give the printed
  * taxes, and only the person, who sees a Taxable box per item, decides which
- * item it was (lg-10 gate 1, F2).
+ * item it was (lg-10 gate 1, F2). It does not look at a receipt with no items,
+ * with one tax line read and the other not, or with mixed signs; and where the
+ * printed taxes are themselves inconsistent (`tax-differs`) it names the marks
+ * only when they give neither tax. A flipped mark whose price is a few cents can
+ * leave the sum inside a tax's range and go unnoticed.
  */
 export const RECEIPT_PROMPT = `Read this photo of one or more Québec receipts. All money is in integer cents (12,49 $ -> 1249; a refund is negative).
 For each printed receipt: the merchant, the date, the subtotal, GST (TPS), QST (TVQ) and total exactly as printed (null when the line is absent or unreadable).

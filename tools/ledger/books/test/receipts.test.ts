@@ -454,3 +454,82 @@ describe("the taxable marks (lg-26)", () => {
     expect(checkReceipt(wine("2026-06-30", 110), changed)).toEqual(["tax-differs"]);
   });
 });
+
+/** A receipt with no tax lines, for the cases below that vary only its items. */
+const groceriesNoTax: ReceiptProposal = {
+  merchant: "Marché Exemple",
+  date: "2026-10-04",
+  subtotal: 1_000,
+  gst: null,
+  qst: null,
+  total: 1_000,
+  items: [],
+};
+
+describe("the taxable marks beside printed taxes that disagree (lg-26, round 1)", () => {
+  /**
+   * 10,00 $ taxable and 3,49 $ untaxed, from a store whose printed QST (0,97 $)
+   * is not the rate's of the GST's taxable part (0,50 $): `tax-differs`, whatever
+   * the marks. `flipped` marks the 3,49 $ taxable as well.
+   */
+  function disagreeing(flipped: boolean): ReceiptProposal {
+    return {
+      merchant: "Marché Exemple",
+      date: "2026-10-04",
+      subtotal: 1_349,
+      gst: 50,
+      qst: 97,
+      total: 1_496,
+      items: [
+        { ...item(2), text: "VIN", price: 1_000, taxable: true },
+        { ...item(0), text: "PAIN", price: 349, taxable: flipped },
+      ],
+    };
+  }
+
+  test("still names a flipped mark when the printed taxes themselves raise tax-differs", () => {
+    // The marks as read give GST, so they are not the cause and are left alone.
+    expect(checkReceipt(disagreeing(false))).toEqual(["tax-differs"]);
+    // 13,49 $ taxable gives neither tax: the flipped mark is named beside tax-differs.
+    expect(checkReceipt(disagreeing(true))).toEqual(["tax-differs", "taxable-differs"]);
+  });
+
+  test("does not blame the marks for a misread tax that the other tax still agrees with", () => {
+    // BASKET's soap and six-pack give 17,98 $ taxable; a QST read as 1,90 $ is the cause.
+    expect(checkReceipt({ ...BASKET, qst: 190, total: 2_487 })).toEqual(["tax-differs"]);
+  });
+
+  test("a store that rounds tax per line can raise it on marks that are right", () => {
+    // 1,54 $ and 1,22 $, both taxable: GST 0,08 $ + 0,06 $, QST 0,15 $ + 0,12 $, per line.
+    const perLine: ReceiptProposal = {
+      merchant: "Marché Exemple",
+      date: "2026-10-04",
+      subtotal: 276,
+      gst: 14,
+      qst: 27,
+      total: 317,
+      items: [
+        { ...item(2), text: "A", price: 154, taxable: true },
+        { ...item(2), text: "B", price: 122, taxable: true },
+      ],
+    };
+
+    expect(checkReceipt(perLine)).toEqual(["taxable-differs"]);
+  });
+
+  test("lets 5 cents taxable pass on a receipt with no tax lines, and flags 6", () => {
+    // GST's zero range is [-10, 9] cents and QST's [-5, 5]; the check takes both.
+    const taxable = (price: number): ReceiptProposal => ({
+      ...groceriesNoTax,
+      subtotal: 1_000 + price,
+      total: 1_000 + price,
+      items: [
+        { ...item(0), text: "PAIN", price: 1_000, taxable: false },
+        { ...item(0), text: "BONBON", price, taxable: true },
+      ],
+    });
+
+    expect(checkReceipt(taxable(5))).toEqual([]);
+    expect(checkReceipt(taxable(6))).toEqual(["taxable-differs"]);
+  });
+});

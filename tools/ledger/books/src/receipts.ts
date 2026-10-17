@@ -90,22 +90,30 @@ function taxesFit(
 }
 
 /**
- * Whether the items marked taxable, taken as the taxable part, give both taxes as
- * printed (lg-26): the same arithmetic as `taxesFit`, with the part fixed
- * instead of searched for. A tax not printed counts as zero, so an item marked
- * taxable on a receipt with no tax lines does not fit. A refund is checked as its
- * magnitudes.
+ * Whether the items marked taxable, taken as the taxable part, are what the
+ * printed taxes say (lg-26): the same arithmetic as `taxesFit`, with the part
+ * fixed instead of searched for. A tax not printed counts as zero, so an item
+ * marked taxable on a receipt with no tax lines does not fit. A refund is checked
+ * as its magnitudes.
+ *
+ * When the taxes themselves are inconsistent (`taxesConsistent` false) no part
+ * gives both, so the marks are only held against each tax on its own: they differ
+ * when they give neither. A misread mark is then still named, while a tax that
+ * was misread (and still gives the marks' sum on the other tax) is not blamed on them.
  */
 function taxableFits(
   items: readonly ReceiptItem[],
   gst: number,
   qst: number,
   rates: SalesTaxRates,
+  taxesConsistent: boolean,
 ): boolean {
   const taxable = Math.abs(items.reduce((sum, item) => sum + (item.taxable ? item.price : 0), 0));
   const [gstLow, gstHigh] = taxableRange(Math.abs(gst), rates.gst);
   const [qstLow, qstHigh] = taxableRange(Math.abs(qst), rates.qst);
-  return taxable >= Math.max(gstLow, qstLow) && taxable <= Math.min(gstHigh, qstHigh);
+  const fitsGst = taxable >= gstLow && taxable <= gstHigh;
+  const fitsQst = taxable >= qstLow && taxable <= qstHigh;
+  return taxesConsistent ? fitsGst && fitsQst : fitsGst || fitsQst;
 }
 
 /**
@@ -122,8 +130,9 @@ function taxableFits(
  * - **The Taxable marks give the printed taxes** (lg-26), when there are items:
  *   the prices of the items marked taxable are a taxable part that gives both
  *   taxes. Both taxes `null` count as printed zero here, so a mark on a receipt
- *   with no tax lines is flagged. Not raised beside `tax-differs`, which says
- *   more; not raised with one tax missing, which `tax-missing` says.
+ *   with no tax lines is flagged. Beside `tax-differs` it is raised only when the
+ *   marks give **neither** tax; not raised with one tax missing, which
+ *   `tax-missing` says, nor with mixed signs.
  * - A field not read is flagged, never guessed at.
  */
 export function checkReceipt(
@@ -154,12 +163,17 @@ export function checkReceipt(
   ) {
     flags.push("tax-differs");
   }
-  // When no taxable part fits, `tax-differs` already says so and the marks are not the cause.
+  // `tax-differs` depends on the printed taxes alone, so it must not hide every mark.
   if (
     proposal.items.length > 0 &&
     (gst === null) === (qst === null) &&
-    !flags.includes("tax-differs") &&
-    !taxableFits(proposal.items, gst ?? 0, qst ?? 0, ratesOn(proposal.date, table))
+    !taxableFits(
+      proposal.items,
+      gst ?? 0,
+      qst ?? 0,
+      ratesOn(proposal.date, table),
+      !flags.includes("tax-differs"),
+    )
   ) {
     flags.push("taxable-differs");
   }

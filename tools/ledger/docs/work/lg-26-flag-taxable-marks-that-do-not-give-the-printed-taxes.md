@@ -148,3 +148,42 @@ nobody charged, and nothing flags it.
     taxable mark on a receipt with no tax lines, both taxes counting as zero"; 4 is
     `web/test/receipts.test.tsx` "shows the Taxable check when a mark does not give
     the printed taxes, and still files (lg-26)".
+- 2026-10-17 — Round 1, after gate 1 (Opus 5.5, `8e50f0d4..f12d0e06`, CONCERNS).
+  **Decision, asked of the owner through AskUserQuestion and answered the same
+  day.** The question: the build above did not raise `taxable-differs` beside
+  `tax-differs`, which Build 2 does not list as an exception; `tax-differs` depends
+  on the printed taxes alone, so every misread mark on such a receipt went unnamed
+  (gate 1: 2628 of 20000 synthetic per-line-rounding receipts raise `tax-differs`
+  with the marks right, and a flip on them was never flagged). Options: (a) keep
+  the suppression and document it; (b) always raise it beside `tax-differs`, which
+  puts a false "check which items are taxable" on every misread tax and changes
+  three existing expectations; (c) beside `tax-differs`, raise it when the marked
+  sum fits **neither** printed tax. The owner chose **(c)**, the gate's
+  recommendation, which **overrides the first build's suppression** (option (a)).
+  `taxableFits` in `books/src/receipts.ts` now takes whether the taxes are
+  consistent: if so the marks must fit both, if `tax-differs` is raised they must
+  fit at least one. The contract's doc for `taxable-differs` and `reader.ts`'s
+  comment now list what remains unflagged: no items, one tax missing, mixed signs,
+  and beside `tax-differs` a mark sum that fits one tax.
+  - The test for the new rule is `books/test/receipts.test.ts` "still names a flipped
+    mark when the printed taxes themselves raise tax-differs" (describe "the taxable
+    marks beside printed taxes that disagree"). With the `fitsGst || fitsQst`
+    branch mutated to `true`, `npx vitest run tools/ledger/books/test/receipts.test.ts`
+    → `1 failed | 42 passed (43)`, that test; restored → `43 passed (43)`. The
+    three existing expectations (b) would change, and "leaves taxes no taxable part
+    gives to tax-differs alone", pass unchanged.
+  - **A store that rounds tax per line does raise the flag on marks that are
+    right** (the brief's trap, which the first entry said no fixture showed): items
+    1,54 $ and 1,22 $, both taxable, print GST 0,14 $ and QST 0,27 $ and give
+    `["taxable-differs"]`; test "a store that rounds tax per line can raise it on
+    marks that are right". Gate 1 measured 641 of 20000 synthetic receipts. It does
+    not block filing.
+  - **Correction to the first entry:** the zero-tax range is `[-10, 9]` cents for
+    GST alone; QST's is `[-5, 5]` and the check takes the intersection, so 0 to 5
+    cents taxable on a receipt with no tax lines passes and 6 is flagged
+    ("lets 5 cents taxable pass on a receipt with no tax lines, and flags 6").
+    The first entry's "not raised beside `tax-differs`" is superseded by (c).
+  - Left as it is: a receipt whose tax lines are printed but read as `null` still
+    gets `taxable-differs` beside `items-differ` and `parts-differ`. (c) does not
+    change it, since both taxes `null` never raise `tax-differs`; it clears when the
+    taxes are typed in, and `items-differ` already blocks filing.

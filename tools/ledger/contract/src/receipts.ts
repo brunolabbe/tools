@@ -132,7 +132,11 @@ export const receiptProposalSchema = z.strictObject({
  * - `taxable-differs` (lg-26): the prices of the items marked taxable, taken as
  *   the taxable part, do not give both printed taxes; a receipt with items and no
  *   tax lines counts both as zero. It points at the Taxable boxes, and does not
- *   block filing.
+ *   block filing. Where it is **not** raised: a receipt with no items; one tax
+ *   read and the other not (`tax-missing`); mixed signs (`signs-differ`). Beside
+ *   `tax-differs`, where no marks can give both taxes, it is raised only when the
+ *   marks give neither tax on its own, so a misread tax is not blamed on the
+ *   marks. A store that rounds tax per line can raise it on marks that are right.
  * - `items-differ` (lg-10): the items, their deposits and the two taxes do not
  *   make the total, to the cent. Unlike the others it **blocks filing**: the
  *   shared amount is computed from the items, so items that do not add up would
