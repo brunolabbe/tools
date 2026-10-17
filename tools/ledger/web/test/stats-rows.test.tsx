@@ -9,6 +9,7 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type {
   PeriodLine,
@@ -606,4 +607,41 @@ test("more card lines are asked for by offset, and a refused correction says so 
   );
   expect(fetchSpendingStats).toHaveBeenCalledTimes(1);
   expect(screen.getByText("26 of 26")).toBeTruthy();
+});
+
+test("a row split by its receipt shows the slice it counts for under the category it was opened from (lg-28)", async () => {
+  const basket = row(31, "Achat /Marché Exemple", -2476, {
+    spendingCategory: { id: 1, source: "map" },
+  });
+  await chart();
+  fireEvent.click(screen.getByRole("button", { name: "Show the rows" }));
+  await screen.findByRole("list", { name: "Rows in this period" });
+  vi.mocked(fetchSpendingRows).mockResolvedValue({
+    rows: [{ ...basket, sliceCents: -574 }],
+    total: 1,
+  });
+
+  fireEvent.change(screen.getByLabelText("Spending category"), { target: { value: "3" } });
+
+  await waitFor(() =>
+    expect(fetchSpendingRows).toHaveBeenLastCalledWith(
+      expect.objectContaining({ category: 3 }),
+      expect.anything(),
+    ),
+  );
+  const item = within((await screen.findByText(basket.description)).closest("li") as HTMLElement);
+  // The figure is the slice, and the whole amount is only said in the note about the receipt.
+  expect(item.getByText(formatCents(-574), { selector: ".amount" })).toBeTruthy();
+  expect(item.queryByText(formatCents(-2476), { selector: ".amount" })).toBeNull();
+  expect(item.getByText(/Has a receipt/).textContent).toContain(formatCents(-2476));
+});
+
+test("a row charted whole is listed with its amount and no note about a receipt (lg-28)", async () => {
+  await chart();
+  fireEvent.click(screen.getByRole("button", { name: "Show the rows" }));
+
+  const item = within((await screen.findByText(MARKET.description)).closest("li") as HTMLElement);
+
+  expect(item.getByText(formatCents(-10345), { selector: ".amount" })).toBeTruthy();
+  expect(screen.queryByText(/Has a receipt/)).toBeNull();
 });

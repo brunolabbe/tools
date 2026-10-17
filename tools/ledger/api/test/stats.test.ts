@@ -589,7 +589,16 @@ function rowOf(target: App, name: string): number {
 }
 
 /** Files a receipt on a row as `fileReceipt` stores it. */
-function attach(target: App, rowId: number, items: typeof BASKET_ITEMS): void {
+function attach(
+  target: App,
+  rowId: number,
+  items: readonly {
+    price: number;
+    taxable: number;
+    deposit: number | null;
+    category: number | null;
+  }[],
+): void {
   const db = homeBooks(target);
   const photo = db
     .prepare(
@@ -697,5 +706,168 @@ describe("GET /api/stats/spending, for a receipted row, after gate 1 (lg-27)", (
     // Neither row turns the six-pack negative: each stays under its own category.
     expect([charted.get(2), charted.get(3)]).toEqual([undefined, undefined]);
     expect(charted.get(1)).toBe(2_476 + 2_776 + 2_000 + 1_000 + 500 - 2_476);
+  });
+});
+
+// --- lg-28: the list opened from a slice follows the split ---
+
+/** What `GET /api/rows` lists for one category of the chart (`none` for the uncategorised). */
+async function listed(
+  target: App,
+  category: number | "none",
+  scoped = true,
+): Promise<RowsResponse> {
+  const scope = scoped ? "scope=spending&" : "";
+  return await get<RowsResponse>(
+    target,
+    `${ROUTES.rows}?${scope}spendingCategory=${String(category)}`,
+  );
+}
+
+/** What a list counts of its rows, as spending: the slice where a row has one, else the row. */
+function listedSum(response: RowsResponse): number {
+  return response.rows.reduce((sum, row) => sum - (row.sliceCents ?? row.amountCents), 0);
+}
+
+/** Bread (category 1) and an item with no category, no taxes: exactly the 27,76 $ of row B. */
+const TWO_ITEMS = [
+  { price: 1_000, taxable: 0, deposit: null, category: 1 },
+  { price: 1_776, taxable: 0, deposit: null, category: null },
+];
+
+describe("GET /api/rows?scope=spending&spendingCategory, for a receipted row (lg-28)", () => {
+  test("every category's list sums to its slice, the one only a receipt creates and the uncategorised included", async () => {
+    const target = await startWithReceipts();
+    attach(target, rowOf(target, "A"), BASKET_ITEMS);
+    attach(target, rowOf(target, "B"), TWO_ITEMS);
+    const { categories } = await get<SpendingStatsResponse>(target, ROUTES.statsSpending);
+    const slices = await chart(target);
+
+    // The fixture's whole list, then the uncategorised. Alcohol (2) and Household
+    // (3) are in the chart only because row A's receipt created them.
+    const names = new Map(categories.map((one) => [one.id, one.name]));
+    expect([names.get(2), names.get(3)]).toEqual(["Alcohol", "Household"]);
+    expect(categories.length).toBeGreaterThan(3);
+    expect(slices.get(null)).toBe(1_776);
+    for (const one of categories) {
+      const response = await listed(target, one.id);
+      expect(listedSum(response), names.get(one.id)).toBe(slices.get(one.id) ?? 0);
+      expect(response.total, names.get(one.id)).toBe(response.rows.length);
+    }
+    const none = await listed(target, "none");
+    expect(listedSum(none)).toBe(slices.get(null));
+
+    // The six-pack's slice is a receipt's alone: the list has row A, for 15,53 $ of its 24,76 $.
+    const alcohol = await listed(target, 2);
+    expect(alcohol.rows.map((row) => [row.id, row.amountCents, row.sliceCents])).toEqual([
+      [rowOf(target, "A"), -2_476, -1_553],
+    ]);
+    // A row is in the list of each category it was split into, once each.
+    const groceries = await listed(target, 1);
+    expect(groceries.rows.map((row) => [row.id, row.sliceCents])).toEqual([
+      [rowOf(target, "D"), undefined],
+      [rowOf(target, "C"), undefined],
+      [rowOf(target, "B"), -1_000],
+      [rowOf(target, "A"), -349],
+    ]);
+    expect(none.rows.map((row) => [row.id, row.sliceCents])).toEqual([
+      [rowOf(target, "B"), -1_776],
+    ]);
+  });
+
+  test("paging counts entries: the offset and the total are over the slices listed", async () => {
+    const target = await startWithReceipts();
+    attach(target, rowOf(target, "A"), BASKET_ITEMS);
+    attach(target, rowOf(target, "B"), TWO_ITEMS);
+    const url = `${ROUTES.rows}?scope=spending&spendingCategory=1`;
+
+    const first = await get<RowsResponse>(target, `${url}&limit=3`);
+    const rest = await get<RowsResponse>(target, `${url}&limit=3&offset=3`);
+
+    expect([first.rows.length, first.total, rest.rows.length, rest.total]).toEqual([3, 4, 1, 4]);
+    expect(rest.rows[0]?.sliceCents).toBe(-349);
+  });
+
+  test("a row with an override, a refused split, no receipt and no items each list once, whole", async () => {
+    const target = await startWithReceipts([
+      marketRow("14", "E", -500),
+      marketRow("15", "F", 2_476),
+      marketRow("16", "G", -700),
+    ]);
+    const pharmacy = await categoryId(target, "Pharmacy");
+    // A: an override over a basket. E: a basket part paid. F: a basket on a refund row.
+    // D: no receipt. G: a receipt filed with no items.
+    attach(target, rowOf(target, "A"), BASKET_ITEMS);
+    attach(target, rowOf(target, "E"), BASKET_ITEMS);
+    attach(target, rowOf(target, "F"), BASKET_ITEMS);
+    await post(target, ROUTES.spendingCategoryOverrides, {
+      rowId: rowOf(target, "A"),
+      spendingCategoryId: pharmacy,
+    });
+    homeBooks(target)
+      .prepare(
+        "INSERT INTO receipts (photo, media_type, bytes, uploaded_at, uploaded_by) VALUES ('photo-g', 'image/jpeg', 64, '2026-10-03T09:30:00Z', 'alex')",
+      )
+      .run();
+    homeBooks(target)
+      .prepare(
+        "INSERT INTO receipt_filings (receipt_id, part, merchant, date, total_cents, row_id, filed_at, filed_by) VALUES (last_insert_rowid(), 1, 'Marché Exemple', '2026-09-16', 700, ?, '2026-10-03T09:30:00Z', 'alex')",
+      )
+      .run(rowOf(target, "G"));
+
+    const whole = new Map<string, number>([
+      ["A", 2_476],
+      ["D", 1_000],
+      ["E", 500],
+      ["F", -2_476],
+      ["G", 700],
+    ]);
+    const owners = new Map<string, number>([["A", pharmacy]]);
+    const lists = new Map<number, RowsResponse>();
+    for (const id of [1, 2, 3, pharmacy]) lists.set(id, await listed(target, id));
+    for (const [name, spent] of whole) {
+      const own = owners.get(name) ?? 1;
+      const holders = [...lists].filter(([, response]) =>
+        response.rows.some((row) => row.id === rowOf(target, name)),
+      );
+      // One list holds it, its own category's, with the amount it has.
+      expect(
+        holders.map(([id]) => id),
+        name,
+      ).toEqual([own]);
+      const row = lists.get(own)?.rows.find((one) => one.id === rowOf(target, name));
+      expect([row?.amountCents, row?.sliceCents], name).toEqual([-spent, undefined]);
+    }
+    // And the lists still sum to the chart's slices.
+    const slices = await chart(target);
+    for (const [id, response] of lists) {
+      expect(listedSum(response), String(id)).toBe(slices.get(id) ?? 0);
+    }
+  });
+
+  test("a list that is not the chart's keeps a row under its own category, receipt or not", async () => {
+    const target = await startWithReceipts();
+    attach(target, rowOf(target, "A"), BASKET_ITEMS);
+    attach(target, rowOf(target, "B"), TWO_ITEMS);
+
+    // The unfiltered chart list: each row once, whole, as the chart's own reading of it needs.
+    const all = await get<RowsResponse>(target, `${ROUTES.rows}?scope=spending`);
+    expect(all.rows.map((row) => [row.amountCents, row.sliceCents])).toEqual([
+      [-1_000, undefined],
+      [-2_000, undefined],
+      [-2_776, undefined],
+      [-2_476, undefined],
+    ]);
+    expect(all.total).toBe(4);
+    // Without the scope, as the screen that works through the uncategorised reads it.
+    const own = await listed(target, 1, false);
+    expect(own.rows.map((row) => [row.amountCents, row.sliceCents])).toEqual([
+      [-1_000, undefined],
+      [-2_000, undefined],
+      [-2_776, undefined],
+      [-2_476, undefined],
+    ]);
+    expect((await listed(target, 2, false)).rows).toEqual([]);
+    expect((await listed(target, "none", false)).rows).toEqual([]);
   });
 });

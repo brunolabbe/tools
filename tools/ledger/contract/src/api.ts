@@ -996,18 +996,31 @@ export interface StoredRow {
     source: ClassificationSource;
   } | null;
   spendingCategory: RowSpendingCategory | null;
+  /**
+   * The part of this row the list it came in puts under the category it was
+   * asked for (lg-28), signed as `amountCents` is: money out is negative. Present
+   * only when a receipt on the row divides it by its items' categories (lg-27) and
+   * the list is `scope=spending` with a `spendingCategory`; the row is then listed
+   * once under each category it was split into, with that slice here and its whole
+   * amount in `amountCents`. Absent, the row is listed whole and `amountCents` is
+   * what the list counts of it. `spendingCategory` stays the row's own category,
+   * which a split row is not charted under.
+   */
+  sliceCents?: number;
 }
 
 /**
  * `GET /api/rows`: stored rows, newest first. `spendingCategory` keeps the
  * uncategorised (`none`) or one category's by id. `from` and `to` are days, both
  * inclusive. `scope=spending` keeps the rows the spending chart counts: filed
- * to the current expenses and to nobody. A list opened from the chart does not
- * always sum to the slice it was opened from: it leaves out the card lines in
- * that slice, which are not rows, and it files a row under the row's own
- * category even when its receipt's items split the row across several (lg-27;
- * lg-28 is the drill-down that follows the split). `offset` and `limit` page the result (100 by default); `total` is how
- * many match before either.
+ * to the current expenses and to nobody, and with `spendingCategory` it keeps a
+ * row under each category the chart charts it under — a row whose receipt splits
+ * it is listed once per slice, carrying that slice as `sliceCents` (lg-28). A
+ * list opened from the chart therefore sums, in `sliceCents` where a row has
+ * one and `amountCents` where not, to minus that slice less the card lines in it,
+ * which are not rows. Without `scope=spending` a row is listed under its own
+ * category only. `offset` and `limit` page the result (100 by default); `total`
+ * is how many entries match before either.
  */
 export const rowsQuerySchema = z
   .strictObject({
