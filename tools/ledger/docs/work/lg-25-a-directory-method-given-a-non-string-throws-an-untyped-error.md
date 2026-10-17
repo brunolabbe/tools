@@ -308,3 +308,17 @@ wording difference: the gate wrote `addMember({ person: 7 })` as a `TypeError` a
   throw a `RangeError` at the driver, and nothing in the tree reaches them with a
   non-string. Found by the gate's `unguarded.mts` probe. The Decision names the write
   methods, so these are left for the orchestrator to file or decide.
+- 2026-10-17 — Correction and answer, for the entry above, which names two of the four
+  reads. The same fault is in four reads, not two: `members`, `people`, `history` and
+  `household`. Each given `{}` or `[]` throws a `RangeError` ("Too few parameter
+  values were provided") from the driver. Each given `null` returns `[]` or
+  `undefined`, and each given `7` returns `[]` or `undefined`. Measured on the head
+  `c1074aa5` with the gate's `reads.mts`
+  (`node --import tsx reads.mts <tree>`, output: 16 lines, the four `{}`/`[]` rows
+  `RangeError`, the other twelve returned). `history` and `household` are the two the
+  owner's Decision 2 already left as they are. **Question** (gate 2's N1): what should
+  happen to the four reads? **Options:** (a) leave all four and correct this Log;
+  (b) guard all four here; (c) file a sibling `lg-` ticket with `reads.mts` as its
+  reproduction. **Answer:** (a), leave all four, fix the Log. The owner chose it, against
+  the builder's recommendation of (c); the gate recommended (a). **Date:** 2026-10-17.
+  Nothing in the tree reaches the four reads with a non-string.
