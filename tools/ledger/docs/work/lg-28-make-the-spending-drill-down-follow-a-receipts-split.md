@@ -79,3 +79,43 @@ attached to one row: chart Groceries 6 125, Alcohol 1 553, Household 574; lists
 - 2026-10-17 — Filed from lg-27's gate 1 (F1), on the owner's answer to reword
   the two comments and file this ticket rather than make the list follow the
   split in lg-27.
+- 2026-10-17 — Built (`ecdad51b`). `chartedAs(row, receipts)` in
+  `api/src/slices.ts` is the one decision of how a row is charted (override wins,
+  sign guard, no receipt, no items → whole; else `splitByCategory`);
+  `receiptsOnRows` moved there from `stats.ts`. `spendingStats` and `listRows`
+  both call it.
+  - **The contract change is `StoredRow.sliceCents?: number`**, on the row inside
+    `RowsResponse`: the part of a receipt-split row the list puts under the
+    category it was asked for, signed as `amountCents` (money out negative), set
+    only for a split row in a `scope=spending` list with a `spendingCategory`.
+    Everything else is listed as before. A list then sums, in `sliceCents ??
+amountCents`, to minus the slice less the card lines. `total` and `offset`
+    count entries after the expansion.
+  - **Reading of Build 2 the code decides, not the ticket:** the slice-following
+    list is only `scope=spending` with a category. `fetchUncategorisedRows`
+    (`web/src/api/spending.ts`, the Spending screen) asks `spendingCategory=none`
+    with no scope to work through each row's _own_ missing category; a split row
+    must stay in it until a person categorises the row. Unscoped lists are
+    unchanged and a test pins it.
+  - **Open question 2 of the dispatch (null slice under `none`) is determined**,
+    so I did not raise it: `spendingByPeriod` charts a `categoryId: null` entry
+    as the uncategorised slice, whose "Rows" button asks `spendingCategory=none`
+    with `scope=spending`; "a row once for each slice spendingStats charts"
+    therefore puts a receipt's uncategorised-item slice in the `none` list, and
+    the row's own category is not consulted for a split row. The test
+    "every category's list sums to its slice" has such a slice (row B, 17,76 $).
+  - Claim 1 reproduced as a hazard: with `listRows` emitting per-slice entries for
+    `scope=spending` with no category, 5 of 35 tests in `api/test/stats.test.ts`
+    fail (the lg-27 chart tests double-count). The shipped code emits per-slice only
+    when a category is asked for, and `spendingStats` asks for none. Claim 3: the
+    test enumerates `categories` from the chart (the seed list, Alcohol and
+    Household among them, which only row A's receipt creates) plus `none`.
+  - Red before green, by removing the slice path (`rows.ts`) and, for the screen,
+    making `shown()` return `amountCents`: API 2 of 35 failed ("every category's
+    list sums to its slice", "paging counts entries"), web 1 of 19 ("a row split by
+    its receipt shows the slice"). The whole-row test (Done when 2) cannot fail
+    without the fix by nature: it pins that the new path leaves those rows alone.
+  - Both comments are restored: `rowsQuerySchema` (now also the new field) and
+    `countsAsSpending`.
+  - Fold-in: nothing else was made free; lg-29 (`SalaryEntryResponse`) is a
+    different region and file.
