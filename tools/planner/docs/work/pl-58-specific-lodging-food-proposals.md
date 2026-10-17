@@ -47,6 +47,19 @@ them:
    `{name, locality, coordinates}`); or file it as needs-decision. The owner chose
    **prompt-only**, which was the recommendation. This narrows pl-57's own "prompt
    and schema change" to a prompt change. **No contract change.**
+3. **The re-measure's population.** The options were: (a) a population argument to
+   `invention.ts`, whose default still reproduces pl-57's 1,019 places; (b) new
+   records stored outside `live/`; (c) counted by hand; or leave it to this
+   ticket's builder. The owner chose **(a)**, the recommendation.
+4. **The web-check sample size.** The options were 30 or 40 objects, or all of the
+   stratum's objects if fewer. The owner chose **40 objects, or all of them if
+   fewer**, the recommendation. At pl-57's 1.07 searches per object that is about 43
+   queries. At pl-57's 15.8% it is about 6 events, and 6 of 40 is 15.0% (7.1–29.1)
+   by a Wilson interval, which the coordinator computed and this ticket's filing
+   reproduces.
+5. **The live run's shape** (model families, efforts, runs, cost) is a **reserved
+   decision**: the owner sets it at build time, and it is not an open question for
+   this filing.
 
 **Where the prompts live.** On `origin/main`, the specialist's brief is the `role`
 string in `SPECIALIST_DEFINITIONS`, in `tools/planner/agent/src/specialists.ts`.
@@ -75,23 +88,30 @@ and no model receives them. That file is not changed.
    `tools/planner/api/test/live/run.ts`, with `PLANNER_LIVE_RUN=1` and `--out` set,
    on the six briefs in pl-57's by-brief table: `backcountry`, `city-and-culture`,
    `motorised-touring`, `multi-city`, `resort` and `road-trip`. Which model
-   families, which efforts and how many runs are the owner's to set. The Log
-   records the choice, the owner's authorisation with its date, and the run's cost
-   as measured. Do not start the run before the authorisation is in the Log.
+   families, which efforts and how many runs are a **reserved decision**, set by the
+   owner at build time. The Log records the choice, the owner's authorisation with
+   its date, and the run's cost as measured. Do not start the run before the
+   authorisation is in the Log.
 
 4. **Re-measure with pl-57's harness,** `tools/planner/api/test/live/invention.ts`,
    once pl-57 has merged so that the harness is on `main`. Classify the new places by
    pl-57's committed rubric, not a new one. Report `lodging`'s and `food`'s
    named-premises share, before and after. The before figures are pl-57's, 28 of 320
    and 25 of 259, and the Log says which rubric each figure is on.
-   **The population has to be the new run alone.** As committed, the harness reads
-   every `candidatesAccepted` under `api/test/fixtures/live/` other than
-   `hours-coverage/` and `invention/`, so the new records would join the 111 old
-   ones. The Log says how the harness was pointed at the new run's records.
+   **Add a population argument to `invention.ts`** (its name and form are the
+   builder's, and the Log gives them). As committed, the harness reads every
+   `candidatesAccepted` under `api/test/fixtures/live/` other than `hours-coverage/`
+   and `invention/`, so a new run's records would join the 111 old ones. The default,
+   with no argument, must keep reading pl-57's population, the 111 records pl-57
+   counted, so that a later run's records do not change it. With the argument, the
+   population is the new run's records alone. The default is checked with
+   `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx tools/planner/api/test/live/invention.ts`,
+   which must exit 0 against the committed record.
 
 5. **Web-check the stratum's named premises.** From the new run's `lodging` and
-   `food` named-premises places, draw a sample **larger than pl-57's 19 objects**,
-   after classifying, with a fixed seed that the record holds. Objects are counted
+   `food` named-premises places, draw a sample of **40 objects, or all of the
+   stratum's objects if there are fewer than 40**, after classifying, with a fixed
+   seed that the record holds. Objects are counted
    as pl-57 counted them, by shared first query. Each verdict is one of pl-57's:
    `exists`, `exists-elsewhere`, `closed` or `not-found`. Write the search budget
    down before the first query, as pl-57's Build step 5 did. Each verdict carries
@@ -119,12 +139,17 @@ and no model receives them. That file is not changed.
 - `npx vitest run tools/planner/agent/test/prompt.test.ts` passes, and the Log gives
   its count of passed and total tests.
 - The Log gives the live run's command, the six briefs, the models, efforts and runs
-  the owner authorised, the authorisation's date, and the run's measured cost.
+  the owner set at build time (a reserved decision), the authorisation's date, and
+  the run's measured cost.
+- `invention.ts`'s default run, with no population argument, still reproduces
+  pl-57's record: `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx tools/planner/api/test/live/invention.ts`
+  exits 0, and the Log gives that command's exit code, taken without a pipe.
 - The re-measure gives `lodging`'s and `food`'s named-premises share before and after,
   on one rubric, and the Log says which population each figure counts. The after
-  population is the new run's records alone.
+  population is the new run's records alone, selected by the population argument.
 - The record holds the seed and the drawn sample, and each drawn object's verdict
-  with its URL and the date it was read. The sample has more than 19 objects.
+  with its URL and the date it was read. The sample is 40 objects, or all of the
+  stratum's objects if there are fewer than 40.
 - The Log gives the stratum's not-confirmed rate per object, with its 95% Wilson
   interval and its object count, and says whether it clears the bar: above about
   10%, with the lower bound above 5%.
@@ -163,3 +188,11 @@ A first draft carried a `## Review` heading with a placeholder under it. The sta
 check named it: a `ready` ticket with a review section is refused, because a review
 section means the work was picked up. The heading is removed, and the section is
 absent until a build is reviewed.
+
+**2026-10-17 — Maintenance edit (builder, Haiku 5.5), on the coordinator's relay of
+the owner's answers.** The two open decisions in the first draft are recorded in
+_Why_ as items 3 and 4, and the live run's shape as item 5, a reserved decision.
+Build step 4 now asks for a population argument to `invention.ts`, with the default
+pinned to pl-57's 111 records, so a later run's records cannot change it. Build step
+5 and the `Done when` lines use 40 objects, or all of the stratum if fewer. No other
+change to the ticket.
