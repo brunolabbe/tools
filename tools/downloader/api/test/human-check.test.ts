@@ -20,7 +20,10 @@
  *  - the token reaches no log line and no stored row.
  */
 
-import { ROUTES } from "@downloader/contract";
+import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { AppError, ROUTES } from "@downloader/contract";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { loadApiConfig } from "../src/config.ts";
 import { createHumanCheck, SITEVERIFY_URL } from "../src/human-check.ts";
@@ -342,6 +345,16 @@ describe("GET /api/config with keys configured", () => {
   });
 });
 
+/** The error `loadApiConfig` throws for `env`; fails the test when it throws nothing. */
+function refusalFor(env: NodeJS.ProcessEnv): AppError {
+  try {
+    loadApiConfig({}, env);
+  } catch (error: unknown) {
+    return AppError.from(error);
+  }
+  throw new Error("loadApiConfig did not refuse");
+}
+
 describe("the settings", () => {
   test("both keys turn the check on, and neither leaves it off", () => {
     expect(
@@ -369,6 +382,160 @@ describe("the settings", () => {
       expect(String(error)).not.toContain(PASS_SECRET);
     }
   });
+
+  // dl-126: the public instance must not boot with the check off. The setting
+  // is explicit (`REQUIRE_HUMAN_CHECK`), so a self-hoster behind Access who
+  // never sets it keeps the open default the first test above pins.
+  test("REQUIRE_HUMAN_CHECK with neither key refuses to boot, naming the variables", () => {
+    const refusals: AppError[] = [];
+    for (const env of [
+      { REQUIRE_HUMAN_CHECK: "true" },
+      { REQUIRE_HUMAN_CHECK: "1", TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: " " },
+    ]) {
+      expect(() => loadApiConfig({}, env)).toThrow(/REQUIRE_HUMAN_CHECK is set/u);
+      try {
+        loadApiConfig({}, env);
+      } catch (error: unknown) {
+        refusals.push(AppError.from(error));
+      }
+    }
+    expect(refusals).toHaveLength(2);
+    for (const refusal of refusals) {
+      expect(refusal.code).toBe("INTERNAL");
+      const written = JSON.stringify({ error: refusal.message, details: refusal.details });
+      expect(written).toContain("TURNSTILE_SITE_KEY");
+      expect(written).toContain("TURNSTILE_SECRET_KEY");
+    }
+  });
+
+  test("REQUIRE_HUMAN_CHECK with both keys is the check on, as before", () => {
+    expect(
+      loadApiConfig(
+        {},
+        {
+          REQUIRE_HUMAN_CHECK: "true",
+          TURNSTILE_SITE_KEY: PASS_SITE_KEY,
+          TURNSTILE_SECRET_KEY: PASS_SECRET,
+        },
+      ).turnstile,
+    ).toEqual(KEYS);
+  });
+
+  test("REQUIRE_HUMAN_CHECK unset or off leaves the open default, and a test override wins", () => {
+    for (const value of ["", "false", "0", "off", "no"]) {
+      expect(loadApiConfig({}, { REQUIRE_HUMAN_CHECK: value }).turnstile).toBeUndefined();
+    }
+    // A value nobody recognises is not "off": a typo must not open the host.
+    expect(() => loadApiConfig({}, { REQUIRE_HUMAN_CHECK: "ture" })).toThrow(
+      /REQUIRE_HUMAN_CHECK is set/u,
+    );
+    // The suites that pass `turnstile: undefined` must keep working even if the
+    // shell that runs them exports the setting.
+    expect(
+      loadApiConfig({ turnstile: undefined }, { REQUIRE_HUMAN_CHECK: "true" }).turnstile,
+    ).toBeUndefined();
+  });
+
+  test("the thrown refusal under REQUIRE_HUMAN_CHECK carries variable names and no key value", () => {
+    // The text `main.ts` writes is checked for real by the spawn test below;
+    // this is the same property one level down, over the error itself. The
+    // one-key case has a value that could leak, the no-key case has none, and
+    // neither may carry one of Cloudflare's published keys.
+    const oneKey = { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SECRET_KEY: PASS_SECRET };
+    expect(refusalFor(oneKey).message).toMatch(/TURNSTILE_SITE_KEY is not set/u);
+    for (const env of [oneKey, { REQUIRE_HUMAN_CHECK: "true" }]) {
+      const refusal = refusalFor(env);
+      const written = JSON.stringify({ error: refusal.message, details: refusal.details });
+      expect(written).not.toContain(PASS_SECRET);
+      expect(written).not.toContain(PASS_SITE_KEY);
+    }
+  });
+
+  test("a refusal under REQUIRE_HUMAN_CHECK says to set it to false, never to unset it", () => {
+    // The shipped compose file defaults the setting to true, so an unset or
+    // blank `.env` entry still means on and a hint that said "unset" would send
+    // the operator into a second refusal. Only `=false` opts out there.
+    const hints = [
+      refusalFor({ REQUIRE_HUMAN_CHECK: "true" }),
+      refusalFor({ REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SECRET_KEY: PASS_SECRET }),
+    ].map((refusal) => String(refusal.details?.["hint"]));
+    for (const hint of hints) {
+      expect(hint).toContain("REQUIRE_HUMAN_CHECK=false");
+      expect(hint).not.toMatch(/\bunset\b/u);
+    }
+    // Without the setting the one-key hint is the old one: there is nothing to
+    // set to false, and unsetting both keys is exactly how the check goes off.
+    expect(String(refusalFor({ TURNSTILE_SECRET_KEY: PASS_SECRET }).details?.["hint"])).toContain(
+      "unset both",
+    );
+  });
+
+  // The real `main.ts`, not a copy of what it writes: no logger exists yet when
+  // `createApp` fails, so the entry point formats the startup failure itself,
+  // and only a spawned process reads that line as an operator's container log does.
+  test("main.ts, spawned with REQUIRE_HUMAN_CHECK on, exits 1 and writes a refusal with no key value", async () => {
+    const API_DIR = fileURLToPath(new URL("..", import.meta.url));
+    const base: NodeJS.ProcessEnv = {};
+    for (const [name, value] of Object.entries(process.env)) {
+      if (!name.startsWith("TURNSTILE_") && name !== "REQUIRE_HUMAN_CHECK") base[name] = value;
+    }
+    base["DATABASE_PATH"] = ":memory:";
+    base["PORT"] = "0";
+
+    const boot = async (env: Record<string, string>) => {
+      const child = spawn(
+        process.execPath,
+        ["--import", "tsx", path.join(API_DIR, "src", "main.ts")],
+        {
+          cwd: API_DIR,
+          env: { ...base, ...env },
+          shell: false,
+          windowsHide: true,
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString("utf8")));
+      child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString("utf8")));
+      // The boot fails before it listens; a process still up is a regression.
+      const timer = setTimeout(() => child.kill("SIGKILL"), 45_000);
+      const code = await new Promise<number | null>((resolve) => child.once("close", resolve));
+      clearTimeout(timer);
+      return { code, stdout, stderr };
+    };
+
+    const cases: Array<{ env: Record<string, string>; names: string[] }> = [
+      {
+        env: { REQUIRE_HUMAN_CHECK: "true" },
+        names: ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"],
+      },
+      {
+        env: { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: "" },
+        names: ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"],
+      },
+      {
+        env: { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SECRET_KEY: PASS_SECRET },
+        names: ["TURNSTILE_SITE_KEY"],
+      },
+      {
+        env: { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SITE_KEY: PASS_SITE_KEY },
+        names: ["TURNSTILE_SECRET_KEY"],
+      },
+    ];
+    const results = await Promise.all(cases.map(({ env }) => boot(env)));
+
+    results.forEach((result, index) => {
+      const written = `${result.stdout}${result.stderr}`;
+      // Non-vacuous: a process that wrote nothing, or started, fails here.
+      expect(result.code, written).toBe(1);
+      expect(result.stderr).toContain('"msg":"failed to start"');
+      expect(result.stderr).toContain('"code":"INTERNAL"');
+      for (const name of cases[index]?.names ?? []) expect(result.stderr).toContain(name);
+      expect(written).not.toContain(PASS_SECRET);
+      expect(written).not.toContain(PASS_SITE_KEY);
+    });
+  }, 90_000);
 });
 
 describe("the token is a credential", () => {

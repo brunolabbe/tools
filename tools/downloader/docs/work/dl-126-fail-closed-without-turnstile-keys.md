@@ -3,7 +3,7 @@ id: dl-126
 tool: downloader
 title: With no Turnstile keys the downloader serves probes with the human check off, in production too
 kind: fix
-status: ready
+status: done
 milestone: M5
 depends_on: []
 difficulty: standard
@@ -185,6 +185,73 @@ Step 3's option 2 and Decision 2's contract question no longer apply.
    that dl-49's PR #496 rewrites. Land this after #496 merges, so the two do not
    edit the same paragraph.
 
+## Review
+
+**Gate: FAIL**: 2026-10-17 · `8e50f0d4..f2c343d9` · Opus 5.5, depth full
+
+| Done when                                                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. With the setting and no keys, the API does not serve: the boot refuses. The test fails on `76ce7d52` first                             | `api/test/human-check.test.ts` › "REQUIRE_HUMAN_CHECK with neither key refuses to boot, naming the variables" ✓. Its `toThrow(/REQUIRE_HUMAN_CHECK is set/u)` covers `true`, and `1` with blank keys, plus `code === "INTERNAL"`. It goes red with base `config.ts` (identical to `76ce7d52`'s): 2 failed, 16 passed, of 18. It also goes red under the positive control (the throw removed) |
+| 2. Without the setting, the open default is unchanged and "both keys turn the check on, and neither leaves it off" passes                 | that test ✓, and "REQUIRE_HUMAN_CHECK unset or off leaves the open default, and a test override wins" ✓, which asserts `""`, `false`, `0`, `off` and `no` all give `undefined`                                                                                                                                                                                                               |
+| 3. Both keys set: `POST /api/probe` with no token answers `403 HUMAN_CHECK_FAILED`                                                        | existing "a probe with no token" (`expectRefused`) ✓, and "REQUIRE_HUMAN_CHECK with both keys is the check on, as before" ✓, which asserts the config equals `KEYS` with the setting on                                                                                                                                                                                                      |
+| 4. One key alone still refuses, naming only the missing variable                                                                          | existing "one key without the other refuses to boot, naming the missing variable only" ✓, and the new leak test asserts `/TURNSTILE_SITE_KEY is not set/` with the setting on ✓                                                                                                                                                                                                              |
+| 5. A refusal names the variable and never a key value; **a test over captured logger output** proves it                                   | **unproven**. No test captures output. The new test re-creates `JSON.stringify({ error, details })` from the thrown `AppError`. `main.ts`'s catch writes `code`, `error`, `reason` and `details` straight to stderr, and the test leaves out `reason` and `code`. My own capture of the real stderr found no key value (F1)                                                                  |
+| 6. `.env.example`, the ARCHITECTURE settings table and `02-DEPLOYMENT.md` name the setting; no "right behind a login" without the setting | **verified** by reading the files and by a repo-wide grep. Every hit qualifies itself (see report)                                                                                                                                                                                                                                                                                           |
+| 7. `npm run check` and `npm test -- --project downloader` green                                                                           | **verified**: check exit 0. Suite: 124 of 125 files passed (1 skipped), 2588 of 2590 tests passed (2 skipped), in 81 s. CI `check` and `test (ubuntu-latest)` pass on `f2c343d9`                                                                                                                                                                                                             |
+| 8. A container with the setting and no keys does not serve a probe                                                                        | **unproven (gate)**: no container was run, per the dispatch. The PR's `docker` job (pass, `f2c343d9`) runs `compose.downloader.yaml`, which does not carry the setting, so it proves only the open default                                                                                                                                                                                   |
+
+- **med** · Done when 5 depends on it · **F1**: no test captures the refusal as it is actually written. `main.ts` writes the startup failure itself, because no logger exists yet. The test copies a subset of that line rather than capturing it, so a change to `main.ts`'s write would go unnoticed. The property itself holds: I spawned the real `main.ts` (four key arrangements, setting on) and the captured stderr carried no key value. **Open decision**, two ways to close it:
+  - (a) _recommended_: add a test that spawns `node --import tsx api/src/main.ts` with the env and asserts on the captured stderr. It takes about 1.2 s per run, and the boot fails before it listens.
+  - (b) the owner rewords the line to "the thrown error's message and details".
+- **med** · no Done when line depends on it · **F2**: the owner's next `DOWNLOADER_TAG` bump will take down the public downloader on a host with empty keys, and the update procedure does not say so. The PR body and the Log both say it. `02-DEPLOYMENT.md` says it only in the first-setup paths (step 2's bullet and step 4). "Updating and rolling back", the section an operator follows to move a tag, has no "Upgrading past dl-126" note, although its "Upgrading past dl-53" note is the precedent. That section also misses a second effect: rolling back to an older tag reopens a keyless host. The changelog will show this as a plain `fix`. **Open decision**:
+  - (a) _recommended_: add the note to "Updating and rolling back". The fix is fully stated, so it can be done at landing.
+  - (b) also mark the title breaking (`fix(downloader)!:` with a footer naming `REQUIRE_HUMAN_CHECK=false`).
+- **low** · false in the safe direction · **F3**: "unset" and "blank" mean off in the API, but on in the shipped compose deployment. The new boot hint says "unset REQUIRE_HUMAN_CHECK to leave the check off". The one-key hint still says "or unset both to leave it off". The ARCHITECTURE row says "Blank … leave it unset". Under `${REQUIRE_HUMAN_CHECK:-true}`, both an unset and a blank `.env` entry give the container `"true"`. An operator who follows the hint gets a second refusal. Only `=false` opts out.
+- **low** · **F4**: in "a refusal under REQUIRE_HUMAN_CHECK carries variable names and never a key value", the no-key iteration's `try`/`catch` passes even when nothing is thrown. With the throw removed, this test stayed green. A companion that fails on empty output exists, but in another test (the Done when 1 test), which did go red.
+- **low** · **F5**: the Log contradicts my measurement. It says the red run was "1 failed | 17 passed" and that "the other three new tests pass on the old code by design". Against base `config.ts` the branch spec gives 2 failed, 16 passed: the `ture` assertion in "…unset or off leaves the open default…" fails on the old code.
+- **dropped** · blank or whitespace is open at the API level. That matches the repo's "blank is unset" rule, Decision 1 asked for an explicit setting, and the shipped compose path maps blank to `true`. Not a defect.
+- **dropped** · `n`, `disabled`, `'false'` and `"false"` passed raw are refused. That is the fail-closed direction, and it is documented ("any other value turns it on").
+- **dropped** · `report.ts`'s `loadApiConfig()` also refuses with the setting on and no keys. It runs through `compose exec` into a container that would not be up, so no live call site.
+- **findings** · the hunt returned 8; 5 carried, 3 dropped.
+- NFR: security ✓ (no key value in the real stderr; fails closed) · performance n/a · reliability: F2 (a keyless host becomes an outage on the tag bump, by design) · maintainability: F1, F4.
+
+### Gate 2
+
+**Gate: CONCERNS**: 2026-10-17 · `f2c343d9..f2c5fc44` (round commits `340e513b`, `89b2a3d2` and `f2c5fc44`) · Opus 5.5, re-gate of the round only
+
+| Done when                                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 5. A refusal names the variable and never a key value; a test over captured logger output proves it | **proven**: `api/test/human-check.test.ts` › "main.ts, spawned with REQUIRE_HUMAN_CHECK on, exits 1 and writes a refusal with no key value" ✓. It spawns the real `main.ts` for four env shapes and asserts on the captured stdout and stderr: exit `1`, `"msg":"failed to start"`, `"code":"INTERNAL"`, the missing names, and neither test key. It is the only test that goes red when `main.ts`'s startup line also writes `process.env["TURNSTILE_SECRET_KEY"]` (1 failed, 19 passed, of 20) |
+| 8. A container with the setting and no keys does not serve a probe                                  | **unproven (gate)**: unchanged. No container was run. The PR's `docker` job (pass, `f2c5fc44`) runs `compose.downloader.yaml`, which does not carry the setting                                                                                                                                                                                                                                                                                                                                  |
+
+Done when 1–4, 6 and 7 stand as gate 1 graded them. On this head: `npm run check` exits 0. `npm test -- --project downloader`: 124 of 125 files passed (1 skipped), 2590 of 2592 tests passed (2 skipped). On PR #505 at `f2c5fc44`, every check passes, `test (windows-latest, informational)` included.
+
+**Gate 1's findings:**
+
+- **F1 (med, Done when 5): fixed.** Verified by two mutations:
+  - With `main.ts`'s startup line made to also write the secret from the env, the spawn test alone goes red: `expected '{"level":"error",…' not to contain '1x0000000000000000000000000000000AA'`.
+  - With the one-key message made to print the key, three tests go red, the spawn test among them, as the builder said.
+- **F2 (med): fixed.** "Updating and rolling back" in `docs/02-DEPLOYMENT.md` now has "Upgrading past dl-126 stops a downloader whose `.env` has no Turnstile keys", which gives both remedies and says a blank or unset entry does not opt out. It also has "Rolling back past dl-126 reopens a host with no keys". The title stays non-breaking, per the owner.
+- **F3 (low): fixed.** In the real stderr of all four boots, both hints now say "set REQUIRE_HUMAN_CHECK=false and leave both empty". The one-key hint without the setting keeps "unset both", which is right there. "a refusal under REQUIRE_HUMAN_CHECK says to set it to false, never to unset it" pins both hints. The compose comment, `.env.example` and the ARCHITECTURE row now say that under `:-true` only an explicit `false` opts out. Ignoring whitespace, that row is the only content change in the reformatted table.
+- **F4 (low): fixed.** `refusalFor()` throws "loadApiConfig did not refuse". With the no-key throw removed, the leak test now fails (5 failed, 15 passed, of 20); at gate 1 it stayed green.
+- **F5 (low): fixed.** The new Log entry accepts the figure and records the final spec against base `config.ts` as `5 failed | 15 passed (20)`. I measured the same: 5 failed, 15 passed, of 20. The round-0 entry is left standing and is corrected by the new one.
+
+**New, in the round's lines:**
+
+- **low** · `nfr:reliability`, no live leak · **F6**: on its regression path the spawn test stops the process with a single `child.kill("SIGKILL")` after a fixed 45 s. That is not a tree kill, and the failure costs 45 s. I measured that path with base `config.ts`:
+  - Two of the four spawns booted (the one-key cases refuse even at base). Each listened on three ports, 127.0.0.1 and 0.0.0.0 among them.
+  - At t+20 s they had no child processes: no chrome, no ffmpeg.
+  - After the kill, `ps` showed no `api/src/main.ts` process.
+  - No file was left under `tools/downloader/api` (`git status --ignored` was the same before and after).
+  - The test failed in 45 015 ms, inside its 90 s limit.
+
+  So nothing is orphaned today. The root rule is bent only on a path that runs when the test is already failing. It would orphan children if boot ever starts a long-lived child before it listens. A cheaper shape is to kill as soon as stdout shows `"msg":"listening"`.
+
+- **low** · false in the safe direction · **F7**: the upgrade note says "Do this **before** the `docker compose pull` that moves the tag, or expect the outage between the pull and the edit". `pull` does not recreate the container; the outage starts at the `docker compose up -d` that follows. Nothing relies on the distinction, and the advice errs early.
+- **findings** · the round's hunt returned 2; 2 carried, 0 dropped. Gate 1's five: 5 fixed.
+- **No `high`.** CONCERNS comes only from Done when 8, `unproven (gate)`. F6 and F7 are `low`; no Done when line depends on either.
+- NFR: security ✓ (the real stderr carries no key value; a main.ts-level leak is now caught) · performance: F6 (45 s to fail; about 1.6 s green) · reliability: F6 · maintainability ✓.
+
 ## Log
 
 - 2026-10-17 — Filed from dl-49's gate 1 (Opus 5.5, 2026-10-16) on PR #496,
@@ -210,3 +277,105 @@ and no widget: true`.
   `compose.downloader.prod.yaml`. Decision 2: option 1, refuse at boot with
   `AppError("INTERNAL")` naming the missing variables. `status: ready`. #496 has
   merged (`78b188fc`), so Build step 6's ordering constraint is met.
+- 2026-10-17 — Built (branch `dl-126-fail-closed`, from `8e50f0d4`). Build step 1
+  was already done by the filing's own Log entry above (merged in #502), so no
+  separate decisions commit.
+  - **Code.** `config.ts`: `turnstile()` takes a third argument and, with neither
+    key and the setting on, throws `AppError("INTERNAL", "REQUIRE_HUMAN_CHECK is
+set, but TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY are not.")` with a hint
+    naming both and the opt-out. It sits on the environment branch only; the
+    `"turnstile" in overrides` branch is untouched, which a test pins
+    (`loadApiConfig({ turnstile: undefined }, { REQUIRE_HUMAN_CHECK: "true" })`
+    stays `undefined`). `human-check.ts` is unchanged (Decision 2, option 1).
+  - **Parsing differs from `bool` on purpose.** `requireHumanCheck()` reads blank
+    and `0/false/no/off` as unset and **everything else as set**, where `bool`
+    falls back to the default on a word it does not know. For this setting the
+    default is the check off, so a typo (`ture`) through `bool` would be the
+    failure the ticket exists to prevent. A test pins `ture` as a refusal.
+  - **Compose line is `${REQUIRE_HUMAN_CHECK:-true}`, not a literal `true`.** The
+    brief says "set in `compose.downloader.prod.yaml` beside the two keys"; a
+    literal would leave a self-hoster behind Access, who runs this file with no
+    keys, with no way to start except editing the shipped file. The default is
+    on, so the public host that omits the line is closed; the opt-out is
+    `REQUIRE_HUMAN_CHECK=false` in `.env`. **Consequence for the owner's own
+    host:** it runs this file with empty keys today, so on its next pull of an
+    image carrying this change it does not start until both keys are in `.env`
+    (or it opts out). That is the intended fail-closed behaviour, and it lands
+    after #496.
+  - **Red then green.** Tests added at the end of `describe("the settings")` in
+    `human-check.test.ts` (four, so the existing ones keep their lines). Before
+    `config.ts` changed, `npx vitest run tools/downloader/api/test/human-check.test.ts`:
+    `Tests 1 failed | 17 passed (18)`, the failure `REQUIRE_HUMAN_CHECK with
+neither key refuses to boot, naming the variables` with `expected
+[Function] to throw an error`. After: `human-check.test.ts`, `terms-page.test.ts`
+    (reads the compose file) and `config.test.ts` together, `Tests 32 passed (32)`.
+    The other three new tests pass on the old code by design: they pin that the
+    open default, the both-keys path, the override path and the no-leak rule did
+    not move.
+  - **Docs.** `.env.example`, `.env.prod.example`, `compose.downloader.prod.yaml`
+    (its header and the line), `docs/01-ARCHITECTURE.md` (the `TURNSTILE_SITE_KEY`
+    row, a new `REQUIRE_HUMAN_CHECK` row, and the prose paragraph on the human
+    check), `docs/02-DEPLOYMENT.md` (step 2's bullet, the setup-script section's
+    ordering paragraph, and step 4). Build step 6 names `docs/02-DEPLOYMENT.md`
+    under the tool's docs; it is the repo-wide file at the root, which the brief
+    had slightly wrong, and it is edited here as that file.
+  - **Not folded in.** Adding dl-126 to dl-49's `depends_on` is an edit to a
+    ticket that is `in-flight` and was left alone
+    by the filing; not done here. Done when 8 (a container built and run) was not
+    run: it is a container build and no gate was asked for one on this machine,
+    so it stays `unproven (gate)`.
+- 2026-10-17 — Round 1, after gate 1 (Opus 5.5, `8e50f0d4..f2c343d9`, FAIL). The
+  owner answered each open decision through `AskUserQuestion` on 2026-10-17, from
+  the options the gate and the builder offered:
+  - **F1** (Done when 5): "Spawn test over real stderr", over rewording the Done
+    when line. A test now spawns the real `main.ts`.
+  - **F2** (upgrade and rollback): "Upgrade note only", over also marking the title
+    breaking (`fix(downloader)!:`). The title stays non-breaking; the notes are in
+    `docs/02-DEPLOYMENT.md`, "Updating and rolling back".
+  - **Compose default**: "Overridable :-true + fix hints", over a literal `"true"`.
+    `${REQUIRE_HUMAN_CHECK:-true}` stays, and F3 is fixed in this round.
+  - **F1, done.** `human-check.test.ts`, "main.ts, spawned with
+    REQUIRE_HUMAN_CHECK on, exits 1 and writes a refusal with no key value":
+    four env shapes, `node --import tsx api/src/main.ts`, `shell: false`, asserts
+    exit 1, `"msg":"failed to start"`, `"code":"INTERNAL"`, the missing variable
+    names, and neither Cloudflare test key anywhere in stdout or stderr. Proven
+    able to fail: with the one-key message mutated to print `rawSecretKey`, it
+    went red (`expected '{"level":"error","time":… not to contain
+'1x0000000000000000000000000000000AA'`) along with two in-process tests.
+    **Cost:** green it is about 2 s for the four spawns together. Against the old
+    `config.ts` the same test takes 45 s and fails, because the process starts and
+    listens until the test's own kill timer fires.
+  - **F2, done.** Two paragraphs after "Rolling back is the same three commands":
+    upgrading past dl-126 stops a host with no keys (both keys in, or
+    `REQUIRE_HUMAN_CHECK=false`; an unset or blank entry does not opt out; do it
+    before the pull that moves the tag), and rolling back past it reopens a
+    keyless host.
+  - **F3, reproduced and fixed.** `compose-matrix.sh` from gate 1, `docker compose
+config` over the three-file stack: `unset` and `blank` both give
+    `REQUIRE_HUMAN_CHECK: "true"`, `false`, `false` with a trailing space, quoted
+    and with a trailing comment give `"false"`, and `0` gives `"0"`. Both boot
+    hints now say `REQUIRE_HUMAN_CHECK=false` and leave both keys empty, the
+    one-key hint only when the setting is on (without it, "unset both" is still
+    right); the compose comment, `.env.example` and the ARCHITECTURE row say that
+    under the compose default only an explicit `false` opts out. A test pins both
+    hints. That matrix is also the first time the compose edit was parsed; round 0
+    reported it unmeasured.
+  - **F4, reproduced and fixed.** The no-key leak assertion ran inside a bare
+    `try`/`catch`, so a throw that never came passed it. A `refusalFor()` helper
+    fails the test when `loadApiConfig` does not throw. Proven: against the base
+    `config.ts` the rewritten test went red where the old one could not.
+  - **F5, the gate is right.** Round 0's "1 failed | 17 passed" was measured
+    before I added the `ture` assertion to "unset or off leaves the open
+    default", and the entry above was not updated. Against the base `config.ts` the
+    final spec gives, with the round's tests included, `Tests 5 failed | 15 passed
+(20)`; of round 0's four tests, two fail on the old code (the Done when 1
+    test, and "unset or off" on its `ture` line) and two pass (the both-keys test, and the old leak test, which is F4). Round 0's
+    figure above stands as a record of the earlier state.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, F7 — "the upgrade note
+  says 'Do this **before** the `docker compose pull` that moves the tag, or expect
+  the outage between the pull and the edit'. `pull` does not recreate the
+  container; the outage starts at the `docker compose up -d` that follows", fixed
+  as "between the `up -d` and the edit". `grep -n "outage between"
+docs/02-DEPLOYMENT.md` → `685:outage between the `up -d` and the edit.` F6
+  (the spawn test's single `SIGKILL` after 45 s on its regression path) is
+  recorded and left unfixed, by the same owner choice.

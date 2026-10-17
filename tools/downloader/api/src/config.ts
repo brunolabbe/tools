@@ -300,7 +300,9 @@ export interface ApiConfig {
    * Cloudflare Turnstile, the human check on probe and job creation (dl-50).
    * **Both or neither**: with neither, no token is asked for, which is every
    * deployment before dl-50 and the right answer for a self-hoster behind
-   * Access. One without the other is refused at boot — a secret with no site
+   * Access — unless `REQUIRE_HUMAN_CHECK` is set (dl-126), the shipped
+   * production compose file's line, when neither is refused at boot too.
+   * One without the other is refused at boot — a secret with no site
    * key refuses every request behind a widget that cannot render, and a site
    * key with no secret renders a widget nothing checks. Both fail silently at
    * request time, which is what boot validation is for.
@@ -477,19 +479,53 @@ function outcomeRetentionDays(days: number): number {
   return days;
 }
 
-/** See `ApiConfig.turnstile`. The error names the variables, never their values. */
+/**
+ * `REQUIRE_HUMAN_CHECK`, read the other way round from `bool`: a value that is
+ * not recognised counts as set. `bool` falls back to the default on `ture`,
+ * which here would be the check quietly off — the failure this setting exists
+ * to prevent. Only blank or an explicit "off" word leaves it unset.
+ */
+function requireHumanCheck(raw: string | undefined): boolean {
+  const value = raw?.trim().toLowerCase() ?? "";
+  return value !== "" && !["0", "false", "no", "off"].includes(value);
+}
+
+/**
+ * See `ApiConfig.turnstile`. The error names the variables, never their values.
+ *
+ * `required` is `REQUIRE_HUMAN_CHECK` (dl-126). Without it, neither key is a
+ * valid configuration — the self-hoster behind Access. With it, neither key is
+ * a host that was meant to be public and lost its keys, and serving probes
+ * with the check off is the worst way to find out, so it does not start.
+ */
 function turnstile(
   rawSiteKey: string | undefined,
   rawSecretKey: string | undefined,
+  required: boolean,
 ): ApiConfig["turnstile"] {
   const siteKey = rawSiteKey?.trim() ?? "";
   const secretKey = rawSecretKey?.trim() ?? "";
-  if (siteKey === "" && secretKey === "") return undefined;
+  if (siteKey === "" && secretKey === "") {
+    if (!required) return undefined;
+    throw new AppError(
+      "INTERNAL",
+      "REQUIRE_HUMAN_CHECK is set, but TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY are not.",
+      {
+        details: {
+          // `=false`, not "unset": the shipped compose file defaults the setting to
+          // true, so an unset or blank `.env` entry would refuse a second time.
+          hint: "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together, or set REQUIRE_HUMAN_CHECK=false and leave both empty to serve with the check off (a self-hosted instance behind a login).",
+        },
+      },
+    );
+  }
   if (siteKey === "" || secretKey === "") {
     const missing = siteKey === "" ? "TURNSTILE_SITE_KEY" : "TURNSTILE_SECRET_KEY";
     throw new AppError("INTERNAL", `${missing} is not set; the human check needs both keys.`, {
       details: {
-        hint: "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together to turn the check on, or unset both to leave it off.",
+        hint: required
+          ? "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together to turn the check on, or set REQUIRE_HUMAN_CHECK=false and leave both empty to serve with the check off."
+          : "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together to turn the check on, or unset both to leave it off.",
       },
     });
   }
@@ -627,7 +663,11 @@ export function loadApiConfig(
     turnstile:
       "turnstile" in overrides
         ? overrides.turnstile
-        : turnstile(env["TURNSTILE_SITE_KEY"], env["TURNSTILE_SECRET_KEY"]),
+        : turnstile(
+            env["TURNSTILE_SITE_KEY"],
+            env["TURNSTILE_SECRET_KEY"],
+            requireHumanCheck(env["REQUIRE_HUMAN_CHECK"]),
+          ),
   };
 
   assertUsable(config);

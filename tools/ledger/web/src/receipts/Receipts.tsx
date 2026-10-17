@@ -54,6 +54,8 @@ export const FLAG_LABELS: Record<ReceiptFlag, string> = {
   "tax-differs": "The taxes are not 5 % and 9.975 % of the same amount.",
   "signs-differ": "Some amounts are a purchase and some a refund.",
   "items-differ": "The items, deposits and taxes do not add up to the total. Correct them to file.",
+  "taxable-differs":
+    "The items marked taxable do not give the taxes printed. Check which items are taxable.",
 };
 
 /** One item's fields, as typed. */

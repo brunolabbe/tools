@@ -436,6 +436,27 @@ test("keeps an item left out off a joint-account row, before asking the server",
   expect(fileReceipt).not.toHaveBeenCalled();
 });
 
+test("shows the Taxable check when a mark does not give the printed taxes, and still files (lg-26)", async () => {
+  await readBasket();
+  const label =
+    "The items marked taxable do not give the taxes printed. Check which items are taxable.";
+  expect(screen.getByText("It adds up.")).toBeTruthy();
+  expect(screen.queryByText(label)).toBeNull();
+
+  // The six-pack's mark misread: its Taxable box is the second of the three.
+  fireEvent.click(screen.getAllByLabelText("Taxable")[1] as HTMLElement);
+
+  expect(screen.getByText(label)).toBeTruthy();
+  expect(screen.queryByText("It adds up.")).toBeNull();
+  // Not blocked: the items still make the total, and the person files.
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(
+    vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items.map((each) => each.taxable),
+  ).toEqual([false, false, true]);
+});
+
 // lg-23 gate 1, F2: among more than two, "the other's" names nobody, so the
 // screen does not offer it, on an item or on the whole receipt.
 test("among three people, an item cycles between shared and not shared only, and the receipt is nobody's", async () => {
