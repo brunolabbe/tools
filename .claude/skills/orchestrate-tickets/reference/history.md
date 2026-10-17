@@ -5488,3 +5488,52 @@ Script, recorded not fixed: `scripts/preflight.mjs`'s merge-tree probe compares 
 - A gate that ran the builder's own "measured" claim (lg-24 option A) and an orchestrator re-run of the gate's script before the owner chose: the owner chose on a reproduced fact, not on either agent's word.
 - Asking the owner a builder's open decision only after its gate returned (repo-104): the gate's high changed what the halt option meant.
 - Probe pull requests that added new files only and were closed with `git push origin --delete` and a `ls-remote | wc -l` → 0 proof (#484, #486, #492).
+
+### Batch 2026-10-16 (tools-d2, lg-25 dl-49 dl-117 dl-125 lg-10, dl-126 lg-26 lg-27 dl-127 filed) — base 76ce7d52
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | seam map, 6 tickets | 1m09s / 1m08s | 0 | $0.1440 |
+| #495 | open, ready | Haiku 5.5 / high | builder-mechanical | lg-25 build + round 1 + landing | 16m51s / 3h15m08s | 1 | $0.6908 |
+| #495 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | lg-25 narrow gates 1–2 | 14m54s / 2h47m03s | 1 | $1.8497 |
+| #496 | open, ready | Sonnet 5.5 / high | builder-standard | dl-49 slice build + round 1 + landing | 20m01s / 2h50m08s | 1 | $2.4372 |
+| #496 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-49 gates 1–2 | 11m21s / 2h33m12s | 1 | $3.6749 |
+| #497 | open, ready | Opus 5.5 / high | builder-hard | dl-125 build + rounds 1–2 + landing | 56m08s / 4h19m50s | 1 | $11.0389 |
+| #497 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | dl-125 gates 1–2 | 41m05s / 1h13m57s | 0 | $4.4120 |
+| #498 | open, ready | Opus 5.5 / high | builder-hard | lg-10 build + round 1 + landing | 45m10s / 4h02m56s | 1 | $14.5178 |
+| #498 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | lg-10 gates 1–2 | 30m29s / 53m45s | 0 | $3.7698 |
+| #499 | open, ready | Haiku 5.5 / high | builder-mechanical | dl-117 build | 40m20s / 37m51s | 0 | $1.6931 |
+| #499 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | dl-117 narrow gates 1–2 | 20m37s / 42m27s | 0 | $2.1280 |
+| #499 | open, ready | Sonnet 5.5 / high | fixer | dl-117 round 1 (dl-127 filed) + landing | 12m29s / 26m27s | 0 | $0.5586 |
+| #500 | open | Haiku 5.5 / high | builder-mechanical | dl-126 filing (maintenance) | 7m15s / 6m43s | 0 | $0.1536 |
+| — | — | Opus 5.5 / medium | orchestrator | tools-d2 | 2h05m37s / 4h25m31s | 1 | $7.8852 |
+
+Total $54.9535, active 7h23m26s (rates read 2026-10-10). Orchestrator row is a floor, read before close.
+
+**Tickets:**
+
+- lg-25 → #495: gate 1 PASS (F1 widened by owner choice), gate 2 PASS (N1 "leave, fix the Log" by owner choice, at landing).
+- dl-49 → #496: Build 1–3 slice, landed `in-flight`; gate 1 FAIL (two highs: false write-order safety text, false per-client cap), gate 2 PASS for the slice.
+- dl-125 → #497: gate 1 CONCERNS (owner narrowed the 0.25 s rule after 9 of 37 complete sources regressed; dropped the liveDurationSec exemption), gate 2 CONCERNS (F5 quadratic fps regex, F6 stale Done when; fixed, no gate 3); the gate's stated F5 remedy was itself quadratic, the builder's variant landed by owner choice.
+- lg-10 → #498: gate 1 CONCERNS (row refusal kept and Done when 5 reworded, corrections followed), gate 2 PASS (N1–N3 fixed at landing); files lg-26, lg-27.
+- dl-117 → #499: gate 1 CONCERNS (Log's 623 s baseline was pre-trim; real 307 → 325 s), gate 2 CONCERNS (findings in dl-127 only, six fixed at landing); files dl-127.
+- dl-126 → #500: maintenance filing, `needs-decision`, no gate.
+
+**Defects in the skill:**
+
+1. `SKILL.md`, step 9 ("A gate cannot write its report to a file") — every gate this batch wrote its own section file. Reproduction: `ls -la <scratch>/lg-25/gate-1/gate-1@a1c122f5.md` → `-rw-r--r-- 1 pwuser pwuser 10094 Oct 16 22:55`, written by the gate agent a65a1c84; the same for dl-49, dl-117, lg-10 and dl-125's gate files.
+2. `roles/reviewer.md`, "What makes a gate worth its cost" ("Reproduce, do not assess") — says to farm and build in a scratch worktree but not that `worktree-farm.sh` farms the cwd's toplevel and the cwd resets between calls, so a `cd` in one call and the farm in the next re-farms the gate's own tree and exits 0. Reproduction (lg-25 gate 1): `cd <base tree>` as one call, then `bash .claude/scripts/worktree-farm.sh` → exit 0, naming the gate's worktree as destination; `cd <base tree> && bash .claude/scripts/worktree-farm.sh` in one call farms the base tree.
+3. `review-ticket/gate.md`, "Severity and the gate" — has no verdict for a slice whose rows are `unproven (scope)` with only lows (PASS needs every line proven, verified or awaiting; `unproven (scope)` triggers neither FAIL nor CONCERNS). Reproduction: `head -3 <scratch>/dl-49/gate-2/gate-2@fa94651d.md` → `**Gate: PASS for the slice (four rows \`unproven (scope)\`)**`.
+4. `review-ticket/gate.md`, "Severity and the gate" — "a test that asserts the opposite of an acceptance line is a `high`" says nothing of an acceptance line the owner amended on the same page but nobody reworded; dl-125's gate 2 graded it med by analogy. Reproduction: `git show f682086a:tools/downloader/docs/work/dl-125-a-60-percent-fast-start-file-finished-done-on-windows.md | grep -n "more than 0.25 s"` → Done when 2's unamended line, beside the test "F1: a whole 8 fps video with B-frames, 0.375 s short of its container, ends done".
+5. `review-ticket/gate.md`, "Severity and the gate", the `unproven (open decision)` entry — covers a brief that contradicts itself, not one silent on a case the build had to decide (lg-10's joint-account row), nor a gate measurement that turns a risk the owner's Decision lists as unmeasured into a regression (dl-125's 9 of 37). Reproduction: `git show be6e4053:tools/ledger/docs/work/lg-10-receipt-items-exclusions-and-categories.md | grep -ci "joint"` → 0 in the brief above `## Log`; `git show c8b20624:tools/downloader/docs/work/dl-125-a-60-percent-fast-start-file-finished-done-on-windows.md | grep -n "low or variable frame rates"` → the Decision's unmeasured list.
+6. `roles/builder.md`, "Scope" ("A ticket you file in this branch is left `ready`") — contradicts `docs/01-TICKETS.md` ("`needs-decision` is a ticket's first state … the ticket poses a question its own page says must not be settled by whoever picks it up") for a filing that poses a question. Reproduction: `grep -n "left \`ready\`" .claude/skills/orchestrate-tickets/roles/builder.md` → line 42; `grep -n "first state" docs/01-TICKETS.md` → line 152; dl-126's filer followed the format page (`npm run status -- --show dl-126` → `status needs-decision`).
+7. `reference/records.md`, "Fixed at landing" — the Log line's "`<the command that shows it fixed>` → <its output>" is self-defeating for a wording fix: a `grep -c` of the new wording also matches the Log line that quotes it. Reproduction: `git show origin/dl-117-split-browser-test:tools/downloader/docs/work/dl-127-parallel-ranges-3x-floor-on-linux-beside-the-suite.md | grep -c "twenty runs each"` → `2`; the landers scoped each check with `sed -n '/^## Build/,/^## Done when/p'`.
+8. `roles/common.md`, "The sandbox refuses some ordinary shell shapes" — the auto-mode classifier, a separate refusal, denies a temporary source mutation for a red/green check ("Security Test Removal") and the next read-only grep, and no page names the fallback (run the new spec against the base's source in a scratch worktree). Reproduction (lg-10 builder): `sed -i 's/  if (proposal.items.length === 0) return true;/  if (proposal.items.length >= 0) return true;/' tools/ledger/books/src/receipts.ts && … npm run build -w @ledger/books` → "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Security Test Removal]".
+9. `roles/common.md` (no heading covers it) — `timeout` around `npx vitest`, the only red for a synchronous hang, kills `npx` and leaves the vitest child running. Reproduction (lg-10 landing): `timeout -k 5 60 npx vitest run tools/ledger/api/test/receipts.test.ts -t "gate 2" --pool=threads` → `exit=124`; `ps -eo pid,etimes,pcpu,args | grep vitest` → pid 504354, 63 s, 93 % CPU, still running.
+10. `review-ticket/gate.md` or `roles/reviewer.md` (no heading covers it) — nothing asks a gate to check that the remedy it states is itself safe; dl-125's gate 2 stated a single F5 remedy that was quadratic on another hostile line. Reproduction: `node <scratch>/dl-125/build/r3/linear.mjs` → `stream index of 60000 digits, no colon … STREAM_VIDEO 2566.5 ms (false)  variant 0.1 ms (false)`.
+
+**Worked, and worth keeping:**
+
+- A builder with conditional ship authority stopped and pushed back on a gate's stated remedy with a measurement (dl-125 F5), and the orchestrator re-ran the script before asking.
+- Gates that dry-ran each option before offering it (dl-125 F1/F2, lg-10 F1): every owner answer this batch was the dry-run's recommendation.
+- A slice landed `in-flight` with its live rows `unproven (scope)` (dl-49), which records the gate without claiming the owner's steps.
