@@ -682,7 +682,7 @@ the downloader serves nothing until one of these is done in `.env`, followed by
   file turns both into `true`, and only an explicit `false` opts out.
 
 Do this **before** the `docker compose pull` that moves the tag, or expect the
-outage between the pull and the edit. `git pull` brings the new compose file
+outage between the `up -d` and the edit. `git pull` brings the new compose file
 without moving the tag, so the setting can already be on while the old image
 runs; the old image ignores it.
 

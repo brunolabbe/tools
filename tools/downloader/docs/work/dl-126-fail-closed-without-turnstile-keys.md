@@ -304,3 +304,11 @@ config` over the three-file stack: `unset` and `blank` both give
 (20)`; of round 0's four tests, two fail on the old code (the Done when 1
     test, and "unset or off" on its `ture` line) and two pass (the both-keys test, and the old leak test, which is F4). Round 0's
     figure above stands as a record of the earlier state.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, F7 — "the upgrade note
+  says 'Do this **before** the `docker compose pull` that moves the tag, or expect
+  the outage between the pull and the edit'. `pull` does not recreate the
+  container; the outage starts at the `docker compose up -d` that follows", fixed
+  as "between the `up -d` and the edit". `grep -n "outage between"
+docs/02-DEPLOYMENT.md` → `685:outage between the `up -d` and the edit.` F6
+  (the spawn test's single `SIGKILL` after 45 s on its regression path) is
+  recorded and left unfixed, by the same owner choice.
