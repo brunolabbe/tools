@@ -3,7 +3,7 @@ id: lg-27
 tool: ledger
 title: Split a joint-account row's spending by its receipt items' categories
 kind: work-package
-status: needs-decision
+status: ready
 milestone: P5
 depends_on: [lg-10]
 difficulty: standard
@@ -29,7 +29,11 @@ been charged a tip on top. lg-10's gate 1 (finding F5) found that nothing owned
 the work, and the owner chose on 2026-10-17 to file this ticket and point both
 sentences at it.
 
-## Decision — open, for the owner
+## Decision — answered
+
+**The owner chose (a) on 2026-10-17:** each item's exact cost, summed per
+category. The remainder, which is the rounding plus any tip, goes to the largest
+category. The options are kept below as they were asked.
 
 **How do a row's taxes, deposits and any tip divide among its items' categories?**
 The row's amount is the card's charge. Its items are prices, deposits and a
@@ -52,7 +56,7 @@ taxable mark, and the printed GST and QST cover the taxable items together.
 
 ## Build
 
-Once the Decision is answered:
+By rule (a):
 
 1. **`books`, pure:** a function from a row's amount and its receipt items (with
    the receipt's date) to amounts per spending category. It must sum to the
@@ -74,3 +78,7 @@ Once the Decision is answered:
 4. Gates green.
 
 ## Log
+
+- 2026-10-17 — Owner answered the Decision through `AskUserQuestion` with
+  options (a), (b) and (c) as written, (a) recommended, and chose (a).
+  `status: ready`. Done when 2 puts the tip in the largest category.
