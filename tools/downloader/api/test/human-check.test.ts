@@ -20,7 +20,7 @@
  *  - the token reaches no log line and no stored row.
  */
 
-import { ROUTES } from "@downloader/contract";
+import { AppError, ROUTES } from "@downloader/contract";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { loadApiConfig } from "../src/config.ts";
 import { createHumanCheck, SITEVERIFY_URL } from "../src/human-check.ts";
@@ -367,6 +367,78 @@ describe("the settings", () => {
     } catch (error: unknown) {
       expect(JSON.stringify(error)).not.toContain(PASS_SECRET);
       expect(String(error)).not.toContain(PASS_SECRET);
+    }
+  });
+
+  // dl-126: the public instance must not boot with the check off. The setting
+  // is explicit (`REQUIRE_HUMAN_CHECK`), so a self-hoster behind Access who
+  // never sets it keeps the open default the first test above pins.
+  test("REQUIRE_HUMAN_CHECK with neither key refuses to boot, naming the variables", () => {
+    const refusals: AppError[] = [];
+    for (const env of [
+      { REQUIRE_HUMAN_CHECK: "true" },
+      { REQUIRE_HUMAN_CHECK: "1", TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: " " },
+    ]) {
+      expect(() => loadApiConfig({}, env)).toThrow(/REQUIRE_HUMAN_CHECK is set/u);
+      try {
+        loadApiConfig({}, env);
+      } catch (error: unknown) {
+        refusals.push(AppError.from(error));
+      }
+    }
+    expect(refusals).toHaveLength(2);
+    for (const refusal of refusals) {
+      expect(refusal.code).toBe("INTERNAL");
+      const written = JSON.stringify({ error: refusal.message, details: refusal.details });
+      expect(written).toContain("TURNSTILE_SITE_KEY");
+      expect(written).toContain("TURNSTILE_SECRET_KEY");
+    }
+  });
+
+  test("REQUIRE_HUMAN_CHECK with both keys is the check on, as before", () => {
+    expect(
+      loadApiConfig(
+        {},
+        {
+          REQUIRE_HUMAN_CHECK: "true",
+          TURNSTILE_SITE_KEY: PASS_SITE_KEY,
+          TURNSTILE_SECRET_KEY: PASS_SECRET,
+        },
+      ).turnstile,
+    ).toEqual(KEYS);
+  });
+
+  test("REQUIRE_HUMAN_CHECK unset or off leaves the open default, and a test override wins", () => {
+    for (const value of ["", "false", "0", "off", "no"]) {
+      expect(loadApiConfig({}, { REQUIRE_HUMAN_CHECK: value }).turnstile).toBeUndefined();
+    }
+    // A value nobody recognises is not "off": a typo must not open the host.
+    expect(() => loadApiConfig({}, { REQUIRE_HUMAN_CHECK: "ture" })).toThrow(
+      /REQUIRE_HUMAN_CHECK is set/u,
+    );
+    // The suites that pass `turnstile: undefined` must keep working even if the
+    // shell that runs them exports the setting.
+    expect(
+      loadApiConfig({ turnstile: undefined }, { REQUIRE_HUMAN_CHECK: "true" }).turnstile,
+    ).toBeUndefined();
+  });
+
+  test("a refusal under REQUIRE_HUMAN_CHECK carries variable names and never a key value", () => {
+    // `main.ts` writes `message` and `details` to stderr when `createApp`
+    // throws, so that is the text checked. The one-key case has a value that
+    // could leak; the no-key case has none, and its text must not carry one of
+    // Cloudflare's published keys either.
+    const oneKey = { REQUIRE_HUMAN_CHECK: "true", TURNSTILE_SECRET_KEY: PASS_SECRET };
+    expect(() => loadApiConfig({}, oneKey)).toThrow(/TURNSTILE_SITE_KEY is not set/u);
+    for (const env of [oneKey, { REQUIRE_HUMAN_CHECK: "true" }]) {
+      try {
+        loadApiConfig({}, env);
+      } catch (error: unknown) {
+        const refusal = AppError.from(error);
+        const written = JSON.stringify({ error: refusal.message, details: refusal.details });
+        expect(written).not.toContain(PASS_SECRET);
+        expect(written).not.toContain(PASS_SITE_KEY);
+      }
     }
   });
 });

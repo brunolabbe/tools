@@ -210,3 +210,50 @@ and no widget: true`.
   `compose.downloader.prod.yaml`. Decision 2: option 1, refuse at boot with
   `AppError("INTERNAL")` naming the missing variables. `status: ready`. #496 has
   merged (`78b188fc`), so Build step 6's ordering constraint is met.
+- 2026-10-17 — Built (branch `dl-126-fail-closed`, from `8e50f0d4`). Build step 1
+  was already done by the filing's own Log entry above (merged in #502), so no
+  separate decisions commit.
+  - **Code.** `config.ts`: `turnstile()` takes a third argument and, with neither
+    key and the setting on, throws `AppError("INTERNAL", "REQUIRE_HUMAN_CHECK is
+set, but TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY are not.")` with a hint
+    naming both and the opt-out. It sits on the environment branch only; the
+    `"turnstile" in overrides` branch is untouched, which a test pins
+    (`loadApiConfig({ turnstile: undefined }, { REQUIRE_HUMAN_CHECK: "true" })`
+    stays `undefined`). `human-check.ts` is unchanged (Decision 2, option 1).
+  - **Parsing differs from `bool` on purpose.** `requireHumanCheck()` reads blank
+    and `0/false/no/off` as unset and **everything else as set**, where `bool`
+    falls back to the default on a word it does not know. For this setting the
+    default is the check off, so a typo (`ture`) through `bool` would be the
+    failure the ticket exists to prevent. A test pins `ture` as a refusal.
+  - **Compose line is `${REQUIRE_HUMAN_CHECK:-true}`, not a literal `true`.** The
+    brief says "set in `compose.downloader.prod.yaml` beside the two keys"; a
+    literal would leave a self-hoster behind Access, who runs this file with no
+    keys, with no way to start except editing the shipped file. The default is
+    on, so the public host that omits the line is closed; the opt-out is
+    `REQUIRE_HUMAN_CHECK=false` in `.env`. **Consequence for the owner's own
+    host:** it runs this file with empty keys today, so on its next pull of an
+    image carrying this change it does not start until both keys are in `.env`
+    (or it opts out). That is the intended fail-closed behaviour, and it lands
+    after #496.
+  - **Red then green.** Tests added at the end of `describe("the settings")` in
+    `human-check.test.ts` (four, so the existing ones keep their lines). Before
+    `config.ts` changed, `npx vitest run tools/downloader/api/test/human-check.test.ts`:
+    `Tests 1 failed | 17 passed (18)`, the failure `REQUIRE_HUMAN_CHECK with
+neither key refuses to boot, naming the variables` with `expected
+[Function] to throw an error`. After: `human-check.test.ts`, `terms-page.test.ts`
+    (reads the compose file) and `config.test.ts` together, `Tests 32 passed (32)`.
+    The other three new tests pass on the old code by design: they pin that the
+    open default, the both-keys path, the override path and the no-leak rule did
+    not move.
+  - **Docs.** `.env.example`, `.env.prod.example`, `compose.downloader.prod.yaml`
+    (its header and the line), `docs/01-ARCHITECTURE.md` (the `TURNSTILE_SITE_KEY`
+    row, a new `REQUIRE_HUMAN_CHECK` row, and the prose paragraph on the human
+    check), `docs/02-DEPLOYMENT.md` (step 2's bullet, the setup-script section's
+    ordering paragraph, and step 4). Build step 6 names `docs/02-DEPLOYMENT.md`
+    under the tool's docs; it is the repo-wide file at the root, which the brief
+    had slightly wrong, and it is edited here as that file.
+  - **Not folded in.** Adding dl-126 to dl-49's `depends_on` is an edit to a
+    ticket that is `in-flight` and was left alone
+    by the filing; not done here. Done when 8 (a container built and run) was not
+    run: it is a container build and no gate was asked for one on this machine,
+    so it stays `unproven (gate)`.

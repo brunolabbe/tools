@@ -292,11 +292,13 @@ widget, _Rotate secret key_). Cloudflare's published OpenAPI document
 2026-10-02) lists `secret` among the required fields of what
 `GET /accounts/{account_id}/challenges/widgets/{sitekey}` returns for one
 widget, and omits it from the list; **not measured against the live API**. The
-script never needs it, so a re-run prints no keys either way. The hosts that
-leave the two variables empty keep the check off, which is correct while the
-hostname is still behind Access. **A host that serves the downloader with no
-login must have both set**: with them empty the app still starts, and answers
-anyone on the internet with no human check at all
+script never needs it, so a re-run prints no keys either way. A host that leaves
+the two variables empty has the check off only if it also sets
+`REQUIRE_HUMAN_CHECK=false`, which is correct while the hostname is still behind
+Access; without that line the downloader refuses to start (dl-126). **A host
+that serves the downloader with no login must have both keys set**: on an image
+that predates dl-126 the app still starts with them empty, and answers anyone on
+the internet with no human check at all
 ([step 2](#2--decide-who-may-reach-each-tool)).
 
 **A token made on the dashboard's _Account API tokens_ page is account-owned**,
@@ -330,8 +332,12 @@ nothing until its two keys are in `.env` and the container has been restarted.
 On a host that serves the downloader without a login, put
 `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` in `.env` **before the downloader
 container is up** (see [step 4](#4--bring-it-up)), or run the script before
-`cloudflared` is connected to a running downloader. Otherwise the downloader is
-open, with no human check, from the first routed request until you restart it.
+`cloudflared` is connected to a running downloader. With the shipped compose file
+the downloader does not start without both keys (`REQUIRE_HUMAN_CHECK`, dl-126),
+so the hostname serves nothing until they are in and the container is up,
+instead of being open. On an image that predates dl-126, or a compose file that does not
+set it, the downloader is open, with no human check, from the first routed
+request until you restart it.
 
 **Read step 2 before running it either way.** The script encodes which tools get
 a login at all and which must never have a Bypass rule; the argument for that is
@@ -386,11 +392,16 @@ spend the host. Each is a ticket you can read:
 
 - **A human check, before any probe runs**
   ([dl-50](../tools/downloader/docs/work/dl-50-a-human-check-without-an-account.md)):
-  a Cloudflare Turnstile widget. It is **off until the host's `.env` carries both
-  `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`**, which
+  a Cloudflare Turnstile widget. It is on when the host's `.env` carries both
+  `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`, which
   [`compose.downloader.prod.yaml`](../compose.downloader.prod.yaml) passes
   through, and `scripts/cloudflare-setup.mjs --apply` creates the widget and
-  prints the two lines once. Check it before the login comes off:
+  prints the two lines once. **That file also sets `REQUIRE_HUMAN_CHECK`**
+  ([dl-126](../tools/downloader/docs/work/dl-126-fail-closed-without-turnstile-keys.md)):
+  with it on, a host whose `.env` has neither key does not start, and the
+  container log names the two variables, so a lost key is an outage and not an
+  open downloader. A host that is still behind Access, and has no keys on
+  purpose, puts `REQUIRE_HUMAN_CHECK=false` in `.env`. Check it before the login comes off:
   `curl -sS https://downloader.example.com/api/config` answers a `siteKey`, not
   `null`, and a `POST /api/probe` with no `humanCheckToken` answers `403`
   `HUMAN_CHECK_FAILED`.
@@ -578,9 +589,13 @@ below assumes it.
 
 **If this host serves the downloader without a login, `TURNSTILE_SITE_KEY` and
 `TURNSTILE_SECRET_KEY` must already be in `.env` before this `up -d`.** With them
-empty the app starts and answers anyone with no human check at all, and the
-setup script's widget does not help until the keys are pasted and the container
-restarted. A host behind Access can leave them empty.
+empty the downloader container exits at boot (`REQUIRE_HUMAN_CHECK` is on in
+`compose.downloader.prod.yaml`, dl-126), and `docker compose logs downloader`
+names both variables. A host whose image predates dl-126 starts and answers
+anyone with no human check at all, so check the image you pulled. The setup
+script's widget does not help until the keys are pasted and the container
+restarted. A host behind Access that leaves them empty on purpose sets
+`REQUIRE_HUMAN_CHECK=false` in `.env`.
 
 No `--build`: this host pulls released images rather than compiling them. The
 downloader's first pull is long — its image carries Playwright's Chromium and
