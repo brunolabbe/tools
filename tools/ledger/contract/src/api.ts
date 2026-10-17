@@ -470,8 +470,9 @@ export interface BucketsResponse {
   asOf: string;
   /**
    * The mortgage bucket is not shared money (`docs/00-ANALYSIS.md` §4): each
-   * person's own amounts sum to `balanceCents` exactly. `lead` is who has paid
-   * more in, and by how much; `null` when the two are level.
+   * person's own amounts sum to `balanceCents` exactly. `lead` is who has the
+   * most of their own money in it, and by how much over the next; `null` when
+   * the two with the most are level, or there are fewer than two people (lg-23).
    */
   mortgage: {
     balanceCents: number;
@@ -544,7 +545,7 @@ export interface RatioProposal {
 /** What `POST /api/salaries` answers: the year's salaries as they now stand, and the ratio they give. */
 export interface SalaryEntryResponse {
   salaries: Salary[];
-  /** `null` when the year does not yet hold a salary for each of the two people. */
+  /** `null` until the year holds salaries for at least two people, not all of them zero. */
   proposal: RatioProposal | null;
 }
 
@@ -747,32 +748,58 @@ export interface RecurringResponse {
 export const SETTLEMENT_FORMULAS = ["v1", "v2", "v3"] as const;
 export type SettlementFormula = (typeof SETTLEMENT_FORMULAS)[number];
 
-/** What closing a period computes, or would compute if it closed now. */
-export interface SettlementFigures {
-  formula: SettlementFormula;
-  /** The ratio in effect on the period's last day, which the deposit is divided by. */
-  ratioId: number;
-  shares: RatioShare[];
-  /** Who owes, and to whom; both `null` when the two stand at the ratio to within half a cent. */
-  payerId: string | null;
-  recipientId: string | null;
-  /**
-   * Into the buffer. `null` when the recipient's share is zero, so that only a
-   * direct transfer can settle it.
-   */
-  depositCents: number | null;
-  /** The same debt paid directly to the recipient instead. */
-  netCents: number;
+/** One person's deposit into the buffer that a settlement asks for. */
+export interface SettlementDeposit {
+  personId: string;
+  depositCents: number;
+}
+
+/** One payment from a person who owes to a person owed: the direct form of a settlement. */
+export interface SettlementTransfer {
+  fromId: string;
+  toId: string;
+  cents: number;
 }
 
 /**
- * What became of a closed period's deposit. `matched`: a paste brought it in.
- * `expected`: not seen yet. `folded`: not seen, and a later close, being
- * cumulative, asked for it again. `none`: nothing was owed. `direct`: only a
- * direct transfer could settle it.
+ * What closing a period computes, or would compute if it closed now: the
+ * matching rule between everyone in the books (lg-23). Between two people there
+ * is one deposit at most and one transfer, the same figures lg-6 recorded as a
+ * payer, a recipient, a deposit and a net.
+ */
+export interface SettlementFigures {
+  formula: SettlementFormula;
+  /** The ratio in effect on the period's last day, whose shares the deposits are divided by. */
+  ratioId: number;
+  shares: RatioShare[];
+  /**
+   * Into the buffer, in id order; empty when everyone stands at the ratio to
+   * within half a cent. Up to one fewer than the people: whoever is furthest
+   * ahead for their share deposits nothing. `null` when someone owed has a
+   * share of zero, so that only the transfers can settle it.
+   */
+  deposits: SettlementDeposit[] | null;
+  /** The same, paid directly instead: from those who owe to those owed. */
+  transfers: SettlementTransfer[];
+}
+
+/**
+ * What became of a closed period's deposits. `matched`: a paste brought in every
+ * one. `expected`: not all seen yet. `folded`: not all seen, and a later close,
+ * being cumulative, asked for what is missing again. `none`: nothing was owed.
+ * `direct`: only direct transfers could settle it.
  */
 export const DEPOSIT_STATUSES = ["matched", "expected", "folded", "none", "direct"] as const;
 export type DepositStatus = (typeof DEPOSIT_STATUSES)[number];
+
+/** What became of one deposit a closed period asked for. */
+export interface DepositOutcome {
+  personId: string;
+  depositCents: number;
+  status: Extract<DepositStatus, "matched" | "expected" | "folded">;
+  /** The statement row that brought it in, when `matched`. */
+  rowId: number | null;
+}
 
 /** A line the open period holds: one stored, or one a recurring item generates. */
 export interface OpenPeriodLine {
@@ -835,7 +862,7 @@ export const closePeriodRequestSchema = z
     (request) => request.start === null || request.start <= request.end,
   ) satisfies z.ZodType<ClosePeriodRequest>;
 
-/** A closed period, the settlement it recorded, and whether its deposit has been seen. */
+/** A closed period, the settlement it recorded, and whether its deposits have been seen. */
 export interface ClosedPeriod {
   id: number;
   start: string | null;
@@ -845,8 +872,8 @@ export interface ClosedPeriod {
   settlement: SettlementFigures;
   deposit: {
     status: DepositStatus;
-    /** The statement row that brought it in, when `matched`. */
-    rowId: number | null;
+    /** One per deposit the settlement asked for, in its order. */
+    deposits: DepositOutcome[];
   };
 }
 

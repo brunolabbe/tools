@@ -113,13 +113,30 @@ describe("dayAfter", () => {
   });
 });
 
+/** A two-person close's expectation: one deposit from the payer, none, or only direct. */
 function expecting(
   periodId: number,
   end: string,
   depositCents: number | null,
   payerId: string | null = "alex",
 ): Expectation {
-  return { periodId, end, payerId, depositCents };
+  const deposits =
+    depositCents === null ? null : payerId === null ? [] : [{ personId: payerId, depositCents }];
+  return { periodId, end, deposits };
+}
+
+/** What a two-person period's one deposit became. */
+function outcome(
+  periodId: number,
+  status: "matched" | "expected" | "folded",
+  rowId: number | null,
+  depositCents = 15_000,
+) {
+  return {
+    periodId,
+    status,
+    deposits: [{ personId: "alex", depositCents, status, rowId }],
+  };
 }
 
 function row(id: number, date: string, amountCents: number, personId = "alex"): CandidateRow {
@@ -133,7 +150,7 @@ describe("matchDeposits", () => {
       [row(9, "2026-04-02", 14_999)],
     );
 
-    expect(matches).toEqual([{ periodId: 1, status: "matched", rowId: 9 }]);
+    expect(matches).toEqual([outcome(1, "matched", 9)]);
   });
 
   test("two cents off, another person's, or dated before the end, it is still expected", () => {
@@ -144,7 +161,7 @@ describe("matchDeposits", () => {
     ];
 
     expect(matchDeposits([expecting(1, "2026-03-31", 15_000)], rows)).toEqual([
-      { periodId: 1, status: "expected", rowId: null },
+      outcome(1, "expected", null),
     ]);
   });
 
@@ -153,8 +170,8 @@ describe("matchDeposits", () => {
     const expectations = [expecting(1, "2026-03-31", 15_000), expecting(2, "2026-06-30", 15_000)];
 
     expect(matchDeposits(expectations, [row(7, "2026-07-03", 15_000)])).toEqual([
-      { periodId: 1, status: "folded", rowId: null },
-      { periodId: 2, status: "matched", rowId: 7 },
+      outcome(1, "folded", null),
+      outcome(2, "matched", 7),
     ]);
   });
 
@@ -163,8 +180,8 @@ describe("matchDeposits", () => {
     const rows = [row(4, "2026-04-02", 15_000), row(8, "2026-07-02", 15_000)];
 
     expect(matchDeposits(expectations, rows)).toEqual([
-      { periodId: 1, status: "matched", rowId: 4 },
-      { periodId: 2, status: "matched", rowId: 8 },
+      outcome(1, "matched", 4),
+      outcome(2, "matched", 8),
     ]);
   });
 
@@ -172,8 +189,8 @@ describe("matchDeposits", () => {
     const expectations = [expecting(1, "2026-03-31", 0, null), expecting(2, "2026-06-30", null)];
 
     expect(matchDeposits(expectations, [row(1, "2026-07-01", 0)])).toEqual([
-      { periodId: 1, status: "none", rowId: null },
-      { periodId: 2, status: "direct", rowId: null },
+      { periodId: 1, status: "none", deposits: [] },
+      { periodId: 2, status: "direct", deposits: [] },
     ]);
   });
 });
@@ -186,7 +203,7 @@ describe("matchDeposits, on the boundary", () => {
       [row(5, "2026-03-31", 15_000)],
     );
 
-    expect(matches).toEqual([{ periodId: 1, status: "matched", rowId: 5 }]);
+    expect(matches).toEqual([outcome(1, "matched", 5)]);
   });
 });
 
@@ -217,5 +234,47 @@ describe("enteredLate", () => {
 
   test("never while nothing has closed", () => {
     expect(enteredLate([], "2026-09-15", "2026-10-02T08:00:00.000Z")).toBe(false);
+  });
+});
+
+// lg-23: a close between more than two people asks for several deposits.
+describe("matchDeposits, several deposits in one close", () => {
+  const three: Expectation = {
+    periodId: 1,
+    end: "2026-03-31",
+    deposits: [
+      { personId: "alex", depositCents: 6_000 },
+      { personId: "casey", depositCents: 3_000 },
+    ],
+  };
+
+  test("each is matched by its own person's row, and the period once every one is", () => {
+    const rows = [row(1, "2026-04-02", 3_001, "casey"), row(2, "2026-04-03", 6_000, "alex")];
+
+    expect(matchDeposits([three], rows)).toEqual([
+      {
+        periodId: 1,
+        status: "matched",
+        deposits: [
+          { personId: "alex", depositCents: 6_000, status: "matched", rowId: 2 },
+          { personId: "casey", depositCents: 3_000, status: "matched", rowId: 1 },
+        ],
+      },
+    ]);
+  });
+
+  test("one seen and one not leaves the period expected, naming which", () => {
+    const rows = [row(1, "2026-04-02", 6_000, "alex"), row(2, "2026-04-02", 6_000, "casey")];
+
+    expect(matchDeposits([three], rows)).toEqual([
+      {
+        periodId: 1,
+        status: "expected",
+        deposits: [
+          { personId: "alex", depositCents: 6_000, status: "matched", rowId: 1 },
+          { personId: "casey", depositCents: 3_000, status: "expected", rowId: null },
+        ],
+      },
+    ]);
   });
 });

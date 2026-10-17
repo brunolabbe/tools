@@ -15,6 +15,7 @@ export type { BufferPosition, Contribution, FiledRow, Lead, MortgagePosition } f
 export { PARTS_PER_MILLION, ratioFromSalaries, ratioInEffect } from "./ratio.ts";
 export type { SalaryInput, Share } from "./ratio.ts";
 export {
+  cumulativeHouseholdSettlement,
   cumulativeSettlement,
   dayAfter,
   enteredLate,
@@ -33,8 +34,21 @@ export type {
   RecurringInput,
   WeighedPeriod,
 } from "./periods.ts";
-export { CURRENT_FORMULA, settleStretches, settlement } from "./settlement.ts";
-export type { Charge, PersonCents, Settlement, Stretch } from "./settlement.ts";
+export {
+  CURRENT_FORMULA,
+  asPair,
+  netsOf,
+  settleHousehold,
+  settleStretches,
+  settlement,
+} from "./settlement.ts";
+export type {
+  Charge,
+  HouseholdSettlement,
+  PersonCents,
+  Settlement,
+  Stretch,
+} from "./settlement.ts";
 export { classify, matchesPattern, normalize as normalizeDescription } from "./classify.ts";
 export type { ClassifiableRow, MatchableRule, RuleMatch } from "./classify.ts";
 export { spendingCategory, spendingMap } from "./spending.ts";
