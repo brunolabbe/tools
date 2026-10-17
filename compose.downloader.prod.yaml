@@ -25,7 +25,9 @@
 #  - `cloudflared` waits on this service's health check before it registers.
 #  - its log is capped by size, which is what the terms page's retention rests on
 #    (dl-54); the comment on `logging` below says what that does and does not do.
-#  - the human check's keys come from the host's `.env` (dl-50), empty by default.
+#  - the human check's keys come from the host's `.env` (dl-50), and
+#    `REQUIRE_HUMAN_CHECK` is on by default (dl-126): without both keys the API
+#    does not start.
 #  - the limits are **set here, with their sources** (dl-52): the per-client job
 #    cap and the three probe and job rate limits are new to this file, and the
 #    browser, job and file-size values that `compose.downloader.yaml` already sets
@@ -102,9 +104,16 @@ services:
       TRUST_PROXY: "172.30.42.0/24"
 
       # The human check on probe and job creation (dl-50), from the host's
-      # `.env`. Empty by default, which leaves the check off — the right state
-      # while the hostname is behind Access. Both or neither: the API refuses
-      # to start with one. See `.env.prod.example`.
+      # `.env`. Both or neither: the API refuses to start with one.
+      #
+      # `REQUIRE_HUMAN_CHECK` (dl-126) is on unless the host's `.env` turns it
+      # off, and with it on the API also refuses to start with neither key, so a
+      # host that lost its keys is down rather than open to anyone with the
+      # check off. A host that is still behind Access, and has no keys on
+      # purpose, sets `REQUIRE_HUMAN_CHECK=false` in `.env`; an unset or blank
+      # entry is `true` here (`:-`), so only an explicit `false` opts out.
+      # See `.env.prod.example`.
+      REQUIRE_HUMAN_CHECK: "${REQUIRE_HUMAN_CHECK:-true}"
       TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:-}"
       TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:-}"
 
