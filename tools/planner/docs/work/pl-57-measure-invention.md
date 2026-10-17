@@ -591,7 +591,7 @@ Population-weighted, the stratum is 53 of the 207 named premises (25.6%) and
 the rest 154 (74.4%). That gives about 4.3% per key (0.256 x 10.7% + 0.744 x
 2.2%) and about 6.0% per object (the rest is 1 object of 39, 2.6%: the Bonaventure
 Island keys). Six of the 28 stratum keys are parks (four Parc national de la
-Gaspésie keys and Parc du Bic), whose `exists` confirms the park and not a
+Gaspésie keys, Parc du Bic and `forillon national park|gaspé`), whose `exists` confirms the park and not a
 lodging premises; without the three parks' objects the stratum is 3 of 16
 objects, 18.8% (6.6–43.0), from gate 1's reproduction. All of these are small
 counts: the stratum's interval rests on three events.
@@ -708,10 +708,11 @@ orchestrator, not here.
   should be six." Counted the same way: `Five of the 28 stratum keys` 1
   before, 0 after; `five of the stratum's 28` 1 before, 0 after;
   `Six of the 28 stratum keys` 1 after; `six of the stratum's 28` 1 after. The
-  parenthetical after the units-paragraph count still lists five parks (four Parc national de la
-  Gaspésie keys and Parc du Bic); the gate's finding names the count and not
-  the list, so the list was left as written and does not name the sixth,
-  `forillon national park|gaspé`.
+  parenthetical after the units-paragraph count first listed five parks (four
+  Parc national de la Gaspésie keys and Parc du Bic); the gate's finding names
+  the count and not the list, so that landing left the list as written. The
+  owner then chose to add the sixth, `forillon national park|gaspé`; see the
+  last entry.
 - 2026-10-17 — Fixed at landing by owner choice: gate 2, finding 3 — "two
   figures are labelled wrongly: the units table is said to be 'every figure
   printed by the harness', but its per-key total (5 of 121, 4.1%, 1.8–9.3) is
@@ -738,3 +739,13 @@ orchestrator, not here.
   nothing was overridden. The cost of the live re-measure run was stated as
   unmeasured. Nothing of option 1 is built here. A follow-up ticket for it
   will be filed separately, not in this pull request.
+- 2026-10-17 — Fixed at landing by owner choice, on the lander's open decision
+  and not a gate finding: the park list after "Six of the 28 stratum keys are
+  parks" named five parks, and the owner chose to add the sixth. The units
+  paragraph now reads "(four Parc national de la Gaspésie keys, Parc du Bic and
+  `forillon national park|gaspé`)", and the finding 2 entry that said the list
+  omits Forillon was reworded to match. Gate 1's section, which also says "Five
+  of the 28 lodging/food keys are parks", is a gate section and was not
+  touched. Counted in the text before these entries, as above: `Parc du Bic)` 1
+  before, 0 after; `Parc du Bic and .forillon national park|gaspé.` 0 before, 1
+  after. The record was not regenerated.
