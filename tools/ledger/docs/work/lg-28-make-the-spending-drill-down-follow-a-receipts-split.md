@@ -3,7 +3,7 @@ id: lg-28
 tool: ledger
 title: Make the spending drill-down list follow a receipt's split
 kind: fix
-status: ready
+status: done
 milestone: P5
 depends_on: [lg-27]
 difficulty: standard
@@ -73,6 +73,53 @@ attached to one row: chart Groceries 6 125, Alcohol 1 553, Household 574; lists
 3. A web test shows a split row's slice amount under the category it was opened
    from.
 4. Gates green.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-17 · `6b42ee19..c0a78c84` · Opus 5.5, depth standard
+
+| Done when                                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Every category's list, a receipt-only one included, sums to its slice less its card lines; an API test files a basket and asserts it per category | `api/test/stats.test.ts` › "every category's list sums to its slice, the one only a receipt creates and the uncategorised included" ✓ — the `listedSum(response)` against `slices.get(one.id)` loop over every `categories` id plus `none`; red with the slice path removed. The card-line clause is carried by the lg-18 test "a category's list sums to its slice of the chart less the card lines, for every category and for none" in the same file. The gate's own fixture (a split row and a card line in one slice, a period boundary, a split refund) agreed on 14 of 14 period × category comparisons |
+| 2. Override, refused split, no receipt, no items: each listed once, whole, as charted                                                                | `api/test/stats.test.ts` › "a row with an override, a refused split, no receipt and no items each list once, whole" ✓ — the `holders` and `[amountCents, sliceCents]` assertions for A, E, F, D and G. Passes at the base by nature, and goes red when the shared decision stops honouring the override and when a whole row is given `sliceCents`                                                                                                                                                                                                                                                             |
+| 3. A web test shows a split row's slice amount under the category it was opened from                                                                 | `web/test/stats-rows.test.tsx` › "a row split by its receipt shows the slice it counts for under the category it was opened from (lg-28)" ✓ — `.amount` is `formatCents(-574)`, not `-2476`; red with `shown()` returning `amountCents`                                                                                                                                                                                                                                                                                                                                                                        |
+| 4. Gates green                                                                                                                                       | **unproven (gate)** — on `c0a78c84` every check but two has passed; `test (windows-latest, informational)` and `CodeQL` were still pending when read. Locally `npm run check` exit 0 and `npm test -- --project ledger` 1179 of 1179 (plus the gate's own spec, removed)                                                                                                                                                                                                                                                                                                                                       |
+
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · the note
+  `PeriodRows` shows on a split row ("… of its … is in this category, the rest in
+  the others its items chose") is false when every item chose one category:
+  `chartedAs` in `api/src/slices.ts` returns `split: true` for a one-slice split, so
+  `sliceCents` equals `amountCents` and there is no rest. False in the safe
+  direction (the figure is right, only the sentence is wrong). Verified by reading,
+  not run.
+- **low** · `nfr:reliability` · no `Done when` line depends on it · no test on the
+  branch puts a split row and a card line in one slice, a split refund (negative
+  items on a positive row, which splits and carries a positive `sliceCents`), a
+  negative slice inside a purchase, or a period boundary. The gate's fixture covers
+  all four and the invariant holds; a missing fixture, not a defect.
+- **dropped** · `slices.ts` is a new file with no test file of its own, and
+  `rows.ts` gains a branch (`sliceEntries`) with none either. `chartedAs` and
+  `receiptsOnRows` are moved from `stats.ts`, not new, and `rows.ts` has always been
+  tested over HTTP in `stats.test.ts` and `spending-categories.test.ts`; five
+  mutations of the two files each turn a test red. Not graded under the
+  no-test-file rule.
+- **dropped** · a page boundary inside one row's slices: impossible by
+  construction. A category list holds a row at most once (`splitByCategory` keys by
+  category), so entries and rows count the same; walking 14 lists at limit 1 and 2
+  showed no duplicate or skip and a constant `total`. Not a defect.
+- **dropped** · two receipts filed on one row are merged into one item list under
+  the first filing's date in `receiptsOnRows`. That is lg-27's behaviour, moved
+  unchanged, and the chart and the list read it alike. Out of the reviewed range.
+- **findings** · the hunt returned 5; 2 carried, 3 dropped.
+- Invariants: the contract change (`StoredRow.sliceCents?`) is the one Build 1
+  authorises and the pull request declares it. No zod schema, type guard or Fastify
+  response schema reads `StoredRow`, so nothing drops the field. No new `AppError`,
+  no new workspace import, no spawn, URL or log line. Style ✓. Skipped: SSRF,
+  redaction, process trees, progress, Dockerfile (nothing in the diff reaches them).
+- NFR: security n/a (the query schema is unchanged) · performance ✓ (one
+  `receipt_items` scan per scoped category list, next to the existing full row
+  scan) · reliability: above · maintainability: above; `chartedAs` is the single
+  decision, and the chart's own read never expands.
 
 ## Log
 
