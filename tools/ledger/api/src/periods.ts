@@ -5,20 +5,23 @@
  * **Nothing is edited** (`docs/00-ANALYSIS.md` §9). A line is corrected by a
  * line that supersedes it and removed by a retirement that does; a recurring
  * item is corrected or ended by a version that supersedes it; and a period is a
- * row only once it is closed, so closing one is a single `INSERT`. The open
- * period is whatever follows the last closed one.
+ * row only once it is closed, so closing one is a single `INSERT` — with a row
+ * per deposit and transfer when it settles between more than two people
+ * (lg-23), in the same transaction. The open period is whatever follows the
+ * last closed one.
  *
  * **The arithmetic is the books'.** This file gathers what they need — every
  * line and generated monthly line, every buffer deposit filed to a person with
  * the closed period it settles if it matched one, and each closed period with
  * the ratio its settlement recorded — and stores what
- * a close computed: amount, payer, ratio and formula version (§5). A recorded
+ * a close computed: amounts, who pays, ratio and formula version (§5). A recorded
  * settlement is never recomputed: the next close is cumulative, so whatever an
  * earlier one got wrong is caught up there.
  */
 
 import {
-  cumulativeSettlement,
+  asPair,
+  cumulativeHouseholdSettlement,
   dayAfter,
   enteredLate,
   matchDeposits,
@@ -30,6 +33,7 @@ import type {
   ClosedSpan,
   DepositInput,
   DepositMatch,
+  HouseholdSettlement,
   LineInput,
   WeighedPeriod,
 } from "@ledger/books";
@@ -46,8 +50,10 @@ import type {
   RatioShare,
   RecurringItem,
   RecurringItemDraft,
+  SettlementDeposit,
   SettlementFigures,
   SettlementFormula,
+  SettlementTransfer,
 } from "@ledger/contract";
 import type { Database } from "better-sqlite3";
 import { requireKnownPerson } from "./rules.ts";
@@ -364,6 +370,43 @@ function sharesOf(db: Database, ratioId: number): RatioShare[] {
   }));
 }
 
+/** A settlement's deposits and transfers: what a close records, between any number of people. */
+type Settled = Pick<SettlementFigures, "deposits" | "transfers">;
+
+/**
+ * A closed period's deposits and transfers. A settlement between more than two
+ * people is in rows of its own (lg-23, migration 10); one between two, and every
+ * period closed before, is the periods row's payer, recipient, deposit and net.
+ */
+function settledOf(db: Database, period: PeriodColumns): Settled {
+  const deposits = (
+    db
+      .prepare(
+        "SELECT person_id, deposit_cents FROM settlement_deposits WHERE period_id = ? ORDER BY person_id",
+      )
+      .all(period.id) as { person_id: string; deposit_cents: number }[]
+  ).map((row): SettlementDeposit => ({ personId: row.person_id, depositCents: row.deposit_cents }));
+  const transfers = (
+    db
+      .prepare(
+        "SELECT from_id, to_id, cents FROM settlement_transfers WHERE period_id = ? ORDER BY id",
+      )
+      .all(period.id) as { from_id: string; to_id: string; cents: number }[]
+  ).map((row): SettlementTransfer => ({ fromId: row.from_id, toId: row.to_id, cents: row.cents }));
+  if (deposits.length > 0 || transfers.length > 0) {
+    return { deposits: period.deposit_cents === null ? null : deposits, transfers };
+  }
+  const { payer_id: payer, recipient_id: recipient, deposit_cents: deposit } = period;
+  if (payer === null || recipient === null) return { deposits: [], transfers: [] };
+  const direct =
+    period.net_cents > 0 ? [{ fromId: payer, toId: recipient, cents: period.net_cents }] : [];
+  if (deposit === null) return { deposits: null, transfers: direct };
+  return {
+    deposits: deposit > 0 ? [{ personId: payer, depositCents: deposit }] : [],
+    transfers: direct,
+  };
+}
+
 /**
  * When each record of `table` was first entered: the start of its chain of
  * corrections. `table` is one of two names written here, never input.
@@ -483,6 +526,7 @@ function bufferRows(db: Database): CandidateRow[] {
  * reclassified row moves with it.
  */
 function depositMatches(
+  db: Database,
   closed: readonly PeriodColumns[],
   rows: readonly CandidateRow[],
 ): DepositMatch[] {
@@ -490,11 +534,16 @@ function depositMatches(
     closed.map((period) => ({
       periodId: period.id,
       end: period.end_date,
-      payerId: period.payer_id,
-      depositCents: period.deposit_cents,
+      deposits: settledOf(db, period).deposits,
     })),
     rows,
   );
+}
+
+/** What closing a period would compute: the figures, and the books' own settlement they come from. */
+interface Computed {
+  figures: SettlementFigures;
+  household: HouseholdSettlement;
 }
 
 /**
@@ -507,14 +556,17 @@ function settlementFor(
   closed: readonly PeriodColumns[],
   start: string | null,
   end: string,
-): SettlementFigures | null {
+): Computed | null {
   const ratio = ratioInEffect(currentRatios(db), end);
   if (ratio === null) return null;
   const rows = bufferRows(db);
   const settles = new Map<number, string>();
-  for (const [index, match] of depositMatches(closed, rows).entries()) {
+  for (const [index, match] of depositMatches(db, closed, rows).entries()) {
     const period = closed[index];
-    if (match.rowId !== null && period !== undefined) settles.set(match.rowId, period.end_date);
+    if (period === undefined) continue;
+    for (const { rowId } of match.deposits) {
+      if (rowId !== null) settles.set(rowId, period.end_date);
+    }
   }
   const periods: WeighedPeriod[] = [
     ...closed.map((period) => ({
@@ -531,15 +583,16 @@ function settlementFor(
     amountCents: row.amountCents,
     settles: settles.get(row.id) ?? null,
   }));
-  const result = cumulativeSettlement(periods, lines, deposits);
+  const household = cumulativeHouseholdSettlement(periods, lines, deposits);
   return {
-    formula: result.formula,
-    ratioId: ratio.id,
-    shares: ratio.shares,
-    payerId: result.payerId,
-    recipientId: result.recipientId,
-    depositCents: result.depositCents,
-    netCents: result.netCents,
+    figures: {
+      formula: household.formula,
+      ratioId: ratio.id,
+      shares: ratio.shares,
+      deposits: household.deposits,
+      transfers: household.transfers,
+    },
+    household,
   };
 }
 
@@ -578,7 +631,7 @@ export function openPeriod(
       lines: linesThrough(db, request.end, closed).filter(
         (line) => start === null || line.date >= start || line.late,
       ),
-      settlement: settlementFor(db, closed, start, request.end),
+      settlement: settlementFor(db, closed, start, request.end)?.figures ?? null,
     };
   })();
 }
@@ -598,29 +651,72 @@ function toClosed(
       formula: period.formula,
       ratioId: period.ratio_id,
       shares: sharesOf(db, period.ratio_id),
-      payerId: period.payer_id,
-      recipientId: period.recipient_id,
-      depositCents: period.deposit_cents,
-      netCents: period.net_cents,
+      ...settledOf(db, period),
     },
     deposit,
   };
 }
 
-/** The closed periods, newest first, each with whether its deposit has been seen. */
+/** The closed periods, newest first, each with whether its deposits have been seen. */
 export function closedPeriods(db: Database): ClosedPeriod[] {
   return db.transaction(() => {
     const closed = closedRows(db);
-    const matches = depositMatches(closed, bufferRows(db));
+    const matches = depositMatches(db, closed, bufferRows(db));
     return closed
       .map((period, index) =>
         toClosed(db, period, {
           status: matches[index]?.status ?? "expected",
-          rowId: matches[index]?.rowId ?? null,
+          deposits: matches[index]?.deposits ?? [],
         }),
       )
       .toReversed();
   })();
+}
+
+/**
+ * Records a close's settlement. Between two people it is the periods row's
+ * payer, recipient, deposit and net, as every close before lg-23 recorded it;
+ * between more, those say nobody and the figures are rows of their own.
+ */
+function insertPeriod(
+  context: PeriodContext,
+  span: { start: string | null; end: string },
+  computed: Computed,
+): number {
+  const { figures, household } = computed;
+  const pair = asPair(household);
+  const result = context.db
+    .prepare(
+      `INSERT INTO periods (start_date, end_date, closed_at, closed_by, formula, ratio_id, payer_id, recipient_id, deposit_cents, net_cents)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      span.start,
+      span.end,
+      context.now().toISOString(),
+      context.personId,
+      figures.formula,
+      figures.ratioId,
+      pair?.payerId ?? null,
+      pair?.recipientId ?? null,
+      pair === null ? (household.deposits === null ? null : 0) : pair.depositCents,
+      pair?.netCents ?? 0,
+    );
+  const periodId = Number(result.lastInsertRowid);
+  if (pair !== null) return periodId;
+  const deposit = context.db.prepare(
+    "INSERT INTO settlement_deposits (period_id, person_id, deposit_cents) VALUES (?, ?, ?)",
+  );
+  for (const { personId, depositCents } of household.deposits ?? []) {
+    deposit.run(periodId, personId, depositCents);
+  }
+  const transfer = context.db.prepare(
+    "INSERT INTO settlement_transfers (period_id, from_id, to_id, cents) VALUES (?, ?, ?, ?)",
+  );
+  for (const { fromId, toId, cents } of household.transfers) {
+    transfer.run(periodId, fromId, toId, cents);
+  }
+  return periodId;
 }
 
 /**
@@ -642,26 +738,9 @@ export function closePeriod(context: PeriodContext, request: ClosePeriodRequest)
       if (start !== null && request.end < start) {
         throw new AppError("BAD_REQUEST", "A period cannot end before it starts.");
       }
-      const figures = settlementFor(context.db, closed, start, request.end);
-      if (figures === null) throw new AppError("RATIO_NOT_IN_EFFECT");
-      const result = context.db
-        .prepare(
-          `INSERT INTO periods (start_date, end_date, closed_at, closed_by, formula, ratio_id, payer_id, recipient_id, deposit_cents, net_cents)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          start,
-          request.end,
-          context.now().toISOString(),
-          context.personId,
-          figures.formula,
-          figures.ratioId,
-          figures.payerId,
-          figures.recipientId,
-          figures.depositCents,
-          figures.netCents,
-        );
-      return Number(result.lastInsertRowid);
+      const computed = settlementFor(context.db, closed, start, request.end);
+      if (computed === null) throw new AppError("RATIO_NOT_IN_EFFECT");
+      return insertPeriod(context, { start, end: request.end }, computed);
     })
     .immediate();
   const stored = closedPeriods(context.db).find((period) => period.id === id);

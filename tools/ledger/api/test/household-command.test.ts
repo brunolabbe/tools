@@ -126,16 +126,20 @@ describe("the household command", () => {
     ]);
   });
 
-  test("refuses a third person in a household, and says why", () => {
+  // lg-23: lg-20 refused a third person here; a household now holds any number.
+  test("adds a third person to a household, and says a household holds any number", () => {
     run("add", "home", "Home");
     run("member", "home", ALEX, "alex");
     run("member", "home", SAM, "sam");
 
     const ran = run("member", "home", "casey@example.test", "casey");
 
-    expect(ran.code).toBe(1);
-    expect(ran.err).toMatch(/two people/u);
-    expect(read((directory) => directory.membershipOf("casey@example.test"))).toBeUndefined();
+    expect(ran.code, ran.err).toBe(0);
+    expect(read((directory) => directory.membershipOf("casey@example.test"))).toEqual({
+      household: "home",
+      person: "casey",
+    });
+    expect(run().err).toMatch(/any number of people/u);
   });
 
   test("refuses what the directory refuses with exit 1, and a malformed command with 2", () => {

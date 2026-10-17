@@ -33,6 +33,7 @@ import { currentRatios, currentSalaries } from "../src/salaries.ts";
 import { importStatement } from "../src/statements.ts";
 import { HOUSEHOLD, writeMemberDirectory } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
+import { asTwo } from "./helpers/settlement.ts";
 import { history, render } from "./helpers/workbook.ts";
 import type { Fixture } from "./helpers/workbook.ts";
 
@@ -253,9 +254,9 @@ describe("the workbook import", () => {
         start: period.start,
         end: period.end,
         formula: period.settlement.formula,
-        payerId: period.settlement.payerId,
-        recipientId: period.settlement.recipientId,
-        depositCents: period.settlement.depositCents,
+        payerId: asTwo(period.settlement).payerId,
+        recipientId: asTwo(period.settlement).recipientId,
+        depositCents: asTwo(period.settlement).depositCents,
         status: period.deposit.status,
       })),
     ).toEqual([
@@ -342,7 +343,7 @@ describe("the workbook import", () => {
       closedPeriods(db).map((period) => [
         period.end,
         period.settlement.formula,
-        period.settlement.depositCents,
+        asTwo(period.settlement).depositCents,
         period.settlement.shares.map((share) => share.partsPerMillion),
       ]),
     ).toEqual([

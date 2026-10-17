@@ -26,6 +26,7 @@ import { SAM, homeBooks } from "./helpers/access.ts";
 import { addRule, pasteStatement, startApp } from "./helpers/classification.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import type { PasteRow } from "./helpers/paste.ts";
+import { asTwo, oneDeposit } from "./helpers/settlement.ts";
 
 let app: App | undefined;
 
@@ -139,7 +140,7 @@ describe("closing a period", () => {
 
     const closed = await close(target, null, "2026-09-30");
 
-    expect(closed.settlement).toMatchObject({
+    expect({ ...closed.settlement, ...asTwo(closed.settlement) }).toMatchObject({
       formula: "v3",
       payerId: "alex",
       recipientId: "sam",
@@ -151,16 +152,21 @@ describe("closing a period", () => {
       ],
     });
     expect(closed).toMatchObject({ start: null, end: "2026-09-30", closedBy: "alex" });
-    expect(closed.deposit).toEqual({ status: "expected", rowId: null });
+    // lg-23's shape for the same close: one deposit, one transfer.
+    expect(closed.settlement).toMatchObject({
+      deposits: [{ personId: "alex", depositCents: 15_000 }],
+      transfers: [{ fromId: "alex", toId: "sam", cents: 6_000 }],
+    });
+    expect(oneDeposit(closed.deposit)).toEqual({ status: "expected", rowId: null });
 
     await account().paste({ date: "2026-10-02", description: ALEX_BUFFER, amountCents: 15_000 });
 
     const [after] = await periods(target);
     expect(after?.deposit.status).toBe("matched");
-    expect(after?.deposit.rowId).toEqual(expect.any(Number));
+    expect(oneDeposit(after?.deposit).rowId).toEqual(expect.any(Number));
     // The deposit is a contribution like any other: the open period now stands
     // exactly at the ratio.
-    expect((await open(target)).settlement).toMatchObject({ payerId: null, depositCents: 0 });
+    expect(asTwo((await open(target)).settlement)).toMatchObject({ payerId: null, depositCents: 0 });
   });
 
   test("a deposit two cents off, or filed to someone else, is not the one expected", async () => {
@@ -189,7 +195,7 @@ describe("closing a period", () => {
     const second = await close(target, "2026-04-01", "2026-06-30");
 
     // 75 for this period, and the 90 left short.
-    expect(second.settlement).toMatchObject({ payerId: "alex", depositCents: 16_500 });
+    expect(asTwo(second.settlement)).toMatchObject({ payerId: "alex", depositCents: 16_500 });
 
     await history.paste({ date: "2026-07-02", description: ALEX_BUFFER, amountCents: 16_500 });
 
@@ -197,7 +203,7 @@ describe("closing a period", () => {
     expect(latest?.deposit.status).toBe("matched");
     // Never made, and asked for again by the second close.
     expect(earlier?.deposit.status).toBe("folded");
-    expect((await open(target)).settlement).toMatchObject({ payerId: null, depositCents: 0 });
+    expect(asTwo((await open(target)).settlement)).toMatchObject({ payerId: null, depositCents: 0 });
   });
 
   test("what was owed before a ratio change carries over as money", async () => {
@@ -211,7 +217,7 @@ describe("closing a period", () => {
     const { settlement } = await open(target);
 
     // The closed period keeps the ratio it recorded: 60 owed, not 50.
-    expect(settlement).toMatchObject({ payerId: "alex", netCents: 6_000, depositCents: 12_000 });
+    expect(asTwo(settlement)).toMatchObject({ payerId: "alex", netCents: 6_000, depositCents: 12_000 });
     expect(settlement?.shares[0]?.partsPerMillion).toBe(500_000);
   });
 
@@ -279,7 +285,7 @@ describe("closing a period", () => {
     expect(view.lines.map((line) => line.amountCents)).toEqual([10_000]);
 
     const closed = await close(target, "2026-07-01", "2026-09-30");
-    expect(closed.settlement.depositCents).toBe(15_000);
+    expect(asTwo(closed.settlement).depositCents).toBe(15_000);
     // After that, the open period starts where this one ended, whatever is asked.
     expect(await open(target, "?start=2020-01-01")).toMatchObject({
       start: "2026-10-01",
@@ -416,7 +422,7 @@ describe("lines", () => {
       draft("sam", "2026-09-03", 3_000, { chargedTo: "alex", note: "alex's book" }),
     );
     expect(charge).toMatchObject({ chargedTo: "alex", enteredBy: "sam" });
-    expect((await open(target)).settlement).toMatchObject({
+    expect(asTwo((await open(target)).settlement)).toMatchObject({
       payerId: "alex",
       netCents: 3_000,
       depositCents: 7_500,
@@ -459,7 +465,7 @@ describe("the day a period is closed", () => {
 
     expect(view).toMatchObject({ start: "2026-10-04", end: "2026-10-03", lines: [] });
     // The deposit is not in yet, and the books say so.
-    expect(view.settlement).toMatchObject({ payerId: "alex", depositCents: 15_000 });
+    expect(asTwo(view.settlement)).toMatchObject({ payerId: "alex", depositCents: 15_000 });
     const empty = await target.server.inject({
       method: "POST",
       url: ROUTES.periodClose,
@@ -477,17 +483,17 @@ describe("a deposit of exactly what was asked", () => {
     await withBufferRule(target);
     await addLine(target, draft("sam", "2026-09-10", 10_001));
     const asked = await close(target, null, "2026-09-30");
-    expect(asked.settlement.depositCents).toBe(15_002);
+    expect(asTwo(asked.settlement).depositCents).toBe(15_002);
 
     await account().paste({ date: "2026-09-30", description: ALEX_BUFFER, amountCents: 15_002 });
 
-    expect((await open(target)).settlement).toMatchObject({
+    expect(asTwo((await open(target)).settlement)).toMatchObject({
       payerId: null,
       depositCents: 0,
       netCents: 0,
     });
     const next = await close(target, "2026-10-01", "2026-10-03");
-    expect(next.settlement).toMatchObject({ payerId: null, depositCents: 0 });
+    expect(asTwo(next.settlement)).toMatchObject({ payerId: null, depositCents: 0 });
     expect(next.deposit.status).toBe("none");
   });
 });
@@ -516,7 +522,7 @@ describe("a line entered after its period closed", () => {
     expect(view.lines.map((line) => [line.date, line.amountCents, line.late])).toEqual([
       ["2026-10-03", 4_000, true],
     ]);
-    expect(view.settlement?.depositCents).toBe(21_000);
+    expect(asTwo(view.settlement).depositCents).toBe(21_000);
   });
 
   test("dated well inside the closed period, it is listed too, and counted once", async () => {
@@ -534,7 +540,7 @@ describe("a line entered after its period closed", () => {
       ["2026-10-02", "alex", false],
     ]);
     // 150 + 75 for sam's two, less alex's 10: counted once each.
-    expect(view.settlement?.depositCents).toBe(21_500);
+    expect(asTwo(view.settlement).depositCents).toBe(21_500);
   });
 
   test("a line on time, corrected after the close, is not listed as late", async () => {
@@ -627,9 +633,9 @@ describe("what is not a deposit into the buffer", () => {
     });
 
     const [closed] = await periods(target);
-    expect(closed?.deposit).toEqual({ status: "expected", rowId: null });
+    expect(oneDeposit(closed?.deposit)).toEqual({ status: "expected", rowId: null });
     // Still the 150.00 asked: neither row moved the settlement.
-    expect((await open(target)).settlement).toMatchObject({
+    expect(asTwo((await open(target)).settlement)).toMatchObject({
       payerId: "alex",
       depositCents: 15_000,
     });
@@ -660,10 +666,10 @@ describe("a late line, after the next close", () => {
 
     const before = await open(target);
     expect(before.lines.map((line) => [line.date, line.late])).toEqual([["2026-09-15", true]]);
-    expect(before.settlement?.depositCents).toBe(22_500);
+    expect(asTwo(before.settlement).depositCents).toBe(22_500);
 
     const second = await close(target, "2026-10-01", "2026-10-03");
-    expect(second.settlement.depositCents).toBe(22_500);
+    expect(asTwo(second.settlement).depositCents).toBe(22_500);
 
     expect((await open(target)).lines).toEqual([]);
     expect((await open(target, "?end=2026-10-20")).lines).toEqual([]);
@@ -679,7 +685,7 @@ describe("a settlement's deposit, when the ratio changes after its period", () =
     await withBufferRule(target);
     await addLine(target, draft("sam", "2026-09-10", 10_000));
     const closed = await close(target, null, "2026-09-30");
-    expect(closed.settlement).toMatchObject({ payerId: "alex", depositCents: 15_000 });
+    expect(asTwo(closed.settlement)).toMatchObject({ payerId: "alex", depositCents: 15_000 });
     await ratio(target, "2026-10-01", alex, sam);
     return target;
   }
@@ -698,7 +704,7 @@ describe("a settlement's deposit, when the ratio changes after its period", () =
       expect((await periods(target))[0]?.deposit.status).toBe("matched");
       const { settlement } = await open(target);
       expect(settlement?.shares[0]?.partsPerMillion).toBe(share);
-      expect(settlement).toMatchObject({ payerId: null, depositCents: 0, netCents: 0 });
+      expect(asTwo(settlement)).toMatchObject({ payerId: null, depositCents: 0, netCents: 0 });
     },
   );
 
@@ -708,7 +714,7 @@ describe("a settlement's deposit, when the ratio changes after its period", () =
     await account().paste({ date: "2026-10-02", description: ALEX_BUFFER, amountCents: 9_000 });
 
     expect((await periods(target))[0]?.deposit.status).toBe("expected");
-    expect((await open(target)).settlement).toMatchObject({
+    expect(asTwo((await open(target)).settlement)).toMatchObject({
       payerId: "alex",
       depositCents: 3_000,
       netCents: 1_500,
@@ -734,7 +740,7 @@ describe("a settlement's deposit, when the ratio changes after its period", () =
     // Newest first: period 2's own ask is a different figure and is unpaid.
     const closed = await periods(target);
     expect(closed.map((period) => period.deposit.status)).toEqual(["expected", "matched"]);
-    expect((await open(target)).settlement).toMatchObject({
+    expect(asTwo((await open(target)).settlement)).toMatchObject({
       payerId: "alex",
       depositCents: 8_333,
       netCents: 2_500,

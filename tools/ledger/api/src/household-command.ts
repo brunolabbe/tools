@@ -30,8 +30,9 @@ Changes who belongs to which household, in the ledger's directory (DIRECTORY_PAT
   remove <address>                      take an address out of its household
   list                                  every household and its members
 
-A household holds two people, each behind any number of addresses. Every
-address must also be on the ledger's Access policy, which is a dashboard edit.
+A household holds any number of people, each behind any number of addresses,
+and a name stays in its books once there. Every address must also be on the
+ledger's Access policy, which is a dashboard edit.
 `;
 
 function usage(io: CommandIo, message: string): number {
