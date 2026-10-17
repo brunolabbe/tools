@@ -149,6 +149,53 @@ By rule (a):
 - Invariants checked: no import across tools, no new error code, contract untouched (only F1's remedy would edit it), no new workspace or Dockerfile line, specs added to existing registered files, style. Skipped as untouched by the diff: shell and process trees, redaction, SSRF, progress, routes.
 - NFR: security n/a (read-only SQL with no input) · performance: `receiptsOnRows` reads every filed row's items on each stats call, whatever the range, the same shape as `listRows`; acceptable · reliability: F3 · maintainability: F1, F5.
 
+### Gate 2
+
+**Gate: PASS**: 2026-10-17 · `89ad8b02..b21aa3c6` · Opus 5.5, re-gate of the round's own commit (`git log --first-parent --no-merges 89ad8b02..b21aa3c6` lists only `b21aa3c6`)
+
+Nothing in this round is a `high`.
+
+| Done when                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Two categories, summing to the row to the cent                             | Unchanged from gate 1, and still green: `books/test/receipts.test.ts` › "two or more categories chart as amounts that sum to the row's amount, to the cent" and `api/test/stats.test.ts` › "a row with a basket charts as the basket's categories, summing to the row to the cent" ✓. The gate's books harness re-derives the rule independently, now with the owner's sign guard, over 20 000 generated baskets. It agrees with `splitByCategory` on 20 000 of 20 000. Every split that is not empty sums to the row's amount. **proven** |
+| 2. A tip goes where the Decision says                                         | Unchanged from gate 1: the books test "a tip charted on top of the total goes to the largest category" and the api test "a tip on top of the receipt's total charts under the largest category" ✓. **proven**                                                                                                                                                                                                                                                                                                                              |
+| 3. A row with no receipt, and one whose receipt has no items, chart as before | `api/test/stats.test.ts` › "a row with no receipt, and one whose receipt has no items, chart whole as before" ✓. The gate's API harness, run on this head over the gate-1 "dw3" fixture, gives `{1: 7100, 3: 574}` with `accountCents 6752`, the same as it gave at `8e50f0d4`. **proven**                                                                                                                                                                                                                                                 |
+| 4. Gates green                                                                | PR #506 at `b21aa3c6`: every check passed, including `test (ubuntu-latest)` and `test (windows-latest, informational)`. Locally, `npm test -- --project ledger` gave 1129 of 1129 (60 files) and `npm run check` exited 0. **proven**                                                                                                                                                                                                                                                                                                      |
+
+- **F1 (high)** · **fixed**.
+  - Both comments are now true. `rowsQuerySchema` in `contract/src/api.ts` says the list "files a row under the row's own category even when its receipt's items split the row" and names lg-28. `countsAsSpending` in `api/src/rows.ts` now claims only that the chart and the list count the same rows.
+  - Measured against the gate's API harness on this head (fixture "all-after"): the Groceries slice is 2 198 and its list 6 752, so the list and the slice still differ, as both comments now say.
+  - The owner's answers apply the same way to both: an overridden row and a guarded row are each charted whole and listed whole under the same category. The "override-after" fixture gives list = slice, 4 276 and 2 476.
+  - A grep of `tools/ledger` finds no other copy of the old claim. The sum claim on `periodLinesQuerySchema` is about card lines, which the split does not touch.
+  - lg-28 checks out:
+    - The format parses: `npm run status -- --show lg-28` gives `fix`, `ready`, `standard`, blocked by lg-27.
+    - The id is free on `origin/main` (`b9f01370`) and in the open PRs #504 and #508.
+    - Its reproduction table is gate 1's, and it names `89ad8b02`.
+    - `depends_on: [lg-27]`.
+- **F2 (med)** · **fixed**.
+  - `spendingStats` charts a row whole when `row.spendingCategory?.source === "override"`.
+  - Test: `api/test/stats.test.ts` › "an override on a receipted row moves the chart: the row charts whole under it (F2)". It asserts 2 476 under Pharmacy and that the alcohol and household slices are gone.
+  - Red/green: with only that condition removed, it is the one failure, 1 failed of 72 in `npx vitest run tools/ledger/books/test/receipts.test.ts tools/ledger/api/test/stats.test.ts`. Restored, all 72 pass.
+  - The gate's own harness on this head gives `{1: 4276, 4: 2476}` after the override on A. That is identical to `8e50f0d4`, so lg-18's Done when 1 holds again for a row with a receipt.
+- **F3 (med)** · **fixed, by the owner's sign guard.**
+  - `splitByCategory` answers `[]` when the remainder would change the sign of the largest category.
+  - Tests: books › "a basket part paid by card gives no split, where it gave Alcohol −4,23 $" and "a purchase's receipt on a refund row gives no split"; api › "a basket part paid by card, and one filed on a refund row, chart whole (F3)".
+  - Red/green: with only the guard removed (books rebuilt, `dist/receipts.js` grepped for `Math.sign(adjusted)`: 0 matches), exactly those 3 fail, 3 failed of 72. Restored and rebuilt (1 match), all pass.
+  - The two fixes red separately add up to the builder's "4 of 72".
+  - Across the generated population:
+    - Sign flips of the target category: 0 of 20 000 (gate 1: 3 491).
+    - Charted whole by the guard: 3 503 of 20 000.
+    - Purchases charting a negative slice: 2 823 of 15 311 (gate 1: 4 408). All 2 823 come from categories whose own items already net negative (discount lines); 0 come from the remainder.
+  - Correction to my own gate 1 text: "4 408 of 20 000 purchases" should have read "of 15 311 purchases". The generator's seed is the same, so that is the gate 1 denominator.
+  - Through the route, "all-after" now charts Groceries 2 198, Alcohol 3 406 and Household 1 148, with no negative slice. Checked by hand: A and B are split, and C, D, E and F are whole.
+  - `pastLargest_10000` still splits as `[349, 9077, 574]`. Per the dispatch, that is the owner's rule as worded and not a finding.
+- **F4 (low)** · **not fixed**, recorded as the dispatch directs. The builder reasoned that the guard leaves it unchanged and did not run it; the gate ran it on this head: `tipToDiscount` is still `[1000, 1000, −1200]`.
+- **F5 (low)** · **fixed**. Both the block comment in `books/test/receipts.test.ts` and the Log now read 15,5352525 $ and 5,7372525 $. A grep of `tools/ledger` for the old figures finds none.
+- **Helper change checked:** `startWithReceipts(more = [])` appends rows after D. The `git diff 89ad8b02 b21aa3c6` of `api/test/stats.test.ts` changes no line in the gate-1 tests, and they call it with no argument, so their fixture is unchanged.
+- **dropped** · the guard also returns `[]` when the remainder brings the largest category to exactly 0 (`Math.sign(0)` is not the target's sign), so such a row charts whole. That is the conservative result, and nothing relies on the difference.
+- **dropped** · comment lines in `contract/src/api.ts` run past 100 columns. Nine lines in that file already do, and `npm run check` passes.
+- **findings** · the round's lines raise 2: 0 carried, 2 dropped.
+
 ## Log
 
 - 2026-10-17 — Owner answered the Decision through `AskUserQuestion` with
