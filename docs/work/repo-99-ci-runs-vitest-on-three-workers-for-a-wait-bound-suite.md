@@ -116,3 +116,22 @@ CI only**. Local runs keep vitest's default.
   measurements above stay here as the record for whoever measures the number
   once dl-117 has split the file. `status` stays `ready`, so the ticket reads as
   blocked by its dependency rather than done.
+- 2026-10-17 — The owner answered the open choice above, asked through
+  AskUserQuestion on 2026-10-17. Question, verbatim: "repo-99: dl-117 has now
+  split the long file, so six CI workers can be measured for real. The open
+  point is the Windows flake in parallel-ranges.test.ts (dl-98 feeder limits: 1
+  failure in 2 Windows attempts at six workers). What should the builder do?"
+  Options offered: **"Measure at 6, report, then decide"** (recommended), which
+  sets `maxWorkers` to 6 under `CI`, takes before and after CI runs on both legs
+  once dl-117 is in, and reports the durations and any flake before landing;
+  **"Land at 6 as the brief says"**, which builds to Done when as written and
+  files a recurring Windows flake as a new ticket rather than blocking; and
+  **"Lower to 4 and measure"**, which matches CI's 4 vCPUs. Chosen: **"Measure
+  at 6, report, then decide"**. dl-117 is done, merged as #499 on 2026-10-17, so
+  `depends_on` is satisfied and the ticket is no longer blocked. `status` stays
+  `ready`. For whoever builds it next: the `maxWorkers` change reverted with the
+  hold above has to be applied again. Set it to 6 under `CI` only, measure
+  `npm test` on both CI legs against the latest `main` run of the same suite,
+  and report the durations with their run ids, plus any flake and the test it
+  names, before landing. The owner picks the number and whether to land from
+  those figures; the builder does not choose either.
