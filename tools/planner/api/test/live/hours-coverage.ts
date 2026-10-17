@@ -212,8 +212,9 @@ export function exclusionReason(kind: string): string | null {
 /**
  * Whether the row `chooseGeocoderResult` picked is the place the specialist
  * proposed. **Read by hand** from each row's `display_name` against the query,
- * for the 74 located rows of a kind that keeps hours, and independently
- * re-read by the first gate (it agreed on the 35 named premises). It is data,
+ * for the 74 located rows of a kind that keeps hours. The first gate's
+ * classification came first and this map equals it on all 74 rows; that is
+ * agreement with it, not a second independent read. It is data,
  * keyed by the query sent, because it cannot be computed: a string match would
  * be a second chooser. A located row of a kind that keeps hours whose query is
  * missing here reads `unread`, which the report shows rather than hides.

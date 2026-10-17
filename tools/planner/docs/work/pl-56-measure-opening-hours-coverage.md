@@ -383,9 +383,10 @@ dated it is 4 years old. The seasons half of §5's item 2 is almost entirely
 not in this data: the other 14 values are weekly patterns, `24/7`, or a single
 range. The season test is a month name, an ISO date or `easter` in the raw
 string; no grammar was parsed. **That is the count for what `locate` finds
-today.** The 32 places the chooser declines include three more seasonal values
-(Schönbrunn, Musei Capitolini, Centrale Montemartini; below), so the seasons
-half is 4 of 27 if the declines are recovered, not 1 of 15.
+today.** The 32 places the chooser declines include three more values the harness's
+regex counts as seasonal (Schönbrunn, a season range; Musei Capitolini and
+Centrale Montemartini, holiday closures; below), so the seasons half is 2 of 27
+if the declines are recovered (the regex's own count is 4), not 1 of 15.
 
 **The denominators.** The first gate showed one denominator is not enough:
 "a located place of a kind that keeps hours" includes a town resolved to its
@@ -567,7 +568,7 @@ Round 1: `npm run check` → exit 0. `npx oxlint tools/planner/api` → 0 errors
 files, 257 of 257; `live-records.test.ts` now walks the new record as one more
 case (257 at head against 256 at base), and no `*.test.ts` was added, so the
 `planner` project collects the same test files. The record carries no
-credential-shaped string. Round 2 reruns are in the next section.
+credential-shaped string. Round 2's reruns are in gate 2's section above.
 
 **Where the record lives.** The ticket named `fixtures/live/hours-coverage/`, so
 it stays there. It is not a live-run record (no `briefFixture`, no
@@ -599,7 +600,7 @@ numbers: its recomputation matched the record on all 1,019 rows. What changed:
 - **Coordinates** (low): noted above.
 - **Walker** (low): noted above.
 
-Checks after the changes are in the report that follows this push.
+The checks after the changes are the reruns in gate 2's section above.
 
 ### OPEN DECISION — where would hours come from, if at all
 
@@ -656,7 +657,7 @@ bought against:
    `unchecked.ts` stays. On the documented extract this is clearly right: 2
    objects. On a wide extract it forgoes 7 city objects in this corpus and a
    hit rate near 60% on named city premises, in a sample of 15 rows. The seasons
-   half is 1 of 15 (4 of 27 with the endonym fix) and 0 of 15 hours values are
+   half is 1 of 15 (2 of 27 with the endonym fix) and 0 of 15 hours values are
    dated within two years. **What would have to be true for a metered source to
    be worth reopening:** (a) per-place hours well above the OSM rate for named
    city premises, measured on a sample bigger than this one, which nothing here
@@ -677,9 +678,50 @@ reaches 2 objects, so nothing is worth building; under a wide extract it reaches
 a real number of city premises but needs a name guard nobody has written and a
 sample of 15 rows is all there is. The recommendation therefore depends on one
 fact the owner can read in a minute: `OSM_EXTRACT_URL` in the deployment's
-`.env`. If it is the documented Québec extract, option 3 stands. If the owner
-runs, or wants to run, an extract holding the cities the city briefs name,
+`.env`. If it is the documented Québec extract, option 3 stands. If the
+deployed `OSM_EXTRACT_URL` already holds the cities the city briefs name,
 option 1 with the name guard is the cheapest way to start, and I would then
 want the guard measured on a second sample before any ticket is filed. Round 1
 recommended option 1 on figures that were wrong in two ways at once; I am not
 keeping it for continuity.
+
+### The owner's answers, and the fixes made at landing (2026-10-17)
+
+- 2026-10-17 — The open decision above is answered. Question: "where should
+  planner's opening hours come from?" Options: don't build from OSM yet (option
+  3, recommended by the builder and by gate 2) / I'll check my .env first /
+  Overpass by OSM id anyway (option 1) / re-import Nominatim with extratags
+  (option 2). **Answer: "Don't build from OSM yet" — option 3.** No hours build
+  tickets are filed. It reopens if the deployed `OSM_EXTRACT_URL` turns out to
+  hold the cities.
+- 2026-10-17 — Question: pursue matching English and local place names
+  (Rome → Roma, Vienna → Wien) in `locate`? Options: not now (the
+  orchestrator's recommendation, not the builder's or the gate's) / file a
+  ticket. **Answer: "Not now".** No ticket is filed.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, the reversal
+  condition — "The reversal condition is right in its first clause and
+  uncosted in its second. … The remedy is to cost the \"wants to run\" branch,
+  or to drop it so that the reversal reads only \"if the deployed
+  `OSM_EXTRACT_URL` already holds the cities\"." The owner chose the drop.
+  `sed '/^### The owner/q' tools/planner/docs/work/pl-56-measure-opening-hours-coverage.md | grep -c "wants to run"`
+  → 0.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, the seasons count —
+  "\"the seasons half is 4 of 27\" uses the harness's regex. That regex counts
+  two holiday-closure values as seasons … Only 2 of 27 are season ranges
+  (Ljubljana Castle and Schönbrunn)." The Log now says 2 of 27 and names the
+  regex's own count of 4. `sed '/^### The owner/q' tools/planner/docs/work/pl-56-measure-opening-hours-coverage.md | grep -c "4 of 27"`
+  → 0.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, the provenance
+  comment — "the `READING_OF_KEPT_ROWS` comment says the reading was
+  \"independently re-read by the first gate (it agreed on the 35 named
+  premises)\" … This is false about provenance." The comment now says the map
+  equals the first gate's earlier classification on all 74 rows, not a second
+  independent read. `grep -c "independently re-read" tools/planner/api/test/live/hours-coverage.ts`
+  → 0.
+- 2026-10-17 — Fixed at landing by owner choice: gate 2, the pointers to
+  round-2 checks — "the Log says \"Round 2 reruns are in the next section\" and
+  \"Checks after the changes are in the report that follows this push\". No
+  section of the Log carries round-2 check results; the second sentence points
+  outside the repo." Both sentences now point to the reruns in gate 2's
+  section above. `sed '/^### The owner/q' tools/planner/docs/work/pl-56-measure-opening-hours-coverage.md | grep -c "next section\|report that follows"`
+  → 0.
