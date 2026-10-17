@@ -85,3 +85,18 @@ depend on the directory rather than the books.
 - 2026-10-17 — At lg-23's landing, by owner choice, applied lg-23 gate 2's N2:
   Build 3's premise "the API needs no change" was false. The measured fact is now
   in Why and Build 3, and Done when 1 is an API test.
+- 2026-10-17 — The owner answered Build 3's question, through `AskUserQuestion`.
+  - **Question:** "lg-29 Build 3: you chose 'a blank salary means not in this
+    year's ratio'. But the API builds the proposal from every salary on record
+    for the year, so a person who already has one stays in it. How should the
+    API change?"
+  - **Options offered:**
+    - "Scope proposal to entry" (recommended by the orchestrator): the proposal
+      is built only from the salaries in this entry, and the doc comment on
+      `SalaryEntryResponse.proposal` in `@ledger/contract` is reworded to say so.
+    - "Clear left-out salaries": entering without a person deletes their salary
+      on record for that year; the entry then erases data.
+    - "Builder raises it later": the web half is built first and the builder asks
+      with measurements.
+  - **Chosen: "Scope proposal to entry".** That authorises rewording
+    `SalaryEntryResponse.proposal`'s doc comment, and no other contract change.
