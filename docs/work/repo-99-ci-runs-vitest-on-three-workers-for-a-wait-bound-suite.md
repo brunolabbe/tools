@@ -276,3 +276,63 @@ passed | 2 skipped (285)`, `Tests 5758 passed | 61 skipped (5819)`.
   - Done when 3 is still not met on the six-worker figures above. At four
     workers, the two Windows attempts and their flake result are the evidence
     the owner asked for; the first `main` run after merge is still owed.
+- 2026-10-17 — The owner's answers on the four-worker figures, both through
+  AskUserQuestion on 2026-10-17 and relayed by the orchestrator, which gave the
+  questions below in the abbreviated form quoted (its "…" is its own; the full
+  text is not in the lander's hands). This is the entry gate 1's F1 asked for,
+  and it closes the "owner picks the number and whether to land" line above.
+  - Answer 1, after the four-worker figures. Question: "repo-99 at 4 CI
+    workers, two samples per leg, all passing … What next?" Options offered:
+    **"Land at 4"** (recommended), **"More samples at 4 first"**, **"Go back to
+    6"**, **"Close, no change"**. Chosen: **"Land at 4"**.
+  - Answer 2, asked again once gate 1's F4 had widened the baseline. Question:
+    "… Five main samples average Windows 418 s and ubuntu 269 s, not the
+    450/270 s I quoted. Four workers, with the head's own run (Windows 431 s)
+    included, averages Windows 378 s (−10%) and ubuntu 247 s (−8%). Most
+    four-worker Windows samples fall inside main's own spread … Still land at
+    4?" Options offered: **"Still land at 4"** (recommended), **"More samples
+    first"**, **"Close, no change"**. Chosen: **"Still land at 4"**. A second
+    question, "Should the lander apply these fixes, with no re-gate?"
+    (multi-select over F2, F3 and F4), was answered with **all three**; they
+    are the three entries that follow. F1 is this entry.
+  - Consequence: the number is 4, chosen by the owner on the figures in the
+    entries above and in the F4 entry below. Done when 3's first clause is met
+    at four workers on the PR's runs; its second half stays owed, as the
+    ticket's `awaiting` line says.
+- 2026-10-17 — Fixed at landing by owner choice: gate 1, F2 — "the config
+  comment's cost claim is contradicted by this branch's own measurements, and it
+  hides why the number is 4 … Fix: replace the sentence with the trade-off and
+  the reason, in a sentence". `grep -n "cost it nothing" vitest.config.ts` →
+  no output, exit 1 (the sentence was there at the gated head). The comment now
+  reads "Four, one per vCPU: six oversubscribed the Windows runner and flaked
+  parallel-ranges (repo-99 Log)."
+- 2026-10-17 — Fixed at landing by owner choice: gate 1, F3 — "`vitest.config.ts`
+  and `scripts/test-gate.mjs` disagree on what counts as CI … `CI=false` and
+  `CI=0` give root 4, resolved 4; `CI=""` gives null". The config's test is now
+  `scripts/test-gate.mjs`'s own: `value !== undefined && value !== "" && value
+!== "false" && value !== "0"`. The gate's probe (`resolve-driver.mjs` with
+  `resolve-child.mts`, vitest 4.1.10's `createVitest`, 12 cores here), on this
+  tree. Before the fix: `CI` unset root null, resolved 11; `CI=1` and `CI=true`
+  root 4; `CI=""` root null; `CI=false` root 4; `CI=0` root 4. After: `CI`
+  unset root null, resolved 11; `CI=1` root 4, resolved 4; `CI=true` root 4,
+  resolved 4; `CI=""` root null; `CI=false` root null, resolved 11; `CI=0` root
+  null, resolved 11; `VITEST_MAX_WORKERS=2` still resolves 2 with and without
+  `CI=1`. No test was added: the brief names the config read back as the
+  proof, as the gate's own row 1 says.
+- 2026-10-17 — Fixed at landing by owner choice: gate 1, F4 — "the Log's
+  four-worker gain is stated against two `main` samples, and `main`'s own
+  scatter is as wide as the gain". Added here, with the earlier entries left as
+  written, from the gate's figures, which the lander has not re-read.
+  `grep -c "superseded by these mean[s]" docs/work/repo-99-*.md` → 1, this entry. Over
+  the five `main` samples from 9e157902 to 6b42ee19 (four runs, 6b42ee19 read
+  twice): `main` Windows 352 to 478 s (mean 418), ubuntu 257 to 286 s (mean
+  269). Four workers: Windows 363 s, 340 s and the head's own 431 s (mean 378,
+  -10 per cent), ubuntu 273 s, 232 s and 235 s (mean 247, -8 per cent). Every
+  Windows four-worker sample but one lies inside `main`'s range, so the Windows
+  gain is not separable from `main`'s own scatter on these samples. The "about
+  22 per cent" and "about 6 per cent" in the four-worker entry above rest on
+  two `main` samples (mean 450 s and 270 s) and are superseded by these means.
+  The summed-time comparison there quotes one `main` Windows sample (1070 s)
+  and not the other (951 s, run 39058961193 attempt 2), which is below both
+  four-worker figures (985 s, 923 s). Not checked by the gate: whether the
+  other `main` runs ran the same 5819 tests (the Log gives 5772 for 9e157902).
