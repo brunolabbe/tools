@@ -217,6 +217,41 @@ This ticket answers both, from data already on disk.
 - **findings** · the hunt returned 13; 9 carried, 4 dropped.
 - NFR: security n/a (no request, no secrets; `live-records.test.ts` walks the three new JSON files and passes) · performance n/a · reliability ✓ (check mode goes red on both mutation shapes) · maintainability: above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-17 · `88fb17a6..51a4b673` (round: `9e5b59a9`) · Opus 5.5, scoped to round 1
+
+The open lows are recorded below and do not hold the ticket. Nothing here is a `high`.
+
+- **Units and option 3's bar (med) — fixed.** `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx tools/planner/api/test/live/invention.ts` gives `exit=0`. The new `sampleByObject` regenerates and prints "58 objects, not confirmed 4 of 58, 6.9% (2.7%–16.4%); lodging or food stratum 19 objects, not confirmed 3 of 19, 15.8% (5.5%–37.6%)". The Log's units table matches.
+  - The population weighting checks out by hand: 0.256 × 10.7% + 0.744 × 2.2% gives 4.3% per key. The other 39 objects hold one defect (Bonaventure), so per object it is about 6.0%.
+  - Option 3's bar now names its unit (per object) and its population before the comparison.
+  - Options 3 and 4 and the recommendation follow from those figures: the scoped loop clears the bar, barely, on three events; the whole-population loop does not.
+- **"4 of 5 proposals" (med) — fixed.** The text now gives 579 of 724 lodging and food candidates (80.0%) and 751 of 2,090 overall (35.9%). These are the figures gate 1 measured.
+- **`rubric.written` (med) — fixed.** The field now gives the Log's account of when the rubric was written. Check mode exits 0 on it.
+- **How far the classification moves (low) — dispositioned as the owner chose (A).** A script diff of `classification.json` between 88fb17a6 and the new head shows zero class changes and one tag change, the added `park-visit` tag. The sensitivity line gives 20 of 320 (6.3%), 30 of 402 (7.5%), food unchanged at 25 of 259, plus (b), (c) and (d).
+- **Grande-Grève's search budget (low) — fixed.** Queries 1 and 2 now follow the budget as written, and the evidence note says they were re-run. The new Parks Canada PDF is **unverified**: WebFetch could read only its metadata ("2026_Camping_PG_oTENTik"), and the Read tool could not render it. The verdict does not rest on that PDF.
+- **Evidence notes (low) — fixed in part.** The Fumoir dates and the Bonaventure note are corrected and match my fetches. What remains is recorded in the Log rather than changed: `readOn` holds the date a search snippet was seen, and `closed` may be undercounted.
+- **Per-family counting (low) — fixed.** The Log now states the departure from the brief, and its figures (3 of 58, 2 of 60) match gate 1's script.
+- **Object count and arithmetic (low) — fixed.** The record now carries 58 objects, and the Log says searches per defect _found_.
+- **Misplaced doc comment (low) — fixed.**
+- **Refutation of "3/16 without the parks": does not hold. Gate 1's 3/16 is right.**
+  - The script's "park objects" line matched the text "Parc national" in each object's first query. It therefore caught two campgrounds, `Camping Cap-Bon-Ami Parc national Forillon` and `Camping du Mont-Albert Parc national de la Gaspésie Sépaq`, which are lodging premises, not parks.
+  - The parks are three objects: Forillon NP, Parc de la Gaspésie and Bic. Removing them leaves 3 of 16, which is 18.8% (6.6–43.0).
+  - The mislabelled line is gate 1's script, not the build's.
+- **low** · new · the Log's units paragraph says "without the three parks' objects the stratum is 3 of 14 objects, 21.4% (7.6–47.6)". It should say 3 of 16, 18.8% (6.6–43.0). Direction: unsafe, mildly, because it overstates the stratum's rate. Nothing relies on it: option 3 compares 3 of 19.
+- **low** · new · "Five of the 28 stratum keys are parks", in the units paragraph and in option 3, should be six. `forillon national park|gaspé` is in the stratum through one `food` mention out of 59. Gate 1 wrote "five" first. Nothing relies on the count.
+- **low** · new · two figures are labelled wrongly:
+  - The units table is said to be "every figure printed by the harness", but its per-key total (5 of 121, 4.1%, 1.8–9.3) is not in the harness output (`grep '4\.1%'` on the check-mode output finds nothing).
+  - "About 15 searches per defect found" sits under the population-weighted bullet but is computed from the unweighted 4 of 58 (1.07 × 58 / 4 = 15.5). At the weighted 6.0% it is about 18.
+  - "About 6 to 7 per defect" in the stratum is right: 1.07 × 19 / 3 = 6.8.
+- **findings** · the round review returned 3 new, all `low`, all carried. Of gate 1's 9 findings: 7 fixed (the 3 meds among them), 1 fixed in part, and 1 (the classification low) dispositioned as the owner chose. The 1 refutation does not hold.
+- Checks:
+  - `npm run check` exits 0.
+  - `npx vitest run tools/planner/api/test/live-records.test.ts`: 133 passed (133).
+  - PR #522 at 51a4b673: every check passes except `test (ubuntu-latest)` and `test (windows-latest, informational)`, still pending when read.
+  - The round changes no spec, so planner's file count is unchanged.
+
 ## Log
 
 **2026-10-17 — Filed.** The owner chose "measure invention first" over a check
