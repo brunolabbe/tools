@@ -2,9 +2,12 @@
 
 ## When a worktree goes
 
-`SKILL.md` step 10 is the rule: a ticket's worktrees — builder, gate and fixer —
-are removed once its records are committed, its pull request is open, and you
-have looked once at that pull request's finished checks. Before removing each:
+`SKILL.md` step 10 is the rule: a ticket's worktrees — builder, gate and fixer,
+and any second tree an agent added under
+`/workspaces/tools/.claude/worktrees/<role>-<id>-<n>` and did not remove
+(`roles/reviewer.md`, `roles/common.md`) — are removed once its records are
+committed, its pull request is open, and you have looked once at that pull
+request's finished checks. Before removing each:
 
 - `git status --porcelain` is empty, and its head is on origin
   (`git branch -r --contains <head>`);

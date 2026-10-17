@@ -46,8 +46,14 @@ worktree: several sessions run against this repo at once.
   `git checkout <sha> -- <path>`.
 - **If the auto-mode classifier denies a temporary source mutation** ("Security
   Test Removal", lg-10's red/green), do not try another spelling: run the new
-  spec against the base's source in a second tree instead (`reviewer.md`, the
-  second-tree recipe), and say in your report which check that replaced.
+  spec against the base's source in a second tree instead, and say in your
+  report which check that replaced. The second tree is
+  `git worktree add --detach /workspaces/tools/.claude/worktrees/<role>-<id>-<n> <sha>`,
+  then the farm and `npm run build` in it from one script run with
+  `bash <file>`, and `git worktree remove --force` before you report;
+  `reviewer.md`'s second-tree recipe has the traps (a tree outside
+  `/workspaces/tools` fails `npm run check`; a `cd` in a separate call farms
+  the wrong tree).
 - **End every commit message with the `Co-Authored-By` trailer** your session's
   attribution reminder gives, in the commit that lands it; never rewrite a
   pushed commit, or one a Log cites, to add it (repo-101 moved three cited shas

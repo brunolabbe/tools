@@ -56,9 +56,14 @@ confirm it. So read in this order:
   did not appear in a ledger project run (lg-23). When you need a second tree,
   `git worktree add --detach /workspaces/tools/.claude/worktrees/gate-<id>-<n> <sha>`,
   then farm and `npm run build` in it, and `git worktree remove --force` it
-  before you report. Not under your scratch directory: a tree there fails
-  `npm run check` with a false TS2883 even at the base sha, where the same sha
-  beside the agent worktrees passes (lg-23). The farm fills the toplevel of the
+  before you report. Not under your scratch directory, nor anywhere outside
+  `/workspaces/tools`: the farm's links resolve to the shared `node_modules`,
+  and TypeScript can name a type from there as its package only when that
+  directory is an ancestor's `node_modules`, so a tree under `/tmp` fails
+  `npm run check` with TS2883 at `tools/ledger/api/test/helpers/households.ts`
+  even at the base sha (lg-23; re-run 2026-10-17 at `f3b9776b`: build exit 0,
+  typecheck exit 1, that one error — lg-33 removes it), where the same sha
+  beside the agent worktrees passes. The farm fills the toplevel of the
   directory it runs in and the cwd resets between calls, so a `cd` in one call
   and the farm in the next re-farms your own tree and exits 0 (lg-25): put both
   in one script in your scratch directory and run it with `bash <file>`. A
@@ -103,14 +108,18 @@ confirm it. So read in this order:
   `## Review` for gate 1, `### Gate <n>` for a later one — and name the path in
   your report. The lander commits that file as it stands — or, when the branch
   only files a ticket or records a decision on one, posts it on the pull
-  request thread (`gate.md`, `records.md`). **The section file is the only
-  report-shaped file you write.** Your final message is the full report,
-  returned as text and never written to a file (the harness refuses a subagent
-  writing a report file); the orchestrator files it for the lander to post, and
-  its text reaches the orchestrator HTML-escaped and is not what lands. The
-  section inside that message is the file's text, pasted, not retyped: the
-  orchestrator compares the two and sends a difference back to you (lg-26).
-  Write nowhere else: your worktree must be clean when you report.
+  request thread (`gate.md`, `records.md`). **Write the full report to a
+  second file beside it, `gate-<n>@<short head sha>.full.md`**: the section
+  pasted in as its first part — not retyped — then the reasoning, the
+  enumerations and the reproductions. The lander posts that file on the pull
+  request thread. The one file name the harness refuses a subagent is
+  `report.md`, in any directory ("Subagents should return findings as text";
+  measured 2026-10-17 with one body under four names, that name alone
+  refused), so never use it. Your final message is the full report's text as
+  well, for the orchestrator to route; the two files are the record, and the
+  orchestrator compares the section in the full file with the section file and
+  sends a difference back to you (lg-26). Write nowhere else: your worktree
+  must be clean when you report.
 - **A remedy you state is a claim.** Run it on the input that found the defect
   and on one hostile input of your own, or state a direction instead of a
   remedy: dl-125's gate 2 stated one F5 remedy, and it was itself quadratic on

@@ -7,10 +7,9 @@ models so one can be held against the other:
 - **The section, in the ticket**, above `## Log`: the verdict, the acceptance
   table and the findings, one subsection per gate, exactly as the gate wrote it.
 - **The full report, on the pull request thread**: the reasoning, the
-  enumerations and the reproductions. A gate returns it as text and cannot
-  write it to a file (the harness refuses a subagent writing a report file);
-  the orchestrator writes each one to `<scratch>/<id>/gate-<n>/report.md`, and
-  the lander posts those.
+  enumerations and the reproductions. The gate writes it beside its section
+  as `gate-<n>@<sha>.full.md` — the harness refuses a subagent only a file
+  named `report.md` (measured 2026-10-17) — and the lander posts those files.
 
 ## What a record names
 

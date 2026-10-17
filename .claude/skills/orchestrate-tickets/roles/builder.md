@@ -29,9 +29,10 @@ instead.
    named local ref and say which you used. **If the auto-mode classifier denies
    the checkout** ("Modify Shared Resources": lg-25, and repo-99's records
    builder), do not try another spelling: stop and report the denial verbatim.
-   The orchestrator puts it to the owner and dispatches you again fresh, since
-   a resume with nothing committed lands in the shared checkout (_Stopping on a
-   stop condition_, below).
+   The orchestrator dispatches you again fresh — never a resume, which with
+   nothing committed lands in the shared checkout (_Stopping on a stop
+   condition_, below) — and puts it to the owner only if the fresh dispatch is
+   denied too.
 
 ## Scope
 
