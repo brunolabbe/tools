@@ -229,6 +229,19 @@ clock in the packer, which today sums minute budgets and holds no clock, the
 lookup, and the plan view) are filed once pl-56's number is in. Writing them
 now would be the fiction the end of this page warns about.
 
+**§5's third item, existence, is not built either, and it was put behind a
+measurement on 2026-10-17.** pl-56's number already disproves §5's premise
+that "no hit is strong evidence that it is not": 77% of the places proposed
+came back empty from the geocoder, and most of them were a kind of place, not a
+name. The other half of the premise, invention itself, has never been observed
+in a recorded run. So the next ticket counts invention before any check is
+designed:
+
+9. **Does a specialist ever invent a place?** Classify all 1,019 recorded
+   places by how specific they are, then check 50 named premises per model on
+   the web, and end with the build decision as options. →
+   [pl-57](./work/pl-57-measure-invention.md)
+
 ## Phase 4 — Revision is the product
 
 Pin an item, name the days a re-plan may touch, re-run a slice with two
@@ -318,7 +331,13 @@ Short, and each one is a real decision someone has to make rather than a gap:
   §5's amendment and [pl-29](./work/pl-29-detours-along-a-leg.md) are about.
   **Answered for opening hours on 2026-10-17: a pass**, accepting that cost
   (see the end of Phase 3). It stays open for existence, the item where a
-  specialist that knew would most plausibly have proposed differently.
+  specialist that knew would most plausibly have proposed differently. **On
+  2026-10-17 the owner put it behind a measurement**:
+  [pl-57](./work/pl-57-measure-invention.md) counts how often a specialist
+  invents a place before either shape is built. Two facts from its filing weaken
+  this sentence. Corridor finds reach 2 of the 544 candidates written by the
+  specialists shown them, and most proposals name a kind of place rather than a
+  premises.
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough — pl-5 built exactly that and pl-16 now

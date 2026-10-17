@@ -355,6 +355,24 @@ possible. This is that one.
 
 → [pl-29](./work/pl-29-detours-along-a-leg.md)
 
+### Amendment, 2026-10-17 — no hit is not strong evidence either
+
+Item 3 above says "a search hit is weak evidence that a place is real; no hit
+is strong evidence that it is not." **The second half did not survive its first
+measurement.** pl-56 sent all 1,019 places from the 111 recorded live runs
+through the geocoder. 787 came back empty, and most of those were not names at
+all: specialists propose a kind of place at a locality ("Percé village inn")
+about as often as a named premises. Real ones came back empty too, Parc national
+de la Gaspésie among them. So with map data, an empty reply mostly means the
+proposal was too vague to look up, and an existence check built on one could
+label a candidate but not drop it.
+
+Failure 5 itself, invention, has not been observed in a recorded run. That is
+not evidence it does not happen, because no run has ever been checked for it. The
+item stays ranked where it is, and nothing is built for it until it is counted.
+
+→ [pl-57](./work/pl-57-measure-invention.md)
+
 ---
 
 ## 6. The plan is a document, and revision is the whole product
