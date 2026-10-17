@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.0](https://github.com/brunolabbe/tools/compare/ledger-v0.2.0...ledger-v0.3.0) (2026-10-17)
+
+
+### Features
+
+* **ledger:** a blank salary leaves a person out of the year's ratio (lg-29) ([#515](https://github.com/brunolabbe/tools/issues/515)) ([801c740](https://github.com/brunolabbe/tools/commit/801c7404767586c137c7b66f210c23b345facb08))
+* **ledger:** manage households and their members from the app (lg-22) ([#472](https://github.com/brunolabbe/tools/issues/472)) ([3292943](https://github.com/brunolabbe/tools/commit/3292943712e433cd21fa0f489333f62a2518c919))
+* **ledger:** one file of books per household, chosen by who is asking (lg-21) ([#452](https://github.com/brunolabbe/tools/issues/452)) ([3a9b298](https://github.com/brunolabbe/tools/commit/3a9b298dc4587fda2cd56939d16aa75169541a76))
+* **ledger:** photograph a receipt, read it with a model, confirm and file it (lg-8) ([#474](https://github.com/brunolabbe/tools/issues/474)) ([f52cef6](https://github.com/brunolabbe/tools/commit/f52cef62fd0bdadaa5d7bfbf68de0160034703d8))
+* **ledger:** read a receipt's items, take off what is not shared or is the other's (lg-10) ([#498](https://github.com/brunolabbe/tools/issues/498)) ([5f318ac](https://github.com/brunolabbe/tools/commit/5f318acbf634fc6be78deabc9d0914418c72e65c))
+* **ledger:** settle a household of more than two people (lg-23) ([#508](https://github.com/brunolabbe/tools/issues/508)) ([2ec0be0](https://github.com/brunolabbe/tools/commit/2ec0be09440e5021c9edc508146aa7338355b06a))
+* **ledger:** split a joint-account row's spending by its receipt items (lg-27) ([#506](https://github.com/brunolabbe/tools/issues/506)) ([72eb962](https://github.com/brunolabbe/tools/commit/72eb9624b0a841d5ae8b4d00f29995a9f5b033d3))
+
+
+### Fixes
+
+* **ledger:** a cent of rounding no longer refuses a receipt with nothing shared (lg-32) ([#519](https://github.com/brunolabbe/tools/issues/519)) ([495a5b7](https://github.com/brunolabbe/tools/commit/495a5b7a1f31cc7ba384c7956b671f05aeb02f11))
+* **ledger:** flag taxable marks that do not give the printed taxes (lg-26) ([#504](https://github.com/brunolabbe/tools/issues/504)) ([1ba5098](https://github.com/brunolabbe/tools/commit/1ba5098e07343916a14af6cc348e39b26e4d6794))
+* **ledger:** list and correct a closed period's card lines from the stats screen (lg-19) ([#449](https://github.com/brunolabbe/tools/issues/449)) ([d78ac28](https://github.com/brunolabbe/tools/commit/d78ac2875a77b1ea3bb5083ad9ee0299b5b04865))
+* **ledger:** make the spending drill-down follow a receipt's split (lg-28) ([#517](https://github.com/brunolabbe/tools/issues/517)) ([d882a66](https://github.com/brunolabbe/tools/commit/d882a6682c12b2f980feaf61c3de5da21004f498))
+* **ledger:** refuse a non-string to a directory method as BAD_REQUEST (lg-25) ([#495](https://github.com/brunolabbe/tools/issues/495)) ([b08b694](https://github.com/brunolabbe/tools/commit/b08b694f03ef183793775d68724afffda67a44bf))
+* **ledger:** refuse a NULL household id in the directory schema (lg-24) ([#485](https://github.com/brunolabbe/tools/issues/485)) ([191153e](https://github.com/brunolabbe/tools/commit/191153e5b4671ca86d1f07bb2c0686546427cb87))
+
 ## [0.2.0](https://github.com/brunolabbe/tools/compare/ledger-v0.1.0...ledger-v0.2.0) (2026-10-12)
 
 
