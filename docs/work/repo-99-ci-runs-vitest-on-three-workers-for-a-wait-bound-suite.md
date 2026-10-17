@@ -191,3 +191,29 @@ CI only**. Local runs keep vitest's default.
     rest of preflight passes at `4d72b248`: `npm run check` and `npm test` ok,
     `ciCommands` ok, `review` ok, `title` ok (`ci` is hidden in
     `release-please-config.json`).
+- 2026-10-17 — Correction to the entry above, on Done when 3, the flake. It
+  says "none", which holds for the four attempts on `4d72b248` and no others.
+  The Log commit `761ceba7` pushed the same config under a docs-only change;
+  its diff against `main` still carries `vitest.config.ts`, so the unit matrix
+  ran (PR run 39061881142, attempt 1). Windows failed on the same test the
+  2026-10-12 entry names: `tools/downloader/engine/test/parallel-ranges.test.ts`,
+  "dl-98: the feeder's own limits" > "bytes held ahead never exceed 4 x 4 MB,
+  measured at the defaults with ffmpeg not reading", `AssertionError: expected
+'fallen-back' to be 'parallel'`. Vitest's summary on that leg: `Test Files 1
+failed | 282 passed | 2 skipped (285)`, `Tests 1 failed | 5757 passed | 61
+skipped (5819)`. The leg is informational, so the run's conclusion reads
+  `success`. Its `npm test` step ran 378 s (19:19:40 to 19:25:58). The ubuntu
+  leg of the same run passed in 231 s (19:19:44 to 19:23:35), a third ubuntu
+  sample at six workers beside 222 s and 229 s.
+- Windows flake, counted at six workers on the PR's config: 2 failures in 5
+  attempts. 38262465552 (2026-10-12, the earlier draft, same setting) failed
+  attempt 1 and passed attempt 2; 39059607797 passed attempts 1 and 3; 39061881142
+  failed attempt 1. At the three-worker default on `main`: 0 failures in 3
+  attempts (39048517864 attempt 1; 39058961193 attempts 1 and 2). These are
+  the attempts this ticket has read, not a sample from a controlled run, and
+  the ubuntu leg passed every attempt on both settings. The test's own comment
+  names the mechanism: a 50 ms throughput window falls back when four
+  connections are not 1.5 times one that the CPU already limits, and six
+  workers share four vCPUs on Windows. Done when 3 is therefore not met for the
+  Windows leg at six workers. The number is not lowered and the test is not
+  excluded here, as Build step 3 requires; both choices sit with the owner.
