@@ -560,6 +560,14 @@ export interface InventionRecord {
   budget: VerdictsFile["budget"];
   verdictTables: Record<string, VerdictTable>;
   /** pl-56's OSM `located` against this record's classes and verdicts. */
+  /**
+   * The distinct sampled places split by whether `lodging` or `food` proposed
+   * them: the two specialists whose proposals were emptiest in pl-56.
+   */
+  sampleBySpecialistGroup: Record<
+    string,
+    { places: number; counts: Record<string, number>; notConfirmed: string }
+  >;
   osmCrossTabs: {
     locatedByClass: Record<string, { located: number; total: number }>;
     /** Over the distinct sampled places: verdict → located / not located by OSM. */
@@ -567,6 +575,34 @@ export interface InventionRecord {
   };
   unchecked: string[];
   rows: unknown[];
+}
+
+export function buildSpecialistGroups(
+  places: NamedPlace[],
+  checks: Record<string, Check>,
+  sampled: Set<string>,
+): InventionRecord["sampleBySpecialistGroup"] {
+  const out: InventionRecord["sampleBySpecialistGroup"] = {
+    "lodging or food proposed it": { places: 0, counts: {}, notConfirmed: "" },
+    "only other specialists": { places: 0, counts: {}, notConfirmed: "" },
+  };
+  for (const place of places) {
+    const check = checks[place.key];
+    if (!sampled.has(place.key) || check === undefined) continue;
+    const group =
+      out[
+        "lodging" in place.specialists || "food" in place.specialists
+          ? "lodging or food proposed it"
+          : "only other specialists"
+      ];
+    if (group === undefined) continue;
+    group.places += 1;
+    bump(group.counts, check.verdict);
+  }
+  for (const group of Object.values(out)) {
+    group.notConfirmed = rate(group.places - (group.counts["exists"] ?? 0), group.places);
+  }
+  return out;
 }
 
 export function buildOsmCrossTabs(
@@ -652,6 +688,7 @@ export function buildRecord(inputs: {
     sample,
     budget: verdicts.budget,
     verdictTables: buildVerdictTables(sample, verdicts.checks),
+    sampleBySpecialistGroup: buildSpecialistGroups(places, verdicts.checks, sampled),
     osmCrossTabs: buildOsmCrossTabs(places, classification, verdicts.checks, sampled, hoursByKey),
     unchecked,
     rows,
@@ -750,6 +787,17 @@ export function render(record: InventionRecord): string {
         verdict,
         cell.located,
         cell.notLocated,
+      ]),
+    ),
+  );
+  out.push(
+    markdownTable(
+      ["distinct sampled places", "n", ...VERDICTS, "not confirmed"],
+      Object.entries(record.sampleBySpecialistGroup).map(([group, cell]) => [
+        group,
+        cell.places,
+        ...VERDICTS.map((verdict) => cell.counts[verdict] ?? 0),
+        cell.notConfirmed,
       ]),
     ),
   );

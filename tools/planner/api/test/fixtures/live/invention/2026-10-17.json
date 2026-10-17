@@ -528,6 +528,26 @@
       "notConfirmed": "0.0% (0.0%–7.1%)"
     }
   },
+  "sampleBySpecialistGroup": {
+    "lodging or food proposed it": {
+      "places": 28,
+      "counts": {
+        "exists": 25,
+        "not-found": 1,
+        "exists-elsewhere": 1,
+        "closed": 1
+      },
+      "notConfirmed": "10.7% (3.7%–27.2%)"
+    },
+    "only other specialists": {
+      "places": 93,
+      "counts": {
+        "exists": 91,
+        "exists-elsewhere": 2
+      },
+      "notConfirmed": "2.2% (0.6%–7.5%)"
+    }
+  },
   "osmCrossTabs": {
     "locatedByClass": {
       "settlement-or-area": {
