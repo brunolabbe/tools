@@ -545,7 +545,12 @@ export interface RatioProposal {
 /** What `POST /api/salaries` answers: the year's salaries as they now stand, and the ratio they give. */
 export interface SalaryEntryResponse {
   salaries: Salary[];
-  /** `null` until the year holds salaries for at least two people, not all of them zero. */
+  /**
+   * The ratio between the people this entry names, and only them (lg-29): a
+   * person it leaves out is not in the year's ratio, even when a salary of theirs
+   * stands for the year, and `salaries` above still lists it. `null` until the
+   * entry names at least two people, not all of them zero.
+   */
   proposal: RatioProposal | null;
 }
 

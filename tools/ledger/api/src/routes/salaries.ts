@@ -1,9 +1,10 @@
 /**
  * The salaries and the ratio (lg-5).
  *
- * `POST /api/salaries` files a year's salaries and answers with the ratio they
- * give, as a proposal; `POST /api/ratios` is the person confirming it, with the
- * day it takes effect. Both append, and who acted comes from `personOf`.
+ * `POST /api/salaries` files a year's salaries and answers with the ratio
+ * between the people the entry names, as a proposal; `POST /api/ratios` is the
+ * person confirming it, with the day it takes effect. Both append, and who
+ * acted comes from `personOf`.
  */
 
 import { AppError, ROUTES, confirmRatioRequestSchema, salaryEntrySchema } from "@ledger/contract";

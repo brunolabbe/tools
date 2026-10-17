@@ -14,8 +14,9 @@ import type {
   SalaryEntry,
   SalaryEntryResponse,
 } from "@ledger/contract";
+import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { SAM, homeBooks } from "./helpers/access.ts";
+import { ALEX, SAM, accessConfig, homeBooks, memberDirectory } from "./helpers/access.ts";
 import { startApp } from "./helpers/classification.ts";
 
 let app: App | undefined;
@@ -241,11 +242,12 @@ describe("a corrected salary", () => {
     const ratio2026 = await confirm(target, entered2026, "2026-01-01");
     const [, samOriginal] = entered2026.salaries;
 
-    // sam's 2026 salary was mistyped.
-    const corrected = await enter(target, {
-      year: 2026,
-      salaries: [{ personId: "sam", amountCents: 4_000_000 }],
-    });
+    // sam's 2026 salary was mistyped. alex's is sent again, unchanged, because
+    // the proposal is between the people an entry names (lg-29).
+    const corrected = await enter(target, year(2026, 6_000_000, 4_000_000));
+    expect(
+      records(target).filter((row) => row.person_id === "alex" && row.year === 2026),
+    ).toHaveLength(1);
 
     // The earlier record is still stored, and the correction names it.
     const sam2026 = records(target).filter((row) => row.person_id === "sam" && row.year === 2026);
@@ -328,5 +330,104 @@ describe("a corrected salary", () => {
     const all = await target.server.inject({ method: "GET", url: ROUTES.ratios });
     expect(all.json<RatiosResponse>().ratios).toEqual([second]);
     expect(homeBooks(target).prepare("SELECT count(*) AS n FROM ratios").get()).toEqual({ n: 2 });
+  });
+});
+
+function threePeople(alex: number, casey: number, sam: number): SalaryEntry {
+  return {
+    year: 2025,
+    salaries: [
+      { personId: "alex", amountCents: alex },
+      { personId: "casey", amountCents: casey },
+      { personId: "sam", amountCents: sam },
+    ],
+  };
+}
+
+describe("a salary left out of an entry (lg-29)", () => {
+  const CASEY = "casey@example.test";
+
+  /** A household of alex, casey and sam, alex the caller. */
+  async function startThree(): Promise<App> {
+    app = await createApp({
+      directory: memberDirectory([
+        [ALEX, "alex"],
+        [CASEY, "casey"],
+        [SAM, "sam"],
+      ]),
+      config: {
+        dataDir: ":memory:",
+        logLevel: "silent",
+        access: accessConfig({ devIdentity: ALEX }),
+      },
+      now: () => new Date("2026-10-03T09:30:00Z"),
+    });
+    return app;
+  }
+
+  test("the proposal is between the people entered, not every salary the year holds", async () => {
+    const target = await startThree();
+    const first = await enter(target, threePeople(5_000_000, 4_000_000, 1_000_000));
+    expect(first.proposal?.shares.map((share) => share.personId)).toEqual(["alex", "casey", "sam"]);
+
+    // sam's field is blank this time, though a salary of his stands for 2025.
+    const second = await enter(target, {
+      year: 2025,
+      salaries: [
+        { personId: "alex", amountCents: 5_000_000 },
+        { personId: "casey", amountCents: 4_000_000 },
+      ],
+    });
+
+    expect(second.proposal?.shares.map((share) => [share.personId, share.partsPerMillion])).toEqual(
+      [
+        ["alex", 555_556],
+        ["casey", 444_444],
+      ],
+    );
+    // The salary on record is not erased, and the year still lists it.
+    expect(second.salaries.map((salary) => salary.personId)).toEqual(["alex", "casey", "sam"]);
+    expect(records(target)).toHaveLength(3);
+  });
+
+  test("confirming that proposal stores a ratio of the two, and sam is not in it", async () => {
+    const target = await startThree();
+    await enter(target, threePeople(5_000_000, 4_000_000, 1_000_000));
+    const second = await enter(target, {
+      year: 2025,
+      salaries: [
+        { personId: "alex", amountCents: 5_000_000 },
+        { personId: "casey", amountCents: 4_000_000 },
+      ],
+    });
+
+    const response = await target.server.inject({
+      method: "POST",
+      url: ROUTES.ratios,
+      payload: {
+        effectiveFrom: "2025-01-01",
+        salaryIds: second.proposal?.shares.map((share) => share.salaryId),
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json<Ratio>().shares.map((share) => share.personId)).toEqual(["alex", "casey"]);
+  });
+
+  test("an entry of one person proposes nothing, though the year holds salaries for others", async () => {
+    const target = await startThree();
+    await enter(target, threePeople(5_000_000, 4_000_000, 1_000_000));
+
+    const alone = await enter(target, {
+      year: 2025,
+      salaries: [{ personId: "alex", amountCents: 6_000_000 }],
+    });
+
+    expect(alone.proposal).toBeNull();
+    expect(alone.salaries.map((salary) => [salary.personId, salary.amountCents])).toEqual([
+      ["alex", 6_000_000],
+      ["casey", 4_000_000],
+      ["sam", 1_000_000],
+    ]);
   });
 });

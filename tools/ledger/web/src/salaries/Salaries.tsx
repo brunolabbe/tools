@@ -7,6 +7,10 @@
  * with the day it takes effect, which starts as the day of entry and can be
  * changed. Until then the ratio in effect is the one confirmed before, so
  * correcting a salary never quietly moves a ratio a settlement already used.
+ *
+ * A blank salary leaves that person out of the entry, and so out of the ratio it
+ * proposes (lg-29). The proposal's shares are on the screen before anyone
+ * confirms, which is the check that a salary was left blank on purpose.
  */
 
 import { useCallback, useEffect, useId, useState } from "react";
@@ -117,12 +121,19 @@ export function Salaries(): React.ReactElement {
     const entries: { personId: string; amountCents: number }[] = [];
     for (const personId of people) {
       const text = typed[personId] ?? "";
+      // A blank leaves the person out of this year's ratio (lg-29); text that is
+      // not an amount is still a mistake, not a blank.
+      if (text.trim() === "") continue;
       const amountCents = parseTypedAmountCents(text);
       if (amountCents === null || amountCents < 0) {
         setProblem(`${personId}'s salary is not an amount. Try 60000 or 60000.50.`);
         return;
       }
       entries.push({ personId, amountCents });
+    }
+    if (entries.length < 2) {
+      setProblem("A ratio is between two people or more. Enter a salary for at least two.");
+      return;
     }
     setProblem(null);
     void send(async () => {
@@ -154,6 +165,12 @@ export function Salaries(): React.ReactElement {
         {inEffect === null
           ? "No ratio is in effect yet."
           : `Ratio in effect: ${sharesLabel(inEffect.shares)}, since ${inEffect.effectiveFrom}.`}
+      </p>
+
+      <p className="muted">
+        A blank salary leaves that person out of the year&rsquo;s ratio. A salary already on record
+        for them comes back pre-filled whenever the year is opened, and must be cleared again each
+        time; the one on record is kept.
       </p>
 
       <form className="rule-form" onSubmit={save}>

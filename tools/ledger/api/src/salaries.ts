@@ -86,7 +86,7 @@ function yearSalaries(db: Database, year: number): Salary[] {
   ).map(toSalary);
 }
 
-/** The ratio a year's salaries give, once the year holds them for two people or more (lg-23). */
+/** The ratio some salaries give, once there are two people's or more, not all of them zero (lg-23). */
 function proposalFor(salaries: readonly Salary[], today: string): RatioProposal | null {
   if (salaries.length < 2) return null;
   const byPerson = new Map(salaries.map((salary) => [salary.personId, salary.id]));
@@ -139,7 +139,15 @@ export function enterSalaries(context: SalaryContext, entry: SalaryEntry): Salar
         );
       }
       const salaries = yearSalaries(context.db, entry.year);
-      return { salaries, proposal: proposalFor(salaries, todayOf(context)) };
+      // The proposal is between the people this entry names (lg-29): a person
+      // left out of it is not in this year's ratio, though a salary of theirs
+      // may stand, and it is not erased either.
+      const entered = new Set(named);
+      const proposal = proposalFor(
+        salaries.filter((salary) => entered.has(salary.personId)),
+        todayOf(context),
+      );
+      return { salaries, proposal };
     })
     .immediate();
 }
