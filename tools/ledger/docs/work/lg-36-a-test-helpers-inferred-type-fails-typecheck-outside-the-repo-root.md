@@ -1,5 +1,5 @@
 ---
-id: lg-33
+id: lg-36
 tool: ledger
 title: A test helper's inferred return type fails typecheck in any worktree outside the repo root (TS2883)
 kind: fix
@@ -9,7 +9,7 @@ depends_on: []
 difficulty: mechanical
 ---
 
-# lg-33 — A test helper's inferred return type fails typecheck outside the repo root
+# lg-36 — A test helper's inferred return type fails typecheck outside the repo root
 
 ## Why
 
@@ -77,3 +77,7 @@ other error. The same sha under `/workspaces/tools/.claude/worktrees/` passed
   ran the reproduction above and read the cause off the error's relative path:
   twelve `../` from the helper's directory to `/`, then into the shared
   `node_modules`.
+- 2026-10-17 — Renumbered from lg-33 to lg-36: #523 filed its own lg-33 (rename a
+  person) between this ticket's id check and its merge, and `main` carried two
+  lg-33 files from #525's merge until this landed (`npm run status` → `"lg-33"
+is used by more than one ticket`, exit 1).

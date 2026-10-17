@@ -62,7 +62,7 @@ confirm it. So read in this order:
   directory is an ancestor's `node_modules`, so a tree under `/tmp` fails
   `npm run check` with TS2883 at `tools/ledger/api/test/helpers/households.ts`
   even at the base sha (lg-23; re-run 2026-10-17 at `f3b9776b`: build exit 0,
-  typecheck exit 1, that one error — lg-33 removes it), where the same sha
+  typecheck exit 1, that one error — lg-36 removes it), where the same sha
   beside the agent worktrees passes. The farm fills the toplevel of the
   directory it runs in and the cwd resets between calls, so a `cd` in one call
   and the farm in the next re-farms your own tree and exits 0 (lg-25): put both
