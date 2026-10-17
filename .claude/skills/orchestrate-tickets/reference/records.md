@@ -7,10 +7,9 @@ models so one can be held against the other:
 - **The section, in the ticket**, above `## Log`: the verdict, the acceptance
   table and the findings, one subsection per gate, exactly as the gate wrote it.
 - **The full report, on the pull request thread**: the reasoning, the
-  enumerations and the reproductions. A gate returns it as text and cannot
-  write it to a file (the harness refuses a subagent writing a report file);
-  the orchestrator writes each one to `<scratch>/<id>/gate-<n>/report.md`, and
-  the lander posts those.
+  enumerations and the reproductions. The gate writes it beside its section
+  as `gate-<n>@<sha>.full.md` — the harness refuses a subagent only a file
+  named `report.md` (measured 2026-10-17) — and the lander posts those files.
 
 ## What a record names
 
@@ -59,7 +58,14 @@ all five names: **the landing's `## Review` and title checks have not run until
 it passes**, so `--only mergeTree` alone is not enough. A `--land` killed
 after its push is finished except for the thread comments and `gh pr ready`:
 do those by hand, and never run `--land` on the same files again — it splices
-a second `## Review` (repo-103).
+a second `## Review` (repo-103). **A suite that fails after the push in a file
+the branch never touched**, a timing test under the batch's own load, is the
+same case: the records are landed, and the lander reruns only the checks that
+did not pass, `node scripts/preflight.mjs --only <names> --base origin/<base>
+--title "<title>"`, once the machine is quieter, and names that pass in the
+thread comment (dl-126: `expected 1001.709… to be greater than or equal to
+1200` in `browser-resolver-departure-and-floor.test.ts`, then `--only check`
+exit 0).
 
 - **Gate 1's file starts `## Review`; a later gate's starts `### Gate <n>`.**
   The script reads the gate number off that line.
@@ -99,7 +105,9 @@ A below-floor finding the owner chose to fix at the landing (`SKILL.md` step 6)
 is applied as the finding states it — the gate's wording and the code it names,
 not the lander's reading of it (repo-95's lander wrote "a similar sentence";
 the gate's is the record). The gate's section is not touched. The mark is one
-Log entry on the ticket, in the landing commit:
+Log entry on the ticket, **in the fix's own commit, before `--land`**, which
+refuses a ticket dirty against `HEAD` (every lander since 2026-10-15 committed
+it so: repo-104's `ba703486`, lg-26's `611e7547`):
 
 ```markdown
 - 2026-10-14 — Fixed at landing by owner choice: gate 2, N1 — "<the gate's
@@ -107,8 +115,12 @@ Log entry on the ticket, in the landing commit:
 ```
 
 It names the finding, not the commit: a commit cannot carry its own sha (lg-19
-spent two commits on one line), and the fix is the landing commit whose subject
-names the finding. When the fix touched anything but the ticket file, the
+spent two commits on one line), and the fix is the commit before the records
+whose subject names the finding. **Scope the command above `## Log`** when the
+fix is a wording change — `awk '/^## Log/{exit} {print}' <ticket> | grep -c
+"<phrase>"` — because the entry quotes the phrase it removed, and an unscoped
+`grep -c` counts the entry (dl-127: `2` for one fixed line; pl-56: `3`, every
+hit in the landing's own entries). When the fix touched anything but the ticket file, the
 orchestrator reads the landing head's `CodeQL` check before the merge
 (`SKILL.md` step 10): repo-103's landing fix raised a new `high` alert that the
 gated sha's run had not seen.

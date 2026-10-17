@@ -103,15 +103,26 @@ for as long as it is open, so:
 - **Its title is checked like any other**
   (`node scripts/commit-message.mjs --text "<title>"`) before you write it into
   the prompt; "DO NOT MERGE" goes after the type and scope.
+- **It runs `ci.yml`'s whole matrix too** whenever it adds a file that is not
+  markdown, beside its own job: dl-125's probe paid about 17 minutes of Linux
+  and Windows legs beside a 13-minute probe. Price that in the dispatch.
+- **It prints its whole reading into its job log**, and an artifact is a
+  copy: `gh run download` timed out here on 2026-10-15 and fetched the same
+  artifact on 2026-10-17, so it depends on the firewall of the day.
 - **It is a draft, and it is closed with its branch deleted** as the next action
-  after the reading is captured. A sibling whose preflight exits 16 against a
+  after the reading is captured: `gh pr close <n>`, then
+  `git push origin --delete <branch>`, then
+  `git ls-remote --heads origin <branch> | wc -l` → `0`. `gh pr close
+  --delete-branch` from a worktree closes the pull request and leaves the
+  branch ("'main' is already used by worktree", #486). A sibling whose preflight exits 16 against a
   probe waits for that, and changes nothing. That exit stopped its run at the
   probe (repo-104): the sibling's suites, `## Review` and title checks are
   unproven until it reruns the checks its last line lists after `not run:`.
 
 **Preflight exit 16 against a sibling that will merge** blocks `gh pr ready` on
 the branch that merges second, not on both: set the order, hold the second as a
-draft, and rebase it once the first has merged
+draft, and merge `main` into it once the first has merged — never a rebase,
+which cannot reach `origin` without a force-push
 ([concurrency.md](concurrency.md)).
 
 ## Routing a round
@@ -124,8 +135,7 @@ draft, and rebase it once the first has merged
   whether it has ship authority.
 - **A fresh `fixer`**, when every finding is mechanical or only the landing is
   left: the branch, the base, the findings pasted, the scratch directory, the
-  gate files to land, the `report.md` you wrote beside each from the gate's
-  returned text, the pull request number and title, and every model's name for
+  gate files to land, each gate's `.full.md` report file beside them, the pull request number and title, and every model's name for
   the body. A fixer and a resumed builder never work one branch at once.
 - **End the last relay with conditional ship authority**: "apply these, and if
   preflight exits 0 and the diff's scope is unchanged, land it yourself; if any
