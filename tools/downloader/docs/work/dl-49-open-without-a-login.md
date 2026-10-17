@@ -151,6 +151,30 @@ the allowlist is the only configuration in which its data model is coherent.
 - Invariants: no shell, no new spawn, no imports across tools, no contract edit. Skipped as untouched: `AppError`, SSRF, redaction, progress, image closure, test registration (both specs are existing `repo` files).
 - NFR: security, see F1 and F2 · performance n/a · reliability ✓ (the script stays additive; the two files went from 31 to 34 tests (17+14 at the base by `^test(` count, 18+16 at head). The two replaced setup tests asserted the old downloader shape, so they were rewritten, not weakened) · maintainability, see F5 and F6.
 
+### Gate 2
+
+**Gate: PASS for the slice (four rows `unproven (scope)`)** — 2026-10-17 · `34fcfac1..fa94651d` (one commit) · Opus 5.5, depth medium · round only; still the Build 1–3 slice, no request to `oludoi.com`
+
+The acceptance rows are as gate 1 left them. The four `unproven (scope)` rows are still scoped out by the orchestrator's dispatch and land with the owner's Builds 4–6. The CI row is re-read on this head: PR #496 at `fa94651d` has `check`, `test (ubuntu-latest)`, `test (windows-latest, informational)`, CodeQL and dependency-review all passing. Locally, `npx vitest run` on the two spec files gives 34 of 34.
+
+- **F1 (high) · fixed.**
+  - `docs/02-DEPLOYMENT.md` "Steps 2 and 3, in one command" now says the Access-first argument covers the planner and the ledger, not the downloader. It says the downloader's hostname answers once ingress and DNS land, that the widget guards nothing until the keys are in `.env` and the container restarts, and that the keys must be there before the downloader container is up.
+  - Step 4 repeats that before `up -d`.
+  - The `applyOrder` comment no longer claims "everything that guards the host"; it names the planner's and the ledger's applications and gives the downloader its own paragraph.
+  - Checked against the code: the order of writes is unchanged, and gate 1's `widget-fails.mts`, re-run at `fa94651d`, still prints `downloader routed with no Access app and no widget: true`. The new text now describes exactly that.
+  - The new `#4--bring-it-up` link resolves: `anchors.mjs` checked 122 links, 0 broken.
+- **F2 (high) · fixed.** The bullet now says `MAX_JOBS_PER_CLIENT` bounds the jobs one address has running or waiting, and that on this instance it equals `MAX_CONCURRENT_JOBS` (2), so one address can still hold both job slots. It links `#tightening-it-past-one-user`, which resolves. Checked against the code and config:
+  - `routes/files.ts` acquires `jobClientGate` with the comment "Counts running and waiting together (dl-51)", and refuses past `maxQueuedJobs`.
+  - `compose.downloader.prod.yaml` sets both values to 2.
+- **F5 (low) · fixed.** The `planAccess` comment now speaks of two applications on one host in general, and names the downloader's pair as history from before dl-49.
+- **F6 (low) · fixed, red first.** Mutant `early-return.mjs`: `main` returns silently after `planAccess` when a `downloader.` application is live.
+  - With the head test file, `scripts/test/cloudflare-turnstile.test.ts` fails 1 of 16, on "applications already live are not written again, and no downloader login is named".
+  - With gate 1's copy of the test (`34fcfac1`), the same mutant passes 16 of 16.
+  - The builder's red-first claim holds. The tree was restored to `fa94651d` and is clean.
+- **F3, F4 (low) · recorded, not fixed.** The owner chose on 2026-10-16 to merge with the docs reading ahead of the live host.
+- **findings** · nothing new in the round's lines. The round's Log entry still lists the fail-closed change as "Open for the owner". The owner has since answered it (a separate dl- ticket), and that is a Log fact for the lander to append, not a defect in the build.
+- No finding is a `high`.
+
 ## Log
 
 - 2026-09-13 — Filed with dl-50 through dl-54 as the plan to open the downloader
