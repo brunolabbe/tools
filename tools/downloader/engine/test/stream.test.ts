@@ -2382,7 +2382,7 @@ describe("dl-125: a fast-start file stored to exactly a sample's first byte", ()
   });
 
   /** The visitor's side of a stream of `whole` stored to `cut`, and how `done` ended. */
-  async function storedTo(label: string, cut: number) {
+  async function storedTo(label: string, cut: number, options: JobOptions = {}) {
     stored = whole.subarray(0, cut);
     const lines: string[] = [];
     const engine = engineWith({ logger: capturingLogger(lines) });
@@ -2391,11 +2391,18 @@ describe("dl-125: a fast-start file stored to exactly a sample's first byte", ()
     const received = await exchange(
       label,
       () =>
-        engine.stream({
-          jobId: label,
-          variant: large(`${shortOrigin.origin}/large/faststart.mp4`),
-          requestContext: CONTEXT,
-        }),
+        engine
+          .stream({
+            jobId: label,
+            variant: large(`${shortOrigin.origin}/large/faststart.mp4`),
+            requestContext: CONTEXT,
+            options,
+          })
+          .catch((error: unknown) => {
+            // Refused before the first byte: `done` never existed.
+            done = Promise.resolve(`refused ${AppError.from(error).code}`);
+            throw error;
+          }),
       (media) => {
         done = media.done.then(
           (outcome) => outcome,
@@ -2510,4 +2517,115 @@ describe("dl-125: a fast-start file stored to exactly a sample's first byte", ()
       30_000,
     );
   }
+
+  /**
+   * dl-125's gate 1, on the owner's answers of 2026-10-17. F1: the rule as
+   * first built failed complete downloads, so it is narrowed — not for
+   * `audioOnly`, not when ffmpeg says it estimated the duration, and four
+   * frame intervals of slack when the video's frame rate is known. F2: a
+   * capture limit no longer exempts a run; the rule measures against the
+   * smaller of the container's duration and the limit. F3 and F4 pin what
+   * the first round left unasserted.
+   */
+  describe("gate 1: the rule narrowed, and measured against a capture limit", () => {
+    const completeDir = (): string => path.join(fixtureRoot, "dl125-complete");
+
+    beforeAll(async () => {
+      const { generateCompleteButShortOfDeclared } = await import("./helpers/media.ts");
+      await generateCompleteButShortOfDeclared(completeDir());
+    }, 120_000);
+
+    /** A whole source from `origin`, which honours Range: how `done` ended. */
+    async function wholeSource(
+      file: string,
+      variant: Partial<MediaVariant>,
+      options: JobOptions = {},
+    ): Promise<{ code: string | null; details: unknown }> {
+      const media = await engineWith().stream({
+        jobId: `dl-125-whole-${file}`,
+        variant: {
+          id: file,
+          protocol: "progressive",
+          url: `${origin.origin}/dl125-complete/${file}`,
+          hasVideo: true,
+          hasAudio: true,
+          label: file,
+          ...variant,
+        },
+        requestContext: CONTEXT,
+        options,
+      });
+      media.body.resume();
+      return media.done.then(
+        (outcome) => ({ code: null, details: outcome }),
+        (error: unknown) => ({
+          code: AppError.from(error).code,
+          details: AppError.from(error).details,
+        }),
+      );
+    }
+
+    test("F1: a whole 8 fps video with B-frames, 0.375 s short of its container, ends done", async () => {
+      const ended = await wholeSource("fps8.mp4", { hasAudio: false, durationSec: 10 });
+      expect(ended.code, JSON.stringify(ended)).toBeNull();
+    }, 60_000);
+
+    test("F1: a whole file read audioOnly, its audio 0.5 s shorter than its video, ends done", async () => {
+      const ended = await wholeSource("audio-short.mp4", { durationSec: 4 }, { audioOnly: true });
+      expect(ended.code, JSON.stringify(ended)).toBeNull();
+    }, 60_000);
+
+    test("F1: a whole MP3 whose duration ffmpeg estimated from its bitrate ends done", async () => {
+      // Not `audioOnly`, so that only the estimate can be what lets it through.
+      const ended = await wholeSource("estimated.mp3", { hasVideo: false, durationSec: 10 });
+      expect(ended.code, JSON.stringify(ended)).toBeNull();
+    }, 60_000);
+
+    for (const limit of [3, 3600]) {
+      test(`F2: the sample-start cut under a ${limit} s capture limit still fails DOWNLOAD_FAILED`, async () => {
+        const cut = starts.find((at) => at >= whole.length * 0.6) as number;
+        const result = await storedTo(`dl-125-limit-${limit}`, cut, { liveDurationSec: limit });
+        expect({ done: result.done, aborted: result.aborted }, JSON.stringify(result)).toEqual({
+          done: "DOWNLOAD_FAILED",
+          aborted: true,
+        });
+      }, 60_000);
+    }
+
+    test("F2: a 2 s capture of the whole 4 s file is not short, and completes", async () => {
+      const result = await storedTo("dl-125-clip-2", whole.length, { liveDurationSec: 2 });
+      expect({ done: result.done, aborted: result.aborted }, JSON.stringify(result)).toEqual({
+        done: result.evidence.received,
+        aborted: false,
+      });
+    }, 60_000);
+
+    test.skipIf(process.platform === "win32")(
+      "F3: the same 0.26 s gap on an HLS stream is not read, and ends done",
+      async () => {
+        const media = await engineWith({
+          ffmpegPath: await standIn125([
+            DURATION_4S,
+            OUT,
+            progress125(3_740_000),
+            later(200, "process.exit(0);"),
+          ]),
+        }).stream({ jobId: "dl-125-hls", variant: hlsVariant("hls6", 6), requestContext: CONTEXT });
+        media.body.resume();
+        await expect(media.done).resolves.toMatchObject({ bytes: 4096 });
+      },
+      30_000,
+    );
+
+    test("F4: one byte past that sample start, the capture holds ffmpeg's `partial file`", async () => {
+      // The companion to `ffmpeg: []` above: the same capture, on a cut that
+      // ends inside a sample, is not empty.
+      const cut = (starts.find((at) => at >= whole.length * 0.6) as number) + 1;
+      const result = await storedTo("dl-125-boundary-plus-1", cut);
+      expect(
+        result.ffmpeg.some((line) => /partial file/u.test(line)),
+        JSON.stringify(result),
+      ).toBe(true);
+    }, 60_000);
+  });
 });

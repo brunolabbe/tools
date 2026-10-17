@@ -596,3 +596,72 @@ export function sampleStarts(file: Buffer): number[] {
   }
   return [...new Set(starts)].toSorted((a, b) => a - b);
 }
+
+/**
+ * Whole sources whose container declares more than ffmpeg's last `out_time`
+ * by over 0.25 s, though nothing is missing (dl-125's gate 1, F1). Each one
+ * ended `done` before dl-125, and must still.
+ *
+ *  - `fps8.mp4`: 10 s of video only at 8 fps, libx264's **default** preset,
+ *    so with B-frames. `out_time` trails by the muxer's reorder delay, three
+ *    frames: 0.375 s. (The suite's `H264` is `ultrafast`, which has none.)
+ *  - `audio-short.mp4`: 4 s of video and 3.5 s of audio. Read `audioOnly`,
+ *    the output ends with the audio, half a second before the container.
+ *  - `estimated.mp3`: a VBR MP3 with no Xing header, silence first, so
+ *    ffmpeg guesses its duration from the first frames' bitrate (15.19 s for
+ *    10 s, measured) and says `Estimating duration from bitrate`.
+ */
+export async function generateCompleteButShortOfDeclared(dir: string): Promise<void> {
+  await fs.mkdir(dir, { recursive: true });
+  await ffmpeg([
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=size=160x120:rate=8:duration=10",
+    "-c:v",
+    "libx264",
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+    path.join(dir, "fps8.mp4"),
+  ]);
+  await ffmpeg([
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=size=160x120:rate=15:duration=4",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:sample_rate=44100:duration=3.5",
+    ...H264,
+    ...AAC,
+    "-movflags",
+    "+faststart",
+    path.join(dir, "audio-short.mp4"),
+  ]);
+  await ffmpeg([
+    "-f",
+    "lavfi",
+    "-i",
+    "anullsrc=r=44100:cl=mono:d=6",
+    "-f",
+    "lavfi",
+    "-i",
+    "anoisesrc=d=4:c=white:a=0.5:r=44100",
+    "-filter_complex",
+    "[0:a][1:a]concat=n=2:v=0:a=1",
+    "-c:a",
+    "libmp3lame",
+    "-q:a",
+    "4",
+    "-write_xing",
+    "0",
+    "-id3v2_version",
+    "0",
+    "-write_id3v1",
+    "0",
+    path.join(dir, "estimated.mp3"),
+  ]);
+}
