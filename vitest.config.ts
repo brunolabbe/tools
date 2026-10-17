@@ -1,5 +1,10 @@
 import { defineConfig } from "vitest/config";
 
+// The same test scripts/test-gate.mjs applies to `env.CI`, so the two never
+// disagree about whether a run is CI.
+const isCi = (value: string | undefined): boolean =>
+  value !== undefined && value !== "" && value !== "false" && value !== "0";
+
 /**
  * One project per tool, plus one for the shared packages.
  *
@@ -15,6 +20,21 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
+    // More workers, on CI only (repo-99). Most of this suite's wall time is
+    // waiting — timers, sockets, child processes — so vitest's default of
+    // cores - 1 (three on the four-vCPU runner) leaves CI's cores idle. Four,
+    // one per vCPU: six oversubscribed the Windows runner and flaked
+    // parallel-ranges (repo-99 Log). A developer machine is shared, and an
+    // orchestrator runs several reviewers on it at once, so it keeps vitest's
+    // default and never gets the bump.
+    //
+    // "CI is set" is test-gate.mjs's own test: the strings "", "false" and "0"
+    // are not CI, so a local `CI=false` run is not capped.
+    //
+    // At the root, not per project: vitest 4 resolves a project's worker count
+    // from the project's own maxWorkers, then the root's, then the core count
+    // (resolveMaxWorkers in vitest's cli-api chunk), and no project sets one.
+    ...(isCi(process.env.CI) ? { maxWorkers: 4 } : {}),
     projects: [
       {
         test: {
