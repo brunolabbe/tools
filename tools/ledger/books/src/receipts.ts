@@ -261,6 +261,22 @@ export interface ReceiptSplit {
  * once — so an item that is the other's costs them exactly what it would come
  * off as not shared. `paidCents` is what the card was charged, the total unless
  * a tip was added under it; the tip stays shared.
+ *
+ * **A cent of rounding is not an excess** (lg-32). The parts are rounded apart,
+ * so they can come to a cent more than the same items rounded together, which
+ * `sharedAmount` gives for them all at once. When the items taken off together
+ * leave the shared amount at zero or at the payment's sign, and the parts apart
+ * leave it at the opposite sign, that cent is rounding and nothing else: it is
+ * taken off the `not-shared` amount, which is the payer's own, no line records it
+ * and nobody owes it (owner, 2026-10-17, "not-shared first"). More taken off than
+ * was paid, together, is still returned with the opposite sign, for the caller to
+ * refuse.
+ *
+ * With no `not-shared` items the cent would go off the largest charge, the
+ * earlier on a tie. There is one charge here, rounded once, so with nothing
+ * not shared `together` and the parts apart are the same number and that case
+ * cannot arise yet; it belongs to the several charges of lg-30. Not-shared items
+ * that come to 0 cents are still items: the cent goes off them (gate 1, F2).
  */
 export function splitReceipt(
   receipt: ReceiptProposal,
@@ -271,9 +287,23 @@ export function splitReceipt(
   totalOf(receipt);
   const places = (share: ReceiptItem["share"]): number[] =>
     receipt.items.flatMap((item, index) => (item.share === share ? [index] : []));
-  const notSharedCents = sharedAmount(receipt, places("not-shared"), rates).excludedCents;
-  const chargedCents = sharedAmount(receipt, places("theirs"), rates).excludedCents;
-  return { sharedCents: paidCents - notSharedCents - chargedCents, notSharedCents, chargedCents };
+  const notShared = places("not-shared");
+  const charged = places("theirs");
+  let notSharedCents = sharedAmount(receipt, notShared, rates).excludedCents;
+  const chargedCents = sharedAmount(receipt, charged, rates).excludedCents;
+  const sharedCents = paidCents - notSharedCents - chargedCents;
+
+  const together =
+    paidCents - sharedAmount(receipt, [...notShared, ...charged], rates).excludedCents;
+  const roundingOnly =
+    sharedCents !== 0 &&
+    Math.sign(sharedCents) !== Math.sign(paidCents) &&
+    (together === 0 || Math.sign(together) === Math.sign(paidCents));
+  if (roundingOnly && notShared.length > 0) {
+    notSharedCents += sharedCents;
+    return { sharedCents: 0, notSharedCents, chargedCents };
+  }
+  return { sharedCents, notSharedCents, chargedCents };
 }
 
 /**
