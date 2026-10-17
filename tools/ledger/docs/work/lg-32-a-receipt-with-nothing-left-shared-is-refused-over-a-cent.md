@@ -3,7 +3,7 @@ id: lg-32
 tool: ledger
 title: A receipt with nothing left shared is refused over a cent of rounding
 kind: fix
-status: ready
+status: done
 milestone: P6
 depends_on: []
 difficulty: standard
@@ -83,6 +83,49 @@ change what the other person owes by a cent to fix the payer's own rounding.
    marks and a smaller amount charged, by more than the rounding) is still
    `BAD_REQUEST` with the same message.
 5. `npm run check` and `npm test -- --project ledger` pass at the branch's head.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-17 · `a04a1c96..f72a51c0` · Opus 5.5, depth full
+
+| Done when                                                                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The reproduction files with 200: one line, the charge of 1,554 to sam, no shared line, `chargeLineId` `null`. BAD_REQUEST before the change | `api/test/receipts.test.ts` › "files the charge alone, where the parts rounded apart come to a cent over" ✓. It asserts the 200, `chargeLineId` `null` and `storedLines` equal to `[{1554, sam}]`. With the base `splitReceipt` rebuilt into `dist`, the same test gets 400 `BAD_REQUEST` "More comes off this receipt than the card was charged. Check the amount charged and the items." `6b42ee19` and `a04a1c96` have the same `books/src/receipts.ts` and `api/src/receipts.ts`. |
+| 2. `splitReceipt`: 0 / 922 / 1,554, and -1 / 923 / 1,554 before the change                                                                     | `books/test/receipts.test.ts` › "takes the cent the parts were rounded apart by off the not-shared amount" ✓. It asserts the whole object with `toEqual`. At the base source it gets `sharedCents: -1`.                                                                                                                                                                                                                                                                               |
+| 3. The refund, negated with its deposit: 0 / -922 / -1,554                                                                                     | `books/test/receipts.test.ts` › "does the same for the refund of it, negated" ✓. The `REFUND` fixture negates the prices, the deposit, the taxes and the total. At the base source it gets `sharedCents: 1`.                                                                                                                                                                                                                                                                          |
+| 4. _Regression:_ a real excess is still BAD_REQUEST with the same message                                                                      | `api/test/receipts.test.ts` › "still refuses a receipt that charged less than the items came to" ✓. At 2,470 it asserts 400, the code, the message, and zero `period_lines` and `receipt_filings`. `books/test/receipts.test.ts` › "still shows more than was charged, where the parts together come to more" also covers it, at 2,475 and 2,470. Both go red when the `together` condition is mutated to `true`.                                                                     |
+| 5. `npm run check` and the ledger project pass at the head                                                                                     | **verified**. `npm run check` exits 0. `npm test -- --project ledger`: 1190 of 1190 tests in 62 files. The pull request's CI on `f72a51c0`: all 9 checks are SUCCESS, the Windows leg included.                                                                                                                                                                                                                                                                                       |
+
+- **med** · open decision · no `Done when` line depends on it · `nfr:reliability`. **The rule's test for "rounding" checks the amounts taken off, with their taxes computed exactly, against the payment. It never checks them against the printed total.** About half of the ticket's own symptom is left, and a card charged a cent under the printed total now files.
+  - The rule decides rounding with `together` (the payment less `sharedAmount` of every item taken off). That is exact taxes rounded once. A till prints GST and QST each rounded separately, so the printed total can sit a cent either side of `together`.
+  - Measured on 180,000 two-item receipts with every item taken off. Each has one not-shared and one `theirs` item, both taxable, prices 1..300 and 1001..1300, and `checkReceipt` raises no flag on any of them.
+    - Paid exactly the total: the guard newly files 13,825, and 12,890 are still refused.
+    - Paid a cent under the total: the guard newly files 7,985 that the base refused.
+  - Reproduced through the API, at the head and at the base:
+    - **Still refused at the total.** 10,00 $ not shared and 10,07 $ `theirs`, both taxable. GST 100, QST 200, total 2,307, paid 2,307. Head: `400 BAD_REQUEST "More comes off this receipt than the card was charged…"`. Base: the same. This is the failure the ticket's Why describes: every item marked, and the receipt adds up.
+    - **Newly filed a cent under.** 10,00 $ not shared and 10,12 $ `theirs`. GST 101, QST 201, total 2,314, paid 2,313. Head: `200`, one line `{1164, sam}`, not-shared 1,149. Base: `400`, the same message.
+  - **The definition cannot tell a real 1-cent shortfall from rounding.** Whether paying the total, or a cent under it, counts as "excess" depends on which way the printed taxes rounded.
+  - Options:
+    - **(A, recommended)** Widen the rule in this branch. When nothing is left shared, judge against the printed total, which `itemsAddUp` guarantees the items make. A payment at or beyond the total, at its sign, makes whatever the parts leave over rounding: up to 2 cents, one from printed against exact taxes and one from rounding the parts apart. That amount comes off the not-shared amount, or else off the largest charge. A payment under the total is refused. This rewords Build 1 and Done when 4. lg-30's Build 2 states the same `together` test, so per `gate.md` the same rewording goes into lg-30's Build 2 in the same pull request.
+    - **(B)** Land as built and file a follow-up ticket, with the 2,307 receipt above as its reproduction.
+    - **(C)** Accept the refusal for a printed-tax cent.
+  - The owner chose where the cent goes ("not-shared first"). The `together` test itself came from the filing, so (A) does not reopen the owner's answer.
+- **low** · no `Done when` line depends on it. **Build 1's second branch can be reached, and the comment saying it cannot is false.** Not-shared items whose amount rounds to 0 are still refused.
+  - The guard runs only when `notSharedCents !== 0`. Not-shared items of mixed sign and opposite tax treatment can be present and still round to 0 cents.
+  - Reproduction, through the API at the head and the base: 1,00 $ untaxed not shared, a -0,87 $ taxed coupon not shared (-0,028 $ exactly), and 4,91 $ taxed `theirs`. GST 20, QST 40, total 564, paid 564. `together` is 0 and the parts apart are -1. Head: `400 "More comes off…"`. Base: the same.
+  - Build 1 says to take the cent off the not-shared amount, or with none, off the largest charge. Either one files it.
+  - Shipped text that is false:
+    - The `splitReceipt` header says "that case cannot arise yet".
+    - The Log says the branch "cannot be reached here" and describes a zero not-shared amount as "every not-shared item priced 0".
+    - The falsehood runs in the safe direction: the receipt is refused as it was at the base, and no amount is wrong. The trigger is contrived.
+  - Mutation: deleting `&& notSharedCents !== 0` leaves all 1190 ledger tests passing, so nothing pins that condition.
+  - Seam with lg-30: both tickets say "the not-shared amount when there is one" and "with no not-shared items". This branch reads the first as the amount, and in the gap between amount and items neither rule runs. lg-30's extension has to choose between them. Nothing in either ticket is contradicted.
+- **dropped** · a tip with the same marks (2,776 charged) leaves 299 shared apart and 300 together. That is at the payment's sign, and the rounding stays shared as the header says. Not a defect.
+- **dropped** · mixed-sign lines, deposits and refunds where the not-shared amount is not zero. A random search of 400,000 receipts, each at the total and with a 1-cent tip, found no receipt the head refuses where `together` is 0 or at the payment's sign. The guard covers them.
+- **dropped** · the size of the adjustment. When the guard fires the parts apart are exactly -1 and `together` is 0, because the two roundings differ by at most a cent. The Log's "at most a cent" holds.
+- **dropped** · there is no web test for the preview: `Receipts.tsx` calls the same `splitReceipt`. No Done when line asks for one, and the books and API tests prove the function.
+- **findings** · the hunt returned 6; 2 carried, 4 dropped.
+- NFR: security n/a · performance ✓ (one more `sharedAmount` call per split) · reliability: F1 · maintainability: F2 (an unpinned condition, a false comment).
 
 ## Log
 
