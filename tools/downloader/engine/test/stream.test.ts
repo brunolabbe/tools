@@ -2628,4 +2628,96 @@ describe("dl-125: a fast-start file stored to exactly a sample's first byte", ()
       ).toBe(true);
     }, 60_000);
   });
+
+  /**
+   * dl-125's gate 2. F5: the frame-rate parse read every `[info]` line with
+   * a pattern whose two wildcards made a long line cost quadratic time, and a
+   * source can make ffmpeg print such a line (a metadata key holding a
+   * newline). F8: the four frames of slack, and the parse, pinned by a 1 fps
+   * stream line.
+   */
+  describe("gate 2: the frame-rate parse", () => {
+    /** One tagged `[info]` line, as `level+info` makes ffmpeg write it. */
+    const info = (text: string): string => say(JSON.stringify(`[info] ${text}`));
+    const exitSoon = later(200, "process.exit(0);");
+
+    async function endedWith(statements: readonly string[]) {
+      const started = performance.now();
+      const media = await engineWith({ ffmpegPath: await standIn125(statements) }).stream({
+        jobId: "dl-125-gate-2",
+        variant: large(`${origin.origin}/large/faststart.mp4`),
+        requestContext: CONTEXT,
+      });
+      media.body.resume();
+      const code = await media.done.then(
+        () => null,
+        (error: unknown) => AppError.from(error).code,
+      );
+      return { code, elapsedMs: Math.round(performance.now() - started) };
+    }
+
+    test.skipIf(process.platform === "win32")(
+      "F5: thirty 63 KB forged `Stream … Video:` lines with no fps cost nothing, and the run ends done",
+      async () => {
+        // Gate 2 measured 0.19 s for one such line under the first pattern,
+        // and 5.77 s for twenty keys through real ffmpeg.
+        const forged = `[info]   Stream #0:0: Video: ${": Video: ".repeat(7000)}x`;
+        const ended = await endedWith([
+          // Synchronous: `process.stderr.write` of 1.9 MB delivered 3 of the
+          // 30 lines before the stand-in exited.
+          `for (let i = 0; i < 30; i += 1) require("node:fs").writeSync(2, ${JSON.stringify(forged)} + "\\n");`,
+          OUT,
+          exitSoon,
+        ]);
+        expect(ended.code).toBeNull();
+        expect(ended.elapsedMs).toBeLessThan(2_000);
+      },
+      30_000,
+    );
+
+    test.skipIf(process.platform === "win32")(
+      "F5: three forged `Stream #0:` lines with a 60,000-digit index cost nothing, and the run ends done",
+      async () => {
+        // The other shape: `\d+[^:]*` would try every split of the digits,
+        // about 2.5 s a line.
+        const forged = `[info]   Stream #0:${"1".repeat(60_000)}x`;
+        const ended = await endedWith([
+          `for (let i = 0; i < 3; i += 1) require("node:fs").writeSync(2, ${JSON.stringify(forged)} + "\\n");`,
+          OUT,
+          exitSoon,
+        ]);
+        expect(ended.code).toBeNull();
+        expect(ended.elapsedMs).toBeLessThan(2_000);
+      },
+      30_000,
+    );
+
+    const oneFps = info(
+      "  Stream #0:0: Video: h264 (High), yuv420p, 160x120, 1 fps, 1 tbr, 16384 tbn",
+    );
+
+    test.skipIf(process.platform === "win32")(
+      "F8: at 1 fps, 3.5 s short of a 4 s Duration is inside four frames of slack, and ends done",
+      async () => {
+        const ended = await endedWith([DURATION_4S, oneFps, OUT, progress125(500_000), exitSoon]);
+        expect(ended.code).toBeNull();
+      },
+      30_000,
+    );
+
+    test.skipIf(process.platform === "win32")(
+      "F8: at 1 fps, 4.5 s short of a 5 s Duration is past four frames, and fails DOWNLOAD_FAILED",
+      async () => {
+        const ended = await endedWith([
+          info("  Duration: 00:00:05.00, start: 0.000000"),
+          oneFps,
+          OUT,
+          progress125(500_000),
+          exitSoon,
+        ]);
+        expect(ended.code).toBe("DOWNLOAD_FAILED");
+      },
+      30_000,
+    );
+  });
 });

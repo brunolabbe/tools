@@ -310,14 +310,37 @@ const PARTIAL_VERDICT_MS = 2_000;
  *
  * The cost is short sources the rule no longer catches: an `audioOnly` cut on
  * a sample boundary, and a cut that loses no more than the last four frames
- * (4 s at 1 fps).
+ * (4 s at 1 fps). One known false failure remains, by the owner's choice
+ * (2026-10-17): video-only FLV with B-frames below 20 fps. Its `Duration`
+ * carries a two-frame start offset on top of the reorder delay, five frames
+ * in all.
+ *
+ * **Everything this rule reads, the source can forge.** ffmpeg prints a
+ * metadata key unescaped, so a key holding a newline becomes a line of the
+ * source's choosing (dl-96's gate, F2). A forged `Duration` fails a whole
+ * file or passes a short one. A forged `Stream … Video: …, 0.0001 fps` line
+ * buys unbounded slack (40,000 s). A forged `[warning] Estimating duration
+ * from bitrate` skips the rule. Each lets that file through no worse than
+ * before dl-125, when there was no rule. None does more than the forged
+ * `Duration` already could (dl-125's gate 2, F9).
  */
 const SHORT_OF_DECLARED_SEC = 0.25;
 /** Frame intervals of slack: libx264's reorder delay of three frames, and one spare. */
 const REORDER_FRAMES = 4;
 
-/** An input's video stream and its frame rate, from ffmpeg's `[info]` stream line. */
-const VIDEO_FPS = /^\s*Stream #\d+:\d+.*: Video: .*?, (\d+(?:\.\d+)?) fps,/u;
+/**
+ * An input's video stream line, then its frame rate, from ffmpeg's `[info]`
+ * output. **Two linear patterns, not one.** A source can make ffmpeg print a
+ * line of its own (a metadata key holding a newline, up to about 64 KB). A
+ * single pattern with two wildcards, `Stream #….*: Video: .*?, N fps,`, took
+ * quadratic time on such a line, about 0.19 s for one of 63 KB (dl-125's
+ * gate 2, F5). The anchored test stops at the first `:` after the stream
+ * index. Whatever follows the index must open with a non-digit: with
+ * `\d+[^:]*`, a 60,000-digit index could split between the two parts in
+ * every way, about 2.5 s a line. The search tries each `, ` once.
+ */
+const STREAM_VIDEO = /^\s*Stream #\d+:\d+(?:[^:\d][^:]*)?: Video: /u;
+const FPS = /, (\d+(?:\.\d+)?) fps,/u;
 
 /** ffmpeg's warning that the `Duration` it printed was guessed, not read. */
 const DURATION_ESTIMATED = /Estimating duration from bitrate/iu;
@@ -940,7 +963,7 @@ async function attempt(
     onInfoLine: (line) => {
       if (frameIntervalSec === null) {
         // The first video stream described is the input's, before the output's.
-        const fps = Number(VIDEO_FPS.exec(line)?.[1]);
+        const fps = STREAM_VIDEO.test(line) ? Number(FPS.exec(line)?.[1]) : 0;
         if (fps > 0) frameIntervalSec = 1 / fps;
       }
       if (containerDurationSec !== null) return;
