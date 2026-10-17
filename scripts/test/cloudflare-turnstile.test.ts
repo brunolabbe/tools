@@ -128,10 +128,14 @@ const answer = (result: unknown, status = 200) =>
  * returns the secret was not measured (dl-71's Log).
  */
 function fakeAccount(
-  initial: { widgets?: Record<string, unknown>[]; widgetListStatus?: number } = {},
+  initial: {
+    widgets?: Record<string, unknown>[];
+    widgetListStatus?: number;
+    apps?: Record<string, unknown>[];
+  } = {},
 ) {
   const widgets = [...(initial.widgets ?? [])];
-  const apps: Record<string, unknown>[] = [];
+  const apps: Record<string, unknown>[] = [...(initial.apps ?? [])];
   const records: Record<string, unknown>[] = [];
   const writes: string[] = [];
   const base = "https://api.cloudflare.com/client/v4/accounts/A";
@@ -375,4 +379,60 @@ test("run as a process from a path with a space, a refusal still exits 1", () =>
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// --- dl-49: the downloader has no login to plan --------------------------------
+
+test("applications already live are not written again, and no downloader login is named", async () => {
+  // The live shape after dl-49 step 5 is the planner's and the ledger's
+  // applications, the widget, and the routing. The same account before step 5 also
+  // carries the downloader's two applications; both are run below.
+  const widgets = [
+    { sitekey: "0xFAKE-SITE", name: "downloader", domains: ["downloader.example.com"] },
+  ];
+  const after = fakeAccount({
+    widgets,
+    apps: [
+      { id: "1", domain: "planner.example.com" },
+      { id: "2", domain: "ledger.example.com" },
+    ],
+  });
+  const afterRun = await runSetup(after, "--apply");
+  expect(afterRun.error).toBeUndefined();
+  expect(afterRun.out).not.toContain("access  downloader");
+  expect(afterRun.out).toContain("ok       access  planner.example.com (allow)");
+  expect(afterRun.out).toContain("ok       access  ledger.example.com (allow)");
+  expect(after.writes.filter((w) => w.includes("/access/apps"))).toEqual([]);
+
+  // Before step 5 the leftovers are still live. They are not adopted (no `ok`),
+  // not proposed (no `ADD`), and not deleted (no DELETE): the script has nothing
+  // to say about them and nothing to write.
+  const before = fakeAccount({
+    widgets,
+    apps: [
+      { id: "0", domain: "downloader.example.com" },
+      { id: "9", domain: "downloader.example.com/api/files/*" },
+      { id: "1", domain: "planner.example.com" },
+      { id: "2", domain: "ledger.example.com" },
+    ],
+  });
+  const beforeRun = await runSetup(before, "--apply");
+  expect(beforeRun.error).toBeUndefined();
+  // Present as well as absent: without this, a run that returned before the access
+  // section printed anything would pass every assertion below.
+  expect(beforeRun.out).toContain("ok       access  planner.example.com (allow)");
+  expect(beforeRun.out).not.toContain("access  downloader");
+  expect(before.writes.filter((w) => w.includes("/access/apps"))).toEqual([]);
+});
+
+test("--apply on an empty account creates the planner's and the ledger's applications and no downloader one", async () => {
+  const account = fakeAccount();
+  const run = await runSetup(account, "--apply");
+
+  expect(run.error).toBeUndefined();
+  expect(run.out).toContain("applied  access  planner.example.com");
+  expect(run.out).toContain("applied  access  ledger.example.com");
+  expect(run.out).not.toContain("access  downloader");
+  expect(account.writes.filter((w) => w === "POST /access/apps")).toHaveLength(2);
+  expect(account.writes.filter((w) => w.startsWith("DELETE"))).toEqual([]);
 });

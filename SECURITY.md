@@ -1,8 +1,14 @@
 # Security
 
-These tools are self-hosted. There is no instance run for you and no service to
-attack — a report here is about the code, and the person affected by a bug in it
-is whoever chose to deploy it.
+These tools are self-hosted, with one exception: **the downloader has a public
+instance, `downloader.oludoi.com`, which anyone may use without an account.** It
+is run by the maintainer, so a bug in the code can affect that instance as well
+as whoever deployed their own copy. The planner and the ledger have no public
+instance; they run behind a login, on the maintainer's own host, and nobody else
+is expected to reach them.
+
+A report about the public instance goes through the same private channel as a
+report about the code (below), and says which of the two it is about.
 
 ## Reporting
 
@@ -54,10 +60,14 @@ Some of these get reported often enough to be worth stating up front.
 - **The service fetches URLs that a client supplies.** That is the product, not a
   flaw. The claim worth making is that it reaches somewhere the guard should have
   refused — see the first bullet above.
-- **Running it exposed and unauthenticated.** It binds to loopback by default and
-  says why; [docs/02-DEPLOYMENT.md](./docs/02-DEPLOYMENT.md) puts it behind a
-  tunnel and a login. Choosing to publish it wide open is a deployment decision
-  the code already warns about.
+- **Running your own copy exposed and unauthenticated.** It binds to loopback by
+  default and says why; [docs/02-DEPLOYMENT.md](./docs/02-DEPLOYMENT.md) puts it
+  behind a tunnel, and either a login or the downloader's own safeguards (the
+  human check and per-client limits) that the public instance runs on. A copy
+  published without either is a deployment decision the code already warns about.
+  **That the public instance has no login is not a finding either**: that is the
+  maintainer's decision. A way past what stands in for the login — the human
+  check, the per-client limits, the SSRF guard — is.
 - **The absence of DRM circumvention.** Widevine, PlayReady and FairPlay are
   detected and refused by design — the pipeline stops at `DRM_PROTECTED`. This
   boundary is deliberate and is not going to move; reports asking for it past it

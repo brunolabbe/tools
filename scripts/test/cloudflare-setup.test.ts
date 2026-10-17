@@ -186,32 +186,65 @@ test("an unproxied CNAME to the right tunnel is still a conflict", () => {
   expect(plan.conflicts).toHaveLength(1);
 });
 
-test("the two downloader applications are told apart by their path", () => {
+test("a live downloader application is neither adopted nor proposed again", () => {
+  // The script never deletes, so a host set up before dl-49 still has the
+  // downloader's login and its files Bypass until the owner removes them on the
+  // dashboard. The plan must neither count them as wanted (`ok`) nor offer to
+  // create them again (`create`): it simply does not mention them.
   const want = desiredState("example.com", "you@example.com").apps;
-  const live = [{ id: "1", domain: "downloader.example.com" }];
+  const live = [
+    { id: "1", domain: "downloader.example.com" },
+    { id: "2", domain: "downloader.example.com/api/files/*" },
+  ];
 
   const plan = planAccess(live, want);
 
-  expect(plan.ok.map((a: { domain: string }) => a.domain)).toEqual(["downloader.example.com"]);
+  expect(plan.ok).toEqual([]);
   expect(plan.create.map((a: { domain: string }) => a.domain)).toEqual([
-    "downloader.example.com/api/files/*",
     "planner.example.com",
     "ledger.example.com",
   ]);
 });
 
-test("only the downloader's files path bypasses, and the planner never does", () => {
+test("the downloader has no Access application at all, and nothing bypasses", () => {
   const apps = desiredState("example.com", "you@example.com").apps;
-  const bypassing = apps.filter((a: { decision: string }) => a.decision === "bypass");
 
-  expect(bypassing.map((a: { domain: string }) => a.domain)).toEqual([
-    "downloader.example.com/api/files/*",
+  expect(apps.map((a: { domain: string }) => a.domain)).toEqual([
+    "planner.example.com",
+    "ledger.example.com",
   ]);
-  expect(bypassing[0]?.include).toEqual([{ everyone: {} }]);
+  expect(apps.filter((a: { decision: string }) => a.decision === "bypass")).toEqual([]);
 
-  const planner = apps.filter((a: { domain: string }) => a.domain.startsWith("planner."));
-  expect(planner).toHaveLength(1);
-  expect(planner[0]?.decision).toBe("allow");
+  // Asserted on the table too, not only on what it resolves to: a downloader
+  // entry with an `access` list is the login coming back at the next `--apply`.
+  const downloader = (TOOLS as { tool: string; access: unknown[] }[]).find(
+    (t) => t.tool === "downloader",
+  );
+  expect(downloader?.access).toEqual([]);
+});
+
+test("the planner's and the ledger's applications are unchanged", () => {
+  // Whole objects, so a quiet edit to either policy fails here and not in
+  // someone's dashboard: the planner is an allowlist of one with no bypass, and
+  // the ledger's admits a second address from its own flag.
+  const apps = desiredState("example.com", "you@example.com", TOOLS, {
+    "ledger-email": "them@example.com",
+  }).apps;
+
+  expect(apps).toEqual([
+    {
+      name: "planner",
+      domain: "planner.example.com",
+      decision: "allow",
+      include: [{ email: { email: "you@example.com" } }],
+    },
+    {
+      name: "ledger",
+      domain: "ledger.example.com",
+      decision: "allow",
+      include: [{ email: { email: "you@example.com" } }, { email: { email: "them@example.com" } }],
+    },
+  ]);
 });
 
 test("the ports match the compose fragment that defines each service", () => {
