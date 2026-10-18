@@ -17,8 +17,10 @@
  *
  * **Placing the rows.** A statement row has no identity of its own (lg-2), so
  * the workbook is matched to the stored rows by **position**: its newest rows
- * must be the oldest stored ones, one for one, by amount and running balance,
- * or its newest row must leave the balance the oldest stored row opened from.
+ * must be the oldest stored ones, day by day — each run of its rows on one date
+ * holding the same amounts as the stored rows in their places and ending on the
+ * same balance, in any order within the day (`workbook-days.ts`, lg-40) — or its
+ * newest row must leave the balance the oldest stored row opened from.
  * The rows before that are added, numbered below the oldest stored position;
  * the rows the pastes already hold are checked, never added again. The
  * workbook's description of a row is its own vocabulary, not the bank's, so the
@@ -55,6 +57,8 @@ import { enrollPeople, knownPeople } from "./people.ts";
 import { openPeriod } from "./periods.ts";
 import type { RuleContext } from "./rules.ts";
 import { confirmRatio, enterSalaries } from "./salaries.ts";
+import { alignDays } from "./workbook-days.ts";
+import type { DayEntry } from "./workbook-days.ts";
 
 export interface WorkbookImportOptions {
   /** Whoever runs the import: the name in the directory everything it writes is recorded under. */
@@ -112,10 +116,18 @@ function storedRows(db: Database): StoredColumns[] {
     .all() as StoredColumns[];
 }
 
-function agrees(movement: Movement, stored: StoredColumns): boolean {
-  return (
-    movement.amountCents === stored.amount_cents && movement.balanceCents === stored.balance_cents
-  );
+function entryOf(row: StoredColumns): DayEntry {
+  return { date: row.date, amountCents: row.amount_cents, balanceCents: row.balance_cents };
+}
+
+/**
+ * The workbook's rows against the stored ones in their places, day by day
+ * (`workbook-days.ts`): for each movement, the index in `stored` of its row, or
+ * `null` when they are not the same movements. Every date is allowed, since a
+ * differing one is reported rather than refused.
+ */
+function align(movements: readonly Movement[], stored: readonly StoredColumns[]): number[] | null {
+  return alignDays(movements, stored.map(entryOf), "any");
 }
 
 function describeStored(row: StoredColumns): string {
@@ -133,13 +145,9 @@ function readings(movements: readonly Movement[], stored: readonly StoredColumns
   const found: number[] = [];
   for (let before = 0; before < movements.length; before++) {
     const shared = Math.min(movements.length - before, stored.length);
-    let fits = true;
-    for (let index = 0; index < shared && fits; index++) {
-      const movement = movements[before + index];
-      const row = stored[index];
-      fits = movement !== undefined && row !== undefined && agrees(movement, row);
+    if (align(movements.slice(before, before + shared), stored.slice(0, shared)) !== null) {
+      found.push(before);
     }
-    if (fits) found.push(before);
   }
   const newest = movements.at(-1);
   if (
@@ -196,7 +204,7 @@ function place(
     );
     problems.push(
       near === undefined
-        ? `The workbook's rows do not line up with the stored ones: no run of them matches the stored rows from the oldest, ${describeStored(head)}, one for one by amount and balance, so a row is in one and not the other.`
+        ? `The workbook's rows do not line up with the stored ones: no run of them matches the stored rows from the oldest, ${describeStored(head)}, day by day by amount and balance, so a row is in one and not the other.`
         : `${describeMovement(near)} moves the same day and amount as the oldest stored row, but leaves ${formatCents(near.balanceCents)} where it leaves ${formatCents(head.balance_cents)}: ${formatCents(head.balance_cents - near.balanceCents)} is unexplained.`,
     );
     return null;
@@ -207,9 +215,13 @@ function place(
     );
     return null;
   }
-  const overlap = movements.slice(before).map((movement, index) => ({
+  // Within a day the two may list the rows in different orders, so each
+  // movement is paired with its own stored row, not the one in its position.
+  const alreadyStored = movements.slice(before);
+  const pairing = align(alreadyStored, stored.slice(0, alreadyStored.length)) ?? [];
+  const overlap = alreadyStored.map((movement, index) => ({
     movement,
-    stored: stored[index] as StoredColumns,
+    stored: stored[pairing[index] ?? index] as StoredColumns,
   }));
   // A correction is written as a note on the row it moves, and a stored row
   // is never written again: the row is the app's to file (decided 2026-10-08).
@@ -224,7 +236,9 @@ function place(
     added: movements.slice(0, before),
     firstSeq: head.seq - before,
     overlap,
-    lastSeq: overlap.at(-1)?.stored.seq ?? head.seq - 1,
+    // The newest stored row the overlap reaches, by position: the newest
+    // movement may be paired with an earlier row of its day.
+    lastSeq: stored[overlap.length - 1]?.seq ?? head.seq - 1,
   };
 }
 
@@ -622,7 +636,7 @@ function run(
   const passed: string[] = [];
   if (placement !== null && placement.overlap.length > 0) {
     passed.push(
-      `The ${String(placement.overlap.length)} rows the pastes already hold are the workbook's newest, one for one, by amount and balance.`,
+      `The ${String(placement.overlap.length)} rows the pastes already hold are the workbook's newest, day by day, by amount and balance.`,
     );
   }
   const out: string[] = [];

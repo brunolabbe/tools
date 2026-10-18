@@ -926,3 +926,176 @@ describe("--household names the books the import writes (lg-21)", () => {
     );
   });
 });
+
+// lg-40, Build item 5: the paste meets the workbook's rows the same way both
+// ways round, so a day the workbook lists in another order than the bank is
+// placed when the pastes came first, too.
+
+/** The workbook's 2024 with one more day, of three movements, in the workbook's order. */
+function withDay(): Fixture {
+  const fixture = history();
+  const year = fixture.years[2];
+  if (year === undefined) throw new Error("the fixture has no 2024");
+  year.rows.push(
+    {
+      written: "2024-03-01",
+      bucket: "Dép. Courantes",
+      detail: "Versement",
+      person: "Sam",
+      amount: 10,
+    },
+    {
+      written: "2024-03-01",
+      bucket: "Dép. Courantes",
+      detail: "Versement",
+      person: "Alex",
+      amount: 5,
+    },
+    { written: "2024-03-01", bucket: "Dép. Courantes", detail: "Achat", amount: -20 },
+  );
+  return fixture;
+}
+
+describe("the workbook against pasted rows that list a day in another order (lg-40)", () => {
+  /** The same day as the bank lists it, −20, +10, +5, stored and filed as the workbook files it. */
+  function pasteDay(
+    db: Database.Database,
+    amounts: readonly number[] = [-2_000, 1_000, 500],
+    lastDate = "2024-03-01",
+  ): void {
+    const words: Record<number, string> = {
+      [-2_000]: "Achat /Quincaillerie Exemple",
+      1_000: "Virement /Caisse du Mont",
+      500: "Virement /Caisse du Lac",
+    };
+    const rows = withBalances(
+      amounts.map((amountCents, index) => ({
+        date: index === amounts.length - 1 ? lastDate : "2024-03-01",
+        description: words[amountCents] ?? "Autre",
+        amountCents,
+      })),
+      // What the workbook's account held after its 2024-02-02 row.
+      160_499,
+    );
+    const context = { db, personId: "alex", now: () => NOW };
+    importStatement(context, renderPaste(rows));
+    const filed = (
+      db.prepare("SELECT id, amount_cents FROM statement_rows ORDER BY seq").all() as {
+        id: number;
+        amount_cents: number;
+      }[]
+    ).map((row) => ({
+      rowId: row.id,
+      bucket: "current-expenses" as const,
+      personId: row.amount_cents === 1_000 ? "sam" : row.amount_cents === 500 ? "alex" : null,
+    }));
+    const classify = { ...context, people: new Set(["alex", "sam"]) };
+    for (const answer of filed) classifyRow(classify, answer);
+  }
+
+  test("the stored day is the workbook's newest, in another order, and only the older rows are imported", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    pasteDay(db);
+    db.close();
+
+    const ran = await run(await workbook(withDay()), "--as", "alex", "--write");
+
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toMatch(/imported +17\n/u);
+    expect(ran.out).toMatch(/already stored +3 /u);
+    expect(ran.out).toContain("The books show the workbook's figures for both buckets.");
+    const after = books();
+    // The pasted rows keep the bank's order and words.
+    expect(
+      (
+        after
+          .prepare(
+            "SELECT seq, description, amount_cents FROM statement_rows WHERE seq >= 0 ORDER BY seq",
+          )
+          .all() as { seq: number; description: string; amount_cents: number }[]
+      ).map((row) => [row.seq, row.description, row.amount_cents]),
+    ).toEqual([
+      [0, "Achat /Quincaillerie Exemple", -2_000],
+      [1, "Virement /Caisse du Mont", 1_000],
+      [2, "Virement /Caisse du Lac", 500],
+    ]);
+    after.close();
+  });
+
+  test("a stored day whose amounts differ by one row, ending on the same balance, is still refused", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    // −20, +11, +4: the day ends on the workbook's balance, but is not its day.
+    pasteDay(db, [-2_000, 1_100, 400]);
+    const before = dump(db);
+    db.close();
+
+    const ran = await run(await workbook(withDay()), "--as", "alex", "--write");
+
+    expect(ran.code, ran.out).toBe(1);
+    expect(ran.out).toContain("Refused: nothing was written.");
+    const after = books();
+    expect(dump(after)).toEqual(before);
+    after.close();
+  });
+
+  test("a date that differs within a reordered day is reported against the row's own match, not the row in its place", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    // The bank dates its last row of the day, the +5, the 2nd. In the workbook
+    // the +5 is the day's second row and the −20 its last.
+    pasteDay(db, undefined, "2024-03-02");
+    db.close();
+
+    const ran = await run(await workbook(withDay()), "--as", "alex");
+
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain(
+      'dated differently: 2024 row 3, 2024-03-01 "Versement" 5.00 $ (balance 1619.99 $); the paste says 2024-03-02',
+    );
+    expect(ran.out).not.toContain('"Achat" -20.00 $ (balance 1599.99 $); the paste says');
+  });
+
+  test("the report and the refusal say the rows are compared day by day (gate 1, F6)", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    pasteDay(db);
+    db.close();
+
+    const placed = await run(await workbook(withDay()), "--as", "alex");
+
+    expect(placed.code, placed.out).toBe(0);
+    expect(placed.out).toContain(
+      "The 3 rows the pastes already hold are the workbook's newest, day by day, by amount and balance.",
+    );
+
+    // A stored row the workbook lacks: nothing lines up from the oldest.
+    for (const file of [databasePath, `${databasePath}-wal`, `${databasePath}-shm`]) {
+      rmSync(file, { force: true });
+    }
+    const other = books();
+    enrollPeople(other, ["alex", "sam"], NOW);
+    importStatement(
+      { db: other, personId: "alex", now: () => NOW },
+      renderPaste(
+        withBalances(
+          [
+            { date: "2024-01-05", description: "Virement /Caisse du Lac", amountCents: 50_000 },
+            { date: "2024-01-10", description: "Remise /Caisse du Lac", amountCents: 100 },
+          ],
+          210_499,
+        ),
+      ),
+    );
+    other.close();
+
+    const refused = await run(await workbook(), "--as", "alex");
+
+    expect(refused.code).toBe(1);
+    expect(refused.out).toContain(
+      ", day by day by amount and balance, so a row is in one and not the other.",
+    );
+    expect(refused.out).not.toContain("one for one");
+  });
+});

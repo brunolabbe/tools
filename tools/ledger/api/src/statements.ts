@@ -23,6 +23,32 @@
  * - **Never overwrite.** A stored row is never edited and never replaced: the
  *   rows a paste adds are `INSERT`ed, and a pasted row that disagrees with a
  *   stored one is refused with both named, not reconciled.
+ * - **A row the workbook imported is compared the way the workbook import
+ *   compares** (lg-40). Its row came in through a `statement_imports` row whose
+ *   `source` is `'workbook'`, and carries the workbook's wording and no
+ *   category, so it is never compared by description or category. Where the
+ *   overlap reaches such rows, they are read day by day (`workbook-days.ts`):
+ *   each stretch of consecutive workbook rows on one date, and the pasted rows
+ *   in their positions, must hold the same amounts, counted with repeats, and
+ *   end on the same balance, and each pasted row must be dated that day or a day
+ *   either side. A paste may start or end partway through such a day: its rows
+ *   there must be among the day's amounts and open from a balance the bank's day
+ *   reaches at that point (`matchPart`), and the balances the workbook shows
+ *   inside a day, which follow its own order, are never compared. So within a
+ *   day the order may differ, a date a day off is accepted, two days off is not,
+ *   and a day whose amounts differ by one row is not, even when it ends on the
+ *   same balance. Two exceptions are refused whatever the paste holds: a day the
+ *   workbook both re-dated and reordered (it is two runs, so it does not match),
+ *   and a paste that starts and ends inside a day of more than
+ *   `LONGEST_SEARCHED_DAY` rows (20), which is not searched. A row a paste
+ *   stored is still compared field for field, in order. Every reading this
+ *   makes possible is a reading like any other: two of them are refused as
+ *   ambiguous. The workbook's rows keep their wording and dates; only the rows
+ *   past the tail are stored. When nothing fits and the
+ *   stored row the paste had to meet is the workbook's, the refusal names that
+ *   row and the pasted row that opens from its balance, and does not ask for a
+ *   longer stretch: that is the advice for a paste that falls short of the
+ *   stored rows, and this one reached rows it does not match.
  *
  * The whole thing runs in one `IMMEDIATE` transaction, so two pastes arriving
  * at once cannot both read the same tail and both extend it. The rows it adds
@@ -31,13 +57,17 @@
 
 import { AppError } from "@ledger/contract";
 import type { ImportStatementReport } from "@ledger/contract";
-import { formatCents, parseStatement } from "@ledger/books";
+import { dayAfter, formatCents, parseStatement } from "@ledger/books";
 import type { StatementRow } from "@ledger/books";
 import type { Database } from "better-sqlite3";
 import { classifyAdded, lastRowId } from "./classifications.ts";
+import { LONGEST_SEARCHED_DAY, dayBefore, matchPart } from "./workbook-days.ts";
 
-/** A stored row: the parser's row, with `seq` now the position in the whole history. */
-type StoredRow = StatementRow;
+/**
+ * A stored row: the parser's row, with `seq` now the position in the whole
+ * history, and whether the workbook import stored it (lg-40).
+ */
+type StoredRow = StatementRow & { fromWorkbook: boolean };
 
 interface Columns {
   seq: number;
@@ -46,9 +76,14 @@ interface Columns {
   description: string;
   amount_cents: number;
   balance_cents: number;
+  source: string;
 }
 
-const SELECT = `SELECT seq, date, category, description, amount_cents, balance_cents FROM statement_rows`;
+// The import a row came in with says whether it is the workbook's. No column
+// here shares a name with `statement_imports`'s, so the WHERE clauses below
+// need no table prefix.
+const SELECT = `SELECT seq, date, category, description, amount_cents, balance_cents, source
+  FROM statement_rows JOIN statement_imports ON statement_imports.id = statement_rows.import_id`;
 
 function toRow(columns: Columns): StoredRow {
   return {
@@ -58,6 +93,7 @@ function toRow(columns: Columns): StoredRow {
     description: columns.description,
     amountCents: columns.amount_cents,
     balanceCents: columns.balance_cents,
+    fromWorkbook: columns.source === "workbook",
   };
 }
 
@@ -86,8 +122,8 @@ function sameRow(stored: StoredRow, pasted: StatementRow): boolean {
 
 /** A row as an error carries it, without a `seq` whose meaning differs by side. */
 function plain(row: StatementRow): Record<string, unknown> {
-  const { seq: _seq, ...fields } = row;
-  return fields;
+  const { date, category, description, amountCents, balanceCents } = row;
+  return { date, category, description, amountCents, balanceCents };
 }
 
 function conflict(message: string, stored: StoredRow, pasted: StatementRow): never {
@@ -205,15 +241,83 @@ function latest(db: Database, order: "ASC" | "DESC", limit: number): StoredRow[]
   return (db.prepare(`${SELECT} ORDER BY seq ${order} LIMIT ?`).all(limit) as Columns[]).map(toRow);
 }
 
-/** Every stored row with the same date, description, amount and balance as `row`. */
+/**
+ * Every stored row a paste lists as `row` — the same date, description, amount
+ * and balance — and that a paste stored. A workbook row is never one: its
+ * wording is the workbook's, so it is found by `workbookStarts` instead.
+ */
 function candidates(db: Database, row: StatementRow): StoredRow[] {
   return (
     db
       .prepare(
-        `${SELECT} WHERE date = ? AND description = ? AND amount_cents = ? AND balance_cents = ? ORDER BY seq DESC`,
+        `${SELECT} WHERE date = ? AND description = ? AND amount_cents = ? AND balance_cents = ? AND source <> 'workbook' ORDER BY seq DESC`,
       )
       .all(row.date, row.description, row.amountCents, row.balanceCents) as Columns[]
   ).map(toRow);
+}
+
+/**
+ * Every workbook row a paste starting on `row` could start on: dated that day
+ * or a day either side, since the workbook's day may list `row` anywhere in it.
+ */
+function workbookStarts(db: Database, row: StatementRow): StoredRow[] {
+  return (
+    db
+      .prepare(`${SELECT} WHERE source = 'workbook' AND date IN (?, ?, ?) ORDER BY seq DESC`)
+      .all(dayBefore(row.date), row.date, dayAfter(row.date)) as Columns[]
+  ).map(toRow);
+}
+
+/**
+ * The workbook rows of `edge`'s day on one side of it, oldest first: the rest of
+ * a day a stretch of stored rows starts or ends partway through.
+ */
+function restOfDay(db: Database, edge: StoredRow, side: "before" | "after"): StoredRow[] {
+  const query =
+    side === "before"
+      ? `${SELECT} WHERE seq < ? ORDER BY seq DESC`
+      : `${SELECT} WHERE seq > ? ORDER BY seq ASC`;
+  const found: StoredRow[] = [];
+  for (const columns of db.prepare(query).iterate(edge.seq) as IterableIterator<Columns>) {
+    const row = toRow(columns);
+    if (!row.fromWorkbook || row.date !== edge.date) break;
+    found.push(row);
+  }
+  return side === "before" ? found.toReversed() : found;
+}
+
+/**
+ * Whether these stored rows are the pasted rows in their places: a row a paste
+ * stored field for field, and a stretch of workbook rows on one date day by day.
+ * Such a stretch is weighed against its whole day (`matchPart`), the rows the
+ * stretch leaves out included, since a paste may start or end partway through a
+ * day whose order the workbook does not keep.
+ */
+function overlaps(
+  db: Database,
+  stored: readonly StoredRow[],
+  pasted: readonly StatementRow[],
+): boolean {
+  if (stored.length !== pasted.length) return false;
+  let start = 0;
+  while (start < stored.length) {
+    const first = stored[start] as StoredRow;
+    if (!first.fromWorkbook) {
+      if (!sameRow(first, pasted[start] as StatementRow)) return false;
+      start += 1;
+      continue;
+    }
+    let end = start + 1;
+    while (stored[end]?.fromWorkbook === true && stored[end]?.date === first.date) end += 1;
+    const earlier = start === 0 ? restOfDay(db, first, "before") : [];
+    const later = end === stored.length ? restOfDay(db, stored[end - 1] as StoredRow, "after") : [];
+    const day = [...earlier, ...stored.slice(start, end), ...later];
+    if (!matchPart(day, earlier.length, pasted.slice(start, end), "a day either side")) {
+      return false;
+    }
+    start = end;
+  }
+  return true;
 }
 
 /** Up to `limit` stored rows from position `from` on, oldest first. */
@@ -233,6 +337,9 @@ function from(db: Database, position: number, limit: number): StoredRow[] {
  * - `k` rows overlapping the stored tail: the paste's first `k` rows are the
  *   tail's last `k`, and `k = 0` is a continuation, opening from the tail's balance.
  * - A paste wholly inside the history: every row already stored, so `rows.length`.
+ *
+ * Either way the stored rows are compared by `overlaps`: the workbook's day by
+ * day, a paste's field for field (lg-40).
  */
 function readings(
   db: Database,
@@ -247,21 +354,12 @@ function readings(
     const fits =
       k === 0
         ? oldest.balanceCents - oldest.amountCents === tail.balanceCents
-        : rows.slice(0, k).every((row, index) => {
-            const stored = window[window.length - k + index];
-            return stored !== undefined && sameRow(stored, row);
-          });
+        : overlaps(db, window.slice(window.length - k), rows.slice(0, k));
     if (fits) found.add(k);
   }
   if (rows.length <= count) {
-    for (const candidate of candidates(db, oldest)) {
-      const stored = from(db, candidate.seq, rows.length);
-      if (
-        stored.length === rows.length &&
-        stored.every((row, index) => sameRow(row, rows[index] as StatementRow))
-      ) {
-        found.add(rows.length);
-      }
+    for (const candidate of [...candidates(db, oldest), ...workbookStarts(db, oldest)]) {
+      if (overlaps(db, from(db, candidate.seq, rows.length), rows)) found.add(rows.length);
     }
   }
   // Most already-stored first, so the readings list reads from "nothing new" up.
@@ -302,6 +400,8 @@ function fail(
     if (found === undefined || index === 0) continue;
     const before = previous(db, found.seq);
     if (before === undefined) throw beforeHistory(found);
+    // The rows before the shared ones had to meet the workbook's, and did not.
+    if (before.fromWorkbook) throw workbookMismatch(before, rows);
     const pasted = rows[index - 1] ?? oldest;
     conflict(
       `The pasted row ${describeRow(pasted)} is not the stored row ${describeRow(before)} that comes before the rows they share (they differ in: ${differingFields(before, pasted).join(", ")}).`,
@@ -327,6 +427,9 @@ function fail(
   ) {
     throw beforeHistory(head);
   }
+  // The paste had to meet the workbook's rows, which were compared without their
+  // wording, a date a day off or the order within a day: not the gap's case.
+  if (tail.fromWorkbook) throw workbookMismatch(tail, rows);
   throw gap(oldest, tail);
 }
 
@@ -353,6 +456,49 @@ function gap(oldest: StatementRow, tail: StoredRow): AppError {
         previousBalanceCents: tail.balanceCents,
         expectedBalanceCents: tail.balanceCents + oldest.amountCents,
         unexplainedCents: opening - tail.balanceCents,
+      },
+    },
+  );
+}
+
+/**
+ * The paste had to meet the workbook's rows, ending on `newest`, and fits them
+ * nowhere. Its refusal names that row and the pasted row that opens from its
+ * balance, if the paste holds one: a paste starting there continues the
+ * workbook. It does not ask for a longer paste, the gap's advice: this paste
+ * reached the workbook's rows and does not match them, and what it says instead
+ * is how they were compared.
+ */
+function workbookMismatch(newest: StoredRow, rows: readonly StatementRow[]): AppError {
+  const earliest = dayBefore(newest.date);
+  const at = rows.findIndex(
+    (row) => row.balanceCents - row.amountCents === newest.balanceCents && row.date >= earliest,
+  );
+  const continuing = rows[at];
+  const left = formatCents(newest.balanceCents);
+  const next =
+    continuing === undefined
+      ? ` No pasted row opens from the ${left} it left, so the paste does not reach it, or a row is in one and not the other.`
+      : ` The pasted row ${describeRow(continuing)} opens from the ${left} it left: a paste that starts on that row continues the workbook.`;
+  return new AppError(
+    "STATEMENT_CHAIN_BROKEN",
+    `The paste does not line up with the rows imported from the workbook, which end on ${describeRow(newest)}. Those are compared by amount and balance a day at a time: a day's rows in any order, each dated within a day of the workbook's, and a paste may start or end partway through a day, except that a day the workbook both re-dated and reordered is refused, and so is a paste that starts and ends inside a day of more than ${String(LONGEST_SEARCHED_DAY)} rows. Their wording is never compared.${next}`,
+    {
+      details: {
+        date: newest.date,
+        description: newest.description,
+        amountCents: newest.amountCents,
+        balanceCents: newest.balanceCents,
+        continuesAt:
+          continuing === undefined
+            ? null
+            : {
+                pasteIndex: at,
+                date: continuing.date,
+                description: continuing.description,
+                amountCents: continuing.amountCents,
+                balanceCents: continuing.balanceCents,
+              },
       },
     },
   );

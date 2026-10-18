@@ -70,7 +70,11 @@ export const LEDGER_ERROR_CODES = [
   //
   // A gap between a paste and the stored tail is `STATEMENT_CHAIN_BROKEN` again:
   // the same proof failing, one boundary further out, with the same
-  // `unexplainedCents` in its details. These two are what that code cannot say.
+  // `unexplainedCents` in its details. A paste that reaches rows the workbook
+  // imported and matches none of them is `STATEMENT_CHAIN_BROKEN` too (lg-40),
+  // with no unexplained amount: its details name the workbook's newest row and,
+  // as `continuesAt`, the pasted row that opens from its balance, or `null`.
+  // These two are what that code cannot say.
   /**
    * A pasted row and a stored row disagree about the same place in the history:
    * the same identity with another category, or another row where the stored
