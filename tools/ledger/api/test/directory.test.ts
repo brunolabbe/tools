@@ -13,7 +13,7 @@ import { describe, expect, test } from "vitest";
 import { AppError } from "@ledger/contract";
 import { migrateDirectory } from "../src/db/directory-schema.ts";
 import { Directory, isHouseholdId } from "../src/directory.ts";
-import { ALEX, SAM } from "./helpers/access.ts";
+import { ALEX, SAM, STRANGER } from "./helpers/access.ts";
 import { WRITES_IN_PLACE } from "./helpers/append-only.ts";
 
 const AT = new Date("2026-10-12T12:00:00Z");
@@ -223,7 +223,7 @@ describe("membership", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(4);
+    expect(db.pragma("user_version", { simple: true })).toBe(5);
     expect(db.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(before);
     insert(db, { address: CASEY, person: "casey" });
     expect(db.prepare("SELECT person FROM current_members ORDER BY person").all()).toEqual([
@@ -392,7 +392,7 @@ describe("a record is never replaced", () => {
         "INSERT OR REPLACE INTO households (id, name, created_at, created_by) VALUES ('home', 'Elsewhere', 'x', 'raw')",
       ),
     ).toThrow(/appended, never replaced/u);
-    expect(db.pragma("user_version", { simple: true })).toBe(4);
+    expect(db.pragma("user_version", { simple: true })).toBe(5);
     db.close();
   });
 
@@ -496,7 +496,7 @@ describe("a household id is never NULL", () => {
       directory.close();
 
       const after = new Database(file);
-      expect(after.pragma("user_version", { simple: true })).toBe(4);
+      expect(after.pragma("user_version", { simple: true })).toBe(5);
       expect(after.prepare("SELECT * FROM households ORDER BY id").all()).toEqual(households);
       expect(after.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(memberships);
       refusesNullIds(after);
@@ -761,4 +761,121 @@ describe("a directory method given a value that is not of its type", () => {
       directory.close();
     },
   );
+});
+
+// lg-34: an address changed in one transaction, so the person is never without
+// one between the remove and the add.
+describe("changing a member's address", () => {
+  const LATER = new Date("2026-10-18T09:00:00Z");
+  const KIM = "kim@away.test";
+
+  function withTwo(): Directory {
+    const directory = withHousehold();
+    directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
+    directory.addMember({ household: "home", address: SAM, person: "sam", ...CHANGE });
+    directory.addHousehold({ id: "away", name: "Away", ...CHANGE });
+    directory.addMember({ household: "away", address: KIM, person: "kim", ...CHANGE });
+    return directory;
+  }
+
+  test("leaves the new address standing under the same person, the old in no household, and records remove then add", () => {
+    const directory = withTwo();
+
+    const moved = directory.changeAddress({
+      household: "home",
+      from: ` ${SAM.toUpperCase()} `,
+      to: " Casey@Example.TEST ",
+      by: ALEX,
+      at: LATER,
+    });
+
+    expect(moved).toEqual({ address: CASEY, household: "home", person: "sam" });
+    expect(directory.membershipOf(CASEY)).toEqual({ household: "home", person: "sam" });
+    expect(directory.membershipOf(SAM)).toBeUndefined();
+    expect(directory.members("home")).toEqual([
+      { address: ALEX, household: "home", person: "alex" },
+      { address: CASEY, household: "home", person: "sam" },
+    ]);
+    expect(directory.history("home").slice(-2)).toEqual([
+      { address: SAM, person: "sam", action: "remove", at: LATER.toISOString(), by: ALEX },
+      { address: CASEY, person: "sam", action: "add", at: LATER.toISOString(), by: ALEX },
+    ]);
+    directory.close();
+  });
+
+  test("with the new address in another household is refused, and the old one still stands", () => {
+    const directory = withTwo();
+    const before = { members: directory.members(), history: directory.history("home") };
+
+    expect(
+      code(() => directory.changeAddress({ household: "home", from: SAM, to: KIM, ...CHANGE })),
+    ).toBe("ADDRESS_ALREADY_A_MEMBER");
+
+    expect(directory.members()).toEqual(before.members);
+    expect(directory.history("home")).toEqual(before.history);
+    expect(directory.membershipOf(SAM)).toEqual({ household: "home", person: "sam" });
+    directory.close();
+  });
+
+  test("rolls the remove back when the add fails after it, past every check the class makes", () => {
+    const db = raw();
+    insert(db, { address: SAM, person: "sam" });
+    // A writer's own refusal of the second statement: the schema's triggers are
+    // what refuses in earnest, and this stands in for one.
+    db.exec(
+      `CREATE TRIGGER refuse_casey BEFORE INSERT ON memberships
+       WHEN NEW.action = 'add' AND NEW.address = '${CASEY}'
+       BEGIN SELECT RAISE(ABORT, 'refused after the remove'); END`,
+    );
+    const directory = new Directory(db);
+
+    expect(() =>
+      directory.changeAddress({ household: "home", from: SAM, to: CASEY, ...CHANGE }),
+    ).toThrow(/refused after the remove/u);
+
+    expect(directory.members()).toEqual([{ address: SAM, household: "home", person: "sam" }]);
+    expect(directory.history("home").map((record) => record.action)).toEqual(["add"]);
+    directory.close();
+  });
+
+  test.each([
+    ["an address that stands in another household", "home", KIM, CASEY, "MEMBER_NOT_FOUND"],
+    ["an address that belongs to nobody", "home", STRANGER, CASEY, "MEMBER_NOT_FOUND"],
+    ["a household that does not exist", "nowhere", SAM, CASEY, "HOUSEHOLD_NOT_FOUND"],
+    ["a new address already in this household", "home", SAM, ALEX, "ADDRESS_ALREADY_A_MEMBER"],
+    [
+      "a new address that is the old one in other letters",
+      "home",
+      SAM,
+      ` ${SAM.toUpperCase()}`,
+      "BAD_REQUEST",
+    ],
+    ["a new address that is not one", "home", SAM, "not an address", "BAD_REQUEST"],
+    ["an old address that is not one", "home", "not an address", CASEY, "BAD_REQUEST"],
+  ])("refuses %s, and changes nothing", (_label, household, from, to, expected) => {
+    const directory = withTwo();
+    const before = { ...stateOf(directory), away: directory.history("away") };
+
+    expect(code(() => directory.changeAddress({ household, from, to, ...CHANGE }))).toBe(expected);
+
+    expect({ ...stateOf(directory), away: directory.history("away") }).toEqual(before);
+    directory.close();
+  });
+
+  test.each([
+    ["household", { household: 7 }],
+    ["from", { from: null }],
+    ["to", { to: undefined }],
+    ["by", { by: 7 }],
+    ["at", { at: INVALID_DATE }],
+  ])("refuses a %s of the wrong type as BAD_REQUEST, and changes nothing", (_field, wrong) => {
+    const directory = withTwo();
+    const before = stateOf(directory);
+    const call = { household: "home", from: SAM, to: CASEY, ...CHANGE, ...wrong };
+
+    expect(code(() => directory.changeAddress(untyped(call)))).toBe("BAD_REQUEST");
+
+    expect(stateOf(directory)).toEqual(before);
+    directory.close();
+  });
 });

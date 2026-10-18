@@ -28,6 +28,7 @@ import {
   fetchRecurring,
   retireLine,
 } from "../src/api/periods.ts";
+import { PeopleNamesProvider } from "../src/people.tsx";
 import { Periods } from "../src/periods/Periods.tsx";
 
 vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
@@ -560,4 +561,39 @@ test("between three people, a charge names whose it was", async () => {
       expect.objectContaining({ personId: "sam", chargedTo: "casey" }),
     ),
   );
+});
+
+// lg-33's gate 1, F1: the charge's confirmation named the person by their id.
+test("a charge to a renamed person is confirmed under their shown name, and sends the id (lg-33)", async () => {
+  vi.mocked(addLine).mockResolvedValue({
+    id: 9,
+    personId: "sam",
+    date: "2026-09-12",
+    amountCents: 4_520,
+    category: null,
+    spendingCategoryId: 4,
+    note: null,
+    source: "manual",
+    chargedTo: "alex",
+    supersedes: null,
+    enteredAt: "2026-09-12T12:00:00.000Z",
+    enteredBy: "sam",
+  });
+  render(
+    <PeopleNamesProvider value={{ alex: "Alex", sam: "sam" }}>
+      <Periods />
+    </PeopleNamesProvider>,
+  );
+  const form = await screen.findByRole("form", { name: "Add a line" });
+
+  fireEvent.change(within(form).getByLabelText("Date"), { target: { value: "2026-09-12" } });
+  fireEvent.change(within(form).getByLabelText("Amount"), { target: { value: "45.20" } });
+  fireEvent.change(within(form).getByLabelText("Spending category"), { target: { value: "4" } });
+  fireEvent.click(within(form).getByLabelText("This was Alex's"));
+  fireEvent.click(within(form).getByRole("button", { name: "Add the line" }));
+
+  await waitFor(() =>
+    expect(addLine).toHaveBeenCalledWith(expect.objectContaining({ chargedTo: "alex" })),
+  );
+  expect(await screen.findByText("Charged to Alex.")).toBeTruthy();
 });

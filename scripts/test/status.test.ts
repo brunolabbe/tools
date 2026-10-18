@@ -1764,3 +1764,59 @@ test("parseFrontmatter reads a CRLF-terminated ticket the same as its LF form", 
   const crlf = lf.replace(/\n/g, "\r\n");
   expect(parseFrontmatter(crlf, "t.md")).toEqual(parseFrontmatter(lf, "t.md"));
 });
+
+// ---------------------------------------------------------------------------
+// repo-105 — a `## Decision — open` heading agrees with `status`.
+// ---------------------------------------------------------------------------
+
+// The heading and `status` both say whether a decision is open, and nothing
+// compared them. The first case is the one the check exists for, and the only
+// one that can fail with the check removed. The other two pass with it removed
+// too, by construction, so each is also run against the one mutant that would
+// wrongly fail it: dropping the `needs-decision` exemption fails the second,
+// and matching headings inside fences fails the third (both measured, see the
+// ticket's Log).
+const decisionBody = (status: string, body: string) => `${pl("pl-1", { status })}${body}\n`;
+
+test("a `## Decision — open` heading on a ready ticket fails, and names the file", () => {
+  const root = repoWith({
+    [at("pl-1")]: decisionBody("ready", "## Decision — open\n\nWhich model?\n"),
+  });
+  expect(() => readTickets(root)).toThrow(
+    `${at("pl-1")}: has a "## Decision — open" heading, but its status is "ready".`,
+  );
+  const { stderr, status } = run(["--json"], root);
+  expect(status).toBe(1);
+  expect(stderr).toContain(`${at("pl-1")}: has a "## Decision — open" heading`);
+});
+
+test("the same heading on a needs-decision ticket is the case it is for, and passes", () => {
+  const root = repoWith({
+    [at("pl-1")]: decisionBody("needs-decision", "## Decision — open\n\nWhich model?\n"),
+  });
+  expect(readTickets(root).map((t) => [t.id, t.status])).toEqual([["pl-1", "needs-decision"]]);
+  expect(run(["--json"], root).status).toBe(0);
+});
+
+test("a heading quoted inside a fence is an example, and a ready ticket carrying one passes", () => {
+  const root = repoWith({
+    [at("pl-1")]: decisionBody(
+      "ready",
+      "Quoting the template:\n\n```markdown\n## Decision — open\n```\n",
+    ),
+  });
+  expect(readTickets(root).map((t) => [t.id, t.status])).toEqual([["pl-1", "ready"]]);
+  expect(run(["--json"], root).status).toBe(0);
+});
+
+// Build 4. The sentence sits in the template's own section, so a ticket copied
+// from it carries the rule where its author writes the heading. Sliced between
+// the two headings so a sentence elsewhere in the file does not count.
+test("the ticket format says the status check fails the open heading", () => {
+  const format = fs.readFileSync(path.join(REPO, "docs", "01-TICKETS.md"), "utf8");
+  const section = format.slice(
+    format.indexOf("## Decision — open"),
+    format.indexOf("## Done when"),
+  );
+  expect(section).toMatch(/`npm run status` fails [^.]*`needs-decision`/);
+});

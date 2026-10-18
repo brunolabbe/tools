@@ -33,6 +33,8 @@ import {
   fetchSpendingStats,
 } from "../api/stats.ts";
 import { formatShare, personLabel } from "../labels.ts";
+import { shownName, usePeopleNames } from "../people.tsx";
+import type { ShownNames } from "../people.tsx";
 import { ChartCard, ColumnChart, LineChart } from "./Chart.tsx";
 import type { ColumnSeries, LegendItem, LineSeries, TableData } from "./Chart.tsx";
 import { PeriodRows } from "./PeriodRows.tsx";
@@ -160,13 +162,14 @@ export function MortgagePaymentCard({ range }: { range: StatsRange }): React.Rea
 
 export function MortgageOwnCard({ range }: { range: StatsRange }): React.ReactElement {
   const series = useSeries(fetchMortgageOwn, range);
+  const names = usePeopleNames();
   return (
     <Loaded title="Own money in the mortgage" series={series}>
       {({ points, people }, stale) => {
         const colors = personColors(people);
         const lines: LineSeries[] = people.map((person) => ({
           key: person,
-          label: person,
+          label: shownName(names, person),
           color: colors.get(person) ?? slotColor(1),
           values: points.map(
             (point) => point.own.find((own) => own.personId === person)?.ownCents ?? 0,
@@ -178,7 +181,7 @@ export function MortgageOwnCard({ range }: { range: StatsRange }): React.ReactEl
             caption="Each person's own money in the bucket: their deposits less half of every payment. It is not shared money."
             legend={legendOf(lines)}
             table={{
-              head: ["Date", ...people, "In the bucket"],
+              head: ["Date", ...people.map((person) => shownName(names, person)), "In the bucket"],
               rows: points.map((point) => [
                 point.date,
                 ...people.map((person) =>
@@ -210,6 +213,7 @@ export function MortgageOwnCard({ range }: { range: StatsRange }): React.ReactEl
 
 export function ContributionCards({ range }: { range: StatsRange }): React.ReactElement {
   const series = useSeries(fetchContributions, range);
+  const names = usePeopleNames();
   return (
     <Loaded title="What each person has put in" series={series}>
       {({ series: buckets, people }, stale) => {
@@ -220,7 +224,7 @@ export function ContributionCards({ range }: { range: StatsRange }): React.React
               const title = `Put into ${bucket.bucket === "mortgage" ? "the mortgage" : "the buffer"}`;
               const lines: LineSeries[] = people.map((person) => ({
                 key: person,
-                label: person,
+                label: shownName(names, person),
                 color: colors.get(person) ?? slotColor(1),
                 values: bucket.points.map(
                   (point) =>
@@ -235,7 +239,7 @@ export function ContributionCards({ range }: { range: StatsRange }): React.React
                   caption="Cumulative: the sum of the rows filed to each person. A joint row is nobody's."
                   legend={legendOf(lines)}
                   table={{
-                    head: ["Date", ...people],
+                    head: ["Date", ...people.map((person) => shownName(names, person))],
                     rows: bucket.points.map((point) => [
                       point.date,
                       ...people.map((person) =>
@@ -329,9 +333,12 @@ export function BufferCard({ range }: { range: StatsRange }): React.ReactElement
 
 // --- Salaries and the ratio ---
 
-function ratioWords(shares: readonly { personId: string; partsPerMillion: number }[]): string {
+function ratioWords(
+  shares: readonly { personId: string; partsPerMillion: number }[],
+  names: ShownNames,
+): string {
   return shares
-    .map((share) => `${share.personId} ${formatShare(share.partsPerMillion)}`)
+    .map((share) => `${shownName(names, share.personId)} ${formatShare(share.partsPerMillion)}`)
     .join(", ");
 }
 
@@ -341,6 +348,7 @@ function SalaryBody(props: {
   stale: boolean;
 }): React.ReactElement {
   const { years, stale } = props;
+  const names = usePeopleNames();
   // Coloured by place in everyone the books know, whatever the range holds; drawn
   // only for the people the range has a salary or a share for.
   const colors = personColors(props.everyone);
@@ -356,7 +364,7 @@ function SalaryBody(props: {
   }));
   const salaryLines: ColumnSeries[] = people.map((person) => ({
     key: person,
-    label: person,
+    label: shownName(names, person),
     color: colors.get(person) ?? slotColor(1),
     values: years.map(
       (year) => year.salaries.find((salary) => salary.personId === person)?.amountCents ?? 0,
@@ -364,7 +372,7 @@ function SalaryBody(props: {
   }));
   const ratioLines: ColumnSeries[] = people.map((person) => ({
     key: person,
-    label: person,
+    label: shownName(names, person),
     color: colors.get(person) ?? slotColor(1),
     values: years.map(
       (year) => year.ratio?.shares.find((share) => share.personId === person)?.partsPerMillion ?? 0,
@@ -378,7 +386,7 @@ function SalaryBody(props: {
         caption="The salaries that stand for each year, one column per person."
         legend={legendOf(salaryLines)}
         table={{
-          head: ["Year", ...people],
+          head: ["Year", ...people.map((person) => shownName(names, person))],
           rows: years.map((year) => [
             String(year.year),
             ...people.map((person) => {
@@ -408,9 +416,9 @@ function SalaryBody(props: {
           head: ["Year", "Ratio at the year's end", "Changes in the year"],
           rows: years.map((year) => [
             String(year.year),
-            year.ratio === null ? "none yet" : ratioWords(year.ratio.shares),
+            year.ratio === null ? "none yet" : ratioWords(year.ratio.shares, names),
             year.changes
-              .map((change) => `${change.effectiveFrom}: ${ratioWords(change.shares)}`)
+              .map((change) => `${change.effectiveFrom}: ${ratioWords(change.shares, names)}`)
               .join("; "),
           ]),
         }}
@@ -432,7 +440,7 @@ function SalaryBody(props: {
           }}
           notes={(index) =>
             (years[index]?.changes ?? []).map(
-              (change) => `From ${change.effectiveFrom}: ${ratioWords(change.shares)}`,
+              (change) => `From ${change.effectiveFrom}: ${ratioWords(change.shares, names)}`,
             )
           }
         />
@@ -705,7 +713,7 @@ const FORMULA_WORDS = {
  * Who owes whom, from the transfers that would settle it directly; between
  * more than two people, each of them (lg-23).
  */
-function who(period: ClosedPeriod): string {
+function who(period: ClosedPeriod, names: ShownNames): string {
   const { deposits, transfers } = period.settlement;
   if (transfers.length === 0) {
     // A deposit of a cent can stand where the direct amount rounds to nothing;
@@ -717,11 +725,14 @@ function who(period: ClosedPeriod): string {
       .filter((person) => person !== deposit.personId);
     const [recipient] = others;
     return another === undefined && others.length === 1 && recipient !== undefined
-      ? `${personLabel(deposit.personId)} owes ${personLabel(recipient)}`
-      : `${personLabel(deposit.personId)} owes`;
+      ? `${personLabel(deposit.personId, names)} owes ${personLabel(recipient, names)}`
+      : `${personLabel(deposit.personId, names)} owes`;
   }
   return transfers
-    .map((transfer) => `${personLabel(transfer.fromId)} owes ${personLabel(transfer.toId)}`)
+    .map(
+      (transfer) =>
+        `${personLabel(transfer.fromId, names)} owes ${personLabel(transfer.toId, names)}`,
+    )
     .join(", ");
 }
 
@@ -740,6 +751,7 @@ function intoBufferCents(period: ClosedPeriod): number | null {
 
 export function SettlementsCard({ range }: { range: StatsRange }): React.ReactElement {
   const series = useSeries(fetchSettlementsStats, range);
+  const names = usePeopleNames();
   return (
     <Loaded title="Settlements" series={series}>
       {({ periods }, stale) => {
@@ -753,7 +765,7 @@ export function SettlementsCard({ range }: { range: StatsRange }): React.ReactEl
               rows: periods.map((period) => [
                 period.end,
                 period.settlement.formula,
-                who(period),
+                who(period, names),
                 formatCents(directCents(period)),
                 intoBufferCents(period) === null
                   ? "only direct"
@@ -787,7 +799,7 @@ export function SettlementsCard({ range }: { range: StatsRange }): React.ReactEl
                 if (period === undefined) return [];
                 return [
                   `Formula ${period.settlement.formula}: ${FORMULA_WORDS[period.settlement.formula]}.`,
-                  `${who(period)}.`,
+                  `${who(period, names)}.`,
                   intoBufferCents(period) === null
                     ? "Only a direct transfer can settle it."
                     : `Into the buffer instead: ${formatCents(intoBufferCents(period) ?? 0)}.`,

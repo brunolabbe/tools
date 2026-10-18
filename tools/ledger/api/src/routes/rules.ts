@@ -1,5 +1,6 @@
 /**
- * The rules and the people they may name (lg-4; the people from lg-5's table).
+ * The rules and the people they may name (lg-4; the people from lg-5's table,
+ * and how each is shown from the household directory, lg-33).
  *
  * Every route is behind the identity check, and records who acted from
  * `personOf` — never from anything the body says. **Every write is a `POST`
@@ -15,6 +16,7 @@ import { AppError, ROUTES, ruleDraftSchema } from "@ledger/contract";
 import type { PeopleResponse, Rule, RuleDraft, RulesResponse } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
+import { shownName } from "../directory.ts";
 import { booksOf, personOf } from "../identity.ts";
 import { knownPeople } from "../people.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
@@ -35,6 +37,32 @@ function ruleId(request: FastifyRequest): number {
   const id = typeof raw === "string" && /^\d{1,15}$/u.test(raw) ? Number(raw) : 0;
   if (id < 1) throw new AppError("BAD_REQUEST", "A rule is named by its number.");
   return id;
+}
+
+/**
+ * How each of `people` is shown, with no two alike (lg-33's gate 1, F3; option
+ * 2, chosen by the owner on 2026-10-18). The directory refuses a shown name
+ * another person holds or has as an id, but it cannot see an id the books hold
+ * only from an old rule, so a rename can take one. Here, with the books, every
+ * person whose shown name another shares is shown under their id instead: ids
+ * are unique, so the loop ends, and it runs again in case a fallback meets a
+ * name still standing.
+ */
+function distinctNames(
+  people: readonly string[],
+  names: ReadonlyMap<string, string>,
+): Record<string, string> {
+  const shown = new Map(people.map((person) => [person, shownName(names, person)]));
+  for (;;) {
+    const count = new Map<string, number>();
+    for (const name of shown.values()) count.set(name, (count.get(name) ?? 0) + 1);
+    const alike = [...shown].filter(
+      ([person, name]) => name !== person && (count.get(name) ?? 0) > 1,
+    );
+    if (alike.length === 0) break;
+    for (const [person] of alike) shown.set(person, person);
+  }
+  return Object.fromEntries(shown);
 }
 
 function draft(request: FastifyRequest): RuleDraft {
@@ -65,8 +93,14 @@ export function registerRuleRoutes(app: FastifyInstance, context: AppContext): v
   // this comment, is what holds it. Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]
   app.get(ROUTES.people, { onRequest: read }, async (request) => {
-    // The household's table, which the directory's members fill (people.ts).
-    const body: PeopleResponse = { people: knownPeople(booksOf(request)) };
+    // The household's table, which the directory's members fill (people.ts),
+    // and how each is shown, which only the directory knows (lg-33).
+    const people = knownPeople(booksOf(request));
+    const names = context.directory.names(personOf(request).household);
+    const body: PeopleResponse = {
+      people,
+      names: distinctNames(people, names),
+    };
     return body;
   });
 

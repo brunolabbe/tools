@@ -71,7 +71,7 @@ function household(people: readonly string[], left: readonly string[] = []): Hou
   });
   return {
     household: { id: "home", name: "Home" },
-    members: people.map((person) => ({ address: address(person), person })),
+    members: people.map((person) => ({ address: address(person), person, name: person })),
     history: [
       ...[...people, ...left].map((person) => record(person, "add")),
       ...left.map((person) => record(person, "remove")),
@@ -562,9 +562,9 @@ test("counts the household's current members from its record, not every name the
   vi.mocked(fetchHousehold).mockResolvedValue({
     ...household(["alex", "sam"]),
     members: [
-      { address: "alex@example.test", person: "alex" },
-      { address: "alex@work.example", person: "alex" },
-      { address: "sam@example.test", person: "sam" },
+      { address: "alex@example.test", person: "alex", name: "alex" },
+      { address: "alex@work.example", person: "alex", name: "alex" },
+      { address: "sam@example.test", person: "sam", name: "sam" },
     ],
   });
   await readBasket();
@@ -616,3 +616,131 @@ test("among three people, the whole receipt can be someone else's, picked by nam
     chargedTo: "sam",
   });
 });
+
+// --- lg-39: the household has not loaded ---
+
+/** The basket read from a photo, its six-pack marked someone else's. */
+async function readBasketWithTheirs(): Promise<void> {
+  vi.mocked(fetchSpendingCategories).mockResolvedValue([
+    { id: 1, name: "Groceries", retired: false, createdAt: "x", createdBy: "migration" },
+    { id: 2, name: "Alcohol", retired: false, createdAt: "x", createdBy: "migration" },
+  ]);
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 3,
+    model: "claude-haiku-5-5",
+    proposals: [
+      {
+        proposal: {
+          ...BASKET,
+          items: BASKET.items.map((item) =>
+            item.text === "BIERE 6X355" ? { ...item, share: "theirs" as const } : item,
+          ),
+        },
+        flags: [],
+        merchantCategoryId: null,
+      },
+    ],
+  });
+  await takePhoto();
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+}
+
+function expectNoTwoPersonForm(): void {
+  expect(screen.queryByRole("form", { name: "The receipt" })).toBeNull();
+  expect(screen.queryByRole("checkbox")).toBeNull();
+  expect(screen.queryByRole("button", { name: /^File as/u })).toBeNull();
+  expect(screen.queryByLabelText("What is shared")).toBeNull();
+  expect(fileReceipt).not.toHaveBeenCalled();
+}
+
+test("the household's record failing holds the form, says so where the person is, and retries (lg-39)", async () => {
+  vi.mocked(fetchHousehold).mockRejectedValueOnce(new Error("boom"));
+  await readBasketWithTheirs();
+
+  // The failure is in the screen the person is on, not only on the first one.
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("The household did not load");
+  expectNoTwoPersonForm();
+
+  // Retrying asks for the record again, and not for the categories again.
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await waitFor(() => expect(field("Total").value).toBe("24.76"));
+  expect(fetchHousehold).toHaveBeenCalledTimes(2);
+  expect(fetchSpendingCategories).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("alert")).toBeNull();
+  // The categories the other request returned were kept.
+  const category = screen.getByLabelText("Category of BIERE 6X355") as HTMLSelectElement;
+  expect([...category.options].map((option) => option.text)).toContain("Alcohol");
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+});
+
+test("the signed-in person failing to load holds the form the same way (lg-39)", async () => {
+  vi.mocked(fetchMe).mockRejectedValue(new Error("boom"));
+  await readBasketWithTheirs();
+
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("The household did not load");
+  expect(fetchHousehold).not.toHaveBeenCalled();
+  expectNoTwoPersonForm();
+});
+
+test("a household that has not answered yet holds the form, and files nothing (lg-39)", async () => {
+  vi.mocked(fetchHousehold).mockReturnValue(new Promise(() => undefined));
+  await readBasketWithTheirs();
+
+  expect((await screen.findByRole("status")).textContent).toBe("Loading the household…");
+  expectNoTwoPersonForm();
+});
+
+test("categories failing to load do not hold the form, and can be asked for again (lg-39)", async () => {
+  vi.mocked(fetchSpendingCategories).mockRejectedValueOnce(new Error("boom"));
+  await readBasketWithTheirs();
+
+  await waitFor(() => expect(field("Total").value).toBe("24.76"));
+  // The household loaded, so the form is the household's own, with the failure beside it.
+  expect(screen.getByRole("checkbox", { name: "This was sam's" })).toBeTruthy();
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("The spending categories did not load");
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  expect(fetchSpendingCategories).toHaveBeenCalledTimes(2);
+  expect(fetchHousehold).toHaveBeenCalledTimes(1);
+});
+
+// --- lg-39: a household with nobody else in it ---
+
+test.each([
+  ["one member", ["alex"]],
+  ["no member", []],
+])(
+  "%s: nobody to charge, so no one else's box, no one else's share, and a read one is not filed (lg-39)",
+  async (_name, members) => {
+    vi.mocked(fetchHousehold).mockResolvedValue(household(members));
+    await readBasketWithTheirs();
+    await waitFor(() => expect(field("Total").value).toBe("24.76"));
+
+    // The whole receipt cannot be someone else's.
+    expect(screen.queryByRole("checkbox", { name: /^This was/u })).toBeNull();
+    // A tap cycles shared and not shared, and never lands on someone else's.
+    fireEvent.click(screen.getByRole("button", { name: "PAIN, Shared" }));
+    expect(screen.getByRole("button", { name: "PAIN, Not shared" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "PAIN, Not shared" }));
+    expect(screen.getByRole("button", { name: "PAIN, Shared" })).toBeTruthy();
+
+    // The six-pack was read as someone else's: it is said, and nothing is filed.
+    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "There is nobody else in the household to charge an item to.",
+    );
+    expect(fileReceipt).not.toHaveBeenCalled();
+
+    // Tapping it moves it off someone else's, and then it files, charging nobody.
+    fireEvent.click(screen.getByRole("button", { name: /^BIERE 6X355, / }));
+    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+    await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+    const filed = vi.mocked(fileReceipt).mock.calls[0]?.[1];
+    expect(filed?.proposal.items.map((item) => item.share)).not.toContain("theirs");
+    expect(filed?.destination).toMatchObject({ to: "line", chargedTo: null });
+  },
+);

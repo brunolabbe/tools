@@ -30,6 +30,8 @@ import {
   fetchRecurring,
   retireLine,
 } from "../api/periods.ts";
+import { shownName, usePeopleNames } from "../people.tsx";
+import type { ShownNames } from "../people.tsx";
 import { LineForm } from "./LineForm.tsx";
 import { Recurring } from "./Recurring.tsx";
 
@@ -58,17 +60,23 @@ function listed(parts: readonly string[]): string {
  * Between two people, lg-6's sentences; between more, the same said of each
  * deposit and each transfer (lg-23).
  */
-export function settlementSentence(settlement: SettlementFigures): {
+export function settlementSentence(
+  settlement: SettlementFigures,
+  shown: ShownNames,
+): {
   lead: string;
   hint: string | null;
 } {
   const { deposits, transfers, shares } = settlement;
+  const as = (person: string): string => shownName(shown, person);
   const people = new Set(shares.map((share) => share.personId));
   for (const { personId } of deposits ?? []) people.add(personId);
   for (const { fromId, toId } of transfers) people.add(fromId).add(toId);
   const two = people.size <= 2;
   const direct = listed(
-    transfers.map(({ fromId, toId, cents }) => `${fromId} pays ${toId} ${formatCents(cents)}`),
+    transfers.map(
+      ({ fromId, toId, cents }) => `${as(fromId)} pays ${as(toId)} ${formatCents(cents)}`,
+    ),
   );
   if (deposits !== null && deposits.length === 0 && transfers.length === 0) {
     return {
@@ -82,8 +90,8 @@ export function settlementSentence(settlement: SettlementFigures): {
   if (deposits === null) {
     if (two && transfer !== undefined) {
       return {
-        lead: `${transfer.fromId} pays ${transfer.toId} ${formatCents(transfer.cents)} directly.`,
-        hint: `${transfer.toId}'s share of the buffer is zero, so a deposit into it cannot settle this.`,
+        lead: `${as(transfer.fromId)} pays ${as(transfer.toId)} ${formatCents(transfer.cents)} directly.`,
+        hint: `${as(transfer.toId)}'s share of the buffer is zero, so a deposit into it cannot settle this.`,
       };
     }
     return {
@@ -95,13 +103,13 @@ export function settlementSentence(settlement: SettlementFigures): {
   if (two && deposit !== undefined && deposits.length === 1) {
     const recipient = transfer?.toId ?? [...people].find((person) => person !== deposit.personId);
     return {
-      lead: `${deposit.personId} deposits ${formatCents(deposit.depositCents)} into the buffer.`,
-      hint: `Or pays ${recipient ?? ""} ${formatCents(transfer?.cents ?? 0)} directly.`,
+      lead: `${as(deposit.personId)} deposits ${formatCents(deposit.depositCents)} into the buffer.`,
+      hint: `Or pays ${recipient === undefined ? "" : as(recipient)} ${formatCents(transfer?.cents ?? 0)} directly.`,
     };
   }
   const into = listed(
     deposits.map(
-      ({ personId, depositCents }) => `${personId} deposits ${formatCents(depositCents)}`,
+      ({ personId, depositCents }) => `${as(personId)} deposits ${formatCents(depositCents)}`,
     ),
   );
   return {
@@ -115,7 +123,11 @@ export function settlementSentence(settlement: SettlementFigures): {
  * A line is named by its spending category when it has one. One stored before the
  * list, or imported from the workbook, shows its free text as it was.
  */
-function lineLabel(line: OpenPeriodLine, names: ReadonlyMap<number, string>): string {
+function lineLabel(
+  line: OpenPeriodLine,
+  names: ReadonlyMap<number, string>,
+  shown: ShownNames,
+): string {
   const spending =
     line.spendingCategoryId === null ? undefined : names.get(line.spendingCategoryId);
   const what = [spending ?? line.category, line.note].filter((part) => part !== null).join(" · ");
@@ -124,7 +136,7 @@ function lineLabel(line: OpenPeriodLine, names: ReadonlyMap<number, string>): st
     line.recurringItemId !== null
       ? `${words} (monthly)`
       : line.chargedTo !== null
-        ? `${words}, ${line.chargedTo}'s`
+        ? `${words}, ${shownName(shown, line.chargedTo)}'s`
         : words;
   // Dated in a period already closed, and counted by the next close instead.
   return line.late ? `${kind}, entered after its period closed` : kind;
@@ -132,6 +144,7 @@ function lineLabel(line: OpenPeriodLine, names: ReadonlyMap<number, string>): st
 
 export function Periods(): React.ReactElement {
   const id = useId();
+  const shown = usePeopleNames();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [end, setEnd] = useState<string | null>(null);
   const [since, setSince] = useState("");
@@ -233,7 +246,7 @@ export function Periods(): React.ReactElement {
       const period = await closePeriod({ start: open.start, end: end ?? open.end });
       setSince("");
       setEnd(null);
-      return `Period closed. ${settlementSentence(period.settlement).lead}`;
+      return `Period closed. ${settlementSentence(period.settlement, shown).lead}`;
     }, {});
   };
 
@@ -249,7 +262,7 @@ export function Periods(): React.ReactElement {
   const chosenEnd = end ?? open.end;
   // The period after one closed today starts tomorrow: nothing to close yet.
   const empty = open.start !== null && chosenEnd < open.start;
-  const sentence = open.settlement === null ? null : settlementSentence(open.settlement);
+  const sentence = open.settlement === null ? null : settlementSentence(open.settlement, shown);
 
   return (
     <>
@@ -265,7 +278,7 @@ export function Periods(): React.ReactElement {
           return (
             <div key={personId} className="period-person">
               <p className="figure lead">
-                <span>Paid by {personId}</span>
+                <span>Paid by {shownName(shown, personId)}</span>
                 <span className="amount">{formatCents(shared)}</span>
               </p>
               {lines.length === 0 ? (
@@ -275,7 +288,7 @@ export function Periods(): React.ReactElement {
                   {lines.map((line) => (
                     <li key={`${String(line.lineId)}-${String(line.recurringItemId)}-${line.date}`}>
                       <span>
-                        {line.date} · {lineLabel(line, names)}
+                        {line.date} · {lineLabel(line, names, shown)}
                       </span>
                       <span className="amount">
                         {formatCents(line.amountCents)}
@@ -284,7 +297,7 @@ export function Periods(): React.ReactElement {
                             type="button"
                             className="secondary small"
                             disabled={busy}
-                            aria-label={`Remove ${line.date} ${lineLabel(line, names)}`}
+                            aria-label={`Remove ${line.date} ${lineLabel(line, names, shown)}`}
                             onClick={() => {
                               const lineId = line.lineId;
                               if (lineId === null) return;
@@ -378,7 +391,7 @@ export function Periods(): React.ReactElement {
             {expected.map(({ period, deposit }) => (
               <li key={`${String(period.id)}-${deposit.personId}`}>
                 <span>
-                  {deposit.personId}, for the period ending {period.end}
+                  {shownName(shown, deposit.personId)}, for the period ending {period.end}
                 </span>
                 <span className="amount">{formatCents(deposit.depositCents)}</span>
               </li>

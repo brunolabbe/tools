@@ -21,8 +21,9 @@
  * after them are the store's (lg-2), the next two are the rules' and the
  * inbox's (lg-4), the next is the salaries' (lg-5), the next four are the
  * periods' (lg-6), the next is the spending categories' (lg-15), the next
- * five are the household directory's (lg-20, and lg-22's four ahead of it),
- * the next six are the receipts' (lg-8), and the last is their items' (lg-10).
+ * four are the household directory's (lg-22), the next two are its people's
+ * shown names (lg-33), the next six are the receipts' (lg-8), and the last is
+ * their items' (lg-10).
  */
 
 import {
@@ -157,6 +158,18 @@ export const LEDGER_ERROR_CODES = [
   "MEMBER_NOT_FOUND",
   // lg-20's HOUSEHOLD_FULL, a third person refused, left with the cap in lg-23:
   // the books settle between any number of people.
+  // lg-33: a person's shown name, which an admin changes and the books never see.
+  /**
+   * The person named to rename is not one a membership of this household has
+   * ever named. A person id the books know only from an old rule or
+   * classification is not in the directory, so it has no shown name to change.
+   */
+  "PERSON_NOT_FOUND",
+  /**
+   * Another person in the household is shown under that name, or has it as their
+   * id: two people shown alike could not be told apart on any screen.
+   */
+  "PERSON_NAME_TAKEN",
   // --- Receipts (lg-8) ---
   /**
    * The upload's first bytes are not a JPEG, a PNG or a WebP image, whatever it
@@ -237,6 +250,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   MEMBER_NOT_ADDED: "That address cannot be added to this household.",
   HOUSEHOLD_NOT_FOUND: "There is no such household.",
   MEMBER_NOT_FOUND: "That address is not a member of this household.",
+  PERSON_NOT_FOUND: "That person is not one this household's members have been added as.",
+  PERSON_NAME_TAKEN: "Another person in this household is already shown under that name.",
   RECEIPT_NOT_AN_IMAGE: "That is not a photo. Take one, or choose a JPEG, PNG or WebP image.",
   RECEIPT_NOT_FOUND: "There is no such receipt.",
   RECEIPT_ALREADY_FILED:

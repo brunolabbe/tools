@@ -73,7 +73,10 @@ describe("the people table", () => {
     // The route answers from the table: a person only the table holds is listed.
     homeBooks(app).prepare("INSERT INTO people (id, added_at) VALUES ('casey', 'x')").run();
     const response = await app.server.inject({ method: "GET", url: ROUTES.people });
-    expect(response.json<PeopleResponse>()).toEqual({ people: ["alex", "casey", "sam"] });
+    expect(response.json<PeopleResponse>()).toEqual({
+      people: ["alex", "casey", "sam"],
+      names: { alex: "alex", casey: "casey", sam: "sam" },
+    });
   });
 
   test("the person ids lg-4 stores on rules and classifications all name someone", async () => {

@@ -21,8 +21,8 @@ vi.mock("../src/api/households.ts", () => ({
 const HOME: HouseholdResponse = {
   household: { id: "home", name: "The test household" },
   members: [
-    { address: "alex@example.test", person: "alex" },
-    { address: "sam@example.test", person: "sam" },
+    { address: "alex@example.test", person: "alex", name: "alex" },
+    { address: "sam@example.test", person: "sam", name: "sam" },
   ],
   history: [
     {
@@ -71,6 +71,7 @@ test("adds a member, tells them the address must be admitted on Access, and show
   vi.mocked(addHouseholdMember).mockResolvedValue({
     address: "sam.phone@example.test",
     person: "sam",
+    name: "sam",
   });
   render(<Household id="home" />);
   await screen.findByRole("heading", { name: "Household" });
@@ -112,4 +113,57 @@ test("offers no way to remove anyone", async () => {
 
   expect(screen.queryByRole("button", { name: /remove/iu })).toBeNull();
   expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Add member"]);
+});
+
+// lg-33: a person is shown by name, and a rename is its own line in the history.
+test("shows a renamed person by name, and the rename as its own line", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue({
+    ...HOME,
+    members: [
+      { address: "alex@example.test", person: "alex", name: "Alex" },
+      { address: "sam@example.test", person: "sam", name: "sam" },
+    ],
+    history: [
+      ...HOME.history,
+      {
+        action: "rename",
+        person: "alex",
+        name: "Alex",
+        at: "2026-10-17T00:00:00.000Z",
+        by: "admin@example.test",
+      },
+    ],
+  });
+  vi.mocked(addHouseholdMember).mockResolvedValue({
+    address: "alex.phone@example.test",
+    person: "alex",
+    name: "Alex",
+  });
+  render(<Household id="home" />);
+  await screen.findByRole("heading", { name: "Household" });
+
+  const [members, history] = screen.getAllByRole("list");
+  expect(members?.textContent).toContain("Alex alex@example.test");
+  const changes = history?.querySelectorAll("li") ?? [];
+  expect(changes[0]?.textContent).toBe("2026-10-17 alex renamed Alex, by admin@example.test");
+  expect(changes[2]?.textContent).toBe(
+    "2026-10-01 alex@example.test added as Alex, by the operator",
+  );
+
+  // The form offers Alex and sends the id.
+  fireEvent.change(screen.getByLabelText("Address"), {
+    target: { value: "alex.phone@example.test" },
+  });
+  fireEvent.change(screen.getByLabelText("Person"), { target: { value: "Alex" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add member" }));
+
+  await waitFor(() =>
+    expect(vi.mocked(addHouseholdMember)).toHaveBeenCalledWith("home", {
+      address: "alex.phone@example.test",
+      person: "alex",
+    }),
+  );
+  expect((await screen.findByRole("status")).textContent).toContain(
+    "Added alex.phone@example.test as Alex.",
+  );
 });

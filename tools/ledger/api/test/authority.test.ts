@@ -77,6 +77,20 @@ const ADMIN_PROBES: Probe[] = [
     url: at("adminMemberRemove"),
     payload: { address: SAM },
   },
+  // lg-34: a member of the household is refused this one too, though it names their own address.
+  {
+    route: "adminMemberAddress",
+    method: "POST",
+    url: at("adminMemberAddress"),
+    payload: { from: SAM, to: NEW_ADDRESS },
+  },
+  // lg-33: a member of the household is refused it too, by "every admin route".
+  {
+    route: "adminPersonRename",
+    method: "POST",
+    url: at("adminPersonRename"),
+    payload: { person: "sam", name: "Samantha" },
+  },
 ];
 
 /**
@@ -143,7 +157,7 @@ describe("the sweep", () => {
       (route) => isAdminRoute(route) || isHouseholdRoute(route),
     );
 
-    expect(routes.length).toBe(5);
+    expect(routes.length).toBe(7);
     expect(new Set(probes.map((probe) => probe.route))).toEqual(new Set(routes));
     for (const route of routes) {
       for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const) {

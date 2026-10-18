@@ -14,6 +14,8 @@ import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type { BucketsResponse } from "@ledger/contract";
 import { fetchBuckets } from "../api/buckets.ts";
+import { shownName, usePeopleNames } from "../people.tsx";
+import type { ShownNames } from "../people.tsx";
 
 type Load =
   | { state: "loading" }
@@ -24,19 +26,21 @@ type Load =
  * Who has paid extra into the mortgage bucket. Between two people, as lg-5 said
  * it; between more, the one with most and their margin over the next (lg-23).
  */
-export function leadSentence(mortgage: BucketsResponse["mortgage"]): string {
+export function leadSentence(mortgage: BucketsResponse["mortgage"], names: ShownNames): string {
   const two = mortgage.own.length <= 2;
   if (mortgage.lead === null) {
     return two ? "Both have paid the same." : "The two who have paid the most are level.";
   }
   const by = formatCents(mortgage.lead.byCents);
+  const who = shownName(names, mortgage.lead.personId);
   return two
-    ? `${mortgage.lead.personId} has paid ${by} more.`
-    : `${mortgage.lead.personId} has paid the most, ${by} more than the next.`;
+    ? `${who} has paid ${by} more.`
+    : `${who} has paid the most, ${by} more than the next.`;
 }
 
 export function Home(): React.ReactElement {
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const names = usePeopleNames();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -67,12 +71,12 @@ export function Home(): React.ReactElement {
         <ul className="figures">
           {mortgage.own.map((person) => (
             <li key={person.personId}>
-              <span>{person.personId}</span>
+              <span>{shownName(names, person.personId)}</span>
               <span className="amount">{formatCents(person.ownCents)}</span>
             </li>
           ))}
         </ul>
-        <p className="lead">{leadSentence(mortgage)}</p>
+        <p className="lead">{leadSentence(mortgage, names)}</p>
         <p className="muted hint">In the bucket: {formatCents(mortgage.balanceCents)}</p>
       </section>
       <section className="card" aria-labelledby="buffer-heading">
@@ -84,7 +88,7 @@ export function Home(): React.ReactElement {
         <ul className="figures muted">
           {buffer.contributions.map((person) => (
             <li key={person.personId}>
-              <span>Put in by {person.personId}</span>
+              <span>Put in by {shownName(names, person.personId)}</span>
               <span className="amount">{formatCents(person.contributedCents)}</span>
             </li>
           ))}

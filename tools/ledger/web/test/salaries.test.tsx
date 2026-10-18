@@ -12,6 +12,7 @@ import { AppError } from "@ledger/contract";
 import type { Ratio, Salary } from "@ledger/contract";
 import { fetchPeople } from "../src/api/rules.ts";
 import { confirmRatio, enterSalaries, fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
+import { PeopleNamesProvider } from "../src/people.tsx";
 import { Salaries } from "../src/salaries/Salaries.tsx";
 
 vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
@@ -225,4 +226,43 @@ test("fewer than two salaries is refused, and nothing is sent (lg-29)", async ()
 
   expect((await screen.findByRole("alert")).textContent).toMatch(/at least two/u);
   expect(entered).not.toHaveBeenCalled();
+});
+
+// lg-33: after an admin renames alex to Alex, the screen prints Alex wherever it
+// names them, and still sends alex, the id the books store.
+test("prints a person's shown name after a rename, never the id, and sends the id", async () => {
+  entered.mockResolvedValue({
+    salaries: [salary(3, "alex", 2026, 6_000_000), salary(4, "sam", 2026, 4_000_000)],
+    proposal: {
+      effectiveFrom: "2026-10-03",
+      shares: [
+        { personId: "alex", partsPerMillion: 600_000, salaryId: 3 },
+        { personId: "sam", partsPerMillion: 400_000, salaryId: 4 },
+      ],
+    },
+  });
+  render(
+    <PeopleNamesProvider value={{ alex: "Alex", sam: "sam" }}>
+      <Salaries />
+    </PeopleNamesProvider>,
+  );
+
+  expect(
+    await screen.findByText("Ratio in effect: Alex 60.0000 % · sam 40.0000 %, since 2025-01-01."),
+  ).toBeTruthy();
+  expect(screen.queryByLabelText("alex’s salary")).toBeNull();
+  fireEvent.change(field("Year"), { target: { value: "2026" } });
+  fireEvent.change(field("Alex’s salary"), { target: { value: "60000" } });
+  fireEvent.change(field("sam’s salary"), { target: { value: "40000" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save salaries" }));
+
+  expect(await screen.findByText("Alex 60.0000 % · sam 40.0000 %")).toBeTruthy();
+  expect(entered).toHaveBeenCalledWith({
+    year: 2026,
+    salaries: [
+      { personId: "alex", amountCents: 6_000_000 },
+      { personId: "sam", amountCents: 4_000_000 },
+    ],
+  });
+  expect(document.body.textContent).not.toMatch(/\balex\b/u);
 });

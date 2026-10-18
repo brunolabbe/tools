@@ -18,6 +18,7 @@ import type { PeriodLine, SpendingCategory } from "@ledger/contract";
 import { correctLine } from "../api/periods.ts";
 import { fetchSpendingLines } from "../api/spending.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
+import { shownName, usePeopleNames } from "../people.tsx";
 
 /** How many lines one tap of "Show more" brings. */
 const PAGE = 25;
@@ -50,6 +51,7 @@ export function PeriodLines({
   categories,
   onChanged,
 }: PeriodLinesProps): React.ReactElement {
+  const names = usePeopleNames();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [version, setVersion] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
@@ -153,8 +155,8 @@ export function PeriodLines({
                   <p className="muted">{line.note}</p>
                 )}
                 <p className="muted">
-                  Paid by {line.personId}
-                  {line.chargedTo !== null && `, charged to ${line.chargedTo}`}.
+                  Paid by {shownName(names, line.personId)}
+                  {line.chargedTo !== null && `, charged to ${shownName(names, line.chargedTo)}`}.
                 </p>
                 <p className="line">
                   <span>Spending category</span>

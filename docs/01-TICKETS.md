@@ -84,7 +84,9 @@ context — numbered steps, named files, the traps worth knowing in advance.
 Optional: only on a ticket that poses a question. The question, its options and
 their costs. Once settled the heading reads
 `## Decision — answered <date> by <who>`, and the answer, with the options it
-was chosen from, stays under it.
+was chosen from, stays under it. `npm run status` fails this heading on a
+ticket whose `status` is not `needs-decision`, so the heading and the frontmatter
+cannot disagree.
 
 ## Done when
 

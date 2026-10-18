@@ -118,7 +118,7 @@ describe("a member", () => {
     const directory = memberDirectory([[ALEX, "alex"]]);
     const { app: target } = await start(directory);
     expect((await me(target, SAM)).statusCode).toBe(403);
-    expect((await send(target, ALEX, "GET", ROUTES.people)).json<PeopleResponse>()).toEqual({
+    expect((await send(target, ALEX, "GET", ROUTES.people)).json<PeopleResponse>()).toMatchObject({
       people: ["alex"],
     });
 
@@ -127,7 +127,7 @@ describe("a member", () => {
     expect((await me(target, SAM)).json<MeResponse>().person.id).toBe("sam");
     // The first request anyone in the household makes enrols the new name:
     // the salaries screen asks for every person, before the new one signs in.
-    expect((await send(target, ALEX, "GET", ROUTES.people)).json<PeopleResponse>()).toEqual({
+    expect((await send(target, ALEX, "GET", ROUTES.people)).json<PeopleResponse>()).toMatchObject({
       people: ["alex", "sam"],
     });
   });

@@ -9,7 +9,9 @@
  *   it goes through an admin (`docs/00-ANALYSIS.md` §7).
  * - **The admin's**, under `/api/admin/`, for an address in `LEDGER_ADMINS` only
  *   (`adminOf`), who need not be in any household: every household and its
- *   members, a new household, and adding or removing any member.
+ *   members, a new household, adding or removing any member, changing a
+ *   member's address in one step (lg-34), and giving a person a shown name
+ *   (lg-33); neither of those two changes an id, so neither touches the books.
  *
  * Every guard runs in the route's `onRequest` hooks, before the body is
  * parsed, so a refusal is the same 403 whatever the request carries — a body
@@ -35,18 +37,22 @@ import {
   AppError,
   ROUTES,
   addMemberRequestSchema,
+  changeAddressRequestSchema,
   createHouseholdRequestSchema,
   removeMemberRequestSchema,
+  renamePersonRequestSchema,
 } from "@ledger/contract";
 import type {
   AdminHouseholdsResponse,
   HouseholdMember,
   HouseholdResponse,
   HouseholdSummary,
+  PersonName,
 } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
-import type { Directory, Household } from "../directory.ts";
+import { shownName } from "../directory.ts";
+import type { Directory, Household, Member } from "../directory.ts";
 import { adminOf, memberOf } from "../identity.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 
@@ -57,7 +63,16 @@ function householdIdOf(request: FastifyRequest): string {
 }
 
 function membersOf(directory: Directory, household: string): HouseholdMember[] {
-  return directory.members(household).map(({ address, person }) => ({ address, person }));
+  const names = directory.names(household);
+  return directory
+    .members(household)
+    .map(({ address, person }) => ({ address, person, name: shownName(names, person) }));
+}
+
+/** One membership as the routes answer it, with how its person is shown (lg-33). */
+function memberOfHousehold(directory: Directory, member: Member): HouseholdMember {
+  const name = shownName(directory.names(member.household), member.person);
+  return { address: member.address, person: member.person, name };
 }
 
 /** The household an admin named, or `HOUSEHOLD_NOT_FOUND`. */
@@ -101,7 +116,7 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
         by: caller.email.toLowerCase(),
         at: context.now(),
       });
-      const body: HouseholdMember = { address: added.address, person: added.person };
+      const body: HouseholdMember = memberOfHousehold(directory, added);
       return body;
     } catch (error: unknown) {
       if (error instanceof AppError && error.code === "ADDRESS_ALREADY_A_MEMBER") {
@@ -149,7 +164,7 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
       by: admin,
       at: context.now(),
     });
-    const body: HouseholdMember = { address: added.address, person: added.person };
+    const body: HouseholdMember = memberOfHousehold(directory, added);
     return body;
   });
 
@@ -165,7 +180,46 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
       by: admin,
       at: context.now(),
     });
-    const body: HouseholdMember = { address: removed.address, person: removed.person };
+    const body: HouseholdMember = memberOfHousehold(directory, removed);
+    return body;
+  });
+
+  // lg-34: the admin's only. One transaction, so a refused new address leaves the
+  // old one standing; the person id is unchanged, so no books are touched.
+  app.post(ROUTES.adminMemberAddress, { onRequest: adminWrite }, async (request) => {
+    const admin = adminOf(request);
+    const id = householdIdOf(request);
+    const draft = changeAddressRequestSchema.safeParse(request.body);
+    if (!draft.success) {
+      throw new AppError("BAD_REQUEST", "Send the address to replace and the one to use instead.");
+    }
+    namedHousehold(directory, id);
+    const changed = directory.changeAddress({
+      household: id,
+      ...draft.data,
+      by: admin,
+      at: context.now(),
+    });
+    const body: HouseholdMember = memberOfHousehold(directory, changed);
+    return body;
+  });
+
+  // lg-33: the admin's only. A person keeps their id, which every record in the
+  // books names, so this writes the directory and nothing else.
+  app.post(ROUTES.adminPersonRename, { onRequest: adminWrite }, async (request) => {
+    const admin = adminOf(request);
+    const id = householdIdOf(request);
+    const draft = renamePersonRequestSchema.safeParse(request.body);
+    if (!draft.success) {
+      throw new AppError("BAD_REQUEST", "Send the person's id and the name to show them under.");
+    }
+    namedHousehold(directory, id);
+    const body: PersonName = directory.renamePerson({
+      household: id,
+      ...draft.data,
+      by: admin,
+      at: context.now(),
+    });
     return body;
   });
 }

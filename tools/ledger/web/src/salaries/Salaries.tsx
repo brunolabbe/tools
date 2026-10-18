@@ -20,15 +20,17 @@ import type { Ratio, RatioProposal, Salary } from "@ledger/contract";
 import { fetchPeople } from "../api/rules.ts";
 import { confirmRatio, enterSalaries, fetchRatios, fetchSalaries } from "../api/salaries.ts";
 import { formatShare } from "../labels.ts";
+import { shownName, usePeopleNames } from "../people.tsx";
+import type { ShownNames } from "../people.tsx";
 
 type Load =
   | { state: "loading" }
   | { state: "failed"; message: string }
   | { state: "ready"; people: string[]; salaries: Salary[]; inEffect: Ratio | null };
 
-function sharesLabel(shares: RatioProposal["shares"]): string {
+function sharesLabel(shares: RatioProposal["shares"], names: ShownNames): string {
   return shares
-    .map((share) => `${share.personId} ${formatShare(share.partsPerMillion)}`)
+    .map((share) => `${shownName(names, share.personId)} ${formatShare(share.partsPerMillion)}`)
     .join(" · ");
 }
 
@@ -43,6 +45,7 @@ function typedFor(salaries: readonly Salary[], year: number): Record<string, str
 
 export function Salaries(): React.ReactElement {
   const id = useId();
+  const names = usePeopleNames();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   // The year the screen opens on, read once: the year's amounts on record are
   // filled in for it when the salaries first load, and again on each change.
@@ -126,7 +129,9 @@ export function Salaries(): React.ReactElement {
       if (text.trim() === "") continue;
       const amountCents = parseTypedAmountCents(text);
       if (amountCents === null || amountCents < 0) {
-        setProblem(`${personId}'s salary is not an amount. Try 60000 or 60000.50.`);
+        setProblem(
+          `${shownName(names, personId)}'s salary is not an amount. Try 60000 or 60000.50.`,
+        );
         return;
       }
       entries.push({ personId, amountCents });
@@ -164,7 +169,7 @@ export function Salaries(): React.ReactElement {
       <p className="lead">
         {inEffect === null
           ? "No ratio is in effect yet."
-          : `Ratio in effect: ${sharesLabel(inEffect.shares)}, since ${inEffect.effectiveFrom}.`}
+          : `Ratio in effect: ${sharesLabel(inEffect.shares, names)}, since ${inEffect.effectiveFrom}.`}
       </p>
 
       <p className="muted">
@@ -183,7 +188,7 @@ export function Salaries(): React.ReactElement {
         />
         {people.map((personId) => (
           <div key={personId} className="rule-form">
-            <label htmlFor={`${id}-${personId}`}>{personId}&rsquo;s salary</label>
+            <label htmlFor={`${id}-${personId}`}>{shownName(names, personId)}&rsquo;s salary</label>
             <input
               id={`${id}-${personId}`}
               value={typed[personId] ?? ""}
@@ -202,7 +207,7 @@ export function Salaries(): React.ReactElement {
       {proposal !== null && (
         <fieldset className="offer" aria-labelledby={`${id}-proposal`}>
           <h3 id={`${id}-proposal`}>These salaries give</h3>
-          <p>{sharesLabel(proposal.shares)}</p>
+          <p>{sharesLabel(proposal.shares, names)}</p>
           <label htmlFor={`${id}-from`}>In effect from</label>
           <input
             id={`${id}-from`}
@@ -238,7 +243,7 @@ export function Salaries(): React.ReactElement {
           {salaries.map((salary) => (
             <li key={salary.id}>
               <span>
-                {salary.year} · {salary.personId}
+                {salary.year} · {shownName(names, salary.personId)}
               </span>
               <span className="amount">{formatCents(salary.amountCents)}</span>
             </li>

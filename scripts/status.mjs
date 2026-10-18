@@ -290,7 +290,11 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
       const file = `${docs}/work/${entry}`;
       const text = fs.readFileSync(path.join(dir, entry), "utf8");
       const fields = parseFrontmatter(text, file);
-      tickets.push({ ...validate(fields, tool, entry, file), file, reviewed: hasGateRecord(text) });
+      tickets.push({
+        ...validate(fields, tool, entry, file, text),
+        file,
+        reviewed: hasGateRecord(text),
+      });
     }
   }
 
@@ -331,6 +335,20 @@ export function hasGateRecord(text) {
   // backtick fence exposed a quoted one. Exported for `preflight.mjs`' check 3,
   // so no two readers of `## Review` can disagree about where it is.
   return extractSections(text).some((s) => s.level === 2 && /^Review\b/.test(s.title));
+}
+
+/**
+ * Whether a ticket's body carries an open-decision heading, outside any fence.
+ *
+ * `\b` after `open` keeps `## Decision — opened` from matching, and nothing
+ * else about the title is read: an answered heading is `Decision — answered`,
+ * which does not match.
+ *
+ * @param {string} text The whole file, frontmatter included.
+ * @returns {boolean}
+ */
+function hasOpenDecisionHeading(text) {
+  return extractSections(text).some((s) => s.level === 2 && /^Decision — open\b/.test(s.title));
 }
 
 /**
@@ -439,8 +457,9 @@ export function danglingDependencies(tickets) {
 /**
  * @param {Record<string, unknown>} fields
  * @param {string} tool @param {string} entry @param {string} file
+ * @param {string} text the whole file, for the body's own headings
  */
-function validate(fields, tool, entry, file) {
+function validate(fields, tool, entry, file, text) {
   const ticket = /** @type {ReturnType<typeof readTickets>[number]} */ (fields);
   if (ticket.tool !== tool) {
     throw new Error(`${file}: tool is "${ticket.tool}" but the file is under "${tool}"`);
@@ -470,6 +489,18 @@ function validate(fields, tool, entry, file) {
   if (ticket.difficulty == null && !["done", "dropped"].includes(ticket.status)) {
     throw new Error(
       `${file}: a "${ticket.status}" ticket needs a difficulty. Use one of: ${DIFFICULTIES.join(", ")}`,
+    );
+  }
+  // The `## Decision — open` heading and `status` both say whether a decision is
+  // open, and nothing compared them (repo-105). Only the open form is checked:
+  // a `needs-decision` ticket with no heading is legal, because the section is
+  // optional. A fenced heading is an example and is skipped, as in
+  // `hasGateRecord`.
+  if (ticket.status !== "needs-decision" && hasOpenDecisionHeading(text)) {
+    throw new Error(
+      `${file}: has a "## Decision — open" heading, but its status is "${ticket.status}". ` +
+        `Reword the heading as answered ("## Decision — answered <date> by <who>", as docs/01-TICKETS.md says), ` +
+        `or set the status to "needs-decision".`,
     );
   }
   const match = /^[a-z]+-(?<number>[1-9]\d*)$/.exec(ticket.id);
