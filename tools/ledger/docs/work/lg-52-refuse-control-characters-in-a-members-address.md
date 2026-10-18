@@ -151,10 +151,10 @@ every writer refuses them. **Every writer of an address on `main`:**
   command's `remove` verb. It reads its address through `readAddress` too, which
   matters below.
 - `LEDGER_ADMINS` in `config.ts`, which reads each entry through `readAddress`.
-- Unmerged, on PR #546: `Directory.changeAddress` (lg-34), whose `to` goes
-  through `readAddress` as `addMember`'s does. It is covered by this change once
-  both are on `main`; until then it is the gate's example and not a writer on
-  `main`. Whoever lands second checks the other.
+- `Directory.changeAddress` (lg-34, merged as PR #546, `dbf4cd5f`), whose `to`
+  goes through `readAddress` as `addMember`'s does, so it inherits the change.
+  Its `from` goes through `readAddress` too, and is not the removal exception of
+  item 4 (see the Log).
 
 `DEV_IDENTITY` is lower-cased and never goes through `readAddress`, but it is
 refused at boot unless the directory already has a member by that address, so it
@@ -398,3 +398,35 @@ bytes`, and with `env: { X: "a\u0000b" }` → `ERR_INVALID_ARG_VALUE The propert
   the spec from (the gate did, about 200 lines).
 - 2026-10-18 — lg-57 filed at the owner's decision: the C1 controls and the
   zero-width characters, which item 2 now leaves out. It depends on this ticket.
+- 2026-10-18 — Built. `ADDRESS` is now two constants in `api/src/directory.ts`:
+  `ADDRESS_SHAPE`, the old pattern, and `CONTROL`, `/[\u0000-\u001f\u007f]/u`
+  (the line carries an `oxlint-disable-next-line no-control-regex`; without it
+  `npx oxlint tools/ledger/api/src/directory.ts` → `error eslint(no-control-regex)`).
+  `readAddress` refuses on either, and a private `readStoredAddress` checks the
+  shape alone; `removeMember` reads through it, so removal keeps refusing exactly
+  what it refused and takes a row that holds a control character. `addMember`,
+  `changeAddress` and `LEDGER_ADMINS` (via `config.ts`) inherit `readAddress`
+  unchanged. Both headers reworded (item 5); no trigger, no migration.
+- 2026-10-18 — Red against the base. The new specs were run with
+  `tools/ledger/api/src/directory.ts` restored from `origin/main@335efcd4`:
+  `npx vitest run` of `directory`, `households`, `household-command` and
+  `config-access` → `Tests  11 failed | 105 passed (116)`; the 11 are the
+  `readAddress` sweep, `addMember` ×4 (NUL, SOH, ESC, DEL), `changeAddress` to a
+  NUL, the `member` verb ×3, both routes (one test), and the `LEDGER_ADMINS`
+  entry. The removal tests and the five-input refusals pass at the base, as they
+  must. Then with the tightened `readAddress` also on `removeMember` (one line
+  changed) → `Tests  3 failed | 98 passed (101)`, the three removal tests (class,
+  admin route, `remove` verb): they fail if removal shares the strict check.
+  With the change: `Tests  116 passed (116)` over the same four files.
+- 2026-10-18 — What the brief had wrong or left open. (a) Its "Unmerged, on PR
+  #546" bullet: `changeAddress` is on `main` (`dbf4cd5f`), so it is a writer
+  here and `directory.test.ts` refuses `to: "a@b\u0000c"`. (b) `readAddress`
+  trims, so a control character that is whitespace (`\t`, `\n`, `\v`, `\f`, `\r`)
+  at an address's end was never stored: `readAddress("a@b.test\t")` returns
+  `a@b.test`, before and after. The sweep asserts that, not a refusal, for those
+  five at the end. (c) `changeAddress`'s `from` goes through the strict
+  `readAddress`, so a stored row with a control character cannot be the `from` of
+  a change, though it can be removed and re-added. The brief names `removeMember`
+  alone as the exception and this change keeps to it; making `from` read through
+  `readStoredAddress` is a one-word edit, and is the open decision in the report.
+- 2026-10-18 — Not run: item 6's query against a deployed directory; the owner's.

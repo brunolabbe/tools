@@ -884,13 +884,15 @@ describe("changing a member's address", () => {
 
 // lg-52: `\s` covers tab and newline and not the other C0 controls or DEL, so an
 // address carrying one was stored and then no Access token could name it.
+/** A character as `\uXXXX`, so a failure names a control a terminal would swallow. */
+const shown = (text: string) =>
+  text.replace(/[^ -~]/gu, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+
 describe("an address with a control character", () => {
   /** The C0 controls and DEL, which the class refuses wherever they sit. */
   const CONTROLS = [...Array.from({ length: 32 }, (_, i) => i), 0x7f].map((point) =>
     String.fromCodePoint(point),
   );
-  const shown = (text: string) =>
-    text.replace(/[^ -~]/gu, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
 
   test("is not an address to readAddress, in the local part, the domain or at the end, while a clean one is", () => {
     // The clean address first, so a pattern that refuses everything cannot pass.
