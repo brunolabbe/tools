@@ -1,15 +1,15 @@
 ---
 id: repo-111
 tool: repo
-title: Re-gate with a fresh narrow gate, and run at most three tickets at once
+title: Re-gate fresh, run three tickets at once, offer batches by tool, and push before the suites
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
 ---
 
-# repo-111 — A fresh gate 2, and three tickets in flight
+# repo-111 — A fresh gate 2, three tickets in flight, batches by tool, no suite before the gate
 
 ## Why
 
@@ -18,9 +18,10 @@ on lg-40 (PR #548, a one-ticket batch on base 960f4b26), from its three agent
 transcripts: builder `a9dd02de949ac55d2`, gate `a5490055183b61b89`, fixer
 `aacd38c83247e1abd`, under
 `~/.claude/projects/-workspaces-tools/76d8bfd3-5bf4-4dc1-8f0f-5cfd08c6379a/subagents/`.
-Two figures from that analysis show the loop as it ran before this change:
+[lg-40's clock](../../.claude/skills/orchestrate-tickets/reference/lg-40-timeline.drawio.svg)
+is the measurement that motivated this change, and
 [the flow](../../.claude/skills/orchestrate-tickets/reference/flow.drawio.svg)
-and [lg-40's clock](../../.claude/skills/orchestrate-tickets/reference/lg-40-timeline.drawio.svg).
+is the loop as it runs under it.
 
 **The chain was build 26 min, gate 1 31, round 1 (builder resumed) 36, gate 2
 38, landing 8**, from 02:49:50Z to 05:17:12Z, 147 minutes. The five
@@ -56,6 +57,18 @@ over 9h42m18s, with two cold restarts. `reference/concurrency.md` said
 "Reviewers occupy slots. A cap of four means four agents total", and no step
 of `SKILL.md` applied a cap.
 
+**A builder ran the tool's suites up to four times per ticket**: preflight
+before its push, preflight again in each round, the landing's `--land`
+preflight, and CI on the draft. A downloader preflight is ten to twelve
+minutes (`roles/builder.md` quoted "a twelve-minute preflight"), and the gate
+waited for the first of them, since the draft opened only after it.
+
+**Intake asked for a batch but not for the decisions inside it.** The reason
+relayed with the owner's decision is that lg-30, lg-32, lg-33, lg-39 and lg-40
+each came back from gate 1 with a `med` that was an open decision (about 74
+minutes of round and gate 2 on lg-40). Read against the files, that reason
+does not hold as stated; see the Log of 2026-10-18, round 2.
+
 **This does not amend [adr/006](../adr/006-gate-records-carry-no-citations.md).**
 Its decision 3 is "two gates: the first, and one re-gate scoped to the fix
 round"; the count and the scope stay, and only who runs the re-gate changes.
@@ -76,6 +89,25 @@ rejected by the owner, because it makes the process less trustable.
 - **At most N tickets in flight per orchestrator, applied at intake. N = 3**,
   the recommended default: the owner chose the cap without fixing N.
 
+Later the same day, each from options the Fable session put with
+`AskUserQuestion`:
+
+- **Intake offers batches by tool, under the cap, and asks the candidates'
+  open decisions in the same checkpoint.** Options: one question whose options
+  are batches by tool (recommended, **chosen**); a separate tool question
+  first; the orchestrator picks when the owner names no tool. The orchestrator
+  still never picks the batch.
+- **Push and open the draft before the slow checks, and run no suite in the
+  fix round.** Offered as points 3 and 4 beside the first two; the owner: "1,
+  2, 3 and 4 seem like real wins". The quality trade is that a gate may open a
+  head CI has not yet proven, which it already grades `unproven (gate)`.
+- **How this ticket lands: a WAIVED record and `status: done` in this pull
+  request.** Options: WAIVED record, status done (recommended, **chosen**);
+  leave `ready` and close it later.
+- **A third gate, when one runs, is a fresh dispatch too**, taken under this
+  ticket on its builder's note that no page said how a gate 3 runs; gate 3's
+  rules are otherwise unchanged.
+
 ## Build
 
 1. `.claude/skills/orchestrate-tickets/SKILL.md`: step 2 states the cap, with
@@ -94,8 +126,17 @@ rejected by the owner, because it makes the process less trustable.
 5. Every other "wake" or "woken" in `.claude/skills/**/*.md` outside
    `reference/history.md` is reworded or retargeted.
 6. `reference/model-pairing.md`: a dated 2026-10-18 section with the
-   provenance of both changes, linking the two figures, which are copied into
-   `reference/`.
+   provenance of every change here, linking the two figures, which are copied
+   into `reference/`.
+7. `SKILL.md` step 2 and `.claude/agents/seam-mapper.md`'s _What you return_:
+   batches by tool, a held tool left out or offered beside its session, open
+   decisions quoted by the seam map and asked at intake.
+8. `roles/builder.md` _Before you report_, _Your report_ and _When you are
+   resumed with findings_, and `roles/fixer.md` _The work_: `npm run check`
+   and `preflight.mjs --only mergeTree,ciCommands,review,title`, no full
+   suite; `SKILL.md` step 4 reads CI's state on the head; `reference/sizing.md`
+   says the suites run twice per ticket.
+9. `SKILL.md` step 8: a third gate is a fresh dispatch too.
 
 ## Done when
 
@@ -123,13 +164,42 @@ rejected by the owner, because it makes the process less trustable.
 6. `reference/sizing.md` _What a batch pays for_ carries the cost of a resumed
    gate and the orchestrator's queue.
 7. `reference/model-pairing.md` carries a dated 2026-10-18 section with the
-   provenance of both changes — the options, the owner's choice, the
+   provenance of every change here — the options, the owner's choice, the
    measurement — and links to both figures; `git check-ignore` prints nothing
    for either figure's path.
 8. This ticket's Log carries the recipe that recomputes the gate's
    cache-read figures and its output: 99 and 73 responses, 16,953,045 and
    28,624,318 cache-read tokens.
 9. `npm run check` exits 0 and preflight exits 0 on the branch.
+10. `SKILL.md` step 2 makes each `AskUserQuestion` option one tool's batch of
+    at most the cap, recommended first with seam notes and a rough cost; leaves
+    out a tool another session holds or offers it as "beside <session>'s
+    batch"; offers only the named tool's batches when the owner named one, and
+    otherwise recommends the tool with the most unblocked `ready` tickets; and
+    asks the candidates' open decisions in the same checkpoint.
+11. `.claude/agents/seam-mapper.md` _What you return_ groups candidates by
+    tool and quotes each candidate's open-decision lines as findings, still
+    under about forty lines.
+12. `roles/builder.md` _Before you report_ has the builder run `npm run check`
+    and `preflight.mjs --only mergeTree,ciCommands,review,title`, then push
+    and open the draft, and run no full suite; _Your report_ asks for CI's
+    state on the head; _When you are resumed with findings_ step 2 runs no
+    full suite.
+13. `roles/fixer.md` _The work_ runs `npm run check` and the fast preflight
+    checks for a round, and no full suite.
+14. `SKILL.md` step 4 checks CI's state on the head in place of a local suite
+    run, and `reference/sizing.md` _What a batch pays for_ says the suites run
+    twice per ticket.
+15. `SKILL.md` step 8 says a third gate is also a fresh dispatch.
+16. `## Review` carries the owner's WAIVED line, `status` is `done`, and
+    `node scripts/status.mjs --json` exits 0.
+17. The first batch under these rules records, per ticket, whether CI on the
+    draft went red on something the dropped local suite run would have
+    caught. A gate cannot prove this before the merge; it is owed in the Log.
+
+## Review
+
+**Gate: WAIVED** — 2026-10-18 · Bruno Labbé (owner) · the owner's own rule edit, built on the owner's decisions with no gate (adr/006 point 6); chosen in AskUserQuestion, transcribed by the builder.
 
 ## Log
 
@@ -203,3 +273,46 @@ agent dispatched by the owner's Fable 5.1 session), on base `335efcd4`.
   nothing (exit 1).
 - **Unmeasured:** whether a fresh gate 2 costs less than lg-40's woken one. The
   first batch under the rule is the reading.
+
+**2026-10-18, round 2 — four more rule changes and the landing** (same
+builder, resumed by the owner's Fable session with the decisions above).
+
+- **The intake reason does not survive the files.** Relayed: lg-30, lg-32,
+  lg-33, lg-39 and lg-40 each came back from gate 1 with a `med` that was an
+  open decision, each costing a round and a gate 2. Run in
+  `tools/ledger/docs/work/`,
+  `grep -n '^## Decision\|^### Gate\|^## Review' lg-30-*.md lg-32-*.md lg-33-*.md lg-39-*.md lg-40-*.md`
+  prints a `## Review` for all five, a `### Gate 2` for lg-33, lg-39 and lg-40
+  only, and **no `## Decision` heading in any of them**. Each of those meds
+  reads "no `Done when` line depends on it" and was raised by the gate's own
+  probes (lg-40's F1/F2 by a sweep over reordered days). An intake question
+  could not have asked them, and lg-30 and lg-32 paid no gate 2. The rule
+  stands as the owner chose it; its recorded reason in `model-pairing.md` says
+  this, and its benefit is unmeasured.
+- **`--only` cannot say "everything but the suites"**: `preflight.mjs`'s
+  `check` runs `npm run check` and then `npm test -- --project <tool>` per
+  touched tool (its header, check 1). So the builder runs `npm run check`
+  itself beside `--only mergeTree,ciCommands,review,title`. **Follow-up for a
+  later ticket, not filed here:** a preflight flag that skips only the suites.
+  `ciCommands` is added to the three checks the dispatch named: it is `ci.yml`'s
+  own check job (lockfile sync, `status.mjs --json`, `status.test.ts`), and the
+  four ran in 16.2 s on this branch (`date +%s.%N` either side:
+  1792363313.84 → 1792363330.07), last line
+  `preflight passed (only mergeTree, ciCommands, review, title; the other checks did not run) (exit 0)`.
+- **Owed by the first batch under these rules** (Done when 17): per ticket,
+  whether CI on the draft went red on something the dropped local suite run
+  would have caught. Whoever runs that batch records it in its history entry.
+- **Superseded:** the first entry's "`status` stays `ready`". The owner chose
+  a WAIVED record and `done`; `## Review` carries the owner's words as given,
+  transcribed by the builder. It has neither half `docs/01-TICKETS.md` asks of
+  a gate record, because no gate ran.
+- **The brief had wrong:** `SKILL.md` step 1 runs `ListAgents` but not
+  `git worktree list`, so step 2 names both.
+- **Folded in:** `roles/fixer.md`'s landing bullet said to post "the
+  `report.md` your dispatch names … the orchestrator wrote it", where
+  `SKILL.md` step 9 has the gate write `gate-<n>@<sha>.full.md` and the
+  harness refuse `report.md`. It now names the `.full.md`.
+- **The flow figure is redrawn** by the Fable session for the rules as they
+  stand after this change and copied over `reference/flow.drawio.svg`; three
+  historical "woken" mentions stay in its notes, outside Done when 4's `*.md`
+  pathspec.
