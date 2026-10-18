@@ -140,3 +140,27 @@ readings were taken would have spoiled them.
   the sandbox's: the ticket's 48 s was a quiet machine and these ran at load
   7 to 22. The ratio is the usable reading, and it is noisy; the CI reading is
   below. An earlier single run at 029641b4 read 92.00 s at load 7.73 to 15.54.
+
+  **Done when 3, CI.** The spec's own line in the `Run npm test` log
+  (`gh run view <run> --job <id> --log | grep review-record.test.ts`), one run
+  each side, so a single reading a side:
+
+  | Leg                                    | Before: run 39086562034 (dispatched, 029641b4) | After: run 39089135953 (PR #540, e7658afd) |
+  | -------------------------------------- | ---------------------------------------------- | ------------------------------------------ |
+  | `test (ubuntu-latest)`                 | 41,634 ms, 67 tests                            | 21,171 ms, 64 tests                        |
+  | `test (windows-latest, informational)` | 121,328 ms, 67 tests                           | 121,660 ms, 64 tests                       |
+
+  Ubuntu halves, as the local pairs suggest. **Windows does not move**: 121 s
+  either side. Cutting the section's `oxfmt` spawns and four `land()` runs saved
+  nothing there, so that leg's time is somewhere this change does not reach.
+  repo-89's own readings were of the `--land` CLI case, which this ticket was told
+  to leave alone and did; this is a reading of the whole file on that leg, not
+  an investigation of it, and what dominates it is not measured here.
+
+  **Folded in, and not.** Folded in: the Why's stale repo-89 sentence and line
+  numbers, and the stale "four links" comment above `setStatus`'s CRLF test.
+  Not folded in: the whole-ticket `oxfmt` at `spliceSection`
+  (`scripts/review-record.mjs:492` at 029641b4), a second spawn per splice that
+  could in principle be avoided — it has no specification, since its input is a
+  file in the repository's config, not a bare text, so it was not "already
+  specified" and no ticket was filed (repo-106 stays unused).
