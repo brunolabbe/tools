@@ -132,7 +132,7 @@ function ruleFor(spendingCategoryId: number | null, fields: Partial<RuleDraft> =
 }
 
 describe("the list", () => {
-  test("is seeded with six generic words, and nothing else is", async () => {
+  test("is seeded with generic words, lg-15's six and lg-53's ten, and nothing else is", async () => {
     const target = await start();
 
     expect((await categories(target)).map((category) => category.name)).toEqual([
@@ -142,6 +142,16 @@ describe("the list", () => {
       "Pharmacy",
       "Restaurant",
       "Other",
+      "Property taxes",
+      "Electricity",
+      "Internet & phone",
+      "Subscriptions",
+      "Insurance",
+      "Home maintenance",
+      "Travel",
+      "Transport",
+      "Bank fees",
+      "Cash",
     ]);
     // Rules are never seeded (the tool's CLAUDE.md); neither is the map.
     expect(homeBooks(target).prepare("SELECT count(*) AS n FROM rules").get()).toEqual({ n: 0 });
