@@ -79,6 +79,23 @@
  * cap and the method are sentinelle's `agent-usage.mjs`'s; the figures are
  * approximate, and the total sums active time only.
  *
+ * **Lost output is estimated, and says so.** From Claude Code 2.1.300
+ * (2026-10-15) a subagent's transcript usually stops before the record that
+ * carries a response's final `output_tokens`: a response is logged as one
+ * record per content block, each with the stream's opening count (often 8 or
+ * 16), and the last record, which held the real count and a non-null
+ * `stop_reason`, is missing. Subagent responses with a final record were 99 to
+ * 100% of each day through 2.1.296 (2026-10-13) and 2 to 14% of each day from
+ * 2.1.300 on, while every main-session response kept its own (repo-112). The
+ * content blocks are all still there, so a response with no `stop_reason` on
+ * any of its records gets an output estimated from what it shows
+ * (`visibleOutput`, `estimateOutput`, `OUTPUT_ESTIMATE`), used only when it
+ * exceeds the recorded count. Most of the gap is redacted thinking, whose
+ * signature length tracks its token count (r 0.95 on Opus 5.5 and Sonnet 5.5).
+ * Every row and total that rests on an estimate names how many responses it
+ * raised and the recorded figure beside it; a file whose records all carry a
+ * final count prints exactly as before.
+ *
  * **An agent can be named by id** (`--agent <id>`) instead of by its task
  * output file: the transcript is looked up at
  * `<config>/projects/<project>/<session>/subagents/agent-<id>.jsonl`, where
@@ -253,6 +270,70 @@ const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
 /**
+ * The estimate's three constants, for a response whose stream lost its final
+ * record (see _lost output_ in the module doc). Fitted by repo-112 on the
+ * subagent responses that do carry a final record, measured with
+ * `visibleOutput` itself; the fit, the held-out check and its error are in
+ * that ticket's Log. Re-fit them there, not here, when a model changes.
+ */
+export const OUTPUT_ESTIMATE = /** @type {const} */ ({
+  charsPerToken: 1.8,
+  thinkingTokensPerSignatureChar: 0.277,
+  thinkingSignatureOffset: 266,
+});
+
+/**
+ * What one streamed record shows of its response's output: the characters of
+ * its text blocks, of each tool call's name and JSON input, and of any
+ * thinking that is not redacted; and, for a redacted thinking block, the
+ * length of its signature, the only trace of how much it thought.
+ *
+ * @param {unknown} content `message.content` of one record
+ * @returns {{chars: number, signature: number}}
+ */
+export function visibleOutput(content) {
+  let chars = 0;
+  let signature = 0;
+  if (!Array.isArray(content)) return { chars, signature };
+  for (const block of content) {
+    const b =
+      /** @type {{type?: unknown, text?: unknown, name?: unknown, input?: unknown, thinking?: unknown, signature?: unknown}} */ (
+        block
+      );
+    if (b.type === "text" && typeof b.text === "string") chars += b.text.length;
+    else if (b.type === "tool_use") {
+      chars +=
+        (typeof b.name === "string" ? b.name.length : 0) + JSON.stringify(b.input ?? {}).length;
+    } else if (b.type === "thinking") {
+      if (typeof b.thinking === "string" && b.thinking.length > 0) chars += b.thinking.length;
+      else if (typeof b.signature === "string") signature += b.signature.length;
+    }
+  }
+  return { chars, signature };
+}
+
+/**
+ * The output a response's visible content implies, in tokens: its characters
+ * at `charsPerToken`, plus its redacted thinking at
+ * `thinkingTokensPerSignatureChar` less `thinkingSignatureOffset`, never below
+ * zero. An estimate, labelled as one wherever it is printed.
+ *
+ * @param {{chars: number, signature: number}} seen
+ * @returns {number}
+ */
+export function estimateOutput({ chars, signature }) {
+  const thinking =
+    signature > 0
+      ? Math.max(
+          0,
+          signature * OUTPUT_ESTIMATE.thinkingTokensPerSignatureChar -
+            OUTPUT_ESTIMATE.thinkingSignatureOffset,
+        )
+      : 0;
+  return Math.round(chars / OUTPUT_ESTIMATE.charsPerToken + thinking);
+}
+
+/**
  * The id a rate is keyed by: a context suffix (`[1m]`) and a date suffix
  * (`-20251001`) name no different price, and which form a transcript records
  * has not been checked for every model — Opus 5.5's is undated, Haiku 4.5's is
@@ -267,7 +348,7 @@ export function normaliseModel(model) {
 
 /**
  * @typedef {{model: string, input: number, cacheWrite: number, cacheWrite1h: number, cacheRead: number, output: number}} Response
- * @typedef {{models: string[], responses: Response[], input: number, cacheWrite: number, cacheWrite1h: number, cacheRead: number, output: number, syntheticSkipped: number, efforts: string[], coldRestarts: number, activeMs: number, wallMs: number}} FileTotals
+ * @typedef {{models: string[], responses: Response[], input: number, cacheWrite: number, cacheWrite1h: number, cacheRead: number, output: number, recordedOutput: number, unfinishedResponses: number, estimatedResponses: number, syntheticSkipped: number, efforts: string[], coldRestarts: number, activeMs: number, wallMs: number}} FileTotals
  */
 
 /**
@@ -318,6 +399,8 @@ export function sumUsage(content, file) {
   const timestamps = [];
   /** @type {Map<string, number | null>} ms since the previous assistant record, per response */
   const gaps = new Map();
+  /** @type {Map<string, {final: boolean, chars: number, signature: number}>} what each response's records show */
+  const seen = new Map();
   /** @type {number | null} */
   let lastAssistantAt = null;
   let syntheticSkipped = 0;
@@ -338,7 +421,7 @@ export function sumUsage(content, file) {
       );
     }
     const rec =
-      /** @type {{type?: unknown, timestamp?: unknown, requestId?: unknown, effort?: unknown, message?: {id?: unknown, model?: unknown, usage?: Record<string, unknown>}}} */ (
+      /** @type {{type?: unknown, timestamp?: unknown, requestId?: unknown, effort?: unknown, message?: {id?: unknown, model?: unknown, content?: unknown, stop_reason?: unknown, usage?: Record<string, unknown>}}} */ (
         record
       );
     /** @type {number | null} */
@@ -377,6 +460,16 @@ export function sumUsage(content, file) {
     }
     if (at !== null) lastAssistantAt = at;
 
+    // Each streamed record carries its own content block, so the blocks add
+    // up across the group; a non-null stop_reason marks the record that
+    // carries the response's final output count.
+    const shown = visibleOutput(rec.message?.content);
+    const so = seen.get(key) ?? { final: false, chars: 0, signature: 0 };
+    so.final ||= rec.message?.stop_reason != null;
+    so.chars += shown.chars;
+    so.signature += shown.signature;
+    seen.set(key, so);
+
     const usage = rec.message?.usage ?? {};
     const output = Number(usage.output_tokens ?? 0);
     const kept = responses.get(key);
@@ -410,9 +503,22 @@ export function sumUsage(content, file) {
   let cacheWrite1h = 0;
   let cacheRead = 0;
   let output = 0;
+  let recordedOutput = 0;
+  let unfinishedResponses = 0;
+  let estimatedResponses = 0;
   let coldRestarts = 0;
   let ttlMs = FIVE_MINUTES_MS;
   for (const [key, kept] of responses) {
+    recordedOutput += kept.output;
+    const so = seen.get(key);
+    if (so && !so.final) {
+      unfinishedResponses += 1;
+      const estimate = estimateOutput(so);
+      if (estimate > kept.output) {
+        kept.output = estimate;
+        estimatedResponses += 1;
+      }
+    }
     input += kept.input;
     cacheWrite += kept.cacheWrite;
     cacheWrite1h += kept.cacheWrite1h;
@@ -441,6 +547,9 @@ export function sumUsage(content, file) {
     cacheWrite1h,
     cacheRead,
     output,
+    recordedOutput,
+    unfinishedResponses,
+    estimatedResponses,
     syntheticSkipped,
     efforts: [...efforts].toSorted(),
     coldRestarts,
@@ -537,6 +646,19 @@ function oneHourNote(count) {
 }
 
 /**
+ * `; output estimated for N of M responses, recorded R` inside the rate note
+ * whenever the estimate raised any response, so a dollar figure that rests on
+ * it never reads as a recorded one; `""` otherwise.
+ *
+ * @param {{estimatedResponses: number, responseCount: number, recordedOutput: number}} r
+ */
+function estimateNote(r) {
+  return r.estimatedResponses > 0
+    ? `; output estimated for ${r.estimatedResponses} of ${r.responseCount} responses, recorded ${r.recordedOutput}`
+    : "";
+}
+
+/**
  * One line per priced file, in the order given, then a total row summing the
  * token fields, the cold restarts, the active time and the dollar figure
  * across them. Each file's row names every model and effort it ran at, its
@@ -556,7 +678,8 @@ export function render(rows) {
       `active=${formatDuration(r.activeMs)} wall=${formatDuration(r.wallMs)}  input=${r.input} ` +
       `cacheWrite=${r.cacheWrite}${oneHourNote(r.cacheWrite1h)} cacheRead=${r.cacheRead} ` +
       `output=${r.output} cold=${r.coldRestarts}  ${formatDollars(r.dollars)} ` +
-      `(rates read ${RATES_READ_ON})${syntheticNote(r.syntheticSkipped)}`,
+      `(rates read ${RATES_READ_ON}${estimateNote({ ...r, responseCount: r.responses.length })})` +
+      `${syntheticNote(r.syntheticSkipped)}`,
   );
 
   const total = rows.reduce(
@@ -566,6 +689,9 @@ export function render(rows) {
       cacheWrite1h: acc.cacheWrite1h + r.cacheWrite1h,
       cacheRead: acc.cacheRead + r.cacheRead,
       output: acc.output + r.output,
+      recordedOutput: acc.recordedOutput + r.recordedOutput,
+      estimatedResponses: acc.estimatedResponses + r.estimatedResponses,
+      responseCount: acc.responseCount + r.responses.length,
       dollars: acc.dollars + r.dollars,
       syntheticSkipped: acc.syntheticSkipped + r.syntheticSkipped,
       coldRestarts: acc.coldRestarts + r.coldRestarts,
@@ -577,6 +703,9 @@ export function render(rows) {
       cacheWrite1h: 0,
       cacheRead: 0,
       output: 0,
+      recordedOutput: 0,
+      estimatedResponses: 0,
+      responseCount: 0,
       dollars: 0,
       syntheticSkipped: 0,
       coldRestarts: 0,
@@ -587,7 +716,7 @@ export function render(rows) {
     `total  active=${formatDuration(total.activeMs)}  input=${total.input} ` +
       `cacheWrite=${total.cacheWrite}${oneHourNote(total.cacheWrite1h)} ` +
       `cacheRead=${total.cacheRead} output=${total.output} cold=${total.coldRestarts}  ` +
-      `${formatDollars(total.dollars)} (rates read ${RATES_READ_ON})` +
+      `${formatDollars(total.dollars)} (rates read ${RATES_READ_ON}${estimateNote(total)})` +
       `${syntheticNote(total.syntheticSkipped)}`,
   );
   return lines.join("\n");
