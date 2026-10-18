@@ -111,6 +111,7 @@ export type {
 export { parseStatement } from "./statement.ts";
 export type { ParsedStatement, StatementRow } from "./statement.ts";
 export {
+  HOUSEHOLD_LAYOUT,
   NO_CORRECTIONS,
   cellRef,
   noteOf,
@@ -131,6 +132,7 @@ export type {
   Repair,
   Sheet,
   Skip,
+  UnfiledRow,
   WorkbookFigures,
   WorkbookLine,
   WorkbookPeriod,

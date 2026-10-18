@@ -7,8 +7,10 @@
  * told apart by it (`docs/00-ANALYSIS.md` §5, §8). Everything below is pure:
  * it reads, repairs, verifies and reports, and it writes nothing.
  *
- * **The layout is §8's.** Where §8 says nothing, the reading below is this
- * ticket's, and it refuses what it does not recognise rather than guessing:
+ * **A description drives the reading** (lg-38): a `WorkbookLayout` from
+ * `@ledger/contract` says which sheets are the account, the periods and the
+ * salaries, and where in them each figure is. The household's own workbook is
+ * `HOUSEHOLD_LAYOUT`, §8's layout and the default, and what it says is:
  *
  * - **Year sheets** (`2022` … `2026`), newest first: `B` date, `C` bucket, `D`
  *   detail, `E` person, `F` the account's running balance, `G` amount, `H`
@@ -30,13 +32,27 @@
  * - **`Accueil`**: row heads name the people over their columns, and the row
  *   labelled `Salaires…` holds each one's salary under their name (lg-37).
  *
+ * Another description moves those columns, rows, names and labels; the
+ * verifications are the same whichever it is. Two things only a description
+ * can take away: with no balance column nothing proves the rows, which is a
+ * problem; with no bucket column the rows are read and proven but cannot be
+ * filed, so they are `unfiled`, never guessed into a bucket.
+ *
  * **Every problem is collected, not thrown.** A workbook with three typos
  * reports three, so the owner fixes them in one pass; `api` refuses to write
  * while any is left.
  */
 
-import type { Bucket, SettlementFormula } from "@ledger/contract";
-import { AppError } from "@ledger/contract";
+import type {
+  AccountLayout,
+  Bucket,
+  LayoutColumnRole,
+  PeriodsLayout,
+  SettlementFormula,
+  SheetSelector,
+  WorkbookLayout,
+} from "@ledger/contract";
+import { AppError, workbookLayoutSchema } from "@ledger/contract";
 import { bufferAsOf, mortgageAsOf } from "./buckets.ts";
 import type { FiledRow, MortgagePosition } from "./buckets.ts";
 import { daysInMonth, fold } from "./months.ts";
@@ -105,12 +121,30 @@ export interface Movement {
   amountCents: number;
   balanceCents: number;
   detail: string;
-  /** The workbook's own note, `H`. */
+  /** The workbook's own note, from the note column (`H` in the household's). */
   note: string | null;
   /** How the workbook filed it, when a correction files it otherwise. */
   workbook: { bucket: Bucket; personId: string | null } | null;
   /** The owner's note on the correction, when there is one. */
   correction: string | null;
+}
+
+/**
+ * A row of the account the layout reads but this import cannot store: it has
+ * no bucket, because the layout names no bucket column, or no balance, because
+ * it names no balance column. Rows like these are a statement's, filed through
+ * the inbox once proven, never by guessing a bucket here.
+ */
+export interface UnfiledRow {
+  sheet: string;
+  row: number;
+  date: string;
+  bucket: Bucket | null;
+  personId: string | null;
+  amountCents: number;
+  balanceCents: number | null;
+  detail: string;
+  note: string | null;
 }
 
 export interface CarryOver {
@@ -133,12 +167,15 @@ export interface Skip {
   row: number;
 }
 
-/** A row listed above a row dated after it: reported, and imported as typed. */
+/** A row listed as newer than a row dated after it: reported, and imported as typed. */
 export interface OutOfOrder {
   sheet: string;
   row: number;
   date: string;
-  /** The row just below it in the sheet, which is dated later. */
+  /**
+   * The row the sheet's order puts just before it, which is dated later: the
+   * row below it in a sheet listed newest first, as the household's is.
+   */
   belowRow: number;
   belowDate: string;
 }
@@ -191,6 +228,8 @@ export interface PeriodDeposit {
 export interface WorkbookReading {
   /** Every movement, oldest first, each filed as it will be stored. */
   movements: Movement[];
+  /** Rows read and checked that this import cannot file, oldest first; none under the household's layout. */
+  unfiled: UnfiledRow[];
   carryOvers: CarryOver[];
   /** What the first year carried in from before the workbook, per bucket. */
   opening: Record<Bucket, number>;
@@ -211,9 +250,43 @@ export interface WorkbookReading {
   problems: string[];
 }
 
-// --- Cells ---
+// --- The household's layout ---
 
-const COLUMN = { B: 2, C: 3, D: 4, E: 5, F: 6, G: 7, H: 8 } as const;
+/** §8's layout: the household's own workbook, and what `readWorkbook` reads when given no other. */
+export const HOUSEHOLD_LAYOUT: WorkbookLayout = {
+  account: {
+    sheets: { by: "year" },
+    yearPerSheet: true,
+    order: "newest-first",
+    columns: [
+      { role: "date", column: "B" },
+      { role: "bucket", column: "C" },
+      { role: "detail", column: "D" },
+      { role: "person", column: "E" },
+      { role: "balance", column: "F" },
+      { role: "amount", column: "G" },
+      { role: "note", column: "H" },
+    ],
+    buckets: [
+      { bucket: "mortgage", labels: ["Hypothèque"] },
+      { bucket: "current-expenses", labels: ["Dép. Courantes", "Dépenses courantes"] },
+    ],
+    carryOverLabel: "Solde reporté",
+    summary: { column: "C", labels: ["Solde", "Total"] },
+  },
+  periods: {
+    sheets: { by: "prefix", prefix: "$" },
+    namesRow: 1,
+    datesRow: 6,
+    firstLine: 8,
+    totalLabel: "Total",
+    depositLabel: "Montant à déposer",
+  },
+  salaries: { sheet: "Accueil", label: "Salaires" },
+  ignored: ["Labels", "Budget"],
+};
+
+// --- Cells ---
 
 function columnName(column: number): string {
   let name = "";
@@ -325,20 +398,62 @@ class People {
 
 // --- Year sheets ---
 
-const BUCKET_NAMES: ReadonlyMap<string, Bucket> = new Map([
-  ["hypotheque", "mortgage"],
-  ["dep courantes", "current-expenses"],
-  ["depenses courantes", "current-expenses"],
-]);
-
-function bucketOf(text: string | null): Bucket | undefined {
-  return text === null ? undefined : BUCKET_NAMES.get(folded(text));
+/** The account's layout as the reader uses it: column numbers, folded labels. */
+interface AccountPlan {
+  layout: AccountLayout;
+  columns: Partial<Record<LayoutColumnRole, number>>;
+  /** The date column, which every account has. */
+  date: number;
+  /** Where an amount's problem is named: the amount column, or the deposit one. */
+  amountAt: number;
+  /** The span of the columns the layout names, where a carry-over's label is looked for. */
+  first: number;
+  last: number;
+  bucketNames: ReadonlyMap<string, Bucket>;
+  /** The first label of each bucket, for a message: `Hypothèque or Dép. Courantes`. */
+  bucketHint: string;
+  carryOver: string | null;
+  summary: { column: number; labels: string[] } | null;
 }
 
-function isCarryOver(sheet: Sheet, row: number): boolean {
-  for (let column = COLUMN.B; column <= COLUMN.H; column++) {
+function accountPlan(layout: AccountLayout): AccountPlan {
+  const columns: Partial<Record<LayoutColumnRole, number>> = {};
+  for (const entry of layout.columns) columns[entry.role] = columnNumber(entry.column);
+  const numbers = Object.values(columns);
+  const date = columns.date ?? 1;
+  return {
+    layout,
+    columns,
+    date,
+    amountAt: columns.amount ?? columns.deposit ?? date,
+    first: Math.min(...numbers),
+    last: Math.max(...numbers),
+    bucketNames: new Map(
+      layout.buckets.flatMap((entry) =>
+        entry.labels.map((text): [string, Bucket] => [folded(text), entry.bucket]),
+      ),
+    ),
+    bucketHint: layout.buckets.flatMap((entry) => entry.labels.slice(0, 1)).join(" or "),
+    carryOver: layout.carryOverLabel === null ? null : folded(layout.carryOverLabel),
+    summary:
+      layout.summary === null
+        ? null
+        : {
+            column: columnNumber(layout.summary.column),
+            labels: layout.summary.labels.map(folded),
+          },
+  };
+}
+
+function bucketOf(plan: AccountPlan, text: string | null): Bucket | undefined {
+  return text === null ? undefined : plan.bucketNames.get(folded(text));
+}
+
+function isCarryOver(plan: AccountPlan, sheet: Sheet, row: number): boolean {
+  if (plan.carryOver === null) return false;
+  for (let column = plan.first; column <= plan.last; column++) {
     const text = textOf(cellAt(sheet, row, column));
-    if (text !== null && folded(text).includes("solde reporte")) return true;
+    if (text !== null && folded(text).includes(plan.carryOver)) return true;
   }
   return false;
 }
@@ -348,13 +463,74 @@ function isCarryOver(sheet: Sheet, row: number): boolean {
  * `Solde Dép. Courantes`, `Solde Hypothèque` and `Total`, each a formula over
  * the sheet. It restates the rows, so it is neither imported nor a problem.
  */
-function isSummary(sheet: Sheet, row: number): boolean {
-  // `C` only: `D` is a movement's free-text detail, and a detail that starts
-  // with "Solde" on a row whose date is unreadable is money, not a summary.
-  const text = textOf(cellAt(sheet, row, COLUMN.C));
+function isSummary(plan: AccountPlan, sheet: Sheet, row: number): boolean {
+  // One column only (`C` in the household's): `D` is a movement's free-text
+  // detail, and a detail that starts with "Solde" on a row whose date is
+  // unreadable is money, not a summary.
+  if (plan.summary === null) return false;
+  const text = textOf(cellAt(sheet, row, plan.summary.column));
   if (text === null) return false;
   const key = folded(text);
-  return key.startsWith("solde") || key.startsWith("total");
+  return plan.summary.labels.some((start) => key.startsWith(start));
+}
+
+/** An amount as the layout gives it: one signed column, or a withdrawal and a deposit. */
+type AmountRead =
+  | { kind: "none" }
+  | { kind: "bad"; column: number; problem: string }
+  | {
+      kind: "amount";
+      /** Signed, as the books keep it. */
+      value: number;
+      /** Each figure it was read from, so one finer than a cent is named at its own cell. */
+      figures: { column: number; value: number }[];
+    };
+
+function amountOf(plan: AccountPlan, sheet: Sheet, row: number): AmountRead {
+  const read = (column: number): AmountRead => {
+    const cell = cellAt(sheet, row, column);
+    const value = numberOf(cell);
+    if (value !== null) return { kind: "amount", value, figures: [{ column, value }] };
+    if (cell === null) return { kind: "none" };
+    return {
+      kind: "bad",
+      column,
+      problem:
+        cell.value === null
+          ? "the amount is a formula with no readable value; open the workbook in Excel and save it."
+          : "the amount is not a number.",
+    };
+  };
+  const { amount, withdrawal, deposit } = plan.columns;
+  if (amount !== undefined) return read(amount);
+  if (withdrawal === undefined || deposit === undefined) return { kind: "none" };
+  const out = read(withdrawal);
+  const into = read(deposit);
+  if (out.kind === "bad") return out;
+  if (into.kind === "bad") return into;
+  if (out.kind === "none" && into.kind === "none") return { kind: "none" };
+  // Unsigned columns, though a bank may still print a withdrawal with its minus.
+  const outValue = out.kind === "amount" ? Math.abs(out.value) : 0;
+  const inValue = into.kind === "amount" ? Math.abs(into.value) : 0;
+  return {
+    kind: "amount",
+    value: inValue - outValue,
+    figures: [
+      ...(out.kind === "amount" ? out.figures : []),
+      ...(into.kind === "amount" ? into.figures : []),
+    ],
+  };
+}
+
+/** An amount's cents: each figure rounded on its own, so a split row's float noise never adds. */
+function centsOf(read: Extract<AmountRead, { kind: "amount" }>, plan: AccountPlan): number {
+  if (plan.columns.amount !== undefined) return toCents(read.value);
+  const [first, second] = read.figures;
+  const signed = (figure: { column: number; value: number } | undefined): number =>
+    figure === undefined
+      ? 0
+      : (figure.column === plan.columns.deposit ? 1 : -1) * Math.abs(toCents(figure.value));
+  return signed(first) + signed(second);
 }
 
 /** `date` with its year replaced by `year`, or `null` when that day does not exist (29 February). */
@@ -364,46 +540,62 @@ function inYear(date: string, year: number): string | null {
   return `${String(year)}${date.slice(4)}`;
 }
 
+/** One account sheet, read. */
 interface YearRead {
-  year: number;
-  /** Oldest first. */
-  movements: Movement[];
+  /** The sheet's name, which names it in a message: its year, in the household's. */
+  label: string;
+  /** `null` when the layout does not hold a year per sheet. */
+  year: number | null;
+  /** Oldest first, filed or not. */
+  rows: UnfiledRow[];
   carryOvers: CarryOver[];
 }
 
 function readYear(
   sheet: Sheet,
-  year: number,
+  year: number | null,
+  plan: AccountPlan,
   people: People,
   out: Pick<WorkbookReading, "repairs" | "skipped" | "outOfOrder" | "problems">,
 ): YearRead {
-  const movements: Movement[] = [];
+  const rows: UnfiledRow[] = [];
   const carryOvers: CarryOver[] = [];
+  const { columns } = plan;
   let dated = false;
   for (let row = 1; row <= sheet.rows.length; row++) {
     const at = (column: number): string => cellRef(sheet.name, row, column);
-    const bucketText = textOf(cellAt(sheet, row, COLUMN.C));
-    const amount = numberOf(cellAt(sheet, row, COLUMN.G));
+    const bucketText =
+      columns.bucket === undefined ? null : textOf(cellAt(sheet, row, columns.bucket));
+    const read = amountOf(plan, sheet, row);
+    const amount = read.kind === "amount" ? read.value : null;
 
-    if (isCarryOver(sheet, row)) {
-      const bucket = bucketOf(bucketText);
+    if (isCarryOver(plan, sheet, row)) {
+      const bucket = bucketOf(plan, bucketText);
       if (bucket === undefined) {
-        out.problems.push(`${at(COLUMN.C)}: a carry-over names no bucket the books know.`);
-      } else if (amount === null) {
-        out.problems.push(`${at(COLUMN.G)}: a carry-over has no amount.`);
+        out.problems.push(
+          `${at(columns.bucket ?? plan.date)}: a carry-over names no bucket the books know.`,
+        );
+      } else if (read.kind !== "amount") {
+        out.problems.push(`${at(plan.amountAt)}: a carry-over has no amount.`);
       } else {
-        carryOvers.push({ sheet: sheet.name, row, year, bucket, amountCents: toCents(amount) });
+        carryOvers.push({
+          sheet: sheet.name,
+          row,
+          year: year ?? 0,
+          bucket,
+          amountCents: centsOf(read, plan),
+        });
       }
       continue;
     }
 
-    const written = dateOf(cellAt(sheet, row, COLUMN.B));
+    const written = dateOf(cellAt(sheet, row, plan.date));
     if (written === null) {
       // A header, a title, a blank, or the summary above the movements. An
       // amount with no date anywhere else would be money nobody can place,
       // which is never skipped quietly.
-      if (amount !== null && amount !== 0 && !(!dated && isSummary(sheet, row))) {
-        out.problems.push(`${at(COLUMN.B)}: an amount with no date.`);
+      if (amount !== null && amount !== 0 && !(!dated && isSummary(plan, sheet, row))) {
+        out.problems.push(`${at(plan.date)}: an amount with no date.`);
       }
       continue;
     }
@@ -411,30 +603,28 @@ function readYear(
     // A placeholder's amount is empty. One that holds text, or a formula Excel
     // never saved a value for, is an amount the books cannot read, and on the
     // newest rows nothing after it would show the money missing.
-    const amountCell = cellAt(sheet, row, COLUMN.G);
-    if (amount === null && amountCell !== null) {
-      out.problems.push(
-        amountCell.value === null
-          ? `${at(COLUMN.G)}: the amount is a formula with no readable value; open the workbook in Excel and save it.`
-          : `${at(COLUMN.G)}: the amount is not a number.`,
-      );
+    if (read.kind === "bad") {
+      out.problems.push(`${at(read.column)}: ${read.problem}`);
       continue;
     }
-    if (amount === null || toCents(amount) === 0) {
+    if (read.kind === "none" || centsOf(read, plan) === 0) {
       out.skipped.push({ sheet: sheet.name, row });
       continue;
     }
-    if (!wholeCents(amount)) {
-      out.problems.push(`${at(COLUMN.G)}: ${String(amount)} is not a whole number of cents.`);
+    const fine = read.figures.find((figure) => !wholeCents(figure.value));
+    if (fine !== undefined) {
+      out.problems.push(
+        `${at(fine.column)}: ${String(fine.value)} is not a whole number of cents.`,
+      );
       continue;
     }
 
     let date = written;
-    if (Number(written.slice(0, 4)) !== year) {
+    if (year !== null && Number(written.slice(0, 4)) !== year) {
       const repaired = inYear(written, year);
       if (repaired === null) {
         out.problems.push(
-          `${at(COLUMN.B)}: ${written} is not in ${String(year)}, and that day does not exist in ${String(year)}.`,
+          `${at(plan.date)}: ${written} is not in ${String(year)}, and that day does not exist in ${String(year)}.`,
         );
         continue;
       }
@@ -442,47 +632,57 @@ function readYear(
       date = repaired;
     }
 
-    const bucket = bucketOf(bucketText);
-    if (bucket === undefined) {
-      out.problems.push(
-        `${at(COLUMN.C)}: "${bucketText ?? ""}" is not a bucket (Hypothèque or Dép. Courantes).`,
-      );
-      continue;
+    let bucket: Bucket | null = null;
+    if (columns.bucket !== undefined) {
+      const found = bucketOf(plan, bucketText);
+      if (found === undefined) {
+        out.problems.push(
+          `${at(columns.bucket)}: "${bucketText ?? ""}" is not a bucket (${plan.bucketHint}).`,
+        );
+        continue;
+      }
+      bucket = found;
     }
-    const balance = numberOf(cellAt(sheet, row, COLUMN.F));
-    if (balance === null) {
-      out.problems.push(`${at(COLUMN.F)}: a movement has no running balance.`);
-      continue;
+    let balanceCents: number | null = null;
+    if (columns.balance !== undefined) {
+      const balance = numberOf(cellAt(sheet, row, columns.balance));
+      if (balance === null) {
+        out.problems.push(`${at(columns.balance)}: a movement has no running balance.`);
+        continue;
+      }
+      if (!wholeCents(balance)) {
+        out.problems.push(
+          `${at(columns.balance)}: ${String(balance)} is not a whole number of cents.`,
+        );
+        continue;
+      }
+      balanceCents = toCents(balance);
     }
-    if (!wholeCents(balance)) {
-      out.problems.push(`${at(COLUMN.F)}: ${String(balance)} is not a whole number of cents.`);
-      continue;
-    }
-    const name = textOf(cellAt(sheet, row, COLUMN.E));
+    const name = columns.person === undefined ? null : textOf(cellAt(sheet, row, columns.person));
     let personId: string | null = null;
-    if (name !== null) {
-      const found = people.resolve(name, at(COLUMN.E));
+    if (name !== null && columns.person !== undefined) {
+      const found = people.resolve(name, at(columns.person));
       if (found === undefined) continue;
       personId = found;
     }
-    movements.push({
+    rows.push({
       sheet: sheet.name,
       row,
       date,
       bucket,
       personId,
-      amountCents: toCents(amount),
-      balanceCents: toCents(balance),
-      detail: textOf(cellAt(sheet, row, COLUMN.D)) ?? "",
-      note: textOf(cellAt(sheet, row, COLUMN.H)),
-      workbook: null,
-      correction: null,
+      amountCents: centsOf(read, plan),
+      balanceCents,
+      detail:
+        (columns.detail === undefined ? null : textOf(cellAt(sheet, row, columns.detail))) ?? "",
+      note: columns.note === undefined ? null : textOf(cellAt(sheet, row, columns.note)),
     });
   }
-  // The sheet lists the newest first; the books keep the oldest first.
-  const oldestFirst = movements.toReversed();
-  // The row order is what proves a repaired year, so it is checked: newest
-  // first, no row is older than the one below it. Where a repaired row breaks
+  // The household's sheets list the newest first; the books keep the oldest first.
+  const newestFirst = plan.layout.order === "newest-first";
+  const oldestFirst = newestFirst ? rows.toReversed() : rows;
+  // The row order is what proves a repaired year, so it is checked: no row is
+  // older than the one the order puts before it. Where a repaired row breaks
   // that order the repair is unproven, and it is refused at that row's cell.
   // Any other inversion is a date typed a few days off; the figures are read
   // by position, so it is reported and imported as typed (decided 2026-10-08).
@@ -505,11 +705,12 @@ function readYear(
       });
       continue;
     }
+    const [upper, lower] = newestFirst ? [movement, below] : [below, movement];
     out.problems.push(
-      `${cellRef(sheet.name, suspect.row, COLUMN.B)}: typed ${repaired.get(suspect.row) ?? ""} and repaired to ${suspect.date}, the sheet's year, but row ${String(movement.row)} (${movement.date}) is listed above row ${String(below.row)} (${below.date}); newest first, the order does not prove the repair.`,
+      `${cellRef(sheet.name, suspect.row, plan.date)}: typed ${repaired.get(suspect.row) ?? ""} and repaired to ${suspect.date}, the sheet's year, but row ${String(upper.row)} (${upper.date}) is listed above row ${String(lower.row)} (${lower.date}); ${newestFirst ? "newest" : "oldest"} first, the order does not prove the repair.`,
     );
   }
-  return { year, movements: oldestFirst, carryOvers };
+  return { label: year === null ? sheet.name : String(year), year, rows: oldestFirst, carryOvers };
 }
 
 /** Whether a cached figure is a whole number of cents, to within a float's noise. */
@@ -525,49 +726,58 @@ const BUCKETS_IN_ORDER: readonly Bucket[] = ["mortgage", "current-expenses"];
  * running balance from one row to the next. Both are checked on the workbook's
  * own filing, before any correction: the workbook computed its carry-overs from
  * what it said then.
+ *
+ * A layout with no carry-overs starts the balance where its first row says it
+ * stood before that row; one with no balance column proves nothing, and says so.
  */
-function verifyYears(years: readonly YearRead[], out: WorkbookReading): void {
-  let previous: { year: number; closing: Record<Bucket, number> } | null = null;
+function verifyYears(years: readonly YearRead[], plan: AccountPlan, out: WorkbookReading): void {
+  let previous: { label: string; closing: Record<Bucket, number> } | null = null;
   let balance: number | null = null;
   let chained = 0;
   let breaks = 0;
+  const balanceAt = plan.columns.balance;
   for (const year of years) {
     const carried: Record<Bucket, number> = { mortgage: 0, "current-expenses": 0 };
-    for (const bucket of BUCKETS_IN_ORDER) {
-      const found = year.carryOvers.filter((carry) => carry.bucket === bucket);
-      const [carry] = found;
-      if (found.length > 1) {
-        out.problems.push(
-          `${String(year.year)}: ${String(found.length)} carry-overs for the ${bucket} bucket; a year has one.`,
-        );
+    if (plan.carryOver !== null) {
+      for (const bucket of BUCKETS_IN_ORDER) {
+        const found = year.carryOvers.filter((carry) => carry.bucket === bucket);
+        const [carry] = found;
+        if (found.length > 1) {
+          out.problems.push(
+            `${year.label}: ${String(found.length)} carry-overs for the ${bucket} bucket; a year has one.`,
+          );
+        }
+        carried[bucket] = carry?.amountCents ?? 0;
+        if (previous === null) continue;
+        const closing = previous.closing[bucket];
+        if (carry === undefined) {
+          out.problems.push(
+            `${year.label}: no carry-over for the ${bucket} bucket, which closed ${previous.label} at ${formatCentsPlain(closing)}.`,
+          );
+        } else if (carry.amountCents !== closing) {
+          out.problems.push(
+            `${cellRef(carry.sheet, carry.row, plan.amountAt)}: carries ${formatCentsPlain(carry.amountCents)} into the ${bucket} bucket, but ${previous.label} closed it at ${formatCentsPlain(closing)} (${formatCentsPlain(carry.amountCents - closing)} unexplained).`,
+          );
+        } else {
+          out.checks.push(
+            `${year.label} carries ${formatCentsPlain(closing)} into the ${bucket} bucket, as ${previous.label} closed it.`,
+          );
+        }
       }
-      carried[bucket] = carry?.amountCents ?? 0;
-      if (previous === null) continue;
-      const closing = previous.closing[bucket];
-      if (carry === undefined) {
-        out.problems.push(
-          `${String(year.year)}: no carry-over for the ${bucket} bucket, which closed ${String(previous.year)} at ${formatCentsPlain(closing)}.`,
-        );
-      } else if (carry.amountCents !== closing) {
-        out.problems.push(
-          `${cellRef(carry.sheet, carry.row, COLUMN.G)}: carries ${formatCentsPlain(carry.amountCents)} into the ${bucket} bucket, but ${String(previous.year)} closed it at ${formatCentsPlain(closing)} (${formatCentsPlain(carry.amountCents - closing)} unexplained).`,
-        );
-      } else {
-        out.checks.push(
-          `${String(year.year)} carries ${formatCentsPlain(closing)} into the ${bucket} bucket, as ${String(previous.year)} closed it.`,
-        );
-      }
+      if (previous === null) out.opening = { ...carried };
+      if (balance === null) balance = carried.mortgage + carried["current-expenses"];
     }
-    if (previous === null) out.opening = { ...carried };
-    if (balance === null) balance = carried.mortgage + carried["current-expenses"];
 
-    for (const movement of year.movements) {
+    for (const movement of year.rows) {
+      if (balanceAt === undefined || movement.balanceCents === null) continue;
+      // With no carry-over to start from, the first row says what stood before it.
+      balance ??= movement.balanceCents - movement.amountCents;
       const expected: number = balance + movement.amountCents;
       chained += 1;
       if (movement.balanceCents !== expected) {
         breaks += 1;
         out.problems.push(
-          `${cellRef(movement.sheet, movement.row, COLUMN.F)}: the running balance is ${formatCentsPlain(movement.balanceCents)}, but the row before it left ${formatCentsPlain(balance)} and this one moves ${formatCentsPlain(movement.amountCents)} (${formatCentsPlain(movement.balanceCents - expected)} unexplained).`,
+          `${cellRef(movement.sheet, movement.row, balanceAt)}: the running balance is ${formatCentsPlain(movement.balanceCents)}, but the row before it left ${formatCentsPlain(balance)} and this one moves ${formatCentsPlain(movement.amountCents)} (${formatCentsPlain(movement.balanceCents - expected)} unexplained).`,
         );
       }
       // From the row's own balance on, so one break is reported once.
@@ -575,12 +785,28 @@ function verifyYears(years: readonly YearRead[], out: WorkbookReading): void {
     }
 
     const closing = { ...carried };
-    for (const movement of year.movements) closing[movement.bucket] += movement.amountCents;
-    previous = { year: year.year, closing };
+    for (const movement of year.rows) {
+      if (movement.bucket !== null) closing[movement.bucket] += movement.amountCents;
+    }
+    previous = { label: year.label, closing };
+  }
+  const rows = years.reduce((sum, year) => sum + year.rows.length, 0);
+  if (balanceAt === undefined) {
+    if (rows > 0) {
+      out.problems.push(
+        `The layout names no balance column, so nothing proves the ${String(rows)} rows read are all of them or that their amounts are right. Match them one for one against a statement paste of the same dates first (docs/00-ANALYSIS.md §8).`,
+      );
+    }
+    return;
   }
   if (chained > 0 && breaks === 0) {
+    const [first] = years.flatMap((year) => year.rows);
+    const inferred = plan.carryOver === null;
+    const start = inferred
+      ? (first?.balanceCents ?? 0) - (first?.amountCents ?? 0)
+      : out.opening.mortgage + out.opening["current-expenses"];
     out.checks.push(
-      `The running balance follows from row to row through all ${String(chained)} movements, from the ${formatCentsPlain(out.opening.mortgage + out.opening["current-expenses"])} the first year carried in.`,
+      `The running balance follows from row to row through all ${String(chained)} movements, from the ${formatCentsPlain(start)} ${inferred ? "the first row implies" : "the first year carried in"}.`,
     );
   }
 }
@@ -592,6 +818,7 @@ function applyCorrections(
   corrections: readonly Correction[],
   people: People,
   sheets: ReadonlySet<string>,
+  dateColumn: number,
   out: WorkbookReading,
 ): Movement[] {
   const byPlace = new Map(
@@ -600,7 +827,7 @@ function applyCorrections(
   const corrected = new Map<string, Movement>();
   for (const correction of corrections) {
     const place = `${correction.sheet}!${String(correction.row)}`;
-    const where = `The correction for ${cellRef(correction.sheet, correction.row, COLUMN.B)}`;
+    const where = `The correction for ${cellRef(correction.sheet, correction.row, dateColumn)}`;
     const movement = byPlace.get(place);
     if (movement === undefined) {
       out.problems.push(
@@ -684,6 +911,7 @@ function readSettlement(
   sheet: Sheet,
   row: number,
   columns: readonly { column: number; personId: string }[],
+  depositLabel: string,
   out: WorkbookReading,
 ): WorkbookSettlement | null {
   const asked = columns.map(({ column, personId }) => ({
@@ -700,7 +928,7 @@ function readSettlement(
   const chosen = positive.length > 0 ? positive : negative;
   if (chosen.length > 1) {
     out.problems.push(
-      `${cellRef(sheet.name, row, columns[0]?.column ?? 1)}: the Montant à déposer asks both people for money; it asks one.`,
+      `${cellRef(sheet.name, row, columns[0]?.column ?? 1)}: the ${depositLabel} asks both people for money; it asks one.`,
     );
     return null;
   }
@@ -709,9 +937,7 @@ function readSettlement(
     asking?.formula ?? asked.find((entry) => entry.formula !== null)?.formula ?? null;
   const at = cellRef(sheet.name, row, asking?.column ?? columns[0]?.column ?? 1);
   if (formulaText === null) {
-    out.problems.push(
-      `${at}: the Montant à déposer has no formula, so its version cannot be told.`,
-    );
+    out.problems.push(`${at}: the ${depositLabel} has no formula, so its version cannot be told.`);
     return null;
   }
   const arithmetic = arithmeticOf(sheet, formulaText);
@@ -731,12 +957,18 @@ function readSettlement(
   return { formula, payerId, recipientId, depositCents: Math.abs(asking.cents) };
 }
 
-/** A period sheet's first line; rows 1 to 7 are its heading. */
-const FIRST_LINE = 8;
-
-function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): WorkbookPeriod | null {
+function readPeriod(
+  sheet: Sheet,
+  layout: PeriodsLayout,
+  people: People,
+  out: WorkbookReading,
+): WorkbookPeriod | null {
+  // Rows 1 to 7 are the household's heading, and its first line is row 8.
+  const { namesRow, datesRow, firstLine } = layout;
+  const totalLabel = folded(layout.totalLabel);
+  const depositLabel = folded(layout.depositLabel);
   const columns: { column: number; personId: string }[] = [];
-  for (const [index, cell] of (sheet.rows[0] ?? []).entries()) {
+  for (const [index, cell] of (sheet.rows[namesRow - 1] ?? []).entries()) {
     const text = textOf(cell);
     const personId = text === null ? undefined : people.peek(text);
     if (personId !== undefined && !columns.some((entry) => entry.personId === personId)) {
@@ -745,41 +977,44 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
   }
   if (columns.length !== 2) {
     out.problems.push(
-      `${cellRef(sheet.name, 1, 1)}: row 1 names ${String(columns.length)} of the household (${rowTexts(sheet, 1).join(", ") || "nothing"}); a period sheet names two. Map a name in the corrections file's "people".`,
+      `${cellRef(sheet.name, namesRow, 1)}: row ${String(namesRow)} names ${String(columns.length)} of the household (${rowTexts(sheet, namesRow).join(", ") || "nothing"}); a period sheet names two. Map a name in the corrections file's "people".`,
     );
     return null;
   }
   const first = Math.min(...columns.map((entry) => entry.column));
   const last = Math.max(...columns.map((entry) => entry.column));
 
-  const dates = (sheet.rows[5] ?? []).flatMap((cell) => {
+  const dates = (sheet.rows[datesRow - 1] ?? []).flatMap((cell) => {
     const date = dateOf(cell);
     return date === null ? [] : [date];
   });
   const [start, end] = dates;
   if (start === undefined) {
-    out.problems.push(`${cellRef(sheet.name, 6, 1)}: row 6 holds no start date.`);
+    out.problems.push(
+      `${cellRef(sheet.name, datesRow, 1)}: row ${String(datesRow)} holds no start date.`,
+    );
     return null;
   }
   if (end !== undefined && end < start) {
     out.problems.push(
-      `${cellRef(sheet.name, 6, 1)}: the period ends (${end}) before it starts (${start}).`,
+      `${cellRef(sheet.name, datesRow, 1)}: the period ends (${end}) before it starts (${start}).`,
     );
     return null;
   }
 
   const lines: WorkbookLine[] = [];
   const totals = new Map<string, number>();
-  let totalRow = FIRST_LINE;
+  let totalRow = firstLine;
   let settlement: WorkbookSettlement | null = null;
   let ended = false;
-  // The summary rows are read from row 2, since the household's sheets keep
-  // them above the lines; a line is read only from row 8.
-  for (let row = 2; row <= sheet.rows.length; row++) {
+  // The summary rows are read from the row under the names, since the
+  // household's sheets keep them above the lines; a line is read only from the
+  // first line on.
+  for (let row = namesRow + 1; row <= sheet.rows.length; row++) {
     const texts = rowTexts(sheet, row).map(folded);
-    if (texts.some((text) => text.startsWith("montant a deposer"))) {
-      settlement = readSettlement(sheet, row, columns, out);
-      if (row >= FIRST_LINE) ended = true;
+    if (texts.some((text) => text.startsWith(depositLabel))) {
+      settlement = readSettlement(sheet, row, columns, layout.depositLabel, out);
+      if (row >= firstLine) ended = true;
       continue;
     }
     const labels: string[] = [];
@@ -788,16 +1023,16 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
       if (text !== null) labels.push(text);
     }
     const label = labels.join(" ");
-    if (folded(label).startsWith("total")) {
+    if (folded(label).startsWith(totalLabel)) {
       for (const { column, personId } of columns) {
         const total = numberOf(cellAt(sheet, row, column));
         if (total !== null) totals.set(personId, toCents(total));
       }
       totalRow = row;
-      if (row >= FIRST_LINE) ended = true;
+      if (row >= firstLine) ended = true;
       continue;
     }
-    if (ended || row < FIRST_LINE) continue;
+    if (ended || row < firstLine) continue;
     const note = textOf(cellAt(sheet, row, last + 1));
     for (const { column, personId } of columns) {
       const cell = cellAt(sheet, row, column);
@@ -834,11 +1069,19 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
   return { sheet: sheet.name, start, end: end ?? null, lines, settlement, ratio: null };
 }
 
-function overlap(period: WorkbookPeriod, before: WorkbookPeriod & { end: string }): string {
-  return `${cellRef(period.sheet, 6, 1)}: ${period.sheet} starts on ${period.start}, before ${before.sheet} ends on ${before.end}; periods do not overlap.`;
+function overlap(
+  period: WorkbookPeriod,
+  before: WorkbookPeriod & { end: string },
+  datesRow: number,
+): string {
+  return `${cellRef(period.sheet, datesRow, 1)}: ${period.sheet} starts on ${period.start}, before ${before.sheet} ends on ${before.end}; periods do not overlap.`;
 }
 
-function orderPeriods(read: readonly WorkbookPeriod[], out: WorkbookReading): void {
+function orderPeriods(
+  read: readonly WorkbookPeriod[],
+  layout: PeriodsLayout,
+  out: WorkbookReading,
+): void {
   const open = read.filter((period) => period.end === null);
   const closed = read
     .filter((period): period is WorkbookPeriod & { end: string } => period.end !== null)
@@ -853,15 +1096,17 @@ function orderPeriods(read: readonly WorkbookPeriod[], out: WorkbookReading): vo
   if (current !== undefined && newest !== undefined && current.start <= newest.start) {
     out.problems.push(`${current.sheet} has no end date, but it is not the newest period.`);
   } else if (current !== undefined && newest !== undefined && current.start < newest.end) {
-    out.problems.push(overlap(current, newest));
+    out.problems.push(overlap(current, newest, layout.datesRow));
   }
   for (const [index, period] of closed.entries()) {
     const before = closed[index - 1];
     // A period may start the day the one before it ends; it may not start sooner.
     if (before !== undefined && period.start < before.end)
-      out.problems.push(overlap(period, before));
+      out.problems.push(overlap(period, before, layout.datesRow));
     if (period.settlement === null) {
-      out.problems.push(`${period.sheet} is closed, but no Montant à déposer was read from it.`);
+      out.problems.push(
+        `${period.sheet} is closed, but no ${layout.depositLabel} was read from it.`,
+      );
     }
     if (closed[index - 1]?.end === period.end) {
       out.problems.push(
@@ -925,13 +1170,14 @@ function findDeposits(out: WorkbookReading): void {
  * over its calculators, and only the labelled row is read, so those figures
  * are never taken for salaries.
  */
-function readSalaries(sheet: Sheet, people: People, out: WorkbookReading): void {
+function readSalaries(sheet: Sheet, label: string, people: People, out: WorkbookReading): void {
+  const start = folded(label);
   const found = new Map<string, number>();
   const heads = new Map<number, string>();
   for (const [index, cells] of sheet.rows.entries()) {
     const salaries = cells.some((cell) => {
       const text = textOf(cell);
-      return text !== null && folded(text).startsWith("salaire");
+      return text !== null && folded(text).startsWith(start);
     });
     for (const [column, cell] of cells.entries()) {
       const text = textOf(cell);
@@ -953,7 +1199,7 @@ function readSalaries(sheet: Sheet, people: People, out: WorkbookReading): void 
   }
   if (found.size !== 2) {
     out.problems.push(
-      `${sheet.name}: ${String(found.size)} salaries were found; the ratio needs one for each of two people, in a row labelled Salaires, under a column each one's name heads.`,
+      `${sheet.name}: ${String(found.size)} salaries were found; the ratio needs one for each of two people, in a row labelled ${label}, under a column each one's name heads.`,
     );
   }
   out.salaries = [...found].map(([personId, amountCents]) => ({ personId, amountCents }));
@@ -965,15 +1211,28 @@ export interface ReadOptions {
   /** Every person id the books may name. */
   people: readonly string[];
   corrections?: Corrections;
+  /** How the workbook is laid out; the household's own when absent (lg-38). */
+  layout?: WorkbookLayout;
 }
 
 const YEAR_SHEET = /^\d{4}$/u;
 
-export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): WorkbookReading {
-  const corrections = options.corrections ?? NO_CORRECTIONS;
-  const people = new People(options.people, corrections.people);
-  const out: WorkbookReading = {
+function selects(selector: SheetSelector, sheet: Sheet): boolean {
+  const name = sheet.name.trim();
+  switch (selector.by) {
+    case "year":
+      return YEAR_SHEET.test(name);
+    case "prefix":
+      return name.startsWith(selector.prefix);
+    case "name":
+      return selector.names.some((wanted) => folded(wanted) === folded(name));
+  }
+}
+
+function emptyReading(): WorkbookReading {
+  return {
     movements: [],
+    unfiled: [],
     carryOvers: [],
     opening: { mortgage: 0, "current-expenses": 0 },
     repairs: [],
@@ -987,47 +1246,91 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
     checks: [],
     problems: [],
   };
+}
+
+export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): WorkbookReading {
+  const out = emptyReading();
+  // A layout is checked as the contract has it, not only as its type does: a
+  // role named twice is a well-typed description that cannot be read.
+  const checked = workbookLayoutSchema.safeParse(options.layout ?? HOUSEHOLD_LAYOUT);
+  if (!checked.success) {
+    out.problems.push(
+      ...checked.error.issues.map(
+        (issue) => `The layout, at ${issue.path.join(".") || "its top"}: ${issue.message}`,
+      ),
+    );
+    return out;
+  }
+  const layout = checked.data;
+  const plan = accountPlan(layout.account);
+  const corrections = options.corrections ?? NO_CORRECTIONS;
+  const people = new People(options.people, corrections.people);
 
   const years: YearRead[] = [];
   const periods: WorkbookPeriod[] = [];
-  let accueil: Sheet | undefined;
+  let home: Sheet | undefined;
   for (const sheet of sheets) {
     const name = sheet.name.trim();
-    if (YEAR_SHEET.test(name)) years.push(readYear(sheet, Number(name), people, out));
-    else if (name.startsWith("$")) {
-      const period = readPeriod(sheet, people, out);
+    if (selects(layout.account.sheets, sheet)) {
+      if (!layout.account.yearPerSheet) years.push(readYear(sheet, null, plan, people, out));
+      else if (YEAR_SHEET.test(name)) years.push(readYear(sheet, Number(name), plan, people, out));
+      else
+        out.problems.push(`The layout reads "${sheet.name}" as a year, but its name is not one.`);
+    } else if (layout.periods !== null && selects(layout.periods.sheets, sheet)) {
+      const period = readPeriod(sheet, layout.periods, people, out);
       if (period !== null) periods.push(period);
-    } else if (folded(name) === "accueil") accueil = sheet;
-    else out.ignored.push(sheet.name);
+    } else if (layout.salaries !== null && folded(name) === folded(layout.salaries.sheet)) {
+      home = sheet;
+    } else out.ignored.push(sheet.name);
   }
 
-  years.sort((a, b) => a.year - b.year);
-  if (years.length === 0) out.problems.push("The workbook has no year sheet (2022, 2023, …).");
+  // Year sheets in their years' order; any other account sheets as the workbook orders them.
+  years.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+  if (years.length === 0) {
+    out.problems.push(
+      layout.account.sheets.by === "year"
+        ? "The workbook has no year sheet (2022, 2023, …)."
+        : "The workbook has no sheet the layout reads as the account.",
+    );
+  }
   for (const [index, year] of years.entries()) {
     const before = years[index - 1];
-    if (before !== undefined && year.year !== before.year + 1) {
+    if (
+      before !== undefined &&
+      before.year !== null &&
+      year.year !== null &&
+      year.year !== before.year + 1
+    ) {
       out.problems.push(
         `The workbook has ${String(before.year)} and ${String(year.year)}, and nothing between them.`,
       );
     }
   }
-  verifyYears(years, out);
+  verifyYears(years, plan, out);
   out.carryOvers = years.flatMap((year) => year.carryOvers);
 
-  const movements = years.flatMap((year) => year.movements);
+  const movements: Movement[] = [];
+  for (const row of years.flatMap((year) => year.rows)) {
+    const { bucket, balanceCents } = row;
+    if (bucket === null || balanceCents === null) out.unfiled.push(row);
+    else movements.push({ ...row, bucket, balanceCents, workbook: null, correction: null });
+  }
   out.movements = applyCorrections(
     movements,
     corrections.corrections,
     people,
     new Set(sheets.map((sheet) => sheet.name)),
+    plan.date,
     out,
   );
 
-  orderPeriods(periods, out);
+  if (layout.periods !== null) orderPeriods(periods, layout.periods, out);
   findDeposits(out);
-  if (accueil === undefined)
-    out.problems.push("The workbook has no Accueil sheet, so no salaries.");
-  else readSalaries(accueil, people, out);
+  if (layout.salaries !== null) {
+    if (home === undefined) {
+      out.problems.push(`The workbook has no ${layout.salaries.sheet} sheet, so no salaries.`);
+    } else readSalaries(home, layout.salaries.label, people, out);
+  }
   applyRatios(corrections.ratios, people, out);
 
   out.problems.unshift(...people.problems);
