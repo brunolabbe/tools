@@ -77,6 +77,15 @@ confirm it. So read in this order:
   exit 0).
 - **Enumerate, never sample**, and report the population you covered against the
   population that exists.
+- **Sweep inside the budget your dispatch names** — 15 minutes for all your
+  sweeps when it names none. When the budget is spent, start no other sweep:
+  report the population you covered against the one that exists, as a
+  finding, and grade `unproven` any line the uncovered part carries. The
+  budget bounds the search, not the report. A sweep that must run past the
+  600 s foreground cap is one background job with one exit file: do other work
+  while it runs, and wait on it once, when nothing else is left. Every poll is
+  a turn, and every turn re-reads your whole transcript — lg-59's gate 1 was
+  re-reading about 318k cache tokens a turn after 155 of them.
 - **Read the pull request's CI** when your dispatch names one, as `common.md`'s
   _Reading a pull request's checks_ says. A failing or still-running check on
   the head you are gating goes in the section, named with its sha. An

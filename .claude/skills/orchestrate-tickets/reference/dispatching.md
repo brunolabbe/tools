@@ -67,6 +67,14 @@ Gate yield tracks prompt specificity, not gate count or runtime.
   batches flag the conflict, and some wrote both.
 - **What to attack**: the riskiest decision, the seam with the longest reach,
   the claim you least believe. Name the real input to run first.
+- **A population for each probe, and one sweep budget.** Every probe you ask
+  for names its population — the alphabet, or the seed and the count — and
+  the prompt names one time budget for all the gate's sweeps, 15 minutes
+  unless you say otherwise. Size each population before you write it (_Dry-run
+  anything you prescribe_, above). A search you cannot size is not a gate
+  attack; it is a measurement ticket. "Build your own pastes" over several
+  dimensions, with no bound, kept lg-59's gate 1 waiting on its own sweeps for
+  49.5 of its first 93 minutes.
 - **Which failure the positive control must plant.**
 - **What is already settled** and must not be redone.
 - **The depth**, and for a `mechanical` ticket, "narrow": the named attacks and

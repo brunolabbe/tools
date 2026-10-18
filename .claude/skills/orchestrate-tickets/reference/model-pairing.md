@@ -7,7 +7,7 @@ had been lines 11 to 151 of a 296-line file loaded into every builder — narrat
 that no builder needs to build, on the page that costs every dispatch. Nothing
 below is an instruction; the table is the instruction.
 
-## 2026-10-18: a fresh gate 2, three tickets at once, batches by tool, no suite before the gate
+## 2026-10-18: a fresh gate 2, three tickets at once, batches by tool, no suite before the gate, a sweep budget
 
 **The owner chose both on 2026-10-18** (repo-111), after asking why gates take
 so long. The options were put as "Cut the waiting", then "Fresh narrow gate 2"
@@ -67,6 +67,19 @@ beside `--only mergeTree,ciCommands,review,title` (16 s on repo-111's branch);
 a flag that skips only the suites is left to a later ticket. Owed by the first
 batch under the rule: per ticket, whether CI on the draft went red on
 something the dropped local run would have caught.
+
+**A gate dispatch carries a sweep budget** (repo-111, owner, 2026-10-18).
+Options: fold it into repo-111 (recommended, chosen), file it as repo-112, or
+leave it. lg-59's gate 1, dispatched 21:24:40Z and read at 22:57Z while it
+still ran, had been asked to re-run lg-40's two probes at seed 11 on head and
+base and then "build your own pastes" over several dimensions, with no bound
+on the population or the time. By 22:57:28Z it had made 155 responses
+(30,347,322 cache-read tokens; 194k a response over its first 153, 318k over
+the last two) and spent 49.5 minutes in waits on its own sweeps, four
+finished at the 600 s cap and a fifth open. lg-40's gate 2 had the same shape
+(18.8 minutes of sweep waits, above). The budget is 15 minutes for all of a
+gate's sweeps unless the dispatch names another, and a search the
+orchestrator cannot size becomes a measurement ticket.
 
 **A third gate is a fresh dispatch too**, for gate 2's reason, taken under
 repo-111 after its builder noted that no page said how a gate 3 runs.

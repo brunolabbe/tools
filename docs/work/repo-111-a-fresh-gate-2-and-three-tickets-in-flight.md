@@ -119,6 +119,13 @@ brief already poses costs a question at intake, or a round after gate 1. The
 claim that it would have saved those five rounds is withdrawn, and the benefit
 is unmeasured.
 
+**A gate dispatch carries a sweep budget** (owner, 2026-10-18, from the
+options "fold into repo-111" (recommended, **chosen**), "file as repo-112" and
+"leave it"). Each probe a gate prompt asks for names its population, the
+prompt names one time budget for all sweeps (15 minutes by default), and a
+search the orchestrator cannot size becomes a measurement ticket. The reason
+is lg-59's gate 1 and lg-40's gate 2 (Log, round 4).
+
 ## Build
 
 1. `.claude/skills/orchestrate-tickets/SKILL.md`: step 2 states the cap, with
@@ -148,6 +155,10 @@ is unmeasured.
    suite; `SKILL.md` step 4 reads CI's state on the head; `reference/sizing.md`
    says the suites run twice per ticket.
 9. `SKILL.md` step 8: a third gate is a fresh dispatch too.
+10. The sweep budget: `reference/dispatching.md` _A gate prompt carries_,
+    `roles/reviewer.md` _What makes a gate worth its cost_,
+    `reference/sizing.md` _What a batch pays for_, and
+    `reference/model-pairing.md`'s 2026-10-18 section.
 
 ## Done when
 
@@ -207,6 +218,20 @@ is unmeasured.
 17. The first batch under these rules records, per ticket, whether CI on the
     draft went red on something the dropped local suite run would have
     caught. A gate cannot prove this before the merge; it is owed in the Log.
+18. `reference/dispatching.md` _A gate prompt carries_ has each probe name its
+    population (the alphabet, or the seed and the count), one time budget for
+    all sweeps (15 minutes by default), sizing before writing, and "a search
+    you cannot size … is a measurement ticket".
+19. `roles/reviewer.md` _What makes a gate worth its cost_ keeps "Enumerate,
+    never sample" unchanged and adds, beside it, a sweep budget: no sweep
+    started once it is spent, the covered population reported as a finding
+    with `unproven` for what the uncovered part carries, and one background
+    job with one exit file past the 600 s cap, waited on once rather than
+    polled, saying that every poll is a turn re-reading the transcript.
+20. `reference/sizing.md` _What a batch pays for_ has one bullet with the
+    lg-59 and lg-40 wait figures.
+21. `reference/model-pairing.md`'s 2026-10-18 section has the sweep-budget
+    decision, its three options and the lg-59 measurement.
 
 ## Review
 
@@ -343,3 +368,27 @@ builder, resumed by the owner's Fable session with the decisions above).
 - **Retitled the pull request** to
   `docs(repo): fresh gate 2, three in flight, batches by tool, no suite before the gate (repo-111)`,
   option (a); the ticket's own title already names the four.
+
+**2026-10-18, round 4 — a sweep budget for gates**, the owner's decision
+above, folded in. The lg-59 figures were relayed from a gate still running;
+re-read here from its transcript,
+`196311b6-27e1-4ec1-a958-40fd27d0130d/subagents/agent-a2fd8c8650f059328.jsonl`
+(`ticket-reviewer-sonnet`, "Gate 1 lg-59"), with this branch's scratch
+scripts:
+
+- `split.py <transcript> 2026-10-18T22:57:00Z` printed
+  `gate 1: 153 responses, 29,710,447 cache-read, 194,185 per response` and
+  `gate 2: 2 responses, 636,875 cache-read, 318,437 per response` — the second
+  line is the two responses after 22:57Z, not a gate 2. So 155 responses; the
+  relayed "~322k re-read per turn" is its latest turns, and the mean is 196k.
+- `span.py` printed a first record at `21:24:40.517Z` and a last at
+  `22:57:28.037Z`: 92.8 minutes.
+- `waits.py <transcript>` (each Bash call whose command waits, with its
+  duration) printed `tool calls: 167, 72.1 min inside; waits: 14, 49.5 min, 0
+at the 600 s cap`. Its match counts two non-waits (a `kill … sleep 1` of
+  1.5 s and a `sleep 200; ls` of 0.0 s): 12 finished waits, 49.5 minutes, and
+  a 13th still open at 22:57:28Z, which matches the relayed 13. Four of the
+  finished ones, 585.4–589.4 s, are the 600 s cap (the script's 595 s
+  threshold missed them); the open one is the relayed fifth.
+- **Not re-run:** the relayed split of the rest into 13 minutes of probes and
+  22 of model time.
