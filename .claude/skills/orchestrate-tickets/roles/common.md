@@ -118,6 +118,13 @@ harness's "completed" notice reports the outer shell, not preflight; the exit
 file is the signal. The same shape for any suite that can run past two minutes:
 three resolver spec files took 490 s.
 
+That recipe is for preflight, `--land` and a suite run, where the agent has
+nothing else to do while it waits and a poll costs little. **A gate's sweeps
+follow `roles/reviewer.md` instead**, _What makes a gate worth its cost_
+("Sweep inside the budget your dispatch names"): one background job, one exit
+file, waited on once when nothing else is left, inside the dispatch's budget.
+A gate's transcript is large, and every poll re-reads it.
+
 ## Reading a pull request's checks
 
 `gh pr checks <n>` and `gh pr view <n> --json headRefOid,statusCheckRollup`,

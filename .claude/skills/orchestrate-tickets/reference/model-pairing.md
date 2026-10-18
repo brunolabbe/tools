@@ -74,8 +74,8 @@ leave it. lg-59's gate 1, dispatched 21:24:40Z and read at 22:57Z while it
 still ran, had been asked to re-run lg-40's two probes at seed 11 on head and
 base and then "build your own pastes" over several dimensions, with no bound
 on the population or the time. By 22:57:28Z it had made 155 responses
-(30,347,322 cache-read tokens; 194k a response over its first 153, 318k over
-the last two) and spent 49.5 minutes in waits on its own sweeps, four
+(30,347,322 cache-read tokens: 196k a response on average, and about 318k a
+turn by the last two) and spent 49.5 minutes in waits on its own sweeps, four
 finished at the 600 s cap and a fifth open. lg-40's gate 2 had the same shape
 (18.8 minutes of sweep waits, above). The budget is 15 minutes for all of a
 gate's sweeps unless the dispatch names another, and a search the

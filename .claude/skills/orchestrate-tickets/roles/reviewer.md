@@ -85,7 +85,8 @@ confirm it. So read in this order:
   600 s foreground cap is one background job with one exit file: do other work
   while it runs, and wait on it once, when nothing else is left. Every poll is
   a turn, and every turn re-reads your whole transcript — lg-59's gate 1 was
-  re-reading about 318k cache tokens a turn after 155 of them.
+  re-reading about 318k cache tokens a turn after 155 of them, 196k on
+  average.
 - **Read the pull request's CI** when your dispatch names one, as `common.md`'s
   _Reading a pull request's checks_ says. A failing or still-running check on
   the head you are gating goes in the section, named with its sha. An

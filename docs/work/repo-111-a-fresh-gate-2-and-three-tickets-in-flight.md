@@ -232,6 +232,10 @@ is lg-59's gate 1 and lg-40's gate 2 (Log, round 4).
     lg-59 and lg-40 wait figures.
 21. `reference/model-pairing.md`'s 2026-10-18 section has the sweep-budget
     decision, its three options and the lg-59 measurement.
+22. `roles/common.md` _Preflight runs longer than a foreground call allows_
+    scopes its recipe to preflight, `--land` and a suite run, and sends a
+    gate's sweeps to `roles/reviewer.md` _What makes a gate worth its cost_ by
+    name, with the reason that every poll re-reads a large transcript.
 
 ## Review
 
@@ -392,3 +396,14 @@ at the 600 s cap`. Its match counts two non-waits (a `kill … sleep 1` of
   threshold missed them); the open one is the relayed fifth.
 - **Not re-run:** the relayed split of the rest into 13 minutes of probes and
   22 of model time.
+
+**2026-10-18, round 5 — `common.md` and `reviewer.md` reconciled.** Round 4's
+report found `roles/common.md`'s wait recipe (`until [ -s <exit file> ]`, and
+"start another" past the cap) prescribing the polling the new reviewer rule
+forbids for a gate's sweeps. The owner's session chose to keep the recipe for
+preflight, `--land` and a suite run, where the agent has nothing else to do,
+and to scope it there with a pointer to the reviewer rule (Done when 22). The
+per-turn figure for lg-59 now reads "about 318k a turn after 155 of them, 196k
+on average" on `reviewer.md` and `model-pairing.md`, so neither number stands
+for the other; `git grep -n -E '318k|322k|196k|194k' -- .claude/skills` is how
+the two places were found.
