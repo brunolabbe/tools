@@ -1056,4 +1056,46 @@ describe("the workbook against pasted rows that list a day in another order (lg-
     );
     expect(ran.out).not.toContain('"Achat" -20.00 $ (balance 1599.99 $); the paste says');
   });
+
+  test("the report and the refusal say the rows are compared day by day (gate 1, F6)", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    pasteDay(db);
+    db.close();
+
+    const placed = await run(await workbook(withDay()), "--as", "alex");
+
+    expect(placed.code, placed.out).toBe(0);
+    expect(placed.out).toContain(
+      "The 3 rows the pastes already hold are the workbook's newest, day by day, by amount and balance.",
+    );
+
+    // A stored row the workbook lacks: nothing lines up from the oldest.
+    for (const file of [databasePath, `${databasePath}-wal`, `${databasePath}-shm`]) {
+      rmSync(file, { force: true });
+    }
+    const other = books();
+    enrollPeople(other, ["alex", "sam"], NOW);
+    importStatement(
+      { db: other, personId: "alex", now: () => NOW },
+      renderPaste(
+        withBalances(
+          [
+            { date: "2024-01-05", description: "Virement /Caisse du Lac", amountCents: 50_000 },
+            { date: "2024-01-10", description: "Remise /Caisse du Lac", amountCents: 100 },
+          ],
+          210_499,
+        ),
+      ),
+    );
+    other.close();
+
+    const refused = await run(await workbook(), "--as", "alex");
+
+    expect(refused.code).toBe(1);
+    expect(refused.out).toContain(
+      ", day by day by amount and balance, so a row is in one and not the other.",
+    );
+    expect(refused.out).not.toContain("one for one");
+  });
 });

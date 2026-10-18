@@ -1097,3 +1097,211 @@ describe("a paste that meets the workbook's rows", () => {
     expect(stored(target)).toEqual(before);
   });
 });
+
+// lg-40, gate 1: a paste that starts or ends partway through one of the
+// workbook's days (F1, F2), and what no test asserted before (F3). The workbook
+// rows are written as the import writes them, under a `'workbook'` import with
+// an empty category, so a day can hold any order.
+
+interface Movement {
+  date: string;
+  amountCents: number;
+}
+
+/** These movements stored as the workbook import stores them, oldest first. */
+function workbookRows(target: App, rows: readonly Movement[], opening: number): void {
+  const db = homeBooks(target);
+  const batch = db
+    .prepare(
+      "INSERT INTO statement_imports (imported_at, imported_by, source) VALUES (?, ?, 'workbook')",
+    )
+    .run("2026-10-01T09:00:00Z", "alex");
+  const insert = db.prepare(
+    `INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id)
+     VALUES (?, ?, '', ?, ?, ?, ?)`,
+  );
+  let balance = opening;
+  for (const [seq, row] of rows.entries()) {
+    balance += row.amountCents;
+    insert.run(
+      seq,
+      row.date,
+      `Ligne ${String(seq)}`,
+      row.amountCents,
+      balance,
+      batch.lastInsertRowid,
+    );
+  }
+}
+
+/** A movement as the bank words it. */
+function bankRow(row: Movement, index: number): PasteRow {
+  return { ...row, description: `Virement /Caisse ${String(index)}` };
+}
+
+describe("a paste partway through one of the workbook's days", () => {
+  // The bank's 5 March, oldest first: +10.00, −3.00, +0.70, from 1 000.00.
+  const BANK_DAY: Movement[] = [
+    { date: "2026-03-05", amountCents: 1_000 },
+    { date: "2026-03-05", amountCents: -300 },
+    { date: "2026-03-05", amountCents: 70 },
+  ];
+  const NEXT: Movement = { date: "2026-03-06", amountCents: -250 };
+  const ORDERS = [
+    [0, 2, 1],
+    [1, 0, 2],
+    [1, 2, 0],
+    [2, 0, 1],
+    [2, 1, 0],
+  ] as const;
+
+  test.each(ORDERS.flatMap((order) => [1, 2].map((start) => [order.join(","), start] as const)))(
+    "a day the workbook lists as %s, pasted from the bank's row %i of it on, adds only the new row (F1)",
+    async (listed, start) => {
+      const target = await startApp();
+      const order = listed.split(",").map(Number);
+      workbookRows(
+        target,
+        order.map((index) => BANK_DAY[index] as Movement),
+        100_000,
+      );
+      const before = stored(target);
+      const opening =
+        100_000 + BANK_DAY.slice(0, start).reduce((sum, row) => sum + row.amountCents, 0);
+
+      const result = await report(
+        target,
+        of([...BANK_DAY.slice(start), NEXT].map(bankRow), opening),
+      );
+
+      expect(result).toEqual({
+        rowsAdded: 1,
+        rowsAlreadyPresent: 3 - start,
+        tailBalanceCents: 100_520,
+      });
+      expect(stored(target).slice(0, 3)).toEqual(before);
+    },
+  );
+
+  test("a paste whose rows fit a reordered day two ways is refused, not stored as one of them (F2)", async () => {
+    const target = await startApp();
+    // The bank's day is −10, +10, +10, +10; the workbook holds its first three,
+    // listed +10, +10, −10, so the balances it shows inside the day are its own.
+    workbookRows(
+      target,
+      [1_000, 1_000, -1_000].map((amountCents) => ({ date: "2026-03-05", amountCents })),
+      100_000,
+    );
+    const before = stored(target);
+    const lastTwo = [1_000, 1_000].map((amountCents, index) =>
+      bankRow({ date: "2026-03-05", amountCents }, index),
+    );
+
+    // The bank's last two rows: its third, which the workbook holds, and its
+    // fourth, which is new. Or the workbook's day may begin with those two.
+    const response = await post(target, of(lastTwo, 100_000));
+
+    expect(response.statusCode).toBe(422);
+    const error = refusal(response);
+    expect(error.code).toBe("STATEMENT_ROW_CONFLICT");
+    expect(error.details).toMatchObject({
+      readings: [
+        { rowsAdded: 0, rowsAlreadyPresent: 2 },
+        { rowsAdded: 1, rowsAlreadyPresent: 1 },
+      ],
+    });
+    expect(stored(target)).toEqual(before);
+
+    // With the next day's row, only the true reading fits.
+    const result = await report(target, of([...lastTwo, bankRow(NEXT, 2)], 100_000));
+    expect(result).toEqual({ rowsAdded: 2, rowsAlreadyPresent: 1, tailBalanceCents: 101_750 });
+    expect(stored(target).map((row) => [row.amount_cents, row.balance_cents])).toEqual([
+      [1_000, 101_000],
+      [1_000, 102_000],
+      [-1_000, 101_000],
+      [1_000, 102_000],
+      [-250, 101_750],
+    ]);
+  });
+
+  /** The workbook's 1 March of three movements and its 10 March, from 1 000.00. */
+  function march(target: App): StoredRowColumns[] {
+    workbookRows(
+      target,
+      [
+        { date: "2026-03-01", amountCents: 10_000 },
+        { date: "2026-03-01", amountCents: 5_000 },
+        { date: "2026-03-01", amountCents: -20_000 },
+        { date: "2026-03-10", amountCents: -30_000 },
+      ],
+      100_000,
+    );
+    return stored(target);
+  }
+
+  test.each(["2026-02-28", "2026-03-02"])(
+    "a paste wholly inside the workbook's rows, in the bank's order and dated %s, a day off, adds nothing (F3)",
+    async (date) => {
+      const target = await startApp();
+      const before = march(target);
+
+      const result = await report(
+        target,
+        of(
+          [-20_000, 10_000, 5_000].map((amountCents, index) =>
+            bankRow({ date, amountCents }, index),
+          ),
+          100_000,
+        ),
+      );
+
+      expect(result).toEqual({ rowsAdded: 0, rowsAlreadyPresent: 3, tailBalanceCents: 65_000 });
+      expect(stored(target)).toEqual(before);
+    },
+  );
+
+  test.each(["2026-02-27", "2026-03-03"])(
+    "a paste wholly inside the workbook's rows but dated %s, two days off, is refused (F3)",
+    async (date) => {
+      const target = await startApp();
+      const before = march(target);
+
+      const response = await post(
+        target,
+        of(
+          [-20_000, 10_000, 5_000].map((amountCents, index) =>
+            bankRow({ date, amountCents }, index),
+          ),
+          100_000,
+        ),
+      );
+
+      expect(response.statusCode).toBe(422);
+      expect(stored(target)).toEqual(before);
+    },
+  );
+
+  test("a pasted row dated before the workbook's newest day is not named as continuing it, whatever its balance (F3)", async () => {
+    const target = await startApp();
+    march(target);
+
+    // The second row opens from 650.00, the balance the workbook's 10 March
+    // left, but is dated the 5th: it cannot be the row after the 10th.
+    const response = await post(
+      target,
+      of(
+        [
+          { date: "2026-03-04", amountCents: 500 },
+          { date: "2026-03-05", amountCents: -100 },
+        ].map(bankRow),
+        64_500,
+      ),
+    );
+
+    expect(response.statusCode).toBe(422);
+    const error = refusal(response);
+    expect(error.code).toBe("STATEMENT_CHAIN_BROKEN");
+    expect(error.details).toMatchObject({ date: "2026-03-10", continuesAt: null });
+    expect(error.message).not.toContain("a paste that starts on that row continues the workbook");
+  });
+});

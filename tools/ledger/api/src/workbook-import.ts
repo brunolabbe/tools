@@ -204,7 +204,7 @@ function place(
     );
     problems.push(
       near === undefined
-        ? `The workbook's rows do not line up with the stored ones: no run of them matches the stored rows from the oldest, ${describeStored(head)}, one for one by amount and balance, so a row is in one and not the other.`
+        ? `The workbook's rows do not line up with the stored ones: no run of them matches the stored rows from the oldest, ${describeStored(head)}, day by day by amount and balance, so a row is in one and not the other.`
         : `${describeMovement(near)} moves the same day and amount as the oldest stored row, but leaves ${formatCents(near.balanceCents)} where it leaves ${formatCents(head.balance_cents)}: ${formatCents(head.balance_cents - near.balanceCents)} is unexplained.`,
     );
     return null;
@@ -629,7 +629,7 @@ function run(
   const passed: string[] = [];
   if (placement !== null && placement.overlap.length > 0) {
     passed.push(
-      `The ${String(placement.overlap.length)} rows the pastes already hold are the workbook's newest, one for one, by amount and balance.`,
+      `The ${String(placement.overlap.length)} rows the pastes already hold are the workbook's newest, day by day, by amount and balance.`,
     );
   }
   const out: string[] = [];

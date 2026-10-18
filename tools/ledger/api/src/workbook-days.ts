@@ -64,7 +64,8 @@ export type DateWindow = "a day either side" | "any";
 /**
  * The most rows of one day a paste starting and ending inside it is weighed
  * against: past this, which of the day's rows came first is not searched, and the
- * reading is not admitted. A bank day this long has not been seen.
+ * reading is not admitted. The search grows with the number of ways to choose
+ * among the day's rows, so a bound keeps one paste from taking the lock for long.
  */
 export const LONGEST_SEARCHED_DAY = 20;
 
@@ -111,7 +112,6 @@ export function matchDay(
 
 /** Whether `count` of `amounts` add up to `sum`. */
 function someAddUpTo(amounts: readonly number[], count: number, sum: number): boolean {
-  if (amounts.length > LONGEST_SEARCHED_DAY) return false;
   // The sums reachable with each number of the amounts taken.
   let reachable: Set<number>[] = [new Set([0])];
   for (const amount of amounts) {
@@ -164,6 +164,7 @@ export function matchPart(
   const partOpening = opens.balanceCents - opens.amountCents;
   if (before === 0) return partOpening === dayOpening;
   if (after === 0) return ends.balanceCents === last.balanceCents;
+  if (run.length > LONGEST_SEARCHED_DAY) return false;
   return someAddUpTo(rest, before, partOpening - dayOpening);
 }
 
