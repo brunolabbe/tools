@@ -1,6 +1,6 @@
 /**
  * The admin's screen (lg-22): every household and its members, with adding and
- * removing any member and creating a household. Only an admin is answered
+ * removing any member, renaming a person (lg-33), and creating a household. Only an admin is answered
  * (`LEDGER_ADMINS`), whether or not they are in a household, and being one shows
  * no household's books.
  *
@@ -16,10 +16,13 @@ import type { AddMemberRequest, AdminHousehold, CreateHouseholdRequest } from "@
 import {
   adminAddMember,
   adminRemoveMember,
+  adminRenamePerson,
   createHousehold,
   fetchAdminHouseholds,
 } from "../api/households.ts";
 import { ACCESS_POLICY_NOTE, MemberForm } from "../household/MemberForm.tsx";
+import { shownName } from "../people.tsx";
+import type { ShownNames } from "../people.tsx";
 
 type Load =
   | { state: "loading" }
@@ -98,6 +101,10 @@ function HouseholdCard(props: {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const people = [...new Set(household.members.map((member) => member.person))].toSorted();
+  // The listing's own names: an admin may be in no household, so has no other map.
+  const names: ShownNames = Object.fromEntries(
+    household.members.map((member) => [member.person, member.name]),
+  );
 
   const add = async (member: AddMemberRequest) => {
     const added = await adminAddMember(household.id, member);
@@ -131,7 +138,7 @@ function HouseholdCard(props: {
           {household.members.map((member) => (
             <li key={member.address}>
               <span>
-                <strong>{member.person}</strong> {member.address}
+                <strong>{shownName(names, member.person)}</strong> {member.address}
               </span>
               {confirming === member.address ? (
                 <span className="actions">
@@ -178,8 +185,117 @@ function HouseholdCard(props: {
           {problem}
         </p>
       )}
-      <MemberForm people={people} onAdd={add} />
+      {people.length > 0 && (
+        <>
+          <h4>People</h4>
+          <ul className="members" aria-label={`People in ${household.name}`}>
+            {people.map((person) => (
+              <RenamePerson
+                key={person}
+                household={household.id}
+                person={person}
+                name={shownName(names, person)}
+                onChange={onChange}
+              />
+            ))}
+          </ul>
+          <p className="muted hint">
+            A rename changes how a person is shown on every screen. Their records keep the id they
+            were added under.
+          </p>
+        </>
+      )}
+      <MemberForm people={people} names={names} onAdd={add} />
     </section>
+  );
+}
+
+/** One person, shown by name, with a Rename beside them (lg-33). */
+function RenamePerson(props: {
+  household: string;
+  person: string;
+  name: string;
+  onChange: () => Promise<void>;
+}): React.ReactElement {
+  const { household, person, name, onChange } = props;
+  const id = useId();
+  const [editing, setEditing] = useState(false);
+  const [typed, setTyped] = useState(name);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await adminRenamePerson(household, { person, name: typed.trim() });
+      setEditing(false);
+      await onChange();
+    } catch (error: unknown) {
+      setProblem(AppError.from(error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submit = (event: React.SyntheticEvent): void => {
+    event.preventDefault();
+    if (typed.trim() === "") {
+      setProblem("Give the name to show them under.");
+      return;
+    }
+    void save();
+  };
+
+  if (!editing) {
+    return (
+      <li>
+        <strong>{name}</strong>
+        <button
+          type="button"
+          className="small secondary"
+          aria-label={`Rename ${name}`}
+          onClick={() => {
+            setTyped(name);
+            setProblem(null);
+            setEditing(true);
+          }}
+        >
+          Rename
+        </button>
+      </li>
+    );
+  }
+  return (
+    <li>
+      <form className="member-form" onSubmit={submit}>
+        <label htmlFor={`${id}-name`}>New name for {name}</label>
+        <input
+          id={`${id}-name`}
+          autoComplete="off"
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+        />
+        {problem !== null && (
+          <p className="bad" role="alert">
+            {problem}
+          </p>
+        )}
+        <div className="actions">
+          <button type="submit" className="small" disabled={busy}>
+            Save
+          </button>
+          <button
+            type="button"
+            className="small secondary"
+            disabled={busy}
+            onClick={() => setEditing(false)}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </li>
   );
 }
 

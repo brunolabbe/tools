@@ -15,12 +15,14 @@ import { fetchHealth } from "../src/api/health.ts";
 import { fetchAdminHouseholds, fetchHousehold } from "../src/api/households.ts";
 import { fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
 import { fetchMe } from "../src/api/me.ts";
+import { fetchPeopleNames } from "../src/api/people.ts";
 import { fetchPeople, fetchRules } from "../src/api/rules.ts";
 import { fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
 import { App } from "../src/App.tsx";
 
 vi.mock("../src/api/health.ts", () => ({ fetchHealth: vi.fn() }));
 vi.mock("../src/api/me.ts", () => ({ fetchMe: vi.fn() }));
+vi.mock("../src/api/people.ts", () => ({ fetchPeopleNames: vi.fn() }));
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
 vi.mock("../src/api/salaries.ts", () => ({
   fetchSalaries: vi.fn(),
@@ -58,6 +60,7 @@ beforeEach(() => {
   vi.mocked(fetchRules).mockResolvedValue([]);
   vi.mocked(fetchAutoFiled).mockResolvedValue([]);
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchPeopleNames).mockResolvedValue({ alex: "alex", sam: "sam" });
   vi.mocked(fetchBuckets).mockResolvedValue({
     asOf: "2026-10-03",
     mortgage: { balanceCents: 0, own: [], lead: null },
@@ -239,7 +242,7 @@ beforeEach(() => {
   vi.mocked(fetchAdminHouseholds).mockRejectedValue(new AppError("FORBIDDEN"));
   vi.mocked(fetchHousehold).mockResolvedValue({
     household: { id: "home", name: "The test household" },
-    members: [{ address: "alex@example.test", person: "alex" }],
+    members: [{ address: "alex@example.test", person: "alex", name: "alex" }],
     history: [],
   });
 });
@@ -300,3 +303,34 @@ test.each(["UNREACHABLE", "RATE_LIMITED", "INTERNAL"] as const)(
     expect(screen.queryByRole("heading", { name: "No household" })).toBeNull();
   },
 );
+
+// lg-33: the shell asks how each person is shown and every screen prints it; a
+// rename made meanwhile is on the next tab opened.
+test("the shell hands every screen the shown names, asked again on a change of tab (lg-33)", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  vi.mocked(fetchRatios).mockResolvedValue({
+    asOf: "2026-10-03",
+    ratios: [],
+    inEffect: {
+      id: 1,
+      effectiveFrom: "2025-01-01",
+      shares: [
+        { personId: "alex", partsPerMillion: 600_000, salaryId: 1 },
+        { personId: "sam", partsPerMillion: 400_000, salaryId: 2 },
+      ],
+      supersedes: null,
+      enteredAt: "2026-10-03T09:30:00.000Z",
+      enteredBy: "alex",
+    },
+  });
+  render(<App />);
+  await waitFor(() => expect(vi.mocked(fetchPeopleNames)).toHaveBeenCalled());
+
+  vi.mocked(fetchPeopleNames).mockResolvedValue({ alex: "Alex", sam: "sam" });
+  fireEvent.click(screen.getByRole("button", { name: "Salaries" }));
+
+  expect(
+    await screen.findByText("Ratio in effect: Alex 60.0000 % · sam 40.0000 %, since 2025-01-01."),
+  ).toBeTruthy();
+  expect(screen.getByLabelText("Alex’s salary")).toBeTruthy();
+});

@@ -36,6 +36,7 @@ import {
 import { RuleForm } from "../rules/RuleForm.tsx";
 import { RowSpending } from "../spending/RowSpending.tsx";
 import { AutoFiled } from "./AutoFiled.tsx";
+import { shownName, usePeopleNames } from "../people.tsx";
 
 interface Ready {
   state: "ready";
@@ -60,6 +61,7 @@ export interface InboxProps {
 }
 
 export function Inbox({ onCount }: InboxProps): React.ReactElement {
+  const shown = usePeopleNames();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [problem, setProblem] = useState<string | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
@@ -237,8 +239,8 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
           <h3>Make this a rule?</h3>
           <p>
             Next time, a row like <strong>{offer.row.description}</strong> will be filed as{" "}
-            <strong>{answerLabel(offer)}</strong> without asking. Change what it should match first,
-            or leave it.
+            <strong>{answerLabel(offer, shown)}</strong> without asking. Change what it should match
+            first, or leave it.
           </p>
           <RuleForm
             initial={{
@@ -299,6 +301,7 @@ function InboxItem({
   onAccept,
   onAnswer,
 }: InboxItemProps): React.ReactElement {
+  const shown = usePeopleNames();
   const { suggestion, history } = row;
   const agrees =
     suggestion !== null &&
@@ -332,7 +335,7 @@ function InboxItem({
         <ul className="matching" aria-label="Rules that match">
           {row.matching.map((rule) => (
             <li key={rule.id}>
-              {rule.descriptionPattern} ({criteriaLabel(rule)}) → {answerLabel(rule)}
+              {rule.descriptionPattern} ({criteriaLabel(rule)}) → {answerLabel(rule, shown)}
             </li>
           ))}
         </ul>
@@ -340,14 +343,16 @@ function InboxItem({
       {suggestion !== null && (
         <div className="suggestion">
           <p>
-            Suggested: <strong>{answerLabel(suggestion)}</strong>
+            Suggested: <strong>{answerLabel(suggestion, shown)}</strong>
             <span className="muted">
               {" "}
               — rule {suggestion.descriptionPattern} ({criteriaLabel(suggestion)})
             </span>
           </p>
           {/* The rule and the history saying the same thing is one answer, not two. */}
-          {history !== null && agrees && <p className="muted">Answered {historyLabel(history)}.</p>}
+          {history !== null && agrees && (
+            <p className="muted">Answered {historyLabel(history, shown)}.</p>
+          )}
           <button type="button" onClick={() => onAccept(suggestion.id)}>
             Accept
           </button>
@@ -356,7 +361,7 @@ function InboxItem({
       {history !== null && !agrees && (
         <div className="suggestion">
           <p>
-            Answered <strong>{historyLabel(history)}</strong>
+            Answered <strong>{historyLabel(history, shown)}</strong>
           </p>
           <button type="button" onClick={() => onAnswer(history.personId, history.bucket)}>
             Use this answer
@@ -367,10 +372,10 @@ function InboxItem({
         <label>
           Belongs to
           <select value={person} onChange={(event) => setPerson(event.target.value)}>
-            <option value="">{personLabel(null)}</option>
+            <option value="">{personLabel(null, shown)}</option>
             {people.map((name) => (
               <option key={name} value={name}>
-                {name}
+                {shownName(shown, name)}
               </option>
             ))}
           </select>

@@ -55,6 +55,8 @@ import { fetchMe } from "../api/me.ts";
 import { fetchSpendingCategories } from "../api/spending.ts";
 import { fetchReceiptMatches, fileReceipt, readReceipt, uploadReceipt } from "../api/receipts.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
+import { shownName, usePeopleNames } from "../people.tsx";
+import type { ShownNames } from "../people.tsx";
 
 export const FLAG_LABELS: Record<ReceiptFlag, string> = {
   "total-missing": "The total was not read.",
@@ -225,14 +227,14 @@ type Stage =
   | ({ step: "filed"; said: string } & Photo);
 
 /** An item's share as its button reads: someone else's names whose, when known. */
-function shareLabel(share: ItemShare, person: string | null): string {
+function shareLabel(share: ItemShare, person: string | null, shown: ShownNames): string {
   return share === "shared"
     ? "Shared"
     : share === "not-shared"
       ? "Not shared"
       : person === null
         ? "The other's"
-        : `${person}'s`;
+        : `${shownName(shown, person)}'s`;
 }
 
 /** "a", "a and b", "a, b and c". */
@@ -292,6 +294,7 @@ async function loadMembers(signal: AbortSignal): Promise<string[]> {
 
 export function Receipts(): React.ReactElement {
   const id = useId();
+  const shown = usePeopleNames();
   const [stage, setStage] = useState<Stage>({ step: "photo" });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [spendingCategoryId, setSpendingCategoryId] = useState<number | null>(null);
@@ -631,13 +634,15 @@ export function Receipts(): React.ReactElement {
             : { to: "row", rowId: destination },
       });
       // Each person charged, by the filing's own record of whose (lg-30).
-      const chargedPeople = filing.charges.map((charge) => `${charge.chargedTo}'s`);
+      const chargedPeople = filing.charges.map(
+        (charge) => `${shownName(shown, charge.chargedTo)}'s`,
+      );
       const said =
         destination !== "line"
           ? "Attached to the joint-account row."
           : chargedPeople.length === 0
-            ? `Filed as ${payer}'s line in the period.`
-            : `Filed as ${payer}'s line in the period, and ${listed(chargedPeople)} items as ${
+            ? `Filed as ${shownName(shown, payer)}'s line in the period.`
+            : `Filed as ${shownName(shown, payer)}'s line in the period, and ${listed(chargedPeople)} items as ${
                 chargedPeople.length === 1 ? "a charge" : "charges"
               }.`;
       const photo = { receipt, read: stage.read, filed: [...stage.filed, part] };
@@ -726,10 +731,10 @@ export function Receipts(): React.ReactElement {
                   </label>
                   <button
                     type="button"
-                    aria-label={`${name}, ${shareLabel(item.share, whose(item) ?? other)}`}
+                    aria-label={`${name}, ${shareLabel(item.share, whose(item) ?? other, shown)}`}
                     onClick={() => setItem(index, { share: nextShare(item.share, alone) })}
                   >
-                    {shareLabel(item.share, whose(item) ?? other)}
+                    {shareLabel(item.share, whose(item) ?? other, shown)}
                   </button>
                   {several && item.share === "theirs" && (
                     <select
@@ -739,7 +744,7 @@ export function Receipts(): React.ReactElement {
                     >
                       {others.map((person) => (
                         <option key={person} value={person}>
-                          {person}
+                          {shownName(shown, person)}
                         </option>
                       ))}
                     </select>
@@ -774,10 +779,10 @@ export function Receipts(): React.ReactElement {
                 ? split.charges
                     .map(
                       (charge) =>
-                        `${shareLabel("theirs", charge.personId)} ${formatCents(charge.cents)} · `,
+                        `${shareLabel("theirs", charge.personId, shown)} ${formatCents(charge.cents)} · `,
                     )
                     .join("")
-                : `${shareLabel("theirs", other)} ${formatCents(split.chargedCents)} · `}
+                : `${shareLabel("theirs", other, shown)} ${formatCents(split.chargedCents)} · `}
               Shared {formatCents(split.sharedCents)}
             </output>
           )}
@@ -799,7 +804,7 @@ export function Receipts(): React.ReactElement {
               checked={theirs}
               onChange={(event) => setTheirs(event.target.checked)}
             />
-            {several ? "This was someone else's" : `This was ${other}'s`}
+            {several ? "This was someone else's" : `This was ${shownName(shown, other)}'s`}
           </label>
         )}
         {theirs && several && (
@@ -812,7 +817,7 @@ export function Receipts(): React.ReactElement {
             >
               {others.map((person) => (
                 <option key={person} value={person}>
-                  {person}
+                  {shownName(shown, person)}
                 </option>
               ))}
             </select>
@@ -820,7 +825,7 @@ export function Receipts(): React.ReactElement {
         )}
         <div className="actions">
           <button type="button" disabled={busy} onClick={() => fileAs("line")}>
-            File as {payer}&rsquo;s line
+            File as {shownName(shown, payer)}&rsquo;s line
           </button>
           <button type="button" disabled={busy} onClick={lookUp}>
             Paid with the joint card?

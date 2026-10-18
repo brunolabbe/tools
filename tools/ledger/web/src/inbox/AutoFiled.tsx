@@ -14,6 +14,7 @@ import { BUCKETS } from "@ledger/contract";
 import type { AutoFiledRow, Bucket, SpendingCategory } from "@ledger/contract";
 import { BUCKET_LABELS, answerLabel, personLabel } from "../labels.ts";
 import { RowSpending } from "../spending/RowSpending.tsx";
+import { shownName, usePeopleNames } from "../people.tsx";
 
 export interface AutoFiledProps {
   rows: readonly AutoFiledRow[];
@@ -65,6 +66,7 @@ function AutoFiledItem({
   onAnswer,
   onSpending,
 }: AutoFiledItemProps): React.ReactElement {
+  const shown = usePeopleNames();
   const filed = row.classification;
   const [person, setPerson] = useState(filed.personId ?? "");
   const [bucket, setBucket] = useState<Bucket>(filed.bucket);
@@ -87,13 +89,13 @@ function AutoFiledItem({
       />
       <div className="suggestion">
         <p>
-          Filed automatically as <strong>{answerLabel(filed)}</strong>, on these answers:
+          Filed automatically as <strong>{answerLabel(filed, shown)}</strong>, on these answers:
         </p>
         <ul className="matching" aria-label="Answers it rests on">
           {row.restsOn.map((ground) => (
             <li key={ground.classificationId}>
-              {ground.date} · {formatCents(ground.amountCents)} · {answerLabel(ground)}
-              <span className="muted"> — answered by {ground.classifiedBy}</span>
+              {ground.date} · {formatCents(ground.amountCents)} · {answerLabel(ground, shown)}
+              <span className="muted"> — answered by {shownName(shown, ground.classifiedBy)}</span>
             </li>
           ))}
         </ul>
@@ -105,10 +107,10 @@ function AutoFiledItem({
         <label>
           Belongs to
           <select value={person} onChange={(event) => setPerson(event.target.value)}>
-            <option value="">{personLabel(null)}</option>
+            <option value="">{personLabel(null, shown)}</option>
             {people.map((name) => (
               <option key={name} value={name}>
-                {name}
+                {shownName(shown, name)}
               </option>
             ))}
           </select>

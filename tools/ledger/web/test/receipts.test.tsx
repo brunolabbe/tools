@@ -71,7 +71,7 @@ function household(people: readonly string[], left: readonly string[] = []): Hou
   });
   return {
     household: { id: "home", name: "Home" },
-    members: people.map((person) => ({ address: address(person), person })),
+    members: people.map((person) => ({ address: address(person), person, name: person })),
     history: [
       ...[...people, ...left].map((person) => record(person, "add")),
       ...left.map((person) => record(person, "remove")),
@@ -562,9 +562,9 @@ test("counts the household's current members from its record, not every name the
   vi.mocked(fetchHousehold).mockResolvedValue({
     ...household(["alex", "sam"]),
     members: [
-      { address: "alex@example.test", person: "alex" },
-      { address: "alex@work.example", person: "alex" },
-      { address: "sam@example.test", person: "sam" },
+      { address: "alex@example.test", person: "alex", name: "alex" },
+      { address: "alex@work.example", person: "alex", name: "alex" },
+      { address: "sam@example.test", person: "sam", name: "sam" },
     ],
   });
   await readBasket();

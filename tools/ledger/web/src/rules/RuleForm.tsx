@@ -15,6 +15,7 @@ import { AppError, BUCKETS } from "@ledger/contract";
 import type { Bucket, RuleDraft, SpendingCategory } from "@ledger/contract";
 import { BUCKET_LABELS } from "../labels.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
+import { shownName, usePeopleNames } from "../people.tsx";
 
 /** What is shown in the fields to begin with. */
 export interface RuleFormValues {
@@ -41,6 +42,7 @@ export interface RuleFormProps {
 export function RuleForm(props: RuleFormProps): React.ReactElement {
   const { initial, people } = props;
   const id = useId();
+  const shown = usePeopleNames();
   const [pattern, setPattern] = useState(initial.descriptionPattern);
   const [category, setCategory] = useState(initial.category ?? "");
   const [amount, setAmount] = useState(
@@ -118,7 +120,7 @@ export function RuleForm(props: RuleFormProps): React.ReactElement {
         <option value="">Joint</option>
         {people.map((name) => (
           <option key={name} value={name}>
-            {name}
+            {shownName(shown, name)}
           </option>
         ))}
       </select>

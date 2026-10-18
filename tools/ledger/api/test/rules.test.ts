@@ -226,6 +226,6 @@ describe("GET /api/people", () => {
 
     const response = await app.server.inject({ method: "GET", url: ROUTES.people });
 
-    expect(response.json<PeopleResponse>()).toEqual({ people: ["alex", "sam"] });
+    expect(response.json<PeopleResponse>()).toMatchObject({ people: ["alex", "sam"] });
   });
 });

@@ -149,6 +149,78 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
   -- too many.
   DROP TRIGGER memberships_two_people;
   `,
+  // 5 — a person's shown name (lg-33).
+  `
+  -- A person's id is the name a membership first gave them, and the books store
+  -- it on every rule, classification, salary and share, so it never changes
+  -- (00-ANALYSIS.md §7). What changes is how they are shown: a record here, set
+  -- by an admin, and the latest one stands. A person with none is shown under
+  -- their id. It lives in the directory, not the books, because an admin who
+  -- renames reads no books and may be in no household.
+  CREATE TABLE person_names (
+    id INTEGER PRIMARY KEY,
+    household_id TEXT NOT NULL REFERENCES households (id),
+    -- The person's id, as memberships.person names them.
+    person TEXT NOT NULL CHECK (length(person) BETWEEN 1 AND 64 AND person = trim(person)),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 64 AND name = trim(name)),
+    named_at TEXT NOT NULL,
+    -- Who named them: an admin's address.
+    named_by TEXT NOT NULL
+  );
+
+  CREATE INDEX person_names_person ON person_names (household_id, person, id);
+
+  -- How each named person is shown now: their latest record, by id, which only
+  -- ever grows, as current_members is ordered.
+  CREATE VIEW current_person_names AS
+    SELECT household_id, person, name, named_at, named_by
+    FROM person_names
+    WHERE id = (
+      SELECT max(id) FROM person_names later
+      WHERE later.household_id = person_names.household_id AND later.person = person_names.person
+    );
+
+  -- Only a person a membership of the household has named has a shown name: an
+  -- id the books hold only from an old rule is not in the directory at all.
+  CREATE TRIGGER person_names_held BEFORE INSERT ON person_names
+    WHEN NOT EXISTS (
+      SELECT 1 FROM memberships WHERE household_id = NEW.household_id AND person = NEW.person
+    )
+    BEGIN SELECT RAISE(ABORT, 'a shown name is for a person the household has held'); END;
+
+  -- A shown name is unique in its household: no other person is shown under it
+  -- now, and no other person has it as their id, which is what a person with no
+  -- record is shown under and what the books store.
+  CREATE TRIGGER person_names_unique BEFORE INSERT ON person_names
+    WHEN EXISTS (
+        SELECT 1 FROM current_person_names
+        WHERE household_id = NEW.household_id AND person <> NEW.person AND name = NEW.name
+      )
+      OR EXISTS (
+        SELECT 1 FROM memberships
+        WHERE household_id = NEW.household_id AND person <> NEW.person AND person = NEW.name
+      )
+    BEGIN SELECT RAISE(ABORT, 'a shown name is unique in its household'); END;
+
+  -- The same rule from the other side: a new person's id is not a name another
+  -- person of the household is shown under, or two people would be shown alike.
+  CREATE TRIGGER memberships_person_not_shown_as_another BEFORE INSERT ON memberships
+    WHEN NEW.action = 'add'
+      AND NEW.person NOT IN (SELECT person FROM memberships WHERE household_id = NEW.household_id)
+      AND EXISTS (
+        SELECT 1 FROM current_person_names
+        WHERE household_id = NEW.household_id AND name = NEW.person
+      )
+    BEGIN SELECT RAISE(ABORT, 'a shown name is unique in its household'); END;
+
+  CREATE TRIGGER person_names_never_updated BEFORE UPDATE ON person_names
+    BEGIN SELECT RAISE(ABORT, 'a shown name record is appended, never edited'); END;
+  CREATE TRIGGER person_names_never_deleted BEFORE DELETE ON person_names
+    BEGIN SELECT RAISE(ABORT, 'a shown name record is appended, never deleted'); END;
+  CREATE TRIGGER person_names_never_replaced BEFORE INSERT ON person_names
+    WHEN NEW.id IS NOT NULL AND EXISTS (SELECT 1 FROM person_names WHERE id = NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'a shown name record is appended, never replaced'); END;
+  `,
 ];
 
 /** Brings a directory up to `target`, every migration by default. */

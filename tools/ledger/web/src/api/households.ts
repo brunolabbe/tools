@@ -13,6 +13,8 @@ import type {
   HouseholdMember,
   HouseholdResponse,
   HouseholdSummary,
+  PersonName,
+  RenamePersonRequest,
 } from "@ledger/contract";
 import { requestJson } from "./client.ts";
 
@@ -68,5 +70,16 @@ export async function adminRemoveMember(
   return await requestJson<HouseholdMember>(at(ROUTES.adminMemberRemove, household), {
     method: "POST",
     body: { address },
+  });
+}
+
+/** A person's shown name (lg-33): their id stays, so nothing in the books changes. */
+export async function adminRenamePerson(
+  household: string,
+  rename: RenamePersonRequest,
+): Promise<PersonName> {
+  return await requestJson<PersonName>(at(ROUTES.adminPersonRename, household), {
+    method: "POST",
+    body: rename,
   });
 }
