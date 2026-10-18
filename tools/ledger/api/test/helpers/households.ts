@@ -4,6 +4,7 @@
  * and `ADMIN` is in neither.
  */
 
+import type { LightMyRequestResponse } from "fastify";
 import type Database from "better-sqlite3";
 import type { Directory } from "../../src/directory.ts";
 import { createLogger } from "../../src/logger.ts";
@@ -70,7 +71,7 @@ export async function send(
   method: Method,
   url: string,
   payload?: Record<string, unknown> | string,
-) {
+): Promise<LightMyRequestResponse> {
   const token = signToken({
     key: KEY,
     nowSec: Math.floor(NOW.getTime() / 1000),
