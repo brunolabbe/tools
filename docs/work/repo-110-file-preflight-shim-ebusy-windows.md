@@ -95,10 +95,10 @@ next-id.mjs's id-sweep wording when gh fails inside check 5". Grep for
    throw `EBUSY` once and then succeed, and the test still passes. The Review
    table names the spec and its run.
 3. A leak still fails on Linux, where no `EBUSY` can occur. With the helper's
-   call removed from any one of the three tests, a spec that counts
-   `preflight-ghshim-*` directories in `os.tmpdir()` before and after goes red.
-   Read it with the call removed and with it restored, once per site: three
-   red and three green readings, named.
+   call removed from any one of the three tests, a spec that asserts none of
+   the shim directories this file made survives goes red. Read it with the call
+   removed and with it restored, once per site: three red and three green
+   readings, named.
 4. Persistent `EBUSY` does not pass silently. When the injected removal throws
    on every attempt, the test fails, and the failure names the directory left
    behind.
@@ -190,3 +190,26 @@ when EBUSY never clears`, `1 failed | 108 passed (109)`. A third spec,
     job log prints 0. One green of an intermittent failure (one red in four
     before): it does not show the retry ran, since the unlink may not have
     hit `EBUSY` this time.
+
+- 2026-10-18 — Owner's resolution of gate 1 (Opus 5.5), applied by the fixer.
+  The question was "repo-110 gate 1 (#559) is FAIL … How do you want these
+  resolved?" with options "One-line fix + reword DW3 (Recommended)", "Reword both
+  lines" and "One-line fix + tmpdir count". The owner chose **"One-line fix +
+  reword DW3 (Recommended)"**.
+  - F1 (high), fixed as the gate wrote it: the helper's default is now
+    `remove: ShimRemove = (shimDir, options) => fs.rmSync(shimDir, options),`.
+    `grep -n "rmSync(shimDir" scripts/test/preflight.test.ts` finds one line,
+    2430, in `removeShimDir`; the builder's entry above, which says it prints
+    nothing, was true of the head it was written on.
+  - F2 (med), `Done when` 3 reworded, not the code. Old wording: "With the
+    helper's call removed from any one of the three tests, a spec that counts
+    `preflight-ghshim-*` directories in `os.tmpdir()` before and after goes red."
+    New wording: "a spec that asserts none of the shim directories this file made
+    survives goes red", the rest of the line unchanged. The spec is `no
+preflight-ghshim directory this file made is left behind (repo-110)`; the
+    three red and three green readings are in the builder's entry above. A count
+    of the shared temp directory races with concurrent sessions
+    (`.claude/rules/testing.md`).
+  - F3 (low, the leak spec's guard depends on the order it runs in) and F4 (low,
+    a thrown null) are left unfixed by the owner's choice and stay in the gate's
+    record.

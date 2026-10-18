@@ -2427,7 +2427,7 @@ type ShimRemove = (dir: string, options: { recursive: true; force: true }) => vo
  */
 function removeShimDir(
   dir: string,
-  remove: ShimRemove = fs.rmSync,
+  remove: ShimRemove = (shimDir, options) => fs.rmSync(shimDir, options),
   wait: (ms: number) => void = sleepSync,
 ): void {
   const attempts = 8;
