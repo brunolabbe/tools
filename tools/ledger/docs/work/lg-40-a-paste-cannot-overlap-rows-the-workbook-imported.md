@@ -104,3 +104,81 @@ should add the one new row.
   Measured on a scratch copy of their local books: the same paste starting on
   the first row after the workbook's newest row was accepted (3 rows added), and
   one starting a row earlier was refused with the gap message.
+- 2026-10-18 — **Build item 5, the owner's answer.** Asked by the orchestrator
+  on 2026-10-18, before the build: "if lg-7's own placement (`readings` in
+  `workbook-import.ts`) has the same reordered-day blind spot, what should the
+  builder do?" Options: (a) fix it here, (b) file it as a new lg- ticket, (c)
+  the builder's call as written. **The owner chose (a), fix it here**: reproduce
+  first, and if it exists fix it with the same rule as item 2, with a test in
+  the workbook-import suite.
+- 2026-10-18 — built (builder, branch `lg-40-paste-overlaps-workbook-rows`,
+  base `960f4b26`).
+
+  **The rule**, in `api/src/workbook-days.ts` and used by both files. The
+  workbook's rows are cut into runs, each a stretch of consecutive rows on one
+  date (cut on the workbook's dates); the other side's rows at the same
+  positions are the run's counterpart. A run and its counterpart must (1) hold
+  the same amounts, counted with repeats, (2) end on the same balance, and (3)
+  for a paste, have every bank row dated the run's date or a day either side;
+  the workbook import keeps lg-7's "any date, reported" instead. Wording is
+  never compared. Since every run ends where the other side's does and holds
+  the same amounts, it also opens where it does, so the balances agree at every
+  day boundary and only the order within a day may differ. In `statements.ts`,
+  a stored row is a workbook row when its `statement_imports` row has
+  `source = 'workbook'`; a row a paste stored is compared field for field, in
+  order, as before. The same comparison serves the `k`-row overlap and the
+  paste-inside-the-history reading, whose start candidates now include every
+  workbook row dated within a day of the paste's oldest row. A day the workbook
+  both re-dated and reordered is two runs and does not match.
+
+  **Item 5 reproduced on the base**, then fixed. Pasted rows `−20, +10, +5` on
+  2024-03-01 and the workbook listing the same day `+10, +5, −20`, with
+  `workbook-import.ts` as at `960f4b26` and only the new test added:
+  `npx vitest run tools/ledger/api/test/workbook-import.test.ts -t "lg-40"` →
+  1 failed | 1 passed, the import refusing with `2024 row 2, 2024-03-01 "Achat"
+-20.00 $ (balance 1599.99 $) moves the same day and amount as the oldest
+stored row, but leaves 1599.99 $ where it leaves 1584.99 $: -15.00 $ is
+unexplained.` Fixed in `readings` and `place`, not in `run()`. `place` now
+  pairs each movement with its own stored row within a day, not the row in its
+  position, so "dated differently" names the right row, and `lastSeq` is the
+  position the overlap reaches.
+
+  **The ticket's reproduction on the base**: `npx vitest run
+tools/ledger/api/test/statements.test.ts` with the source at `960f4b26` and
+  the new tests added → 8 failed | 42 passed (50), the first with "A row is
+  missing between the two, so paste a longer stretch that overlaps what is
+  stored." After the fix, 50 of 50.
+
+  **Mutations**, each from commit `1ef52779` and restored from it, both spec
+  files (81 tests): no date window for a paste → 2 fail (two days off, and the
+  refusal naming the workbook); amounts not compared → 3 fail; end balance not
+  compared → 7 fail; pasted rows compared day by day as well → 3 fail (two lg-2
+  tests and "rows a paste stored above the workbook's"); the workbook refusal
+  replaced by the gap message → 1 fails; no workbook start candidates for a
+  paste inside the history → 1 fails; lg-7's pairing back to positional → 1
+  fails.
+
+  **What the brief had wrong, or left open.**
+  - "A date one day off reported rather than refused": the paste's answer,
+    `ImportStatementReport`, has no field to report it on, and adding one is a
+    contract change and a screen change. Built as accepted and not reported:
+    the stored row keeps the workbook's date and the paste's is dropped. Left to
+    the orchestrator as an open decision.
+  - The tolerance had to reach the paste-inside-the-history reading too, or a
+    paste lying wholly inside the workbook's rows would be refused; done here,
+    with its own test.
+  - `fail`'s two "the paste departs from a stored row" refusals find stored
+    rows by date, description, amount and balance, which a workbook row could
+    match only by accident, and would then name its empty category as the
+    difference. They now consider rows a paste stored only, and a paste whose
+    shared rows sit just above the workbook's gets the workbook refusal.
+  - The refusal cannot promise that no longer paste helps: a paste starting
+    partway through a reordered day compares only the part of the day it holds.
+    So it says what was compared and names the pasted row that opens from the
+    workbook's last balance (`continuesAt` in `details`, or `null`), and never
+    asks for a longer stretch.
+  - `run()`'s report line "one for one, by amount and balance" now reads day by
+    day; left as it is, since `run()` is the seam with lg-38 (#542).
+
+  Fold-in: none. lg-54 is the only other ready ticket on the paste, and its work
+  is the screen and possibly the report's contract, not free here.
