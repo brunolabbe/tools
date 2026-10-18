@@ -182,3 +182,122 @@ tools/ledger/api/test/statements.test.ts` with the source at `960f4b26` and
 
   Fold-in: none. lg-54 is the only other ready ticket on the paste, and its work
   is the screen and possibly the report's contract, not free here.
+
+- 2026-10-18 — **Gate 1's decisions, the owner's answers.** All asked by the
+  orchestrator on 2026-10-18.
+  - F1/F2, a paste starting partway through a reordered day. Options: (A) admit
+    a partial first day, the gate's recommendation; (B) reword the message and
+    header and record F2 as a known limit; (C) land as built and file F2.
+    **The owner chose A**, and to fix F3 and F6 in the same round. F4 and F5 stay
+    recorded unfixed.
+  - The builder's open decision on a date a day off, which the paste's answer
+    has no field to report. Options: file a new lg- ticket (the builder's
+    recommendation), add it in this branch, or leave it unreported. **The owner
+    chose to file a new lg- ticket**, filed by the lander, not in this round.
+- 2026-10-18 — round 1 (builder), on `cea53bf7`.
+
+  **The rule, as it now stands.** Inside one of the workbook's days only its
+  opening and closing balances are real; the balances it shows between them
+  follow its own order, and nothing is compared with them any more. A paste's
+  rows that fall in one of the workbook's days are weighed against the whole day
+  (`matchPart` in `api/src/workbook-days.ts`), the rows its stretch leaves out
+  included (`restOfDay` in `statements.ts`). Placed as the bank's rows `b` to
+  `b + n` of that day, they must be among the day's amounts, counted with
+  repeats, each dated within a day of it, and must open from a balance the bank's
+  day reaches after `b` of its other amounts: the day's opening when `b` is 0,
+  the day's closing after their last row when they run to the day's end, and
+  otherwise some `b` of the remaining amounts adding up to the difference, found
+  by a search over sums for days of up to 20 rows (`LONGEST_SEARCHED_DAY`; a
+  longer day admits no part that starts and ends inside it). A whole day reduces
+  to the old comparison. The workbook import keeps cutting a day where its own
+  listing puts the edge (`alignDays`): it adds the workbook's rows before the
+  pastes, so those must be the rest of the day, which only the workbook's listing
+  can say, and admitting a part the way a paste does would let it add the wrong
+  ones.
+
+  **F1 reproduced, then fixed.** The gate's grid ported to
+  `statements.test.ts` › "a paste partway through one of the workbook's days" ›
+  "a day the workbook lists as %s, pasted from the bank's row %i of it on, adds
+  only the new row (F1)": 5 non-identity orders × 2 mid-day starts. With the
+  source at `cea53bf7`, `npx vitest run tools/ledger/api/test/statements.test.ts
+tools/ledger/api/test/workbook-import.test.ts` → 10 failed | 88 passed (98): 8
+  of the 10 F1 cases (the gate's count), F2 and F6. At `b4bcb94b`, all pass.
+
+  **F2 reproduced, then fixed.** The gate's probe `gate-lg40g`: at `cea53bf7`
+  the bank's last two rows were `ACCEPT add=0 present=2 tail=101000`, the
+  follow-up with the next day's row `REFUSE STATEMENT_CHAIN_BROKEN`. At
+  `725722ea` and `b4bcb94b`: `REFUSE STATEMENT_ROW_CONFLICT` naming two readings
+  (0 new, or 1 new), and the follow-up `ACCEPT add=2 present=1 tail=101750`, the
+  truth. The gate expected the ambiguity refusal; it is what happened. Ported as
+  "a paste whose rows fit a reordered day two ways is refused, not stored as one
+  of them (F2)".
+
+  **The exhaustive probe** (`gate-lg40d`, every one-day history of up to six
+  rows, every workbook order, every paste start; split by start here, as
+  `gate-lg40d2`). It hits vitest's 20 s timeout and still writes both alphabets.
+
+  | ±10.00                    | `cea53bf7` | `b4bcb94b` |
+  | ------------------------- | ---------- | ---------- |
+  | same order, correct       | 1 358      | 1 048      |
+  | same order, ambiguous     | 562        | 872        |
+  | reordered, correct        | 24 474     | 15 960     |
+  | reordered, ambiguous      | 18 946     | 43 376     |
+  | reordered, refused        | 9 280      | 0          |
+  | reordered, wrong (skip)   | 2 636      | 0          |
+  | reordered, wrong (double) | 4 000      | 0          |
+
+  With +10.00/−5.00: wrong 1 284 skips and 2 340 doubles → 0, refused 13 252 →
+  0, ambiguous 8 976 → 26 364, correct 35 404 → 34 892. **No wrong answer and no
+  refusal remains; the cost is ambiguity.** The workbook's balances inside a day
+  used to break ties, sometimes rightly and sometimes, as in F2, wrongly, so
+  every tie they broke is now a refusal naming both readings. Split by where the
+  paste starts, ±10.00: same-order pastes from the day's first row 368 correct
+  and 148 ambiguous before, 300 and 216 after; reordered 6 084 and 4 420
+  before, 4 024 and 6 480 after. Those are histories of one day, where no
+  earlier row exists to settle a reading; with an earlier day, a stretch that
+  starts on it settles one.
+
+  **The randomised probe** (`gate-lg40c`, seed 11, 1 500 trials a cell), wrong
+  accepts `cea53bf7` → `b4bcb94b`: distinct amounts 0 → 0 in every mode;
+  repeated amounts, reordered 10 → 0 and reordered with dates moved 29 → 22;
+  ±10.00, reordered 17 → 0 and reordered with dates moved 38 → 31. Refused
+  correct pastes, reordered, 98, 69, 41 → 0. Ambiguous, rows in the bank's own
+  order: 134 → 167 (repeated) and 296 → 364 (±10.00), the same cost as above.
+  **What is left wrong** is the case this ticket already named: a day the
+  workbook both re-dated and reordered is two runs, the true reading is not
+  admitted, and a shorter overlap or a `k = 0` continuation on a balance that
+  happens to match is then the only reading, and stores rows twice. The six
+  wrong cases the probe prints (three per cell) are all of that shape: three
+  `k = 0`, two `k = 1`, one `k = 2`. The gate measured the base, before lg-40, storing rows
+  twice the same way (256 of 1 920 same-order one-day cases). Not fixed here; it
+  needs runs that span a re-dated row.
+
+  **F3.** `api/test/workbook-days.test.ts`, 16 tests: `dayBefore` across a month,
+  a leap day and a year; `dayRuns`; `matchDay`; `matchPart` at a day's start,
+  its end and its middle, an amount the day lacks, the window, and the search
+  bound; `alignDays`. In `statements.test.ts`: "a paste wholly inside the
+  workbook's rows, in the bank's order and dated %s, a day off, adds nothing
+  (F3)" for 2026-02-28 and 2026-03-02, "… but dated %s, two days off, is refused
+  (F3)" for 2026-02-27 and 2026-03-03, and "a pasted row dated before the
+  workbook's newest day is not named as continuing it, whatever its balance
+  (F3)". Mutations, each restored from `b4bcb94b`, over the three suites (114
+  tests): the gate's three — `dayBefore` two days back → 5 fail, `workbookStarts`
+  on the pasted date only → 2 fail, `continuesAt` without its earliest date → 1
+  fails; and this round's — a day's start unchecked → 1, its end unchecked → 8,
+  its middle unchecked → 1, no search bound → 1, amounts unchecked → 3,
+  `restOfDay` empty → 9.
+
+  **F6.** `workbook-import.ts`: `place`'s refusal and `run()`'s report line say
+  "day by day" where they said "one for one" (the one-line change in `run()`,
+  the seam with #542). `contract/src/errors.ts`: the note on
+  `STATEMENT_CHAIN_BROKEN` now names the workbook refusal's details; no type and
+  no code changed. Test: `workbook-import.test.ts` › "the report and the refusal
+  say the rows are compared day by day (gate 1, F6)".
+
+  **The refusal and the header, against the new rule.** The workbook refusal no
+  longer says "it is not their wording, their order or a date a day off that
+  differs", which was false for F1 and stays unprovable for a re-dated and
+  reordered day. It now says how the rows are compared, that a paste may start or
+  end partway through a day, and that wording is never compared. The header
+  says the refusal does not ask for a longer stretch because the paste reached
+  the stored rows, not that a longer one could not help.
