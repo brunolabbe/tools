@@ -606,3 +606,7 @@ the owner answers 1. lg-56 carries them as context, not as Build.
    says whether the verifications caught it.
 4. **Open, waiting on lg-56.** The recommendation is above; the build is
    filed or the ticket dropped by the owner's decision after lg-56's run.
+
+### 2026-10-18 — gate records
+
+The gate records for the pull request that filed this entry and lg-56 are on PR #552's thread, not in a `## Review` section: gate 1 CONCERNS at `d76699a2`, gate 2 PASS at `1135f0a6`.

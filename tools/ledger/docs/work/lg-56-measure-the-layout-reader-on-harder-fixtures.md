@@ -218,3 +218,7 @@ prose that the ticket follows lg-38's merged harness (the builder's
 recommendation); keep it and dispatch by hand, outside `--ready`; or move
 lg-38 to `done` with an `awaiting` line. **On 2026-10-18 the owner chose the
 first**, the recommended option. The Why now says so.
+
+### 2026-10-18 — gate records
+
+The gate records for the pull request that filed this entry and lg-56 are on PR #552's thread, not in a `## Review` section: gate 1 CONCERNS at `d76699a2`, gate 2 PASS at `1135f0a6`.
