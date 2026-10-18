@@ -324,3 +324,14 @@ this.#minWaitMs` replaced by `minWaitMs: MIN_WAIT_MS` →
     `× a minWaitMs below it is the one the wait is handed`, `AssertionError:
 expected 1200 to be 200`. Each: `Tests  1 failed | 2 passed | 120 skipped
 (123)`.
+
+- 2026-10-18 — Correction to gate 1's record, from dl-128. The Review's
+  sentence "The lower bound `waitedMs >= MIN_WAIT_MS` cannot fail by timing,
+  because the loop guarantees it" is false. `waitForQuiet` checks the floor and
+  then the deadline, so a wait whose budget runs out first returns short of the
+  floor; and it counts its floor on `Date.now`, which the test's `performance.now`
+  stopwatch does not follow, so a system-clock step during the wait moves the
+  two apart. dl-126's landing saw `expected 1001.709182999999 to be greater than
+or equal to 1200` from this assertion. dl-128 measured which of the two it can
+  be here (the deadline cannot, at the test's 25 s budget) and gave the test an
+  assertion that names each. The Review above is left as the gate wrote it.
