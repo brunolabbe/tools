@@ -3,12 +3,15 @@ import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, test } from "vitest";
+import { NO_CORRECTIONS } from "@ledger/books";
 import { ROUTES } from "@ledger/contract";
 import type { ErrorResponse, ImportStatementReport } from "@ledger/contract";
 import { householdBooksPath } from "../src/books.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
+import { importWorkbook } from "../src/workbook-import.ts";
+import { readSheets } from "../src/xlsx.ts";
 import {
   ALEX,
   HOUSEHOLD,
@@ -19,6 +22,8 @@ import {
 } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import type { PasteRow } from "./helpers/paste.ts";
+import { render } from "./helpers/workbook.ts";
+import type { YearRow } from "./helpers/workbook.ts";
 
 let app: App | undefined;
 
@@ -742,5 +747,353 @@ describe("a paste that shares nothing with the history, by date", () => {
 
     // Opens from 12,00, not the stored 15,00, and ends on the 10,00 the history opened from.
     expect((await refused(target, row, 1200)).code).toBe("STATEMENT_BEFORE_HISTORY");
+  });
+});
+
+// lg-40: a paste meeting rows the workbook imported into empty books. The
+// workbook's rows carry its own wording and no category, date a row a day off
+// now and then, and list a day's movements in their own order.
+describe("a paste that meets the workbook's rows", () => {
+  /** The workbook's rows, oldest first, from an empty account: 1 000.00 in, then the ticket's four. */
+  const WORKBOOK: YearRow[] = [
+    {
+      written: "2026-02-16",
+      bucket: "Hypothèque",
+      detail: "Versement",
+      person: "Alex",
+      amount: 1000,
+    },
+    {
+      written: "2026-03-01",
+      bucket: "Dép. Courantes",
+      detail: "Dépôt",
+      person: "Alex",
+      amount: 100,
+    },
+    { written: "2026-03-01", bucket: "Dép. Courantes", detail: "Dépôt", person: "Sam", amount: 50 },
+    { written: "2026-03-01", bucket: "Dép. Courantes", detail: "Taxes", amount: -200 },
+    { written: "2026-03-10", bucket: "Hypothèque", detail: "Paiement", amount: -300 },
+  ];
+
+  /** The same movements in the bank's words. */
+  const BANK = {
+    deposit: {
+      date: "2026-03-01",
+      description: "Virement - AccèsD Internet /Caisse du Lac",
+      amountCents: 10_000,
+    },
+    transfer: {
+      date: "2026-03-01",
+      description: "Virement entre folios /Caisse du Lac",
+      amountCents: 5_000,
+    },
+    taxes: {
+      date: "2026-03-01",
+      category: "Taxes municipales/scolaires",
+      description: "Taxes /Ville Exemple",
+      amountCents: -20_000,
+    },
+    payment: {
+      date: "2026-03-10",
+      category: "Loyer/Prêt hypothécaire",
+      description: "Hypothèque /Prêteur Exemple",
+      amountCents: -30_000,
+    },
+  } satisfies Record<string, PasteRow>;
+
+  /**
+   * The same movements in the workbook's own words. A paste always carries a
+   * category and the workbook's is empty, so only the description can be the
+   * workbook's.
+   */
+  const OWN = {
+    deposit: { date: "2026-03-01", description: "Dépôt", amountCents: 10_000 },
+    transfer: { date: "2026-03-01", description: "Dépôt", amountCents: 5_000 },
+    taxes: { date: "2026-03-01", description: "Taxes", amountCents: -20_000 },
+    payment: { date: "2026-03-10", description: "Paiement", amountCents: -30_000 },
+  } satisfies Record<string, PasteRow>;
+
+  /** The one row after the workbook's newest. */
+  const PURCHASE: PasteRow = {
+    date: "2026-03-12",
+    category: "Épicerie",
+    description: "Achat /Marché Exemple",
+    amountCents: -2_000,
+  };
+
+  /** What the account held before the 1 March movements, on both sides. */
+  const BEFORE_MARCH = 100_000;
+
+  /** The workbook imported into these books, through lg-7's own import; the rows it stored. */
+  async function workbookInto(
+    target: App,
+    rows: YearRow[] = WORKBOOK,
+  ): Promise<StoredRowColumns[]> {
+    const sheets = await readSheets(
+      await render({
+        years: [{ year: 2026, carry: { mortgage: 0, buffer: 0 }, rows }],
+        periods: [],
+        salaries: { alex: 60_000, sam: 40_000 },
+      }),
+    );
+    const result = importWorkbook(homeBooks(target), sheets, {
+      personId: "alex",
+      members: ["alex", "sam"],
+      corrections: NO_CORRECTIONS,
+      write: true,
+      commit: true,
+      now: () => new Date("2026-10-01T09:00:00Z"),
+    });
+    expect(result.written, result.report).toBe(true);
+    return stored(target);
+  }
+
+  test("a paste reaching back into the workbook's rows adds only the row after them, and leaves theirs as they were", async () => {
+    const target = await startApp();
+    const before = await workbookInto(target);
+    expect(
+      before.map((row) => [
+        row.date,
+        row.category,
+        row.description,
+        row.amount_cents,
+        row.balance_cents,
+      ]),
+    ).toEqual([
+      ["2026-02-16", "", "Versement", 100_000, 100_000],
+      ["2026-03-01", "", "Dépôt", 10_000, 110_000],
+      ["2026-03-01", "", "Dépôt", 5_000, 115_000],
+      ["2026-03-01", "", "Taxes", -20_000, 95_000],
+      ["2026-03-10", "", "Paiement", -30_000, 65_000],
+    ]);
+
+    // The bank's words, 1 March in the bank's order (balances 800, 900, 950),
+    // and the payment dated the 9th.
+    const result = await report(
+      target,
+      of(
+        [
+          BANK.taxes,
+          BANK.deposit,
+          BANK.transfer,
+          { ...BANK.payment, date: "2026-03-09" },
+          PURCHASE,
+        ],
+        BEFORE_MARCH,
+      ),
+    );
+
+    expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 4, tailBalanceCents: 63_000 });
+    const after = stored(target);
+    expect(after.slice(0, 5)).toEqual(before);
+    expect(after[5]).toMatchObject({
+      seq: (before.at(-1)?.seq ?? 0) + 1,
+      date: "2026-03-12",
+      category: "Épicerie",
+      description: "Achat /Marché Exemple",
+      amount_cents: -2_000,
+      balance_cents: 63_000,
+    });
+  });
+
+  test.each([
+    ["its wording alone", [BANK.deposit, BANK.transfer, BANK.taxes, BANK.payment]],
+    [
+      "a date a day off alone",
+      [OWN.deposit, OWN.transfer, OWN.taxes, { ...OWN.payment, date: "2026-03-11" }],
+    ],
+    ["the order of one day's rows alone", [OWN.taxes, OWN.deposit, OWN.transfer, OWN.payment]],
+  ])("a paste that differs from the workbook in %s is accepted", async (_, overlap) => {
+    const target = await startApp();
+    const before = await workbookInto(target);
+
+    const result = await report(target, of([...overlap, PURCHASE], BEFORE_MARCH));
+
+    expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 4, tailBalanceCents: 63_000 });
+    expect(stored(target).slice(0, 5)).toEqual(before);
+  });
+
+  test.each([
+    [
+      "a date two days off",
+      [BANK.taxes, BANK.deposit, BANK.transfer, { ...BANK.payment, date: "2026-03-08" }],
+    ],
+    [
+      // −200, +90, +60 ends the day on 950.00, as the workbook's does.
+      "a reordered day whose amounts differ by one row",
+      [
+        BANK.taxes,
+        { ...BANK.deposit, amountCents: 9_000 },
+        { ...BANK.transfer, amountCents: 6_000 },
+        BANK.payment,
+      ],
+    ],
+  ])(
+    "a paste that differs from the workbook by %s is refused, and stores nothing",
+    async (_, overlap) => {
+      const target = await startApp();
+      const before = await workbookInto(target);
+
+      const response = await post(target, of([...overlap, PURCHASE], BEFORE_MARCH));
+
+      expect(response.statusCode).toBe(422);
+      expect(refusal(response).code).toBe("STATEMENT_CHAIN_BROKEN");
+      expect(stored(target)).toEqual(before);
+    },
+  );
+
+  test("rows a paste stored above the workbook's are still compared field for field, and in order", async () => {
+    const target = await startApp();
+    await workbookInto(target);
+    await report(
+      target,
+      of([BANK.taxes, BANK.deposit, BANK.transfer, BANK.payment, PURCHASE], BEFORE_MARCH),
+    );
+    const x: PasteRow = { date: "2026-03-20", description: "Virement X", amountCents: 1_000 };
+    const y: PasteRow = { date: "2026-03-20", description: "Retrait Y", amountCents: 500 };
+    const z: PasteRow = { date: "2026-03-20", description: "Achat Z", amountCents: -2_500 };
+    const w: PasteRow = { date: "2026-03-21", description: "Achat W", amountCents: -100 };
+    await report(target, of([x, y, z], 63_000));
+    const before = stored(target);
+
+    // A pasted row whose category differs is refused and named, as ever.
+    const recategorised = await post(target, of([{ ...PURCHASE, category: "Divers" }, x], 65_000));
+    expect(recategorised.statusCode).toBe(422);
+    expect(refusal(recategorised)).toMatchObject({
+      code: "STATEMENT_ROW_CONFLICT",
+      details: { fields: ["category"], stored: { category: "Épicerie" } },
+    });
+
+    // A pasted day in another order is not the stored day.
+    const reordered = await post(target, of([z, x, y, w], 63_000));
+    expect(reordered.statusCode).toBe(422);
+    expect(refusal(reordered).code).toBe("STATEMENT_CHAIN_BROKEN");
+    expect(refusal(reordered).message).toContain("paste a longer stretch");
+    expect(stored(target)).toEqual(before);
+  });
+
+  test("a paste that fits nowhere after the workbook's rows says so, naming its newest row and where to start", async () => {
+    const lines: string[] = [];
+    app = await createApp({
+      directory: memberDirectory(),
+      config: { dataDir: ":memory:", access: accessConfig({ devIdentity: ALEX }) },
+      logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
+      now: () => new Date("2026-10-02T09:30:00Z"),
+    });
+    const before = await workbookInto(app);
+
+    const response = await post(
+      app,
+      of(
+        [
+          BANK.taxes,
+          BANK.deposit,
+          BANK.transfer,
+          { ...BANK.payment, date: "2026-03-08" },
+          PURCHASE,
+        ],
+        BEFORE_MARCH,
+      ),
+    );
+
+    expect(response.statusCode).toBe(422);
+    const error = refusal(response);
+    expect(error.code).toBe("STATEMENT_CHAIN_BROKEN");
+    expect(error.message).toContain(
+      'imported from the workbook, which end on 2026-03-10 "Paiement"',
+    );
+    expect(error.message).toContain('2026-03-12 "Achat /Marché Exemple"');
+    expect(error.message).not.toContain("paste a longer stretch");
+    expect(error.details).toEqual({
+      date: "2026-03-10",
+      description: "Paiement",
+      amountCents: -30_000,
+      balanceCents: 65_000,
+      continuesAt: {
+        pasteIndex: 4,
+        date: "2026-03-12",
+        description: "Achat /Marché Exemple",
+        amountCents: -2_000,
+        balanceCents: 63_000,
+      },
+    });
+    expect(stored(app)).toEqual(before);
+    const logged = lines.join("\n");
+    expect(logged).toContain("STATEMENT_CHAIN_BROKEN");
+    expect(logged).toContain("continuesAt");
+    expect(logged).not.toContain("Paiement");
+    expect(logged).not.toContain("Marché");
+
+    // With no pasted row opening from the workbook's last balance, none is named.
+    const gap = await post(
+      app,
+      of(
+        [{ date: "2026-03-15", description: "Achat /Autre Exemple", amountCents: -1_000 }],
+        60_000,
+      ),
+    );
+    expect(gap.statusCode).toBe(422);
+    expect(refusal(gap).message).toContain("workbook");
+    expect(refusal(gap).message).not.toContain("paste a longer stretch");
+    expect(refusal(gap).details).toMatchObject({ description: "Paiement", continuesAt: null });
+  });
+
+  test("a reading only the day's order makes possible counts like any other, so two readings are refused", async () => {
+    const target = await startApp();
+    const before = await workbookInto(target, [
+      WORKBOOK[0] as YearRow,
+      {
+        written: "2026-03-01",
+        bucket: "Dép. Courantes",
+        detail: "Retour",
+        person: "Sam",
+        amount: -10,
+      },
+      {
+        written: "2026-03-01",
+        bucket: "Dép. Courantes",
+        detail: "Virement",
+        person: "Sam",
+        amount: 10,
+      },
+    ]);
+    const x: PasteRow = {
+      date: "2026-03-01",
+      description: "Virement /Caisse du Mont",
+      amountCents: 1_000,
+    };
+    const back: PasteRow = {
+      date: "2026-03-01",
+      description: "Retour /Caisse du Mont",
+      amountCents: -1_000,
+    };
+    const y: PasteRow = { date: "2026-03-02", description: "Achat Y", amountCents: -200 };
+
+    // The stored day in the bank's order with two more rows, or the same again after it.
+    const response = await post(target, of([x, back, x, y], BEFORE_MARCH));
+
+    expect(response.statusCode).toBe(422);
+    const error = refusal(response);
+    expect(error.code).toBe("STATEMENT_ROW_CONFLICT");
+    expect(error.details).toMatchObject({
+      readings: [
+        { rowsAdded: 2, rowsAlreadyPresent: 2 },
+        { rowsAdded: 4, rowsAlreadyPresent: 0 },
+      ],
+    });
+    expect(stored(target)).toEqual(before);
+  });
+
+  test("a paste wholly inside the workbook's rows, in another order and other words, adds nothing", async () => {
+    const target = await startApp();
+    const before = await workbookInto(target);
+
+    const result = await report(
+      target,
+      of([BANK.taxes, BANK.deposit, BANK.transfer], BEFORE_MARCH),
+    );
+
+    expect(result).toEqual({ rowsAdded: 0, rowsAlreadyPresent: 3, tailBalanceCents: 65_000 });
+    expect(stored(target)).toEqual(before);
   });
 });
