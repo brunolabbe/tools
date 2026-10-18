@@ -17,11 +17,32 @@
  *   bank's does, every run opens where the bank's does too, so the balances
  *   line up at every boundary between days; within a day only the order may
  *   differ, and each side has already proven its own running balance.
+ * - **Within a day, only the workbook's opening and closing balances are
+ *   real.** The balances it shows between them follow its own order, not the
+ *   bank's, so nothing is ever compared with them.
  * - **A date is never compared beyond a window.** A paste allows each of the
  *   bank's rows to sit on the run's date or a day either side of it; the
  *   workbook import, which reports every differing date and refuses none, allows
  *   any.
  * - **Wording is never compared**: not the description, not the category.
+ *
+ * **A paste may start or end partway through one of the workbook's days**
+ * (`matchPart`): its rows there are some of that day's, as the bank lists them
+ * from a position the paste's place gives. They must be among the day's amounts,
+ * and the bank's day must be able to reach the balance they open from: from the
+ * day's opening when they are its first rows, to its closing when they are its
+ * last, and when they are neither, through some of the day's other amounts, as
+ * many as the bank listed before them. Comparing them with the workbook's rows
+ * in the same positions instead would compare a different part of the day
+ * whenever the order differs, which refused a correct paste and could leave a
+ * false reading the only one (gate 1, F1 and F2).
+ *
+ * **The workbook import cuts a day where its own listing puts the edge**
+ * (`alignDays`). Where the pastes start partway through a day, the workbook's
+ * rows after the edge must hold the pasted rows' amounts and end on their
+ * balance, as a whole day would. It adds the workbook's rows before the edge, so
+ * those must be the rest of the day, which only the workbook's own listing can
+ * say; admitting a part as a paste does would let it add the wrong ones.
  *
  * A run of one row is lg-7's own comparison: amount and balance, one for one.
  * A day the workbook spread over two dates is two runs, so a day it both
@@ -39,6 +60,13 @@ export interface DayEntry {
 
 /** How far apart the two sides may date a row. */
 export type DateWindow = "a day either side" | "any";
+
+/**
+ * The most rows of one day a paste starting and ending inside it is weighed
+ * against: past this, which of the day's rows came first is not searched, and the
+ * reading is not admitted. A bank day this long has not been seen.
+ */
+export const LONGEST_SEARCHED_DAY = 20;
 
 /** The calendar day before a `yyyy-mm-dd` date. */
 export function dayBefore(date: string): string {
@@ -81,6 +109,64 @@ export function matchDay(
   return pairing;
 }
 
+/** Whether `count` of `amounts` add up to `sum`. */
+function someAddUpTo(amounts: readonly number[], count: number, sum: number): boolean {
+  if (amounts.length > LONGEST_SEARCHED_DAY) return false;
+  // The sums reachable with each number of the amounts taken.
+  let reachable: Set<number>[] = [new Set([0])];
+  for (const amount of amounts) {
+    const next = reachable.map((sums) => new Set(sums));
+    for (const [taken, sums] of reachable.entries()) {
+      if (taken >= count) continue;
+      const into = next[taken + 1] ?? new Set<number>();
+      for (const total of sums) into.add(total + amount);
+      next[taken + 1] = into;
+    }
+    reachable = next;
+  }
+  return reachable[count]?.has(sum) ?? false;
+}
+
+/**
+ * Some of the bank's rows of one of the workbook's days, `part`, in the bank's
+ * order, as the bank's rows `before` to `before + part.length` of that day.
+ * `run` is the whole day as the workbook holds it.
+ *
+ * The part's amounts must be among the day's, every one of its rows dated within
+ * the window, and the balance it opens from one the bank's day reaches after
+ * `before` of the day's other amounts: the day's opening when `before` is 0, and
+ * when the part runs to the day's end, simply the day's closing balance after its
+ * last row. A part that is the whole day is `matchDay`'s comparison.
+ */
+export function matchPart(
+  run: readonly DayEntry[],
+  before: number,
+  part: readonly DayEntry[],
+  window: DateWindow,
+): boolean {
+  const first = run[0];
+  const last = run.at(-1);
+  const opens = part[0];
+  const ends = part.at(-1);
+  if (first === undefined || last === undefined || opens === undefined || ends === undefined) {
+    return false;
+  }
+  const after = run.length - before - part.length;
+  if (before < 0 || after < 0) return false;
+  if (!part.every((row) => withinWindow(last.date, row.date, window))) return false;
+  const rest = run.map((row) => row.amountCents);
+  for (const row of part) {
+    const at = rest.indexOf(row.amountCents);
+    if (at === -1) return false;
+    rest.splice(at, 1);
+  }
+  const dayOpening = first.balanceCents - first.amountCents;
+  const partOpening = opens.balanceCents - opens.amountCents;
+  if (before === 0) return partOpening === dayOpening;
+  if (after === 0) return ends.balanceCents === last.balanceCents;
+  return someAddUpTo(rest, before, partOpening - dayOpening);
+}
+
 /** The workbook's rows cut into runs of one date, as `[start, end)` positions. */
 export function dayRuns(rows: readonly { readonly date: string }[]): [number, number][] {
   const runs: [number, number][] = [];
@@ -96,8 +182,9 @@ export function dayRuns(rows: readonly { readonly date: string }[]): [number, nu
 
 /**
  * A stretch of the workbook's rows against the bank's in their place, day by
- * day: for each workbook row, the position of its bank row, or `null` when the
- * two stretches are not the same movements.
+ * day, a day at either end cut where the stretch is (`matchDay`): for each
+ * workbook row, the position of its bank row, or `null` when the two stretches
+ * are not the same movements.
  */
 export function alignDays(
   workbook: readonly DayEntry[],
