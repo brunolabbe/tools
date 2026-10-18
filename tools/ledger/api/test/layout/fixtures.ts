@@ -869,6 +869,16 @@ async function lg7(): Promise<LayoutFixture> {
   };
 }
 
+/** Every fixture's name, in the order the measurement runs them. */
+export const LAYOUT_FIXTURE_NAMES: readonly string[] = [
+  "lg7",
+  "lg37",
+  "moved",
+  "english",
+  "csv-balance",
+  "csv-no-balance",
+];
+
 /** Every fixture, in the order the measurement runs them. */
 export async function layoutFixtures(): Promise<LayoutFixture[]> {
   return [await lg7(), lg37(), moved(), english(), csvBalance(), csvNoBalance()];

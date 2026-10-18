@@ -159,3 +159,44 @@ describe("the layout measurement's harness", () => {
     expect(asked).toEqual(["lg7"]);
   });
 });
+
+// lg-38 gate 1: the custom-headers refusal and the CLI's three guards.
+describe("the layout measurement's harness, round 1", () => {
+  /** The repository this test is in: `test` → `api` → `ledger` → `tools` → the root. */
+  const repository = path.resolve(import.meta.dirname, "../../../..");
+  const need = ["--model", "m", "--price-in", "1", "--price-out", "5"];
+
+  test("refuses ANTHROPIC_CUSTOM_HEADERS beside the key, and never repeats its value", () => {
+    const env = {
+      LEDGER_LIVE_RUN: "1",
+      ANTHROPIC_API_KEY: "k",
+      ANTHROPIC_CUSTOM_HEADERS: "x-demo-header: from-the-shell",
+    };
+    expect(() => assertLiveRunConsent(env)).toThrow("ANTHROPIC_CUSTOM_HEADERS is set");
+    expect(() => assertLiveRunConsent(env)).not.toThrow("from-the-shell");
+    // Blank is unset, as the SDK reads it.
+    expect(assertLiveRunConsent({ ...env, ANTHROPIC_CUSTOM_HEADERS: "  " })).toBe("k");
+  });
+
+  test("refuses an --out inside the repository, however it is spelled", () => {
+    for (const out of [
+      repository,
+      path.join(repository, "tools", "ledger", "docs", "x"),
+      path.join(repository, "results", "..", "results"),
+    ]) {
+      expect(() => parseCli([...need, "--out", out]), out).toThrow("is inside the repository");
+    }
+    expect(parseCli([...need, "--out", dir]).out).toBe(path.resolve(dir));
+  });
+
+  test("keeps everything after the first = as the value", () => {
+    const out = path.join(dir, "a=b");
+    expect(parseCli([...need, `--out=${out}`]).out).toBe(out);
+  });
+
+  test("refuses a --fixtures name that is no fixture, naming it", () => {
+    expect(() => parseCli([...need, "--out", dir, "--fixtures", "lg7,lg-37"])).toThrow(
+      "--fixtures names lg-37, which is no fixture",
+    );
+  });
+});

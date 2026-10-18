@@ -10,7 +10,11 @@
  * - It is not named `*.test.ts`, so the ledger's vitest project never collects it.
  * - `assertLiveRunConsent` refuses before anything else runs unless
  *   `LEDGER_LIVE_RUN=1` is set and `ANTHROPIC_API_KEY` holds a key. A key in a
- *   shell is not consent to spend it.
+ *   shell is not consent to spend it. It refuses `ANTHROPIC_CUSTOM_HEADERS`
+ *   too, as the ledger's own receipt reader does (pl-39): the SDK applies it
+ *   to every request whatever the client is given.
+ * - `--out` may not be inside the repository: the records are synthetic, but a
+ *   run's output is never something to commit by accident.
  *
  * One model per invocation:
  *
@@ -40,7 +44,7 @@ import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { workbookLayoutSchema } from "@ledger/contract";
-import { layoutFixtures } from "../layout/fixtures.ts";
+import { LAYOUT_FIXTURE_NAMES, layoutFixtures } from "../layout/fixtures.ts";
 import type { LayoutFixture } from "../layout/fixtures.ts";
 import { scoreLayout } from "../layout/score.ts";
 import type { Outcome, Score } from "../layout/score.ts";
@@ -58,6 +62,14 @@ export function assertLiveRunConsent(env: NodeJS.ProcessEnv): string {
   }
   const key = env["ANTHROPIC_API_KEY"]?.trim() ?? "";
   if (key === "") throw new Error("Refusing: ANTHROPIC_API_KEY is not set.");
+  // The SDK reads this variable whatever the client is given, and a header in
+  // it can replace the key or change what a request bills (pl-39). Blank is
+  // unset, as the SDK reads it. The value is never repeated: it may carry a key.
+  if ((env["ANTHROPIC_CUSTOM_HEADERS"]?.trim() ?? "") !== "") {
+    throw new Error(
+      "Refusing: ANTHROPIC_CUSTOM_HEADERS is set. The Anthropic SDK applies it to every request and it can replace the key. Unset it.",
+    );
+  }
   return key;
 }
 
@@ -228,6 +240,9 @@ export function summary(records: readonly RunRecord[]): string {
 
 // --- The command ---
 
+/** The repository this file is in: `--out` must be outside it. */
+const REPOSITORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
+
 const USAGE =
   "Usage: LEDGER_LIVE_RUN=1 ANTHROPIC_API_KEY=… node --import tsx tools/ledger/api/test/live/layout-run.ts --model <id> --price-in <usd/Mtok> --price-out <usd/Mtok> --out <dir> [--runs 3] [--max-usd 5] [--effort low|medium|high] [--figures shown|masked] [--fixtures a,b]";
 
@@ -235,9 +250,11 @@ export function parseCli(argv: readonly string[]): MeasureOptions {
   const values = new Map<string, string>();
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index] ?? "";
-    const [name, inline] = flag.split("=", 2);
-    if (name === undefined || !name.startsWith("--"))
-      throw new Error(`${USAGE}\nUnexpected ${flag}`);
+    // Everything after the first `=` is the value: a path may hold one.
+    const equals = flag.indexOf("=");
+    const name = equals === -1 ? flag : flag.slice(0, equals);
+    const inline = equals === -1 ? undefined : flag.slice(equals + 1);
+    if (!name.startsWith("--")) throw new Error(`${USAGE}\nUnexpected ${flag}`);
     const value = inline ?? argv[++index];
     if (value === undefined) throw new Error(`${USAGE}\n${name} needs a value`);
     values.set(name, value);
@@ -277,21 +294,40 @@ export function parseCli(argv: readonly string[]): MeasureOptions {
   if (figures !== "shown" && figures !== "masked") throw new Error("--figures is shown or masked");
   const runs = positive("--runs", 3);
   if (!Number.isInteger(runs)) throw new Error("--runs is a whole number");
-  const fixtures = values.get("--fixtures");
+  const fixtures = values
+    .get("--fixtures")
+    ?.split(",")
+    .map((name) => name.trim());
+  const unknown = fixtures?.filter((name) => !LAYOUT_FIXTURE_NAMES.includes(name)) ?? [];
+  if (unknown.length > 0) {
+    throw new Error(
+      `--fixtures names ${unknown.join(", ")}, which is no fixture (${LAYOUT_FIXTURE_NAMES.join(", ")}).`,
+    );
+  }
+  const out = path.resolve(required("--out"));
+  const inside = path.relative(REPOSITORY, out);
+  if (inside === "" || (!inside.startsWith("..") && !path.isAbsolute(inside))) {
+    throw new Error(`--out ${out} is inside the repository; give a directory outside it.`);
+  }
   return {
     model: required("--model"),
     priceIn: positive("--price-in"),
     priceOut: positive("--price-out"),
-    out: required("--out"),
+    out,
     runs,
     maxUsd: positive("--max-usd", 5),
     effort,
     figures,
-    ...(fixtures === undefined ? {} : { fixtures: fixtures.split(",").map((name) => name.trim()) }),
+    ...(fixtures === undefined ? {} : { fixtures }),
   };
 }
 
-/** The real model, built only after consent. Every option the SDK would read from the environment is given. */
+/**
+ * The real model, built only after consent. Every option the SDK reads from
+ * the environment when it is not given one is given here; the one it reads
+ * whatever it is given, `ANTHROPIC_CUSTOM_HEADERS`, `assertLiveRunConsent`
+ * has already refused.
+ */
 function anthropicAsk(apiKey: string, options: MeasureOptions): Ask {
   const client = new Anthropic({
     apiKey,
