@@ -170,32 +170,41 @@ export class Directory {
    * other household's record is ever read for it.
    */
   history(household: string): (MembershipChange | PersonRename)[] {
-    // Each table in its own id order, and the two merged by time; a membership
-    // and a rename at the same instant read membership first, since a person is
-    // only renamed once a membership has named them (lg-33).
-    const rows = this.#db
+    // Each table read in its own id order, as migration 1 orders memberships
+    // rather than by a timestamp two writers could tie, and the two merged by
+    // time without re-sorting either among itself: a clock that stepped back
+    // between two memberships leaves them in the order they were written
+    // (lg-33's gate 1, F2). At the same instant a membership reads first,
+    // since a person is only renamed once a membership has named them.
+    const memberships = this.#db
       .prepare(
-        `SELECT 0 AS kind, id, address, person, action, NULL AS name,
-                changed_at AS at, changed_by AS by
-         FROM memberships WHERE household_id = ?
-         UNION ALL
-         SELECT 1 AS kind, id, NULL, person, 'rename', name, named_at, named_by
-         FROM person_names WHERE household_id = ?
-         ORDER BY at, kind, id`,
+        `SELECT address, person, action, changed_at AS at, changed_by AS by
+         FROM memberships WHERE household_id = ? ORDER BY id`,
       )
-      .all(household, household) as {
-      address: string | null;
-      person: string;
-      action: "add" | "remove" | "rename";
-      name: string | null;
-      at: string;
-      by: string;
-    }[];
-    return rows.map(({ address, person, action, name, at, by }) =>
-      action === "rename"
-        ? { action, person, name: name ?? person, at, by }
-        : { address: address ?? "", person, action, at, by },
-    );
+      .all(household) as MembershipChange[];
+    const renames = (
+      this.#db
+        .prepare(
+          `SELECT person, name, named_at AS at, named_by AS by
+           FROM person_names WHERE household_id = ? ORDER BY id`,
+        )
+        .all(household) as Omit<PersonRename, "action">[]
+    ).map((rename): PersonRename => ({ action: "rename", ...rename }));
+    const merged: (MembershipChange | PersonRename)[] = [];
+    let m = 0;
+    let r = 0;
+    while (m < memberships.length || r < renames.length) {
+      const membership = memberships[m];
+      const rename = renames[r];
+      if (membership !== undefined && (rename === undefined || membership.at <= rename.at)) {
+        merged.push(membership);
+        m++;
+      } else if (rename !== undefined) {
+        merged.push(rename);
+        r++;
+      }
+    }
+    return merged;
   }
 
   households(): Household[] {

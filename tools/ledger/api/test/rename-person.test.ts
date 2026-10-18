@@ -193,3 +193,30 @@ describe("a rename is refused", () => {
     expect(directorySnapshot(directory)).toBe(before);
   });
 });
+
+// lg-33's gate 1, F3, option 2 by the owner (2026-10-18): the directory cannot
+// see an id the books hold only from an old rule, so a rename can take it; the
+// people answer, which has the books, shows each of two such people under their id.
+describe("the people answer never shows two people alike", () => {
+  test("a shown name that is a books-only id falls back to the id, for both", async () => {
+    const { app } = await start();
+    homeBooks(app).prepare("INSERT INTO people (id, added_at) VALUES ('casey', 'x')").run();
+
+    const renamed = await send(app, ADMIN, "POST", RENAME, { person: "bruno", name: "casey" });
+
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    const answer = (await send(app, SAM, "GET", ROUTES.people)).json<PeopleResponse>();
+    expect(answer).toEqual({
+      people: ["bruno", "casey", "sam"],
+      names: { bruno: "bruno", casey: "casey", sam: "sam" },
+    });
+    expect(new Set(Object.values(answer.names)).size).toBe(answer.people.length);
+    // A name nobody else is shown as still shows.
+    await send(app, ADMIN, "POST", RENAME, { person: "sam", name: "Samantha" });
+    expect((await send(app, SAM, "GET", ROUTES.people)).json<PeopleResponse>().names).toEqual({
+      bruno: "bruno",
+      casey: "casey",
+      sam: "Samantha",
+    });
+  });
+});

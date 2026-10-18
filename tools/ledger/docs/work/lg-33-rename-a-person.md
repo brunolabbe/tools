@@ -125,10 +125,11 @@ store is rewritten.
     line in `Directory.history`, so `HouseholdResponse.history` and the member's
     household screen show it ("alex renamed Alex, by …"); the admin screen does
     not. Showing it there needs `history` on `AdminHousehold`, left to the
-    owner. The contract moved by three types more than Build 4 names, each
-    forced: `PersonNameRecord` in `HouseholdResponse.history` (the rename line),
-    `RenamePersonRequest` (the schema's type) and `PersonName` (the route's
-    answer).
+    owner. The contract moved by three types more than Build 4 names: one
+    forced, `PersonNameRecord` in `HouseholdResponse.history` (the rename line),
+    and two by the contract's convention rather than the compiler,
+    `RenamePersonRequest` (the schema's type, as every request schema has one)
+    and `PersonName` (the route's answer, as every route's body is typed).
   - **Folded in.** The reverse of Build 2's rule: a new person id equal to a
     name another person is shown under is refused, by `addMember`
     (`PERSON_NAME_TAKEN`) and by a trigger in migration 5, since adding
@@ -138,9 +139,57 @@ store is rewritten.
     directory codes, stale since lg-23 dropped `HOUSEHOLD_FULL`; it says four.
   - **Changed beside it.** lg-30's API test "GET /api/people still answers the
     one key, people" now expects `people` and `names` and is renamed for it;
-    four other suites' exact `{ people }` expectations became `toMatchObject`.
+    three other suites' exact `{ people }` expectations (`books`,
+    `directory-identity`, `rules`) became `toMatchObject`.
   - **Not covered.** Uniqueness is exact text, as person ids are (`bruno` and
     `Bruno` were already two ids). An id the books hold only from migration 3
     is not in the directory, so a shown name is not checked against it: the
-    admin route reads no books. `household:ledger list` still prints ids, which
+    admin route reads no books. (Round 1, F3: `GET /api/people` now shows both
+    such people under their ids.) `household:ledger list` still prints ids, which
     is what its `member` command takes.
+- 2026-10-18 — Round 1, on gate 1's findings at `029641b4..a151ea9a`
+  (CONCERNS, nothing high). Each fix's test failed at a151ea9a and passes
+  after it.
+  - **F1, fixed.** The period line form confirmed a charge with the id
+    (`Charged to alex.`). It now prints the shown name. `web/test/periods.test.tsx`
+    › "a charge to a renamed person is confirmed under their shown name, and
+    sends the id (lg-33)": 1 failed of 17 before ("Unable to find … Charged to
+    Alex."), 17 of 17 after.
+  - **F2, fixed.** `Directory.history` sorted the union by `at`, so a clock that
+    stepped back reordered two memberships (`remove@11:59, add@12:00`). Each
+    table is now read in its own id order and the two lists are merged by time
+    without re-sorting either. `api/test/person-names.test.ts` › "the history
+    with renames in it › keeps each table's records in the order they were
+    written, a clock that stepped back included": before, it received
+    `remove@11:59, add@12:00, …`; after, it passes. The gate's
+    `history-order.mts` on this tree now prints `add@12:00 , remove@11:59`.
+  - **F3, fixed by the owner's choice.** A rename could take an id the books
+    hold only from migration 3, and `GET /api/people` answered
+    `{bruno: casey, casey: casey}`. The question: two people can still be shown
+    alike through a books-only id; what should be done? Options: (1) accept and
+    write it down; (2) `GET /api/people`, which has the books, falls back to
+    the id for any name two of its `people` would share, with no contract
+    change; (3) let the rename route read the books. **The owner chose 2** on
+    2026-10-18. The gate recommended 2 if any real household holds a
+    books-only id, and 1 otherwise. `distinctNames` in `api/src/routes/rules.ts`
+    does it. `api/test/rename-person.test.ts` › "the people answer never shows
+    two people alike › a shown name that is a books-only id falls back to the
+    id, for both": before, it received `bruno: "casey"`; after, it passes. The
+    directory's own listings (admin, household) still show bruno as `casey`,
+    since no books-only person is listed there.
+  - **F4, owner's answer, no code.** The question: should the rename line also
+    show on the admin screen? Options: (a) keep it on the household screen only,
+    with nothing added to `AdminHousehold`; (b) add `history` to
+    `AdminHousehold` and render it on the admin card. **The owner chose (a)**
+    on 2026-10-18, as the builder and the gate both recommended.
+  - **F5, owner's answer, no code.** The question: Build 3 points at
+    `Directory.people`, who stands now; should renaming be limited to that?
+    Options: keep `heldPeople` (ever-named), or limit renames to current
+    members. **The owner chose to keep `heldPeople`** on 2026-10-18, as the
+    builder and the gate both recommended.
+  - **F6, recorded, not fixed.** `addMember`'s `PERSON_NAME_TAKEN` branch has
+    no HTTP-level test, and its "Pick them from the list" reads oddly where the
+    admin's datalist holds current members only.
+  - **F7, fixed in place.** Two statements in the entry above were corrected
+    where they stand: three suites, not four; and of the three extra contract
+    types, one is forced and two follow the contract's convention.

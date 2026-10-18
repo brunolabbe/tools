@@ -86,7 +86,9 @@ export function LineForm({
       setSpendingCategoryId(null);
       setNote("");
       setTheirs(false);
-      return theirs ? `Charged to ${other ?? ""}.` : "Line added.";
+      return theirs
+        ? `Charged to ${other === null ? "" : shownName(names, other)}.`
+        : "Line added.";
     });
   };
 

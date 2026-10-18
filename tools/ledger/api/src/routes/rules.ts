@@ -39,6 +39,32 @@ function ruleId(request: FastifyRequest): number {
   return id;
 }
 
+/**
+ * How each of `people` is shown, with no two alike (lg-33's gate 1, F3; option
+ * 2, chosen by the owner on 2026-10-18). The directory refuses a shown name
+ * another person holds or has as an id, but it cannot see an id the books hold
+ * only from an old rule, so a rename can take one. Here, with the books, every
+ * person whose shown name another shares is shown under their id instead: ids
+ * are unique, so the loop ends, and it runs again in case a fallback meets a
+ * name still standing.
+ */
+function distinctNames(
+  people: readonly string[],
+  names: ReadonlyMap<string, string>,
+): Record<string, string> {
+  const shown = new Map(people.map((person) => [person, shownName(names, person)]));
+  for (;;) {
+    const count = new Map<string, number>();
+    for (const name of shown.values()) count.set(name, (count.get(name) ?? 0) + 1);
+    const alike = [...shown].filter(
+      ([person, name]) => name !== person && (count.get(name) ?? 0) > 1,
+    );
+    if (alike.length === 0) break;
+    for (const [person] of alike) shown.set(person, person);
+  }
+  return Object.fromEntries(shown);
+}
+
 function draft(request: FastifyRequest): RuleDraft {
   const body = ruleDraftSchema.safeParse(request.body);
   if (!body.success) {
@@ -73,7 +99,7 @@ export function registerRuleRoutes(app: FastifyInstance, context: AppContext): v
     const names = context.directory.names(personOf(request).household);
     const body: PeopleResponse = {
       people,
-      names: Object.fromEntries(people.map((person) => [person, shownName(names, person)])),
+      names: distinctNames(people, names),
     };
     return body;
   });

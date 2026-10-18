@@ -319,3 +319,45 @@ describe("migration 5", () => {
     directory.close();
   });
 });
+
+/** An instant on 2026-10-17, as hh:mm. */
+function atTime(time: string): Date {
+  return new Date(`2026-10-17T${time}:00Z`);
+}
+
+// lg-33's gate 1, F2: merging renames into the history must not re-sort a
+// table's own records, which migration 1 orders by id, never by a timestamp.
+describe("the history with renames in it", () => {
+  test("keeps each table's records in the order they were written, a clock that stepped back included", () => {
+    const directory = Directory.open(":memory:");
+    directory.addHousehold({ id: "home", name: "Home", ...CHANGE });
+    directory.addMember({
+      household: "home",
+      address: ALEX,
+      person: "bruno",
+      by: "operator",
+      at: atTime("12:00"),
+    });
+    // Written second, stamped a minute earlier: the clock stepped back.
+    directory.removeMember({ address: ALEX, by: ADMIN, at: atTime("11:59") });
+    directory.renamePerson({
+      household: "home",
+      person: "bruno",
+      name: "Bruno",
+      by: ADMIN,
+      at: atTime("12:30"),
+    });
+    directory.addMember({
+      household: "home",
+      address: SAM,
+      person: "sam",
+      by: "operator",
+      at: atTime("13:00"),
+    });
+
+    expect(
+      directory.history("home").map((record) => `${record.action}@${record.at.slice(11, 16)}`),
+    ).toEqual(["add@12:00", "remove@11:59", "rename@12:30", "add@13:00"]);
+    directory.close();
+  });
+});
