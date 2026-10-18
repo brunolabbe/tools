@@ -100,3 +100,31 @@ is used by more than one ticket`, exit 1).
     helper with this shape would have to typecheck from outside the repo root;
     that is a decision about where such a check runs, not a small piece, and it
     was not measured here.
+- 2026-10-18 — Done when 3 ("the report names the skill sentences that become
+  droppable") met by the orchestrator's comparison, under gate 1's own condition
+  and its F1 remedy (2). The orchestrator compared the builder's report with
+  gate 1's F1 (a) and (b) on 2026-10-18; the report names both:
+  - (a) `roles/reviewer.md`, "What makes a gate worth its cost", the "Reproduce,
+    do not assess" bullet: the paragraph beginning "Not under your scratch
+    directory, nor anywhere outside `/workspaces/tools`: the farm's links
+    resolve to the shared `node_modules` …" through "… where the same sha
+    beside the agent worktrees passes."
+  - (b) `roles/common.md`, "Your worktree", the "If the auto-mode classifier
+    denies a temporary source mutation" bullet: the first clause of its
+    parenthesis, "(a tree outside `/workspaces/tools` fails `npm run check`; a
+    `cd` in a separate call farms the wrong tree)", with the `cd` clause kept.
+
+  Both exist on `origin/main`:
+  `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n "Not under your scratch directory, nor anywhere outside"`
+  → `59:`;
+  `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -n -A1 "a tree outside"`
+  → `54:` and `55:`, with the `cd` clause on the second line.
+
+- 2026-10-18 — Owner's answers, 2026-10-18, to gate 1's F2 and to the builder's
+  open decision. F2 (title): retitle to `test(ledger): …`, the gate's
+  recommendation, over keeping `fix(ledger)`;
+  `node scripts/commit-message.mjs --text "test(ledger): annotate the test helper send's return type (lg-36)"`
+  → exit 0. The builder's open decision (no guard for the next helper of this
+  shape): "accept the gap, rely on review", the builder's recommendation, over
+  filing `isolatedDeclarations` or an out-of-root CI job. Nothing is filed for
+  either.
