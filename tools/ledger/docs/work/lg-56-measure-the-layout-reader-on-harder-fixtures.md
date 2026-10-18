@@ -483,8 +483,8 @@ that replaces "read such a run by its `differences`", for steps 3 and 4:
   and class it by comparing with the correct columns: `bank-two-dates` is
   `date:A detail:D amount:E balance:F`, `bank-wide` is
   `date:A detail:E amount:H balance:I`.
-  - **note-only**: the same four columns and an added `note` on any other
-    column. Harmless; the books keep one more text field.
+  - **note-only**: differs from the correct columns only in the `note` role,
+    whether added, moved or dropped. Harmless; the note is a free-text field.
   - **date-column**: `date` on another column. A different import, and the
     kind that matters for `bank-two-dates`.
   - **movement-changing**: anything else (amount, balance or detail on another
@@ -519,3 +519,5 @@ currency col…': 'let-through'`. **lg-38's own `MISTAKES` table has the same
 **Checks.** `npx vitest run api/test/layout.test.ts
 api/test/layout-live-gate.test.ts`: `73 passed (73)`. Preflight and the new
 head are in the pull request's thread.
+
+- 2026-10-18 — Fixed at landing by owner choice: gate 2, the new low — "'note-only' is defined only as an added `note` beside `bank-two-dates`' and `bank-wide`'s four columns; everything else is 'movement-changing'. On the workbook fixtures, a run that drops or moves the note column also scores `let-through`." The round-1 entry's note-only bullet now defines it as differing from the correct columns only in the `note` role, whether added, moved or dropped (Log wording only; no fixture or scorer changed). `grep -c "the same four columns and an added" tools/ledger/docs/work/lg-56-measure-the-layout-reader-on-harder-fixtures.md` → `0` (it was `1`).
