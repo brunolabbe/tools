@@ -1123,13 +1123,17 @@ test("land() splices two gates, sets status, pushes and verifies — one call, a
       ].join("\n"),
     );
 
+    // Absorbs "land() passes --title through to runPreflight (F2/M5)" (repo-100).
+    const title = "docs(repo): land the fixture ticket (zz-1)";
+    const runPreflight = vi.fn(() => ({ ok: true, output: "preflight passed (exit 0)" }));
+
     const result = land({
       ticket: ticketAbs,
       sections: [gate1, gate2],
       base,
       status: "done",
-      title: "docs(repo): land the fixture ticket (zz-1)",
-      runPreflight: okPreflight,
+      title,
+      runPreflight,
     });
 
     expect(result.steps.map((s) => `${s.name}:${s.ok}`)).toEqual([
@@ -1141,6 +1145,8 @@ test("land() splices two gates, sets status, pushes and verifies — one call, a
       "preflight:true",
     ]);
     expect(result.ok).toBe(true);
+    expect(runPreflight).toHaveBeenCalledTimes(1);
+    expect(runPreflight.mock.calls[0]?.slice(1)).toEqual([base, title]);
 
     // Two commits, one per gate.
     const subjects = gitIn(dir, "log", "--format=%s", `${base}..HEAD`)
@@ -1156,55 +1162,25 @@ test("land() splices two gates, sets status, pushes and verifies — one call, a
     // Status set in the ticket at HEAD.
     expect(gitIn(dir, "show", `HEAD:${TICKET_PATH}`)).toMatch(/^status: done$/m);
 
+    // Absorbs "land() sets status in the FIRST commit, not only at HEAD (F2/M2)"
+    // (repo-100). `subjects` above lists the "new thing" commit first, so the
+    // first commit `land()` made is the next one. The commit BEFORE landing
+    // still has the old status, and that first commit already has the new one
+    // — a mutation writing status only in the last commit leaves it "ready".
+    const shas = gitIn(dir, "log", "--format=%H", `${base}..HEAD`)
+      .split("\n")
+      .filter(Boolean)
+      .toReversed();
+    expect(shas).toHaveLength(3);
+    expect(gitIn(dir, "show", `${base}:${TICKET_PATH}`)).toMatch(/^status: ready$/m);
+    expect(gitIn(dir, "show", `${shas[1]}:${TICKET_PATH}`)).toMatch(/^status: done$/m);
+
     // Pushed: the bare remote's own `feature` ref is this branch's HEAD.
     expect(gitIn(bareDir, "rev-parse", "feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
 
     // Both gates verify independently against what actually landed.
     expect(runCli(dir, ["--verify", ticketAbs, gate1]).status).toBe(0);
     expect(runCli(dir, ["--verify", ticketAbs, gate2, "--gate", "2"]).status).toBe(0);
-  } finally {
-    cleanup();
-  }
-});
-
-test('land() lands every commit and the push, then names "preflight" when it fails, without rolling anything back', () => {
-  const { dir, ticketAbs, base, cleanup } = withLandRepo();
-  try {
-    const gate1 = writeSectionFile(
-      dir,
-      "gate1.md",
-      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
-    );
-
-    const result = land({
-      ticket: ticketAbs,
-      sections: [gate1],
-      base,
-      status: "in-flight",
-      title: "docs(repo): land the fixture ticket (zz-1)",
-      runPreflight: () => ({ ok: false, output: "FAIL check: no package.json in the fixture" }),
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.steps.map((s) => s.name)).toEqual([
-      "setup",
-      "sections",
-      "splice",
-      "push",
-      "verify",
-      "preflight",
-    ]);
-    const failed = result.steps.at(-1);
-    expect(failed?.name).toBe("preflight");
-    expect(failed?.ok).toBe(false);
-    expect(failed?.detail).toContain("FAIL check: no package.json in the fixture");
-    // Gate 1, F3: a post-splice failure does not run a reset — the commit
-    // stays, on purpose. Since repo-94 a failure after the push does not
-    // print one either: the landing is on origin and only preflight is open.
-    expect(failed?.detail).not.toContain("git reset --hard");
-
-    // The commit and the push already happened — a report, not a reversal.
-    expect(gitIn(dir, "log", "-1", "--format=%s")).toMatch(/record gate 1/);
   } finally {
     cleanup();
   }
@@ -1467,112 +1443,13 @@ test('the --land CLI lands the commit and the push for real, then fails naming "
 
 // ---------------------------------------------------------------------------
 // repo-80 gate 1, F2: four links of the landing chain had no test — a
-// mutation at any of these four passed 52 of 52 before this round. Each test
-// below is red on exactly the mutation the gate named, run alone.
+// mutation at any of these four passed 52 of 52 before this round. Each had a
+// test red on exactly the mutation the gate named, run alone. Since repo-100
+// the F2/M2 (status in the first commit), F2/M4 (verify called once per
+// section) and F2/M5 (--title reaches runPreflight) assertions live inside the
+// land() tests above and below that already ran the same scenario; each says
+// which it absorbed.
 // ---------------------------------------------------------------------------
-
-test("land() sets status in the FIRST commit, not only at HEAD (F2/M2)", () => {
-  const { dir, ticketAbs, base, cleanup } = withLandRepo();
-  try {
-    const gate1 = writeSectionFile(
-      dir,
-      "gate1.md",
-      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
-    );
-    const gate2 = writeSectionFile(dir, "gate2.md", "### Gate 2 — 2026-09-29\n\nNothing cited.\n");
-
-    const result = land({
-      ticket: ticketAbs,
-      sections: [gate1, gate2],
-      base,
-      status: "done",
-      title: "docs(repo): land the fixture ticket (zz-1)",
-      runPreflight: okPreflight,
-    });
-
-    expect(result.ok).toBe(true);
-    const shas = gitIn(dir, "log", "--format=%H", `${base}..HEAD`)
-      .split("\n")
-      .filter(Boolean)
-      .toReversed();
-    expect(shas).toHaveLength(2);
-    // The commit BEFORE landing still has the old status …
-    expect(gitIn(dir, "show", `${base}:${TICKET_PATH}`)).toMatch(/^status: ready$/m);
-    // … and the FIRST commit `land()` makes already has the new one — a
-    // mutation writing status only in the last commit leaves this one still
-    // "ready".
-    expect(gitIn(dir, "show", `${shas[0]}:${TICKET_PATH}`)).toMatch(/^status: done$/m);
-  } finally {
-    cleanup();
-  }
-});
-
-test("land() actually calls its verify step once per section, and stops on its failure (F2/M4)", () => {
-  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
-  try {
-    const gate1 = writeSectionFile(
-      dir,
-      "gate1.md",
-      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
-    );
-
-    let calls = 0;
-    const result = land({
-      ticket: ticketAbs,
-      sections: [gate1],
-      base,
-      status: "done",
-      title: "docs(repo): land the fixture ticket (zz-1)",
-      verify: () => {
-        calls += 1;
-        throw Object.assign(new Error("boom"), {
-          stderr: "the committed record does not match the section file, on purpose",
-        });
-      },
-      runPreflight: okPreflight,
-    });
-
-    // A deleted verify loop never calls this at all, and `result.ok` stays
-    // `true` — both assertions are red on that mutation, run alone.
-    expect(calls).toBe(1);
-    expect(result.ok).toBe(false);
-    expect(result.steps.at(-1)?.name).toBe("verify");
-    expect(result.steps.at(-1)?.detail).toContain("does not match the section file, on purpose");
-
-    // The commit and the push already happened — verify runs after both.
-    expect(gitIn(bareDir, "rev-parse", "feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
-  } finally {
-    cleanup();
-  }
-});
-
-test("land() passes --title through to runPreflight (F2/M5)", () => {
-  const { dir, ticketAbs, base, cleanup } = withLandRepo();
-  try {
-    const gate1 = writeSectionFile(
-      dir,
-      "gate1.md",
-      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
-    );
-    const title = "docs(repo): land the fixture ticket (zz-1)";
-    const runPreflight = vi.fn(() => ({ ok: true, output: "" }));
-
-    const result = land({
-      ticket: ticketAbs,
-      sections: [gate1],
-      base,
-      status: "done",
-      title,
-      runPreflight,
-    });
-
-    expect(result.ok).toBe(true);
-    expect(runPreflight).toHaveBeenCalledTimes(1);
-    expect(runPreflight.mock.calls[0]?.slice(1)).toEqual([base, title]);
-  } finally {
-    cleanup();
-  }
-});
 
 // ---------------------------------------------------------------------------
 // repo-80 gate 1 — a trailing low: setStatus on a CRLF frontmatter.
@@ -2047,12 +1924,24 @@ test("land() reports a scratch-clone cleanup failure as a warning naming the lef
 });
 
 test("land() after a successful push says the landing is pushed and prints no reset command on a preflight failure (repo-94)", () => {
-  for (const preflight of [
-    () => ({ ok: false, output: "FAIL merge-tree: conflicts with PR #371" }),
-    () => {
-      throw new Error("preflight could not start");
+  // The first case also absorbs 'land() lands every commit and the push, then
+  // names "preflight" when it fails, without rolling anything back' (repo-100):
+  // it ran the same scenario with status "in-flight", so the first case does
+  // too, and its preflight output is the one that test asserted the detail
+  // carries.
+  const cases = [
+    {
+      status: "in-flight" as const,
+      preflight: () => ({ ok: false, output: "FAIL check: no package.json in the fixture" }),
     },
-  ]) {
+    {
+      status: "done" as const,
+      preflight: () => {
+        throw new Error("preflight could not start");
+      },
+    },
+  ];
+  for (const [index, { status, preflight }] of cases.entries()) {
     const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
     try {
       const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
@@ -2060,7 +1949,7 @@ test("land() after a successful push says the landing is pushed and prints no re
         ticket: ticketAbs,
         sections: [gate1],
         base,
-        status: "done",
+        status,
         title: "x",
         runPreflight: preflight,
       });
@@ -2074,6 +1963,25 @@ test("land() after a successful push says the landing is pushed and prints no re
       );
       expect(failed?.detail).not.toMatch(/git reset --hard/);
       expect(failed?.detail).toMatch(/landed and pushed to origin\/feature/);
+
+      if (index === 0) {
+        expect(result.ok).toBe(false);
+        expect(result.steps.map((s) => s.name)).toEqual([
+          "setup",
+          "sections",
+          "splice",
+          "push",
+          "verify",
+          "preflight",
+        ]);
+        expect(failed?.detail).toContain("FAIL check: no package.json in the fixture");
+        // Gate 1, F3: a post-splice failure does not run a reset — the commit
+        // stays, on purpose. Since repo-94 a failure after the push does not
+        // print one either: the landing is on origin and only preflight is open.
+        expect(failed?.detail).not.toContain("git reset --hard");
+        // The commit and the push already happened — a report, not a reversal.
+        expect(gitIn(dir, "log", "-1", "--format=%s")).toMatch(/record gate 1/);
+      }
     } finally {
       cleanup();
     }
@@ -2085,6 +1993,11 @@ test("land() keeps the reset command on a verify failure after the push, and say
   try {
     const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
     const preLandingSha = gitIn(dir, "rev-parse", "HEAD");
+
+    // Absorbs "land() actually calls its verify step once per section, and
+    // stops on its failure (F2/M4)" (repo-100): the same single-gate scenario
+    // with a throwing verify, here counting its calls and carrying a stderr.
+    let calls = 0;
     const result = land({
       ticket: ticketAbs,
       sections: [gate1],
@@ -2092,15 +2005,25 @@ test("land() keeps the reset command on a verify failure after the push, and say
       status: "done",
       title: "x",
       verify: () => {
-        throw new Error("the landed block is not the section file");
+        calls += 1;
+        throw Object.assign(new Error("the landed block is not the section file"), {
+          stderr: "the committed record does not match the section file, on purpose",
+        });
       },
       runPreflight: okPreflight,
     });
 
+    // A deleted verify loop never calls this at all, and `result.ok` stays
+    // `true` — both assertions are red on that mutation, run alone.
+    expect(calls).toBe(1);
+    expect(result.ok).toBe(false);
+
     const failed = result.steps.at(-1);
     expect(failed?.name).toBe("verify");
     expect(failed?.ok).toBe(false);
-    // The push passed, so origin holds the landing.
+    expect(failed?.detail).toContain("does not match the section file, on purpose");
+    // The push passed, so origin holds the landing — verify runs after both
+    // the commit and the push.
     expect(gitIn(bareDir, "rev-parse", "refs/heads/feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
     expect(failed?.detail).toContain(`git reset --hard ${preLandingSha}`);
     expect(failed?.detail).toMatch(/already on origin\/feature/);
