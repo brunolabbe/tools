@@ -37,14 +37,31 @@ const { probe, probeError } = probes(() => server);
 // Records the `minWaitMs` each quiet wait is handed (dl-115), and changes nothing:
 // the default can only be read where the resolver passes it on, and a timing
 // bound cannot tell 1200 from a default that merely lands near it.
-const quietWaitCalls = vi.hoisted(() => [] as { minWaitMs: number }[]);
+//
+// It also records what the wait returned and how long it lasted on the clock the
+// wait itself reads (dl-128). `waitForQuiet` returns false when the deadline
+// arrived first, and then ends short of its minimum: a cut the floor test can
+// name by reading it here instead of inferring it from a duration. It is not the
+// only way the minimum is not held: `waitForQuiet` also returns `true` early when
+// its `stop` predicate fires (a departure or DRM), which `reachedQuiet` does not
+// tell from quiet, so `wallWaitedMs` agreeing with `waitedMs` is what sets that
+// apart from a clock step.
+const quietWaitCalls = vi.hoisted(
+  () => [] as { minWaitMs: number; reachedQuiet?: boolean; wallWaitedMs?: number }[],
+);
 vi.mock("../../src/browser/provoke.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof provoke>();
   return {
     ...actual,
-    waitForQuiet: (...args: Parameters<typeof actual.waitForQuiet>) => {
-      quietWaitCalls.push({ minWaitMs: args[0].minWaitMs });
-      return actual.waitForQuiet(...args);
+    waitForQuiet: async (...args: Parameters<typeof actual.waitForQuiet>) => {
+      const call: { minWaitMs: number; reachedQuiet?: boolean; wallWaitedMs?: number } = {
+        minWaitMs: args[0].minWaitMs,
+      };
+      quietWaitCalls.push(call);
+      const wallStart = Date.now();
+      call.reachedQuiet = await actual.waitForQuiet(...args);
+      call.wallWaitedMs = Date.now() - wallStart;
+      return call.reachedQuiet;
     },
   };
 });
@@ -401,9 +418,12 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
    * and provocation are outside it. `quietMs` is small so that only the minimum
    * can hold the wait: the page's last request is a second old by then.
    */
-  async function quietWait(
-    minWaitMs: number | undefined,
-  ): Promise<{ waitedMs: number; handedMs: number | undefined }> {
+  async function quietWait(minWaitMs: number | undefined): Promise<{
+    waitedMs: number;
+    handedMs: number | undefined;
+    reachedQuiet: boolean | undefined;
+    wallWaitedMs: number | undefined;
+  }> {
     const resolver = new BrowserResolver({
       pool,
       hlsParser: recordingHlsParser().parser,
@@ -425,7 +445,12 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
     );
     expect(waitedMs).toBeDefined();
     expect(quietWaitCalls).toHaveLength(1);
-    return { waitedMs: waitedMs ?? Number.NaN, handedMs: quietWaitCalls[0]?.minWaitMs };
+    return {
+      waitedMs: waitedMs ?? Number.NaN,
+      handedMs: quietWaitCalls[0]?.minWaitMs,
+      reachedQuiet: quietWaitCalls[0]?.reachedQuiet,
+      wallWaitedMs: quietWaitCalls[0]?.wallWaitedMs,
+    };
   }
 
   test("the default is 1200 ms", () => {
@@ -436,12 +461,26 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
     "a resolver given no minWaitMs hands the wait MIN_WAIT_MS, and holds it that long",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const { waitedMs, handedMs } = await quietWait(undefined);
+      const { waitedMs, handedMs, reachedQuiet, wallWaitedMs } = await quietWait(undefined);
 
       // Exactly the constant: a default that skips it, 2400 say, fails here and
       // not on a timing bound a slow runner could cross.
       expect(handedMs).toBe(MIN_WAIT_MS);
-      expect(waitedMs).toBeGreaterThanOrEqual(MIN_WAIT_MS);
+      // The wait ended at quiet, not at its deadline (dl-128). The loop checks
+      // the floor and then the deadline, so a budget spent on page load returns
+      // short of the minimum, and the duration below cannot say that was why.
+      // The budget here is `PROBE_TIMEOUT_MS`, 25 s, of which page load and
+      // provocation take about 2 s on `/mse.html` (1.6 to 2.0 s measured, at a
+      // load average up to 11.5): only a budget lowered under this test, or a
+      // page that stops loading, reaches the deadline.
+      expect(reachedQuiet, "the wait ended at its deadline, not at quiet").toBe(true);
+      // `wallWaitedMs` is the clock the wait counts on, `waitedMs` the one it
+      // cannot step (dl-105). The two disagreeing means the system clock moved
+      // during the wait, which this message names rather than blaming the floor.
+      expect(
+        waitedMs,
+        `the wait lasted ${Math.round(waitedMs)} ms by performance.now and ${wallWaitedMs} ms by Date.now`,
+      ).toBeGreaterThanOrEqual(MIN_WAIT_MS);
     },
   );
 
