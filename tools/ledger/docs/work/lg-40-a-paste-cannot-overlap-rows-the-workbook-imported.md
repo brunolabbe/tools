@@ -329,3 +329,17 @@ tools/ledger/api/test/statements.test.ts` → clean 92 passed (92); `later`
 tools/ledger/api/test/workbook-import.test.ts
 tools/ledger/api/test/workbook-days.test.ts` → 3 files, 124 passed (124); no
   test asserts the refusal's text.
+- 2026-10-18 — **Gate 2's decisions, the owner's answers.** Asked by the
+  orchestrator on 2026-10-18.
+  - "A day the workbook both re-dated and reordered can still store rows twice"
+    (gate 2's open decision). Options: file a new lg- ticket (the builder's
+    recommendation), leave it recorded only (the gate's), fix it in this branch.
+    **The owner chose to file a new lg- ticket**: lg-59, filed separately, in a
+    pull request of its own. It is not fixed here.
+  - "Remedy A's cost, more ambiguity refusals" (gate 2, F8). Options: accept as
+    built (the recommendation), file a wording follow-up. **The owner chose to
+    accept as built.** F8 stays recorded, unfixed.
+  - The one-day-off date the paste's answer cannot report, gate 1's decision:
+    filed as lg-58 (PR #555), as the owner chose after gate 1. Round 1's entry
+    left it to the lander ("filed by the lander, not in this round"); this entry
+    is the only place the Log names the ticket.
