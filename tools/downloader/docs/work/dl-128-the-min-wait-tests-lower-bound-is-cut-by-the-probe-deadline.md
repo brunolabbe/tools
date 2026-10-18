@@ -3,7 +3,7 @@ id: dl-128
 tool: downloader
 title: The min-wait test's lower bound is cut by the probe deadline, which dl-115's Log says cannot happen
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -76,6 +76,25 @@ removed the upper bounds; the lower one stayed on the claim quoted above.
    deadline assertion and not on `waitedMs` — shown once as a mutation in the
    Log, with the command and the assertion message.
 3. dl-115's Log carries the dated correction.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-18 · `335efcd4..669b245f` · Opus 5.5, depth full
+
+| Done when                                                                                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Ten sequential runs of `-t "defaults to 1200"` pass, load average in the Log                                                               | **verified** — the gate's own ten sequential runs at `669b245f`: 10 of 10 exit 0, each `Tests 3 passed \| 14 skipped (17)`, 1-min load 4.14 to 6.63 on 12 cores. The Log carries the builder's ten with a load average beside each                                                                                                                                                                                                                                                           |
+| 2. Budget forced below page load plus the floor fails on the deadline assertion, not on `waitedMs`, shown in the Log with command and message | **verified** — the gate's mutations of `quietWait`'s `options()` in `resolvers/test/browser/browser-resolver-departure-and-floor.test.ts`: `timeoutMs: 5000` (deadline gone before the wait) and `timeoutMs: 5500` (deadline mid-wait) each give `AssertionError: the wait ended at its deadline, not at quiet: expected false to be true`, `Tests 1 failed \| 2 passed \| 14 skipped (17)`. The Log records the message; its Done when 2 bullet names the mutation but not the command (F4) |
+| 3. dl-115's Log carries the dated correction                                                                                                  | **verified** by reading — a 2026-10-18 entry at the end of dl-115's `## Log`; the branch's diff of that file is 11 insertions and 0 deletions, so its `## Review` is untouched. Its parenthetical overreaches (F1)                                                                                                                                                                                                                                                                           |
+
+- **F1 · med** · no `Done when` line depends on it · the clock-step cause is put forward as seen on this machine, and what was seen cannot cause this failure. The branch's Log says "A second cause fits dl-126's number and was seen here", and dl-115's correction says dl-128 "measured which of the two it can be here (the deadline cannot…)", which reads as: the clock caused it. On this machine the system clock steps only **backwards** relative to `performance.now` and `/proc/uptime`: 60 of 60 steps in 900 s, about −300 and −430 ms in pairs every ~30 s, drift −22.6 s, no forward step at all. A backward step during the wait makes it last longer (one replay of the loop measured 2005.8 ms). Only a forward step of 200 ms or more gives dl-126's 1001.7. The Log's own iteration-5 reading (`Date.now` 730 ms behind) is this same backward step. The text is false in the unsafe direction: the open decision on moving `waitForQuiet` to a monotonic clock rests on it, and a reader trusting it stops looking. Rewording both passages to "the steps measured here run backwards and cannot shorten the wait; a forward step would, and none was observed" fixes it.
+- **F2 · low** · `nfr:maintainability` · the test's comment over `quietWaitCalls` says a deadline-cut wait is "the one way the minimum is not held that a test can name". That is false: `waitForQuiet` also returns `true` early when its `stop` predicate fires (a departure or DRM). A mutation that makes `stop` fire 1000 ms in fails as `the wait lasted 1003 ms by performance.now and 1002 ms by Date.now`, with `reachedQuiet` `true`. The two clocks agreeing still tells this case apart from a clock step, so the message can be read correctly. The comment and the field name `reachedQuiet` say otherwise. No live call site: `/mse.html` neither navigates nor requests DRM.
+- **F3 · low** · the test's comment says page load and provocation "take under 2 s on `/mse.html`". The gate measured `network-quiet` at 1580 to 2047 ms over 15 probes at load 8.8 to 11.5. That is false by 47 ms in the safe direction: the wait still started with 18 952 ms or more of budget left.
+- **F4 · low** · the Log's Done when 2 bullet gives the mutation and the message but not the command the line asks for. It also says "the helper's `options()`", which could mean `helpers/browser-harness.ts` rather than the `options()` call in `quietWait`, and the restore it names covers only the spec file.
+- **dropped** · the floor counted on integer `Date.now` against a `performance.now` stopwatch could read 1199.x. Measured minimum over 85 waits was 1200.28 ms and none fell below 1200. With no instance, this is not a defect.
+- **dropped** · the wrapper's extra `Date.now` calls could disturb the dl-105 test's `Date.now` spy in the same file. The spy is offset-based, not call-count-based, and the whole file passed 17 of 17.
+- **findings** · the hunt returned 6; 4 carried, 2 dropped.
+- NFR: security n/a (test and docs only) · performance n/a · reliability — F1, F2 · maintainability — F2 to F4.
 
 ## Log
 
