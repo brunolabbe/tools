@@ -5616,3 +5616,48 @@ refuted one that way. A reading of the environment can expire: the 2026-10-17
 review re-ran an artifact download logged as timing out two days before, and
 it fetched 17 MB. An item a script,
 not a page, got wrong names the script and is filed or recorded, not fixed here.
+
+### Batch 2026-10-17 (tools-f6, pl-57 measured, pl-58 filed) — base 4c642ab3
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Haiku 5.5 / medium | general-purpose | WebSearch/WebFetch probe from a subagent | 14s / 14s | 0 | $0.0076 |
+| #522 | open, ready | Sonnet 5.5 / medium | general-purpose (stand-in for builder-standard) | pl-57 build + round 1 | 26m36s / 46m49s | 1 | $5.0727 |
+| #522 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | pl-57 gates 1–2 | 21m18s / 31m01s | 0 | $4.1051 |
+| #522 | open, ready | Sonnet 5.5 / high | fixer | pl-57 three fixes at landing + landing + Forillon edit | 9m42s / 16m26s | 0 | $0.8130 |
+| #531 | open, ready | Haiku 5.5 / high | builder-mechanical | pl-58 filing (maintenance) + answers + round 1 | 14m05s / 29m00s | 0 | $0.7050 |
+| #531 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | pl-58 gates 1–2, narrow | 21m49s / 27m40s | 0 | $2.7791 |
+| #531 | open, ready | Sonnet 5.5 / high | fixer | pl-58 round 2 fixes + landing | 3m23s / 3m22s | 0 | $0.3824 |
+| — | — | Opus 5.5 / high | orchestrator | tools-f6 | 51m16s / 2h09m56s | 0 | $5.8707 |
+
+Total $19.7355 (rates read 2026-10-10), the orchestrator row a floor.
+
+**Tickets:**
+
+- pl-57 → #522: gate 1 CONCERNS (3 med, 6 low), gate 2 PASS (3 new lows, fixed at landing by owner choice). After the landing, Forillon was added to the parks list, by owner choice on the lander's open decision. The owner chose option 1 on the ticket's open decision.
+- pl-58 filed → #531: gate 1 FAIL (5 med, 3 low), gate 2 CONCERNS (2 med, 4 low). The lander fixed all six with no gate 3, per step 8. The gate records are on the PR thread only, because the ticket is `ready`.
+
+**Defects in the skill:**
+
+1. `SKILL.md`, "Which model built it, and which gated it". There is no row for a ticket that needs `WebSearch`, and the `builder-*` agents lack it. pl-57 was built by a general-purpose agent with `model: sonnet` passed, against "Never pass `model`". A general-purpose agent carries no effort, so it ran at medium where builder-standard declares high. `roles/builder.md` also told it "You have no `Skill` tool", which was false for it. Reproduction:
+   - `grep -n '^tools\|^effort' .claude/agents/builder-standard.md` → `4:tools: Read, Write, Edit, Grep, Glob, Bash, WebFetch, TodoWrite` and `6:effort: high`.
+   - `node scripts/agent-cost.mjs --agent a96c140d65df9d451` → `claude-sonnet-5-5  effort=medium`.
+   - `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n 'no \`Skill\`'` → `63:- **You have no \`Skill\` tool.**`.
+2. `reference/records.md`, "Fixed at landing". The proof is scoped "above `## Log`", which counts nothing when the fixed phrase sits inside the Log, as a measurement ticket's tables and options do. The lander had to invent its own scope (`awk '/Fixed at landing by owner choice/{exit} {print}'`). Reproduction:
+   - `git show 51a4b673:tools/planner/docs/work/pl-57-measure-invention.md | awk '/^## Log/{exit} {print}' | grep -c "Five of the 28 stratum keys"` → `0`.
+   - The same without the `awk` → `1`.
+3. `reference/records.md` and `SKILL.md` step 9 give no landing for a gated filing. `--land` splices `## Review` into the ticket and the filing's ticket stays `status: ready`, which `status --json` refuses. pl-58's gate records went to the PR thread only, by the orchestrator's call. Reproduction: copy `tools/planner/docs/work/pl-58-specific-lodging-food-proposals.md` (#531) into a scratch root as `tools/planner/docs/work/`, append `## Review`, then `node scripts/status.mjs --root <root> --json; echo exit=$?` → `exit=1`, `"kind": "reviewed-but-ready"`, "status is "ready" but the ticket carries a ## Review gate record, which nothing unstarted has".
+4. `reference/records.md`, "Fixed at landing". There is no form for an owner-chosen edit made after `--land` has run. `--land` runs once, so pl-57's Forillon edit needed a standalone preflight, and a mark worded "on the lander's open decision, not a gate finding". Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/reference/records.md | grep -c -i 'after.*--land\|post-landing'` → `0`.
+5. `roles/fixer.md`, posting the reports, still names the old file. #521 renamed a gate's full report `gate-<n>@<sha>.full.md` (`SKILL.md` step 9, `records.md`), but the fixer page was not in that change. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/fixer.md | grep -n report.md` → `91:  (\`gh pr comment <n> --body-file <f>\`, the \`report.md\` your dispatch names`.
+6. `review-ticket/gate.md`, the verdict rules, do not say how a filing's findings roll up. When the acceptance is the dispatch's attacks, a `Done when` line a builder cannot meet can be graded "unproven" (CONCERNS) or "not met" (FAIL). pl-58's gate 1 returned FAIL on five meds and no high, and named the ambiguity itself. Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n 'any acceptance line'` → `175:- **FAIL** — any high, any acceptance line **not met**, or any acceptance line` and `177:- **CONCERNS** — any med, or any acceptance line **unproven (gate)**.`.
+7. `roles/reviewer.md`, "When you are woken to re-gate", has no disposition for two cases:
+   - a refutation that quotes the gate's own mislabelled script output. In pl-57, gate 2 found the builder's "3/14" came from gate 1's `objects.py`, whose "park objects" filter matched two campgrounds.
+   - a new finding whose source is the gate's own earlier section. In pl-58 (G4), gate 1's unqualified "character 99" was copied by the builder.
+
+   Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n 'refuted,'` → `159:  in part, naming the clause that remains (lg-17's F6); not fixed; or refuted,`, the only disposition for a refutation.
+
+**Worked, and worth keeping:**
+
+- Probing the ticket's premise with a $0.0076 Haiku agent before dispatch settled that a general-purpose subagent has `WebSearch` and `WebFetch`.
+- Handing the re-gate the refutation as a command and its output let pl-57's gate 2 overturn it. The orchestrator had checked the script's output line, not what it counted.
+- The narrow Sonnet gate on a Haiku filing found five meds in a brief, each shown on a plant (pl-58 gate 1's `check-plants.sh`: V0 exit 1, the name-rule variant exit 0).
