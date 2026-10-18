@@ -52,7 +52,7 @@ export type {
 } from "./settlement.ts";
 export { classify, matchesPattern, normalize as normalizeDescription } from "./classify.ts";
 export type { ClassifiableRow, MatchableRule, RuleMatch } from "./classify.ts";
-export { spendingCategory, spendingMap } from "./spending.ts";
+export { spendingCategory, spendingMap, spendingNameForText } from "./spending.ts";
 export type {
   SpendingChoice,
   SpendingMap,

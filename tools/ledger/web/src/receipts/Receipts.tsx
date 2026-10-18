@@ -24,7 +24,10 @@
  * from its record (`fetchHousehold`), never every name the books hold. With one
  * other member an item marked someone else's is theirs, as it always was, and
  * names nobody in the request; with more, it carries a picker of the others, and
- * so does the whole receipt.
+ * so does the whole receipt. **The form is held until the household has loaded**
+ * (lg-39): while it is slow, or after it failed, the screen says so with a retry
+ * and offers no filing, since without the members it cannot name whose an item
+ * is. The categories load on their own, so one request failing drops no other.
  */
 
 import { useEffect, useId, useState } from "react";
@@ -97,12 +100,20 @@ interface Draft {
 /** The form's fields that are a line of text. */
 type TextField = Exclude<keyof Draft, "items">;
 
+const NOBODY_ELSE = "There is nobody else in the household to charge an item to.";
+
 /** What a tap on an item makes it next. */
 const NEXT_SHARE: Record<ItemShare, ItemShare> = {
   shared: "not-shared",
   "not-shared": "theirs",
   theirs: "shared",
 };
+
+/** The tap's result; with nobody else in the household it skips someone else's. */
+function nextShare(share: ItemShare, alone: boolean): ItemShare {
+  const next = NEXT_SHARE[share];
+  return alone && next === "theirs" ? NEXT_SHARE[next] : next;
+}
 
 let lastItemKey = 0;
 
@@ -239,6 +250,48 @@ function nextPart(filed: readonly number[]): number {
   return part;
 }
 
+/** A request's answer as the screen holds it: not yet, failed with what to say, or in. */
+type Loaded<T> =
+  | { state: "loading" }
+  | { state: "failed"; message: string }
+  | { state: "loaded"; value: T };
+
+/**
+ * One request, run on its own so that another's failure drops nothing it
+ * returned (lg-39), and again on `retry`. `load` must be a stable function.
+ */
+function useLoad<T>(load: (signal: AbortSignal) => Promise<T>): [Loaded<T>, () => void] {
+  const [loaded, setLoaded] = useState<Loaded<T>>({ state: "loading" });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoaded({ state: "loading" });
+    const run = async (): Promise<void> => {
+      try {
+        const value = await load(controller.signal);
+        if (!controller.signal.aborted) setLoaded({ state: "loaded", value });
+      } catch (error: unknown) {
+        if (!controller.signal.aborted) {
+          setLoaded({ state: "failed", message: AppError.from(error).message });
+        }
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, [load, attempt]);
+  return [loaded, () => setAttempt((before) => before + 1)];
+}
+
+/**
+ * The current members, from the household's record (lg-30): the books'
+ * `fetchPeople` holds every name ever enrolled, one who has left included.
+ */
+async function loadMembers(signal: AbortSignal): Promise<string[]> {
+  const me = await fetchMe(signal);
+  const household = await fetchHousehold(me.person.household, signal);
+  return [...new Set(household.members.map((member) => member.person))];
+}
+
 export function Receipts(): React.ReactElement {
   const id = useId();
   const shown = usePeopleNames();
@@ -249,35 +302,10 @@ export function Receipts(): React.ReactElement {
   /** Whose the whole receipt is, when it is someone's among several (lg-30). */
   const [wholeChosen, setWholeChosen] = useState("");
   const [matches, setMatches] = useState<ReceiptMatch[] | null>(null);
-  const [people, setPeople] = useState<string[]>([]);
-  const [categories, setCategories] = useState<SpendingCategory[]>([]);
+  const [members, retryMembers] = useLoad(loadMembers);
+  const [loadedCategories, retryCategories] = useLoad(fetchSpendingCategories);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const load = async (): Promise<void> => {
-      try {
-        // The current members, from the household's record (lg-30): the books'
-        // `fetchPeople` holds every name ever enrolled, one who has left included.
-        const members = async (): Promise<string[]> => {
-          const me = await fetchMe(controller.signal);
-          const household = await fetchHousehold(me.person.household, controller.signal);
-          return [...new Set(household.members.map((member) => member.person))];
-        };
-        const [loadedPeople, loadedCategories] = await Promise.all([
-          members(),
-          fetchSpendingCategories(controller.signal),
-        ]);
-        setPeople(loadedPeople);
-        setCategories(loadedCategories);
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) setProblem(AppError.from(error).message);
-      }
-    };
-    void load();
-    return () => controller.abort();
-  }, []);
 
   const run = async (step: () => Promise<void>): Promise<void> => {
     setBusy(true);
@@ -443,6 +471,35 @@ export function Receipts(): React.ReactElement {
     );
   }
 
+  // The form is not offered until the household is known (lg-39): without its
+  // members the screen cannot say whose an item is, and would file "someone
+  // else's" as though the household were two people.
+  if (members.state !== "loaded") {
+    return (
+      <section className="card" aria-labelledby={`${id}-title`}>
+        <h2 id={`${id}-title`}>Receipt</h2>
+        {members.state === "loading" ? (
+          <output className="muted hint">Loading the household…</output>
+        ) : (
+          <>
+            <p className="bad" role="alert">
+              The household did not load: {members.message}
+            </p>
+            <div className="actions">
+              <button type="button" onClick={retryMembers}>
+                Try again
+              </button>
+              <button type="button" onClick={startOver}>
+                Start over
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+    );
+  }
+  const people = members.value;
+  const categories = loadedCategories.state === "loaded" ? loadedCategories.value : [];
   const { receipt, part } = stage;
   const form = draft ?? draftOf(null, receipt);
   const payer = receipt.uploadedBy;
@@ -451,6 +508,9 @@ export function Receipts(): React.ReactElement {
   // With one other member "someone else's" is theirs and the request names
   // nobody, as it always did; with more, each item names whose (lg-30).
   const several = others.length > 1;
+  // With nobody else, nothing can be someone else's: an item cannot be charged
+  // and the receipt cannot be, and filing either would name no one (lg-39).
+  const alone = other === null;
   const whose = (item: ItemDraft): string | null =>
     !several
       ? null
@@ -528,7 +588,9 @@ export function Receipts(): React.ReactElement {
     ? "An item needs its text and its price before the receipt can be filed."
     : flags.includes("items-differ")
       ? FLAG_LABELS["items-differ"]
-      : null;
+      : alone && form.items.some((item) => item.share === "theirs")
+        ? NOBODY_ELSE
+        : null;
 
   const lookUp = (): void => {
     if (charged === null || charged === 0 || !dated) {
@@ -567,7 +629,7 @@ export function Receipts(): React.ReactElement {
                 amountCents: charged,
                 spendingCategoryId,
                 note: form.merchant.trim() === "" ? null : form.merchant.trim(),
-                chargedTo: theirs ? wholeWhose : null,
+                chargedTo: theirs && !alone ? wholeWhose : null,
               }
             : { to: "row", rowId: destination },
       });
@@ -602,6 +664,14 @@ export function Receipts(): React.ReactElement {
   return (
     <section className="card" aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`}>Receipt</h2>
+      {loadedCategories.state === "failed" && (
+        <div role="alert" className="bad">
+          <p>The spending categories did not load: {loadedCategories.message}</p>
+          <button type="button" onClick={retryCategories}>
+            Try again
+          </button>
+        </div>
+      )}
       <form
         className="rule-form"
         aria-label="The receipt"
@@ -662,7 +732,7 @@ export function Receipts(): React.ReactElement {
                   <button
                     type="button"
                     aria-label={`${name}, ${shareLabel(item.share, whose(item) ?? other, shown)}`}
-                    onClick={() => setItem(index, { share: NEXT_SHARE[item.share] })}
+                    onClick={() => setItem(index, { share: nextShare(item.share, alone) })}
                   >
                     {shareLabel(item.share, whose(item) ?? other, shown)}
                   </button>
@@ -716,7 +786,7 @@ export function Receipts(): React.ReactElement {
               Shared {formatCents(split.sharedCents)}
             </output>
           )}
-          {itemsUnread && <p className="hint bad">{unfileable}</p>}
+          {(itemsUnread || unfileable === NOBODY_ELSE) && <p className="hint bad">{unfileable}</p>}
         </fieldset>
         {field("charged", "Charged to the card (with any tip)")}
         <label htmlFor={`${id}-spending`}>Spending category</label>
@@ -727,18 +797,16 @@ export function Receipts(): React.ReactElement {
           noneLabel="None"
           onChange={setSpendingCategoryId}
         />
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={theirs}
-            onChange={(event) => setTheirs(event.target.checked)}
-          />
-          {several
-            ? "This was someone else's"
-            : other === null
-              ? "This was the other person's"
-              : `This was ${shownName(shown, other)}'s`}
-        </label>
+        {other !== null && (
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={theirs}
+              onChange={(event) => setTheirs(event.target.checked)}
+            />
+            {several ? "This was someone else's" : `This was ${shownName(shown, other)}'s`}
+          </label>
+        )}
         {theirs && several && (
           <>
             <label htmlFor={`${id}-whose`}>Whose it was</label>

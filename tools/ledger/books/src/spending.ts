@@ -84,3 +84,39 @@ export function spendingCategory(
   if (fromMap !== undefined) return { category: fromMap, source: "map" };
   return null;
 }
+
+/**
+ * What a row's description or a period line's free text says it was spent on,
+ * as a category _name_ (lg-53): the words the workbook and the bank write for
+ * spending the list has a name for. Generic words, so the repository may hold
+ * them, as it holds the list's first names.
+ *
+ * Matched on the whole text, folded as `classify` folds it, never on a part: a
+ * trip's note `Épicerie Nouvelle-Écosse` is not the week's groceries, and a text
+ * left alone is a person's to place.
+ */
+const SPENDING_WORDS: readonly (readonly [name: string, texts: readonly string[]])[] = [
+  ["Groceries", ["Épicerie", "Épicerie/Comissions", "Épicerie/Commissions"]],
+  [
+    "Property taxes",
+    ["Taxes", "Taxes municipales", "Taxes scolaires", "Taxes municipales/scolaires"],
+  ],
+  ["Electricity", ["Électricité", "Hydro Québec", "Hydro-Québec"]],
+  ["Internet & phone", ["Internet", "Téléphone", "Cellulaire"]],
+  ["Subscriptions", ["Netflix"]],
+  ["Insurance", ["Assurance", "Assurances", "Assurances maison", "Assurance habitation"]],
+  ["Home maintenance", ["Maison"]],
+  ["Travel", ["Voyage"]],
+  // Desjardins' yearly member dividend: money back from the bank, against its fees.
+  ["Bank fees", ["Frais d'utilisation", "Frais mensuels", "Frais bancaires", "Ristourne"]],
+  ["Cash", ["Retrait"]],
+];
+
+const BY_TEXT: ReadonlyMap<string, string> = new Map(
+  SPENDING_WORDS.flatMap(([name, texts]) => texts.map((text) => [normalize(text), name] as const)),
+);
+
+/** The category name `text` says, or `null` when it says none the table knows. */
+export function spendingNameForText(text: string): string | null {
+  return BY_TEXT.get(normalize(text)) ?? null;
+}

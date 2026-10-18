@@ -11,11 +11,14 @@
  * chart with more columns than fit at 28px each scrolls sideways, starting at the
  * newest, rather than squeezing to marks too thin to touch. A figure is never only
  * in a hover: the figures for the selected date are always printed under the chart,
- * the latest by default, and a tap, a pointer or the arrow keys move them.
+ * the latest by default, and a tap, a pointer or the arrow keys move them. A mouse
+ * also gets them in a tip beside the crosshair, so the eye need not leave the line.
+ * The readout holds the height of its tallest date, so moving along the chart never
+ * moves the page under it.
  */
 
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { dayNumber, monthLabel, monthTicks, nearestIndex, niceTicks, project } from "./scale.ts";
 
 /** What a container with no layout (a test, a hidden tab) is drawn at. */
@@ -75,9 +78,14 @@ function useWidth(): [React.RefCallback<HTMLDivElement>, number] {
   return [ref, width > 0 ? width : DEFAULT_WIDTH];
 }
 
-/** Which position is selected: the newest until a pointer or a key says otherwise. */
+/**
+ * Which position is selected: the newest until a pointer or a key says otherwise.
+ * `hovering` is a mouse over the chart, the only pointer that gets a tip: a finger
+ * would cover it, and the readout under the chart is already in view.
+ */
 function useSelection(positions: readonly number[]) {
   const [picked, setPicked] = useState<number | null>(null);
+  const [hovering, setHovering] = useState(false);
   const last = positions.length - 1;
   const index = picked === null ? last : Math.min(picked, last);
   const point = (event: PointerEvent<SVGSVGElement>): void => {
@@ -86,7 +94,9 @@ function useSelection(positions: readonly number[]) {
       event.clientX - event.currentTarget.getBoundingClientRect().left,
     );
     if (found >= 0) setPicked(found);
+    setHovering(event.pointerType === "mouse");
   };
+  const leave = (): void => setHovering(false);
   const press = (event: KeyboardEvent<SVGSVGElement>): void => {
     const target = new Map([
       ["ArrowLeft", Math.max(index - 1, 0)],
@@ -98,7 +108,31 @@ function useSelection(positions: readonly number[]) {
     event.preventDefault();
     setPicked(target);
   };
-  return { index, point, press };
+  return { index, hovering, point, leave, press };
+}
+
+/**
+ * The readout that will stand tallest: the most notes, then the longest, then the
+ * most buttons. Text wraps by width, so this picks which one to lay out, and the
+ * browser measures it.
+ */
+function tallest(readouts: readonly (Readout | null)[]): Readout | null {
+  let best: Readout | null = null;
+  let bestScore = -1;
+  for (const readout of readouts) {
+    if (readout === null) continue;
+    const notes = readout.notes ?? [];
+    const buttons =
+      (readout.onOpen === undefined ? 0 : 1) +
+      readout.rows.filter((row) => row.onOpen !== undefined).length;
+    const score =
+      notes.length * 1_000_000 + notes.reduce((sum, note) => sum + note.length, 0) * 100 + buttons;
+    if (score > bestScore) {
+      best = readout;
+      bestScore = score;
+    }
+  }
+  return best;
 }
 
 // --- The frame ---
@@ -158,7 +192,9 @@ export function ChartCard(props: {
 
 function TableView({ title, table }: { title: string; table: TableData }): React.ReactElement {
   return (
-    <div className="chart-scroll">
+    // A long series scrolls inside its own box, about as tall as the chart it
+    // stands for, rather than stretching the card.
+    <div className="chart-scroll table-scroll">
       <table className="chart-table">
         <caption className="sr-only">{title}</caption>
         <thead>
@@ -171,7 +207,8 @@ function TableView({ title, table }: { title: string; table: TableData }): React
           </tr>
         </thead>
         <tbody>
-          {table.rows.map((row, at) => (
+          {/* Newest first: what someone opens the table to check is what just happened. */}
+          {table.rows.toReversed().map((row, at) => (
             <tr key={`${String(at)}:${row[0] ?? ""}`}>
               {row.map((cell, index) => (
                 <td
@@ -196,20 +233,47 @@ function spokenOf(readout: Readout): string {
   return [`${readout.heading}: ${rows}.`, ...notes].join(" ");
 }
 
-function ReadoutView({ readout }: { readout: Readout | null }): React.ReactElement {
+/**
+ * The readout under the chart, stacked over an invisible copy of the tallest one
+ * so that its height never changes. The copy draws its words from CSS
+ * (`data-text`), so it takes their room without adding text a reader or a query
+ * would find twice.
+ */
+function ReadoutSlot(props: {
+  readout: Readout | null;
+  sizer: Readout | null;
+}): React.ReactElement {
+  return (
+    <div className="readout-slot">
+      <ReadoutView readout={props.readout} />
+      {props.sizer !== null && <ReadoutView readout={props.sizer} ghost />}
+    </div>
+  );
+}
+
+function ReadoutView(props: { readout: Readout | null; ghost?: boolean }): React.ReactElement {
+  const { readout, ghost = false } = props;
+  const say = (text: string): ReactNode =>
+    ghost ? <span className="ghost-text" data-text={text} /> : text;
+  const open = (handler: () => void): (() => void) | undefined => (ghost ? undefined : handler);
   // Only the words are live. A button inside a live region is announced again on
   // every slider step, and the region rewrites on every one (lg-18, gate F8).
   return (
-    <div className="readout">
-      <p className="sr-only" aria-live="polite">
-        {readout === null ? "" : spokenOf(readout)}
-      </p>
+    <div
+      className={ghost ? "readout ghost" : "readout"}
+      {...(ghost ? { "aria-hidden": true, inert: true } : {})}
+    >
+      {!ghost && (
+        <p className="sr-only" aria-live="polite">
+          {readout === null ? "" : spokenOf(readout)}
+        </p>
+      )}
       {readout !== null && (
         <>
-          <p className="readout-heading">{readout.heading}</p>
+          <p className="readout-heading">{say(readout.heading)}</p>
           {readout.onOpen !== undefined && (
-            <button type="button" className="secondary small" onClick={readout.onOpen}>
-              Show the rows
+            <button type="button" className="secondary small" onClick={open(readout.onOpen)}>
+              {say("Show the rows")}
             </button>
           )}
           <ul className="readout-rows">
@@ -218,16 +282,16 @@ function ReadoutView({ readout }: { readout: Readout | null }): React.ReactEleme
                 {row.color !== undefined && (
                   <span className="key" style={{ background: row.color }} aria-hidden="true" />
                 )}
-                <span className="muted">{row.label}</span>
-                <strong>{row.value}</strong>
+                <span className="muted">{say(row.label)}</span>
+                <strong>{say(row.value)}</strong>
                 {row.onOpen !== undefined && (
                   <button
                     type="button"
                     className="secondary small"
                     aria-label={`Show the rows for ${row.label}`}
-                    onClick={row.onOpen}
+                    onClick={open(row.onOpen)}
                   >
-                    Rows
+                    {say("Rows")}
                   </button>
                 )}
               </li>
@@ -235,11 +299,45 @@ function ReadoutView({ readout }: { readout: Readout | null }): React.ReactEleme
           </ul>
           {readout.notes?.map((note) => (
             <p key={note} className="muted hint">
-              {note}
+              {say(note)}
             </p>
           ))}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * The selected figures beside the crosshair, for a mouse. Hidden from a reader:
+ * the readout under the chart says the same and is live.
+ */
+function Tip(props: {
+  readout: Readout | null;
+  x: number;
+  width: number;
+}): React.ReactElement | null {
+  const { readout, x, width } = props;
+  if (readout === null) return null;
+  // On whichever side of the crosshair has more room, so it never covers the point.
+  const side = x > width / 2 ? { right: width - x + 10 } : { left: x + 10 };
+  return (
+    <div className="chart-tip" aria-hidden="true" style={{ top: TOP, ...side }}>
+      <p className="readout-heading">{readout.heading}</p>
+      <ul className="readout-rows">
+        {readout.rows.map((row) => (
+          <li key={row.key}>
+            {row.color !== undefined && <span className="key" style={{ background: row.color }} />}
+            <span className="muted">{row.label}</span>
+            <strong>{row.value}</strong>
+          </li>
+        ))}
+      </ul>
+      {readout.notes?.map((note) => (
+        <p key={note} className="muted hint">
+          {note}
+        </p>
+      ))}
     </div>
   );
 }
@@ -323,23 +421,25 @@ export function LineChart(props: {
       ? (left + right) / 2
       : project(dayNumber(date), { min: first, max: last }, left + 6, right - 6);
   const xs = dates.map(x);
-  const { index, point, press } = useSelection(xs);
+  const { index, hovering, point, leave, press } = useSelection(xs);
 
   const labelled = monthTicks(
     dates[0] ?? "",
     dates.at(-1) ?? "",
     Math.max(2, Math.floor((measured - left) / 70)),
   );
-  const readout: Readout = {
-    heading: dates[index] ?? "",
+  const readoutAt = (at: number): Readout => ({
+    heading: dates[at] ?? "",
     rows: series.map((one) => ({
       key: one.key,
       label: one.label,
-      value: formatValue(one.values[index] ?? 0),
+      value: formatValue(one.values[at] ?? 0),
       color: one.color,
     })),
-    notes: props.notes?.(index) ?? [],
-  };
+    notes: props.notes?.(at) ?? [],
+  });
+  const readout = readoutAt(index);
+  const sizer = tallest(dates.map((_, at) => readoutAt(at)));
 
   return (
     <div ref={box} className="chart-box">
@@ -357,6 +457,7 @@ export function LineChart(props: {
         tabIndex={0}
         onPointerDown={point}
         onPointerMove={point}
+        onPointerLeave={leave}
         onKeyDown={press}
         className="chart"
       >
@@ -430,7 +531,10 @@ export function LineChart(props: {
           );
         })}
       </svg>
-      <ReadoutView readout={readout} />
+      {hovering && xs[index] !== undefined && (
+        <Tip readout={readout} x={xs[index] ?? 0} width={measured} />
+      )}
+      <ReadoutSlot readout={readout} sizer={sizer} />
     </div>
   );
 }
@@ -490,7 +594,24 @@ export function ColumnChart(props: {
   const right = width - RIGHT;
   const y = (value: number): number => project(value, axis, height - BOTTOM, TOP);
   const centres = categories.map((_, at) => left + slot * at + slot / 2);
-  const { index, point, press } = useSelection(centres);
+  const { index, hovering, point, leave, press } = useSelection(centres);
+  // A click on a column, or Enter, is its readout's "Show the rows". A drag that
+  // scrolls the columns is not a click, so a phone can still pan them.
+  const openAt = (event: MouseEvent<SVGSVGElement>): void => {
+    const found = nearestIndex(
+      centres,
+      event.clientX - event.currentTarget.getBoundingClientRect().left,
+    );
+    if (found >= 0) onOpen?.(found, null);
+  };
+  const pressOrOpen = (event: KeyboardEvent<SVGSVGElement>): void => {
+    if (event.key === "Enter" && onOpen !== undefined) {
+      event.preventDefault();
+      onOpen(index, null);
+      return;
+    }
+    press(event);
+  };
 
   // Newest at the right, so that is where a phone starts.
   useLayoutEffect(() => {
@@ -502,37 +623,37 @@ export function ColumnChart(props: {
   const barWidth = Math.min(MAX_BAR, slot - 8);
   const groupWidth = Math.max(4, Math.min(MAX_BAR, (slot - 8) / Math.max(series.length, 1) - 2));
 
-  const selected = categories[index];
-  const readout: Readout | null =
-    selected === undefined
-      ? null
-      : {
-          heading: selected.heading,
-          ...(onOpen === undefined ? {} : { onOpen: () => onOpen(index, null) }),
-          rows: [
-            ...series.map((one) => ({
-              key: one.key,
-              label: one.label,
-              value: formatValue(one.values[index] ?? 0),
-              color: one.color,
-              ...(onOpen === undefined || (one.values[index] ?? 0) === 0
-                ? {}
-                : { onOpen: () => onOpen(index, one.key) }),
-            })),
-            ...(props.total === true
-              ? [
-                  {
-                    key: "total",
-                    label: "Total",
-                    value: formatValue(
-                      series.reduce((sum, one) => sum + (one.values[index] ?? 0), 0),
-                    ),
-                  },
-                ]
-              : []),
-          ],
-          notes: props.notes?.(index) ?? [],
-        };
+  const readoutAt = (at: number): Readout | null => {
+    const selected = categories[at];
+    if (selected === undefined) return null;
+    return {
+      heading: selected.heading,
+      ...(onOpen === undefined ? {} : { onOpen: () => onOpen(at, null) }),
+      rows: [
+        ...series.map((one) => ({
+          key: one.key,
+          label: one.label,
+          value: formatValue(one.values[at] ?? 0),
+          color: one.color,
+          ...(onOpen === undefined || (one.values[at] ?? 0) === 0
+            ? {}
+            : { onOpen: () => onOpen(at, one.key) }),
+        })),
+        ...(props.total === true
+          ? [
+              {
+                key: "total",
+                label: "Total",
+                value: formatValue(series.reduce((sum, one) => sum + (one.values[at] ?? 0), 0)),
+              },
+            ]
+          : []),
+      ],
+      notes: props.notes?.(at) ?? [],
+    };
+  };
+  const readout = readoutAt(index);
+  const sizer = tallest(categories.map((_, at) => readoutAt(at)));
 
   return (
     <div ref={box} className="chart-box">
@@ -559,7 +680,7 @@ export function ColumnChart(props: {
           height={height}
           // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- an SVG chart cannot be an input; slider is the role of something an arrow key steps along.
           role="slider"
-          aria-label={`${name}. Arrow keys move between columns.`}
+          aria-label={`${name}. Arrow keys move between columns.${onOpen === undefined ? "" : " Enter shows the rows."}`}
           aria-orientation="horizontal"
           aria-valuemin={0}
           aria-valuemax={Math.max(count - 1, 0)}
@@ -568,8 +689,10 @@ export function ColumnChart(props: {
           tabIndex={0}
           onPointerDown={point}
           onPointerMove={point}
-          onKeyDown={press}
-          className="chart"
+          onPointerLeave={leave}
+          onKeyDown={pressOrOpen}
+          {...(onOpen === undefined ? {} : { onClick: openAt })}
+          className={onOpen === undefined ? "chart" : "chart openable"}
         >
           <YAxis
             ticks={axis.ticks}
@@ -662,7 +785,16 @@ export function ColumnChart(props: {
           </g>
         </svg>
       </div>
-      <ReadoutView readout={readout} />
+      {hovering &&
+        centres[index] !== undefined && (
+          // The columns scroll under a fixed box, so the tip sits where the column is on screen.
+          <Tip
+            readout={readout}
+            x={(centres[index] ?? 0) - (scroller.current?.scrollLeft ?? 0)}
+            width={measured}
+          />
+        )}
+      <ReadoutSlot readout={readout} sizer={sizer} />
     </div>
   );
 }

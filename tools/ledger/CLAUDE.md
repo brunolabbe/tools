@@ -57,6 +57,7 @@ npm test -- --project ledger
 npm run e2e:ledger          # "No tests found" until the first spec
 npm run import:ledger -- <workbook.xlsx> --household <id> --as <person>   # the one-off import; a dry run without --write
 npm run household:ledger -- <add | member | remove | list>  # the household directory, from the host
+npm run backfill-spending:ledger -- --household <id> --as <person>   # lg-53's one-off: categories from text; a dry run without --write
 ```
 
 **Every API route but health answers 403 until you are a member.** The API
