@@ -5,8 +5,8 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { readCorrections, readWorkbook, toCents } from "../src/index.ts";
-import type { Cell, Sheet } from "../src/index.ts";
+import { HOUSEHOLD_LAYOUT, readCorrections, readWorkbook, toCents } from "../src/index.ts";
+import type { Cell, ReadOptions, Sheet } from "../src/index.ts";
 
 type Input = string | number | { date: string } | { formula: string; result: number } | null;
 
@@ -641,5 +641,162 @@ describe("reading the workbook's own layout", () => {
     );
 
     expect(reading.deposits.map((deposit) => deposit.paid)).toEqual([null]);
+  });
+});
+
+// lg-38: a description drives the reading, the household's being one.
+type Layout = NonNullable<ReadOptions["layout"]>;
+
+/** A bank export's description: one sheet, oldest first, no buckets. */
+function statement(columns: Layout["account"]["columns"]): Layout {
+  return {
+    account: {
+      sheets: { by: "name", names: ["releve.csv"] },
+      yearPerSheet: false,
+      order: "oldest-first",
+      columns,
+      buckets: [],
+      carryOverLabel: null,
+      summary: null,
+    },
+    periods: null,
+    salaries: null,
+    ignored: [],
+  };
+}
+
+describe("reading the workbook through a layout", () => {
+  const SPLIT = statement([
+    { role: "date", column: "A" },
+    { role: "detail", column: "B" },
+    { role: "withdrawal", column: "C" },
+    { role: "deposit", column: "D" },
+    { role: "balance", column: "E" },
+  ]);
+
+  test("a layout the schema refuses is a problem, not a throw, and nothing is read", () => {
+    const twice = statement([
+      { role: "date", column: "A" },
+      { role: "amount", column: "B" },
+      { role: "amount", column: "C" },
+    ]);
+    const reading = readWorkbook([sheet("releve.csv", [[d("2024-01-02"), 5, 5]])], {
+      people,
+      layout: twice,
+    });
+
+    expect(reading.problems).toEqual([
+      'The layout, at account.columns.2.role: The role "amount" is named twice; each role is one column.',
+    ]);
+    expect(reading.unfiled).toEqual([]);
+  });
+
+  test("withdrawals and deposits are proven by the balance from where the first row stood, and left unfiled with no bucket", () => {
+    const rows: Input[][] = [
+      ["Date", "Description", "Retrait", "Dépôt", "Solde"],
+      [d("2024-01-02"), "PAIE", null, 1_000, 1_500],
+      [d("2024-01-05"), "EPICERIE", 120.5, null, 1_379.5],
+      [d("2024-01-09"), "REMBOURSEMENT", null, 20.5, 1_400],
+    ];
+    const reading = readWorkbook([sheet("releve.csv", rows)], { people, layout: SPLIT });
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.movements).toEqual([]);
+    expect(
+      reading.unfiled.map((row) => [row.row, row.amountCents, row.bucket, row.detail]),
+    ).toEqual([
+      [2, 100_000, null, "PAIE"],
+      [3, -12_050, null, "EPICERIE"],
+      [4, 2_050, null, "REMBOURSEMENT"],
+    ]);
+    expect(reading.checks).toEqual([
+      "The running balance follows from row to row through all 3 movements, from the 500.00 the first row implies.",
+    ]);
+
+    const broken = rows.map((row) => [...row]);
+    broken[3] = [d("2024-01-09"), "REMBOURSEMENT", 20.5, null, 1_400];
+    expect(readWorkbook([sheet("releve.csv", broken)], { people, layout: SPLIT }).problems).toEqual(
+      [
+        "'releve.csv'!E4: the running balance is 1400.00, but the row before it left 1379.50 and this one moves -20.50 (41.00 unexplained).",
+      ],
+    );
+  });
+
+  test("with no balance column nothing proves the rows, which is a problem", () => {
+    const layout = statement([
+      { role: "date", column: "A" },
+      { role: "amount", column: "B" },
+    ]);
+    const reading = readWorkbook([sheet("releve.csv", [[d("2024-01-02"), -5]])], {
+      people,
+      layout,
+    });
+
+    expect(reading.problems).toEqual([
+      "The layout names no balance column, so nothing proves the 1 rows read are all of them or that their amounts are right. Match them one for one against a statement paste of the same dates first (docs/00-ANALYSIS.md §8).",
+    ]);
+    expect(reading.unfiled.map((row) => [row.amountCents, row.balanceCents])).toEqual([
+      [-500, null],
+    ]);
+  });
+
+  test("a split amount finer than a cent is named at its own cell", () => {
+    const reading = readWorkbook(
+      [sheet("releve.csv", [[d("2024-01-02"), "X", null, 10.005, 10.005]])],
+      { people, layout: SPLIT },
+    );
+
+    expect(reading.problems).toEqual(["'releve.csv'!D1: 10.005 is not a whole number of cents."]);
+  });
+
+  test("an oldest-first year sheet, with its own columns and labels, reads as the household's does", () => {
+    const layout: Layout = {
+      ...HOUSEHOLD_LAYOUT,
+      account: {
+        sheets: { by: "year" },
+        yearPerSheet: true,
+        order: "oldest-first",
+        columns: [
+          { role: "date", column: "A" },
+          { role: "amount", column: "B" },
+          { role: "balance", column: "C" },
+          { role: "bucket", column: "D" },
+          { role: "person", column: "E" },
+        ],
+        buckets: [
+          { bucket: "mortgage", labels: ["Maison"] },
+          { bucket: "current-expenses", labels: ["Courant"] },
+        ],
+        carryOverLabel: "Report",
+        summary: null,
+      },
+    };
+    const reading = readWorkbook(
+      [
+        sheet("2024", [
+          ["Jour", "Mouvement", "Cumul", "Enveloppe", "Qui"],
+          [d("2024-01-01"), 0, null, "Maison", "Report"],
+          [d("2024-01-01"), 0, null, "Courant", "Report"],
+          [d("2024-01-20"), 500, 500, "Maison", "Alex"],
+          // Typed in 2014; the sheet's year repairs it, and the order bears it out.
+          [d("2014-02-03"), -100, 400, "Courant", null],
+          [d("2024-01-25"), 50, 450, "Courant", "Sam"],
+        ]),
+        ACCUEIL,
+      ],
+      { people, layout },
+    );
+
+    expect(reading.repairs).toEqual([
+      { sheet: "2024", row: 5, from: "2014-02-03", to: "2024-02-03" },
+    ]);
+    expect(reading.problems).toEqual([
+      "2024!A5: typed 2014-02-03 and repaired to 2024-02-03, the sheet's year, but row 5 (2024-02-03) is listed above row 6 (2024-01-25); oldest first, the order does not prove the repair.",
+    ]);
+    expect(reading.movements.map((movement) => [movement.row, movement.bucket])).toEqual([
+      [4, "mortgage"],
+      [5, "current-expenses"],
+      [6, "current-expenses"],
+    ]);
   });
 });
