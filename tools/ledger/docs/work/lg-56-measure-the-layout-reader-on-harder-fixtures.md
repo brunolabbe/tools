@@ -287,8 +287,9 @@ a different, reasonable one.**
   description (no role fits a bank's reference). **A model that files it as
   `note` scores `let-through`** (checked: `note` on C scores `let-through`,
   zero problems), because `imported()` includes the note, though nothing is
-  wrong. Read such a run by its `differences`, which will say
-  `account.columns`, before counting it as a let-through.
+  wrong. `differences` cannot tell it from a real mistake (it says
+  `account.columns` for both): classify each run from its record's `answer`,
+  as the round-1 entry below says.
 - `bank-footer`: the last three rows shown to a model are the three footer
   lines, because the view's last rows are the sheet's last rows: it sees no
   final movement. That is the shape; it is a fixture on purpose.
@@ -427,3 +428,94 @@ Sonnet records and the Haiku shown records share one `--out` because the model
 is a directory under it; only the masked run needs its own. **An estimate, not a
 measurement:** the API counts input at 1.8 to 3.4 times the harness's estimate
 (lg-38's Log), so the spend is dominated by output tokens.
+
+### 2026-10-18 — round 1: gate 1 CONCERNS at `9bced737`; the owner's answer
+
+**The owner's answer, 2026-10-18.** The question was gate 1's two mediums (F1,
+F2) with these options: "F2(a); also fix F1 now", "F2(a) only; F1 stays
+recorded", "F2(b): change the scorer and re-seed". **The owner chose "F2(a);
+also fix F1 now".** F2(a) was the gate's recommendation; opening a round for F1
+is the owner's choice beyond the severity floor. The three lows ride along.
+
+**F1 (med): "matched" held by construction.** `scoreLayout(each, each.layout)`
+compares a layout with itself, so the "correct description matches" tests could
+only go red through their `problems` assertion, which catches only what the
+reader refuses. Gate 1's positive control: `bankWide()`'s detail moved from E
+to G (Channel) left all 60 tests green. Fixed: `fixtures.ts` exports
+`writtenRows(name)`, the rows the generator wrote (date, bucket, person, cents,
+running balance, detail, note), built from the same `recorded()` and
+`banked()` the fixtures are built from, and `layout.test.ts` holds each
+correct description's reading to them, row for row.
+
+```
+$ sed -i 's/{ role: "detail", column: "E" }/{ role: "detail", column: "G" }/' …/fixtures.ts   (committed baseline 766464aa)
+$ npx vitest run api/test/layout.test.ts api/test/layout-live-gate.test.ts
+ × bank-wide: its correct description reads what the generator wrote
+      Tests  1 failed | 72 passed (73)
+$ git checkout 766464aa -- …/fixtures.ts ; same run
+      Tests  64 passed (64)  (layout.test.ts alone)
+```
+
+The refactor that made this possible moved the seeds into those two helpers.
+Checked not to change a fixture: the thirteen fixtures dumped to JSON before
+and after differ only in `bank-wide`'s `shape` text (the low below):
+`sed 's/needs three/needs four/' before.json | cmp - after.json` exits 0.
+
+**Folded in: lg-38's own loop.** It was free: the twelve generated fixtures
+(everything but `lg7`, which comes from `test/helpers/workbook.ts`, not from a
+seeded generator here) go through the same test, and all twelve pass. So the
+five lg-38 fixtures other than `lg7` are held to what was written as well. The
+lg-38 test "the correct description matches, and so does the same one spelled
+another way" is unchanged.
+
+**F2 (med, open decision): the owner chose (a).** On the bank shapes a
+harmless or judgement answer scores `let-through` with the same `differences`
+(`["account.columns"]`) as a real mistake: `bank-two-dates` with the
+reference filed as `note`, or the date read from B; `bank-wide` with any of its
+six text fields (B, C, D, G, J, K) filed as `note`, all reproduced here:
+`let-through`. Also, the 21 rows `bank-two-dates` shows hold no
+transaction-date inversion (0 shown, 2 in the file), so only the header tells
+"Date posted" from "Date of transaction". **Nothing in the scorer or the
+fixtures is changed**, so the run stays comparable with lg-38's 60. The note
+that replaces "read such a run by its `differences`", for steps 3 and 4:
+
+- For every run that did not match, read the record's `answer.account.columns`
+  and class it by comparing with the correct columns: `bank-two-dates` is
+  `date:A detail:D amount:E balance:F`, `bank-wide` is
+  `date:A detail:E amount:H balance:I`.
+  - **note-only**: the same four columns and an added `note` on any other
+    column. Harmless; the books keep one more text field.
+  - **date-column**: `date` on another column. A different import, and the
+    kind that matters for `bank-two-dates`.
+  - **movement-changing**: anything else (amount, balance or detail on another
+    column; order; buckets).
+- Report the let-through count in step 4 as `N let-through, of which M
+note-only, K date-column and J movement-changing`, and state the
+  rule-of-three bound on **both** `N` and `J` as estimates, with the runs and
+  fixtures behind each. The recommendation rests on `J`, and says so.
+- The listing, which reads files and calls nothing (it prints each non-matched
+  run, its outcome and differences, and the answer's columns):
+
+```sh
+node -e 'const fs=require("node:fs");const d=process.argv[1];for(const f of fs.readdirSync(d).sort()){if(!f.endsWith(".json"))continue;const r=JSON.parse(fs.readFileSync(d+"/"+f,"utf8"));if(r.score.outcome==="matched")continue;const cols=(r.answer?.account?.columns??[]).map(c=>c.role+":"+c.column).sort().join(" ");console.log(f,r.score.outcome,r.score.differences.join(","),"|",cols)}' \
+  ~/ledger-layout-lg56-shown/claude-haiku-5-5
+```
+
+Run on a fake directory it printed `bank-wide-1.json refused account.order |
+  amount:H balance:I date:A detail:E`, one line per run that did not match.
+
+**The three lows.**
+
+- The `MISTAKES` title put the `change` function in the third slot. In this
+  ticket's table the cases are objects and the title is `$name, $mistake:
+$outcome`; the verbose run now prints `'bank-wide', 'the detail read from the
+currency col…': 'let-through'`. **lg-38's own `MISTAKES` table has the same
+  title and is left alone**: it is nineteen merged tuples outside this
+  ticket's fixtures, and the defect is cosmetic.
+- `bankWide()`'s `shape` says four.
+- The `bank-two-dates` test now asserts that the posted date has no
+  `outOfOrder` under the correct description, beside the transaction date's.
+
+**Checks.** `npx vitest run api/test/layout.test.ts
+api/test/layout-live-gate.test.ts`: `73 passed (73)`. Preflight and the new
+head are in the pull request's thread.
