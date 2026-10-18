@@ -706,10 +706,35 @@ export function locateGateBlock(markdown, gate, sectionText) {
  * `***` to `---` — so a committed record can differ from a reviewer's raw file
  * in all of those and still be every word the reviewer wrote.
  *
+ * Memoized by input text, within this process only (repo-100): `land()` splices
+ * a section in a scratch clone, again for real, and then verifies it, and each
+ * of those formats the same text — about 330 ms an `oxfmt` spawn. The output is
+ * a function of the text, the pinned `oxfmt` and any `.oxfmtrc.json` above the
+ * fresh directory under the OS temp dir it runs in (`oxfmt` reads one from any
+ * ancestor of that directory; the repository's own config is not among them).
+ * A cache keyed by the text is therefore exact only while that ancestor config
+ * does not change within a process, and nothing here changes it. A throw is
+ * never cached, and the map dies with the process.
+ *
  * @param {string} text
  * @returns {string}
  */
 export function formatMarkdown(text) {
+  const cached = formattedByText.get(text);
+  if (cached !== undefined) return cached;
+  const formatted = runOxfmtOnText(text);
+  formattedByText.set(text, formatted);
+  return formatted;
+}
+
+/** @type {Map<string, string>} */
+const formattedByText = new Map();
+
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+function runOxfmtOnText(text) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-fmt-"));
   try {
     const file = path.join(dir, "section.md");

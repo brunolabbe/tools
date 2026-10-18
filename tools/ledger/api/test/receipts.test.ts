@@ -1134,6 +1134,16 @@ describe("a receipt's items (lg-10)", () => {
       "Pharmacy",
       "Restaurant",
       "Other",
+      "Property taxes",
+      "Electricity",
+      "Internet & phone",
+      "Subscriptions",
+      "Insurance",
+      "Home maintenance",
+      "Travel",
+      "Transport",
+      "Bank fees",
+      "Cash",
     ]);
     expect(answer.proposals[0]?.proposal.items.map((item) => item.spendingCategoryId)).toEqual([
       GROCERIES,

@@ -603,6 +603,13 @@ function run(
   const people = knownPeople(db);
   const reading = readWorkbook(sheets, { people, corrections: options.corrections });
   const problems = [...reading.problems];
+  // None under the household's layout, which names a bucket and a balance
+  // column; a row with neither is a statement's, never filed by this import.
+  if (reading.unfiled.length > 0) {
+    problems.push(
+      `${String(reading.unfiled.length)} rows have no bucket or no balance, and this import files every row it stores.`,
+    );
+  }
   if (!people.includes(options.personId)) {
     problems.push(
       `--as names "${options.personId}", who is not one of the household (${people.join(", ") || "nobody is in the directory"}).`,

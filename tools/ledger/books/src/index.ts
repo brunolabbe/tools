@@ -52,7 +52,7 @@ export type {
 } from "./settlement.ts";
 export { classify, matchesPattern, normalize as normalizeDescription } from "./classify.ts";
 export type { ClassifiableRow, MatchableRule, RuleMatch } from "./classify.ts";
-export { spendingCategory, spendingMap } from "./spending.ts";
+export { spendingCategory, spendingMap, spendingNameForText } from "./spending.ts";
 export type {
   SpendingChoice,
   SpendingMap,
@@ -111,6 +111,7 @@ export type {
 export { parseStatement } from "./statement.ts";
 export type { ParsedStatement, StatementRow } from "./statement.ts";
 export {
+  HOUSEHOLD_LAYOUT,
   NO_CORRECTIONS,
   cellRef,
   noteOf,
@@ -131,6 +132,7 @@ export type {
   Repair,
   Sheet,
   Skip,
+  UnfiledRow,
   WorkbookFigures,
   WorkbookLine,
   WorkbookPeriod,

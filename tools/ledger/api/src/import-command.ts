@@ -81,7 +81,7 @@ function usage(io: CommandIo, message: string): number {
  * make the rehearsal differ from the real import, which verifies everything
  * again on the real file before it commits.
  */
-function copyBooks(databasePath: string | undefined, into: string): string | undefined {
+export function copyBooks(databasePath: string | undefined, into: string): string | undefined {
   if (databasePath === undefined || !existsSync(databasePath)) return undefined;
   const copy = path.join(into, "ledger.db");
   copyFileSync(databasePath, copy);
@@ -115,7 +115,7 @@ function openReal(databasePath: string): Database.Database {
  * be recorded under a name nobody can sign in as; so is a household the
  * directory does not hold, which has no books to import into.
  */
-function directoryPeople(directoryPath: string, household: string): string[] {
+export function directoryPeople(directoryPath: string, household: string): string[] {
   if (directoryPath !== ":memory:" && !existsSync(directoryPath)) {
     throw new AppError(
       "BAD_REQUEST",

@@ -24,6 +24,7 @@
     "dev:ledger:web": "npm run dev -w @ledger/web",
     "import:ledger": "npm run import:ledger -w @ledger/api --",
     "household:ledger": "npm run household:ledger -w @ledger/api --",
+    "backfill-spending:ledger": "npm run backfill-spending:ledger -w @ledger/api --",
     "typecheck": "tsc --build --verbose",
     "// test": "Through the gate (repo-103), as are the test:<tool> scripts: two slots per clone, workers split between runs, nothing changes under CI. Its header says what it leaves ungated.",
     "test": "node scripts/test-gate.mjs vitest run",

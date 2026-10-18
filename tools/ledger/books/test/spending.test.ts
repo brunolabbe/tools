@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { spendingCategory, spendingMap } from "../src/index.ts";
+import { spendingCategory, spendingMap, spendingNameForText } from "../src/index.ts";
 
 const GROCERIES = 1;
 const PHARMACY = 2;
@@ -80,5 +80,24 @@ describe("spendingMap", () => {
     ]);
 
     expect(spendingCategory(ROW, null, map, null)).toBeNull();
+  });
+});
+
+describe("spendingNameForText (lg-53)", () => {
+  test("names what the workbook's and the bank's words were spent on, folded", () => {
+    expect(spendingNameForText("Taxes")).toBe("Property taxes");
+    expect(spendingNameForText("HYDRO QUEBEC")).toBe("Electricity");
+    expect(spendingNameForText("  epicerie/comissions ")).toBe("Groceries");
+    expect(spendingNameForText("Netflix")).toBe("Subscriptions");
+    expect(spendingNameForText("Assurances maison")).toBe("Insurance");
+    expect(spendingNameForText("Frais d'utilisation")).toBe("Bank fees");
+    expect(spendingNameForText("Retrait")).toBe("Cash");
+    expect(spendingNameForText("Ristourne")).toBe("Bank fees");
+  });
+
+  test("matches the whole text and never a part of it", () => {
+    expect(spendingNameForText("Épicerie Nouvelle-Écosse")).toBeNull();
+    expect(spendingNameForText("Paiement")).toBeNull();
+    expect(spendingNameForText("")).toBeNull();
   });
 });
