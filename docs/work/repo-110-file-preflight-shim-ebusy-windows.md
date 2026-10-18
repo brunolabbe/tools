@@ -127,3 +127,59 @@ branch/repo-93-sqlite-file-tests-windows-timeout, merged` line names a
     it needs is the leak bar in `Done when` 3 and 4, and the Windows behaviour can
     only be read on the informational leg. This rating was made by the builder
     from the format page's definitions, not from a measurement of a fix.
+
+- 2026-10-18 — Built on `origin/main` at `335efcd4`, branch
+  `repo-110-preflight-shim-ebusy`, draft PR #559. Code commit `beb5ba3d`.
+  - **Mechanism chosen: a hand-written retry loop, not `rmSync`'s
+    `maxRetries`.** `maxRetries` also retries `EMFILE`, `ENFILE`, `ENOTEMPTY`
+    and `EPERM`, which `Done when` 4 does not want hidden, and it cannot be made
+    to throw `EBUSY` once on Linux. `removeShimDir` retries `EBUSY` only, 8
+    attempts with a 50 ms x attempt wait (1.4 s at most), throws any other error
+    as it came, and after the last attempt throws
+    `could not remove <dir>: still EBUSY after 8 attempts` with the original as
+    `cause`. Its `remove` and `wait` are parameters so a spec injects them.
+  - **Mechanism for the leak spec differs from the brief.** `Done when` 3 says
+    to count `preflight-ghshim-*` in `os.tmpdir()` before and after. That count
+    races with any other session's preflight run in the same `/tmp` (the rule
+    in `.claude/rules/testing.md`, on temp-directory counts), so `makeShimDir`
+    records each directory it makes and the last spec in the file asserts none
+    of those paths still exists. Same property, no shared state. It is last on
+    purpose and passes vacuously under `-t`; the full-file run is the reading.
+  - `Done when` 1: `grep -n "rmSync(shimDir" scripts/test/preflight.test.ts`
+    prints nothing. The only `fs.rmSync` on a shim directory is inside
+    `removeShimDir`, and it reaches it as the default argument, `remove = fs.rmSync`.
+    The brief's grep expected one line in the helper; the helper takes the function
+    as a default parameter, so the literal `rmSync(shimDir` does not occur.
+    Three call sites, `removeShimDir(shimDir)`, at the three tests Build names.
+  - `Done when` 2, the spec `removeShimDir survives one EBUSY and then removes the
+directory (repo-110)`: the injected remove throws `EBUSY` on call 1, succeeds
+    on call 2; asserts 2 calls, one wait of 50 ms, directory gone.
+  - `Done when` 3, the spec `no preflight-ghshim directory this file made is left
+behind (repo-110)`. Each site's `removeShimDir(shimDir)` line replaced by a
+    comment, `npx vitest run scripts/test/preflight.test.ts`, then restored with
+    `git checkout beb5ba3d -- <file>`: line 779 `Tests  1 failed | 108 passed
+(109)` (`expected [ '/tmp/preflight-ghshim-W7QFkb' ] to deeply equal []`),
+    line 2267 `1 failed | 108 passed (109)` (`...-qKBdpM`), line 2320 `1 failed |
+108 passed (109)` (`...-T4VIBE`). Three green: the restored file, once after
+    each, `Tests  109 passed (109)` x3. The three leaked directories were removed
+    by hand.
+  - `Done when` 4, the spec `removeShimDir fails naming the directory when EBUSY
+never clears (repo-110)`: remove throws on every call; `toThrow(dir)`, 8
+    calls, directory still present. Mutation: `return` instead of the throw on
+    the last attempt gives `FAIL ... removeShimDir fails naming the directory
+when EBUSY never clears`, `1 failed | 108 passed (109)`. A third spec,
+    `removeShimDir throws any error other than EBUSY at once, unretried`, pins
+    that the helper does not swallow everything; the mutation that deletes the
+    `!== "EBUSY"` guard fails exactly it, `1 failed | 108 passed (109)`.
+  - `Done when` 6: `npx vitest run scripts/test/preflight.test.ts` →
+    `Tests  109 passed (109)`; `npm run check` → exit 0.
+  - **Windows is unmeasured here.** Nothing on Linux can throw `EBUSY`, so the
+    retry's effect on the real `gh.exe` unlink is read only from the pull
+    request's informational Windows leg; `Done when` 5 is that reading and the
+    gate grades one green of an intermittent failure as such. Whether the image
+    is in fact still held when `spawnSync` returns remains the hypothesis in
+    Why: the retry does not measure it. If the leg goes red with the retry
+    exhausted, the error now names the directory and carries the original
+    `EBUSY` as `cause`, and the cause is a separate filing (Build 3).
+  - Fold-in: none. Build 4 excludes the other `rmSync` calls in the file and
+    nothing else small and specified came free.
