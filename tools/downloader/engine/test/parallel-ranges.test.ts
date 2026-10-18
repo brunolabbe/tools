@@ -489,6 +489,8 @@ describe("dl-98: a progressive source throttled per connection", () => {
       // that put 8 of 16 whole-suite runs at 2.95 to 3.21 and the CI leg at
       // 2.91 to 3.00 (dl-121). So Windows asserts 2.5: 0.41 below the lowest
       // ratio recorded there, and far above the 0.999 of a run that never splits.
+      // Linux keeps 3: 40 whole-project runs beside the suite, 20 before dl-117's
+      // split and 20 after, measured 3.40 to 3.50 with none under 3 (dl-127).
       const floor = process.platform === "win32" ? 2.5 : 3;
       expect(single.ms / split.ms, timing).toBeGreaterThanOrEqual(floor);
       expect(await packetDigests(split.file)).toEqual(await packetDigests(single.file));

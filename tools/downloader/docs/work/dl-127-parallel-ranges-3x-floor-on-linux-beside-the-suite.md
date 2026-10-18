@@ -3,7 +3,7 @@ id: dl-127
 tool: downloader
 title: The 3x parallel-ranges floor failed once on Linux at 2.97x beside the whole suite
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -129,3 +129,40 @@ setting Linux to 2.5 now.
   it: run the two-arm measurement only once no other builder's or gate's local
   test run is active on the machine, and last in its batch. Status is unchanged
   and the measurement has not been run.
+- 2026-10-18 — Measured; **the Linux floor stays 3.** Machine: the repo's
+  devcontainer on WSL2 (kernel 5.15.90.1), 12 cores, 15 GB, Node 22.23.3; every
+  run took the test gate's slot alone with 11 workers. Each run was
+  `npm test -- --project downloader` in a detached worktree carrying an
+  uncommitted edit that appended `singleMs`, `splitMs` and their ratio to a file;
+  the edit was never committed. The two arms alternated, and the starting arm
+  alternated too. Before each run the runner waited for 60 s with no `vitest`,
+  `test-gate`, `playwright`, `tsc`, `vite build` or `oxlint` process outside the
+  two arms (the editor's resident `oxlint --lsp` and Playwright `test-server`
+  excepted). It flagged any run that such a process overlapped and repeated it.
+  None was flagged. Runs 05:21 to 07:59 UTC, 2026-10-18, after peer session
+  tools-01 confirmed it had no local run left.
+
+  | arm                                   | commit     | runs | below 3 | min   | median | max   | `splitMs`    | wall a run       |
+  | ------------------------------------- | ---------- | ---- | ------- | ----- | ------ | ----- | ------------ | ---------------- |
+  | base (one `browser-resolver.test.ts`) | `76ce7d52` | 20   | 0       | 3.400 | 3.444  | 3.481 | 2426 to 2485 | 280.5 to 285.5 s |
+  | split (#499's squash merge)           | `bf793fd6` | 20   | 0       | 3.399 | 3.478  | 3.504 | 2417 to 2475 | 73.4 to 74.8 s   |
+
+  `singleMs` was 8398 to 8539 throughout, so, as the ticket expected, the
+  variance is in `splitMs`. Every run passed whole (2565 tests on base, 2584 on
+  split). **Build step 4: the split arm did not fail more often.** Neither arm
+  failed, and the split's median is the higher of the two. Not counted: a
+  2026-10-17 pilot of 3 runs that died mid-series (3.435 base; 3.399 and 3.458
+  split) and two single-file smoke runs (3.422, 3.455).
+
+  What 40 clean runs can and cannot exclude: at dl-117's one failure in six,
+  (5/6)^40 ≈ 0.07 %; at dl-121's Windows rate of one in sixteen,
+  (15/16)^40 ≈ 7.6 %. So the 95 % upper bound on a quiet Linux failure rate is
+  about 3/40 (one in thirteen), and about 3/20 per arm. The 2.97 is not
+  reproduced: its `splitMs` of 2852 is 367 ms above the slowest four-connection
+  run here, which is the 150 to 405 ms the test's comment records beside a
+  heavier load. dl-117's builder made its six runs during a batch, with other
+  worktrees taking gate slots just before and after. It saw no second gated
+  run when run 3 started, but it looked only at starts and ends, and the gate
+  cannot see work that does not go through it (builds, typechecks, e2e).
+  Concurrent load is the likeliest cause; neither ticket measured it. The test's comment now
+  carries the Linux numbers.
