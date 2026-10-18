@@ -898,4 +898,31 @@ describe("--household names the books the import writes (lg-21)", () => {
     }
     expect(existsSync(dataDir)).toBe(false);
   });
+
+  test("each closed period's deposit is reported as paid, or as not found, and never refuses", async () => {
+    const paid = await run(await workbook(), "--as", "alex");
+
+    expect(paid.code, paid.out).toBe(0);
+    expect(paid.out).toMatch(
+      /paid: \$ \(Avril-Août\)'s 380\.00 \$ by alex, 2022 row \d+, 2022-09-10/u,
+    );
+    expect(paid.out).toMatch(
+      /paid: \$ \(Sept-Mars\)'s 100\.00 \$ by sam, 2023 row \d+, 2023-04-10/u,
+    );
+
+    // Paid net of something: the sheet asked for 100.00, the account holds 90.00.
+    const fixture = history();
+    const deposit = fixture.years[1]?.rows.find((row) => row.detail === "Équivalence");
+    if (deposit === undefined) throw new Error("the fixture has no 2023 deposit");
+    deposit.amount = 90;
+    const next = fixture.years[2];
+    if (next === undefined) throw new Error("the fixture has no 2024");
+    next.carry.buffer -= 10;
+    const net = await run(await workbook(fixture), "--as", "alex");
+
+    expect(net.code, net.out).toBe(0);
+    expect(net.out).toContain(
+      "not paid in the workbook: $ (Sept-Mars) asked sam for 100.00 $, and no deposit of that amount by sam is in the year sheets from 2023-03-17; check it before --write",
+    );
+  });
 });

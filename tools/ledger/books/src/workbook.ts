@@ -14,16 +14,21 @@
  *   detail, `E` person, `F` the account's running balance, `G` amount, `H`
  *   note. A row whose `B` is a date is a movement; a row with `Solde reporté`
  *   in it is a carry-over, one per bucket, and is verified, never imported.
+ *   Above the first movement, a row labelled `Solde …` or `Total` in `C` is
+ *   the sheet's own summary of its buckets, and is not read (lg-37).
  *   Anything else (a header, a blank) is not a row of the account.
  * - **Period sheets** (`$ (…)`): row 1 names the two people, each over the
  *   column that holds their amounts; row 6 holds the start and, once closed,
  *   the end; rows 8 onward are the lines, with the item to the left of the
- *   amount columns and the note just right of them, down to a `Total` row or
- *   the `Montant à déposer` row. In that row, the column holding a positive
- *   amount is who deposits it, and its formula tells `v1` (a division by the
- *   ratio) from `v2` (a product, no division). A sheet with no end is open.
- * - **`Accueil`**: a row naming a person, with a number to its right, is that
- *   person's salary.
+ *   amount columns and the note just right of them. The `Total` and
+ *   `Montant à déposer` rows are read wherever they are: the household's
+ *   sheets hold them in rows 2 to 4, above the lines (lg-37); below the lines,
+ *   they end them. In the `Montant à déposer` row, the column holding a
+ *   positive amount is who deposits it, and the arithmetic it is computed from
+ *   tells `v1` (a division by the ratio) from `v2` (a product, no division).
+ *   A sheet with no end is open, and no two periods overlap.
+ * - **`Accueil`**: row heads name the people over their columns, and the row
+ *   labelled `Salaires…` holds each one's salary under their name (lg-37).
  *
  * **Every problem is collected, not thrown.** A workbook with three typos
  * reports three, so the owner fixes them in one pass; `api` refuses to write
@@ -167,6 +172,22 @@ export interface WorkbookPeriod {
   ratio: Share[] | null;
 }
 
+/**
+ * What a closed period asked, and the deposit in the year sheets that paid
+ * it: the payer's movement of exactly that amount, from two weeks before the
+ * period's end up to the next period's end. Reported, never refused (lg-37):
+ * a deposit can be paid net of a correction, or not reach the workbook at all.
+ */
+export interface PeriodDeposit {
+  sheet: string;
+  payerId: string;
+  askedCents: number;
+  /** The first day searched. */
+  from: string;
+  /** The movement that paid it, or `null` when none of that amount was found. */
+  paid: { sheet: string; row: number; date: string } | null;
+}
+
 export interface WorkbookReading {
   /** Every movement, oldest first, each filed as it will be stored. */
   movements: Movement[];
@@ -179,6 +200,8 @@ export interface WorkbookReading {
   /** Closed periods, oldest first. */
   periods: WorkbookPeriod[];
   open: WorkbookPeriod | null;
+  /** One per closed period that asked somebody for money, oldest first. */
+  deposits: PeriodDeposit[];
   salaries: { personId: string; amountCents: number }[];
   /** Sheets read as none of the above, and so not imported. */
   ignored: string[];
@@ -204,6 +227,12 @@ function columnName(column: number): string {
 export function cellRef(sheet: string, row: number, column: number): string {
   const name = /^[A-Za-z0-9_]+$/u.test(sheet) ? sheet : `'${sheet}'`;
   return `${name}!${columnName(column)}${String(row)}`;
+}
+
+function columnNumber(name: string): number {
+  let column = 0;
+  for (const letter of name) column = column * 26 + (letter.codePointAt(0) ?? 64) - 64;
+  return column;
 }
 
 function cellAt(sheet: Sheet, row: number, column: number): Cell | null {
@@ -314,6 +343,20 @@ function isCarryOver(sheet: Sheet, row: number): boolean {
   return false;
 }
 
+/**
+ * A row of the summary the older year sheets keep above their movements:
+ * `Solde Dép. Courantes`, `Solde Hypothèque` and `Total`, each a formula over
+ * the sheet. It restates the rows, so it is neither imported nor a problem.
+ */
+function isSummary(sheet: Sheet, row: number): boolean {
+  // `C` only: `D` is a movement's free-text detail, and a detail that starts
+  // with "Solde" on a row whose date is unreadable is money, not a summary.
+  const text = textOf(cellAt(sheet, row, COLUMN.C));
+  if (text === null) return false;
+  const key = folded(text);
+  return key.startsWith("solde") || key.startsWith("total");
+}
+
 /** `date` with its year replaced by `year`, or `null` when that day does not exist (29 February). */
 function inYear(date: string, year: number): string | null {
   const [, month, day] = date.split("-").map(Number);
@@ -336,6 +379,7 @@ function readYear(
 ): YearRead {
   const movements: Movement[] = [];
   const carryOvers: CarryOver[] = [];
+  let dated = false;
   for (let row = 1; row <= sheet.rows.length; row++) {
     const at = (column: number): string => cellRef(sheet.name, row, column);
     const bucketText = textOf(cellAt(sheet, row, COLUMN.C));
@@ -355,13 +399,15 @@ function readYear(
 
     const written = dateOf(cellAt(sheet, row, COLUMN.B));
     if (written === null) {
-      // A header, a title or a blank. An amount with no date would be money
-      // nobody can place, which is never skipped quietly.
-      if (amount !== null && amount !== 0) {
+      // A header, a title, a blank, or the summary above the movements. An
+      // amount with no date anywhere else would be money nobody can place,
+      // which is never skipped quietly.
+      if (amount !== null && amount !== 0 && !(!dated && isSummary(sheet, row))) {
         out.problems.push(`${at(COLUMN.B)}: an amount with no date.`);
       }
       continue;
     }
+    dated = true;
     // A placeholder's amount is empty. One that holds text, or a formula Excel
     // never saved a value for, is an amount the books cannot read, and on the
     // newest rows nothing after it would show the money missing.
@@ -617,6 +663,23 @@ function rowTexts(sheet: Sheet, row: number): string[] {
   return texts;
 }
 
+/** A reference to a cell of the same sheet: not after a `!` or a range's `:`, and not a function's name. */
+const SAME_SHEET_CELL = /(?<![\w$!.':])\$?([A-Z]{1,3})\$?(\d+)(?![\w(!])/gu;
+
+/**
+ * The arithmetic a deposit is computed from: its own formula, and when that
+ * neither divides nor multiplies, the formulas of the cells on its sheet it
+ * reads. The v1 sheets compute it in an `Équivalence` row and only subtract
+ * in `Montant à déposer` (`=IF(D3<E3,E3-D3,0)`), so the division is a row up.
+ */
+function arithmeticOf(sheet: Sheet, formula: string): string {
+  if (/[/*]/u.test(formula)) return formula;
+  const read = [...formula.matchAll(SAME_SHEET_CELL)].map(
+    ([, column = "", row = ""]) => cellAt(sheet, Number(row), columnNumber(column))?.formula ?? "",
+  );
+  return [formula, ...read].join(" ");
+}
+
 function readSettlement(
   sheet: Sheet,
   row: number,
@@ -651,9 +714,10 @@ function readSettlement(
     );
     return null;
   }
+  const arithmetic = arithmeticOf(sheet, formulaText);
   let formula: "v1" | "v2";
-  if (formulaText.includes("/")) formula = "v1";
-  else if (formulaText.includes("*")) formula = "v2";
+  if (arithmetic.includes("/")) formula = "v1";
+  else if (arithmetic.includes("*")) formula = "v2";
   else {
     out.problems.push(
       `${at}: the formula =${formulaText} is neither v1 (a division by the ratio) nor v2 (a product with it).`,
@@ -666,6 +730,9 @@ function readSettlement(
   const recipientId = asking.cents > 0 ? other : asking.personId;
   return { formula, payerId, recipientId, depositCents: Math.abs(asking.cents) };
 }
+
+/** A period sheet's first line; rows 1 to 7 are its heading. */
+const FIRST_LINE = 8;
 
 function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): WorkbookPeriod | null {
   const columns: { column: number; personId: string }[] = [];
@@ -703,13 +770,16 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
 
   const lines: WorkbookLine[] = [];
   const totals = new Map<string, number>();
+  let totalRow = FIRST_LINE;
   let settlement: WorkbookSettlement | null = null;
   let ended = false;
-  for (let row = 8; row <= sheet.rows.length; row++) {
+  // The summary rows are read from row 2, since the household's sheets keep
+  // them above the lines; a line is read only from row 8.
+  for (let row = 2; row <= sheet.rows.length; row++) {
     const texts = rowTexts(sheet, row).map(folded);
     if (texts.some((text) => text.startsWith("montant a deposer"))) {
       settlement = readSettlement(sheet, row, columns, out);
-      ended = true;
+      if (row >= FIRST_LINE) ended = true;
       continue;
     }
     const labels: string[] = [];
@@ -723,10 +793,11 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
         const total = numberOf(cellAt(sheet, row, column));
         if (total !== null) totals.set(personId, toCents(total));
       }
-      ended = true;
+      totalRow = row;
+      if (row >= FIRST_LINE) ended = true;
       continue;
     }
-    if (ended) continue;
+    if (ended || row < FIRST_LINE) continue;
     const note = textOf(cellAt(sheet, row, last + 1));
     for (const { column, personId } of columns) {
       const cell = cellAt(sheet, row, column);
@@ -756,11 +827,15 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
       );
     } else {
       out.problems.push(
-        `${cellRef(sheet.name, 8, column)}: ${personId}'s lines add up to ${formatCentsPlain(sum)}, but the sheet's total says ${formatCentsPlain(total)}.`,
+        `${cellRef(sheet.name, totalRow, column)}: ${personId}'s lines add up to ${formatCentsPlain(sum)}, but the sheet's total says ${formatCentsPlain(total)}.`,
       );
     }
   }
   return { sheet: sheet.name, start, end: end ?? null, lines, settlement, ratio: null };
+}
+
+function overlap(period: WorkbookPeriod, before: WorkbookPeriod & { end: string }): string {
+  return `${cellRef(period.sheet, 6, 1)}: ${period.sheet} starts on ${period.start}, before ${before.sheet} ends on ${before.end}; periods do not overlap.`;
 }
 
 function orderPeriods(read: readonly WorkbookPeriod[], out: WorkbookReading): void {
@@ -777,8 +852,14 @@ function orderPeriods(read: readonly WorkbookPeriod[], out: WorkbookReading): vo
   const newest = closed.at(-1);
   if (current !== undefined && newest !== undefined && current.start <= newest.start) {
     out.problems.push(`${current.sheet} has no end date, but it is not the newest period.`);
+  } else if (current !== undefined && newest !== undefined && current.start < newest.end) {
+    out.problems.push(overlap(current, newest));
   }
   for (const [index, period] of closed.entries()) {
+    const before = closed[index - 1];
+    // A period may start the day the one before it ends; it may not start sooner.
+    if (before !== undefined && period.start < before.end)
+      out.problems.push(overlap(period, before));
     if (period.settlement === null) {
       out.problems.push(`${period.sheet} is closed, but no Montant à déposer was read from it.`);
     }
@@ -800,32 +881,79 @@ function orderPeriods(read: readonly WorkbookPeriod[], out: WorkbookReading): vo
   out.open = current ?? null;
 }
 
+/**
+ * Two weeks before the end: the household has paid a day early, and nothing
+ * measured needed more. Up to the next period's end, since a late deposit is
+ * still this period's until the next one closes.
+ */
+const DEPOSIT_LEAD_DAYS = 14;
+
+function daysBefore(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+}
+
+function findDeposits(out: WorkbookReading): void {
+  for (const [index, period] of out.periods.entries()) {
+    const settlement = period.settlement;
+    if (settlement === null || settlement.payerId === null || settlement.depositCents === 0)
+      continue;
+    const payerId = settlement.payerId;
+    const from = daysBefore(period.end ?? period.start, DEPOSIT_LEAD_DAYS);
+    const until = out.periods[index + 1]?.end ?? null;
+    const paid = out.movements.find(
+      (movement) =>
+        movement.personId === payerId &&
+        movement.amountCents === settlement.depositCents &&
+        movement.date >= from &&
+        (until === null || movement.date <= until),
+    );
+    out.deposits.push({
+      sheet: period.sheet,
+      payerId,
+      askedCents: settlement.depositCents,
+      from,
+      paid: paid === undefined ? null : { sheet: paid.sheet, row: paid.row, date: paid.date },
+    });
+  }
+}
+
 // --- Accueil ---
 
+/**
+ * A salary is a number in a row labelled `Salaires…`, under the column the
+ * nearest name above it heads. Accueil names the people again further down,
+ * over its calculators, and only the labelled row is read, so those figures
+ * are never taken for salaries.
+ */
 function readSalaries(sheet: Sheet, people: People, out: WorkbookReading): void {
   const found = new Map<string, number>();
+  const heads = new Map<number, string>();
   for (const [index, cells] of sheet.rows.entries()) {
+    const salaries = cells.some((cell) => {
+      const text = textOf(cell);
+      return text !== null && folded(text).startsWith("salaire");
+    });
     for (const [column, cell] of cells.entries()) {
       const text = textOf(cell);
       const personId = text === null ? undefined : people.peek(text);
-      if (personId === undefined) continue;
-      const salary = cells
-        .slice(column + 1)
-        .map(numberOf)
-        .find((value) => value !== null);
-      if (salary === undefined || salary === null) continue;
-      if (found.has(personId)) {
+      if (personId !== undefined) {
+        heads.set(column, personId);
+        continue;
+      }
+      const salary = numberOf(cell);
+      const head = heads.get(column);
+      if (!salaries || salary === null || head === undefined) continue;
+      if (found.has(head)) {
         out.problems.push(
-          `${cellRef(sheet.name, index + 1, column + 1)}: a second salary for ${personId}.`,
+          `${cellRef(sheet.name, index + 1, column + 1)}: a second salary for ${head}.`,
         );
       }
-      found.set(personId, toCents(salary));
-      break;
+      found.set(head, toCents(salary));
     }
   }
   if (found.size !== 2) {
     out.problems.push(
-      `${sheet.name}: ${String(found.size)} salaries were found; the ratio needs one for each of two people.`,
+      `${sheet.name}: ${String(found.size)} salaries were found; the ratio needs one for each of two people, in a row labelled Salaires, under a column each one's name heads.`,
     );
   }
   out.salaries = [...found].map(([personId, amountCents]) => ({ personId, amountCents }));
@@ -853,6 +981,7 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
     outOfOrder: [],
     periods: [],
     open: null,
+    deposits: [],
     salaries: [],
     ignored: [],
     checks: [],
@@ -895,6 +1024,7 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
   );
 
   orderPeriods(periods, out);
+  findDeposits(out);
   if (accueil === undefined)
     out.problems.push("The workbook has no Accueil sheet, so no salaries.");
   else readSalaries(accueil, people, out);

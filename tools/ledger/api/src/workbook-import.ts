@@ -682,6 +682,14 @@ function run(
       `  ${period.sheet}: ${period.start} to ${period.end ?? ""}, ${String(period.lines.length)} lines, ${asked}${ratio}`,
     );
   }
+  // The sheet's ask against the account, reported and never refused (lg-37).
+  for (const deposit of reading.deposits) {
+    say(
+      deposit.paid === null
+        ? `  not paid in the workbook: ${deposit.sheet} asked ${deposit.payerId} for ${money(deposit.askedCents)}, and no deposit of that amount by ${deposit.payerId} is in the year sheets from ${deposit.from}; check it before --write`
+        : `  paid: ${deposit.sheet}'s ${money(deposit.askedCents)} by ${deposit.payerId}, ${deposit.paid.sheet} row ${String(deposit.paid.row)}, ${deposit.paid.date}`,
+    );
+  }
   if (reading.open !== null) {
     say(
       `  ${reading.open.sheet}: open since ${reading.open.start}, ${String(reading.open.lines.length)} lines`,

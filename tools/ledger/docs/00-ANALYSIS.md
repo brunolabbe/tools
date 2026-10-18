@@ -605,13 +605,13 @@ CSRF protection into the ledger.
 The workbook holds everything since 2022, and the owner chose to import all of
 it. Its layout:
 
-| Sheets          | Contents                                                                                                                                                                                                 |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `2022` … `2026` | the account, newest first. `B` date, `C` bucket, `D` detail (from `Labels`), `E` person, `F` running balance, `G` amount, `H` note. Each year ends in two `Solde reporté` rows carrying the buckets over |
-| `$ (…)` periods | row 1 names the two people, row 6 holds the period's start and end dates, and rows 8 onward hold one line per item, with one amount column per person and a note                                         |
-| `Accueil`       | the salaries the ratio came from, imported as the ratio's first record, and the only salaries the workbook holds                                                                                         |
-| `Labels`        | the vocabulary: persons, buckets and details                                                                                                                                                             |
-| `Budget`        | a monthly budget, deferred (§10)                                                                                                                                                                         |
+| Sheets          | Contents                                                                                                                                                                                                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `2022` … `2026` | the account, newest first. `B` date, `C` bucket, `D` detail (from `Labels`), `E` person, `F` running balance, `G` amount, `H` note. Each year ends in two `Solde reporté` rows carrying the buckets over; 2022–2024 also open with a `Solde …`/`Total` summary of the buckets above the movements                        |
+| `$ (…)` periods | row 1 names the two people, rows 2–4 hold `Total`, `Équivalence` and `Montant à déposer` above the lines, row 6 holds the period's start and end dates, and rows 8 onward hold one line per item, with one amount column per person and a note. v1 divides in `Équivalence`; v2 multiplies in `Montant à déposer` itself |
+| `Accueil`       | the salaries the ratio came from, in a `Salaires bruts` row under columns the two names head, imported as the ratio's first record, and the only salaries the workbook holds                                                                                                                                             |
+| `Labels`        | the vocabulary: persons, buckets and details                                                                                                                                                                                                                                                                             |
+| `Budget`        | a monthly budget, deferred (§10)                                                                                                                                                                                                                                                                                         |
 
 What the importer does with that:
 

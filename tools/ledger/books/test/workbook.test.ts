@@ -43,9 +43,10 @@ function year(
   ]);
 }
 
+/** As the household's Accueil has it: names heading columns, salaries in a labelled row under them. */
 const ACCUEIL = sheet("Accueil", [
-  ["Alex", 60000],
-  ["Sam", 40000],
+  [null, "Alex", "Sam"],
+  ["Salaires bruts", 60000, 40000],
 ]);
 
 function period(name: string, deposit: Input[]): Sheet {
@@ -316,5 +317,329 @@ describe("reading the workbook", () => {
       "2024-01-25",
       "2024-01-20",
     ]);
+  });
+});
+
+// lg-37: the layout the household's own workbook has, which lg-7's fixtures did not.
+describe("reading the workbook's own layout", () => {
+  /** A period sheet with its summary in rows 2 to 4, above the lines, as the household keeps it. */
+  function summarised(name: string, start: string, end: string, summary: Input[][]): Sheet {
+    return sheet(name, [
+      [null, null, "Alex", "Sam"],
+      ...summary,
+      [],
+      [null, "Période de facturation", d(start), d(end)],
+      [],
+      [null, "Épicerie", null, 300],
+      [null, "Quincaillerie", 120, null],
+    ]);
+  }
+
+  /** v1: the division is in the Équivalence row, and Montant à déposer only subtracts. */
+  const V1_SUMMARY: Input[][] = [
+    [
+      null,
+      "Total",
+      { formula: "SUM(C8:C202)", result: 120 },
+      { formula: "SUM(D8:D202)", result: 300 },
+    ],
+    [
+      null,
+      "Équivalence",
+      { formula: "IF(C2<D2,C2*Accueil!B2,C2)", result: 120 },
+      { formula: "IF(D2<C2,D2/Accueil!B2,D2)", result: 300 },
+    ],
+    [
+      null,
+      "Montant à déposer",
+      { formula: "IF(C3<D3,D3-C3,0)", result: 180 },
+      { formula: "IF(D3<C3,C3-D3,0)", result: 0 },
+    ],
+  ];
+
+  /** v2: the product is in Montant à déposer itself. */
+  const V2_SUMMARY: Input[][] = [
+    [
+      null,
+      "Total",
+      { formula: "SUM(C8:C202)", result: 120 },
+      { formula: "SUM(D8:D202)", result: 300 },
+    ],
+    [],
+    [
+      null,
+      "Montant à déposer",
+      { formula: "IF(C2-(C2+D2)*Accueil!B2<0,ABS(C2-(C2+D2)*Accueil!B2),0)", result: 132 },
+      { formula: "IF(D2-(D2+C2)*Accueil!C2<0,ABS(D2-(D2+C2)*Accueil!C2),0)", result: 0 },
+    ],
+  ];
+
+  test("a period's summary above its lines is read: its total checked, its deposit's version told", () => {
+    const reading = readWorkbook(
+      [
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        summarised("$ (B)", "2022-08-31", "2023-01-31", V2_SUMMARY),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(reading.problems).toEqual(["The workbook has no year sheet (2022, 2023, …)."]);
+    expect(reading.periods.map((read) => [read.sheet, read.settlement])).toEqual([
+      ["$ (A)", { formula: "v1", payerId: "alex", recipientId: "sam", depositCents: 18_000 }],
+      ["$ (B)", { formula: "v2", payerId: "alex", recipientId: "sam", depositCents: 13_200 }],
+    ]);
+    // Only rows 8 onward are lines; the summary's figures are not.
+    expect(reading.periods[0]?.lines.map((line) => [line.row, line.amountCents])).toEqual([
+      [8, 30_000],
+      [9, 12_000],
+    ]);
+    expect(reading.checks).toContain("$ (A): alex's lines add up to the sheet's total, 120.00.");
+  });
+
+  test("a summary total the lines do not make is refused", () => {
+    const wrong: Input[][] = [
+      [null, "Total", 125, { formula: "SUM(D8:D202)", result: 300 }],
+      ...V1_SUMMARY.slice(1),
+    ];
+    const reading = readWorkbook(
+      [summarised("$ (A)", "2022-04-01", "2022-08-31", wrong), ACCUEIL],
+      { people },
+    );
+
+    expect(reading.problems).toContain(
+      "'$ (A)'!C2: alex's lines add up to 120.00, but the sheet's total says 125.00.",
+    );
+  });
+
+  test("a year's summary above its movements is not money; the same figure below one is", () => {
+    const rows: Input[][] = [
+      [
+        null,
+        null,
+        "Solde Dép. Courantes",
+        null,
+        null,
+        null,
+        { formula: "SUMIF(C6:C9,1)", result: 0 },
+      ],
+      [
+        null,
+        null,
+        "Solde Hypothèque",
+        null,
+        null,
+        null,
+        { formula: "SUMIF(C6:C9,2)", result: 500 },
+      ],
+      [null, null, "Total", null, null, null, { formula: "SUM(G1,G2)", result: 500 }],
+      [null, "Date", "Compte", "Détail", "Personne", "Solde", "Montant"],
+      [null, d("2022-03-01"), "Hypothèque", "Versement", "Alex", 500, 500],
+      [null, null, "Total", null, null, null, 500],
+    ];
+    const reading = readWorkbook([sheet("2022", rows), ACCUEIL], { people });
+
+    expect(reading.problems).toEqual(["2022!B6: an amount with no date."]);
+    expect(reading.movements.map((movement) => movement.row)).toEqual([5]);
+  });
+
+  test("Accueil's salaries are the labelled row, never the figures under its calculators' headings", () => {
+    const reading = readWorkbook(
+      [
+        sheet("Accueil", [
+          [null, "Alex", "Sam"],
+          ["Salaires bruts (2022)", 60000, 40000],
+          ["Facteur équivalence (2022)", 0.6, 0.4],
+          [],
+          [null, "Alex", "Sam"],
+          ["Équivalence avec un total", 900, 600],
+        ]),
+      ],
+      { people },
+    );
+
+    expect(reading.salaries).toEqual([
+      { personId: "alex", amountCents: 6_000_000 },
+      { personId: "sam", amountCents: 4_000_000 },
+    ]);
+    expect(reading.problems).not.toContainEqual(expect.stringContaining("salar"));
+  });
+
+  test("a second Salaires row, or none, is refused", () => {
+    const twice = readWorkbook(
+      [
+        sheet("Accueil", [
+          [null, "Alex", "Sam"],
+          ["Salaires (2022)", 60000, 40000],
+          ["Salaires (2024)", 65000, 45000],
+        ]),
+      ],
+      { people },
+    );
+    const none = readWorkbook(
+      [
+        sheet("Accueil", [
+          ["Alex", 60000],
+          ["Sam", 40000],
+        ]),
+      ],
+      { people },
+    );
+
+    expect(twice.problems).toContain("Accueil!B3: a second salary for alex.");
+    expect(none.problems).toContain(
+      "Accueil: 0 salaries were found; the ratio needs one for each of two people, in a row labelled Salaires, under a column each one's name heads.",
+    );
+  });
+
+  test("periods that overlap are refused; one may start the day the last ends", () => {
+    const touching = readWorkbook(
+      [
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        summarised("$ (B)", "2022-08-31", "2023-01-31", V2_SUMMARY),
+        ACCUEIL,
+      ],
+      { people },
+    );
+    const overlapping = readWorkbook(
+      [
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        summarised("$ (B)", "2022-06-15", "2023-01-31", V2_SUMMARY),
+        ACCUEIL,
+      ],
+      { people },
+    );
+    const openInside = readWorkbook(
+      [
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        sheet("$ (B)", [
+          [null, null, "Alex", "Sam"],
+          [],
+          [],
+          [],
+          [],
+          [null, null, d("2022-06-15")],
+        ]),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    const openTouching = readWorkbook(
+      [
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        sheet("$ (B)", [
+          [null, null, "Alex", "Sam"],
+          [],
+          [],
+          [],
+          [],
+          [null, null, d("2022-08-31")],
+        ]),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(touching.problems).not.toContainEqual(expect.stringContaining("overlap"));
+    expect(openTouching.problems).not.toContainEqual(expect.stringContaining("overlap"));
+    expect(overlapping.problems).toContain(
+      "'$ (B)'!A6: $ (B) starts on 2022-06-15, before $ (A) ends on 2022-08-31; periods do not overlap.",
+    );
+    expect(openInside.problems).toContain(
+      "'$ (B)'!A6: $ (B) starts on 2022-06-15, before $ (A) ends on 2022-08-31; periods do not overlap.",
+    );
+  });
+
+  test("a deposit's own formula is followed only to cells of its own sheet", () => {
+    // C2 divides, so a formula that reads it is v1; one that only names another
+    // sheet's C2, alone or as a range's far end, reads nothing here.
+    const grid = (formula: string): Sheet =>
+      sheet("$ (A)", [
+        [null, null, "Alex", "Sam"],
+        [null, "Équivalence", { formula: "D5/2", result: 1 }],
+        [],
+        [],
+        [],
+        [null, null, d("2022-04-01"), d("2022-08-31")],
+        [],
+        [null, "Épicerie", null, 300],
+        [null, "Montant à déposer", { formula, result: 380 }],
+      ]);
+    const read = (formula: string): string | undefined =>
+      readWorkbook([grid(formula), ACCUEIL], { people }).periods[0]?.settlement?.formula;
+
+    expect(read("C2-D8")).toBe("v1");
+    expect(read("Accueil!C2-D8")).toBeUndefined();
+    expect(read("SUM(Accueil!B2:C2)-D8")).toBeUndefined();
+  });
+
+  test("a summary row below the lines ends them: nothing under it is a line", () => {
+    const below = sheet("$ (A)", [
+      [null, null, "Alex", "Sam"],
+      [],
+      [],
+      [],
+      [],
+      [null, null, d("2022-04-01"), d("2022-08-31")],
+      [],
+      [null, "Épicerie", null, 300],
+      [null, "Montant à déposer", { formula: "D8/Accueil!B2-C8", result: 500 }],
+      [null, "Calcul", 999, 999],
+    ]);
+    const reading = readWorkbook([below, ACCUEIL], { people });
+
+    expect(reading.periods[0]?.lines.map((line) => line.row)).toEqual([8]);
+  });
+
+  test("a detail that starts like a summary, on a row with no readable date, is still money", () => {
+    const rows: Input[][] = [
+      [null, "2022-03-09", "Hypothèque", "Solde de tout compte", "Sam", 800, 300],
+      [null, "Date", "Compte", "Détail", "Personne", "Solde", "Montant"],
+      [null, d("2022-03-01"), "Hypothèque", "Versement", "Alex", 500, 500],
+    ];
+    const reading = readWorkbook([sheet("2022", rows), ACCUEIL], { people });
+
+    expect(reading.problems).toContain("2022!B1: an amount with no date.");
+  });
+
+  test("a closed period's deposit is found by payer and amount, from two weeks before its end", () => {
+    const reading = readWorkbook(
+      [
+        year("2022", [
+          // Fifteen days before $ (B) ends: one day too early to be its deposit.
+          ["2022-12-16", "Dép. Courantes", "Dépôt", "Alex", 312, 132],
+          ["2022-09-05", "Dép. Courantes", "Dépôt", "Alex", 180, 180],
+        ]),
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        summarised("$ (B)", "2022-08-31", "2022-12-31", V2_SUMMARY),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(reading.deposits).toEqual([
+      {
+        sheet: "$ (A)",
+        payerId: "alex",
+        askedCents: 18_000,
+        from: "2022-08-17",
+        paid: { sheet: "2022", row: 3, date: "2022-09-05" },
+      },
+      { sheet: "$ (B)", payerId: "alex", askedCents: 13_200, from: "2022-12-17", paid: null },
+    ]);
+  });
+
+  test("the right amount from the other person does not pay a period's deposit", () => {
+    const reading = readWorkbook(
+      [
+        year("2022", [["2022-09-05", "Dép. Courantes", "Dépôt", "Sam", 180, 180]]),
+        summarised("$ (A)", "2022-04-01", "2022-08-31", V1_SUMMARY),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(reading.deposits.map((deposit) => deposit.paid)).toEqual([null]);
   });
 });
