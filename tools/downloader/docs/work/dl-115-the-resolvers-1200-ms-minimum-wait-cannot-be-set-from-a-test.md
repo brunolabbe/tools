@@ -333,5 +333,6 @@ expected 1200 to be 200`. Each: `Tests  1 failed | 2 passed | 120 skipped
   stopwatch does not follow, so a system-clock step during the wait moves the
   two apart. dl-126's landing saw `expected 1001.709182999999 to be greater than
 or equal to 1200` from this assertion. dl-128 measured which of the two it can
-  be here (the deadline cannot, at the test's 25 s budget) and gave the test an
-  assertion that names each. The Review above is left as the gate wrote it.
+  be here (the deadline cannot, at the test's 25 s budget; the clock steps
+  measured here run backwards and cannot shorten the wait, a forward step would,
+  and none was observed) and gave the test an assertion that names each. The Review above is left as the gate wrote it.

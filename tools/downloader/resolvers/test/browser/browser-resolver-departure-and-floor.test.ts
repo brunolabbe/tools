@@ -40,9 +40,12 @@ const { probe, probeError } = probes(() => server);
 //
 // It also records what the wait returned and how long it lasted on the clock the
 // wait itself reads (dl-128). `waitForQuiet` returns false when the deadline
-// arrived first, and then ends short of its minimum: that is the one way the
-// minimum is not held that a test can name, so the floor test reads it here
-// instead of inferring it from a duration.
+// arrived first, and then ends short of its minimum: a cut the floor test can
+// name by reading it here instead of inferring it from a duration. It is not the
+// only way the minimum is not held: `waitForQuiet` also returns `true` early when
+// its `stop` predicate fires (a departure or DRM), which `reachedQuiet` does not
+// tell from quiet, so `wallWaitedMs` agreeing with `waitedMs` is what sets that
+// apart from a clock step.
 const quietWaitCalls = vi.hoisted(
   () => [] as { minWaitMs: number; reachedQuiet?: boolean; wallWaitedMs?: number }[],
 );
@@ -467,8 +470,9 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
       // the floor and then the deadline, so a budget spent on page load returns
       // short of the minimum, and the duration below cannot say that was why.
       // The budget here is `PROBE_TIMEOUT_MS`, 25 s, of which page load and
-      // provocation take under 2 s on `/mse.html`: only a budget lowered under
-      // this test, or a page that stops loading, reaches the deadline.
+      // provocation take about 2 s on `/mse.html` (1.6 to 2.0 s measured, at a
+      // load average up to 11.5): only a budget lowered under this test, or a
+      // page that stops loading, reaches the deadline.
       expect(reachedQuiet, "the wait ended at its deadline, not at quiet").toBe(true);
       // `wallWaitedMs` is the clock the wait counts on, `waitedMs` the one it
       // cannot step (dl-105). The two disagreeing means the system clock moved

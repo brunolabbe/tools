@@ -100,12 +100,12 @@ removed the upper bounds; the lower one stayed on the claim quoted above.
     `true`, `waited` 1202 to 1207 ms. The deadline leaves 19.3 s of slack
     against a wait that starts at under 1.8 s: a cut wait needs a page load an
     order of magnitude slower than anything here.
-  - **A second cause fits dl-126's number and was seen here.** The wait counts
+  - **A second cause would fit dl-126's number; none was observed here.** The wait counts
     its floor on `Date.now`; the test times it on `performance.now` (dl-105).
     In that scratch run, iteration 5 read `total=2803` on `performance.now` and
     `dateTotal=2071` on `Date.now`: the sandbox stepped the system clock back
-    730 ms mid-run, the dl-105 mechanism. A step forward during the wait does
-    the reverse and shortens the wait in real time. Mutation, a `Date.now` spy
+    730 ms mid-run, the dl-105 mechanism. The steps measured here run backwards
+    and cannot shorten the wait; a forward step would, and none was observed. Mutation, a `Date.now` spy
     adding 500 ms at 2000 ms after the call (the wait runs 1.6 s to 2.8 s):
     `AssertionError: the wait lasted 802 ms by performance.now and 1301 ms by
 Date.now: expected 801.9789369999999 to be greater than or equal to 1200`.
@@ -124,9 +124,14 @@ tools/downloader/resolvers/test/browser/browser-resolver-departure-and-floor.tes
 skipped (17)`, 10 of 10 exit 0. Load average (1 min) before each run: 2.92,
     4.37, 6.84, 6.86, 6.39, 6.20, 5.47, 5.19, 4.47, 4.11 (other builders'
     suites were running).
-  - **Done when 2.** Mutation: `timeoutMs: 5000` added to the helper's
-    `options()` (deadline 1000 ms after the call, before the wait starts), the
-    file restored from `64bcecb1`. `× a resolver given no minWaitMs hands the
+  - **Done when 2.** Mutation: `timeoutMs: 5000` added to the `options({...})`
+    call in `quietWait` in the spec file (not the one in
+    `helpers/browser-harness.ts`; deadline 1000 ms after the call, before the
+    wait starts). Command: `npx vitest run
+tools/downloader/resolvers/test/browser/browser-resolver-departure-and-floor.test.ts
+-t "defaults to 1200"` → exit 1, `Tests  1 failed | 2 passed | 14 skipped
+(17)`. The spec file was the only file mutated, restored with `git checkout
+64bcecb1 -- <that spec file>`. `× a resolver given no minWaitMs hands the
 wait MIN_WAIT_MS, and holds it that long`, `AssertionError: the wait ended
 at its deadline, not at quiet: expected false to be true`, at the new
     assertion, before the duration one.
@@ -137,3 +142,38 @@ at its deadline, not at quiet: expected false to be true`, at the new
     clock a step cannot move is a `src` change in a resolver and the only thing
     that would remove the second cause; it is a decision (see the report), not
     a free piece of work, and its cause here is a hypothesis.
+
+- 2026-10-18 — Owner's answer, on gate 1 (CONCERNS) and the builder's open
+  decision on `waitForQuiet`'s clock: "No clock change; fix F1–F4 at landing".
+  `waitForQuiet` keeps `Date.now`; no `resolvers/src` change, and the builder's
+  open decision is closed. A recurrence of dl-126's failure is read off the
+  floor test's two-clock message (clocks disagree: a clock step; agree with
+  `reachedQuiet` `true`: `stop`; `reachedQuiet` `false`: the deadline).
+
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F1 — "the clock-step
+  cause is put forward as seen on this machine, and what was seen cannot cause
+  this failure". The Log's "A second cause fits dl-126's number and was seen
+  here" and dl-115's "measured which of the two it can be here" now say the
+  steps measured here run backwards and cannot shorten the wait, and that a
+  forward step would and none was observed. `awk '/^- 2026-10-18 — Fixed at
+landing/{exit} {print}' <this ticket> | grep -c "was seen here"` → 0;
+  `grep -c "none was observed" <dl-115 ticket>` → 1.
+
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F2 — "the test's
+  comment over `quietWaitCalls` says a deadline-cut wait is 'the one way the
+  minimum is not held that a test can name'". The comment now names the `stop`
+  predicate as the other way and what tells it from a clock step.
+  `grep -c "that is the one way the" <the spec file>` → 0.
+
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F3 — "page load and
+  provocation 'take under 2 s on `/mse.html`'". The comment says about 2 s,
+  1.6 to 2.0 s measured at a load average up to 11.5. `grep -c "take under 2 s"
+<the spec file>` → 0.
+
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F4 — "the Log's Done
+  when 2 bullet gives the mutation and the message but not the command". The
+  bullet now carries the `npx vitest run … -t "defaults to 1200"` command and its
+  result, names the `options({...})` call in `quietWait` in the spec file rather
+  than "the helper's `options()`", and says the spec file was the only file
+  restored. `awk '/^- 2026-10-18 — Fixed at landing/{exit} {print}' <this
+ticket> | grep -c "the helper's"` → 0.
