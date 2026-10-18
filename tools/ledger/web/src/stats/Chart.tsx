@@ -192,7 +192,9 @@ export function ChartCard(props: {
 
 function TableView({ title, table }: { title: string; table: TableData }): React.ReactElement {
   return (
-    <div className="chart-scroll">
+    // A long series scrolls inside its own box, about as tall as the chart it
+    // stands for, rather than stretching the card.
+    <div className="chart-scroll table-scroll">
       <table className="chart-table">
         <caption className="sr-only">{title}</caption>
         <thead>
@@ -205,7 +207,8 @@ function TableView({ title, table }: { title: string; table: TableData }): React
           </tr>
         </thead>
         <tbody>
-          {table.rows.map((row, at) => (
+          {/* Newest first: what someone opens the table to check is what just happened. */}
+          {table.rows.toReversed().map((row, at) => (
             <tr key={`${String(at)}:${row[0] ?? ""}`}>
               {row.map((cell, index) => (
                 <td

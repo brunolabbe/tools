@@ -655,6 +655,18 @@ svg.chart .selected-band {
   font-variant-numeric: tabular-nums;
 }
 
+.table-scroll {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+/* The column names stay in view over the rows scrolling under them. */
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+
 @media (min-width: 48rem) {
   .shell {
     padding: calc(var(--gap) * 2);
