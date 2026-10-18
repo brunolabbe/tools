@@ -104,8 +104,9 @@ the run is still open.
 **What is left, and the command for it.** The run needs four things: the
 owner's Anthropic key, the firewall opened to `api.anthropic.com`, each
 model's prices in USD per million tokens, and an output directory outside
-the repository. Run it once per model from the repository root, after
-`npm run build`:
+the repository. `ANTHROPIC_CUSTOM_HEADERS` must be unset: the harness
+refuses to run with it set (gate 1's med, fixed in round 1 below). Run it
+once per model from the repository root, after `npm run build`:
 
 ```sh
 LEDGER_LIVE_RUN=1 ANTHROPIC_API_KEY=<key> node --import tsx \
@@ -256,3 +257,54 @@ lg-37 merged as aba691b2. Nothing else was made free.
    of layout failures above is offline.
 4. Unproven (scope): the recommendation and the owner's build-or-drop
    decision follow the run.
+
+### 2026-10-18 — round 1, after gate 1
+
+Gate 1 (at `029641b4..782eb382`) returned CONCERNS, with one med, eleven
+lows and no high.
+
+**The question, and the owner's answer.** The orchestrator asked the owner
+which findings this round should fix. The recommended option was the med
+only. The full list of options is in the orchestrator's record of the
+question, not here.
+
+**On 2026-10-18 the owner chose the med plus the three harness CLI lows.**
+That goes beyond the recommended option. The other ten lows stay recorded in
+the gate's report and are not fixed here.
+
+**Fixed.** Each fix comes with a test appended to
+`api/test/layout-live-gate.test.ts`, under "the layout measurement's
+harness, round 1". All four tests failed against 782eb382's harness and pass
+on the fix: `4 failed | 5 passed (9)`, then `9 passed (9)`.
+
+- **med: `ANTHROPIC_CUSTOM_HEADERS`.** The SDK applies this variable
+  whatever the client is given, and a header in it can replace the key or
+  change what a request bills.
+  - `assertLiveRunConsent` now refuses it, as `loadReceiptReaderConfig`
+    does (pl-39). A blank value counts as unset, and the value is never
+    repeated.
+  - `anthropicAsk`'s comment, which said every environment-read option was
+    given, is corrected.
+  - The test is "refuses ANTHROPIC_CUSTOM_HEADERS beside the key, and never
+    repeats its value".
+  - End to end: with consent, a dummy key and the gate's demo header, the
+    harness exits 1 with "Refusing: ANTHROPIC_CUSTOM_HEADERS is set". It
+    stops there, before any client exists.
+- **low: `--out` inside the repository** is now refused, however it is
+  spelled. The repository is the tree the harness file is in, so a run from
+  a worktree does not refuse an `--out` that is inside the shared checkout.
+  The test is "refuses an --out inside the repository, however it is
+  spelled".
+- **low: `--out=/tmp/a=b`** keeps everything after the first `=`. The test
+  is "keeps everything after the first = as the value".
+- **low: an unknown `--fixtures` name** is refused, and the message names
+  it. The names come from `LAYOUT_FIXTURE_NAMES` in `api/test/layout/fixtures.ts`.
+  The test is "refuses a --fixtures name that is no fixture, naming it".
+
+The gate's `cli-probe.mts`, run on the fix, now gives:
+
+- `--out=/tmp/a=b` → `out="/tmp/a=b"`;
+- an `--out` inside the repository → refused;
+- `lg7,lg-37` → refused, naming `lg-37`.
+
+Still no model call and no spend.
