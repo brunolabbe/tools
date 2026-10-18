@@ -899,12 +899,22 @@ describe("the rows list, narrowed and ordered (lg-41)", () => {
     });
   });
 
-  test("sort, order or q on one chart slice is refused, and the chart's own lists are not", async () => {
+  test("any lg-41 field on one chart slice is refused, and the chart's own lists are not", async () => {
     const target = await start();
     const groceries = await idOf(target, "Groceries");
     const slice = `scope=spending&spendingCategory=${groceries}`;
 
-    for (const extra of ["sort=date", "order=asc", "q=iga", "sort=amount&order=desc"]) {
+    for (const extra of [
+      "sort=date",
+      "order=asc",
+      "q=iga",
+      "sort=amount&order=desc",
+      "bucket=current-expenses",
+      "person=joint",
+      "direction=out",
+      "minCents=1",
+      "maxCents=100000",
+    ]) {
       const response = await target.server.inject({
         method: "GET",
         url: `${ROUTES.rows}?${slice}&${extra}`,
@@ -916,7 +926,8 @@ describe("the rows list, narrowed and ordered (lg-41)", () => {
     for (const url of [
       `${ROUTES.rows}?scope=spending&sort=date`,
       `${ROUTES.rows}?spendingCategory=${groceries}&q=iga&sort=amount`,
-      `${ROUTES.rows}?${slice}&direction=out&minCents=1`,
+      `${ROUTES.rows}?scope=spending&direction=out&minCents=1`,
+      `${ROUTES.rows}?spendingCategory=${groceries}&bucket=current-expenses&direction=out&minCents=1`,
       `${ROUTES.rows}?${slice}`,
     ]) {
       expect((await target.server.inject({ method: "GET", url })).statusCode, url).toBe(200);

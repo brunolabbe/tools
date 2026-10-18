@@ -233,3 +233,42 @@ test("a failed read is said in the taxonomy's words", async () => {
 
   expect((await screen.findByRole("alert")).textContent).toContain("not answering");
 });
+
+test("a Show more answer that arrives after a filter change is not appended to the new list", async () => {
+  const first = Array.from({ length: 50 }, (_, index) =>
+    row(index + 1, `Marché ${String(index)}`, -100),
+  );
+  const late: { release?: (value: { rows: StoredRow[]; total: number }) => void } = {};
+  let aborted = false;
+  vi.mocked(fetchRows)
+    .mockResolvedValueOnce({ rows: first, total: 52 })
+    .mockImplementationOnce(
+      (_query, signal) =>
+        new Promise((resolve) => {
+          late.release = resolve;
+          signal?.addEventListener("abort", () => {
+            aborted = true;
+          });
+        }),
+    )
+    .mockResolvedValue({ rows: [row(80, "Seule réponse", 700), row(81, "Autre", 800)], total: 2 });
+  render(<History />);
+  await screen.findByText("52 rows match.");
+
+  fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+  await waitFor(() => expect(asked().at(-1)).toEqual({ offset: 50, limit: 50 }));
+
+  // The filter changes while the further page is still on its way.
+  fireEvent.change(screen.getByLabelText("Money"), { target: { value: "in" } });
+  await screen.findByText("2 rows match.");
+  expect(aborted).toBe(true);
+
+  // The old filter's page arriving now must not be added to the new filter's list.
+  expect(late.release).toBeDefined();
+  late.release?.({ rows: [row(90, "Réponse tardive", -300)], total: 52 });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(screen.queryByText("Réponse tardive")).toBeNull();
+  expect(screen.getByText("2 rows match.")).toBeTruthy();
+  const list = screen.getByRole("list", { name: "Bank rows" });
+  expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+});

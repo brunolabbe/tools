@@ -1090,6 +1090,18 @@ export type RowBucketFilter = (typeof ROW_BUCKET_FILTERS)[number];
 /** `person` on `GET /api/rows` for a row filed to nobody: the joint account. */
 export const JOINT_PERSON_FILTER = "joint";
 
+/** The lg-41 fields a list of one chart slice (`scope=spending` with a category) refuses. */
+const SLICE_REFUSED_FIELDS = [
+  "q",
+  "bucket",
+  "person",
+  "direction",
+  "minCents",
+  "maxCents",
+  "sort",
+  "order",
+] as const;
+
 /**
  * `GET /api/rows`: stored rows, newest first. `spendingCategory` keeps the
  * uncategorised (`none`) or one category's by id. `from` and `to` are days, both
@@ -1121,8 +1133,10 @@ export const JOINT_PERSON_FILTER = "joint";
  *   direction, so a sorted list pages without repeating or skipping a row.
  *   `order` alone sorts by date. Absent both, the list is newest first by `seq`.
  *
- * `sort`, `order` and `q` with `scope=spending` and a `spendingCategory` are
- * refused: that list holds `sliceCents` entries, which they leave undefined.
+ * Every one of those fields (`q`, `bucket`, `person`, `direction`, `minCents`,
+ * `maxCents`, `sort`, `order`) with `scope=spending` and a `spendingCategory` is
+ * refused: that list holds `sliceCents` entries, which the sorts leave undefined
+ * and the bounds would compare by the row's whole amount, not the slice shown.
  */
 export const rowsQuerySchema = z
   .strictObject({
@@ -1157,10 +1171,10 @@ export const rowsQuerySchema = z
       !(
         query.scope === "spending" &&
         query.spendingCategory !== undefined &&
-        (query.sort !== undefined || query.order !== undefined || query.q !== undefined)
+        SLICE_REFUSED_FIELDS.some((field) => query[field] !== undefined)
       ),
     {
-      message: "sort, order and q are not defined for a list of one chart slice",
+      message: `${SLICE_REFUSED_FIELDS.join(", ")} are not defined for a list of one chart slice`,
       path: ["scope"],
     },
   );
