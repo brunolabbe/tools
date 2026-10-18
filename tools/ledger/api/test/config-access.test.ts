@@ -122,6 +122,17 @@ describe("loadApiConfig: Access", () => {
     expect(message).not.toContain(ALEX);
   });
 
+  // lg-52: a NUL cannot be in a real environment value, so `loadApiConfig` is
+  // called with the string; an ESC and a DEL can.
+  test("refuses an admin entry with a control character, naming its position and not the entry", () => {
+    expect(refusal({ LEDGER_ADMINS: `${ALEX}, ${SAM}` }), "the clean entries").toBeUndefined();
+    for (const entry of ["boss@x\u0000.test", "boss@x\u001b.test", "boss\u007f@x.test"]) {
+      const message = refusal({ LEDGER_ADMINS: `${ALEX}, ${entry}` });
+      expect(message).toMatch(/LEDGER_ADMINS entry 2 is not an address/u);
+      expect(message).not.toContain("boss");
+    }
+  });
+
   test("refuses ACCESS_PEOPLE, set to anything, so a stale .env cannot look as if it admits people", () => {
     for (const value of [`${ALEX}=alex`, ""]) {
       expect(refusal({ ACCESS_PEOPLE: value }), value).toMatch(/ACCESS_PEOPLE is retired/u);

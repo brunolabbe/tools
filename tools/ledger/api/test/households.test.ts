@@ -9,6 +9,7 @@
  * it. Who may call which route at all is `authority.test.ts`.
  */
 
+import Database from "better-sqlite3";
 import { afterEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type {
@@ -19,6 +20,8 @@ import type {
   PeopleResponse,
   Rule,
 } from "@ledger/contract";
+import { migrateDirectory } from "../src/db/directory-schema.ts";
+import { Directory } from "../src/directory.ts";
 import { ADMIN, ALEX, HOUSEHOLD, SAM } from "./helpers/access.ts";
 import { AWAY, KIM, NOW, directorySnapshot, send, startHouseholds } from "./helpers/households.ts";
 import type { Harness } from "./helpers/households.ts";
@@ -346,5 +349,61 @@ describe("a member", () => {
     expect(directory.membershipOf(ALEX)).toEqual({ household: HOUSEHOLD, person: "alex" });
     expect(directory.membershipOf(KIM)).toEqual({ household: AWAY, person: "kim" });
     expect(attempts.length).toBeGreaterThan(40);
+  });
+});
+
+// lg-52: the control characters `\s` does not cover, through the two routes that
+// add an address. JSON carries a NUL; the web input is `type="email"` and the
+// request is not bound to it.
+describe("an address with a control character", () => {
+  const BAD = ["casey@b\u0000c.test", "casey\u0001@example.test", "casey\u007f@example.test"];
+
+  test("is refused 400 by the admin's add route and by a member's, and no row is written", async () => {
+    const { app, directory } = await start();
+    const before = directorySnapshot(directory);
+
+    for (const address of BAD) {
+      const asAdmin = await send(app, ADMIN, "POST", of("adminMembers", HOUSEHOLD), {
+        address,
+        person: "casey",
+      });
+      const asMember = await send(app, ALEX, "POST", of("householdMembers", HOUSEHOLD), {
+        address,
+        person: "casey",
+      });
+
+      for (const refused of [asAdmin, asMember]) {
+        expect(refused.statusCode, refused.body).toBe(400);
+        expect(refused.json<ErrorResponse>().error.code).toBe("BAD_REQUEST");
+      }
+    }
+
+    expect(directorySnapshot(directory)).toBe(before);
+    // The same route takes the clean address, so the refusal is the character's.
+    const admin = await send(app, ADMIN, "POST", of("adminMembers", HOUSEHOLD), {
+      address: CASEY,
+      person: "casey",
+    });
+    expect(admin.statusCode, admin.body).toBe(200);
+  });
+
+  test("on a row that already stands is still removed by the admin's remove route", async () => {
+    // Past `Directory`, as a directory made before lg-52 holds it.
+    const db = new Database(":memory:");
+    migrateDirectory(db);
+    const stored = new Directory(db);
+    stored.addHousehold({ id: HOUSEHOLD, name: "Home", by: "operator", at: NOW });
+    db.prepare(
+      `INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
+       VALUES (?, ?, 'mallory', 'add', 'x', 'operator')`,
+    ).run("mallory@evil\u0000.test", HOUSEHOLD);
+    const running = await start(stored);
+
+    const removed = await send(running.app, ADMIN, "POST", of("adminMemberRemove", HOUSEHOLD), {
+      address: "mallory@evil\u0000.test",
+    });
+
+    expect(removed.statusCode, removed.body).toBe(200);
+    expect(stored.membershipOf("mallory@evil\u0000.test")).toBeUndefined();
   });
 });
