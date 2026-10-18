@@ -3,7 +3,7 @@ id: dl-129
 tool: downloader
 title: The browser tests are half the downloader project's test time, and most of each probe is two fixed sleeps
 kind: chore
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -39,7 +39,7 @@ split that file into six. Nobody had measured the project since. The Log's
   browser files" below) took 325 s of the project's 659 s in the quiet run, and
   318 s of the downloader's 608 s on CI's ubuntu leg. All of
   `resolvers/test/browser/` took 352 s.
-- **Most of each probe is fixed waiting that no test can change.** The
+- **Most of each probe is fixed waiting that no test could change.** The
   middle probe takes 2.0 s. Of the 147 tests in the seven browser files, 68 take
   1 to 2 s and 62 take 2 to 3 s. dl-115 measured
   where the time goes: about 510 ms is page load plus `LANDING_URL_SETTLE_MS`
@@ -47,7 +47,8 @@ split that file into six. Nobody had measured the project since. The Log's
   between them (`provokePlayback` in `src/browser/provoke.ts`), and the rest
   is the quiet wait. dl-115 made the quiet wait settable for tests that
   expect a stream. **The two fixed sleeps stayed, by the owner's ruling of
-  2026-10-12.** That ruling is the decision below.
+  2026-10-12.** The owner re-read that ruling on 2026-10-18 (Decision A,
+  below): a test may now shorten both, under the rule in the Build.
 - **Each file's own Chromium costs nothing measurable once the machine is
   warm.** The first test in six of the seven files takes 2.0 to 2.3 s, about
   the same as the middle test (1.3 to 2.8 s); `-capture`'s first test is not
@@ -56,8 +57,17 @@ split that file into six. Nobody had measured the project since. The Log's
 
 ## Build
 
-The steps below are the trims, one for each kind of wait the Log found. Steps
-2 and 4 wait on the Decision below.
+The steps below are the trims, one for each kind of wait the Log found, shaped
+by the owner's answers under the Decision section.
+
+**Which tests may change their waits (Decision A).** A test may take the
+shortened sleeps of step 2 only when it **expects a stream whose player mounts
+at once**: it asserts a captured stream, and its fixture puts the player on the
+page without a timer, an input or a late mount. Every other test keeps both
+sleeps at their production values: a test that expects `NO_MEDIA_FOUND`, an
+error, or something left unpressed or unrequested (dl-115's negative tests); a
+test whose fixture mounts the player or a layer late; and every test in the
+floor list below.
 
 **One rule covers every step.** A test that proves a product floor or a
 product cap keeps its real wait, its fixture's timing and its assertion:
@@ -100,16 +110,16 @@ recovered.
    run the base in a second tree, as `common.md` describes. The figure that
    is graded is the summed file time from the JSON report (`endTime -
 startTime` per file), which load moves less than the wall clock.
-2. **The two fixed sleeps, only if the Decision allows them** (option 1).
-   Add two options to `BrowserResolverOptions`, shaped like `minWaitMs`
-   (dl-115): one for the landing settle (default `LANDING_URL_SETTLE_MS`, 500) and one for the sleep between provocation passes (default 900, passed
-   down to `provokePlayback`). Pin both defaults with a test that fails if
-   either changes. Production callers pass neither. Use them only in tests
-   that **expect a stream and whose fixture mounts its player without
-   delay**, under dl-115's rule: never in a test that expects
-   `NO_MEDIA_FOUND`, an error, or something left unpressed and unrequested,
-   and never in the tests the rule above lists. Choose values at or above the
-   200 ms tick of the wait loop. Show that the overlay revisit still runs in
+2. **The two fixed sleeps** (Decision A). Add two options to
+   `BrowserResolverOptions`, shaped like `minWaitMs` (dl-115): one for the
+   landing settle (default `LANDING_URL_SETTLE_MS`, 500, in
+   `src/resolvers/browser.ts`) and one for the sleep after pass 0 in
+   `provokePlayback` (`src/browser/provoke.ts`, today the literal `900` in
+   `sleep(budget(options.deadline, 900), ...)`; name it as a constant if that
+   helps the pin). Pin both defaults with a test that fails if either changes.
+   Production callers pass neither. Use them only in the tests the eligibility
+   rule above admits, and list those tests in the Log. Choose values at or
+   above the 200 ms tick of the wait loop. Show that the overlay revisit still runs in
    every test that depends on it, as dl-115 did. The 68 tests in the 1-2 s
    band are where this applies. Estimated gain, not measured: 0.8 to 1.2 s on
    each eligible probe, so 50 to 80 s of summed time. That is about 12 to 20 s
@@ -121,29 +131,59 @@ startTime` per file), which load moves less than the wall clock.
    nearly all negative ("is not pressed", `NO_MEDIA_FOUND`,
    `AGE_CONFIRMATION_REQUIRED`), so this step should find few. No gain is
    claimed for it, and the Log must say how many tests it moved.
-4. **`parallel-ranges.test.ts`, only if the Decision includes it** (option B1).
-   - Its two "F9" tests (6.3 s and 6.1 s) `sleep(4_000)` "long enough for
-     the loopback's buffers to fill and the pause to engage". This is a fixed
-     wait for a kernel event that could be polled instead, for example until
-     `feeder.stats().deliveredBytes` stops growing for a few hundred ms. dl-120
-     tuned this fixture after flakes, so measure at least ten runs of
-     each before and after, under load.
-   - Then split the file along its `describe` blocks, dl-117's way: move code,
-     not tests, and keep "a progressive source throttled per connection",
-     which holds the 3x floor, whole in one file. With the cache warm, the next
-     file to finish ended 18 to 20 s before `parallel-ranges.test.ts` (the Log's
-     runs 2 and 3), which bounds what the split can save locally. dl-127
-     measured the 3x ratio beside the whole suite (40 of 40 runs at or above
-     3.399). Run that test at least ten times after the split and record the
-     lowest ratio, using dl-127's method.
-5. **Not in scope:** the 1200 ms base wait in negative tests (dl-115, the
+4. **The F9 pair's fixed sleep becomes a poll** (Decision B). In
+   `parallel-ranges.test.ts`, `pausedThenRead` (used by the two "F9" tests,
+   6.3 s and 6.1 s) waits `sleep(4_000)`, "long enough for the loopback's
+   buffers to fill and the pause to engage". Replace it with a poll on a
+   condition that says the pause has engaged, for example the file's own
+   `until` helper waiting for `feeder.stats().deliveredBytes` to stop growing
+   for a few hundred ms, with a bound no longer than today's 4 s. The
+   assertions after the wait do not change. dl-120 tuned this fixture after
+   flakes, so run each F9 test at least ten times before and ten times after,
+   under the load the machine has, and record the pass counts.
+5. **Split `parallel-ranges.test.ts`** (Decision B), dl-117's way: along its
+   `describe` blocks, moving code, not tests, with the shared fixture in a
+   helper and each file owning its own servers. Keep the describe "dl-98: a
+   progressive source throttled per connection", which holds the 3x floor,
+   whole in one file. Check each moved body with `git diff --color-moved`.
+   With the cache warm, the next file to finish ended 18 to 20 s before
+   `parallel-ranges.test.ts` (the Log's runs 2 and 3), which bounds what the
+   split can save locally.
+6. **Re-measure the 3x floor after the split** (Decision B). dl-127 measured
+   the ratio beside the whole suite: 40 of 40 runs at or above 3.399. Run "a
+   job that measures slow switches to 4 connections and finishes at least 3x
+   faster" at least ten times after the split, beside the whole project as
+   dl-127 did, logging `singleMs`, `splitMs` and the ratio of every run with
+   dl-127's method (an uncommitted scratch copy that prints them). Record the
+   count, minimum, median and maximum in the Log. The floor stays 3 on Linux
+   and 2.5 on Windows. A run below 3 is a stop: report it, do not lower the
+   floor.
+7. **Not in scope:** the 1200 ms base wait in negative tests (dl-115, the
    owner's rule), fake timers in browser tests (dl-115: Node, Playwright and
    Chromium timers are mixed), a pool warm-up for a cold Chromium (dl-117,
    recorded only), and the file order in a fresh worktree or on CI. That
-   last one is the farm's and CI's results cache, a `repo-` matter, and is
-   recorded in the Log.
+   last one is the farm's and CI's results cache, a `repo-` matter, and was
+   left alone (the Log's 2026-10-18 round 2 entry).
 
-## Decision — open
+## Decision — answered 2026-10-18 by Bruno Labbé
+
+Both questions were put to the owner by the owner's Fable 5.1 session with
+`AskUserQuestion`, using the options below as filed. The owner chose the
+recommended option for each.
+
+**A — chosen: "allow it, defaults pinned" (option 1, recommended).** A test may
+shorten the 500 ms landing settle and the 900 ms sleep between provocation
+passes only when it expects a stream whose player mounts at once. The
+production defaults stay as they are, pinned by a test. The other option
+offered was "keep the ruling as written" (option 2).
+
+**B — chosen: "handle it in dl-129" (option 1, recommended).** The F9 pair's
+fixed `sleep(4_000)` becomes a poll, and `parallel-ranges.test.ts` is split
+dl-117's way, keeping the 3x-floor describe whole and re-measuring the floor
+at least ten times (Build steps 4 to 6). The other options offered were "a
+separate ticket" (option 2) and "leave it" (option 3).
+
+The question and options as filed, kept for the record:
 
 **A. May a test shorten the two fixed sleeps that every probe pays?** dl-115
 records the owner's 2026-10-12 ruling: "The two sleeps above stay: dl-55 (tests
@@ -181,26 +221,42 @@ pick a reading.
    alternated, with each run's command, `test-gate:` line, foreign workers at
    start, load average, vitest `Duration`, and summed file time for the seven
    browser files and for `parallel-ranges.test.ts` from its JSON report.
-2. If Decision A chose option 1: the mean summed file time of the seven browser
-   files over the three after-runs is at least 15 % below the mean over the
-   three before-runs (325 s in the Log's quiet run 1; 353 s and 361 s in its
-   loaded runs). The defaults of 500 ms and 900 ms are pinned by a test that
-   fails when either changes, and every use of the new options is in a test
-   that expects a stream (the Log lists them).
-3. If Decision B chose option 1: no downloader test file runs longer than 60 s
-   in any of the three after-runs' JSON reports. The 3x floor test's lowest
-   ratio over at least ten runs after the split is in the Log, and the floor is
-   unchanged. Each F9 test passes ten runs out of ten after the change.
-4. CI: the PR's own `test (ubuntu-latest)` log shows the seven browser files'
-   summed time at most 85 % of 318 s (run 39126762378 at `335efcd4`), if
-   Decision A chose option 1. Report the `npm test` step time on both legs
-   with run ids, but do not grade it. CI's main runs at four workers spread
-   from 232 to 273 s (repo-99), wider than the 12 to 20 s this ticket expects
-   to save.
-5. No test in the Build's floor list has changed its wait, its fixture's timing
+2. The mean summed file time of the seven browser files over the three
+   after-runs is at least 15 % below the mean over the three before-runs (325 s
+   in the Log's quiet run 1; 353 s and 361 s in its loaded runs).
+3. The two production defaults are unchanged: `LANDING_URL_SETTLE_MS` in
+   `src/resolvers/browser.ts` is still 500, and the sleep after pass 0 in
+   `provokePlayback` (`src/browser/provoke.ts`, the literal `900`, or the
+   constant the builder names for it) is still 900. Neither new
+   `BrowserResolverOptions` field is passed by any production caller. A test
+   fails when either default changes; the Log shows it failing under a
+   mutation of each.
+4. Every use of the two new options is in a test that expects a stream whose
+   player mounts at once. The Log lists each such test, and none of them
+   expects `NO_MEDIA_FOUND`, an error, or something left unpressed or
+   unrequested.
+5. The F9 pair in `parallel-ranges.test.ts` no longer calls `sleep(4_000)` in
+   `pausedThenRead`; it polls instead, and its assertions are unchanged. Each
+   F9 test passes at least ten runs out of ten after the change, with the
+   before and after pass counts and durations in the Log.
+6. `parallel-ranges.test.ts` is split along its `describe` blocks, every moved
+   body unchanged by `git diff --color-moved`, the describe "dl-98: a
+   progressive source throttled per connection" whole in one file, and the
+   project's `Tests` count the same before and after. No downloader test file
+   runs longer than 60 s in any of the three after-runs' JSON reports.
+7. The 3x floor test ran at least ten times after the split, beside the whole
+   project; the Log holds every run's ratio with its count, minimum, median
+   and maximum, and the floor in the spec is still 3 on Linux and 2.5 on
+   Windows.
+8. CI: the PR's own `test (ubuntu-latest)` log shows the seven browser files'
+   summed time at most 85 % of 318 s (run 39126762378 at `335efcd4`). Report
+   the `npm test` step time on both legs with run ids, but do not grade it.
+   CI's main runs at four workers spread from 232 to 273 s (repo-99), wider
+   than the 12 to 20 s this ticket expects to save.
+9. No test in the Build's floor list has changed its wait, its fixture's timing
    or its assertion: `git diff` of those test bodies shows nothing but a move.
-6. `npm run check` passes, and `npm test -- --project downloader` passes in
-   all three after-runs.
+10. `npm run check` passes, and `npm test -- --project downloader` passes in
+    all three after-runs.
 
 ## Log
 
@@ -307,3 +363,21 @@ pick a reading.
     fails a `## Decision — open` heading on any status other than
     `needs-decision`. Decision A re-opens a ruling the owner made, which the
     builder must not settle.
+
+- 2026-10-18, round 2 — The owner, Bruno Labbé, answered Decisions A and B.
+  The owner's Fable 5.1 session asked with `AskUserQuestion` and relayed the
+  answers to the filing agent (Opus 5.5). Both are the recommended options:
+  A, "allow it, defaults pinned"; B, "handle it in dl-129". The answers, with
+  the options they were chosen from, are under
+  `## Decision — answered 2026-10-18 by Bruno Labbé`. `status` moved from
+  `needs-decision` to `ready` in this commit. The Build now gives A's
+  eligibility rule ("expects a stream whose player mounts at once") as the
+  test for which tests may change, and adds B's poll, split and ten-run
+  floor re-measurement as steps 4 to 6. Done when now names the two
+  production defaults (`LANDING_URL_SETTLE_MS` and the 900 ms sleep in
+  `provokePlayback`) and has a line for each of B's steps. `difficulty`
+  stays `standard`, and no source changed.
+- 2026-10-18, round 2 — The vitest duration cache in a fresh worktree and on
+  CI (the "File order" note above) was left alone, with no `repo-` ticket
+  filed. The owner's Fable session chose this on the filing agent's
+  recommendation. It was not put to the owner.
