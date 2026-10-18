@@ -5617,6 +5617,37 @@ review re-ran an artifact download logged as timing out two days before, and
 it fetched 17 MB. An item a script,
 not a page, got wrong names the script and is filed or recorded, not fixed here.
 
+### Batch 2026-10-17 — base a04a1c96
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / medium | afe4a4ea69a40c0ed | seam-mapper, lg-30 + lg-32 | 44s / 44s | 0 | $0.1681 |
+| #519 | merged 495a5b7a | Sonnet 5.5 / high | ae0234e6432103f62 | builder-standard, lg-32 | 5m25s / 5m10s | 0 | $0.5918 |
+| #519 | merged 495a5b7a | Opus 5.5 / high | ac384e8832df73bd6 | ticket-reviewer-opus, lg-32 gate 1 | 11m38s / 11m36s | 0 | $1.9037 |
+| #519 | merged 495a5b7a | Sonnet 5.5 / high | a5218ce478a2ec5b1 | fixer, lg-32 landing + F2 at landing + lg-30 Build 2 reword | 7m01s / 6m53s | 0 | $0.7301 |
+| #529 | open, ready, green at 57e312aa | Opus 5.5 / high | ad669c352ce7fa1cb | builder-hard, lg-30 | 28m27s / 28m26s | 0 | $7.4174 |
+| #529 | open, ready, green at 57e312aa | Sonnet 5.5 / xhigh | ae4597693b3c247fc | ticket-reviewer-sonnet, lg-30 gate 1 | 20m41s / 20m40s | 0 | $3.2472 |
+| #529 | open, ready, green at 57e312aa | Sonnet 5.5 / high | ae90ea3f74cf1a004 | fixer, lg-30 landing + F1/F2/F3 at landing + file lg-39 | 10m22s / 10m12s | 0 | $1.5653 |
+| — | — | Opus 5.5 / high | orchestrator 513e5687 | orchestrator (floor) | 39m37s / 2h06m13s | 0 | $3.6629 |
+| | | | | **total** (rates read 2026-10-10) | 2h03m57s | 0 | **$19.2866** |
+
+**Tickets:**
+
+- lg-32 → #519, gate 1 CONCERNS (F1 med open decision, moved to lg-30's Build 2 by owner choice D; F2 low fixed at landing), merged 495a5b7a; main push CI at 495a5b7a success, both test legs.
+- lg-30 → #529, gate 1 CONCERNS, no high (F1 med open decision, fixed at landing by owner choice "by cost"; F2, F3 low fixed at landing; F5 low filed as lg-39; F4 low recorded), all 10 checks SUCCESS at 57e312aa including CodeQL and Windows; awaiting merge.
+- lg-39 → filed in #529 (F5 of lg-30's gate 1).
+
+**Defects in the skill:**
+
+1. `roles/fixer.md` › _The work_ — "unless the landing is the only work left: `--land` runs preflight itself after the push" does not cover a fix made at landing, and "Run the checks your fixes touch, narrowest first" lets a lander run vitest and skip oxlint. Both landers this batch fixed findings at landing, ran their own tests, then ran `--land`; its preflight failed on `unicorn(consistent-function-scoping)` in the lander's new test after the landing commit was already pushed, so a lint-fix commit landed on top of the gate record. Reproduction: `gh pr view 519 --json commits --jq '.commits[]|.oid[0:8]+" "+.messageHeadline'` → `1ac51c0f docs(ledger): record gate 1 and set status done on lg-32 (lg-32)` then `680b2155 test(ledger): hoist the coupon test's item helper out of the test (lg…`; for #529 the lander ran `npm run check` before `--land` only because the dispatch said to, and it failed on `no-shadow` and `consistent-function-scoping` (`de159b5f test(ledger): hoist the landing tests' item helper so lint passes`).
+2. `roles/common.md` › _Reading a pull request's checks_ — the informational Windows leg is graded against "the latest reading of that leg on `main`", with no way given to find one; main's push runs skip the matrix for a docs-only push or are cancelled by the next merge, and the lg-30 gate walked back four runs to find a reading. Reproduction: `gh run view 39078780064 --json headSha,jobs --jq '.headSha[0:8], (.jobs[]|select(.name|test("test"))|[.name,.conclusion]|@tsv)'` → `4dbe22b8` / `test (${{ matrix.os }}…)	skipped`.
+3. `reference/records.md` › _Fixed at landing_ — says how to mark the gate's finding fixed, but not what to do with the builder's own committed Log sentences the finding shows false; the lg-32 lander found the rule under _Rules for what the record says_ ("withdrawn in place") on its own. Reproduction: `git show origin/main:tools/ledger/docs/work/lg-32-a-receipt-with-nothing-left-shared-is-refused-over-a-cent.md | grep -c WITHDRAWN` → `1`; `sed -n '/^## Fixed at landing/,/^## Rules/p' .claude/skills/orchestrate-tickets/reference/records.md | grep -ci withdrawn` → `0`.
+
+**Worked, and worth keeping:**
+
+- Serialising two tickets over one function on the seam-mapper's word (lg-32, then lg-30 built on the merged guard): lg-30 extended the one guard and no hand merge was needed.
+- A fix at landing whose ship condition is the gate's own measurement script: the lg-30 lander reran the gate's `regress.mts` sweep (61 regressions → 0, no amounts changed, the 456 new filings the gate had predicted), so a code change with no re-gate still had a stated, re-runnable proof.
+
 ### Batch 2026-10-17 (tools-f6, pl-57 measured, pl-58 filed) — base 4c642ab3
 
 | PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |

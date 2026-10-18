@@ -1,0 +1,1872 @@
+{
+ "runDate": "2026-10-17",
+ "budget": {
+  "written": "Taken from the ticket before the first query: a place that came back under the first query it was given is `exists`, `exists-elsewhere` or `closed` on that evidence. A place may be called `not-found` only after every query below and the OSM result in pl-56's record. `not-found` means the search did not find it, never that it does not exist. Search tool: WebSearch (standard mode), with WebFetch for pages worth reading; both from a general-purpose agent. Entities that several sampled keys share (Forillon National Park, Grande-Grave, the Percé Rock and Bonaventure Island park, the Mont-Albert sector) were searched once and the result applied to each key, with each key's own locality judged separately.",
+  "queriesBeforeNotFound": [
+   "1. the name with its locality, as the candidate wrote them",
+   "2. the name alone, in quotation marks",
+   "3. the name in the local language (French for Québec, Italian for Rome and Trieste, German for Vienna, Slovene for Ljubljana)",
+   "plus: the OSM result recorded for this place in pl-56 (tools/planner/api/test/fixtures/live/hours-coverage/2026-10-17.json, the `located` and `displayName` fields), copied into this record as `osm`"
+  ],
+  "osm": "Copied from the hours-coverage record by key, for every checked place. A place pl-56 located is not thereby real: OSM matched a different object for many of them."
+ },
+ "checks": {
+  "banc-de-pêche-de-paspébiac|paspébiac, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Banc-de-Pêche-de-Paspébiac site historique"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.pc.gc.ca/apps/dfhd/page_nhs_eng.aspx?id=1964",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada directory of heritage designations: Banc de Pêche de Paspébiac National Historic Site of Canada, Paspébiac. Seen in the search result."
+    },
+    {
+     "url": "https://www.historicplaces.ca/en/rep-reg/place-lieu.aspx?id=12623",
+     "readOn": "2026-10-17",
+     "note": "Canada's Historic Places register entry. Seen in the search result."
+    }
+   ]
+  },
+  "site historique du banc-de-pêche-de-paspébiac|paspébiac, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Banc-de-Pêche-de-Paspébiac site historique"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.pc.gc.ca/apps/dfhd/page_nhs_eng.aspx?id=1964",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada directory of heritage designations: Banc de Pêche de Paspébiac National Historic Site of Canada, Paspébiac. Seen in the search result."
+    },
+    {
+     "url": "https://www.historicplaces.ca/en/rep-reg/place-lieu.aspx?id=12623",
+     "readOn": "2026-10-17",
+     "note": "Canada's Historic Places register entry. Seen in the search result."
+    }
+   ]
+  },
+  "bioparc de la gaspésie|bonaventure, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Bioparc de la Gaspésie Bonaventure"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.tourisme-gaspesie.com/en/culture-and-living-history/bioparc-de-la-gaspesie/",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board: wildlife park in Bonaventure, 2026 season stated. Seen in the search result."
+    },
+    {
+     "url": "https://musees.qc.ca/en/museums/guide/bioparc-de-la-gaspesie.html",
+     "readOn": "2026-10-17",
+     "note": "Quebec museums directory: 123 rue des Vieux-Ponts, Bonaventure. Seen in the search result."
+    }
+   ]
+  },
+  "bonaventure island|percé, gaspésie": {
+   "verdict": "exists",
+   "queries": [
+    "Bonaventure Island Percé bird sanctuary parc national Île-Bonaventure-et-du-Rocher-Percé"
+   ],
+   "evidence": [
+    {
+     "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
+     "readOn": "2026-10-17",
+     "note": "Percé tourist office directory: the Île-Bonaventure sector of the national park, boats from Percé. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-l-ile-bonaventure-et-du-rocher-perce",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park. Seen in the search result."
+    }
+   ]
+  },
+  "bonaventure island|percé, gaspésie, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Bonaventure Island Percé bird sanctuary parc national Île-Bonaventure-et-du-Rocher-Percé"
+   ],
+   "evidence": [
+    {
+     "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
+     "readOn": "2026-10-17",
+     "note": "Percé tourist office directory: the Île-Bonaventure sector of the national park, boats from Percé. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-l-ile-bonaventure-et-du-rocher-perce",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park. Seen in the search result."
+    }
+   ]
+  },
+  "île bonaventure et du rocher-percé national park|percé": {
+   "verdict": "exists",
+   "queries": [
+    "Bonaventure Island Percé bird sanctuary parc national Île-Bonaventure-et-du-Rocher-Percé"
+   ],
+   "evidence": [
+    {
+     "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
+     "readOn": "2026-10-17",
+     "note": "Percé tourist office directory: the Île-Bonaventure sector of the national park, boats from Percé. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-l-ile-bonaventure-et-du-rocher-perce",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park. Seen in the search result."
+    }
+   ]
+  },
+  "île bonaventure et du rocher-percé|percé": {
+   "verdict": "exists",
+   "queries": [
+    "Bonaventure Island Percé bird sanctuary parc national Île-Bonaventure-et-du-Rocher-Percé"
+   ],
+   "evidence": [
+    {
+     "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
+     "readOn": "2026-10-17",
+     "note": "Percé tourist office directory: the Île-Bonaventure sector of the national park, boats from Percé. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-l-ile-bonaventure-et-du-rocher-perce",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park. Seen in the search result."
+    }
+   ]
+  },
+  "île bonaventure et du rocher-percé|percé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Bonaventure Island Percé bird sanctuary parc national Île-Bonaventure-et-du-Rocher-Percé"
+   ],
+   "evidence": [
+    {
+     "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
+     "readOn": "2026-10-17",
+     "note": "Percé tourist office directory: the Île-Bonaventure sector of the national park, boats from Percé. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-l-ile-bonaventure-et-du-rocher-perce",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park. Seen in the search result."
+    }
+   ]
+  },
+  "île-bonaventure-et-du-rocher-percé national park|percé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Bonaventure Island Percé bird sanctuary parc national Île-Bonaventure-et-du-Rocher-Percé"
+   ],
+   "evidence": [
+    {
+     "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
+     "readOn": "2026-10-17",
+     "note": "Percé tourist office directory: the Île-Bonaventure sector of the national park, boats from Percé. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-l-ile-bonaventure-et-du-rocher-perce",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de l'île-bonaventure-et-du-rocher-percé|percé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Bonaventure Island Percé bird sanctuary parc national Île-Bonaventure-et-du-Rocher-Percé"
+   ],
+   "evidence": [
+    {
+     "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
+     "readOn": "2026-10-17",
+     "note": "Percé tourist office directory: the Île-Bonaventure sector of the national park, boats from Percé. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-l-ile-bonaventure-et-du-rocher-perce",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park. Seen in the search result."
+    }
+   ]
+  },
+  "bonaventure island|bonaventure": {
+   "verdict": "exists-elsewhere",
+   "queries": [
+    "Bonaventure Island Percé bird sanctuary parc national Île-Bonaventure-et-du-Rocher-Percé"
+   ],
+   "evidence": [
+    {
+     "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
+     "readOn": "2026-10-17",
+     "note": "The island is off Percé, and the Percé tourist office's directory lists it as a sector of the park reached from Percé (it does not name the dock). The candidate's locality is the town of Bonaventure, a different municipality on the Baie-des-Chaleurs. Likely cause: the island's own name. Seen in the search result."
+    }
+   ],
+   "actualLocality": "Percé, Québec",
+   "note": "The island is real. The locality the candidate gave is the town of Bonaventure, roughly 100 km from Percé by road (the distance is not measured here)."
+  },
+  "île bonaventure|bonaventure, gaspésie": {
+   "verdict": "exists-elsewhere",
+   "queries": [
+    "Bonaventure Island Percé bird sanctuary parc national Île-Bonaventure-et-du-Rocher-Percé"
+   ],
+   "evidence": [
+    {
+     "url": "https://perce.info/en/directory/parc-national-de-lile-bonaventure-et-du-rocher-perce-secteur-ile-bonaventure/",
+     "readOn": "2026-10-17",
+     "note": "The island is off Percé, and the Percé tourist office's directory lists it as a sector of the park reached from Percé (it does not name the dock). The candidate's locality is the town of Bonaventure, a different municipality on the Baie-des-Chaleurs. Likely cause: the island's own name. Seen in the search result."
+    }
+   ],
+   "actualLocality": "Percé, Québec",
+   "note": "The island is real. The locality the candidate gave is the town of Bonaventure, roughly 100 km from Percé by road (the distance is not measured here)."
+  },
+  "caffè san marco|trieste": {
+   "verdict": "exists",
+   "queries": [
+    "Caffè San Marco Trieste"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.turismofvg.it/en/food-and-wine/antico-caffe-san-marco",
+     "readOn": "2026-10-17",
+     "note": "Friuli Venezia Giulia tourism board: Antico Caffè San Marco, Trieste. Seen in the search result."
+    }
+   ]
+  },
+  "camping cap-bon-ami, parc national forillon|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Camping Cap-Bon-Ami Parc national Forillon"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-cap-bon-ami/3685505A.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board listing: Camping Cap-Bon-Ami, Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "camping du mont-albert, parc national de la gaspésie|sainte-anne-des-monts, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Camping du Mont-Albert Parc national de la Gaspésie Sépaq"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.sepaq.com/en/reservation/camping/parc-national-de-la-gaspesie/camping-mont-albert",
+     "readOn": "2026-10-17",
+     "note": "Sépaq (the park operator) reservation page: camping Mont-Albert. Operator source, so not independent of the park. Seen in the search result."
+    },
+    {
+     "url": "https://sortirauquebec.com/en/listing/campgrounds-and-glamping/parc-national-de-la-gaspesie-camping-mont-albert/",
+     "readOn": "2026-10-17",
+     "note": "Sortir au Québec directory listing for the Mont-Albert campground; the independent source. Seen in the same search result."
+    }
+   ]
+  },
+  "camping petit-gaspé, forillon national park|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Petit-Gaspé campground Forillon National Park Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board listing: Camping Petit-Gaspé, Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://www.parks.canada.ca/pn-np/qc/forillon/visit",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada trip planning: three camping areas, Petit-Gaspé in the southern area. Seen in a later search result."
+    }
+   ]
+  },
+  "forillon national park – petit-gaspé campground|gaspé, qc": {
+   "verdict": "exists",
+   "queries": [
+    "Petit-Gaspé campground Forillon National Park Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board listing: Camping Petit-Gaspé, Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://www.parks.canada.ca/pn-np/qc/forillon/visit",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada trip planning: three camping areas, Petit-Gaspé in the southern area. Seen in a later search result."
+    }
+   ]
+  },
+  "forillon national park (petit-gaspé campground)|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Petit-Gaspé campground Forillon National Park Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board listing: Camping Petit-Gaspé, Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://www.parks.canada.ca/pn-np/qc/forillon/visit",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada trip planning: three camping areas, Petit-Gaspé in the southern area. Seen in a later search result."
+    }
+   ]
+  },
+  "petit-gaspé campground, forillon national park|gaspé, qc": {
+   "verdict": "exists",
+   "queries": [
+    "Petit-Gaspé campground Forillon National Park Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board listing: Camping Petit-Gaspé, Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://www.parks.canada.ca/pn-np/qc/forillon/visit",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada trip planning: three camping areas, Petit-Gaspé in the southern area. Seen in a later search result."
+    }
+   ]
+  },
+  "petit-gaspé campground, forillon national park|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Petit-Gaspé campground Forillon National Park Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board listing: Camping Petit-Gaspé, Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://www.parks.canada.ca/pn-np/qc/forillon/visit",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada trip planning: three camping areas, Petit-Gaspé in the southern area. Seen in a later search result."
+    }
+   ]
+  },
+  "petit-gaspé campground|forillon national park, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Petit-Gaspé campground Forillon National Park Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board listing: Camping Petit-Gaspé, Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://www.parks.canada.ca/pn-np/qc/forillon/visit",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada trip planning: three camping areas, Petit-Gaspé in the southern area. Seen in a later search result."
+    }
+   ]
+  },
+  "campo de' fiori|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Campo de' Fiori Rome piazza market"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.italyreview.com/campo-de-fiori.html",
+     "readOn": "2026-10-17",
+     "note": "Travel guide: Campo de' Fiori, market square in central Rome. Seen in the search result."
+    }
+   ]
+  },
+  "cap gaspé, parc national forillon|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Gaspé Forillon National Park Land's End trail"
+   ],
+   "evidence": [
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/randonnee-hiking",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada hiking page for Forillon: Cap-Gaspé, Land's End. Seen in the search result."
+    },
+    {
+     "url": "https://www.pc.gc.ca/voyage-travel/region/quebec/itin/itin6",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada itinerary: Land's End at the tip of Cap-Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "cap-gaspé trail, forillon national park|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Gaspé Forillon National Park Land's End trail"
+   ],
+   "evidence": [
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/randonnee-hiking",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada hiking page for Forillon: Cap-Gaspé, Land's End. Seen in the search result."
+    },
+    {
+     "url": "https://www.pc.gc.ca/voyage-travel/region/quebec/itin/itin6",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada itinerary: Land's End at the tip of Cap-Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "cap-gaspé, forillon national park|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Gaspé Forillon National Park Land's End trail"
+   ],
+   "evidence": [
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/randonnee-hiking",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada hiking page for Forillon: Cap-Gaspé, Land's End. Seen in the search result."
+    },
+    {
+     "url": "https://www.pc.gc.ca/voyage-travel/region/quebec/itin/itin6",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada itinerary: Land's End at the tip of Cap-Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park, cap-gaspé sector|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Gaspé Forillon National Park Land's End trail"
+   ],
+   "evidence": [
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/randonnee-hiking",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada hiking page for Forillon: Cap-Gaspé, Land's End. Seen in the search result."
+    },
+    {
+     "url": "https://www.pc.gc.ca/voyage-travel/region/quebec/itin/itin6",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada itinerary: Land's End at the tip of Cap-Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park, cap-gaspé|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Gaspé Forillon National Park Land's End trail"
+   ],
+   "evidence": [
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/randonnee-hiking",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada hiking page for Forillon: Cap-Gaspé, Land's End. Seen in the search result."
+    },
+    {
+     "url": "https://www.pc.gc.ca/voyage-travel/region/quebec/itin/itin6",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada itinerary: Land's End at the tip of Cap-Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park, cap-gaspé|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Gaspé Forillon National Park Land's End trail"
+   ],
+   "evidence": [
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/randonnee-hiking",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada hiking page for Forillon: Cap-Gaspé, Land's End. Seen in the search result."
+    },
+    {
+     "url": "https://www.pc.gc.ca/voyage-travel/region/quebec/itin/itin6",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada itinerary: Land's End at the tip of Cap-Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park, land's end sector|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Gaspé Forillon National Park Land's End trail"
+   ],
+   "evidence": [
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/randonnee-hiking",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada hiking page for Forillon: Cap-Gaspé, Land's End. Seen in the search result."
+    },
+    {
+     "url": "https://www.pc.gc.ca/voyage-travel/region/quebec/itin/itin6",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada itinerary: Land's End at the tip of Cap-Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "cap-des-rosiers lighthouse, forillon|cap-des-rosiers, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Phare de Cap-des-Rosiers lighthouse Forillon"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/phare-de-cap-des-rosiers/8925767.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board: Cap-des-Rosiers Lighthouse, 1331 boulevard de Cap-des-Rosiers, Gaspé. Seen in the search result."
+    },
+    {
+     "url": "https://historicplaces.ca/en/rep-reg/place-lieu.aspx?id=4383",
+     "readOn": "2026-10-17",
+     "note": "Canada's Historic Places register. Seen in the search result."
+    }
+   ]
+  },
+  "cap-des-rosiers lighthouse|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Phare de Cap-des-Rosiers lighthouse Forillon"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/phare-de-cap-des-rosiers/8925767.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board: Cap-des-Rosiers Lighthouse, 1331 boulevard de Cap-des-Rosiers, Gaspé. Seen in the search result."
+    },
+    {
+     "url": "https://historicplaces.ca/en/rep-reg/place-lieu.aspx?id=4383",
+     "readOn": "2026-10-17",
+     "note": "Canada's Historic Places register. Seen in the search result."
+    }
+   ]
+  },
+  "cap-des-rosiers lighthouse|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Phare de Cap-des-Rosiers lighthouse Forillon"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/phare-de-cap-des-rosiers/8925767.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board: Cap-des-Rosiers Lighthouse, 1331 boulevard de Cap-des-Rosiers, Gaspé. Seen in the search result."
+    },
+    {
+     "url": "https://historicplaces.ca/en/rep-reg/place-lieu.aspx?id=4383",
+     "readOn": "2026-10-17",
+     "note": "Canada's Historic Places register. Seen in the search result."
+    }
+   ]
+  },
+  "phare de cap-des-rosiers|cap-des-rosiers, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Phare de Cap-des-Rosiers lighthouse Forillon"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/phare-de-cap-des-rosiers/8925767.html",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board: Cap-des-Rosiers Lighthouse, 1331 boulevard de Cap-des-Rosiers, Gaspé. Seen in the search result."
+    },
+    {
+     "url": "https://historicplaces.ca/en/rep-reg/place-lieu.aspx?id=4383",
+     "readOn": "2026-10-17",
+     "note": "Canada's Historic Places register. Seen in the search result."
+    }
+   ]
+  },
+  "centrale montemartini|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Centrale Montemartini Rome museum"
+   ],
+   "evidence": [
+    {
+     "url": "https://aviewoncities.com/rome/centrale-montemartini",
+     "readOn": "2026-10-17",
+     "note": "City guide: Centrale Montemartini, Via Ostiense 106, Rome. Seen in the search result."
+    }
+   ]
+  },
+  "chiesa di san luigi dei francesi|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Chiesa di San Luigi dei Francesi Roma Caravaggio"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.artribune.com/arti-visive/2020/11/roma-caravaggio-chiese/",
+     "readOn": "2026-10-17",
+     "note": "Art magazine: Caravaggio itinerary in Rome churches incl. San Luigi dei Francesi. Seen in the search result."
+    }
+   ]
+  },
+  "san luigi dei francesi|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Chiesa di San Luigi dei Francesi Roma Caravaggio"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.artribune.com/arti-visive/2020/11/roma-caravaggio-chiese/",
+     "readOn": "2026-10-17",
+     "note": "Art magazine: Caravaggio itinerary in Rome churches incl. San Luigi dei Francesi. Seen in the search result."
+    }
+   ]
+  },
+  "figlmüller wollzeile|vienna": {
+   "verdict": "exists",
+   "queries": [
+    "Figlmüller Wollzeile Vienna restaurant"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.frommers.com/destinations/vienna/restaurants/figlmller-wollzeile",
+     "readOn": "2026-10-17",
+     "note": "Frommer's guide entry: Figlmüller Wollzeile, Vienna. Seen in the search result."
+    },
+    {
+     "url": "https://figlmueller.at/en/wollzeile/",
+     "readOn": "2026-10-17",
+     "note": "The restaurant's own site: Wollzeile 5, 1010 Vienna. Seen in the search result."
+    }
+   ]
+  },
+  "flavio al velavevodetto|testaccio, rome": {
+   "verdict": "exists",
+   "queries": [
+    "Flavio al Velavevodetto Testaccio Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.timeout.com/rome/restaurants/flavio-al-velavevodetto",
+     "readOn": "2026-10-17",
+     "note": "Time Out Rome restaurant listing, Testaccio. Seen in the search result."
+    }
+   ]
+  },
+  "fumoir monsieur émile|gaspé": {
+   "verdict": "exists-elsewhere",
+   "queries": [
+    "Fumoir Monsieur Émile Gaspé",
+    "\"Fumoir Monsieur Émile\"",
+    "fumoir Gaspé saumon fumé hareng boutique Monsieur Émile"
+   ],
+   "evidence": [
+    {
+     "url": "https://gentologie.com/en/?p=60611",
+     "readOn": "2026-10-17",
+     "note": "Fetched. Lists Monsieur Émile Smokehouse, 574 route d'Irlande, Percé, QC G0C 2L0; the page does not mention Gaspé. The page shows a publication date of 2025-08-28 and an update of 2026-07-24 (fetched again 2026-10-17). The first two queries found nothing; the third found this page."
+    }
+   ],
+   "actualLocality": "Percé, Québec",
+   "note": "Real, in Percé, which is not Gaspé. The page was published 2025-08-28 and updated 2026-07-24, so it is recent; whether the smokehouse operates today is not otherwise established."
+  },
+  "galleria borghese|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Galleria Borghese Rome museum"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.afar.com/places/borghese-gallery-and-museum-roma",
+     "readOn": "2026-10-17",
+     "note": "Travel guide entry: Borghese Gallery and Museum, Rome. Seen in the search result."
+    }
+   ]
+  },
+  "galleria doria pamphilj|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Galleria Doria Pamphilj Roma Via del Corso"
+   ],
+   "evidence": [
+    {
+     "url": "https://turismoroma.it/en/node/123",
+     "readOn": "2026-10-17",
+     "note": "Rome tourism board: the Doria Pamphilj Gallery, Via del Corso 305. Seen in the search result."
+    }
+   ]
+  },
+  "géoparc de percé glass platform|percé": {
+   "verdict": "exists",
+   "queries": [
+    "Géoparc de Percé plateforme vitrée Pic de l'Aurore"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.bonjourquebec.com/fr/repertoire/quoi-faire/geoparc-mondial-unesco-de-perce/0rs5",
+     "readOn": "2026-10-17",
+     "note": "Québec tourism listing: Géoparc mondial UNESCO de Percé. The search summary names a plateforme vitrée suspendue at about 200 m with a view of the Rocher Percé; the summary did not tie it to the Pic de l'Aurore and the verdict does not depend on that. Seen in the search result."
+    }
+   ]
+  },
+  "grande-grave area, forillon national park|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Grande-Grave Forillon heritage site Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2023/07/forillon-national-parks-grande-grave-heritage-site-revitalization-project-takes-shape.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release: Grande-Grave heritage site, Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "grande-grave, forillon national park|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Grande-Grave Forillon heritage site Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2023/07/forillon-national-parks-grande-grave-heritage-site-revitalization-project-takes-shape.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release: Grande-Grave heritage site, Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "grande-grave, forillon national park|grande-grave": {
+   "verdict": "exists",
+   "queries": [
+    "Grande-Grave Forillon heritage site Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2023/07/forillon-national-parks-grande-grave-heritage-site-revitalization-project-takes-shape.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release: Grande-Grave heritage site, Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "grande-grave, parc national forillon|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Grande-Grave Forillon heritage site Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2023/07/forillon-national-parks-grande-grave-heritage-site-revitalization-project-takes-shape.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release: Grande-Grave heritage site, Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "grande-grave|forillon national park": {
+   "verdict": "exists",
+   "queries": [
+    "Grande-Grave Forillon heritage site Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2023/07/forillon-national-parks-grande-grave-heritage-site-revitalization-project-takes-shape.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release: Grande-Grave heritage site, Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "grande-grave|forillon national park, gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Grande-Grave Forillon heritage site Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2023/07/forillon-national-parks-grande-grave-heritage-site-revitalization-project-takes-shape.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release: Grande-Grave heritage site, Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "grande-grave|forillon national park, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Grande-Grave Forillon heritage site Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2023/07/forillon-national-parks-grande-grave-heritage-site-revitalization-project-takes-shape.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release: Grande-Grave heritage site, Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "grande-grave|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Grande-Grave Forillon heritage site Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2023/07/forillon-national-parks-grande-grave-heritage-site-revitalization-project-takes-shape.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release: Grande-Grave heritage site, Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "grande-grève campground, forillon national park|gaspé, québec": {
+   "verdict": "not-found",
+   "queries": [
+    "Grande-Grève campground Forillon National Park Gaspé, Québec",
+    "\"Grande-Grève campground\"",
+    "camping Grande-Grève parc Forillon terrain de camping Parcs Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.parks.canada.ca/pn-np/qc/forillon/visit",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada trip planning: the park's camping areas are Petit-Gaspé (southern area), Des-Rosiers and Cap-Bon-Ami (northern area). No Grande-Grève campground. Grande-Grève is the name of the boulevard and the southern sector, which Petit-Gaspé is on. Private campgrounds on that boulevard (Camping Baie de Gaspé, Camping Parc Nature Gaspé) are not in the park. Seen in the search result."
+    },
+    {
+     "url": "https://pcweb2.azureedge.net/-/media/pn-np/qc/forillon/Visit/2026/camping-petitgaspe-otentik.pdf",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada map of Camping Petit-Gaspé (2026): a pebble beach labelled Grande-Grave beside the campground. Seen in the search result for query 2. Queries 1 and 2 were re-run as the budget is written after the first gate; the first run had left the locality off query 1 and put extra terms in query 2. Neither found a campground of that name."
+    }
+   ],
+   "note": "The name matches no campground. The nearest real object is Petit-Gaspé on boulevard de Grande-Grève, which is a different name."
+  },
+  "hotel sacher wien|vienna, austria": {
+   "verdict": "exists",
+   "queries": [
+    "Hotel Sacher Wien"
+   ],
+   "evidence": [
+    {
+     "url": "https://guide.michelin.com/ch/it/hotels-stays/vienna/hotel-sacher-wien-6301",
+     "readOn": "2026-10-17",
+     "note": "Michelin Guide hotel entry: Hotel Sacher Wien. Seen in the search result."
+    }
+   ]
+  },
+  "jardins de métis (reford gardens)|grand-métis": {
+   "verdict": "exists",
+   "queries": [
+    "Jardins de Métis Reford Gardens Grand-Métis"
+   ],
+   "evidence": [
+    {
+     "url": "https://musees.qc.ca/en/museums/guide/reford-gardens.html",
+     "readOn": "2026-10-17",
+     "note": "Quebec museums directory: Reford Gardens (Jardins de Métis), Grand-Métis. Seen in the search result."
+    }
+   ]
+  },
+  "jardins de métis (reford gardens)|grand-métis, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Jardins de Métis Reford Gardens Grand-Métis"
+   ],
+   "evidence": [
+    {
+     "url": "https://musees.qc.ca/en/museums/guide/reford-gardens.html",
+     "readOn": "2026-10-17",
+     "note": "Quebec museums directory: Reford Gardens (Jardins de Métis), Grand-Métis. Seen in the search result."
+    }
+   ]
+  },
+  "jardins de métis|grand-métis, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Jardins de Métis Reford Gardens Grand-Métis"
+   ],
+   "evidence": [
+    {
+     "url": "https://musees.qc.ca/en/museums/guide/reford-gardens.html",
+     "readOn": "2026-10-17",
+     "note": "Quebec museums directory: Reford Gardens (Jardins de Métis), Grand-Métis. Seen in the search result."
+    }
+   ]
+  },
+  "kunsthistorisches museum|vienna": {
+   "verdict": "exists",
+   "queries": [
+    "Kunsthistorisches Museum Wien"
+   ],
+   "evidence": [
+    {
+     "url": "https://khm.at/en/explore/the-museum",
+     "readOn": "2026-10-17",
+     "note": "The museum's own site; Wikipedia and e-flux directory also list it. Seen in the search result."
+    }
+   ]
+  },
+  "lac aux américains, parc national de la gaspésie|sainte-anne-des-monts": {
+   "verdict": "exists",
+   "queries": [
+    "Lac aux Américains Parc national de la Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.routard.com/fr/guide/ameriques/canada/quebec/gaspesie/parc-national-de-la-gaspesie/lac-aux-americains",
+     "readOn": "2026-10-17",
+     "note": "Guide du routard: Lac aux Américains, Parc national de la Gaspésie. Seen in the search result."
+    }
+   ]
+  },
+  "lac aux américains|parc national de la gaspésie": {
+   "verdict": "exists",
+   "queries": [
+    "Lac aux Américains Parc national de la Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.routard.com/fr/guide/ameriques/canada/quebec/gaspesie/parc-national-de-la-gaspesie/lac-aux-americains",
+     "readOn": "2026-10-17",
+     "note": "Guide du routard: Lac aux Américains, Parc national de la Gaspésie. Seen in the search result."
+    }
+   ]
+  },
+  "lac aux américains|parc national de la gaspésie, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Lac aux Américains Parc national de la Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.routard.com/fr/guide/ameriques/canada/quebec/gaspesie/parc-national-de-la-gaspesie/lac-aux-americains",
+     "readOn": "2026-10-17",
+     "note": "Guide du routard: Lac aux Américains, Parc national de la Gaspésie. Seen in the search result."
+    }
+   ]
+  },
+  "lake bled|bled": {
+   "verdict": "exists",
+   "queries": [
+    "Lake Bled Slovenia"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.britannica.com/place/Lake-Bled",
+     "readOn": "2026-10-17",
+     "note": "Encyclopaedia Britannica: Lake Bled, Slovenia. Seen in the search result."
+    }
+   ]
+  },
+  "les graves trail, forillon national park|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Les Graves trail Forillon Cap-Gaspé sentier Les Graves"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.tourisme-gaspesie.com/en/outdoor-activities/les-graves-et-phare-de-cap-gaspe-parc-national-forillon/",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board: Les Graves et phare de Cap Gaspé, Parc national Forillon. Seen in the search result."
+    }
+   ]
+  },
+  "ljubljana castle|ljubljana": {
+   "verdict": "exists",
+   "queries": [
+    "Ljubljana Castle Ljubljanski grad"
+   ],
+   "evidence": [
+    {
+     "url": "https://culture.si/en/Ljubljana_Castle",
+     "readOn": "2026-10-17",
+     "note": "culture.si (Slovenian culture portal): Ljubljana Castle. Seen in the search result."
+    }
+   ]
+  },
+  "ljubljana central market|ljubljana": {
+   "verdict": "exists",
+   "queries": [
+    "Ljubljana Central Market Osrednja tržnica Plečnik"
+   ],
+   "evidence": [
+    {
+     "url": "https://visitljubljana.com/en/poi/central-market",
+     "readOn": "2026-10-17",
+     "note": "Visit Ljubljana tourism board: Central Market. Seen in the search result."
+    }
+   ]
+  },
+  "cap-bon-ami|forillon national park, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Bon-Ami Forillon cliffs viewpoint"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.nationalgeographic.com/travel/article/forillon-canada-park",
+     "readOn": "2026-10-17",
+     "note": "National Geographic: Cap Bon Ami at Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "cap-bon-ami|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Bon-Ami Forillon cliffs viewpoint"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.nationalgeographic.com/travel/article/forillon-canada-park",
+     "readOn": "2026-10-17",
+     "note": "National Geographic: Cap Bon Ami at Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de forillon, cap-bon-ami|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Cap-Bon-Ami Forillon cliffs viewpoint"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.nationalgeographic.com/travel/article/forillon-canada-park",
+     "readOn": "2026-10-17",
+     "note": "National Geographic: Cap Bon Ami at Forillon National Park. Seen in the search result."
+    }
+   ]
+  },
+  "cap-des-rosiers and anse-aux-sauvages, forillon national park|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Anse-aux-Sauvages Cap-des-Rosiers Forillon"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.erudit.org/fr/culture/mgaspesie0787/mgaspesie03010/85308ac.pdf",
+     "readOn": "2026-10-17",
+     "note": "Revue Magazine Gaspésie article on Anse-aux-Sauvages: the cove is on the Forillon park map as Anse-aux-Amérindiens, on the road to Cap-Gaspé. Seen in the search result."
+    },
+    {
+     "url": "https://encyclopediecanadienne.ca/article/anse-du-cap-des-rosiers/",
+     "readOn": "2026-10-17",
+     "note": "Canadian Encyclopedia: Anse du Cap des Rosiers. Seen in the search result."
+    }
+   ],
+   "note": "Both halves exist. The cove's name on the park map is now Anse-aux-Amérindiens, so the candidate's name is the older one; the location is the same."
+  },
+  "forillon national park|": {
+   "verdict": "exists",
+   "queries": [
+    "Forillon National Park Gaspé Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2020/01/parks-canada-announces-the-50th-anniversary-of-forillon-national-park-in-2020.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release on the park's 50th anniversary. Seen in the search result."
+    },
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/forillon-national-park",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Forillon National Park, within the municipality of Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Forillon National Park Gaspé Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2020/01/parks-canada-announces-the-50th-anniversary-of-forillon-national-park-in-2020.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release on the park's 50th anniversary. Seen in the search result."
+    },
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/forillon-national-park",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Forillon National Park, within the municipality of Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park|gaspé, gaspésie": {
+   "verdict": "exists",
+   "queries": [
+    "Forillon National Park Gaspé Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2020/01/parks-canada-announces-the-50th-anniversary-of-forillon-national-park-in-2020.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release on the park's 50th anniversary. Seen in the search result."
+    },
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/forillon-national-park",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Forillon National Park, within the municipality of Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park|gaspé, gaspésie, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Forillon National Park Gaspé Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2020/01/parks-canada-announces-the-50th-anniversary-of-forillon-national-park-in-2020.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release on the park's 50th anniversary. Seen in the search result."
+    },
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/forillon-national-park",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Forillon National Park, within the municipality of Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park|gaspé, qc": {
+   "verdict": "exists",
+   "queries": [
+    "Forillon National Park Gaspé Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2020/01/parks-canada-announces-the-50th-anniversary-of-forillon-national-park-in-2020.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release on the park's 50th anniversary. Seen in the search result."
+    },
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/forillon-national-park",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Forillon National Park, within the municipality of Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Forillon National Park Gaspé Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2020/01/parks-canada-announces-the-50th-anniversary-of-forillon-national-park-in-2020.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release on the park's 50th anniversary. Seen in the search result."
+    },
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/forillon-national-park",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Forillon National Park, within the municipality of Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park|gaspésie": {
+   "verdict": "exists",
+   "queries": [
+    "Forillon National Park Gaspé Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2020/01/parks-canada-announces-the-50th-anniversary-of-forillon-national-park-in-2020.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release on the park's 50th anniversary. Seen in the search result."
+    },
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/forillon-national-park",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Forillon National Park, within the municipality of Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "parc national du canada forillon|gaspé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Forillon National Park Gaspé Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2020/01/parks-canada-announces-the-50th-anniversary-of-forillon-national-park-in-2020.html",
+     "readOn": "2026-10-17",
+     "note": "Parks Canada news release on the park's 50th anniversary. Seen in the search result."
+    },
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/forillon-national-park",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Forillon National Park, within the municipality of Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "marché du vieux-port|québec": {
+   "verdict": "closed",
+   "queries": [
+    "Marché du Vieux-Port de Québec"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.ville.quebec.qc.ca/apropos/planification-orientations/amenagement_urbain/grands_projets_urbains/secteur-sud-bassin-louise/",
+     "readOn": "2026-10-17",
+     "note": "Fetched. City of Québec page calls it l'ancien Marché du Vieux-Port: since 2020 the land hosts the Jardins du bassin Louise farm, and a new public square is planned there. The page gives no closing year."
+    },
+    {
+     "url": "https://amp.cbc.ca/news/canada/montreal/quebec-city-old-port-farmers-market-closes-1.5172454",
+     "readOn": "2026-10-17",
+     "note": "CBC headline 'Quebec City old port farmers market closes' (the 1.5172454 id dates to 2019). The search summary gives the closing as spring 2019 after 32 years, replaced by the Grand Marché at ExpoCité. A fetch of this page returned 403, so the year rests on the search result's text."
+    }
+   ],
+   "closedYear": 2019,
+   "note": "A market of this name was real and closed in 2019 (year from a search summary, not a fetched page). The Grand Marché de Québec at ExpoCité replaced it."
+  },
+  "mercato centrale roma|termini, rome": {
+   "verdict": "exists",
+   "queries": [
+    "Mercato Centrale Roma Termini food hall"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.frommers.com/destinations/rome/restaurants/mercato-centrale-roma",
+     "readOn": "2026-10-17",
+     "note": "Frommer's: Mercato Centrale Roma, inside Termini Station. Seen in the search result."
+    }
+   ]
+  },
+  "mercato di testaccio|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Mercato di Testaccio Rome market"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.wantedinrome.com/yellowpage/testaccio-market-in-rome.html",
+     "readOn": "2026-10-17",
+     "note": "Wanted in Rome: Testaccio Market, covered market in Testaccio. Seen in the search result."
+    }
+   ]
+  },
+  "mercato di testaccio|testaccio, rome": {
+   "verdict": "exists",
+   "queries": [
+    "Mercato di Testaccio Rome market"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.wantedinrome.com/yellowpage/testaccio-market-in-rome.html",
+     "readOn": "2026-10-17",
+     "note": "Wanted in Rome: Testaccio Market, covered market in Testaccio. Seen in the search result."
+    }
+   ]
+  },
+  "mercato testaccio|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Mercato di Testaccio Rome market"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.wantedinrome.com/yellowpage/testaccio-market-in-rome.html",
+     "readOn": "2026-10-17",
+     "note": "Wanted in Rome: Testaccio Market, covered market in Testaccio. Seen in the search result."
+    }
+   ]
+  },
+  "mercato testaccio|testaccio, rome": {
+   "verdict": "exists",
+   "queries": [
+    "Mercato di Testaccio Rome market"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.wantedinrome.com/yellowpage/testaccio-market-in-rome.html",
+     "readOn": "2026-10-17",
+     "note": "Wanted in Rome: Testaccio Market, covered market in Testaccio. Seen in the search result."
+    }
+   ]
+  },
+  "mercato esquilino|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Mercato Esquilino Rome Piazza Vittorio market"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.timeout.com/rome/shopping/nuovo-mercato-esquilino",
+     "readOn": "2026-10-17",
+     "note": "Time Out Rome: Nuovo Mercato Esquilino. Seen in the search result."
+    }
+   ]
+  },
+  "miguasha national park|nouvelle, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de Miguasha fossils Nouvelle"
+   ],
+   "evidence": [
+    {
+     "url": "https://whc.unesco.org/ru/list/686",
+     "readOn": "2026-10-17",
+     "note": "UNESCO World Heritage listing 686: Miguasha National Park. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-miguasha",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing: 231 route Miguasha Ouest, Nouvelle. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de miguasha|nouvelle": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de Miguasha fossils Nouvelle"
+   ],
+   "evidence": [
+    {
+     "url": "https://whc.unesco.org/ru/list/686",
+     "readOn": "2026-10-17",
+     "note": "UNESCO World Heritage listing 686: Miguasha National Park. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-miguasha",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing: 231 route Miguasha Ouest, Nouvelle. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de miguasha|nouvelle, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de Miguasha fossils Nouvelle"
+   ],
+   "evidence": [
+    {
+     "url": "https://whc.unesco.org/ru/list/686",
+     "readOn": "2026-10-17",
+     "note": "UNESCO World Heritage listing 686: Miguasha National Park. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-miguasha",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing: 231 route Miguasha Ouest, Nouvelle. Seen in the search result."
+    }
+   ]
+  },
+  "miramare castle|trieste": {
+   "verdict": "exists",
+   "queries": [
+    "Castello di Miramare Trieste"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.italyreview.com/castello-di-miramare.html",
+     "readOn": "2026-10-17",
+     "note": "Travel guide: Castello di Miramare, on a promontory about 8 km from Trieste centre. Seen in the search result."
+    },
+    {
+     "url": "https://miramare.cultura.gov.it/wp-content/uploads/2022/10/IL-MUSEO-STORICO-E-PARCO-DEL-CASTELLO-DI-MIRAMARE.pdf",
+     "readOn": "2026-10-17",
+     "note": "The Italian culture ministry's own page for the castle museum. Seen in the search result."
+    }
+   ]
+  },
+  "mont albert plateau|sainte-anne-des-monts": {
+   "verdict": "exists",
+   "queries": [
+    "Mont Albert Parc national de la Gaspésie plateau hike"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.pleinairalacarte.com/en/qc/gaspesie-en/mount-albert/",
+     "readOn": "2026-10-17",
+     "note": "Plein air à la carte guide: Mount Albert, Gaspésie. Seen in the search result."
+    }
+   ]
+  },
+  "mont albert|parc national de la gaspésie, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Mont Albert Parc national de la Gaspésie plateau hike"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.pleinairalacarte.com/en/qc/gaspesie-en/mount-albert/",
+     "readOn": "2026-10-17",
+     "note": "Plein air à la carte guide: Mount Albert, Gaspésie. Seen in the search result."
+    }
+   ]
+  },
+  "mont ernest-laforce|parc national de la gaspésie": {
+   "verdict": "exists",
+   "queries": [
+    "Mont Ernest-Laforce Parc national de la Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://outmap.pro/route/mont-ernest-laforce-trail-vT33fvLjL6Qc2BfrTgTcjR",
+     "readOn": "2026-10-17",
+     "note": "Route listing: Mont Ernest-Laforce trail. Seen in the search result."
+    },
+    {
+     "url": "https://www1.sepaq.com:443/resources/docs/pq/gas/gas_guide_visiteur_en.pdf",
+     "readOn": "2026-10-17",
+     "note": "Sépaq visitor guide for the park, Monts-McGerrigle sector. Operator source. Seen in the search result."
+    }
+   ]
+  },
+  "mont ernest-laforce|parc national de la gaspésie, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Mont Ernest-Laforce Parc national de la Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://outmap.pro/route/mont-ernest-laforce-trail-vT33fvLjL6Qc2BfrTgTcjR",
+     "readOn": "2026-10-17",
+     "note": "Route listing: Mont Ernest-Laforce trail. Seen in the search result."
+    },
+    {
+     "url": "https://www1.sepaq.com:443/resources/docs/pq/gas/gas_guide_visiteur_en.pdf",
+     "readOn": "2026-10-17",
+     "note": "Sépaq visitor guide for the park, Monts-McGerrigle sector. Operator source. Seen in the search result."
+    }
+   ]
+  },
+  "mont jacques-cartier|parc national de la gaspésie": {
+   "verdict": "exists",
+   "queries": [
+    "Mont Jacques-Cartier Parc national de la Gaspésie summit"
+   ],
+   "evidence": [
+    {
+     "url": "https://en.wikipedia.org/wiki/Mount_Jacques-Cartier",
+     "readOn": "2026-10-17",
+     "note": "Mount Jacques-Cartier, 1,268 m, inside Gaspésie National Park. Seen in the search result."
+    }
+   ]
+  },
+  "mont jacques-cartier|parc national de la gaspésie, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Mont Jacques-Cartier Parc national de la Gaspésie summit"
+   ],
+   "evidence": [
+    {
+     "url": "https://en.wikipedia.org/wiki/Mount_Jacques-Cartier",
+     "readOn": "2026-10-17",
+     "note": "Mount Jacques-Cartier, 1,268 m, inside Gaspésie National Park. Seen in the search result."
+    }
+   ]
+  },
+  "musée de la gaspésie|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Musée de la Gaspésie Gaspé"
+   ],
+   "evidence": [
+    {
+     "url": "https://musees.qc.ca/en/museums/guide/musee-de-la-gaspesie.html",
+     "readOn": "2026-10-17",
+     "note": "Société des musées du Québec: 80 boulevard de Gaspé, Gaspé. Seen in the search result."
+    },
+    {
+     "url": "https://www.tourisme-gaspesie.com/en/culture-and-living-history/musee-de-la-gaspesie/",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board listing. Seen in the search result."
+    }
+   ]
+  },
+  "musei capitolini|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Musei Capitolini Roma Campidoglio"
+   ],
+   "evidence": [
+    {
+     "url": "https://turismoroma.it/it/luoghi/musei-capitolini",
+     "readOn": "2026-10-17",
+     "note": "Rome tourism board: Musei Capitolini, Piazza del Campidoglio. Seen in the search result."
+    }
+   ]
+  },
+  "museo nazionale romano - palazzo massimo|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Palazzo Massimo alle Terme Museo Nazionale Romano"
+   ],
+   "evidence": [
+    {
+     "url": "https://turismoroma.it/en/places/museo-nazionale-romano-palazzo-massimo-alle-terme",
+     "readOn": "2026-10-17",
+     "note": "Rome tourism board: Museo Nazionale Romano, Palazzo Massimo alle Terme. Seen in the search result."
+    }
+   ]
+  },
+  "palazzo massimo alle terme|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Palazzo Massimo alle Terme Museo Nazionale Romano"
+   ],
+   "evidence": [
+    {
+     "url": "https://turismoroma.it/en/places/museo-nazionale-romano-palazzo-massimo-alle-terme",
+     "readOn": "2026-10-17",
+     "note": "Rome tourism board: Museo Nazionale Romano, Palazzo Massimo alle Terme. Seen in the search result."
+    }
+   ]
+  },
+  "naschmarkt|vienna": {
+   "verdict": "exists",
+   "queries": [
+    "Naschmarkt Vienna market"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.austria.info/locations/naschmarkt/",
+     "readOn": "2026-10-17",
+     "note": "Austrian national tourism board: Naschmarkt. Seen in the search result."
+    }
+   ]
+  },
+  "observatoire de la capitale|québec": {
+   "verdict": "exists",
+   "queries": [
+    "Observatoire de la Capitale Québec"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebec-cite.com/fr/entreprises/observatoire-de-la-capitale",
+     "readOn": "2026-10-17",
+     "note": "Québec City tourism board: Observatoire de la Capitale, 31st floor of the Marie-Guyart building. Seen in the search result."
+    }
+   ]
+  },
+  "ostia antica archaeological site|ostia antica, near rome": {
+   "verdict": "exists",
+   "queries": [
+    "Ostia Antica archaeological park"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.italia.it/en/lazio/rome/archaeological-park-of-ostia-antica",
+     "readOn": "2026-10-17",
+     "note": "Italian national tourism board: Archaeological Park of Ostia Antica, near Rome. Seen in the search result."
+    }
+   ]
+  },
+  "palazzo barberini|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Palazzo Barberini Galleria Nazionale d'Arte Antica Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.turismoroma.it/it/luoghi/galleria-nazionale-darte-antica-palazzo-barberini",
+     "readOn": "2026-10-17",
+     "note": "Rome tourism board: Galleria Nazionale d'Arte Antica in Palazzo Barberini. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie – mont-albert sector|sainte-anne-des-monts, qc": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park; the same results describe the Discovery and Visitors Centre in the Mont-Albert sector, about 40 km by road south of Sainte-Anne-des-Monts. Seen in the search result."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-17",
+     "note": "Gaspésie National Park, Chic-Chocs. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie (mont-albert sector)|sainte-anne-des-monts, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park; the same results describe the Discovery and Visitors Centre in the Mont-Albert sector, about 40 km by road south of Sainte-Anne-des-Monts. Seen in the search result."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-17",
+     "note": "Gaspésie National Park, Chic-Chocs. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie, mont-albert sector|sainte-anne-des-monts, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park; the same results describe the Discovery and Visitors Centre in the Mont-Albert sector, about 40 km by road south of Sainte-Anne-des-Monts. Seen in the search result."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-17",
+     "note": "Gaspésie National Park, Chic-Chocs. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie, mont-albert|sainte-anne-des-monts": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park; the same results describe the Discovery and Visitors Centre in the Mont-Albert sector, about 40 km by road south of Sainte-Anne-des-Monts. Seen in the search result."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-17",
+     "note": "Gaspésie National Park, Chic-Chocs. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie|": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park; the same results describe the Discovery and Visitors Centre in the Mont-Albert sector, about 40 km by road south of Sainte-Anne-des-Monts. Seen in the search result."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-17",
+     "note": "Gaspésie National Park, Chic-Chocs. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie|sainte-anne-des-monts": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park; the same results describe the Discovery and Visitors Centre in the Mont-Albert sector, about 40 km by road south of Sainte-Anne-des-Monts. Seen in the search result."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-17",
+     "note": "Gaspésie National Park, Chic-Chocs. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie|sainte-anne-des-monts, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-17",
+     "note": "Quebec maritime tourism listing for the park; the same results describe the Discovery and Visitors Centre in the Mont-Albert sector, about 40 km by road south of Sainte-Anne-des-Monts. Seen in the search result."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-17",
+     "note": "Gaspésie National Park, Chic-Chocs. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie, gîte du mont-albert area|sainte-anne-des-monts, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Gîte du Mont-Albert Parc national de la Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.tourisme-gaspesie.com/en/accommodations/gite-du-mont-albert/",
+     "readOn": "2026-10-17",
+     "note": "Regional tourism board: Gîte du Mont-Albert, 2001 route du Parc, inside the park. Seen in the search result."
+    }
+   ]
+  },
+  "parc national du bic|rimouski, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national du Bic Rimouski Sépaq"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.bonjourquebec.com/en/listing/to-see-and-do/parc-national-du-bic/0o4e",
+     "readOn": "2026-10-17",
+     "note": "Québec tourism listing: Parc national du Bic; the visitor centre is in Rimouski. Seen in the search result."
+    }
+   ]
+  },
+  "penouille|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Penouille Forillon sector Gaspé"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.authentikcanada.com/fr/blog/le-parc-forillon-de-a-a-z",
+     "readOn": "2026-10-17",
+     "note": "Travel guide: Forillon is split into three sectors, one of them Penouille, 25 minutes from Gaspé. Seen in the search result."
+    }
+   ]
+  },
+  "percé rock and bonaventure island|percé": {
+   "verdict": "exists",
+   "queries": [
+    "Percé Rock Rocher Percé Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/perce-rock",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Percé Rock, off Percé on the Gaspé Peninsula; with Bonaventure Island it forms the national park. Seen in the search result."
+    }
+   ]
+  },
+  "percé rock|percé": {
+   "verdict": "exists",
+   "queries": [
+    "Percé Rock Rocher Percé Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/perce-rock",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Percé Rock, off Percé on the Gaspé Peninsula; with Bonaventure Island it forms the national park. Seen in the search result."
+    }
+   ]
+  },
+  "percé rock|percé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Percé Rock Rocher Percé Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/perce-rock",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Percé Rock, off Percé on the Gaspé Peninsula; with Bonaventure Island it forms the national park. Seen in the search result."
+    }
+   ]
+  },
+  "rocher percé|percé, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Percé Rock Rocher Percé Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://thecanadianencyclopedia.ca/en/article/perce-rock",
+     "readOn": "2026-10-17",
+     "note": "The Canadian Encyclopedia: Percé Rock, off Percé on the Gaspé Peninsula; with Bonaventure Island it forms the national park. Seen in the search result."
+    }
+   ]
+  },
+  "piazza unità d'italia|trieste": {
+   "verdict": "exists",
+   "queries": [
+    "Piazza Unità d'Italia Trieste"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.italyreview.com/piazza-unita-ditalia.html",
+     "readOn": "2026-10-17",
+     "note": "Travel guide: Piazza Unità d'Italia, the main square of Trieste. Seen in the search result."
+    }
+   ]
+  },
+  "porte saint-louis|québec, québec": {
+   "verdict": "exists",
+   "queries": [
+    "Porte Saint-Louis Vieux-Québec fortifications"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebec-cite.com/fr/quoi-faire-quebec/porte-saint-louis",
+     "readOn": "2026-10-17",
+     "note": "Québec City tourism board: Porte Saint-Louis, Vieux-Québec. Seen in the search result."
+    }
+   ]
+  },
+  "sant'eustachio il caffè|pantheon area, rome": {
+   "verdict": "exists",
+   "queries": [
+    "Sant'Eustachio il Caffè Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.theinfatuation.com/rome/reviews/sant-eustachio-il-caffe",
+     "readOn": "2026-10-17",
+     "note": "The Infatuation review: Sant'Eustachio Il Caffè, Piazza di Sant'Eustachio 82, Rome. Seen in the search result."
+    }
+   ]
+  },
+  "sant'eustachio il caffè|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Sant'Eustachio il Caffè Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.theinfatuation.com/rome/reviews/sant-eustachio-il-caffe",
+     "readOn": "2026-10-17",
+     "note": "The Infatuation review: Sant'Eustachio Il Caffè, Piazza di Sant'Eustachio 82, Rome. Seen in the search result."
+    }
+   ]
+  },
+  "schönbrunn palace|vienna": {
+   "verdict": "exists",
+   "queries": [
+    "Schönbrunn Palace Vienna"
+   ],
+   "evidence": [
+    {
+     "url": "https://aviewoncities.com/vienna/schonbrunn-palace",
+     "readOn": "2026-10-17",
+     "note": "City guide: Schönbrunn Palace, Vienna. Seen in the search result."
+    }
+   ]
+  },
+  "terme di caracalla|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Terme di Caracalla Roma"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.turismoroma.it/luoghi/terme-di-caracalla",
+     "readOn": "2026-10-17",
+     "note": "Rome tourism board: Terme di Caracalla. Seen in the search result."
+    }
+   ]
+  },
+  "wiener staatsoper|vienna": {
+   "verdict": "exists",
+   "queries": [
+    "Wiener Staatsoper Vienna State Opera"
+   ],
+   "evidence": [
+    {
+     "url": "https://artsandculture.google.com/partner/wiener-staatsoper",
+     "readOn": "2026-10-17",
+     "note": "Google Arts and Culture partner page: Wiener Staatsoper. Seen in the search result."
+    }
+   ]
+  }
+ }
+}

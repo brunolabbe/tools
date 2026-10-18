@@ -15,10 +15,16 @@
  * that do not make the total (lg-10), which the API refuses too.
  *
  * **The items** (lg-10): a tap on an item cycles it through shared, not shared
- * and the other's, and the amounts that come off and the shared amount update as
- * it does, computed by the same `splitReceipt` the API files with. Each item's
+ * and someone else's, and the amounts that come off and the shared amount update
+ * as it does, computed by the same `splitReceipt` the API files with. Each item's
  * category is editable, and the category the merchant was last given is offered
  * first.
+ *
+ * **Whose** (lg-30). The people offered are the household's current members,
+ * from its record (`fetchHousehold`), never every name the books hold. With one
+ * other member an item marked someone else's is theirs, as it always was, and
+ * names nobody in the request; with more, it carries a picker of the others, and
+ * so does the whole receipt.
  */
 
 import { useEffect, useId, useState } from "react";
@@ -41,7 +47,8 @@ import type {
   SpendingCategory,
   UploadedReceipt,
 } from "@ledger/contract";
-import { fetchPeople } from "../api/rules.ts";
+import { fetchHousehold } from "../api/households.ts";
+import { fetchMe } from "../api/me.ts";
 import { fetchSpendingCategories } from "../api/spending.ts";
 import { fetchReceiptMatches, fileReceipt, readReceipt, uploadReceipt } from "../api/receipts.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
@@ -68,6 +75,8 @@ interface ItemDraft {
   deposit: string;
   spendingCategoryId: number | null;
   share: ItemShare;
+  /** Whose a `theirs` item is, as picked; `null` until picked, and with one other member. */
+  chargedTo: string | null;
 }
 
 /** The form's fields, as typed. Amounts are text until filed. */
@@ -109,6 +118,7 @@ function itemDraftOf(item: ReceiptItem): ItemDraft {
     deposit: centsText(item.deposit),
     spendingCategoryId: item.spendingCategoryId,
     share: item.share,
+    chargedTo: item.chargedTo,
   };
 }
 
@@ -146,9 +156,9 @@ function amountOf(text: string): number | null {
 /**
  * An item as the contract has it, or `null` while its text or price is not one:
  * the form then says so and files nothing, rather than file the item as
- * something it is not.
+ * something it is not. `whose` names a `theirs` item's person, or `null`.
  */
-function itemOf(draft: ItemDraft): ReceiptItem | null {
+function itemOf(draft: ItemDraft, whose: (draft: ItemDraft) => string | null): ReceiptItem | null {
   const price = amountOf(draft.price);
   const deposit = amountOf(draft.deposit);
   if (draft.text.trim() === "" || price === null) return null;
@@ -160,11 +170,12 @@ function itemOf(draft: ItemDraft): ReceiptItem | null {
     deposit,
     spendingCategoryId: draft.spendingCategoryId,
     share: draft.share,
+    chargedTo: draft.share === "theirs" ? whose(draft) : null,
   };
 }
 
 /** The form as a proposal; an amount that is not one is `null`, and the check says so. */
-function proposalOf(draft: Draft): ReceiptProposal {
+function proposalOf(draft: Draft, whose: (draft: ItemDraft) => string | null): ReceiptProposal {
   return {
     merchant: draft.merchant.trim() === "" ? null : draft.merchant.trim(),
     date: /^\d{4}-\d{2}-\d{2}$/u.test(draft.date) ? draft.date : null,
@@ -172,7 +183,7 @@ function proposalOf(draft: Draft): ReceiptProposal {
     gst: amountOf(draft.gst),
     qst: amountOf(draft.qst),
     total: amountOf(draft.total),
-    items: draft.items.flatMap((item) => itemOf(item) ?? []),
+    items: draft.items.flatMap((item) => itemOf(item, whose) ?? []),
   };
 }
 
@@ -202,6 +213,23 @@ type Stage =
   | ({ step: "form"; part: number; merchantCategoryId: number | null } & Photo)
   | ({ step: "filed"; said: string } & Photo);
 
+/** An item's share as its button reads: someone else's names whose, when known. */
+function shareLabel(share: ItemShare, person: string | null): string {
+  return share === "shared"
+    ? "Shared"
+    : share === "not-shared"
+      ? "Not shared"
+      : person === null
+        ? "The other's"
+        : `${person}'s`;
+}
+
+/** "a", "a and b", "a, b and c". */
+function listed(names: readonly string[]): string {
+  const last = names.at(-1) ?? "";
+  return names.length < 2 ? last : `${names.slice(0, -1).join(", ")} and ${last}`;
+}
+
 /** The first part of the photo not filed yet. */
 function nextPart(filed: readonly number[]): number {
   let part = 1;
@@ -215,6 +243,8 @@ export function Receipts(): React.ReactElement {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [spendingCategoryId, setSpendingCategoryId] = useState<number | null>(null);
   const [theirs, setTheirs] = useState(false);
+  /** Whose the whole receipt is, when it is someone's among several (lg-30). */
+  const [wholeChosen, setWholeChosen] = useState("");
   const [matches, setMatches] = useState<ReceiptMatch[] | null>(null);
   const [people, setPeople] = useState<string[]>([]);
   const [categories, setCategories] = useState<SpendingCategory[]>([]);
@@ -225,8 +255,15 @@ export function Receipts(): React.ReactElement {
     const controller = new AbortController();
     const load = async (): Promise<void> => {
       try {
+        // The current members, from the household's record (lg-30): the books'
+        // `fetchPeople` holds every name ever enrolled, one who has left included.
+        const members = async (): Promise<string[]> => {
+          const me = await fetchMe(controller.signal);
+          const household = await fetchHousehold(me.person.household, controller.signal);
+          return [...new Set(household.members.map((member) => member.person))];
+        };
         const [loadedPeople, loadedCategories] = await Promise.all([
-          fetchPeople(controller.signal),
+          members(),
           fetchSpendingCategories(controller.signal),
         ]);
         setPeople(loadedPeople);
@@ -256,6 +293,7 @@ export function Receipts(): React.ReactElement {
     setDraft(null);
     setSpendingCategoryId(null);
     setTheirs(false);
+    setWholeChosen("");
     setMatches(null);
     setProblem(null);
   };
@@ -266,6 +304,7 @@ export function Receipts(): React.ReactElement {
     // The merchant's last category is proposed for the line (lg-10).
     setSpendingCategoryId(merchantCategoryId);
     setTheirs(false);
+    setWholeChosen("");
     setMatches(null);
     // The photo's own three fields, not a stage spread in whole: its `step` would win.
     setStage({
@@ -403,16 +442,21 @@ export function Receipts(): React.ReactElement {
 
   const { receipt, part } = stage;
   const form = draft ?? draftOf(null, receipt);
-  const proposal = proposalOf(form);
-  const flags = checkReceipt(proposal);
   const payer = receipt.uploadedBy;
-  const other = people.find((person) => person !== payer) ?? null;
-  // Among more than two, "the other's" would name nobody: the API refuses it
-  // until an item can say whose (lg-30), so the screen does not offer it, and
-  // what was someone else's is a charge line on the period screen (lg-23).
-  const several = people.filter((person) => person !== payer).length > 1;
-  const nextShare = (share: ItemShare): ItemShare =>
-    several && NEXT_SHARE[share] === "theirs" ? "shared" : NEXT_SHARE[share];
+  const others = people.filter((person) => person !== payer);
+  const [other = null] = others;
+  // With one other member "someone else's" is theirs and the request names
+  // nobody, as it always did; with more, each item names whose (lg-30).
+  const several = others.length > 1;
+  const whose = (item: ItemDraft): string | null =>
+    !several
+      ? null
+      : item.chargedTo !== null && others.includes(item.chargedTo)
+        ? item.chargedTo
+        : other;
+  const wholeWhose = others.includes(wholeChosen) ? wholeChosen : other;
+  const proposal = proposalOf(form, whose);
+  const flags = checkReceipt(proposal);
   const offered = merchantFirst(categories, stage.merchantCategoryId);
   // An item whose text or price is not one yet is left out of the proposal.
   const itemsUnread = proposal.items.length !== form.items.length;
@@ -462,6 +506,7 @@ export function Receipts(): React.ReactElement {
         deposit: "",
         spendingCategoryId: null,
         share: "shared",
+        chargedTo: null,
       };
       return { ...current, items: [...current.items, blank] };
     });
@@ -475,14 +520,6 @@ export function Receipts(): React.ReactElement {
     proposal.items.length > 0 && !itemsUnread && itemsAddUp(proposal) && charged !== null
       ? splitReceipt(proposal, undefined, charged)
       : null;
-  const shareLabel = (share: ItemShare): string =>
-    share === "shared"
-      ? "Shared"
-      : share === "not-shared"
-        ? "Not shared"
-        : other === null
-          ? "The other's"
-          : `${other}'s`;
   /** Why the form cannot be filed yet, or `null`. */
   const unfileable = itemsUnread
     ? "An item needs its text and its price before the receipt can be filed."
@@ -527,16 +564,20 @@ export function Receipts(): React.ReactElement {
                 amountCents: charged,
                 spendingCategoryId,
                 note: form.merchant.trim() === "" ? null : form.merchant.trim(),
-                chargedTo: theirs && !several ? other : null,
+                chargedTo: theirs ? wholeWhose : null,
               }
             : { to: "row", rowId: destination },
       });
+      // Each person charged, by the filing's own record of whose (lg-30).
+      const chargedPeople = filing.charges.map((charge) => `${charge.chargedTo}'s`);
       const said =
         destination !== "line"
           ? "Attached to the joint-account row."
-          : filing.chargeLineId === null
+          : chargedPeople.length === 0
             ? `Filed as ${payer}'s line in the period.`
-            : `Filed as ${payer}'s line in the period, and ${other ?? "the other person"}'s items as a charge.`;
+            : `Filed as ${payer}'s line in the period, and ${listed(chargedPeople)} items as ${
+                chargedPeople.length === 1 ? "a charge" : "charges"
+              }.`;
       const photo = { receipt, read: stage.read, filed: [...stage.filed, part] };
       setDraft(null);
       setMatches(null);
@@ -615,11 +656,24 @@ export function Receipts(): React.ReactElement {
                   </label>
                   <button
                     type="button"
-                    aria-label={`${name}, ${shareLabel(item.share)}`}
-                    onClick={() => setItem(index, { share: nextShare(item.share) })}
+                    aria-label={`${name}, ${shareLabel(item.share, whose(item) ?? other)}`}
+                    onClick={() => setItem(index, { share: NEXT_SHARE[item.share] })}
                   >
-                    {shareLabel(item.share)}
+                    {shareLabel(item.share, whose(item) ?? other)}
                   </button>
+                  {several && item.share === "theirs" && (
+                    <select
+                      aria-label={`Whose is ${name}`}
+                      value={whose(item) ?? ""}
+                      onChange={(event) => setItem(index, { chargedTo: event.target.value })}
+                    >
+                      {others.map((person) => (
+                        <option key={person} value={person}>
+                          {person}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <SpendingCategoryPicker
                     ariaLabel={`Category of ${name}`}
                     categories={offered}
@@ -646,7 +700,14 @@ export function Receipts(): React.ReactElement {
           {split !== null && (
             <output aria-label="What is shared">
               Not shared {formatCents(split.notSharedCents)} ·{" "}
-              {several ? "" : `${shareLabel("theirs")} ${formatCents(split.chargedCents)} · `}
+              {several
+                ? split.charges
+                    .map(
+                      (charge) =>
+                        `${shareLabel("theirs", charge.personId)} ${formatCents(charge.cents)} · `,
+                    )
+                    .join("")
+                : `${shareLabel("theirs", other)} ${formatCents(split.chargedCents)} · `}
               Shared {formatCents(split.sharedCents)}
             </output>
           )}
@@ -661,20 +722,33 @@ export function Receipts(): React.ReactElement {
           noneLabel="None"
           onChange={setSpendingCategoryId}
         />
-        {several ? (
-          <p className="muted hint">
-            Something on it was someone else&rsquo;s? Leave it not shared here, and add it on the
-            period screen as a line charged to them.
-          </p>
-        ) : (
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={theirs}
-              onChange={(event) => setTheirs(event.target.checked)}
-            />
-            {other === null ? "This was the other person's" : `This was ${other}'s`}
-          </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={theirs}
+            onChange={(event) => setTheirs(event.target.checked)}
+          />
+          {several
+            ? "This was someone else's"
+            : other === null
+              ? "This was the other person's"
+              : `This was ${other}'s`}
+        </label>
+        {theirs && several && (
+          <>
+            <label htmlFor={`${id}-whose`}>Whose it was</label>
+            <select
+              id={`${id}-whose`}
+              value={wholeWhose ?? ""}
+              onChange={(event) => setWholeChosen(event.target.value)}
+            >
+              {others.map((person) => (
+                <option key={person} value={person}>
+                  {person}
+                </option>
+              ))}
+            </select>
+          </>
         )}
         <div className="actions">
           <button type="button" disabled={busy} onClick={() => fileAs("line")}>

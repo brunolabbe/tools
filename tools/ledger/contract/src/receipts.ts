@@ -40,8 +40,9 @@ export const MAX_RECEIPT_PHOTO_BYTES = 7 * 1024 * 1024;
  *
  * - `shared`: the default, and all a reader ever answers.
  * - `not-shared`: it stays with whoever paid, and comes off the shared amount.
- * - `theirs`: the other person's, and becomes a charge they owe in full; it
- *   comes off the shared amount exactly as a `not-shared` item does.
+ * - `theirs`: someone else's, and becomes a charge they owe in full; it comes
+ *   off the shared amount exactly as a `not-shared` item does. Whose it is, is
+ *   the item's `chargedTo` (lg-30).
  */
 export const ITEM_SHARES = ["shared", "not-shared", "theirs"] as const;
 export type ItemShare = (typeof ITEM_SHARES)[number];
@@ -65,6 +66,15 @@ export interface ReceiptItem {
    */
   spendingCategoryId: number | null;
   share: ItemShare;
+  /**
+   * Whose a `theirs` item is, so each item can be charged to a different person
+   * (lg-30); `null` on every other item. Sent as `null` on a `theirs` item, it
+   * means the household's one other current member, which the API resolves and
+   * refuses when there are several; a filed `theirs` item answers the name it
+   * was charged to (`null` only on one filed before lg-30 whose charge came to
+   * nothing).
+   */
+  chargedTo: string | null;
 }
 
 /** Far past any grocery receipt's lines; a reading past it is cut there. */
@@ -99,14 +109,21 @@ const MAX_CENTS = 100_000_000_000;
 
 const cents = z.number().int().min(-MAX_CENTS).max(MAX_CENTS);
 
-export const receiptItemSchema = z.strictObject({
-  text: z.string().trim().min(1).max(200),
-  price: cents,
-  taxable: z.boolean(),
-  deposit: cents.nullable(),
-  spendingCategoryId: z.number().int().positive().nullable(),
-  share: z.enum(ITEM_SHARES),
-}) satisfies z.ZodType<ReceiptItem>;
+export const receiptItemSchema = z
+  .strictObject({
+    text: z.string().trim().min(1).max(200),
+    price: cents,
+    taxable: z.boolean(),
+    deposit: cents.nullable(),
+    spendingCategoryId: z.number().int().positive().nullable(),
+    share: z.enum(ITEM_SHARES),
+    // Omitted, as every request before lg-30 omits it, it is `null`.
+    chargedTo: z.string().min(1).max(100).nullable().default(null),
+  })
+  // A name on an item that is not someone else's would be a charge nobody filed.
+  .refine((item) => item.chargedTo === null || item.share === "theirs", {
+    path: ["chargedTo"],
+  }) satisfies z.ZodType<ReceiptItem>;
 
 export const receiptProposalSchema = z.strictObject({
   merchant: z.string().trim().min(1).max(200).nullable(),
@@ -194,20 +211,33 @@ export interface ReceiptFiling {
   /** The proposal as the person confirmed it. */
   proposal: ReceiptProposal;
   /**
-   * The line it became, or `null` when it was attached to a row. It carries the
-   * shared amount (lg-10); when nothing on the receipt is shared but some of it
-   * is the other's, it is the charge.
+   * The first line it became, or `null` when it was attached to a row. It
+   * carries the shared amount (lg-10); when nothing on the receipt is shared but
+   * some of it is someone else's, it is the first charge.
    */
   periodLineId: number | null;
   /**
-   * The charge the other person's items became (lg-10), when the receipt also
-   * left a shared line; `null` otherwise.
+   * The charge filed beside a shared line (lg-10), or the first of them when
+   * several people were charged (lg-30); `null` when nothing was shared.
    */
   chargeLineId: number | null;
+  /**
+   * Every charge line the filing made, one per person, in the order each
+   * person's first `theirs` item is printed (lg-30), including a charge that is
+   * also `periodLineId`. A `theirs` item that came to nothing files no line and
+   * is not here.
+   */
+  charges: ReceiptCharge[];
   /** The stored row it documents, or `null` when it became a line. */
   rowId: number | null;
   filedAt: string;
   filedBy: string;
+}
+
+/** One charge line a filing made (lg-30): whose it is, and the line. */
+export interface ReceiptCharge {
+  chargedTo: string;
+  lineId: number;
 }
 
 /**
@@ -281,10 +311,14 @@ export interface ReceiptMatchesResponse {
  * total makes differ from it.
  *
  * With items (lg-10) the line is not `amountCents`: the API takes off what is
- * not shared and what is the other's, computed from the items (`splitReceipt`
- * in `books`), files the rest as the line, and files the other's part as a
- * charge of its own. A tip stays shared. A receipt attached to a row is shared
+ * not shared and what is someone else's, computed from the items
+ * (`splitReceipt` in `books`), files the rest as the line, and files each
+ * charged person's part as a charge of its own, to the person each `theirs`
+ * item names (lg-30). A tip stays shared. A receipt attached to a row is shared
  * whole: its items carry categories, and none may be `not-shared` or `theirs`.
+ *
+ * `chargedTo` on a line marks the whole receipt as one person's, as lg-8 filed
+ * it: it names anyone the books hold who is not the payer.
  */
 export type ReceiptDestination =
   | {

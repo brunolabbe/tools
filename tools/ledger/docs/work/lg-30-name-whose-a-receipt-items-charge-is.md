@@ -3,7 +3,7 @@ id: lg-30
 tool: ledger
 title: Name whose a receipt item's charge is, among more than two people
 kind: work-package
-status: ready
+status: done
 milestone: P6
 depends_on: [lg-23]
 difficulty: hard
@@ -134,11 +134,14 @@ may vary if the Log says what changed and why.
    and QST each rounded separately, so the printed total can sit a cent either
    side of that number, and the old test cannot tell a real shortfall from the
    till's rounding. The rule, for a receipt with **nothing left shared** (every
-   item is not shared or `theirs`, so `itemsAddUp` guarantees the items make the
+   item is not shared or `theirs`, or is shared and costs nothing, **by cost**: price 0 and no
+   deposit, a `SAC 0,00` line; so `itemsAddUp` guarantees the items make the
    printed total): when the payment is **at or beyond the printed total, at its
    sign**, whatever the parts rounded apart leave over the payment is rounding, up
-   to 2 cents (one from printed against exact taxes, one from rounding the parts
-   apart), and the shared amount is 0. When the payment is **under the total**,
+   to `ceil(parts / 2)` cents, `parts` being the people charged plus one for the
+   not-shared amount when there are not-shared items (each part rounded apart is
+   off by at most half a cent, and the printed total by under a cent), and the
+   shared amount is 0. When the payment is **under the total**,
    in size at its sign, nothing is adjusted and the receipt is refused with the
    existing message. Two receipts the rule must handle, each a 10,00 $ taxable
    item not shared and a taxable item `theirs`, `checkReceipt` raising nothing on
@@ -328,9 +331,8 @@ null` as a two-person filing does (to the one other current member); and the
    2); the two make 2,476. The same on the refund: every `BASKET` price, deposit,
    tax and the total negated, `-2,476` charged, the same marks: casey's line is -923 and
    sam's is -1,553, which make -2,476 (sam's is the largest in size, casey's the
-   largest by value). _Regression:_ a fixture where the excess shows with the
-   people rounded together too (more is charged than was paid, with one person
-   charged or several) is refused with the existing `BAD_REQUEST` ("More comes
+   largest by value). _Regression:_ a payment under the printed total (with one
+   person charged or several) is refused with the existing `BAD_REQUEST` ("More comes
    off this receipt than the card was charged. …"), as now.
 8. **`splitReceipt`** (`books/test/receipts.test.ts`): `charges` has one entry
    per distinct `chargedTo`, in first-printed order; `sharedCents +
@@ -395,6 +397,46 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     casey and sam is refused there, so the filing is proved new.)
 17. `npm run check` and the ledger suite (`npm test -- --project ledger`) pass at
     the branch's head; the pull request's own CI is green.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-17 · `4dbe22b8..01c30bf7` · Sonnet 5.5, depth full
+
+No `high`. One `med` (an open decision, no `Done when` line depends on it), four `low`. Every `Done when` line is proven, verified or covered by a green CI leg; the rounding bound was graded against the owner's answer of 2026-10-17 (`ceil(parts/2)`), not Build 2's literal "up to 2 cents". The brief changed between base and head only in Done when 7's lead phrase, as the owner answered (`diff` of the two copies down to `## Log`).
+
+| Done when                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. API, three people, two names             | `api/test/receipts.test.ts` › "an item marked as the other's, among more than two › files a charge to each person the items name (lg-30)" ✓ — asserts exactly three `period_lines` (348 shared, 1,554 casey, 574 sam, sum 2,476), `charges`, the stored items and the response items                                                                                                                                                                                                                                                                                                                                          |
+| 2. lg-23's refusal lifted                   | **verified** — `grep -rn "more than two people in the household" tools/ledger/api/src tools/ledger/web/src` prints nothing (exit 1); lg-23's refusal test is the one now inverted to line 1                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 3. `theirs` with no name among three        | `api/test/receipts.test.ts` › "a theirs item that names nobody, among three (lg-30) › is refused, asking whose, and files nothing" ✓ — message contains "name whose", 0 rows in `period_lines` and `receipt_filings`                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 4. Two people keep requests and results     | `api/test/receipts.test.ts` › "two people keep their requests and results (lg-30) › lg-10's charge names sam in charges and on its stored item" ✓; lg-10's own test is unchanged apart from `chargedTo: null` on `BASKET`'s items                                                                                                                                                                                                                                                                                                                                                                                             |
+| 5. Refused combinations                     | `api/test/receipts.test.ts` › "the names a theirs item may not carry (lg-30) › refuses the payer / a name the books do not hold / a name on a shared item / a name on a not-shared item, and files nothing" ✓ (messages pinned, 0 and 0 rows each; the pair with line 1 is the casey-on-`theirs` filing); row clause ✓ "… still refuses a theirs item on a joint-account row, with the same words"                                                                                                                                                                                                                            |
+| 6. A departed name                          | `api/test/receipts.test.ts` › "a member who has left (lg-30) › a theirs item that names nobody is the one other current member's" and "… and one that names them is charged to them" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 7. Nothing shared, two people charged       | `api/test/receipts.test.ts` › "nothing shared, two people charged (lg-30) › files two charges, the cent of rounding off the largest" (923 / 1,553, `chargeLineId` null, `periodLineId` casey's line) and "… and on the refund, off the charge largest in size" (−923 / −1,553) ✓; regression clause › "a payment under the printed total, with %s charged, is refused as more coming off" (several, one) ✓                                                                                                                                                                                                                    |
+| 8. `splitReceipt` per person                | `books/test/receipts.test.ts` › "a charge per person (lg-30)" (four tests) ✓; with every `theirs` item rounded together 10 of 70 fail, "rounds each person's items apart, so the shared amount takes the cent" among them                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 9. Migration 11                             | `api/test/schema.test.ts` › "migration 11's whose (lg-30)" (three tests) ✓; also run by the gate on a database main's code filled (F4 and the first `dropped` below)                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 10. Screen counts from the household record | `web/test/receipts.test.tsx` › "counts the household's current members from its record, not every name the books hold" ✓; `api/test/receipts.test.ts` › "the people the screen is not given (lg-30) › GET /api/people still answers the one key, people" ✓; `contract/src/api.ts` is not in the diff                                                                                                                                                                                                                                                                                                                          |
+| 11. Web, three members                      | `web/test/receipts.test.tsx` › "among three people, an item cycles to someone else's and names whose it is" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 12. Web, two members and one departed       | `web/test/receipts.test.tsx` › "two current members and one who has left: the screen is the two-person one" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 13. Whole-receipt picker                    | `web/test/receipts.test.tsx` › "among three people, the whole receipt can be someone else's, picked by name" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 14. Docs                                    | **verified** — `grep -n "refused until an item can say whose" tools/ledger/CLAUDE.md` prints nothing (exit 1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 15. A free `theirs` item files no line      | `api/test/receipts.test.ts` › "a theirs item that costs nothing (lg-30) › files no charge line, and keeps whose it was on the item" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 16. A cent on a mixed receipt               | `books/test/receipts.test.ts` › "with not-shared items, the cent comes off the not-shared amount" ✓; `api/test/receipts.test.ts` › "a cent of rounding on a mixed receipt (lg-30) › comes off the not-shared amount, and files the two charges alone" ✓                                                                                                                                                                                                                                                                                                                                                                       |
+| 17. `check`, ledger suite, CI               | **verified** at `01c30bf7`: `npm run build` exit 0, `npm run check` exit 0, `npm test -- --project ledger` 62 files, 1,229 of 1,229 tests. PR #529 at `01c30bf7`: `check`, `test (ubuntu-latest)`, `CodeQL`, `codeql`, `docker`, `dependency-review` pass; `test (windows-latest, informational)` fails in `scripts/test/preflight.test.ts` › "the CLI's --only mergeTree exits 16 on a failed probe and prints no other check (repo-104)" (EBUSY on `gh.exe`), a file the diff cannot reach; main's push run at `495a5b7a` had that leg green (the newer main push runs finished with the matrix skipped, or were cancelled) |
+
+- **med** · F1 · no `Done when` line depends on it · **open decision** · A receipt main files is now refused when it carries a _shared_ item that costs nothing. `splitReceipt` reads "nothing left shared" by items (`nothingShared = every item is not shared or theirs`), where lg-32's guard it replaced read the cents (`together`). A free shared item (a `SAC 0,00` line) therefore blocks the cent of rounding the guard exists to absorb. Reproduction at the API, same request in both trees (no `chargedTo` field, so main's strict schema accepts it): not shared 2,074 taxable; shared 0; theirs 309 and 1,892 taxable; subtotal 4,275, GST 214, QST 426, total 4,915, paid 4,915, two members. **main 4dbe22b8: 200, one line, 2,531 charged to sam. head: 400 "More comes off this receipt than the card was charged. Check the amount charged and the items."** The same receipt without the free item files on both. Extent, `node --import tsx regress.mts <main tree> <head tree> 300000 7` (random receipts that add up, paid the total, a tip, or short; one person charged): 61 of 300,000 files→refused with a shared item at or above the total (33 of them with `checkReceipt` raising nothing, of 171,763 clean); no receipt that both files has different amounts. The builder's Log says this was "not measured"; the test "a receipt with something still shared takes no adjustment" pins the refusal and its comment ("as lg-32 refused it") holds only for the receipt it uses, which main also refuses. Options: **(1) keep the items reading** and say in the Log that a free shared item must be marked not shared; **(2, recommended) read "nothing left shared" by cost** — every shared item has price 0 and no deposit — which also gives the lg-32 F1 fix to receipts that carry a free item. Run on the same sweep, (2) takes the 61 to 0 and leaves only the designed under-total refusals; it rewrites the one test above. Label: open, the owner's call.
+- **low** · F2 · no live call site · `chargedToOf`'s own checks (the payer, a name the books do not hold) are pinned by no test. With both removed, the whole api project passes: `npx vitest run tools/ledger/api/test` 661 of 661. Behind them, a free `theirs` item naming the payer files (200) and stores `charged_to` = the payer with no line, and one naming another household's member or a name nobody holds answers 500 "Something went wrong on our end." (a foreign-key failure, 0 rows). At the head all four answer 400 with the right words (`gate-who.test.ts`, cases 2, 2b, 3, 3b). A priced item is caught a second time by `addLine`, so Done when 5 cannot tell the two apart, as the Log says; Done when 15's free item names a valid person.
+- **low** · F3 · the bound's upper edge is unpinned. `roundingBound` with `+ 1` passes the whole books spec (70 of 70); the only test on that side uses a 150-cent excess. A case at the edge: one taxable item priced 14 on a receipt with no tax lines, paid 14, costs 16 (excess 2, bound 1): `splitReceipt` answers `sharedCents` −2 at the head (refused) and would be absorbed under `+ 1`. Its lower edge is pinned (the five-person test; a fixed 2-cent cap fails it).
+- **low** · F4 · the migration reads a shared line as the charge in the residual the Build names, and the head files the same input differently. On a version-10 file main filled, filing "whole-receipt `chargedTo` sam, plus a free `theirs` item" migrates to the item `charged_to` sam, `charge_line_id` 9 (the shared line of 2,476), `charges` `[{sam, 9}]`; the head's own filing of the same input stores `charge_line_id` null and answers `charges` `[]`. Named in Build 4 and the Log, untested, nothing reads `charges` of a stored filing. Not a data loss.
+- **low** · F5 · the receipt screen's load, which this branch changed, has no test for a failed or slow record, and its behaviour is inherited. `fetchHousehold` rejecting, `fetchMe` rejecting, or `fetchHousehold` never answering all give: an alert "Something went wrong on our end." on the first screen only (the first action clears it); no categories (`Promise.all` drops both); the two-person form ("The other's", no "Whose is" select); and ticking "This was the other person's" files `destination.chargedTo: null`, as the payer's shared line. The same probe at main with `fetchPeople` rejecting prints the same three results, so it is not a regression; the head's chain of two requests lengthens the window. A reproduction is in hand if the lander wants it filed.
+- **dropped** · migration 11 loses or alters a row, or its CHECKs refuse a row main can write — measured on a database main's code filled (35 `receipt_items` rows, 12 filings, a refund, a free `theirs` item, whole-receipt `chargedTo` with and without a charge, a later correction, a retirement, a departed third name): 35 rows before and after, 0 old-column cells altered, the 18 other tables identical, backfill 0 mismatches against an independent derivation, `foreign_key_check` empty, `integrity_check` ok, a second `migrate()` a no-op. Not a defect.
+- **dropped** · a real shortfall absorbed by the bound — never: 1,182,899 payments under the printed total across 394,419 clean nothing-shared receipts, 0 filed with an overshoot; at the total, 0 refused. Not a defect.
+- **dropped** · a charged person who comes to 0 cents counts as a part and widens the bound — a clean receipt never exceeds the real bound (largest raw excess 2 for 3 to 7 parts in 400,000), so it only matters on an unclean one; no live call site.
+- **dropped** · replaying migration 11 over a migrated file with `user_version` reset by hand — ran, and re-derived the same state on main's data; head-written data unmeasured; nothing does it.
+- **findings** · the hunt returned 9; 5 carried, 4 dropped.
+- NFR: security ✓ (a name is checked against the books before anything is written; migration SQL is static) · performance n/a (one table copy at upgrade) · reliability ✓ migration is one transaction with a proven copy; the screen's load failure is F5 · maintainability — above.
+- Invariants walked: tools never import each other ✓; `AppError` codes `BAD_REQUEST` and `INTERNAL` ✓; the contract change (`ReceiptItem.chargedTo`, `ReceiptFiling.charges`) is the owner's answer A of 2026-10-17 ✓; no new test file, so no registration; no new workspace, so no `Dockerfile` edit; style ✓ (`npm run check` exit 0). Skipped: shell, redaction, SSRF, progress, route enumeration (the diff touches none).
+- Unmeasured: a production-sized database; the replay of migration 11 over head-written data; the `ledger.yml` e2e (no ledger e2e spec names receipts, `chargedTo` or `fetchPeople`).
 
 ## Log
 
@@ -566,3 +608,161 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     supersedes, since lg-32's 2,307 receipt shows its excess together and now
     files. A builder pins the regression with a payment under the printed total.
     The line is for the orchestrator to reword if it reads as wrong.
+- 2026-10-17 — The owner answered Done when 7's wording, through
+  `AskUserQuestion` (relayed by the orchestrator to this ticket's builder, who
+  records it here before any source changes):
+  - Question: "lg-30's Done when 7 regression clause reads 'a fixture where the
+    excess shows with the people rounded together too (more is charged than was
+    paid, with one person charged or several) is refused'; after the
+    printed-total rule, the 2,307 receipt shows an excess rounded together yet
+    must file, so should the line change?"
+  - **"Reword to printed total" (recommended by lg-32's lander):** the lead
+    phrase becomes "a payment under the printed total (with one person charged
+    or several) is refused…", so the line cannot be read as the superseded
+    together test.
+  - "Leave as is".
+  - **Chosen: "Reword to printed total".** Done when 7's regression clause now
+    reads so; nothing else in the line changed.
+- 2026-10-17 — Built, on `495a5b7a` (lg-32 merged as #519), in `6bf1a453`
+  (contract and `splitReceipt`) and `c6e7cec1` (API, migration 11, screen, docs).
+  What the brief had wrong, and the choices it left to the builder:
+  - **"Up to 2 cents" holds to four parts, not past them.** Each part rounded
+    once is off by at most half a cent and the printed total by under a cent, so
+    `k` parts overshoot by under `k / 2 + 1`: at most `ceil(k / 2)` cents. Measured
+    on random receipts whose printed taxes are the rates' own (`checkReceipt`
+    clean), paid the total, every item taken off: 2 parts never over 1 cent; 3
+    parts reach 2 (50 of 49,500); 6 to 10 parts, each item its own, reach 3 (4 to
+    52 receipts in about 80,000 each). The gate's "2 cents with four or more
+    parts" was low by one part: three reach it. `splitReceipt` takes
+    `ceil(parts / 2)` (`roundingBound`), which is the Build's 2 for three or four
+    parts and 3 for five or more; past it the excess is refused, so printed taxes
+    that are not the marks' (an item marked taxable on a receipt with no tax
+    lines) are not absorbed. "five people's parts can round 3 cents over the
+    total, and that is still rounding" fails under a fixed 2-cent cap, and "an
+    excess larger than rounding can make is not adjusted" fails with no cap
+    (mutations below). **Open for the orchestrator:** the bound is arithmetic, not
+    an owner's answer; a fixed 2 cents is the other reading.
+  - **"Nothing left shared" is read by items**, as Build 2 defines it: no item
+    is `shared`. A receipt with a `shared` item that costs nothing beside the
+    2,307 receipt is refused, as lg-32 refused it ("a receipt with something
+    still shared takes no adjustment"). Whether some receipt with a shared item
+    that lg-32's together test filed is now refused was not measured.
+    **Superseded 2026-10-18** (owner, Log): it is read by cost now.
+  - **lg-32's tests, kept true.** In `books/test/receipts.test.ts`: "takes the
+    cent the parts were rounded apart by off the not-shared amount", "does the
+    same for the refund of it, negated", "still shows more than was charged,
+    where the parts together come to more" and the COUPON test each gained the
+    one `charges` entry their `toEqual` now meets, and nothing else; the third's
+    2,475 is under the printed total, which a comment now says is the reason. The
+    two API tests are unchanged and pass. lg-32's together test is gone from the
+    guard, replaced in place, not beside it.
+  - **Build 5 named `api/src/stats.ts`**; the `ReceiptItem` literal is in
+    `api/src/slices.ts` (lg-28 moved it there). And "a type error names any
+    other" missed one: `receipts/test/reader.test.ts`'s "returns each item as
+    read, shared, …" compares the reader's items with `toEqual` on untyped
+    literals, so only the ledger suite found it (1 failed of 1229); it now
+    expects `chargedTo: null`.
+  - **Storage: a rebuild, migration 7's pattern.** The header of
+    `api/src/db/schema.ts` says nothing issues an `UPDATE`, and a backfill of two
+    added columns is one; the rebuild copies with `INSERT … SELECT`, proves the
+    copy, and carries two CHECKs: a name only on a `theirs` item, and a line only
+    with a name. "Every `theirs` item has a name" is not a CHECK (a free one filed
+    before this has none) and is kept by `fileReceipt`.
+  - **Members reach `fileReceipt` as a fourth argument** from the route
+    (`context.directory.people(household)`), not through `ruleContext`.
+  - **lg-23's two tests rewritten in place**, the rest added at the end: API "is
+    refused, and nothing is filed" is now "files a charge to each person the
+    items name (lg-30)" (Done when 1); web "among three people, an item cycles
+    between shared and not shared only, and the receipt is nobody's" is now
+    "among three people, an item cycles to someone else's and names whose it is"
+    (Done when 11).
+  - **Words that changed for two people too.** The "said" line after filing is
+    built from `filing.charges`, so a two-person receipt whose only line is the
+    charge now ends "…and sam's items as a charge." where it said only "Filed as
+    alex's line in the period."; and "Nothing on this receipt is shared or the
+    other's" reads "…or someone else's". The "nobody else in the household"
+    refusal now meets any `theirs` item, a free one included, as Build 3 says.
+  - **A given name is checked before anything is written** (`chargedToOf`), not
+    only by `addLine`: a free `theirs` item files no line for `addLine` to check.
+    For a priced item the two give the same words, so Done when 5's payer and
+    unknown-name tests cannot tell them apart.
+  - **Residual, as Build 4 named it, untested:** a whole-receipt `chargedTo` on a
+    filing before this whose `theirs` items cost nothing has its shared line read
+    as the charge by the backfill.
+  - **Docs.** `CLAUDE.md`'s receipts paragraph says what a `theirs` item names.
+    `00-ANALYSIS.md` "Charges between the two" does call a receipt item's charge
+    the other person's, so it gains one sentence pointing to lg-30.
+  - **Fold-in: none.** `npm run status -- --tool ledger`: 1 open of 30, this one,
+    at the base. lg-33 to lg-36, filed on `main` since, touch nothing this branch
+    changed (lg-36's helper is `api/test/helpers/households.ts`).
+  - **Measured.** The branch's four touched specs against the parent's source
+    (the source diff reversed, `contract` and `books` rebuilt, `dist` grepped for
+    `roundingBound`: 0): 57 failed | 114 passed of 171, every new test among the
+    failures; the API ones fail first on the parent's strict item schema
+    (`The filing is not valid: check proposal.`), which the Done when preamble
+    expects. Restored and rebuilt: 171 passed of 171. `splitReceipt` with every
+    `theirs` item rounded together: Done when 8's case answers `sharedCents` 349
+    and `chargedCents` 2,127 against 348 and 2,128. Mutations, each undone:
+    no `notShared.length > 0` condition, 5 failed of 70; no largest-charge
+    branch, 6 failed; largest by value, 1 failed (the refund); no printed-total
+    test, 1 failed (the 2,313 payment); no nothing-shared test, 1 failed; a
+    2-cent cap, 1 failed; no cap, 1 failed; the route passing every name the books
+    hold, 1 failed (the departed member); a 0-cent charge filing a line, 1 failed
+    (500); `chargeLineId` always the first charge, 4 failed; the backfill taking
+    any line, 3 failed of 11. lg-32's `notShared.length > 0` is no longer an
+    equivalent mutant.
+- 2026-10-18 — Owner answer on the rounding bound (asked through the
+  orchestrator after gate 1, 2026-10-17/18). Question: Build 2 says "up to 2
+  cents"; the builder measured `ceil(parts / 2)`, which is 3 cents from five parts
+  (fixture 391/1172/785/384/1653, printed total 5,041, parts apart 5,044, checked
+  by hand). Options: A `ceil(parts / 2)`, already built (the builder's
+  recommendation); B a fixed 2 cents. **Chosen: A.** Build 2's "up to 2 cents" now
+  reads `ceil(parts / 2)`, and no Done when line changed.
+  `awk '/^## Log/{exit} {print}' <this ticket> | grep -c "up to 2 cents"` → `0`.
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F1 — "A receipt main
+  files is now refused when it carries a _shared_ item that costs nothing.
+  `splitReceipt` reads "nothing left shared" by items … where lg-32's guard it
+  replaced read the cents." Options: (1) keep the items reading and say a free
+  shared item must be marked not shared (the gate's option 1); (2) read it by cost,
+  every shared item priced 0 with no deposit (the gate's option 2, recommended);
+  (3) by cost, in a builder round and a re-gate; (4) file a ticket. **Chosen: (2),
+  at landing, no re-gate.** `nothingShared` is now "every item is not shared, or
+  is shared with price 0 and no deposit"; Build 2 and the `splitReceipt` comment
+  say "by cost". The books test "a receipt with something still shared takes no
+  adjustment" is rewritten as "a shared item that costs something takes no
+  adjustment; a free one does not stop it" (the free bag beside the 2,307 receipt
+  now files: not shared 1,149, charged 1,158; a shared 0,01 $ item beside parts
+  2 cents over still answers `sharedCents` -1), and the 4,915 receipt is added at
+  the end of `books/test/receipts.test.ts` and of `api/test/receipts.test.ts`.
+  At `01c30bf7` the rewritten test and the two 4,915 tests failed (the API one with
+  400 "More comes off this receipt than the card was charged."); at the fix they
+  pass, 72 of 72 in books and 75 of 75 in api.
+  `node --import tsx regress.mts <tree at 4dbe22b8> <this tree> 300000 7` → the 61
+  rows `files->refused | sharedItems>0:true underTotal:false` are gone (0); no
+  `files->files` row (no receipt both trees file has different amounts);
+  `files->refused` with a shared item remains only with a payment under the total,
+  11 (7 + 4), the designed break; `refused->files` with a shared item, 456
+  (81 + 56 + 212 + 107), the number the gate predicted: lg-32's F1 fix reaching
+  receipts that carry a free item. With the nothing-shared test dropped
+  (`mutate.mjs <tree> noshared`) 1 of 72 fails in books, the rewritten test.
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F2 — "`chargedToOf`'s
+  own checks (the payer, a name the books do not hold) are pinned by no test."
+  Option chosen: add the gate's cases 2, 2b and 3 (a free item to zoe, to an
+  unknown name, to the payer) as API tests. Added at the end of
+  `api/test/receipts.test.ts`, "a free theirs item names a person the household
+  does not hold (lg-30, gate 1 F2)": each asserts 400, its message and zero rows
+  in `period_lines`, `receipt_filings` and `receipt_items`. They pass at
+  `01c30bf7`, since the checks exist; they fail under the gate's `mutate-api.mjs
+<tree> nocheck`: 3 failed | 72 passed of 75 (the other member of another
+  household, the unknown name, the payer).
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F3 — "the bound's upper
+  edge is unpinned. `roundingBound` with `+ 1` passes the whole books spec." Added
+  at the end of `books/test/receipts.test.ts`, "an excess one cent past the bound
+  is not adjusted": one taxable item priced 14 on a receipt with no tax lines,
+  paid 14, costs 16 (excess 2, bound 1), `sharedCents` -2. It passes at
+  `01c30bf7`; under the gate's `mutate.mjs <tree> slack` 1 failed | 71 passed of
+  72, that test.
+- 2026-10-18 — Owner answer on gate 1, F5 ("the receipt screen's load … has no
+  test for a failed or slow record, and its behaviour is inherited"): filed as a
+  new ticket, **lg-39**, in this pull request, with the gate's reproduction. F4
+  stays recorded as the gate wrote it; nothing was done.

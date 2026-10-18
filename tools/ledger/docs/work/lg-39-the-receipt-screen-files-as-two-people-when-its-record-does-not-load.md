@@ -1,0 +1,82 @@
+---
+id: lg-39
+tool: ledger
+title: The receipt screen shows the two-person form, and files as one, when the household record does not load
+kind: fix
+status: ready
+milestone: null
+depends_on: [lg-30]
+difficulty: standard
+---
+
+# lg-39 — The receipt screen files as two people when the household record does not load
+
+## Why
+
+lg-30 made the receipt screen's load a chain of two requests: `fetchMe` for the
+signed-in person's household, then `fetchHousehold` for its members, beside the
+categories in a `Promise.all` (`web/src/receipts/Receipts.tsx`). When the record
+does not load, or is slow, the screen does not say so where it matters and files
+a receipt as though the household had two people.
+
+Gate 1 of lg-30 (`01c30bf7`) found it and measured that the behaviour is
+inherited, not new: the same probe at `main` with `fetchPeople` rejecting prints
+the same results. What lg-30 changed is the length of the window, one request to
+two. Nothing in the repo pins any of it.
+
+## Reproduction
+
+A jsdom spec in the shape of `web/test/receipts.test.tsx`, with the screen's
+own mocks, rendering a receipt of three items (one `theirs`) in three cases:
+`fetchHousehold` rejecting, `fetchMe` rejecting, and `fetchHousehold` never
+answering. All three give, at `01c30bf7`:
+
+```
+household fails: first screen alert "Something went wrong on our end."
+household fails: alerts on the form []
+household fails: share output "Not shared 0.00 $ · The other's 15.54 $ · Shared 9.22 $"; whose-select present false; checkbox "This was the other person's"; categories offered ["None"]
+household fails: filed with items [["shared",null],["theirs",null],["shared",null]] destination.chargedTo null (the box "This was ..." was ticked)
+me fails:        (identical four lines)
+household slow:  alerts on the form []; (identical share output, no select, categories ["None"]; chargedTo null with the box ticked)
+main, people fail: first screen alert "Something went wrong on our end." / "The other's" / ["None"] / destination.chargedTo null (the box was ticked)
+```
+
+That is: an alert on the first screen only (the first action clears it); no
+categories, since `Promise.all` drops both when one rejects; the two-person form
+("The other's", no "Whose is" select); and ticking "This was the other person's"
+files `destination.chargedTo: null`, which is the payer's shared line, not a
+charge to anyone.
+
+## Build
+
+1. Add the three cases above as web tests at the end of
+   `web/test/receipts.test.tsx`, asserting what the screen should do, and watch
+   them fail at the head this ticket starts from.
+2. Make the screen not offer a filing it cannot name: while the record has not
+   loaded, and after it failed, the form must not present itself as the
+   two-person form or accept a charge as `chargedTo: null`. The shape (hold the
+   form behind the load with a visible failure and a retry, or load the
+   categories on their own so one failed request does not drop the other) is the
+   builder's, recorded in the Log with the reason.
+3. Keep `fetchMe` and `fetchHousehold` as lg-30 left them; the record itself is
+   not in question.
+
+## Done when
+
+1. With `fetchHousehold` rejecting, `fetchMe` rejecting, and `fetchHousehold`
+   never answering, the receipt screen does not offer "This was the other
+   person's" as though the household had two people, and no filing is sent with
+   `destination.chargedTo: null` for an item marked as someone else's
+   (`web/test/receipts.test.tsx`, a test per case).
+2. A failed load is shown where the person is working, not only on the first
+   screen, and the categories the other request returned are still offered.
+3. `npm run check` and `npm test -- --project ledger` pass.
+
+## Log
+
+- 2026-10-18 — Filed at the landing of lg-30 (PR #529) by owner choice, as
+  gate 1's finding F5 (low): "the receipt screen's load, which this branch
+  changed, has no test for a failed or slow record, and its behaviour is
+  inherited." The reproduction above is the gate's section 5, pasted. The probe
+  spec was `gate-web.test.tsx` in the gate's scratch directory, which does not
+  outlive the batch; the cases are described above so it can be written again.

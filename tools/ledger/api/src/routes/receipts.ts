@@ -124,6 +124,8 @@ export function registerReceiptRoutes(
       ruleContext(context, request),
       idOf(request, "receipt"),
       bodyOf(fileReceiptRequestSchema, request, "filing"),
+      // The household as it stands, not every name its books hold (lg-30).
+      context.directory.people(personOf(request).household),
     );
     return filing;
   });

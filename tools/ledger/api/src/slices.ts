@@ -52,6 +52,7 @@ export function receiptsOnRows(db: Database): Map<number, ReceiptOnRow> {
       deposit: item.deposit_cents,
       spendingCategoryId: item.spending_category_id,
       share: item.share,
+      chargedTo: null,
     });
     byRow.set(item.row_id, held);
   }

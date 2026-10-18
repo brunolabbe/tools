@@ -245,38 +245,58 @@ export function sharedAmount(
   return { excludedCents, sharedCents: total - excludedCents };
 }
 
+/** One person's charge on a receipt (lg-30): whose, and what their items came to. */
+export interface ReceiptChargeSplit {
+  /**
+   * The `chargedTo` of the person's `theirs` items. `null` is its own entry: the
+   * items that name nobody yet, which only the screen's preview meets, since the
+   * API names every one before it splits.
+   */
+  personId: string | null;
+  cents: number;
+}
+
 /** A receipt split three ways by its items' `share`: shared + not shared + charged = paid. */
 export interface ReceiptSplit {
   /** What stays shared: what was paid, less the two below. */
   sharedCents: number;
   /** The `not-shared` items: they stay with whoever paid. */
   notSharedCents: number;
-  /** The `theirs` items: a charge the other person owes in full. */
+  /** The `theirs` items, every person's together: the sum of `charges`. */
   chargedCents: number;
+  /**
+   * One entry per distinct `chargedTo` among the `theirs` items, in the order
+   * each is first printed (lg-30), whatever its cents, a zero included.
+   */
+  charges: ReceiptChargeSplit[];
 }
 
 /**
  * The receipt split by its items' `share`. Each part taken off is computed as
  * `sharedAmount` computes an excluded one — price, deposit and taxes, rounded
- * once — so an item that is the other's costs them exactly what it would come
- * off as not shared. `paidCents` is what the card was charged, the total unless
- * a tip was added under it; the tip stays shared.
+ * once — so an item that is someone else's costs them exactly what it would come
+ * off as not shared. Each charged person's items are such a part of their own
+ * (lg-30), so a person is charged what their items cost whoever else is charged
+ * on the receipt; what the parts rounded apart differ by from one rounding stays
+ * in the shared amount, as every other rounding here does. `paidCents` is what
+ * the card was charged, the total unless a tip was added under it; the tip stays
+ * shared.
  *
- * **A cent of rounding is not an excess** (lg-32). The parts are rounded apart,
- * so they can come to a cent more than the same items rounded together, which
- * `sharedAmount` gives for them all at once. When the items taken off together
- * leave the shared amount at zero or at the payment's sign, and the parts apart
- * leave it at the opposite sign, that cent is rounding and nothing else: it is
- * taken off the `not-shared` amount, which is the payer's own, no line records it
- * and nobody owes it (owner, 2026-10-17, "not-shared first"). More taken off than
- * was paid, together, is still returned with the opposite sign, for the caller to
- * refuse.
- *
- * With no `not-shared` items the cent would go off the largest charge, the
- * earlier on a tie. There is one charge here, rounded once, so with nothing
- * not shared `together` and the parts apart are the same number and that case
- * cannot arise yet; it belongs to the several charges of lg-30. Not-shared items
- * that come to 0 cents are still items: the cent goes off them (gate 1, F2).
+ * **A few cents of rounding are not an excess** (lg-32, and lg-30 for the rule).
+ * On a receipt with **nothing left shared**, read by cost (lg-30, owner
+ * 2026-10-18) — every item not shared or `theirs`, or shared with price 0 and no
+ * deposit — the items make the printed total (`itemsAddUp`), so when the
+ * payment is at or beyond that total, at its sign, whatever the parts rounded
+ * apart leave over the payment is rounding: each part is rounded once, and the
+ * printed taxes are each rounded once on the whole. The shared amount is then 0
+ * and the excess comes off the `not-shared` amount when there are not-shared
+ * items — the payer's own, which no line records and nobody owes (owner,
+ * 2026-10-17, "not-shared first"); with none, off the charge largest in size,
+ * the earlier on a tie, as `splitByCategory` takes a remainder. A payment under
+ * the printed total is the person's mistake, not rounding, and is returned with
+ * the opposite sign for the caller to refuse; so is an excess larger than
+ * rounding can make (`roundingBound`). Not-shared items that come to 0 cents are
+ * still items: the excess goes off them (lg-32 gate 1, F2).
  */
 export function splitReceipt(
   receipt: ReceiptProposal,
@@ -284,26 +304,62 @@ export function splitReceipt(
   paidCents: number = totalOf(receipt),
 ): ReceiptSplit {
   // Refused when the items do not add up, whatever was paid.
-  totalOf(receipt);
-  const places = (share: ReceiptItem["share"]): number[] =>
-    receipt.items.flatMap((item, index) => (item.share === share ? [index] : []));
-  const notShared = places("not-shared");
-  const charged = places("theirs");
-  let notSharedCents = sharedAmount(receipt, notShared, rates).excludedCents;
-  const chargedCents = sharedAmount(receipt, charged, rates).excludedCents;
-  const sharedCents = paidCents - notSharedCents - chargedCents;
-
-  const together =
-    paidCents - sharedAmount(receipt, [...notShared, ...charged], rates).excludedCents;
-  const roundingOnly =
-    sharedCents !== 0 &&
-    Math.sign(sharedCents) !== Math.sign(paidCents) &&
-    (together === 0 || Math.sign(together) === Math.sign(paidCents));
-  if (roundingOnly && notShared.length > 0) {
-    notSharedCents += sharedCents;
-    return { sharedCents: 0, notSharedCents, chargedCents };
+  const total = totalOf(receipt);
+  const notShared = receipt.items.flatMap((item, index) =>
+    item.share === "not-shared" ? [index] : [],
+  );
+  const byPerson = new Map<string | null, number[]>();
+  for (const [index, item] of receipt.items.entries()) {
+    if (item.share !== "theirs") continue;
+    byPerson.set(item.chargedTo, [...(byPerson.get(item.chargedTo) ?? []), index]);
   }
-  return { sharedCents, notSharedCents, chargedCents };
+  let notSharedCents = sharedAmount(receipt, notShared, rates).excludedCents;
+  const charges: ReceiptChargeSplit[] = [...byPerson].map(([personId, places]) => ({
+    personId,
+    cents: sharedAmount(receipt, places, rates).excludedCents,
+  }));
+  const charged = (): number => charges.reduce((sum, charge) => sum + charge.cents, 0);
+  const sharedCents = paidCents - notSharedCents - charged();
+
+  // By cost, not by mark (lg-30 gate 1, F1): a shared item that costs nothing, a
+  // `SAC 0,00` line, leaves nothing shared to take the cent from.
+  const nothingShared = receipt.items.every(
+    (item) => item.share !== "shared" || (item.price === 0 && (item.deposit ?? 0) === 0),
+  );
+  const parts = (notShared.length > 0 ? 1 : 0) + charges.length;
+  const excess = sharedCents !== 0 && Math.sign(sharedCents) !== Math.sign(paidCents);
+  // At or beyond the printed total in the payment's direction: a tip, or none.
+  const paidTheTotal = Math.sign(paidCents) * (paidCents - total) >= 0;
+  if (nothingShared && excess && paidTheTotal && Math.abs(sharedCents) <= roundingBound(parts)) {
+    if (notShared.length > 0) {
+      notSharedCents += sharedCents;
+    } else {
+      // Strictly greater, so a tie stays with the earlier person.
+      let largest = 0;
+      for (const [index, charge] of charges.entries()) {
+        if (Math.abs(charge.cents) > Math.abs(charges[largest]?.cents ?? 0)) largest = index;
+      }
+      const target = charges[largest];
+      if (target !== undefined) target.cents += sharedCents;
+    }
+    return { sharedCents: 0, notSharedCents, chargedCents: charged(), charges };
+  }
+  return { sharedCents, notSharedCents, chargedCents: charged(), charges };
+}
+
+/**
+ * The most, in cents, that `parts` amounts each rounded once can come to over a
+ * printed total whose two taxes were each rounded once (lg-30). Each rounding is
+ * off by at most half a cent, so the parts are at most `parts / 2` cents over
+ * the exact cost and the printed total is under a cent below it: the excess is
+ * under `parts / 2 + 1`, which in whole cents is `ceil(parts / 2)`. That is 1
+ * cent for one or two parts and 2 for three or four, the "up to 2 cents"
+ * lg-30's Build names; five or more parts reach 3, measured (lg-30's Log). An
+ * excess beyond it is not rounding: printed taxes that are not the rates' on the
+ * items marked taxable, say.
+ */
+function roundingBound(parts: number): number {
+  return Math.ceil(parts / 2);
 }
 
 /**

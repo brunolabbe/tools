@@ -286,7 +286,9 @@ settles both with one deposit.
 Sometimes one person pays for something that is entirely the other's: an item
 on a shared receipt, or a purchase made as a favour. The owner asked for that
 to be recorded as a **charge**. The other person owes its full price,
-including its taxes and deposit, and it is not shared at all.
+including its taxes and deposit, and it is not shared at all. With more than two
+people "the other" is no one, so a receipt item names whose it is, and each
+person's items are a charge of their own (lg-30).
 
 A charge is money owed **directly** from one person to the other. So is the
 shared imbalance that formula v2 computes. That gives one rule for the whole
