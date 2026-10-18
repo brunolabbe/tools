@@ -1077,6 +1077,19 @@ export interface StoredRow {
   sliceCents?: number;
 }
 
+/** What `GET /api/rows` can be sorted by (lg-41). */
+export const ROW_SORTS = ["date", "amount", "description"] as const;
+export type RowSort = (typeof ROW_SORTS)[number];
+export const ROW_ORDERS = ["asc", "desc"] as const;
+export type RowOrder = (typeof ROW_ORDERS)[number];
+
+/** `bucket` on `GET /api/rows`: one of the buckets, or a row nobody has filed. */
+export const ROW_BUCKET_FILTERS = [...BUCKETS, "unfiled"] as const;
+export type RowBucketFilter = (typeof ROW_BUCKET_FILTERS)[number];
+
+/** `person` on `GET /api/rows` for a row filed to nobody: the joint account. */
+export const JOINT_PERSON_FILTER = "joint";
+
 /**
  * `GET /api/rows`: stored rows, newest first. `spendingCategory` keeps the
  * uncategorised (`none`) or one category's by id. `from` and `to` are days, both
@@ -1089,6 +1102,27 @@ export interface StoredRow {
  * which are not rows. Without `scope=spending` a row is listed under its own
  * category only. `offset` and `limit` page the result (100 by default); `total`
  * is how many entries match before either.
+ *
+ * The rest narrow and order the list for the history screen (lg-41), each absent
+ * meaning no narrowing, so every query sent before keeps its meaning:
+ *
+ * - `q` keeps the rows whose description contains it, ignoring case and accents;
+ * - `bucket` keeps the rows the classification that stands puts in that bucket,
+ *   or `unfiled` for a row with none (a row the inbox would file by a rule is
+ *   still unfiled until someone files it);
+ * - `person` keeps the rows filed to that person id, or `joint` for a row filed
+ *   to nobody; a row with no classification matches neither;
+ * - `direction` is `in` for money in (amount above zero) or `out`;
+ * - `minCents` and `maxCents` bound the row's absolute amount, both inclusive,
+ *   so "over $100" means the same for money in and out;
+ * - `sort` is `date`, `amount` (signed, so ascending puts the largest withdrawal
+ *   first) or `description` (folded as `q` is), and `order` is `asc` or `desc`,
+ *   `desc` when absent. Ties break on the statement's order (`seq`) in the same
+ *   direction, so a sorted list pages without repeating or skipping a row.
+ *   `order` alone sorts by date. Absent both, the list is newest first by `seq`.
+ *
+ * `sort`, `order` and `q` with `scope=spending` and a `spendingCategory` are
+ * refused: that list holds `sliceCents` entries, which they leave undefined.
  */
 export const rowsQuerySchema = z
   .strictObject({
@@ -1098,11 +1132,56 @@ export const rowsQuerySchema = z
     scope: z.literal("spending").optional(),
     offset: z.coerce.number().int().min(0).optional(),
     limit: z.coerce.number().int().min(1).max(500).optional(),
+    q: z.string().trim().min(1).max(100).optional(),
+    bucket: z.enum(ROW_BUCKET_FILTERS).optional(),
+    person: z.string().min(1).max(100).optional(),
+    direction: z.enum(["in", "out"]).optional(),
+    minCents: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    maxCents: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    sort: z.enum(ROW_SORTS).optional(),
+    order: z.enum(ROW_ORDERS).optional(),
   })
   .refine((query) => query.from === undefined || query.to === undefined || query.from <= query.to, {
     message: "from is after to",
     path: ["from"],
-  });
+  })
+  .refine(
+    (query) =>
+      query.minCents === undefined ||
+      query.maxCents === undefined ||
+      query.minCents <= query.maxCents,
+    { message: "minCents is above maxCents", path: ["minCents"] },
+  )
+  .refine(
+    (query) =>
+      !(
+        query.scope === "spending" &&
+        query.spendingCategory !== undefined &&
+        (query.sort !== undefined || query.order !== undefined || query.q !== undefined)
+      ),
+    {
+      message: "sort, order and q are not defined for a list of one chart slice",
+      path: ["scope"],
+    },
+  );
+
+/** The query the web builds for `GET /api/rows`; the route's schema is what decides. */
+export interface RowsQuery {
+  spendingCategory?: "none" | number;
+  from?: string;
+  to?: string;
+  scope?: "spending";
+  offset?: number;
+  limit?: number;
+  q?: string;
+  bucket?: RowBucketFilter;
+  person?: string;
+  direction?: "in" | "out";
+  minCents?: number;
+  maxCents?: number;
+  sort?: RowSort;
+  order?: RowOrder;
+}
 
 export interface RowsResponse {
   rows: StoredRow[];

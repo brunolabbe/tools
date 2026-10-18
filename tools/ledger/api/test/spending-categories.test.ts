@@ -41,6 +41,7 @@ import {
   startApp,
 } from "./helpers/classification.ts";
 import { homeBooks } from "./helpers/access.ts";
+import { renderPaste, withBalances } from "./helpers/paste.ts";
 
 let app: App | undefined;
 
@@ -725,5 +726,222 @@ describe("a rule that matches a row filed before the rule existed", () => {
     expect(inboxRow).toMatchObject({ reason: "differs" });
     expect(inboxRow?.spendingCategory).toBeNull();
     expect(listed.spendingCategory).toBeNull();
+  });
+});
+
+// lg-41: the history screen narrows and orders the whole account. Nine rows,
+// oldest first, so a row's `seq` is its place in this list. Every filter drops at
+// least one row the others keep, three rows share an amount, and two share a day
+// and a description, so the ties the order breaks are real ones.
+describe("the rows list, narrowed and ordered (lg-41)", () => {
+  const FIXTURE = [
+    { key: "A", date: "2026-09-01", description: "ÉPICERIE METRO", amountCents: -2000 },
+    { key: "B", date: "2026-09-01", description: "iga extra", amountCents: -2000 },
+    { key: "C", date: "2026-09-02", description: "Hypothèque Exemple", amountCents: -70000 },
+    { key: "D", date: "2026-09-02", description: "Remboursement IGA", amountCents: 1500 },
+    { key: "E", date: "2026-09-03", description: "Virement Sam", amountCents: 40000 },
+    { key: "F", date: "2026-09-04", description: "Café du coin", amountCents: -500 },
+    { key: "G", date: "2026-09-04", description: "Pharmacie Exemple", amountCents: -2000 },
+    { key: "H", date: "2026-09-05", description: "Station Exemple", amountCents: -7000 },
+    { key: "I", date: "2026-09-05", description: "Station Exemple", amountCents: -7100 },
+  ] as const;
+
+  /** What each row is filed to; F and G are left in the inbox. */
+  const FILED: Record<
+    string,
+    { personId: string | null; bucket: "mortgage" | "current-expenses" }
+  > = {
+    A: { personId: null, bucket: "current-expenses" },
+    B: { personId: "alex", bucket: "current-expenses" },
+    C: { personId: null, bucket: "mortgage" },
+    D: { personId: "sam", bucket: "current-expenses" },
+    E: { personId: "sam", bucket: "mortgage" },
+    H: { personId: null, bucket: "current-expenses" },
+    I: { personId: null, bucket: "current-expenses" },
+  };
+
+  interface Filed {
+    target: App;
+    ids: Record<string, number>;
+  }
+
+  async function filed(): Promise<Filed> {
+    const target = await start();
+    const pasted = FIXTURE.map(({ date, description, amountCents }) => ({
+      date,
+      description,
+      amountCents,
+    }));
+    await pasteStatement(target, renderPaste(withBalances(pasted, 150000)));
+    const ids: Record<string, number> = {};
+    for (const row of FIXTURE) ids[row.key] = rowId(target, row.description, row.amountCents);
+    for (const [key, answer] of Object.entries(FILED)) {
+      await post(target, ROUTES.classifications, { rowId: ids[key], ...answer });
+    }
+    return { target, ids };
+  }
+
+  /** The keys of the rows a query lists, in the order listed, and its `total`. */
+  async function keys(
+    { target, ids }: Filed,
+    query: string,
+  ): Promise<{ keys: string[]; total: number }> {
+    const found = await rows(target, query);
+    const byId = new Map(Object.entries(ids).map(([key, id]) => [id, key]));
+    return { keys: found.rows.map((row) => byId.get(row.id) ?? "?"), total: found.total };
+  }
+
+  test("lists newest first by statement order when nothing is asked", async () => {
+    const books = await filed();
+
+    expect(await keys(books, "")).toEqual({ keys: [..."IHGFEDCBA"], total: 9 });
+  });
+
+  test("q, bucket, person, direction and the amount bounds each narrow, and total counts the narrowed set", async () => {
+    const books = await filed();
+    const cases: [string, string][] = [
+      ["q=iga", "DB"],
+      ["bucket=mortgage", "EC"],
+      ["bucket=current-expenses", "IHDBA"],
+      ["bucket=unfiled", "GF"],
+      ["person=alex", "B"],
+      ["person=sam", "ED"],
+      ["person=joint", "IHCA"],
+      ["direction=in", "ED"],
+      ["direction=out", "IHGFCBA"],
+      ["minCents=2000", "IHGECBA"],
+      ["maxCents=2000", "GFDBA"],
+      ["minCents=1500&maxCents=2000", "GDBA"],
+    ];
+
+    for (const [query, expected] of cases) {
+      const found = await keys(books, `?${query}`);
+      expect({ query, ...found }).toEqual({ query, keys: [...expected], total: expected.length });
+      // Each one drops something, so none passes for no filter at all.
+      expect(found.total).toBeLessThan(9);
+    }
+  });
+
+  test("filters combine, and total is the count before the page", async () => {
+    const books = await filed();
+
+    expect(
+      await keys(books, "?bucket=current-expenses&direction=out&person=joint&minCents=3000"),
+    ).toEqual({ keys: ["I", "H"], total: 2 });
+    expect(await keys(books, "?bucket=current-expenses&direction=out&q=exemple")).toEqual({
+      keys: ["I", "H"],
+      total: 2,
+    });
+    expect(await keys(books, "?direction=out&person=joint&q=exemple&maxCents=10000")).toEqual({
+      keys: ["I", "H"],
+      total: 2,
+    });
+    expect(await keys(books, "?q=iga&limit=1&offset=1")).toEqual({ keys: ["B"], total: 2 });
+    // A filter that leaves nothing answers an empty list, not an error.
+    expect(await keys(books, "?person=alex&direction=in")).toEqual({ keys: [], total: 0 });
+  });
+
+  test("an unfiled row matches no person, not even joint", async () => {
+    const books = await filed();
+
+    const joint = await keys(books, "?person=joint");
+    expect(joint.keys).not.toContain("F");
+    expect(joint.keys).not.toContain("G");
+    expect((await keys(books, "?person=nobody")).total).toBe(0);
+  });
+
+  test("q ignores case and accents on both sides", async () => {
+    const books = await filed();
+
+    expect((await keys(books, "?q=epicerie")).keys).toEqual(["A"]);
+    expect((await keys(books, "?q=%C3%89PICERIE")).keys).toEqual(["A"]);
+    expect((await keys(books, "?q=IGA")).keys).toEqual(["D", "B"]);
+    expect((await keys(books, "?q=cafe")).keys).toEqual(["F"]);
+    expect((await keys(books, "?q=hypotheque")).keys).toEqual(["C"]);
+    expect((await keys(books, "?q=%20metro%20")).keys).toEqual(["A"]);
+  });
+
+  // Same-day rows and equal amounts are in the fixture, so each tie is decided by
+  // the statement's order, in the direction asked.
+  const ORDERS: [string, string][] = [
+    ["sort=date&order=desc", "IHGFEDCBA"],
+    ["sort=date&order=asc", "ABCDEFGHI"],
+    ["order=asc", "ABCDEFGHI"],
+    ["sort=amount&order=asc", "CIHABGFDE"],
+    ["sort=amount&order=desc", "EDFGBAHIC"],
+    ["sort=description&order=asc", "FACBGDHIE"],
+    ["sort=description&order=desc", "EIHDGBCAF"],
+    ["sort=amount", "EDFGBAHIC"],
+  ];
+
+  test.each(ORDERS)("%s lists %s", async (query, expected) => {
+    const books = await filed();
+
+    expect((await keys(books, `?${query}`)).keys).toEqual([...expected]);
+  });
+
+  test.each(ORDERS)("two pages of %s neither repeat nor skip a row", async (query, expected) => {
+    const books = await filed();
+
+    const first = await keys(books, `?${query}&limit=4`);
+    const second = await keys(books, `?${query}&limit=4&offset=4`);
+    const third = await keys(books, `?${query}&limit=4&offset=8`);
+
+    expect([...first.keys, ...second.keys, ...third.keys]).toEqual([...expected]);
+  });
+
+  test("a sort keeps the narrowing, and sorts only what is left", async () => {
+    const books = await filed();
+
+    expect(await keys(books, "?direction=out&sort=amount&order=asc&limit=3")).toEqual({
+      keys: ["C", "I", "H"],
+      total: 7,
+    });
+  });
+
+  test("sort, order or q on one chart slice is refused, and the chart's own lists are not", async () => {
+    const target = await start();
+    const groceries = await idOf(target, "Groceries");
+    const slice = `scope=spending&spendingCategory=${groceries}`;
+
+    for (const extra of ["sort=date", "order=asc", "q=iga", "sort=amount&order=desc"]) {
+      const response = await target.server.inject({
+        method: "GET",
+        url: `${ROUTES.rows}?${slice}&${extra}`,
+      });
+      expect(response.statusCode, extra).toBe(400);
+      expect(response.json<ErrorResponse>().error.code).toBe("BAD_REQUEST");
+    }
+    // The same fields without the combination are allowed, and so is the combination without them.
+    for (const url of [
+      `${ROUTES.rows}?scope=spending&sort=date`,
+      `${ROUTES.rows}?spendingCategory=${groceries}&q=iga&sort=amount`,
+      `${ROUTES.rows}?${slice}&direction=out&minCents=1`,
+      `${ROUTES.rows}?${slice}`,
+    ]) {
+      expect((await target.server.inject({ method: "GET", url })).statusCode, url).toBe(200);
+    }
+  });
+
+  test("a bound that crosses, a value it does not know, or an empty search is refused", async () => {
+    const target = await start();
+
+    for (const query of [
+      "minCents=500&maxCents=100",
+      "minCents=-1",
+      "minCents=1.5",
+      "bucket=savings",
+      "direction=sideways",
+      "sort=balance",
+      "order=up",
+      "q=",
+      "q=%20%20",
+    ]) {
+      const response = await target.server.inject({
+        method: "GET",
+        url: `${ROUTES.rows}?${query}`,
+      });
+      expect(response.statusCode, query).toBe(400);
+    }
   });
 });

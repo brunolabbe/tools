@@ -146,3 +146,35 @@ household's books.
 - 2026-10-18 · filed from the owner's request, with the three decisions above
   answered before filing. Rated `standard`: the contract change is additive and
   decided here, and the rest follows `PeriodRows`' existing pattern.
+- 2026-10-18 · built. `rowsQuerySchema` gained `q`, `bucket` (the buckets and
+  `unfiled`), `person`, `direction`, `minCents`, `maxCents`, `sort` and `order`,
+  all optional, plus `ROW_SORTS`, `ROW_ORDERS`, `ROW_BUCKET_FILTERS`,
+  `JOINT_PERSON_FILTER` and a `RowsQuery` type for the web. `listRows` narrows
+  and orders after the rows are read (`narrowRows`, `orderRows` in
+  `api/src/rows.ts`), folding with NFD, combining marks stripped and
+  `toLowerCase`, and compares with `<`, not `localeCompare`, so the order does not
+  depend on the host's ICU data. The History tab sits after Period; its screen is
+  `web/src/history/History.tsx`, its client `web/src/api/rows.ts`.
+  - **Choices the brief left open**, all in the schema's doc comment: `order`
+    absent with `sort` present is `desc`; `order` alone sorts by date; the tie on
+    `seq` runs in the same direction as `order` (so `date asc` is the statement's
+    order and `date desc` is today's default); the 400 for the slice list covers
+    `order` as well as `sort` and `q`, since `order` alone would sort too. A
+    crossed `minCents`/`maxCents` is a 400 as the brief asked.
+  - **Defect the web test found in my first draft:** an answer arriving after its
+    request was dropped replaced the newer list (`setLoad` ran without checking
+    `controller.signal.aborted` on the success path). The test "the search waits
+    for a pause in typing, and a filter change drops the request in flight" failed
+    with the late row on screen; the check is in, and it passes.
+  - **A limit, not fixed:** a person whose id is literally `joint` cannot be
+    filtered to, because `joint` means `personId === null`. Nothing in the
+    directory refuses such a name (`grep -rni '"joint"' api/src contract/src
+books/src` finds only report strings and the new constant). Left as the brief
+    decided; it earns a ticket only if a household has such a member.
+  - **Nav:** ten buttons for a member without Household, twelve for an admin. At
+    360 px they wrap to three rows, with no horizontal overflow
+    (`document.documentElement.scrollWidth - clientWidth` was 0 at 360 px folded,
+    360 px with the filters open, and 1000 px), from a Playwright run against
+    `vite` with `/api/*` stubbed; `app.test.tsx` passed unchanged apart from the
+    one test added. Not measured: a real device, or the API's data.
+  - Fold-in: none. Nothing the build made free was already specified.

@@ -7,10 +7,13 @@
 
 import { classify } from "@ledger/books";
 import type { SpendingRule } from "@ledger/books";
-import { AppError } from "@ledger/contract";
+import { AppError, JOINT_PERSON_FILTER } from "@ledger/contract";
 import type {
   Bucket,
   ClassificationSource,
+  RowBucketFilter,
+  RowOrder,
+  RowSort,
   RowsResponse,
   SpendingCategoryOverrideRequest,
   SpendingCategoryOverrideResponse,
@@ -24,6 +27,7 @@ import { requireSpendingCategory, spendingReader } from "./spending-categories.t
 
 interface StoredRowColumns {
   id: number;
+  seq: number;
   date: string;
   category: string;
   description: string;
@@ -55,7 +59,9 @@ export function countsAsSpending(row: StoredRow): boolean {
  *
  * The days are narrowed in SQL, so a list of one period reads that period's rows
  * and not the whole account; the category is only known once each row has been
- * read, so it narrows after.
+ * read, so it narrows after, and so do the history screen's narrowing and order
+ * (lg-41): they ask the classification that stands, which SQL does not hold, and
+ * a description's accents, which SQLite's `LIKE` does not fold.
  */
 export function listRows(
   db: Database,
@@ -65,6 +71,14 @@ export function listRows(
     from?: string;
     to?: string;
     spendingOnly?: boolean;
+    q?: string;
+    bucket?: RowBucketFilter;
+    person?: string;
+    direction?: "in" | "out";
+    minCents?: number;
+    maxCents?: number;
+    sort?: RowSort;
+    order?: RowOrder;
     offset?: number;
     limit?: number;
     rowId?: number;
@@ -74,7 +88,7 @@ export function listRows(
   const rules = currentRules(db);
   const found = db
     .prepare(
-      `SELECT r.id, r.date, r.category, r.description, r.amount_cents, r.balance_cents,
+      `SELECT r.id, r.seq, r.date, r.category, r.description, r.amount_cents, r.balance_cents,
               c.bucket, c.person_id, c.rule_id, c.source
        FROM statement_rows r
        LEFT JOIN current_classifications c ON c.row_id = r.id
@@ -91,7 +105,7 @@ export function listRows(
       query.to ?? null,
       query.to ?? null,
     ) as StoredRowColumns[];
-  const rows = found.map((row): StoredRow => {
+  const kept = found.map((row): SeqRow => {
     const classification =
       row.bucket === null || row.source === null
         ? null
@@ -107,16 +121,20 @@ export function listRows(
       if (match.kind === "classified") rule = match.rule;
     }
     return {
-      id: row.id,
-      date: row.date,
-      category: row.category,
-      description: row.description,
-      amountCents: row.amount_cents,
-      balanceCents: row.balance_cents,
-      classification,
-      spendingCategory: reader.of(row, rule),
+      seq: row.seq,
+      row: {
+        id: row.id,
+        date: row.date,
+        category: row.category,
+        description: row.description,
+        amountCents: row.amount_cents,
+        balanceCents: row.balance_cents,
+        classification,
+        spendingCategory: reader.of(row, rule),
+      },
     };
   });
+  const rows = orderRows(narrowRows(kept, query), query);
   const counted = rows.filter((row) => query.spendingOnly !== true || countsAsSpending(row));
   const inCategory = query.uncategorised === true || query.spendingCategoryId !== undefined;
   const matching =
@@ -131,6 +149,79 @@ export function listRows(
           );
   const first = query.offset ?? 0;
   return { rows: matching.slice(first, first + (query.limit ?? 100)), total: matching.length };
+}
+
+/** A row with its place in the statement, which no response carries. */
+interface SeqRow {
+  row: StoredRow;
+  seq: number;
+}
+
+const MARKS = /\p{M}/gu;
+
+/** Lower case with the accents taken off, so `epicerie` finds `ÉPICERIE`. */
+function fold(text: string): string {
+  return text.normalize("NFD").replace(MARKS, "").toLowerCase();
+}
+
+/** The history screen's narrowing (lg-41); every field absent keeps every row. */
+function narrowRows(
+  rows: readonly SeqRow[],
+  query: {
+    q?: string;
+    bucket?: RowBucketFilter;
+    person?: string;
+    direction?: "in" | "out";
+    minCents?: number;
+    maxCents?: number;
+  },
+): SeqRow[] {
+  const needle = query.q === undefined ? undefined : fold(query.q);
+  return rows.filter(({ row }) => {
+    const filed = row.classification;
+    const size = Math.abs(row.amountCents);
+    if (needle !== undefined && !fold(row.description).includes(needle)) return false;
+    if (query.bucket !== undefined) {
+      if (query.bucket === "unfiled" ? filed !== null : filed?.bucket !== query.bucket) {
+        return false;
+      }
+    }
+    if (query.person !== undefined) {
+      const owner = query.person === JOINT_PERSON_FILTER ? null : query.person;
+      if (filed === null || filed.personId !== owner) return false;
+    }
+    if (query.direction === "in" && row.amountCents <= 0) return false;
+    if (query.direction === "out" && row.amountCents >= 0) return false;
+    if (query.minCents !== undefined && size < query.minCents) return false;
+    if (query.maxCents !== undefined && size > query.maxCents) return false;
+    return true;
+  });
+}
+
+/**
+ * The order asked for, or newest first by `seq` as ever. Every sort ends on `seq`
+ * in its own direction, which is unique, so two pages of one sorted list never
+ * repeat or skip a row.
+ */
+function orderRows(
+  rows: readonly SeqRow[],
+  query: { sort?: RowSort; order?: RowOrder },
+): StoredRow[] {
+  if (query.sort === undefined && query.order === undefined) return rows.map(({ row }) => row);
+  const sign = query.order === "asc" ? 1 : -1;
+  const keyOf = {
+    date: (entry: SeqRow) => entry.row.date,
+    amount: (entry: SeqRow) => entry.row.amountCents,
+    description: (entry: SeqRow) => fold(entry.row.description),
+  }[query.sort ?? "date"];
+  // Plain comparison and not `localeCompare`, whose answer depends on the host's ICU data.
+  return rows
+    .map((entry) => ({ entry, key: keyOf(entry) }))
+    .toSorted((a, b) => {
+      if (a.key !== b.key) return (a.key < b.key ? -1 : 1) * sign;
+      return (a.entry.seq - b.entry.seq) * sign;
+    })
+    .map(({ entry }) => entry.row);
 }
 
 /**
