@@ -1367,20 +1367,20 @@ describe("a paste wholly inside a reordered day the workbook lists between two o
     },
   );
 
-  test.each([
-    ["0,1,2,3,4", [2, 1], [2, 2], [3, 1]],
-    ["4,3,2,1,0", [2, 1], [2, 2], [3, 1]],
-    ["2,3,4,0,1", [2, 1], [2, 2], [3, 1]],
-  ] as const)(
+  test.each(["0,1,2,3,4", "4,3,2,1,0", "2,3,4,0,1"])(
     "a day of five listed as %s, pasted from a row with two or three before it, adds nothing",
-    async (listed, ...parts) => {
+    async (listed) => {
       const target = await startApp();
       between(target, FIVE, listed.split(",").map(Number));
       const before = stored(target);
 
       // The rows before the part must be read oldest first, since the day's
       // opening balance is the first of them taken away.
-      for (const [from, count] of parts) {
+      for (const [from, count] of [
+        [2, 1],
+        [2, 2],
+        [3, 1],
+      ] as const) {
         const result = await report(target, part(FIVE, from, from + count));
 
         expect(result.rowsAdded, `rows ${String(from)} on`).toBe(0);
