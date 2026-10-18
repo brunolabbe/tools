@@ -495,3 +495,10 @@ draft PR #568); its CI figures were re-read here with
 - **`origin/main` moved** to `f58473f4` (lg-56, lg-41, dl-128, repo-110,
   lg-52) during this round. None of it touches a path on this branch, and
   preflight diffs `origin/main...HEAD`, so the branch was not merged.
+
+**2026-10-18, round 7 — the flow figure is redrawn under the final rules**, in
+`docs(repo): redraw the flow figure under the final rules (repo-111)`.
+`grep -c -E 'No preflight|no preflight|10–12|9 min|≈10 min'` on it prints 3,
+all "109 min wall", a false positive of `9 min`; anchored as
+`(^|[^0-9])9 min` it prints 0. The SVG and its `content` attribute both parse
+as XML (`svg ok: …svg`, `content ok: mxfile`).
