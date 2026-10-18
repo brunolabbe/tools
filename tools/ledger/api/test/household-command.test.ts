@@ -8,6 +8,7 @@
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { Directory } from "../src/directory.ts";
 import { runHouseholdCommand } from "../src/household-command.ts";
@@ -178,5 +179,43 @@ describe("the household command", () => {
       }),
     ).toBe(2);
     expect(err).toContain("ACCESS_PEOPLE is retired");
+  });
+});
+
+// lg-52: a NUL cannot travel in a real `argv`, so it is passed to the function as
+// a string; an ESC can be typed in a shell.
+describe("the household command and a control character", () => {
+  test.each([
+    ["a NUL", "sam@b\u0000c"],
+    ["an ESC", "sam@b\u001bc.test"],
+    ["a DEL", "sam\u007f@b.test"],
+  ])(
+    "refuses an address with %s on the member verb, exits non-zero and writes no row",
+    (_label, address) => {
+      run("add", "home", "Home");
+
+      const ran = run("member", "home", address, "sam");
+
+      expect(ran.code).toBe(1);
+      expect(ran.err).toContain("That is not an email address.");
+      expect(read((directory) => directory.members())).toEqual([]);
+      expect(run("member", "home", "sam@b.test", "sam").code, "the clean address").toBe(0);
+    },
+  );
+
+  test("still removes a row that already holds a NUL, which the schema let in", () => {
+    run("add", "home", "Home");
+    const db = new Database(directoryPath);
+    db.prepare(
+      `INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
+       VALUES (?, 'home', 'sam', 'add', 'x', 'operator')`,
+    ).run("sam@b\u0000c");
+    db.close();
+    expect(read((directory) => directory.members().length)).toBe(1);
+
+    const ran = run("remove", "sam@b\u0000c");
+
+    expect(ran.code, ran.err).toBe(0);
+    expect(read((directory) => directory.members())).toEqual([]);
   });
 });
