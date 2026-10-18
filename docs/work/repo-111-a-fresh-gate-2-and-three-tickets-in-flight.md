@@ -191,6 +191,15 @@ agent dispatched by the owner's Fable 5.1 session), on base `335efcd4`.
   _When you are woken to re-gate_ for a quote ("Probe a fix from a seed state
   its own tests never started from") that section did not carry. It now points
   at _What makes a gate worth its cost_, where the sentence is "Start a fix
-  from a state its own tests never began from". Four other uses of "wake" about
+  from a state its own tests never began from". Five other uses of "wake" about
   builders and agents in general now say "resume": `dispatching.md` (twice),
   `worktree-hygiene.md`, `fixer.md` and `concurrency.md`.
+- **Checks, at the head before this entry (`4aeb22d9`).** `npm run check`
+  exit 0. `node scripts/preflight.mjs --base origin/main`, titled as the pull
+  request, exit 0: `no conflicts with any other open pull request head`
+  (8 heads), `ok    npm run check`,
+  `ok    npx vitest run scripts/test/status.test.ts`,
+  `preflight passed (exit 0)`. `git check-ignore` on both figure paths printed
+  nothing (exit 1).
+- **Unmeasured:** whether a fresh gate 2 costs less than lg-40's woken one. The
+  first batch under the rule is the reading.

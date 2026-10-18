@@ -33,7 +33,9 @@ the new head and at the gated sha as a control, beside six new attacks. The
 agent sat idle for the 39-minute round between the two, which cost nothing but
 inflates the wall column: gate agents in the history average 24 min active
 over 94 min wall (n=107), single-gate agents 14/26, two-gate agents 27/93. The
-recipe that reproduces the table is in repo-111's Log.
+recipe that reproduces the table is in repo-111's Log. **No fresh gate 2 has
+been measured yet**: the first batch under the rule is the reading, against
+lg-40's 28.6 M.
 
 **The cap answers the orchestrator's own queue.** lg-40's chain was build 26
 min, gate 1 31, round 36, gate 2 38, landing 8, and its five relays 7–8 min:
