@@ -1,54 +1,67 @@
 /**
  * Whether a stretch of the workbook's rows and a stretch of the bank's are the
- * same movements of the account (lg-40). One rule, used both ways round: by a
- * paste meeting rows the workbook imported (`statements.ts`), and by the
- * workbook import meeting rows a paste stored (`workbook-import.ts`).
+ * same movements of the account (lg-40, lg-59). Used both ways round: by a paste
+ * meeting rows the workbook imported (`statements.ts`, `matchStretch`), and by
+ * the workbook import meeting rows a paste stored (`workbook-import.ts`,
+ * `alignDays`). The two cut the workbook's rows differently, as below.
  *
  * The workbook was kept by hand, so it differs from the bank in three ways that
  * are not disagreements about money: its wording is its own, it dates a row a
  * day off now and then, and it lists a day's movements in its own order. So the
- * two are compared **day by day**, cut on the workbook's dates:
+ * two are compared **day by day**, a day being a stretch of consecutive
+ * workbook rows and the bank's rows at the same positions its counterpart: as
+ * many rows, in the bank's order.
  *
- * - The workbook's rows are cut into **runs**, each a stretch of consecutive
- *   rows carrying the same date. The bank's rows at the same positions are that
- *   run's counterpart: as many rows, in the bank's order.
- * - A run and its counterpart **hold the same amounts**, counted with their
- *   repeats, and **end on the same balance**. Since each run ends where the
- *   bank's does, every run opens where the bank's does too, so the balances
+ * - A day and its counterpart **hold the same amounts**, counted with their
+ *   repeats, and **end on the same balance**. Since each day ends where the
+ *   bank's does, every day opens where the bank's does too, so the balances
  *   line up at every boundary between days; within a day only the order may
  *   differ, and each side has already proven its own running balance.
  * - **Within a day, only the workbook's opening and closing balances are
  *   real.** The balances it shows between them follow its own order, not the
  *   bank's, so nothing is ever compared with them.
- * - **A date is never compared beyond a window.** A paste allows each of the
- *   bank's rows to sit on the run's date or a day either side of it; the
- *   workbook import, which reports every differing date and refuses none, allows
- *   any.
  * - **Wording is never compared**: not the description, not the category.
  *
- * **A paste may start or end partway through one of the workbook's days**
- * (`matchPart`): its rows there are some of that day's, as the bank lists them
- * from a position the paste's place gives. They must be among the day's amounts,
- * and the bank's day must be able to reach the balance they open from: from the
- * day's opening when they are its first rows, to its closing when they are its
- * last, and when they are neither, through some of the day's other amounts, as
- * many as the bank listed before them. Comparing them with the workbook's rows
- * in the same positions instead would compare a different part of the day
- * whenever the order differs, which refused a correct paste and could leave a
- * false reading the only one (gate 1, F1 and F2). A part that starts and ends
- * inside a day of more than `LONGEST_SEARCHED_DAY` rows is refused: that search
- * is not made.
+ * **A paste reads a day as a block of up to three calendar dates** (lg-59,
+ * `matchStretch`). Its days are any cutting of the stretch into blocks of
+ * consecutive workbook rows, each block's dates no more than
+ * `WIDEST_BLOCK_DAYS` (2) days apart and each cut falling where the workbook's
+ * date changes, that matches block by block. Each of the bank's rows must be
+ * dated within a day of the block's dates: from the day before its earliest to
+ * the day after its latest. So a day the workbook both re-dated and reordered
+ * matches: the bank's 21st of −5.00, −10.00, +10.00, which the workbook lists
+ * as −10.00 on the 21st, −5.00 on the 20th and +10.00 on the 21st, is one block
+ * from the 20th to the 21st holding the bank's three rows. Cut on the
+ * workbook's dates alone, it was three runs, none of them the bank's
+ * counterpart; the true reading was refused and a false one could be the only
+ * reading left, storing rows twice (lg-59). A block is a reading like any
+ * other: where two cuttings give two readings of a paste, it is refused as
+ * ambiguous. Rows dated more than two days apart are never one block, and a
+ * bank row two days from every date of its block does not match it.
  *
- * **The workbook import cuts a day where its own listing puts the edge**
- * (`alignDays`). Where the pastes start partway through a day, the workbook's
- * rows after the edge must hold the pasted rows' amounts and end on their
- * balance, as a whole day would. It adds the workbook's rows before the edge, so
- * those must be the rest of the day, which only the workbook's own listing can
- * say; admitting a part as a paste does would let it add the wrong ones.
+ * **A paste may start or end partway through one of those blocks**
+ * (`matchPart`): its rows there are some of the block's, as the bank lists them
+ * from a position the paste's place gives. They must be among the block's
+ * amounts, and the bank's block must be able to reach the balance they open
+ * from: from the block's opening when they are its first rows, to its closing
+ * when they are its last, and when they are neither, through some of the
+ * block's other amounts, as many as the bank listed before them. Comparing them
+ * with the workbook's rows in the same positions instead would compare a
+ * different part of the day whenever the order differs, which refused a correct
+ * paste and could leave a false reading the only one (lg-40 gate 1, F1 and F2).
+ * A part that starts and ends inside a block of more than
+ * `LONGEST_SEARCHED_DAY` rows is refused: that search is not made.
  *
- * A run of one row is lg-7's own comparison: amount and balance, one for one.
- * A day the workbook spread over two dates is two runs, so a day it both
- * re-dated and reordered does not match.
+ * **The workbook import cuts its rows into runs of one date** (`dayRuns`,
+ * `alignDays`), each bank row allowed any date, and a day where its own
+ * listing puts the edge. Where the pastes start partway through a day, the
+ * workbook's rows after the edge must hold the pasted rows' amounts and end on
+ * their balance, as a whole day would. It adds the workbook's rows before the
+ * edge, so those must be the rest of the day, which only the workbook's own
+ * listing can say; admitting a part as a paste does would let it add the wrong
+ * ones. A run of one row is lg-7's own comparison: amount and balance, one for
+ * one. The import does not read blocks: a day it both re-dated and reordered is
+ * still cut on its dates there, so `alignDays` does not match it.
  */
 
 import { dayAfter } from "@ledger/books";
@@ -71,9 +84,26 @@ export type DateWindow = "a day either side" | "any";
  */
 export const LONGEST_SEARCHED_DAY = 20;
 
+/**
+ * The most calendar days apart the dates of one block a paste reads may be
+ * (lg-59): a day of the bank's, with a row the workbook dated a day before it and
+ * one it dated a day after.
+ */
+export const WIDEST_BLOCK_DAYS = 2;
+
 /** The calendar day before a `yyyy-mm-dd` date. */
 export function dayBefore(date: string): string {
-  return new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  return daysAfter(date, -1);
+}
+
+/** The `yyyy-mm-dd` date `days` calendar days after `date`; before it when negative. */
+export function daysAfter(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** A `yyyy-mm-dd` date as a count of days, for distances between dates. */
+function dayNumber(date: string): number {
+  return Math.round(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
 }
 
 function withinWindow(workbook: string, bank: string, window: DateWindow): boolean {
@@ -202,4 +232,92 @@ export function alignDays(
     pairing.push(...day.map((offset) => start + offset));
   }
   return pairing;
+}
+
+/**
+ * Some of the bank's rows, `part`, as rows `before` to `before + part.length` of
+ * one block of the workbook's rows a paste reads as one day (lg-59): the
+ * block's dates no more than `WIDEST_BLOCK_DAYS` apart, each of `part`'s within
+ * a day of them, and the amounts and balances as `matchPart` weighs them.
+ */
+export function matchBlock(
+  block: readonly DayEntry[],
+  before: number,
+  part: readonly DayEntry[],
+): boolean {
+  if (block.length === 0) return false;
+  const days = block.map((row) => dayNumber(row.date));
+  const earliest = Math.min(...days);
+  const latest = Math.max(...days);
+  if (latest - earliest > WIDEST_BLOCK_DAYS) return false;
+  const dated = part.every((row) => {
+    const day = dayNumber(row.date);
+    return day >= earliest - 1 && day <= latest + 1;
+  });
+  return dated && matchPart(block, before, part, "any");
+}
+
+/** A stored row as a paste reads it: its date, amount and balance, and whose it is. */
+export interface StretchRow extends DayEntry {
+  readonly fromWorkbook: boolean;
+}
+
+/**
+ * Whether stored rows are the pasted rows in their places, as a paste reads them
+ * (lg-59). `rows` holds the stretch from position `start`, as many rows as
+ * `pasted`, with the workbook's rows next to it on either side that a block
+ * holding the stretch's end rows could take in. `same(offset)` compares a row a
+ * paste stored, at `offset` in the stretch, with the pasted row in its place,
+ * field for field.
+ *
+ * Some cutting of `rows` into blocks must match, each block a row a paste
+ * stored or a stretch of the workbook's rows cut where its date changes
+ * (`matchBlock`). Blocks wholly outside the stretch are not compared: the rows
+ * they hold are not the paste's. The cuttings are searched from the oldest row
+ * up, as the set of cuts some matching cutting reaches, so no cutting is weighed
+ * twice.
+ */
+export function matchStretch(
+  rows: readonly StretchRow[],
+  start: number,
+  pasted: readonly DayEntry[],
+  same: (offset: number) => boolean,
+): boolean {
+  const end = start + pasted.length;
+  if (start < 0 || end > rows.length) return false;
+  // Where a block may begin or end: wherever the date changes or a row is a paste's.
+  const cuts = [0];
+  for (let index = 1; index < rows.length; index++) {
+    const left = rows[index - 1] as StretchRow;
+    const right = rows[index] as StretchRow;
+    if (!left.fromWorkbook || !right.fromWorkbook || left.date !== right.date) cuts.push(index);
+  }
+  cuts.push(rows.length);
+  const reached = cuts.map((_, index) => index === 0);
+  for (const [from, opens] of cuts.entries()) {
+    if (reached[from] !== true) continue;
+    for (let to = from + 1; to < cuts.length; to++) {
+      const closes = cuts[to] as number;
+      const first = rows[opens] as StretchRow;
+      const inside = Math.max(opens, start);
+      const outside = Math.min(closes, end);
+      let fits: boolean;
+      if (!first.fromWorkbook) {
+        // A row a paste stored is a block of its own, compared field for field.
+        if (to !== from + 1) break;
+        fits = inside >= outside || same(inside - start);
+      } else {
+        const block = rows.slice(opens, closes);
+        // A longer block holds this one's rows too, so it cannot fit either.
+        if (block.some((row) => !row.fromWorkbook)) break;
+        const days = block.map((row) => dayNumber(row.date));
+        if (Math.max(...days) - Math.min(...days) > WIDEST_BLOCK_DAYS) break;
+        fits =
+          inside >= outside ||
+          matchBlock(block, inside - opens, pasted.slice(inside - start, outside - start));
+      }
+      if (fits) reached[to] = true;
+    }
+  }
+  return reached.at(-1) === true;
 }

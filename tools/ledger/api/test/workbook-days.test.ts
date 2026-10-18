@@ -4,16 +4,26 @@
  * amount and balance here is invented.
  */
 
+import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
+import { AppError } from "@ledger/contract";
+import type { ImportStatementReport } from "@ledger/contract";
+import { migrate } from "../src/db/schema.ts";
+import { importStatement } from "../src/statements.ts";
 import {
   LONGEST_SEARCHED_DAY,
+  WIDEST_BLOCK_DAYS,
   alignDays,
   dayBefore,
   dayRuns,
+  matchBlock,
   matchDay,
   matchPart,
+  matchStretch,
 } from "../src/workbook-days.ts";
-import type { DayEntry } from "../src/workbook-days.ts";
+import type { DayEntry, StretchRow } from "../src/workbook-days.ts";
+import { renderPaste, withBalances } from "./helpers/paste.ts";
+import type { PasteRow } from "./helpers/paste.ts";
 
 /** Rows on one date from an opening balance, each with the balance after it. */
 function day(date: string, opening: number, amounts: readonly number[]): DayEntry[] {
@@ -156,5 +166,263 @@ describe("matchPart: the longest day that is searched (F7)", () => {
     // The same part as the one a day a row longer refuses, above.
     expect(matchPart(exact, 1, exact.slice(1, 2), "any")).toBe(true);
     expect(matchPart(exact, 5, exact.slice(5, 9), "any")).toBe(true);
+  });
+});
+
+// lg-59: a paste reads the workbook's day as a block whose dates are up to two
+// days apart, so a day the workbook both re-dated and reordered matches.
+
+/** Rows with their own dates from an opening balance, each with the balance after it. */
+function dated(opening: number, rows: readonly [string, number][]): DayEntry[] {
+  let balance = opening;
+  return rows.map(([date, amountCents]) => {
+    balance += amountCents;
+    return { date, amountCents, balanceCents: balance };
+  });
+}
+
+// The reduced case of lg-59's Build step 1: the bank's 21 February is −5.00,
+// −10.00, +10.00, and the workbook lists it −10.00 on the 21st, −5.00 on the
+// 20th, +10.00 on the 21st. Both open from 1 000.00 and close on 995.00.
+const REDATED: [string, number][] = [
+  ["2026-02-21", -1_000],
+  ["2026-02-20", -500],
+  ["2026-02-21", 1_000],
+];
+const BANKS_DAY: [string, number][] = [
+  ["2026-02-21", -500],
+  ["2026-02-21", -1_000],
+  ["2026-02-21", 1_000],
+];
+
+describe("matchBlock: a block of the workbook's rows a paste reads as one day (lg-59)", () => {
+  const block = dated(100_000, REDATED);
+  const bank = dated(100_000, BANKS_DAY);
+
+  test("a day the workbook both re-dated and reordered is the bank's day, though cut on its dates it is three", () => {
+    expect(dayRuns(block)).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+    ]);
+    expect(matchBlock(block, 0, bank)).toBe(true);
+    expect(matchBlock(block, 1, bank.slice(1))).toBe(true);
+  });
+
+  test("each bank row is dated within a day of the block's dates, and no further", () => {
+    const early = bank.map((row) => ({ ...row, date: "2026-02-19" }));
+    const late = bank.map((row) => ({ ...row, date: "2026-02-22" }));
+    const twoDaysLate = bank.map((row) => ({ ...row, date: "2026-02-23" }));
+
+    expect(matchBlock(block, 0, early)).toBe(true);
+    expect(matchBlock(block, 0, late)).toBe(true);
+    expect(matchBlock(block, 0, twoDaysLate)).toBe(false);
+  });
+
+  test(`a block's dates are at most ${String(WIDEST_BLOCK_DAYS)} days apart`, () => {
+    const widest = dated(100_000, [
+      ["2026-02-20", -500],
+      ["2026-02-22", -1_000],
+      ["2026-02-21", 1_000],
+    ]);
+    const wider = dated(100_000, [
+      ["2026-02-20", -500],
+      ["2026-02-23", -1_000],
+      ["2026-02-21", 1_000],
+    ]);
+    const anyDay = bank.map((row) => ({ ...row, date: "2026-02-21" }));
+
+    expect(matchBlock(widest, 0, anyDay)).toBe(true);
+    expect(matchBlock(wider, 0, anyDay)).toBe(false);
+  });
+});
+
+describe("matchStretch: stored rows against pasted rows, a block at a time (lg-59)", () => {
+  const workbook: StretchRow[] = dated(100_000, REDATED).map((row) => ({
+    ...row,
+    fromWorkbook: true,
+  }));
+  const bank = dated(100_000, BANKS_DAY);
+
+  test("a stretch starting partway through the block is weighed against the whole block", () => {
+    expect(matchStretch(workbook, 1, bank.slice(1), () => true)).toBe(true);
+    expect(matchStretch(workbook, 0, bank, () => true)).toBe(true);
+    // The same rows said to be the stretch's first two: they open elsewhere.
+    expect(matchStretch(workbook, 0, bank.slice(1).concat(bank[0] as DayEntry), () => true)).toBe(
+      false,
+    );
+  });
+
+  test("a row a paste stored is its own block, compared by the caller", () => {
+    const pasteRow: StretchRow = {
+      date: "2026-02-22",
+      amountCents: -500,
+      balanceCents: 99_000,
+      fromWorkbook: false,
+    };
+    const rows = [...workbook, pasteRow];
+    const pasted = [
+      ...bank.slice(1),
+      { date: "2026-02-22", amountCents: -500, balanceCents: 99_000 },
+    ];
+
+    expect(matchStretch(rows, 1, pasted, (offset) => offset === 2)).toBe(true);
+    expect(matchStretch(rows, 1, pasted, () => false)).toBe(false);
+  });
+});
+
+/** A database holding these rows as the workbook import stores them, from 1 000.00. */
+function workbookDb(rows: readonly [string, number][]): Database.Database {
+  const db = new Database(":memory:");
+  migrate(db);
+  const batch = db
+    .prepare(
+      "INSERT INTO statement_imports (imported_at, imported_by, source) VALUES (?, ?, 'workbook')",
+    )
+    .run("2026-10-01T09:00:00Z", "alex");
+  const insert = db.prepare(
+    `INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id)
+     VALUES (?, ?, '', ?, ?, ?, ?)`,
+  );
+  for (const [seq, row] of dated(100_000, rows).entries()) {
+    insert.run(
+      seq,
+      row.date,
+      `Ligne ${String(seq)}`,
+      row.amountCents,
+      row.balanceCents,
+      batch.lastInsertRowid,
+    );
+  }
+  return db;
+}
+
+function storedRows(db: Database.Database): unknown[] {
+  return db.prepare("SELECT * FROM statement_rows ORDER BY seq").all();
+}
+
+function paste(
+  db: Database.Database,
+  rows: readonly PasteRow[],
+  opening: number,
+): ImportStatementReport {
+  return importStatement(
+    { db, personId: "alex", now: () => new Date("2026-10-18T09:00:00Z") },
+    renderPaste(withBalances(rows, opening)),
+  );
+}
+
+function bankRows(rows: readonly [string, number][]): PasteRow[] {
+  return rows.map(([date, amountCents], index) => ({
+    date,
+    description: `Virement /Caisse ${String(index)}`,
+    amountCents,
+  }));
+}
+
+/** What a paste came to: its report, or the refusal's code, message and details. */
+function outcome(run: () => unknown): unknown {
+  try {
+    return run();
+  } catch (error: unknown) {
+    if (!(error instanceof AppError)) throw error;
+    return { code: error.code, message: error.message, details: error.details };
+  }
+}
+
+describe("a paste meeting a day the workbook both re-dated and reordered (lg-59)", () => {
+  test("the reduced case: the true reading, or refused as two ways, and the workbook's rows as they were", () => {
+    const db = workbookDb(REDATED);
+    const before = storedRows(db);
+    // The bank's last two rows of the day and one new row, opening from 995.00.
+    // The truth is two rows already stored and one new.
+    const rows = bankRows([...BANKS_DAY.slice(1), ["2026-02-22", -500]]);
+
+    const result = outcome(() => paste(db, rows, 99_500));
+
+    const truth = { rowsAdded: 1, rowsAlreadyPresent: 2, tailBalanceCents: 99_000 };
+    if ("rowsAdded" in (result as object)) {
+      expect(result).toEqual(truth);
+      expect(storedRows(db).slice(0, 3)).toEqual(before);
+    } else {
+      expect(result).toMatchObject({ code: "STATEMENT_ROW_CONFLICT" });
+      expect((result as { message: string }).message).toContain("two ways");
+      expect(storedRows(db)).toEqual(before);
+    }
+  });
+
+  test("a reading only the block makes possible counts like any other, so two readings are refused", () => {
+    const db = workbookDb(REDATED);
+    const before = storedRows(db);
+    const rows = bankRows([...BANKS_DAY.slice(1), ["2026-02-22", -500]]);
+
+    const result = outcome(() => paste(db, rows, 99_500));
+
+    // Two stored is the block's reading: cut on the workbook's dates, the day is
+    // three runs and the last, +10.00, cannot be −10.00 and +10.00. None stored is
+    // the continuation, since −10.00 and +10.00 leave the tail's 995.00 where it was.
+    expect(result).toMatchObject({
+      code: "STATEMENT_ROW_CONFLICT",
+      details: {
+        readings: [
+          { rowsAdded: 1, rowsAlreadyPresent: 2 },
+          { rowsAdded: 3, rowsAlreadyPresent: 0 },
+        ],
+      },
+    });
+    expect((result as { message: string }).message).toContain("two ways");
+    expect(storedRows(db)).toEqual(before);
+  });
+
+  test("with amounts that do not cancel, the one reading is the true one: the new row stored, the workbook's kept", () => {
+    // The bank's 21st is −12.34, +56.00, −7.77; the workbook lists −7.77 on the
+    // 21st, −12.34 on the 20th, +56.00 on the 21st. Then the bank's +25.00 on the 22nd.
+    const db = workbookDb([
+      ["2026-02-21", -777],
+      ["2026-02-20", -1_234],
+      ["2026-02-21", 5_600],
+    ]);
+    const before = storedRows(db);
+    const rows = bankRows([
+      ["2026-02-21", -1_234],
+      ["2026-02-21", 5_600],
+      ["2026-02-21", -777],
+      ["2026-02-22", 2_500],
+    ]);
+
+    expect(paste(db, rows, 100_000)).toEqual({
+      rowsAdded: 1,
+      rowsAlreadyPresent: 3,
+      tailBalanceCents: 106_089,
+    });
+    const after = storedRows(db);
+    expect(after.slice(0, 3)).toEqual(before);
+    expect(after[3]).toMatchObject({
+      seq: 3,
+      date: "2026-02-22",
+      description: "Virement /Caisse 3",
+      amount_cents: 2_500,
+      balance_cents: 106_089,
+    });
+  });
+
+  test("a pasted row two days from every date of its block is refused, and nothing is stored", () => {
+    const db = workbookDb([
+      ["2026-02-21", -777],
+      ["2026-02-20", -1_234],
+      ["2026-02-21", 5_600],
+    ]);
+    const before = storedRows(db);
+    const rows = bankRows([
+      ["2026-02-21", -1_234],
+      ["2026-02-21", 5_600],
+      ["2026-02-23", -777],
+      ["2026-02-24", 2_500],
+    ]);
+
+    expect(outcome(() => paste(db, rows, 100_000))).toMatchObject({
+      code: "STATEMENT_CHAIN_BROKEN",
+    });
+    expect(storedRows(db)).toEqual(before);
   });
 });
