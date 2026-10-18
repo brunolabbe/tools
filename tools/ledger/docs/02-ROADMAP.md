@@ -141,6 +141,7 @@ transcribing by hand.
 | ------------------------------------------------------------------------------------ | ----------------------------------------------- |
 | [lg-9](./work/lg-9-history-and-stats.md)                                             | the charts, over every history                  |
 | [lg-18](./work/lg-18-show-a-filed-rows-spending-category-where-it-can-be-changed.md) | a filed row's category, where it can be changed |
+| [lg-41](./work/lg-41-a-history-of-every-bank-row.md)                                 | every bank row: searched, filtered, sorted      |
 
 ## Phase 6 — More than one household
 
