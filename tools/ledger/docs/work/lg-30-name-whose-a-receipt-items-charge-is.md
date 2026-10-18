@@ -671,3 +671,58 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     (500); `chargeLineId` always the first charge, 4 failed; the backfill taking
     any line, 3 failed of 11. lg-32's `notShared.length > 0` is no longer an
     equivalent mutant.
+- 2026-10-18 — Owner answer on the rounding bound (asked through the
+  orchestrator after gate 1, 2026-10-17/18). Question: Build 2 says "up to 2
+  cents"; the builder measured `ceil(parts / 2)`, which is 3 cents from five parts
+  (fixture 391/1172/785/384/1653, printed total 5,041, parts apart 5,044, checked
+  by hand). Options: A `ceil(parts / 2)`, already built (the builder's
+  recommendation); B a fixed 2 cents. **Chosen: A.** Build 2's "up to 2 cents" now
+  reads `ceil(parts / 2)`, and no Done when line changed.
+  `awk '/^## Log/{exit} {print}' <this ticket> | grep -c "up to 2 cents"` → `0`.
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F1 — "A receipt main
+  files is now refused when it carries a _shared_ item that costs nothing.
+  `splitReceipt` reads "nothing left shared" by items … where lg-32's guard it
+  replaced read the cents." Options: (1) keep the items reading and say a free
+  shared item must be marked not shared (the gate's option 1); (2) read it by cost,
+  every shared item priced 0 with no deposit (the gate's option 2, recommended);
+  (3) by cost, in a builder round and a re-gate; (4) file a ticket. **Chosen: (2),
+  at landing, no re-gate.** `nothingShared` is now "every item is not shared, or
+  is shared with price 0 and no deposit"; Build 2 and the `splitReceipt` comment
+  say "by cost". The books test "a receipt with something still shared takes no
+  adjustment" is rewritten as "a shared item that costs something takes no
+  adjustment; a free one does not stop it" (the free bag beside the 2,307 receipt
+  now files: not shared 1,149, charged 1,158; a shared 0,01 $ item beside parts
+  2 cents over still answers `sharedCents` -1), and the 4,915 receipt is added at
+  the end of `books/test/receipts.test.ts` and of `api/test/receipts.test.ts`.
+  At `01c30bf7` the rewritten test and the two 4,915 tests failed (the API one with
+  400 "More comes off this receipt than the card was charged."); at the fix they
+  pass, 72 of 72 in books and 75 of 75 in api.
+  `node --import tsx regress.mts <tree at 4dbe22b8> <this tree> 300000 7` → the 61
+  rows `files->refused | sharedItems>0:true underTotal:false` are gone (0); no
+  `files->files` row (no receipt both trees file has different amounts);
+  `files->refused` with a shared item remains only with a payment under the total,
+  11 (7 + 4), the designed break; `refused->files` with a shared item, 456
+  (81 + 56 + 212 + 107), the number the gate predicted: lg-32's F1 fix reaching
+  receipts that carry a free item. With the nothing-shared test dropped
+  (`mutate.mjs <tree> noshared`) 1 of 72 fails in books, the rewritten test.
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F2 — "`chargedToOf`'s
+  own checks (the payer, a name the books do not hold) are pinned by no test."
+  Option chosen: add the gate's cases 2, 2b and 3 (a free item to zoe, to an
+  unknown name, to the payer) as API tests. Added at the end of
+  `api/test/receipts.test.ts`, "a free theirs item names a person the household
+  does not hold (lg-30, gate 1 F2)": each asserts 400, its message and zero rows
+  in `period_lines`, `receipt_filings` and `receipt_items`. They pass at
+  `01c30bf7`, since the checks exist; they fail under the gate's `mutate-api.mjs
+<tree> nocheck`: 3 failed | 72 passed of 75 (the other member of another
+  household, the unknown name, the payer).
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F3 — "the bound's upper
+  edge is unpinned. `roundingBound` with `+ 1` passes the whole books spec." Added
+  at the end of `books/test/receipts.test.ts`, "an excess one cent past the bound
+  is not adjusted": one taxable item priced 14 on a receipt with no tax lines,
+  paid 14, costs 16 (excess 2, bound 1), `sharedCents` -2. It passes at
+  `01c30bf7`; under the gate's `mutate.mjs <tree> slack` 1 failed | 71 passed of
+  72, that test.
+- 2026-10-18 — Owner answer on gate 1, F5 ("the receipt screen's load … has no
+  test for a failed or slow record, and its behaviour is inherited"): filed as a
+  new ticket, **lg-39**, in this pull request, with the gate's reproduction. F4
+  stays recorded as the gate wrote it; nothing was done.
