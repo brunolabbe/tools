@@ -183,3 +183,10 @@ when EBUSY never clears`, `1 failed | 108 passed (109)`. A third spec,
     `EBUSY` as `cause`, and the cause is a separate filing (Build 3).
   - Fold-in: none. Build 4 excludes the other `rmSync` calls in the file and
     nothing else small and specified came free.
+  - `Done when` 5, one reading: on head `0a95eb4e`, run `39164706566`, job
+    `117785438356` (`test (windows-latest, informational)`), `gh pr checks 559`
+    reads `pass`, and its log shows `scripts/test/preflight.test.ts (109 tests)`
+    passing and `Test Files 291 passed | 2 skipped (293)`; `grep -c EBUSY` on the
+    job log prints 0. One green of an intermittent failure (one red in four
+    before): it does not show the retry ran, since the unlink may not have
+    hit `EBUSY` this time.
