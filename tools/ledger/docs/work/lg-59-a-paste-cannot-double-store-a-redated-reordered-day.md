@@ -15,8 +15,8 @@ difficulty: hard
 
 lg-40 lets a paste overlap the rows the workbook imported, one day at a time: a
 day's workbook rows may be in any order, and each may be dated a day off the
-bank's. That rule is `api/src/workbook-days.ts` on lg-40's branch (PR #548, not
-yet on `main`). It cuts the workbook's rows into runs of one date. A day the
+bank's. That rule is `api/src/workbook-days.ts`, on `main` since lg-40's PR #548
+merged as `f07e9c25`. It cuts the workbook's rows into runs of one date. A day the
 workbook both re-dated by a day and reordered therefore becomes two runs, and
 the reading that matches the bank is not admitted. A shorter overlap, or a
 continuation with `k = 0` on a balance that happens to coincide, can then be the
@@ -62,8 +62,8 @@ takes one from probe c's output.
 
 ## Build
 
-1. **Measure before any change.** On lg-40's merged head, or on the head this
-   branch is built on, which must include lg-40's code, run probe c and probe c2
+1. **Measure before any change.** On `main` at or after `f07e9c25` (lg-40's
+   merge), run probe c and probe c2
    with seed 11. Record each cell's `correct`, `wrongAccept`, `ambiguous` and
    `refusedOther` in the Log. Take one wrong-accept line from probe c's output in
    a `repeating/both` cell and reduce it by hand, removing rows while the wrong
