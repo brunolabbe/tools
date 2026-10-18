@@ -415,7 +415,7 @@ bytes`, and with `env: { X: "a\u0000b" }` → `ERR_INVALID_ARG_VALUE The propert
   NUL, the `member` verb ×3, both routes (one test), and the `LEDGER_ADMINS`
   entry. The removal tests and the five-input refusals pass at the base, as they
   must. Then with the tightened `readAddress` also on `removeMember` (one line
-  changed) → `Tests  3 failed | 98 passed (101)`, the three removal tests (class,
+  changed) → `Tests  3 failed | 113 passed (116)`, the three removal tests (class,
   admin route, `remove` verb): they fail if removal shares the strict check.
   With the change: `Tests  116 passed (116)` over the same four files.
 - 2026-10-18 — What the brief had wrong or left open. (a) Its "Unmerged, on PR
@@ -430,3 +430,22 @@ bytes`, and with `env: { X: "a\u0000b" }` → `ERR_INVALID_ARG_VALUE The propert
   alone as the exception and this change keeps to it; making `from` read through
   `readStoredAddress` is a one-word edit, and is the open decision in the report.
 - 2026-10-18 — Not run: item 6's query against a deployed directory; the owner's.
+- 2026-10-18 — Owner's answer on gate 1's F1 (`changeAddress` reads `from`
+  through the strict `readAddress`, so a stored row with a control character
+  cannot be the `from` of a change). Asked: "lg-52 passed gate 1 (#560), no high
+  or med. Builder and gate disagree on F1 (low). What do you want?" Options:
+  "Keep `from` strict; fix F2/F3 at landing", "Keep `from` strict; leave lows
+  recorded", "Widen `from`; fix lows too". Chosen: "Keep `from` strict; fix
+  F2/F3 at landing" — the gate's recommendation, overriding the builder's, which
+  was to widen `from` through `readStoredAddress`. No code change for F1.
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, the Log's removal-strict
+  count — "the Log's middle red/green entry gives the removal-strict run as '3
+  failed | 98 passed (101)' beside 'the same four files'; 101 is three files".
+  The entry now gives 113 passed (116). Three files → `Tests  101 passed (101)`;
+  four, with `config-access` → `Tests  116 passed (116)`.
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F3 — "`directory.ts`'s
+  header lists what the schema checks and leaves out the person's and the
+  household name's length-and-trim checks". The header now names a household
+  name's and a person's length and trim among them; `name` and `person` carry a
+  length range and a trim check in `db/directory-schema.ts`. Counting "length and trim" in
+  `directory.ts` gives 1.

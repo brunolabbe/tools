@@ -11,10 +11,11 @@
  *
  * Every write is checked here first, so a refusal carries a sentence an
  * operator can act on. The schema checks less (`db/directory-schema.ts`): a
- * household id's shape, that an address is lower-cased, trimmed and has an `@`
- * with something either side, and the membership rules its triggers hold. It
- * does not check an address's character set, so a writer that skips this class
- * is not refused for a control character in one (lg-52).
+ * household id's shape, a household name's and a person's length and trim, that
+ * an address is lower-cased, trimmed and has an `@` with something either side,
+ * and the membership rules its triggers hold. It does not check an address's
+ * character set, so a writer that skips this class is not refused for a control
+ * character in one (lg-52).
  */
 
 import { mkdirSync } from "node:fs";
