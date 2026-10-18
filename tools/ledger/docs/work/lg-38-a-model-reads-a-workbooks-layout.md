@@ -122,6 +122,40 @@ Scope came from the dispatch, not the brief: the owner's answer of 2026-10-18, "
 - **findings** · the hunt returned 17; 12 carried (1 med, 11 low), 5 dropped.
 - NFR: security — the med above, and `--out` (low); no key or header is logged and the fixtures are synthetic. Performance n/a: the reader is linear in rows times named columns, and none of 1,995 random layouts took 500 ms. Reliability — the two harness lows above on the stop and the lost table. Maintainability — `ignored`, the undeclared dependency.
 
+### Gate 2
+
+**Gate: PASS for the slice (two rows `unproven (scope)`)** — 2026-10-18 · `782eb382..a8e98b8b` (the round's two commits, read first-parent with merges excluded; the two merges from main were not reviewed beyond running the round's tests beside them) · Sonnet 5.5, depth full for the round
+
+Scope is unchanged: the owner's answer of 2026-10-18, "build only", and for the round the owner's choice to fix the med plus the three `parseCli` parts. No model call, no `LEDGER_LIVE_RUN`, no spend. Nothing I found is a `high`, and no third gate is needed. Whether the ticket lands `ready` or `in-flight` with the two scope rows open is the author's call; the Log says `ready`.
+
+**Verdicts on gate 1's findings**
+
+- **med** · `ANTHROPIC_CUSTOM_HEADERS` · **fixed.** `assertLiveRunConsent` refuses any non-blank value, after the `LEDGER_LIVE_RUN` and key checks and before `parseCli` and before the only `new Anthropic` (`main` calls them in that order). Checked: 5 spellings of a set value refused (a header, a key-bearing header, two lines, no colon, padded), 5 blank spellings allowed (empty, spaces, newline, tab-and-space, no-break space), and a client built with the harness's options under each of those values carries no header for any blank one, so allowing blank is safe: the SDK reads the variable with `trim() || undefined`, as the harness does. The message is fixed text and never contains the value (a secret-looking value was not echoed; making the message echo it turns the test red). The test is `api/test/layout-live-gate.test.ts` › "refuses ANTHROPIC_CUSTOM_HEADERS beside the key, and never repeats its value"; disabling the refusal turns it red. Not re-run: the Log's end-to-end refusal with consent set, because it needs `LEDGER_LIVE_RUN=1`.
+- **low** · `parseCli`, three parts:
+  - `--out=/tmp/a=b` · **fixed.** Gives `out="/tmp/a=b"`; reverting the parse turns › "keeps everything after the first = as the value" red.
+  - a `--fixtures` name that is no fixture · **fixed.** Refused, naming it, with the valid names: `--fixtures names lg-37, which is no fixture (lg7, lg37, moved, english, csv-balance, csv-no-balance).` Disabling it turns › "refuses a --fixtures name that is no fixture, naming it" red.
+  - `--out` inside the repository · **fixed in part.** Refused for the tree the harness file is in, in every spelling I tried that stays on that tree's paths (relative, `.`, trailing and doubled slashes, `..` escapes that come back in, an unexpanded `~` from the tree root, `--out=` form); disabling the guard turns › "refuses an --out inside the repository, however it is spelled" red. Clauses that remain: the first new finding below, and a run from a worktree not refusing an `--out` in the shared checkout, which the Log states and which the Log's "from the repository root" instruction covers.
+- The other ten gate-1 lows were not touched by the round and stay recorded, not regraded.
+
+**Findings in the round's lines**
+
+- **low** · `--out` guard · the guard tests `inside.startsWith("..")` on the relative path, so a directory inside the tree whose name starts with two dots (`<tree>/..hidden`, `<tree>/..x/y`) reads as outside and is accepted. Also not refused: an `--out` reached through a symlink into the tree, and a `--model` containing `../` (the records go to `out/model`). The test title and the Log say "however it is spelled", which is false for those spellings; the direction is unsafe but what would land is synthetic answers and scores, never the key, and no caller spells a path this way, so low. Remedy tried on a scratch mutation: comparing `inside !== ".."` and `!inside.startsWith(".." + path.sep)` refuses `..hidden` and `..x/y` while `..` (the parent) and a sibling sharing the name's prefix stay accepted, and the 9 tests still pass.
+- **low** · `LAYOUT_FIXTURE_NAMES` in `api/test/layout/fixtures.ts` is a hand-kept copy of the names `layoutFixtures()` returns, and nothing pins the two together: adding a name that is no fixture leaves `layout-live-gate.test.ts` and `layout.test.ts` green (38 tests), and `--fixtures` would again accept and silently ignore it. No live call site until a fixture is added or removed.
+- **findings** · the hunt in the round's lines returned 2; 2 carried (0 med, 2 low), 0 dropped.
+
+**Round-level checks.** `api/test/layout-live-gate.test.ts` against the previous head's harness files: `4 failed | 5 passed (9)`; on the new head `9 passed (9)`, as the Log says. Ledger project at the new head, beside the merged lg-53 source: 66 files, 1,309 tests pass. `npm run check` exit 0. The Log's owner command parses as written once the placeholders are filled (`--out ~/ledger-layout-lg38` resolves outside the tree, `--runs 5 --max-usd 5` accepted, the same for the Sonnet line) and now says `ANTHROPIC_CUSTOM_HEADERS` must be unset; the Log does not say how to unset it, the harness's own message says "Unset it" and refuses before anything is spent. The paths earlier findings rest on that the merges touched (`tools/ledger/api/package.json`, `tools/ledger/books/src/index.ts`) were re-read: the dependency lists are unchanged, so the undeclared `@anthropic-ai/sdk` low still stands.
+
+| Done when | At `a8e98b8b`                                                                                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1         | **proven** as at gate 1; `api/test/layout.test.ts`, `books/test/workbook.test.ts` and `api/test/workbook-import.test.ts` pass in the 66-file run, and the round touched none of the reader. |
+| 2         | **proven** as at gate 1; `contract/test/layout.test.ts` passes in the same run.                                                                                                             |
+| 3         | **unproven (scope)** — the owner's answer of 2026-10-18; the owner's run with the Log's command.                                                                                            |
+| 4         | **unproven (scope)** — same.                                                                                                                                                                |
+
+CI on the pull request at this head: `check` (twice), `docker`, `codeql`, `CodeQL`, `changes`, `dependency-review` and `test (ubuntu-latest)` passed; `test (windows-latest, informational)` was still pending when I read it, which the lander reads before the push.
+
+- NFR: security — the med is closed, the guard gaps above are low; reliability and maintainability — the unpinned name list; performance n/a.
+
 ## Log
 
 ### 2026-10-18 — built, the paid run left for the owner
