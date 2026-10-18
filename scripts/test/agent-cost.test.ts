@@ -771,3 +771,10 @@ test("the CLI labels an estimated row and still exits 0", () => {
   expect(result.stdout).toContain("output estimated for 1 of 2 responses, recorded 58");
   expect(result.stderr).toBe("");
 });
+
+test("visibleOutput skips a null or non-object content entry instead of throwing", () => {
+  expect(visibleOutput([null, 7, "x", { type: "text", text: "ok" }])).toEqual({
+    chars: 2,
+    signature: 0,
+  });
+});

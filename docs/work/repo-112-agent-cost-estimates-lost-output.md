@@ -128,8 +128,21 @@ about that share. The tables from before are not.
     | Sonnet 5.5 | 60    | 0.95   | 0.85 | 1.12 | 0.77 to 1.29 |
     | Haiku 5.5  | 9     | 0.83   | 0.73 | 1.00 | 0.73 to 1.00 |
 
-    Haiku runs low. It is priced at $0.50/M output, so it moves no total that
-    matters, and one shared table is kept.
+    Haiku runs low. Half of its raised responses are on the $2.50/M long-prompt
+    card, but every raised Haiku response together comes to about $1, so one
+    shared table is kept.
+
+    **The limit of this check.** Every file in the test set has all its
+    responses finished, so the shipped code raises nothing in them; the 38
+    files of that window with an unfinished response are excluded by the rule.
+    The responses from 2.1.300 on that kept their final record are ground truth
+    in the regime the estimate serves. Estimated as if unfinished, gate 1 read
+    them at 1.20 (Opus 5.5, 240 responses), 1.13 (Sonnet 5.5, 424) and 1.14
+    (Haiku 5.5, 96) of recorded, pooled, and 1.21 / 1.12 / 1.11 per-file median.
+    They are longer than the unfinished ones (mean visible characters 1,951
+    against 972), so this is a bound, not a measurement. The estimate may run
+    some percent high on the population it raises. That overstates cost, and
+    the figure is labelled.
 
     An earlier Python pass measured the signature fit on all dates: r 0.95 on
     Opus 5.5 and 0.94 on Sonnet 5.5.
@@ -140,7 +153,7 @@ about that share. The tables from before are not.
     - Taking the estimate even when it is lower (`if (true)`): 18 tests failed.
     - Restored: 60 of 60 pass.
   - **Real files.** A 2.1.301 builder, `196311b6…/agent-a74f778b39702b54b`, now
-    reads `output=97363 … output estimated for 87 of 102 responses, recorded
+    reads `output=98157 … output estimated for 87 of 102 responses, recorded
 24532`. A 2.1.296 gate, `1e178417…/agent-a001f077f5a08f22b`, prints no
     estimate note: every response there has a final record.
   - **Checks.** `npm run check`: exit 0. The seven existing `toEqual` shapes
@@ -148,10 +161,29 @@ about that share. The tables from before are not.
     assert about the existing fields is unchanged.
   - **Not fixed here.** The transcript regression itself is Claude Code's. A
     report upstream is the owner's to file.
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F1, F2, F3 and F4.
+  - F4 — "`visibleOutput` throws on a `null` entry in `message.content`". A
+    null or non-object entry is now skipped, and the spec gained "visibleOutput
+    skips a null or non-object content entry instead of throwing".
+    `npx vitest run scripts/test/agent-cost.test.ts` → `Tests 61 passed (61)`.
+  - F2 — "`sumUsage`'s own doc still says it keeps each group's largest
+    output_tokens", "every main-session response kept its own" and "r 0.95".
+    `sumUsage`'s doc now names the raise. The module doc says 6 of 9,642
+    main-session responses lost theirs, and gives r as about 0.94.
+    `grep -c "every main-session response" scripts/agent-cost.mjs` → `0`.
+  - F3 — "the builder reads output=97363 in the Log and 98157 at head" and "the
+    embedded script prints only median, p10 and p90". The Real files bullet
+    reads 98157, and the Calibration script section says what its copy prints.
+    `awk '/^## Log/{exit} {print}'` is not the scope here, since both fixes
+    are in the Log itself.
+  - F1 — "the Log should state the limit and put the post-2.1.300 reading
+    beside its table". Done under Held-out check, with gate 1's figures.
 
 ### Calibration script
 
-Run from a worktree:
+This copy prints the medians, p10 and p90. The Range column and the fit sizes
+in the Log came from a longer scratch copy that also printed the minimum, the
+maximum and the counts. Run from a worktree:
 `node calibrate.mjs scripts/agent-cost.mjs 2026-10-10 2026-10-11 2026-10-13`
 fits the constants and checks them. Appending `1.8 0.277 266` checks fixed
 constants instead.

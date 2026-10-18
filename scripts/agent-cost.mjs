@@ -86,12 +86,14 @@
  * 16), and the last record, which held the real count and a non-null
  * `stop_reason`, is missing. Subagent responses with a final record were 99 to
  * 100% of each day through 2.1.296 (2026-10-13) and 2 to 14% of each day from
- * 2.1.300 on, while every main-session response kept its own (repo-112). The
+ * 2.1.300 on, while main-session responses kept theirs (6 of 9,642 did not;
+ * repo-112). The
  * content blocks are all still there, so a response with no `stop_reason` on
  * any of its records gets an output estimated from what it shows
  * (`visibleOutput`, `estimateOutput`, `OUTPUT_ESTIMATE`), used only when it
  * exceeds the recorded count. Most of the gap is redacted thinking, whose
- * signature length tracks its token count (r 0.95 on Opus 5.5 and Sonnet 5.5).
+ * signature length tracks its token count (r about 0.94 on Opus 5.5 and Sonnet
+ * 5.5, against output less characters at the fitted rate).
  * Every row and total that rests on an estimate names how many responses it
  * raised and the recorded figure beside it; a file whose records all carry a
  * final count prints exactly as before.
@@ -296,6 +298,7 @@ export function visibleOutput(content) {
   let signature = 0;
   if (!Array.isArray(content)) return { chars, signature };
   for (const block of content) {
+    if (block === null || typeof block !== "object") continue;
     const b =
       /** @type {{type?: unknown, text?: unknown, name?: unknown, input?: unknown, thinking?: unknown, signature?: unknown}} */ (
         block
@@ -362,7 +365,9 @@ export function normaliseModel(model) {
  * at the true billed figure on the final record. So records are grouped by
  * `requestId ?? message.id` first, this keeps each group's largest
  * `output_tokens` and that same record's other fields, and only the kept,
- * deduplicated figures are summed. See the module doc comment for the
+ * deduplicated figures are summed — except that a response with no final
+ * record has its `output` raised to `estimateOutput` when that is larger,
+ * with the largest recorded count kept in `recordedOutput`. See the module doc comment for the
  * measurement that found this.
  *
  * A `"<synthetic>"` `message.model` (a session-limit marker, not a billed
