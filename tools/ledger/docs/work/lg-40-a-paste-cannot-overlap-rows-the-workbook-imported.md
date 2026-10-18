@@ -301,3 +301,19 @@ tools/ledger/api/test/workbook-import.test.ts` → 10 failed | 88 passed (98): 8
   end partway through a day, and that wording is never compared. The header
   says the refusal does not ask for a longer stretch because the paste reached
   the stored rows, not that a longer one could not help.
+
+- 2026-10-18 — Fixed at landing by owner choice: gate 2, F7 — "Three pieces of
+  the fix are asserted by no test, though their absence has a live effect."
+  Three tests added at the end of their suites, each run red against its mutant
+  and green on the clean source, the source restored from a copy after each:
+  `npx vitest run tools/ledger/api/test/workbook-days.test.ts
+tools/ledger/api/test/statements.test.ts` → clean 92 passed (92); `later`
+  emptied in `overlaps` → 7 failed | 85 passed, in "a paste wholly inside a
+  reordered day the workbook lists between two others (F7)" › "a day of three
+  listed as %s, pasted from any of the bank's rows to any other inside it, adds
+  nothing" (five of its six orders) and "a day of five listed as %s, pasted from
+  a row with two or three before it, adds nothing" (4,3,2,1,0 and 2,3,4,0,1);
+  `restOfDay` not reversed → 3 failed | 89 passed, all three orders of the
+  five-row test; `>` made `>=` at `LONGEST_SEARCHED_DAY` → 1 failed | 91 passed,
+  "matchPart: the longest day that is searched (F7)" › "a day of exactly the
+  longest the search allows admits a part that starts and ends inside it".

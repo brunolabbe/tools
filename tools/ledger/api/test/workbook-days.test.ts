@@ -147,3 +147,14 @@ describe("alignDays: a stretch of whole days, as the workbook import compares", 
     expect(alignDays(workbook, bank.slice(1), "any")).toBeNull();
   });
 });
+
+describe("matchPart: the longest day that is searched (F7)", () => {
+  test("a day of exactly the longest the search allows admits a part that starts and ends inside it", () => {
+    const amounts = Array.from({ length: LONGEST_SEARCHED_DAY }, (_, index) => 100 + index);
+    const exact = day("2026-03-05", 100_000, amounts);
+
+    // The same part as the one a day a row longer refuses, above.
+    expect(matchPart(exact, 1, exact.slice(1, 2), "any")).toBe(true);
+    expect(matchPart(exact, 5, exact.slice(5, 9), "any")).toBe(true);
+  });
+});

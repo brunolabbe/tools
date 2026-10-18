@@ -1305,3 +1305,88 @@ describe("a paste partway through one of the workbook's days", () => {
     expect(error.message).not.toContain("a paste that starts on that row continues the workbook");
   });
 });
+
+// lg-40, gate 2, F7: what a paste wholly inside the workbook's rows needs of the
+// rest of the day it starts or ends partway through. The day sits between an
+// earlier day and a later one, so neither edge of the history is its own.
+describe("a paste wholly inside a reordered day the workbook lists between two others (F7)", () => {
+  /** The workbook's 4 March, one 5 March in the order given, and 6 March, from 1 000.00. */
+  function between(target: App, bankDay: readonly number[], listed: readonly number[]): void {
+    workbookRows(
+      target,
+      [
+        { date: "2026-03-04", amountCents: 900 },
+        ...listed.map((index) => ({
+          date: "2026-03-05",
+          amountCents: bankDay[index] as number,
+        })),
+        { date: "2026-03-06", amountCents: -250 },
+      ],
+      100_000,
+    );
+  }
+
+  /** The bank's rows `from` to `to` of its 5 March, from the balance before them. */
+  function part(bankDay: readonly number[], from: number, to: number): string {
+    const opening =
+      100_000 + 900 + bankDay.slice(0, from).reduce((sum, amountCents) => sum + amountCents, 0);
+    return of(
+      bankDay
+        .slice(from, to)
+        .map((amountCents, index) => bankRow({ date: "2026-03-05", amountCents }, from + index)),
+      opening,
+    );
+  }
+
+  const THREE = [-1_234, 5_600, -777];
+  const FIVE = [-1_234, 5_600, -777, 310, 4_408];
+
+  test.each(["0,1,2", "0,2,1", "1,0,2", "1,2,0", "2,0,1", "2,1,0"])(
+    "a day of three listed as %s, pasted from any of the bank's rows to any other inside it, adds nothing",
+    async (listed) => {
+      const target = await startApp();
+      between(target, THREE, listed.split(",").map(Number));
+      const before = stored(target);
+
+      // Every part that ends before the day does, so the workbook's rows after
+      // it are the rest of the day: not the next day's.
+      for (const [from, to] of [
+        [0, 1],
+        [0, 2],
+        [1, 2],
+      ] as const) {
+        const result = await report(target, part(THREE, from, to));
+
+        expect(result, `rows ${String(from)} to ${String(to)}`).toEqual({
+          rowsAdded: 0,
+          rowsAlreadyPresent: to - from,
+          tailBalanceCents: 100_000 + 900 - 1_234 + 5_600 - 777 - 250,
+        });
+      }
+      expect(stored(target)).toEqual(before);
+    },
+  );
+
+  test.each([
+    ["0,1,2,3,4", [2, 1], [2, 2], [3, 1]],
+    ["4,3,2,1,0", [2, 1], [2, 2], [3, 1]],
+    ["2,3,4,0,1", [2, 1], [2, 2], [3, 1]],
+  ] as const)(
+    "a day of five listed as %s, pasted from a row with two or three before it, adds nothing",
+    async (listed, ...parts) => {
+      const target = await startApp();
+      between(target, FIVE, listed.split(",").map(Number));
+      const before = stored(target);
+
+      // The rows before the part must be read oldest first, since the day's
+      // opening balance is the first of them taken away.
+      for (const [from, count] of parts) {
+        const result = await report(target, part(FIVE, from, from + count));
+
+        expect(result.rowsAdded, `rows ${String(from)} on`).toBe(0);
+        expect(result.rowsAlreadyPresent).toBe(count);
+      }
+      expect(stored(target)).toEqual(before);
+    },
+  );
+});
