@@ -758,7 +758,7 @@ test("the CLI never leaks next-id.mjs's id-sweep wording on a bad --base", () =>
 
 test("the CLI never leaks next-id.mjs's id-sweep wording when gh fails inside check 5", () => {
   const repo = makeRepo();
-  const shimDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-ghshim-"));
+  const shimDir = makeShimDir();
   try {
     repo.write("docs/work/seed.md", "seed\n");
     repo.commitAll("docs(repo): seed a fixture");
@@ -776,7 +776,7 @@ test("the CLI never leaks next-id.mjs's id-sweep wording when gh fails inside ch
     expect(result.stdout).not.toMatch(/Refusing to answer/);
   } finally {
     repo.cleanup();
-    fs.rmSync(shimDir, { recursive: true, force: true });
+    removeShimDir(shimDir);
   }
 });
 
@@ -2239,7 +2239,7 @@ test("--only mergeTree runs the probe alone: no suite, no other check (repo-104)
 
 test("the CLI's --only mergeTree exits 16 on a failed probe and prints no other check (repo-104)", () => {
   const repo = makeRepo();
-  const shimDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-ghshim-"));
+  const shimDir = makeShimDir();
   try {
     repo.write("docs/work/seed.md", "seed\n");
     repo.commitAll("docs(repo): seed a fixture");
@@ -2264,13 +2264,13 @@ test("the CLI's --only mergeTree exits 16 on a failed probe and prints no other 
     expect(result.stdout).toMatch(/preflight failed: mergeTree \(exit 16\)/);
   } finally {
     repo.cleanup();
-    fs.rmSync(shimDir, { recursive: true, force: true });
+    removeShimDir(shimDir);
   }
 });
 
 test("the CLI prints the probe's failure first and exits 16 alone, with no suite started (repo-104)", () => {
   const repo = makeRepo();
-  const shimDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-ghshim-"));
+  const shimDir = makeShimDir();
   try {
     repo.write("docs/work/x-1.md", "## Review\n\nFirst pass.\n");
     repo.commitAll("base");
@@ -2317,7 +2317,7 @@ test("the CLI prints the probe's failure first and exits 16 alone, with no suite
     ]);
   } finally {
     repo.cleanup();
-    fs.rmSync(shimDir, { recursive: true, force: true });
+    removeShimDir(shimDir);
   }
 });
 
@@ -2389,4 +2389,135 @@ test("a halted run for an oid no fetch can bring says so, not only 'a conflict' 
   } finally {
     world.cleanup();
   }
+});
+
+// --- repo-110: the gh shim directory's removal ---
+
+/**
+ * Every shim directory this file makes, so a leak is a fact about these paths
+ * and not a count of `os.tmpdir()`: another agent's preflight run shares that
+ * directory and makes its own `preflight-ghshim-*` while this one runs.
+ */
+const shimDirsMade: string[] = [];
+
+function makeShimDir(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-ghshim-"));
+  shimDirsMade.push(dir);
+  return dir;
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+type ShimRemove = (dir: string, options: { recursive: true; force: true }) => void;
+
+/**
+ * The only place a shim directory is removed. The `gh.exe` in it is a hard link
+ * to (or copy of) this process's `node`, and the child that ran it is the
+ * process whose image that file is: on Windows the unlink can land before the
+ * image is released and throw `EBUSY`, and `force: true` does not retry that.
+ * One red in four Windows legs on 2026-10-18 (repo-110).
+ *
+ * Retries `EBUSY` and nothing else, a bounded number of times with a growing
+ * wait. Any other error is a real fault and is thrown as it came. A directory
+ * still held after the last attempt throws naming the directory, so a leak
+ * fails the test instead of passing in silence. `remove` and `wait` are
+ * parameters so a test can make Linux throw `EBUSY`, which it never does.
+ */
+function removeShimDir(
+  dir: string,
+  remove: ShimRemove = (shimDir, options) => fs.rmSync(shimDir, options),
+  wait: (ms: number) => void = sleepSync,
+): void {
+  const attempts = 8;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      remove(dir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EBUSY") throw error;
+      if (attempt === attempts) {
+        throw new Error(`could not remove ${dir}: still EBUSY after ${attempts} attempts`, {
+          cause: error,
+        });
+      }
+      wait(50 * attempt);
+    }
+  }
+}
+
+function busy(dir: string): NodeJS.ErrnoException {
+  return Object.assign(new Error(`EBUSY: resource busy or locked, unlink '${dir}'`), {
+    code: "EBUSY",
+  });
+}
+
+test("removeShimDir survives one EBUSY and then removes the directory (repo-110)", () => {
+  const dir = makeShimDir();
+  fs.writeFileSync(path.join(dir, "gh"), "x");
+  let calls = 0;
+  const waits: number[] = [];
+  removeShimDir(
+    dir,
+    (target, options) => {
+      calls++;
+      if (calls === 1) throw busy(target);
+      fs.rmSync(target, options);
+    },
+    (ms) => waits.push(ms),
+  );
+  expect(calls).toBe(2);
+  expect(waits).toEqual([50]);
+  expect(fs.existsSync(dir)).toBe(false);
+});
+
+test("removeShimDir fails naming the directory when EBUSY never clears (repo-110)", () => {
+  const dir = makeShimDir();
+  let calls = 0;
+  try {
+    expect(() =>
+      removeShimDir(
+        dir,
+        (target) => {
+          calls++;
+          throw busy(target);
+        },
+        () => {},
+      ),
+    ).toThrow(dir);
+    expect(calls).toBe(8);
+    // The failure is the report; the directory is still there to be named.
+    expect(fs.existsSync(dir)).toBe(true);
+  } finally {
+    removeShimDir(dir);
+  }
+});
+
+test("removeShimDir throws any error other than EBUSY at once, unretried (repo-110)", () => {
+  const dir = makeShimDir();
+  let calls = 0;
+  const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+  try {
+    expect(() =>
+      removeShimDir(
+        dir,
+        () => {
+          calls++;
+          throw denied;
+        },
+        () => {},
+      ),
+    ).toThrow(denied);
+    expect(calls).toBe(1);
+  } finally {
+    removeShimDir(dir);
+  }
+});
+
+// Last in the file on purpose: it reads what every test above left behind, and
+// it is the spec a shim test that stops calling `removeShimDir` turns red.
+test("no preflight-ghshim directory this file made is left behind (repo-110)", () => {
+  expect(shimDirsMade.length).toBeGreaterThanOrEqual(3);
+  expect(shimDirsMade.filter((dir) => fs.existsSync(dir))).toEqual([]);
 });

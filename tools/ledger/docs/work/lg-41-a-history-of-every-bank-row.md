@@ -3,7 +3,7 @@ id: lg-41
 tool: ledger
 title: A history screen lists every bank row, searched, filtered and sorted
 kind: work-package
-status: ready
+status: done
 milestone: P5
 depends_on: []
 difficulty: standard
@@ -141,8 +141,104 @@ household's books.
    offset.
 6. `npm run check` and `npm test -- --project ledger` pass.
 
+## Review
+
+**Gate: PASS** — 2026-10-18 · `335efcd4..980eeb78` · Opus 5.5, depth full
+
+| Done when                                                                                                                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `q`, `bucket` (each value and `unfiled`), `person` (an id and `joint`), `direction`, `minCents`/`maxCents` narrow, alone and combined; `total` counts before paging        | `api/test/spending-categories.test.ts` › "q, bucket, person, direction and the amount bounds each narrow, and total counts the narrowed set" (12 cases, each `total < 9`) and › "filters combine, and total is the count before the page" (`q=iga&limit=1&offset=1` → `["B"]`, total 2) ✓. Gate cross-check: 720 filter combinations on a 22-row fixture, page `offset=1&limit=3`, rows and `total` against an independent count, 0 wrong |
+| 2. `epicerie` finds `ÉPICERIE METRO`, `IGA` finds `iga extra`                                                                                                                 | `api/test/spending-categories.test.ts` › "q ignores case and accents on both sides" (`q=epicerie` → `["A"]`, `q=IGA` → `["D","B"]`) ✓                                                                                                                                                                                                                                                                                                     |
+| 3. Each `sort`/`order` in the specified order, ties on `seq`, pages neither repeat nor skip, on same-day and equal-amount rows                                                | `api/test/spending-categories.test.ts` › `"%s lists %s"` and › `"two pages of %s neither repeat nor skip a row"` (8 cases each) ✓. Positive control: the tie-break replaced by `return 0` turns 8 of them red (every `asc` case). Gate cross-check: 12 sort/order cases × 3 filters × page sizes 1–7, 252 walks on a fixture with 5-way date, 13-way amount and 5-way folded-description ties, 0 problems                                 |
+| 4. Every query the web sends today answers as before; existing `spending-categories` and `stats` tests unchanged; `scope=spending` + `spendingCategory` + `sort` or `q` → 400 | `api/test/spending-categories.test.ts` › "sort, order or q on one chart slice is refused, and the chart's own lists are not" (400, `BAD_REQUEST`) ✓; the diff edits no existing test in either file. Gate cross-check: 183 requests in the shapes `fetchSpendingRows` and `fetchUncategorisedRows` build, plus `GET /api/stats/spending` and the three internal `listRows` calls, byte-identical JSON at base and head                    |
+| 5. History tab: a typed search and a picked sort reach the request, the list is the stub's rows, Show more asks the next offset                                               | `web/test/history.test.tsx` › "a search and a sort reach the request, the list is what the server answered, and Show more asks for the next offset" ✓                                                                                                                                                                                                                                                                                     |
+| 6. `npm run check` and `npm test -- --project ledger` pass                                                                                                                    | **verified** — check exit 0; ledger 1454 of 1454 tests in 71 files, exit 0, at 980eeb78; PR #563's `check` and `test (ubuntu-latest)` SUCCESS on 980eeb78                                                                                                                                                                                                                                                                                 |
+
+- **low** · no `Done when` line depends on it · `nfr:reliability` — a `q` made only of combining marks matches every row. `q=%CC%81` (U+0301 alone) passes `rowsQuerySchema` (one character after trim), `fold` in `api/src/rows.ts` strips it to `""`, and `"".includes` is true: 22 of 22 rows, the same as no `q`. `%`, `_`, `\`, `[` and `.` each match only their literal row (1 of 22). Harmless in the safe direction: it returns the unnarrowed list a person would get with an empty box.
+- **low** · no `Done when` line depends on it · open decision · the slice refusal covers `sort`, `order` and `q`, but `bucket`, `person`, `direction`, `minCents` and `maxCents` are accepted on `scope=spending&spendingCategory=<id>` and narrow on the row's whole amount, not the `sliceCents` the list shows: `minCents=2400` keeps row A, listed at 349 ¢, and `maxCents=500` drops it. The branch's own test asserts `direction=out&minCents=1` on a slice answers 200. No live call site: History never sends `scope`, and Stats sends none of these fields. Options: (a) **refuse every lg-41 field on that combination**, the same refinement widened to five more fields, which keeps the brief's "leave its meaning unchanged" (recommended); (b) keep it, and say in `rowsQuerySchema`'s doc comment that on a slice list the bounds compare the row's amount, not the slice.
+- **low** · `nfr:maintainability` — no branch test protects Show more's late-answer guard (`controller.signal.aborted` in `showMore`, `web/src/history/History.tsx`). With that one line removed, all 6 tests in `web/test/history.test.tsx` stay green, and the old filter's page is appended to the new list. The first-page guard is covered: removing it turns "the search waits for a pause in typing, and a filter change drops the request in flight" red.
+- **dropped** · `person=joint` cannot name a person whose id is `joint`. The brief's Build chose the `joint` sentinel, and the Log records the limit. Not a build defect.
+- **dropped** · a failed `fetchPeople` message is cleared by the next filter change (`setProblem(null)` in the list's effect). Found by reading, not reproduced, and cosmetic: the list still works.
+- **dropped** · NFD does not decompose `œ`, so `coeur` would not find `CŒUR`. Not measured. The brief prescribed NFD.
+- **findings** · the hunt returned 6; 3 carried, 3 dropped.
+- NFR: security ✓ (`q` never reaches SQL or a RegExp; every field is checked by the schema) · performance ✓ (5,022 rows: `q`+`sort` page in 16.8–34.2 ms against 11.3–14.8 ms unfiltered, 5 runs each) · reliability ✓, with the low above · maintainability: the low above.
+
+### Gate 2
+
+**Gate: PASS** — 2026-10-18 · `980eeb78..efa7e413` · Opus 5.5, depth narrow (the round's two commits and the `rowsQuerySchema` seam they touch)
+
+| Done when                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 4. Every query the web sends today returns what it did; slice + `sort` or `q` → 400 | `api/test/spending-categories.test.ts` › "any lg-41 field on one chart slice is refused, and the chart's own lists are not" ✓ (all eight fields alone → 400 `BAD_REQUEST`; `scope=spending` alone, a category alone and the bare slice → 200). Gate cross-check: 183 caller-shape requests plus `GET /api/stats/spending` and the three internal `listRows` calls, byte-identical JSON at `335efcd4` and `efa7e413`, 0 non-200 |
+| 6. `npm run check` and `npm test -- --project ledger` pass                          | **verified** — check exit 0; ledger 1455 of 1455 in 71 files, exit 0, at efa7e413. On PR #563 at efa7e413, `check`, `docker`, `codeql`, `CodeQL` and `dependency-review` pass; `test (ubuntu-latest)` and `test (windows-latest, informational)` were still pending when read                                                                                                                                                  |
+
+Earlier findings:
+
+- **F1 (low, combining-mark `q` matches everything)** · not fixed. It stays recorded by the owner's choice of 2026-10-18, and the Log says so.
+- **F2 (low, lg-41 fields accepted on a slice list)** · fixed. Each of the eight fields alone, all 28 pairs and all eight together (37 combinations) answer 400 `BAD_REQUEST` on `scope=spending` with `spendingCategory=1`, with `spendingCategory=none`, and with `from`/`to`/`offset`/`limit` added. The same 37 combinations answer 200 with `scope=spending` alone, a category alone (id or `none`), and neither. Before the fix, gate 1 measured `minCents=2400` on the slice at 200.
+- **F3 (low, Show more's guard had no test)** · fixed. `web/test/history.test.tsx` › "a Show more answer that arrives after a filter change is not appended to the new list". With the `controller.signal.aborted` line in `showMore` removed, it was red in 10 of 10 runs. Restored, it was green in 10 of 10 runs, and the whole file passed 7 of 7.
+
+New in the round's lines:
+
+- **low** · no `Done when` line depends on it · `nfr:maintainability` — the new test waits a fixed 20 ms of real time (`setTimeout(resolve, 20)`) before it asserts the late row is absent. If a regression's stale render took longer than that, the test would pass without having seen it. That is false in the safe direction: the test cannot flake red, and it was red in 10 of 10 mutated runs here. Direction, not a measured remedy: release the late answer inside `await act(async () => …)`, which flushes React's work before the assertion.
+- **dropped** · `SLICE_REFUSED_FIELDS` is a hand-kept list beside the schema's fields, so a later field could miss the refusal. No such field exists, and nothing breaks today.
+- **findings** · the hunt returned 2; 1 carried, 1 dropped. Nothing in this gate is a `high`.
+- NFR: security ✓ (the refusal only narrows what is accepted) · performance n/a · reliability ✓ · maintainability — the low above.
+
 ## Log
 
 - 2026-10-18 · filed from the owner's request, with the three decisions above
   answered before filing. Rated `standard`: the contract change is additive and
   decided here, and the rest follows `PeriodRows`' existing pattern.
+- 2026-10-18 · built. `rowsQuerySchema` gained `q`, `bucket` (the buckets and
+  `unfiled`), `person`, `direction`, `minCents`, `maxCents`, `sort` and `order`,
+  all optional, plus `ROW_SORTS`, `ROW_ORDERS`, `ROW_BUCKET_FILTERS`,
+  `JOINT_PERSON_FILTER` and a `RowsQuery` type for the web. `listRows` narrows
+  and orders after the rows are read (`narrowRows`, `orderRows` in
+  `api/src/rows.ts`), folding with NFD, combining marks stripped and
+  `toLowerCase`, and compares with `<`, not `localeCompare`, so the order does not
+  depend on the host's ICU data. The History tab sits after Period; its screen is
+  `web/src/history/History.tsx`, its client `web/src/api/rows.ts`.
+  - **Choices the brief left open**, all in the schema's doc comment: `order`
+    absent with `sort` present is `desc`; `order` alone sorts by date; the tie on
+    `seq` runs in the same direction as `order` (so `date asc` is the statement's
+    order and `date desc` is today's default); the 400 for the slice list covers
+    `order` as well as `sort` and `q`, since `order` alone would sort too. A
+    crossed `minCents`/`maxCents` is a 400 as the brief asked.
+  - **Defect the web test found in my first draft:** an answer arriving after its
+    request was dropped replaced the newer list (`setLoad` ran without checking
+    `controller.signal.aborted` on the success path). The test "the search waits
+    for a pause in typing, and a filter change drops the request in flight" failed
+    with the late row on screen; the check is in, and it passes.
+  - **A limit, not fixed:** a person whose id is literally `joint` cannot be
+    filtered to, because `joint` means `personId === null`. Nothing in the
+    directory refuses such a name (`grep -rni '"joint"' api/src contract/src
+books/src` finds only report strings and the new constant). Left as the brief
+    decided; it earns a ticket only if a household has such a member.
+  - **Nav:** ten buttons for a member without Household, twelve for an admin. At
+    360 px they wrap to three rows, with no horizontal overflow
+    (`document.documentElement.scrollWidth - clientWidth` was 0 at 360 px folded,
+    360 px with the filters open, and 1000 px), from a Playwright run against
+    `vite` with `/api/*` stubbed; `app.test.tsx` passed unchanged apart from the
+    one test added. Not measured: a real device, or the API's data.
+  - Fold-in: none. Nothing the build made free was already specified.
+- 2026-10-18 · gate 1 (Opus 5.5) passed with three lows; the owner answered the
+  question "lg-41 passed gate 1 (#563) … What do you want?". Options: "Refuse
+  slice fields + F3 test, at landing", "Same, with a narrow re-gate", "Document
+  the bounds only (F2b)", "Land as built; lows recorded". Chosen: **"Same, with
+  a narrow re-gate"**. Fixed on that answer:
+  - `rowsQuerySchema` now refuses `bucket`, `person`, `direction`, `minCents`
+    and `maxCents` on `scope=spending` with a `spendingCategory`, as `q`, `sort`
+    and `order` already were (the gate's option (a)): the bounds compared the
+    row's whole amount, not the `sliceCents` the list shows. The brief's "leave
+    its meaning unchanged" holds for every lg-41 field. The test that expected
+    200 for a slice with `direction=out&minCents=1` now expects 400
+    `BAD_REQUEST` for each of the eight fields alone on a slice, and 200 for the
+    chart's own lists (`scope=spending` alone with narrowing fields, a category
+    alone with narrowing fields, the slice alone).
+  - A web test pins `showMore`'s `controller.signal.aborted` check: a Show more
+    answer released after a filter change is not appended to the new list. With
+    that line removed it fails on "Réponse tardive" in the list.
+  - **Recorded, not fixed:** a `q` made only of combining marks (`q=%CC%81`)
+    folds to `""` and matches every row, the same list as no `q`; harmless in the
+    safe direction. The `person=joint` limit stays as the brief chose.
