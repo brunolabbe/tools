@@ -631,6 +631,30 @@ const MIGRATIONS: readonly string[] = [
   DROP TABLE receipt_items;
   ALTER TABLE receipt_items_v11 RENAME TO receipt_items;
   `,
+
+  // 12 — the service categories (lg-53): what the workbook's words and the bank's
+  // name that the first six did not. A household that already made one of these
+  // names keeps its own and gets no second, which is the two-of-one-name the API
+  // refuses (requireFreeName). The names are ASCII, so lower() is enough to fold.
+  `
+  WITH wanted (position, name) AS (VALUES
+    (1, 'Property taxes'),
+    (2, 'Electricity'),
+    (3, 'Internet & phone'),
+    (4, 'Subscriptions'),
+    (5, 'Insurance'),
+    (6, 'Home maintenance'),
+    (7, 'Travel'),
+    (8, 'Transport'),
+    (9, 'Bank fees'),
+    (10, 'Cash'))
+  INSERT INTO spending_categories (name, created_at, created_by)
+    SELECT name, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'migration' FROM wanted
+    WHERE NOT EXISTS (
+      SELECT 1 FROM current_spending_categories held
+      WHERE held.retired = 0 AND lower(held.name) = lower(wanted.name))
+    ORDER BY position;
+  `,
 ];
 
 /**
