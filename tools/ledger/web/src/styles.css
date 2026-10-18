@@ -470,6 +470,41 @@ label.check input {
 
 .chart-box {
   min-width: 0;
+  position: relative;
+}
+
+/* The readout and an invisible copy of its tallest self share one cell, so the cell keeps that height. */
+.readout-slot {
+  display: grid;
+}
+
+.readout-slot > .readout {
+  grid-area: 1 / 1;
+}
+
+.readout.ghost {
+  visibility: hidden;
+}
+
+.ghost-text::before {
+  content: attr(data-text);
+}
+
+/* A mouse's figures beside the crosshair; it never takes the pointer, so the chart keeps tracking. */
+.chart-tip {
+  position: absolute;
+  max-width: min(16rem, 70%);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+  pointer-events: none;
+}
+
+.chart-tip p {
+  margin: 0;
 }
 
 .chart-card.stale {
