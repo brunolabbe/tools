@@ -5772,3 +5772,31 @@ The owner's paid lg-38 run (60 model calls, $0.5349 by the records' `costUsd`) i
 - Dry-running a stack reconcile with `git merge-tree --merge-base` and comparing patches byte for byte before dispatching it.
 - The lg-38 owner run's 60 per-run records, read directly, settled Done when 3 and corrected two harness claims (input tokens 2.2–2.3× the estimate; the spend stop's input term 1.8–3.3× under).
 - Not defects, for the review: U+2060 is accepted by `readAddress` and was left out of lg-57 by owner choice; lg-56's `depends_on: [lg-38]` deadlock was the orchestrator's dispatch, removed by owner choice; the orchestrator's dispatch named an Opus trailer for a Sonnet fixer, and the fixer correctly wrote Sonnet.
+
+### Batch 2026-10-18 (tools-01, lg-40) — base 960f4b26
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / medium | ab29a3a56aaa4cea7 | seam-mapper, lg-40 against #535/#536/#541/#542/#543 | 24s / 24s | 0 | $0.0813 |
+| #548 | open, ready at deef575a | Opus 5.5 / high | a9dd02de949ac55d2 | builder-hard, lg-40 build + round 1 | 1h02m53s / 1h36m52s | 0 | $9.9334 |
+| #548 | open, ready at deef575a | Sonnet 5.5 / xhigh | a5490055183b61b89 | ticket-reviewer-sonnet, lg-40 gates 1 and 2 | 1h07m30s / 1h48m22s | 0 | $6.4512 |
+| #548 | open, ready at deef575a | Sonnet 5.5 / high | aacd38c83247e1abd | fixer, lg-40 landing + F7/F9 at landing | 8m29s / 8m24s | 0 | $1.0139 |
+| #555 | open, ready | Haiku 5.5 / high | a7dddb193cbfbfa92 | builder-mechanical, file lg-58 (maintenance) | 3m15s / 3m13s | 0 | $0.0334 |
+| #556 | open, ready | Haiku 5.5 / high | aeabc596b6ef87752 | builder-mechanical, file lg-59 (maintenance) | 6m39s / 6m39s | 0 | $0.1900 |
+| — | — | Opus 5.5 / medium | orchestrator 76d8bfd3 | orchestrator (floor) | 1h03m27s / 2h29m47s | 0 | $3.2778 |
+| | | | | **total** (rates read 2026-10-10) | 3h32m37s | 0 | **$20.9809** |
+
+**Tickets:**
+
+- lg-40 → #548. Gate 1 CONCERNS: F1, F2 and F3 med, F4, F5 and F6 low. The owner chose the gate's remedy A, and the round fixed F1, F2, F3 and F6. Gate 2 PASS: F7, F8 and F9 low; F7 and F9 were fixed at landing by owner choice, and F4, F5 and F8 stay recorded. Build item 5 was fixed in the branch by owner choice. Ready at deef575a; codeql and the test legs were in progress at close.
+- lg-58 → #555, filed: the paste report names a date a day off. The owner chose filing over adding it in #548.
+- lg-59 → #556, filed: a day both re-dated and reordered can store rows twice. The owner chose filing, the builder's recommendation, over the gate's "leave it recorded".
+
+**Defects in the skill:**
+
+1. `roles/fixer.md` › _The work_ and `reference/records.md` — the 2026-10-17 entry's defect 1 recurred. A fix made at landing went to `--land` without a typecheck, and `--land`'s preflight failed on TS2345/TS18048 in the lander's own new test. A typing commit then landed on top of the gate records. Reproduction: `gh pr view 548 --json commits --jq '.commits[-3:][]|.oid[0:8]+" "+.messageHeadline'` → `243ad02e docs(ledger): record gate 1 and set status done on lg-40 (lg-40)`, `54d5a720 docs(ledger): record gate 2 on lg-40 (lg-40)`, `deef575a test(ledger): type the five-row day's parts so the tests typecheck (l…`.
+2. `roles/builder.md` › _Set up_ step 2 and `roles/common.md` › _Your worktree_ — they disagree on the base. Step 2 branches from `origin/<base>` as it is now; common.md says to use the sha the dispatch names. They diverged on this dispatch. Reproduction: the dispatch named `960f4b26`; after `git fetch origin` in the builder's worktree, `git rev-parse origin/main` → `140bd78a4cb862e3344a541ea16100d9568ce6d3`.
+3. `roles/builder.md` › _When you are resumed with findings_ — says nothing for a seam pull request the dispatch named that merges during the round. Preflight's merge probe then has no head to compare, and the builder had to infer "carried by the merge". Reproduction: `gh pr view 542 --json state,mergeCommit --jq '.state+" "+.mergeCommit.oid[0:8]'` → `MERGED a2203de1`, merged into lg-40's branch by `856d7efc` during round 1.
+4. `scripts/next-id.mjs` (a script, to file or record) — labels a ticket "merged" when its file is on `main`, although the work's pull request is open. A builder reads that as the opposite of the fact it acts on. Reproduction: `node scripts/next-id.mjs lg | grep lg-40` → `merged lg-40`, while `gh pr view 548 --json state --jq .state` → `OPEN`.
+
+**Worked, and worth keeping:** asking the gate for exhaustive probes over small alphabets found F2, a silent wrong accept that no Done-when line could reach, and gate 2 reran the same probes to confirm the round (30,664 wrong at cea53bf7, then 0 of 505,120). Two decided filings ran on `builder-mechanical` in parallel with the landing, for $0.22 together.
