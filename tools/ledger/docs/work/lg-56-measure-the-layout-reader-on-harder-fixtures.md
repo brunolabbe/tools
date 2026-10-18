@@ -224,6 +224,38 @@ the builder stops after step 2. Change no reader, schema or contract.
 - PR #562 at `9bced737`: every check passes. `test (windows-latest, informational)` was still pending and was read, not graded.
 - NFR: security ✓ (no key read, the consent gate untouched, every bank shape invented) · performance n/a · reliability ✓ (seeded and reproduced) · maintainability: F1 and the three lows.
 
+### Gate 2
+
+**Gate: PASS for the slice (four rows `unproven (scope)`)** — 2026-10-18 · `9bced737..7de01442` · Opus 5.5, re-gate of the round's own commits
+
+| Done when                                                                                       | Proof                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A test per new fixture that its correct description scores `matched`                            | `api/test/layout.test.ts` › "lg-56's harder fixtures" › "%s: its correct description matches, and reads with no problem" ✓. It is now backed by "%s: its correct description reads what the generator wrote" (12 cases), which goes red when a correct description is wrong in a way the reader accepts (F1) |
+| The three named wrong descriptions and one per bank shape are pinned with their actual outcomes | `api/test/layout.test.ts` › "lg-56's harder fixtures" › "$name, $mistake: $outcome", seven cases ✓. The outcomes are unchanged from gate 1's recomputation; the fixtures and the scorer are unchanged                                                                                                        |
+| A test turns red when `LAYOUT_FIXTURE_NAMES` and `layoutFixtures()` differ                      | `api/test/layout.test.ts` › "lg-56's harder fixtures" › "the names the measurement runs are the fixtures there are, in the same order" ✓. The round did not touch it                                                                                                                                         |
+| The Log has the Haiku shown and masked tables, and Sonnet's or "none"                           | **unproven (scope)**: Build step 3, the owner's paid run (dispatch)                                                                                                                                                                                                                                          |
+| The Log quotes every run that did not match and whether it was caught                           | **unproven (scope)**: Build step 4 (dispatch)                                                                                                                                                                                                                                                                |
+| The Log gives the let-through count and bound, and what shown against masked changed            | **unproven (scope)**: Build step 4 (dispatch). The round's classification note bears on it (F2, and the low below)                                                                                                                                                                                           |
+| The Log ends with the recommendation and lg-38's Log points here                                | **unproven (scope)**: Build step 4 (dispatch)                                                                                                                                                                                                                                                                |
+
+- **F1 (med): fixed.** Each of these mutations of a correct description, all accepted by the reader, turned exactly one test red, "<fixture>: its correct description reads what the generator wrote" (1 failed, 72 passed of 73 each):
+  - `bank-wide` detail moved from E to G (gate 1's control) and from E to K;
+  - `bank-two-dates` with a `note` added on C;
+  - `swapped-labels` with its note column dropped;
+  - `empty-columns-carry` with its person column dropped.
+
+  `writtenRows` builds its rows from the generator's `recorded()` and `banked()` data before anything is written to a sheet. It never calls `readWorkbook`, and it recomputes the balance itself rather than reading the sheet's formulas, so it cannot agree with a reading by construction. The thirteen fixtures are byte-identical to `9bced737`'s (sheets, people, layout and request text, by sha256). The only difference is `bank-wide`'s `shape` text.
+
+- **F2 (med, owner chose (a)): fixed.** The Log now says to classify each run from its record's `answer`, and gives the correct columns of `bank-two-dates` and `bank-wide`. I ran the Log's listing, verbatim, on four fake records. It skipped the matched run, printed the note-only and date-column runs with the columns that tell them apart (`… date:B detail:D`, `… detail:E note:G`), and printed an invalid run with no answer without failing. The scorer and fixtures are unchanged.
+- **Lows from gate 1: all three fixed.**
+  - The verbose run prints `'bank-wide', 'the detail read from the currency col…': 'let-through'`.
+  - `shape` now says four.
+  - `bank-two-dates` asserts that the correct description's `outOfOrder` is `[]`.
+- **low** (new, in the round's Log note) · false in the conservative direction. "note-only" is defined only as an added `note` beside `bank-two-dates`' and `bank-wide`'s four columns; everything else is "movement-changing". On the workbook fixtures, a run that drops or moves the note column also scores `let-through`: gate 1 measured `swapped-labels` without its note as `let-through` with `["account.columns"]`, and the fixtures and scorer are unchanged. Such a run would be counted in `J`, the number the recommendation rests on. That over-counts, so a reader relying on `J` errs toward caution. Direction for a fix: define note-only as "differs from the correct columns only in the `note` role, whether added, moved or dropped".
+- **findings** · the round's lines returned 1 new finding, which is carried; nothing was dropped. Of gate 1's findings, 5 are fixed and none was refuted. Nothing here is a `high`.
+- PR #562 at `7de01442`: every check passes, the Windows informational leg included.
+- NFR: security ✓ (nothing live; `live/` untouched) · performance n/a · reliability ✓ · maintainability ✓.
+
 ## Log
 
 ### 2026-10-18 — filed; `depends_on` dropped by the owner's answer
