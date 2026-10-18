@@ -549,6 +549,11 @@ svg.chart text {
 
 svg.chart .grid,
 svg.chart .baseline,
+/* A column chart whose columns open their rows. */
+svg.chart.openable {
+  cursor: pointer;
+}
+
 svg.chart .crosshair {
   stroke: var(--border);
   stroke-width: 1;

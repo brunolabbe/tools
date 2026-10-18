@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { dayNumber, monthLabel, monthTicks, nearestIndex, niceTicks, project } from "./scale.ts";
 
 /** What a container with no layout (a test, a hidden tab) is drawn at. */
@@ -595,6 +595,23 @@ export function ColumnChart(props: {
   const y = (value: number): number => project(value, axis, height - BOTTOM, TOP);
   const centres = categories.map((_, at) => left + slot * at + slot / 2);
   const { index, hovering, point, leave, press } = useSelection(centres);
+  // A click on a column, or Enter, is its readout's "Show the rows". A drag that
+  // scrolls the columns is not a click, so a phone can still pan them.
+  const openAt = (event: MouseEvent<SVGSVGElement>): void => {
+    const found = nearestIndex(
+      centres,
+      event.clientX - event.currentTarget.getBoundingClientRect().left,
+    );
+    if (found >= 0) onOpen?.(found, null);
+  };
+  const pressOrOpen = (event: KeyboardEvent<SVGSVGElement>): void => {
+    if (event.key === "Enter" && onOpen !== undefined) {
+      event.preventDefault();
+      onOpen(index, null);
+      return;
+    }
+    press(event);
+  };
 
   // Newest at the right, so that is where a phone starts.
   useLayoutEffect(() => {
@@ -663,7 +680,7 @@ export function ColumnChart(props: {
           height={height}
           // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- an SVG chart cannot be an input; slider is the role of something an arrow key steps along.
           role="slider"
-          aria-label={`${name}. Arrow keys move between columns.`}
+          aria-label={`${name}. Arrow keys move between columns.${onOpen === undefined ? "" : " Enter shows the rows."}`}
           aria-orientation="horizontal"
           aria-valuemin={0}
           aria-valuemax={Math.max(count - 1, 0)}
@@ -673,8 +690,9 @@ export function ColumnChart(props: {
           onPointerDown={point}
           onPointerMove={point}
           onPointerLeave={leave}
-          onKeyDown={press}
-          className="chart"
+          onKeyDown={pressOrOpen}
+          {...(onOpen === undefined ? {} : { onClick: openAt })}
+          className={onOpen === undefined ? "chart" : "chart openable"}
         >
           <YAxis
             ticks={axis.ticks}

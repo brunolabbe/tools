@@ -645,3 +645,26 @@ test("a row charted whole is listed with its amount and no note about a receipt 
   expect(item.getByText(formatCents(-10345), { selector: ".amount" })).toBeTruthy();
   expect(screen.queryByText(/Has a receipt/)).toBeNull();
 });
+
+test("a click on a column, or Enter, opens that period's rows as its readout's button does", async () => {
+  await chart();
+
+  // jsdom lays nothing out, so x 0 is nearest the first column: the period up to January.
+  fireEvent.click(screen.getByRole("slider"), { clientX: 0 });
+
+  await screen.findByRole("list", { name: "Rows in this period" });
+  expect(fetchSpendingRows).toHaveBeenLastCalledWith(
+    expect.objectContaining({ from: null, to: "2026-01-31", category: null }),
+    expect.anything(),
+  );
+
+  fireEvent.keyDown(screen.getByRole("slider"), { key: "End" });
+  fireEvent.keyDown(screen.getByRole("slider"), { key: "Enter" });
+
+  await waitFor(() =>
+    expect(fetchSpendingRows).toHaveBeenLastCalledWith(
+      expect.objectContaining({ from: "2026-02-01", to: "2026-02-28", category: null }),
+      expect.anything(),
+    ),
+  );
+});
