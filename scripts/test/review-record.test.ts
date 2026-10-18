@@ -17,7 +17,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, test, vi } from "vitest";
+
+// A pass-through spy on `spawnSync`, so the formatMarkdown test (repo-100) can
+// count `oxfmt` spawns while every other test here still spawns for real.
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawnSync: vi.fn(actual.spawnSync) };
+});
+
 import {
+  formatMarkdown,
   insertSection,
   locateInsertedBlock,
   normalizeForDiff,
@@ -2155,4 +2164,34 @@ test("land() after a halted merge-tree failure names every check that is still o
   } finally {
     cleanup();
   }
+});
+
+// --- repo-100: formatMarkdown spawns oxfmt once per distinct text ---------------
+
+test("formatMarkdown spawns oxfmt once for repeated identical input, and again for a different one (repo-100)", () => {
+  // A table the formatter re-pads, so a stale or mangled cache entry could not
+  // pass for the real rendering; unique to this test, so no earlier test in
+  // this process has already cached it.
+  const text = "| a | b |\n|---|---|\n| repo-100 memo | x |\n";
+  const other = `${text}\nA second paragraph, so the text differs.\n`;
+  const oxfmtSpawns = () =>
+    vi
+      .mocked(spawnSync)
+      .mock.calls.filter(
+        ([, args]) =>
+          Array.isArray(args) &&
+          args.some((a) => /review-record-fmt-.*section\.md$/.test(String(a))),
+      ).length;
+
+  const before = oxfmtSpawns();
+  const first = formatMarkdown(text);
+  expect(oxfmtSpawns()).toBe(before + 1);
+  expect(first).not.toBe(text); // the formatter really ran: it re-padded the table
+
+  expect(formatMarkdown(text)).toBe(first);
+  expect(formatMarkdown(text)).toBe(first);
+  expect(oxfmtSpawns()).toBe(before + 1);
+
+  formatMarkdown(other);
+  expect(oxfmtSpawns()).toBe(before + 2);
 });
