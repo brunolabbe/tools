@@ -185,6 +185,34 @@ scripts/test/preflight.test.ts -t "repo-110"` gives `4 passed | 105 skipped`
   the effect on Windows is unmeasured, since two green legs with no `EBUSY` in
   their logs do not show the retry fired · maintainability: F3.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-18 · `611bc6a2..8ea806e1` · Opus 5.5, re-gate of one commit
+
+| Done when                                                                                                              | Proof                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `grep -n "rmSync(shimDir"` finds one line, in the helper; the three tests call the helper                           | verified — the grep prints `2430:  remove: ShimRemove = (shimDir, options) => fs.rmSync(shimDir, options),`, the default parameter of `removeShimDir`, with exit 0. The three call sites are unchanged                                                                                                          |
+| 3. A leak still fails on Linux, read by a spec asserting that none of this file's shim directories survives (reworded) | `scripts/test/preflight.test.ts` › "no preflight-ghshim directory this file made is left behind (repo-110)" ✓. The reworded line now describes this spec. Re-read on the new head with one site removed (the second): `1 failed \| 108 passed (109)`, naming the leaked directory. Restored: `109 passed (109)` |
+| 5. The Windows leg reads `preflight.test.ts` passing on the head, by run id                                            | proven (CI), as one green reading of an intermittent failure, not a fix — `test (windows-latest, informational)`, run 39166718757 job 117791122252 on `8ea806e1`: `scripts/test/preflight.test.ts (109 tests)` ✓, `Test Files 291 passed \| 2 skipped (293)`, 0 `EBUSY` in the log                              |
+| 6. `npm run check` passes; the file's every test passes, with its count                                                | verified — `npm run check` exit 0; `npx vitest run scripts/test/preflight.test.ts` → `109 passed (109)`                                                                                                                                                                                                         |
+
+- **F1** (high) · **fixed**. The default is now
+  `(shimDir, options) => fs.rmSync(shimDir, options)`, the remedy as the gate
+  stated it. The grep finds one line, in `removeShimDir`, and every check
+  passes on `8ea806e1`.
+- **F2** (med) · **fixed**, by the owner's rewording of Done when 3
+  (2026-10-18, recorded in the Log). The diff of the brief above `## Log`
+  between `611bc6a2` and `8ea806e1` is that one hunk, the four lines of Done
+  when 3, and no other `Done when` line changed. The new wording, "a spec that
+  asserts none of the shim directories this file made survives", is what the
+  spec asserts.
+- **F3** (low) and **F4** (low) · not fixed, by the owner's choice. Both stay
+  as written in gate 1.
+- **findings** · the round's lines gave 0 new findings. The round changed one
+  line of code and the ticket.
+- NFR: unchanged from gate 1. The round changes how the default remover is
+  spelled, not how it behaves.
+
 ## Log
 
 - 2026-10-18 — Filed from a maintenance dispatch, on a branch cut from
