@@ -81,6 +81,12 @@ body {
   gap: var(--gap);
 }
 
+/* A screen's cards are siblings in main, which would otherwise stack them flush. */
+main {
+  display: grid;
+  gap: var(--gap);
+}
+
 h1 {
   margin: 0;
   font-size: 1.5rem;
@@ -593,11 +599,6 @@ svg.chart .selected-band {
 .readout-rows strong {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
-}
-
-.chart-subhead {
-  margin: 0.5rem 0 0;
-  font-size: 1rem;
 }
 
 .chart-table {
