@@ -22,8 +22,10 @@ let-through rate at about 5% (rule of three, 95%), and the bound is an
 estimate on six workbooks, not on the households P6 brings in.
 
 It also leaves out the cases that matter most. lg-38's offline scoring found
-which wrong descriptions the verifications let through, and **no fixture
-invites a model to make any of them**:
+six wrong descriptions the verifications let through (its Log lists them), and
+the run exercised at least one (`csv-no-balance` cannot prove its order, and
+all ten of its runs matched). **No fixture invites a model to make the two
+this ticket adds fixtures for**:
 
 - **Swapped bucket labels.** Every carry-over still matches, because the
   carry-over rows swap with the movements, so the books take it.
@@ -80,7 +82,10 @@ the builder stops after step 2. Change no reader, schema or contract.
      column beside the real `amount` column, so that an off-by-one answer is
      easy to give.
    - `empty-columns-csv`: a bank CSV with no carry-over label, `withdrawal` and
-     `deposit` columns with an empty spacer column among them.
+     `deposit` columns with an empty spacer column among them, and a balance
+     column (the pinned `let-through` below holds only with one: read through
+     such a layout, `csv-balance` scores `let-through` and `csv-no-balance`
+     `refused`, lg-38 gate 1).
    - `bank-preamble`: a bank CSV with title, account and period lines above
      the header row, with a balance column.
    - `bank-two-dates`: a bank CSV with a posted date and a transaction date
@@ -98,9 +103,14 @@ the builder stops after step 2. Change no reader, schema or contract.
    a shape the schema cannot express is left out and named in the Log, because
    the contract is not this ticket's to change.
 
-2. **Pin each fixture offline**, in `api/test/layout.test.ts`, appended after the
-   existing tests. For every new fixture, its correct description scores
-   `matched`. For three, a named wrong description is scored and the outcome
+2. **Pin each fixture offline**, in `api/test/layout.test.ts`. Three existing
+   tests there loop over every fixture and must be updated for thirteen:
+   "lg-38's fixtures › there are six, and each reads through its own layout with
+   no problem but the unprovable CSV's" (it asserts the exact list of six
+   names), "…told apart only by their descriptions: an account read through
+   another's columns fails", and "what is sent stays under 3 000 tokens for
+   every fixture, by four characters a token". For every new fixture, its
+   correct description scores `matched`. For three, a named wrong description is scored and the outcome
    pinned, so the harness can tell the failure when a model makes it:
    - `swapped-labels` with the two buckets' labels swapped: `let-through`.
    - `empty-columns-carry` with the amount column pointing at the empty one:
@@ -131,8 +141,9 @@ the builder stops after step 2. Change no reader, schema or contract.
    An estimate of the spend, from lg-38's means and not a measurement: 260 Haiku
    runs at about $0.0012 is about $0.31; the Sonnet runs are at most 13
    fixtures x 10 runs at about $0.017, about $2.2. Use `--max-usd 5` per
-   command, as lg-38 did; the fixtures are larger than lg-38's, so the harness's
-   spend stop is the bound that holds.
+   command, as lg-38 did; the spend stop's input term (the request's characters
+   over two) understates the API's input count by 1.8 to 3.3 times (lg-38's Log), so
+   the output term dominates its ceiling.
 
 4. **Report back in the Log**: each `summary.md` verbatim; every run that did
    not match, with its `score.outcome`, `score.differences` and

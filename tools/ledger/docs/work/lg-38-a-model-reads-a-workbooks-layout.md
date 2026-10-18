@@ -511,8 +511,8 @@ totals rebuilt from the token counts agree with the sums of `costUsd`.
 | Cost, total          | $0.0355   | $0.4993    |
 | Cost per run, mean   | $0.001184 | $0.016644  |
 
-The run cost $0.5349 in all. Sonnet is 14.06 times Haiku per run. Both
-models were sent the same requests (the same input tokens, fixture by
+The run cost $0.5349 in all. Sonnet is 14.05 times Haiku per run (total cost
+over total cost, $0.49933 over $0.0355275). Both models were sent the same requests (the same input tokens, fixture by
 fixture), so the input side is the same count and the price decides it.
 Haiku wrote about 3.5 times as many output tokens (a mean of 989 against
 285); it is still 14 times cheaper.
