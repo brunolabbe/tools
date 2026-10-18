@@ -5692,3 +5692,83 @@ Total $19.7355 (rates read 2026-10-10), the orchestrator row a floor.
 - Probing the ticket's premise with a $0.0076 Haiku agent before dispatch settled that a general-purpose subagent has `WebSearch` and `WebFetch`.
 - Handing the re-gate the refutation as a command and its output let pl-57's gate 2 overturn it. The orchestrator had checked the script's output line, not what it counted.
 - The narrow Sonnet gate on a Haiku filing found five meds in a brief, each shown on a plant (pl-58 gate 1's `check-plants.sh`: V0 exit 1, the name-rule variant exit 0).
+
+### Batch 2026-10-18 — base 029641b4
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / medium | aa0dde676170b8dc7 | seam-mapper, 10 candidates | 49s / 49s | 0 | $0.1366 |
+| #541 | merged e40a506a | Opus 5.5 / high | a060355ee8553c957 | builder-hard, lg-33 + round 1 | 39m19s / 1h05m36s | 0 | $9.0784 |
+| #541 | merged e40a506a | Sonnet 5.5 / xhigh | a1dec93385ccce125 | ticket-reviewer-sonnet, lg-33 gates 1–2 | 30m11s / 41m19s | 0 | $4.5762 |
+| #541 | merged e40a506a | Sonnet 5.5 / high | a791cf8595716fcca | fixer, lg-33 landing (held draft) | 2m04s / 1m57s | 0 | $0.2279 |
+| #541 | merged e40a506a | Sonnet 5.5 / high | af3dafb76f5776327 | fixer, lg-33 merge main after #535 | 3m22s / 2m38s | 0 | $0.2203 |
+| #535 | merged b8fafccb | Sonnet 5.5 / high | aac8dbecbc52641a4 | builder-standard, lg-39 + round 1 | 7m53s / 19m57s | 0 | $0.6366 |
+| #535 | merged b8fafccb | Opus 5.5 / high | a5f445ac6b98be4fb | ticket-reviewer-opus, lg-39 gates 1–2 | 15m06s / 20m46s | 0 | $2.0940 |
+| #535 | merged b8fafccb | Sonnet 5.5 / high | a39de13225f153c37 | fixer, lg-39 landing | 3m14s / 2m21s | 0 | $0.2103 |
+| #542 | merged a2203de1 | Opus 5.5 / high | ad123e210b023029a | builder-hard, lg-38 build only + round 1 | 40m20s / 1h09m35s | 0 | $10.4421 |
+| #542 | merged a2203de1 | Sonnet 5.5 / xhigh | aae8046f5416c5cc8 | ticket-reviewer-sonnet, lg-38 gates 1–2 | 34m02s / 43m37s | 0 | $5.1666 |
+| #542 | merged a2203de1 | Sonnet 5.5 / high | a98c6aad3e4c223a4 | fixer, lg-38 landing in-flight + 2 at landing | 4m42s / 4m08s | 0 | $0.4477 |
+| #536 | merged 078d4c28 | Haiku 5.5 / high | a7473cfe550fd9a55 | builder-mechanical, lg-36 | 8m30s / 8m29s | 0 | $0.0796 |
+| #536 | merged 078d4c28 | Sonnet 5.5 / xhigh | a8f27eb7032819aa4 | ticket-reviewer-sonnet, lg-36 gate 1 (narrow) | 13m51s / 13m47s | 0 | $1.1907 |
+| #536 | merged 078d4c28 | Sonnet 5.5 / high | a0e278586b4f75844 | fixer, lg-36 landing + retitle | 3m12s / 3m11s | 0 | $0.2662 |
+| — | stopped | Sonnet 5.5 / high | af83ad4e81dc66c12 | builder-standard, repo-100 (checkout denied by classifier) | 37s / 37s | 0 | $0.1318 |
+| #540 | merged 9ec8943e | Sonnet 5.5 / high | a0ce2758e1aef3479 | builder-standard, repo-100 | 18m00s / 32m21s | 0 | $1.6139 |
+| #540 | merged 9ec8943e | Opus 5.5 / high | a9c5d298366d8556b | ticket-reviewer-opus, repo-100 gate 1 | 13m59s / 13m59s | 0 | $2.0631 |
+| #540 | merged 9ec8943e | Sonnet 5.5 / high | afccf729f724ba0e5 | fixer, repo-100 landing + L1/L2 at landing | 4m02s / 3m59s | 0 | $0.2699 |
+| #538 | merged c6146100 | Haiku 5.5 / high | a2aeca13afb83bae9 | builder-mechanical, repo-105 | 10m48s / 10m45s | 0 | $0.0873 |
+| #538 | merged c6146100 | Sonnet 5.5 / xhigh | ad6e925659170b959 | ticket-reviewer-sonnet, repo-105 gate 1 (narrow) | 10m17s / 10m16s | 0 | $0.9129 |
+| #538 | merged c6146100 | Sonnet 5.5 / high | ae57121275105b978 | fixer, repo-105 landing + F1/F3 at landing | 5m29s / 5m25s | 0 | $0.4016 |
+| #545 | merged 34676543 | Haiku 5.5 / high | a82cb1c65e86b1652 | builder-mechanical, file repo-106 + repo-107 | 9m36s / 9m11s | 0 | $0.3000 |
+| #546 | merged dbf4cd5f | Sonnet 5.5 / high | af392720ee90b7949 | builder-standard, lg-34 (stacked on lg-33) | 8m34s / 8m32s | 0 | $1.0147 |
+| #546 | merged dbf4cd5f | Opus 5.5 / high | aee34e691e272afd2 | ticket-reviewer-opus, lg-34 gate 1 | 12m39s / 12m35s | 0 | $2.4102 |
+| #546 | merged dbf4cd5f | Sonnet 5.5 / high | adb2c808bae54b53b | fixer, lg-34 landing (stacked draft) | 2m34s / 2m34s | 0 | $0.2158 |
+| #546 | merged dbf4cd5f | Sonnet 5.5 / high | aedb044e2bd9b9f60 | fixer, lg-34 reconcile after lg-33's squash | 3m29s / 3m28s | 0 | $0.2682 |
+| #551 | merged 63ddcccf | Sonnet 5.5 / high | a3568f3ce138eb294 | builder-standard, file lg-52 (reproduced on main) | 8m35s / 8m33s | 0 | $0.8306 |
+| #551 | merged 63ddcccf | Sonnet 5.5 / xhigh | a915f82e017f44cb1 | ticket-reviewer-sonnet, lg-52 filing gate (narrow) | 11m44s / 11m43s | 0 | $1.4412 |
+| #551 | merged 63ddcccf | Sonnet 5.5 / high | ac8132a4efb155639 | fixer, lg-52 landing + 6 at landing + file lg-57 | 8m52s / 8m42s | 0 | $0.9767 |
+| #552 | open, ready at 252d49a6 | Sonnet 5.5 / high | aa752c4cc600802a4 | builder-standard, record lg-38's paid run + file lg-56 | 13m39s / 13m30s | 0 | $1.0700 |
+| #552 | open, ready at 252d49a6 | Sonnet 5.5 / xhigh | a856af223c1a49abf | ticket-reviewer-sonnet, #552 gates 1–2 (narrow) | 16m32s / 16m32s | 0 | $1.8030 |
+| #552 | open, ready at 252d49a6 | Sonnet 5.5 / high | af27f2013f6f9c6e8 | fixer, #552 round + landing (comments denied, posted by orchestrator on owner approval) | 8m09s / 8m00s | 0 | $0.3701 |
+| #553 | merged e3cfbda7 | Haiku 5.5 / high | a7cb6aa966b783f45 | builder-mechanical, file repo-110 | 6m30s / 6m26s | 0 | $0.1740 |
+| — | — | Opus 5.5 / high | orchestrator 20bfbf0a | orchestrator (floor) | 2h28m04s / 2h47m19s | 0 | $19.6349 |
+| | | | | **total** (rates read 2026-10-10) | 8h48m44s | 0 | **$70.7629** |
+
+The owner's paid lg-38 run (60 model calls, $0.5349 by the records' `costUsd`) is not in this table; it ran outside any agent.
+
+**Tickets:**
+
+- lg-39 → #535, gate 1 CONCERNS (F1 med open decision, owner (a) fix on branch; F2–F4 low recorded), gate 2 PASS (2 lows recorded), merged b8fafccb.
+- lg-36 → #536, gate 1 FAIL on Done when 3 only (a report-only line), met by the orchestrator's comparison under the gate's own condition; F2 retitle to `test(ledger)` by owner; merged 078d4c28.
+- repo-105 → #538, gate 1 PASS (F1, F3 fixed at landing by owner choice; F2 recorded), merged c6146100.
+- repo-100 → #540, first builder stopped at a classifier-denied checkout and was re-dispatched by owner choice; gate 1 PASS (L1, L2 fixed at landing; L3 recorded), merged 9ec8943e.
+- lg-38 → #542, build only by owner choice; gate 1 CONCERNS (med `ANTHROPIC_CUSTOM_HEADERS`; owner widened the round to 3 CLI lows), gate 2 PASS (2 fixed at landing by owner choice), landed `in-flight`, merged a2203de1. The owner's paid run is recorded on #552; the owner chose "measure more first", filed as lg-56.
+- lg-33 → #541, gate 1 CONCERNS (F1, F2 med, F3 med open decision → owner option 2; F7 in the round; F4, F5 kept by owner; F6 recorded), gate 2 PASS (F8 low recorded), held as a draft for #535, then merged main, merged e40a506a. Its informational Windows leg failed in an untouched repo test; owner merged as is and filed repo-110.
+- lg-34 → #546, stacked on lg-33; gate 1 PASS (F1 NUL-in-address predates the branch → filed as lg-52 by owner; F2 recorded); reconciled after lg-33's squash by a merge commit carrying the `--onto` tree; merged dbf4cd5f.
+- repo-106, repo-107 → #545 (filings; repo-100's open decision and repo-100's gate's out-of-branch oxfmt finding), merged 34676543.
+- lg-52, lg-57 → #551 (filings), narrow gate PASS (6 lows fixed at landing by owner choice, F8 recorded; F5 → owner "don't widen", which created lg-57), merged 63ddcccf.
+- lg-38 record, lg-56 → #552 (docs), gate 1 CONCERNS (F1 med + 4 lows fixed in a fixer round), gate 2 PASS (N1–N3 low recorded); open, ready at 252d49a6.
+- repo-110 → #553 (filing, the Windows EBUSY in `scripts/test/preflight.test.ts`), merged e3cfbda7.
+- main after the last merge: push CI at e3cfbda7 skipped the test matrix (docs-only, merged last) and dbf4cd5f's was cancelled; `git diff 1f7c3f6c dbf4cd5f` is empty, and #546's PR CI was green on every leg at 1f7c3f6c; dbf4cd5f..e3cfbda7 changes `.md` only.
+
+**Defects in the skill:**
+
+1. `reference/concurrency.md` › _Unstack a branch after its parent squash-merges with `--onto`_ — prescribes `git rebase --onto`, which needs a force-push that `reference/dispatching.md` (_A probe pull request_, "never a rebase, which cannot reach `origin` without a force-push") and `roles/fixer.md` forbid; the page never says so. A merge commit carrying the replayed tree closes it with a fast-forward. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/reference/concurrency.md | grep -c -i "force-push"` → `0`; on lg-34, `git merge-tree --write-tree --name-only origin/main origin/lg-34-change-member-address` → exit 1, 9 `CONFLICT (content)` files; `git merge-tree --write-tree --merge-base b16d4489 origin/main origin/lg-34-change-member-address` → exit 0, tree `ca80f6b4`, whose `git diff origin/main ca80f6b4` was byte-identical to `git diff b16d4489 origin/lg-34-change-member-address` (12 files, +628/−20); `git commit-tree ca80f6b4 -p <child> -p origin/main` pushed as `6615fce7..1f7c3f6c`.
+2. `review-ticket/gate.md` › _Steps_ 4 with `roles/reviewer.md` › _What you are not given, on purpose_ — a `Done when` line proven only by the builder's report ("The report names the skill sentences…", lg-36 Done when 3) has no verdict but `unproven`, so the gate FAILed a line only the orchestrator can check. Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -c -i -E "builder.s report|the report names"` → `0`; `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n "You never see what the build claims"` → `24:`.
+3. `roles/reviewer.md` › _What makes a gate worth its cost_ ("Reproduce, do not assess") and `roles/common.md` › _Your worktree_ — the TS2883 sentences are stale since lg-36 merged (078d4c28). Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n "Not under your scratch directory"` → `59:`; `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -n "a tree outside"` → `54:`; lg-36's gate 1 ran `npm run typecheck` in a farmed, built tree under the scratch directory at 83e4576e → exit 0, and at 029641b4 → exit 1 with one TS2883 at `tools/ledger/api/test/helpers/households.ts(67,23)`.
+4. `roles/reviewer.md` › _Get the branch under review before you measure anything_, step 2 — "the base sha … for every range" carries `main`'s files once the builder merged `main`; the merge-base caveat is only under _When you are woken to re-gate_. Three gates this batch (repo-105, lg-33, lg-38) hit it. Reproduction: `git diff --stat 029641b4...782eb382 | tail -1` → `18 files changed, 3503 insertions(+), 170 deletions(-)`; `git diff --stat 45856244 782eb382 | tail -1` → `15 files changed, 3248 insertions(+), 170 deletions(-)`.
+5. `roles/fixer.md` › _Landing, when your dispatch grants it_ — still names "the `report.md` your dispatch names", where `reference/records.md` and every dispatch name `gate-<n>@<sha>.full.md`; three landers reported it. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/fixer.md | grep -n "report.md"` → ``91:  (`gh pr comment <n> --body-file <f>`, the `report.md` your dispatch names``.
+6. `reference/records.md` › _Fixed at landing_ — the "scope the command above `## Log`" form cannot show a fix to text inside the Log; two landers (repo-105, lg-38) fell back to a bracketed pattern or a line range. Reproduction: `git show bd62d457:docs/work/repo-105-status-checks-the-open-decision-heading-against-status.md | awk '/^## Log/{exit} {print}' | grep -c "needs-decision.exemptio[n]"` → `0`, while the unscoped `grep -c` on the same blob → `1`.
+7. `reference/records.md` › _When there is no ticket_ — says nothing about a filing whose gate's fixes the owner chose to apply at landing on a `ready` ticket (no `--land`, but *Fixed at landing* entries); the lg-52 lander decided on its own to commit them. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/reference/records.md | sed -n '/^## When there is no ticket/,$p' | grep -c -i "fixed at landing"` → `0`.
+8. `roles/common.md` › _Your scratch directory_ — a scratch script or vitest config that imports a bare package (`vitest/config`, `@anthropic-ai/sdk`) cannot resolve it from the scratch directory; two gates worked round it (a `node_modules` symlink, `createRequire`). Reproduction (lg-38 gate 1): `node --import tsx <scratch>/format-probe.mts <tree>` with `await import("@anthropic-ai/sdk/helpers/zod")` → `Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@anthropic-ai/sdk' imported from …/scratchpad/lg-38/gate-1/format-probe.mts`; (lg-33 gate 1) vitest with a config in scratch → `Error: Cannot find module 'vitest/config'`.
+9. `roles/common.md` › _Preflight runs longer than a foreground call allows…_ — the exit-file recipe has no case for a background `( … ; echo $? > f ) &` whose harness notice says `completed (exit code 0)` while the exit file never appears and the log stops mid-build; two filers (a82cb1c65e86b1652, a7cb6aa966b783f45) hit it, and a script file run with `bash` wrote its exit file. Reproduction (a7cb6aa966b783f45's transcript): notice `completed (exit code 0)`, then `cat build.exit` → `No such file or directory`, `build.log` ending `> tsc --build`.
+10. `docs/01-TICKETS.md` › the `difficulty` definitions — `mechanical` and `hard` carry examples and `standard` none, and three filers this batch (repo-106/107, repo-110, lg-56) rated a measurement or a test-cleanup ticket without a rule to check against and asked. Reproduction: `git show origin/main:docs/01-TICKETS.md | grep -n "standard\|mechanical"` → lines `120`, `195`, `198`; `195` names an example for `hard` and `mechanical` only.
+11. `roles/builder.md` › _When you are resumed with findings_ — assumes `main` moves at most once in a round; lg-38's round needed a second merge and a rebuild before preflight. Reproduction: `git log --first-parent --merges --oneline 782eb382..a8e98b8b` → two merge commits, `fe69e5b4` and `a8e98b8b`.
+12. `roles/fixer.md` › _Landing, when your dispatch grants it_ — tells the lander to post with `gh pr comment`, with no step for a classifier denial ("External System Writes"), which hit one of eight landers this batch while the other seven posted; the lander stopped correctly and the orchestrator posted on the owner's explicit approval. Reproduction: af27f2013f6f9c6e8's transcript, `gh pr comment 552 --body-file …/gate-1@d76699a2.full.md` → denied, `[External System Writes]`; the same command from the orchestrator → `https://github.com/brunolabbe/tools/pull/552#issuecomment-6245647665`.
+
+**Worked, and worth keeping:**
+
+- A filing that must reproduce on `main` first (lg-52) overturned the gate's premise ("only an admin can send it": the member route takes it too) before the owner was asked.
+- Owner's *Fixed at landing* path on 6 tickets this batch; no re-gate was needed for any.
+- Dry-running a stack reconcile with `git merge-tree --merge-base` and comparing patches byte for byte before dispatching it.
+- The lg-38 owner run's 60 per-run records, read directly, settled Done when 3 and corrected two harness claims (input tokens 2.2–2.3× the estimate; the spend stop's input term 1.8–3.3× under).
+- Not defects, for the review: U+2060 is accepted by `readAddress` and was left out of lg-57 by owner choice; lg-56's `depends_on: [lg-38]` deadlock was the orchestrator's dispatch, removed by owner choice; the orchestrator's dispatch named an Opus trailer for a Sonnet fixer, and the fixer correctly wrote Sonnet.
