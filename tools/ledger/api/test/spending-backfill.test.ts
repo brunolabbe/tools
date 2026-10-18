@@ -4,11 +4,13 @@
  * workbook's and the bank's generic words.
  */
 
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { normalizeDescription } from "@ledger/books";
 import { householdBooksPath } from "../src/books.ts";
 import { migrate } from "../src/db/schema.ts";
 import { Directory } from "../src/directory.ts";
@@ -57,9 +59,12 @@ function names(db: Database.Database): string[] {
     .map((category) => category.name);
 }
 
-/** Books holding, as the workbook import left them, rows filed by hand and lines with its words. */
-function books(db: Database.Database): Database.Database {
-  migrate(db);
+/**
+ * Books holding, as the workbook import left them, rows filed by hand and lines
+ * with its words; at `version` when a test needs them as an earlier release left them.
+ */
+function books(db: Database.Database, version?: number): Database.Database {
+  migrate(db, version);
   db.prepare("INSERT INTO people (id, added_at) VALUES ('alex', ?), ('sam', ?)").run(AT, AT);
   db.prepare(
     "INSERT INTO statement_imports (id, imported_at, imported_by) VALUES (1, ?, 'alex')",
@@ -87,13 +92,14 @@ function books(db: Database.Database): Database.Database {
     file.run(id, personId, AT);
   });
   const line = db.prepare(
-    "INSERT INTO period_lines (person_id, date, amount_cents, category, note, source, entered_at, entered_by) VALUES (?, ?, ?, ?, ?, 'workbook', ?, 'alex')",
+    "INSERT INTO period_lines (person_id, date, amount_cents, category, note, charged_to, source, entered_at, entered_by) VALUES (?, ?, ?, ?, ?, ?, 'workbook', ?, 'alex')",
   );
-  line.run("alex", "2026-02-03", 9_999, "Hydro Québec", null, AT);
-  line.run("sam", "2026-02-04", 1_799, "Netflix", null, AT);
-  line.run("sam", "2026-02-05", 5_000, "Voyage", "France", AT);
-  line.run("alex", "2026-02-06", 4_000, null, null, AT);
-  line.run("alex", "2026-02-07", 2_500, "Épicerie Nouvelle-Écosse", null, AT);
+  line.run("alex", "2026-02-03", 9_999, "Hydro Québec", null, null, AT);
+  line.run("sam", "2026-02-04", 1_799, "Netflix", null, null, AT);
+  // Charged to alex: the field that moves money, so a correction must carry it.
+  line.run("sam", "2026-02-05", 5_000, "Voyage", "France", "alex", AT);
+  line.run("alex", "2026-02-06", 4_000, null, null, null, AT);
+  line.run("alex", "2026-02-07", 2_500, "Épicerie Nouvelle-Écosse", null, null, AT);
   return db;
 }
 
@@ -138,6 +144,28 @@ describe("migration 12 seeds the service categories (lg-53)", () => {
     expect(names(db).filter((name) => name.toLowerCase() === "insurance")).toEqual(["insurance"]);
     expect(names(db)).toHaveLength(SEEDED.length);
   });
+
+  test("a retired category of one of the names does not stop the seed", () => {
+    const db = new Database(":memory:");
+    migrate(db, 11);
+    const first = Number(
+      db
+        .prepare(
+          "INSERT INTO spending_categories (name, created_at, created_by) VALUES ('Insurance', ?, 'alex')",
+        )
+        .run(AT).lastInsertRowid,
+    );
+    db.prepare(
+      "INSERT INTO spending_categories (root_id, name, supersedes, retired, created_at, created_by) VALUES (?, 'Insurance', ?, 1, ?, 'alex')",
+    ).run(first, first, AT);
+
+    migrate(db);
+
+    expect(names(db)).toEqual(SEEDED);
+    expect(spendingCategories(db).filter((category) => category.name === "Insurance")).toHaveLength(
+      2,
+    );
+  });
 });
 
 describe("backfillSpending (lg-53)", () => {
@@ -157,9 +185,15 @@ describe("backfillSpending (lg-53)", () => {
       "(none)": null,
       "Épicerie Nouvelle-Écosse": null,
     });
-    // A corrected line keeps what it was; only its spending category is new.
+    // A corrected line keeps what was spent; its source becomes a correction's, as on the Period screen.
     const voyage = currentLines(db).find((line) => line.category === "Voyage");
-    expect(voyage).toMatchObject({ personId: "sam", amountCents: 5_000, note: "France" });
+    expect(voyage).toMatchObject({
+      personId: "sam",
+      date: "2026-02-05",
+      amountCents: 5_000,
+      note: "France",
+      chargedTo: "alex",
+    });
     expect(result.bareLines).toBe(1);
     expect(result.left).toEqual([
       { kind: "row", text: "Paiement", count: 1 },
@@ -188,6 +222,45 @@ describe("backfillSpending (lg-53)", () => {
     );
     expect(db.prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual(lines);
   });
+
+  test("leaves a category a rule or the map gave, and a line's own", () => {
+    const db = books(new Database(":memory:"));
+    const idOf = (name: string): number =>
+      spendingCategories(db).find((category) => category.name === name)?.id ?? 0;
+    // A paste's row the map covers by its Desjardins category, and one a rule filed with a category.
+    db.prepare(
+      "INSERT INTO spending_category_map (desjardins_key, desjardins_category, spending_category_id, entered_at, entered_by) VALUES (?, 'Taxes municipales', ?, ?, 'sam')",
+    ).run(normalizeDescription("Taxes municipales"), idOf("Other"), AT);
+    const rule = Number(
+      db
+        .prepare(
+          "INSERT INTO rules (description_pattern, category, amount_cents, person_id, bucket, created_at, created_by, spending_category_id) VALUES ('Taxes', '', NULL, NULL, 'current-expenses', ?, 'sam', ?)",
+        )
+        .run(AT, idOf("Household")).lastInsertRowid,
+    );
+    const row = db.prepare(
+      "INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id) VALUES (?, '2026-09-01', ?, 'Taxes', -1_000, 0, 1)",
+    );
+    const mapped = Number(row.run(100, "Taxes municipales").lastInsertRowid);
+    const ruled = Number(row.run(101, "").lastInsertRowid);
+    const file = db.prepare(
+      "INSERT INTO classifications (row_id, bucket, person_id, rule_id, source, classified_at, classified_by) VALUES (?, 'current-expenses', NULL, ?, ?, ?, 'sam')",
+    );
+    file.run(mapped, null, "manual", AT);
+    file.run(ruled, rule, "rule", AT);
+    db.prepare(
+      "INSERT INTO period_lines (person_id, date, amount_cents, category, spending_category_id, source, entered_at, entered_by) VALUES ('sam', '2026-09-02', 700, 'Voyage', ?, 'workbook', ?, 'sam')",
+    ).run(idOf("Other"), AT);
+
+    spendingBackfillForTest(db, NOW);
+
+    const byRow = new Map(listRows(db, { limit: 100 }).rows.map((one) => [one.id, one]));
+    expect(byRow.get(mapped)?.spendingCategory).toEqual({ id: idOf("Other"), source: "map" });
+    expect(byRow.get(ruled)?.spendingCategory).toEqual({ id: idOf("Household"), source: "rule" });
+    expect(currentLines(db).find((line) => line.date === "2026-09-02")?.spendingCategoryId).toBe(
+      idOf("Other"),
+    );
+  });
 });
 
 describe("npm run backfill-spending:ledger (lg-53)", () => {
@@ -210,7 +283,8 @@ describe("npm run backfill-spending:ledger (lg-53)", () => {
       at: NOW,
     });
     directory.close();
-    books(new Database(householdBooksPath(dataDir, "home"))).close();
+    // As the release before lg-53 left them: the --write migrates, the dry run must not.
+    books(new Database(householdBooksPath(dataDir, "home")), 11).close();
   });
 
   afterEach(() => {
@@ -234,6 +308,23 @@ describe("npm run backfill-spending:ledger (lg-53)", () => {
     return { code, out, err };
   }
 
+  /** The books and their write-ahead log, if any: a write can sit in either. */
+  function hash(): string {
+    const file = householdBooksPath(dataDir, "home");
+    const digest = createHash("sha256").update(readFileSync(file));
+    if (existsSync(`${file}-wal`)) digest.update(readFileSync(`${file}-wal`));
+    return digest.digest("hex");
+  }
+
+  function version(): unknown {
+    const db = new Database(householdBooksPath(dataDir, "home"), { readonly: true });
+    try {
+      return db.pragma("user_version", { simple: true });
+    } finally {
+      db.close();
+    }
+  }
+
   function overrides(): unknown {
     const db = new Database(householdBooksPath(dataDir, "home"), { readonly: true });
     try {
@@ -244,12 +335,15 @@ describe("npm run backfill-spending:ledger (lg-53)", () => {
   }
 
   test("a dry run reports what --write then records", () => {
+    const before = hash();
     const dry = run("--household", "home", "--as", "alex");
 
     expect(dry.code, dry.err).toBe(0);
     expect(dry.out).toContain("Dry run: nothing is written.");
     expect(dry.out).toContain('2 bank rows "Taxes" -> Property taxes');
-    expect(overrides()).toEqual({ n: 0 });
+    // Not a byte of the books changed, the schema version included.
+    expect(hash()).toBe(before);
+    expect(version()).toBe(11);
 
     const wrote = run("--household", "home", "--as", "alex", "--write");
 
@@ -258,6 +352,18 @@ describe("npm run backfill-spending:ledger (lg-53)", () => {
       dry.out.replace("Dry run: nothing is written.\n", ""),
     );
     expect(overrides()).toEqual({ n: 4 });
+    expect(version()).toBe(12);
+    const migrated = new Database(householdBooksPath(dataDir, "home"), { readonly: true });
+    try {
+      expect(names(migrated)).toEqual(SEEDED);
+    } finally {
+      migrated.close();
+    }
+
+    const written = hash();
+    const again = run("--household", "home", "--as", "alex", "--write");
+    expect(again.out).toContain("Filled: 0");
+    expect(hash()).toBe(written);
   });
 
   test("refuses someone who is not a member of the household", () => {

@@ -29,9 +29,9 @@ no spending category. Measured on a copy of the household's books that day:
   chart counts (joint, current expenses, money out) include `Taxes` (~19 rows,
   ~19,000 $), `Épicerie` (9), `Frais d'utilisation` (7), `Retrait` (3) and `Autre`
   (2).
-- **Of the 450 card lines, 27 carry the workbook's own word:** `Hydro Québec`,
+- **Of the 475 card lines, 32 carry the workbook's own word:** `Hydro Québec`,
   `Internet`, `Netflix`, `Assurances maison` (5 each), `Épicerie/Comissions` (8),
-  `Voyage`, `Maison` (2 each). About 420 are bare amounts and cannot be
+  `Voyage`, `Maison` (2 each). The other 443 are bare amounts and cannot be
   categorised from anything stored.
 
 The owner chose, from options put to them:
@@ -77,6 +77,38 @@ widens what a receipt item may be proposed as. No change is needed there.
 - A row or a line that already has a category keeps it, and a row the chart does
   not count (a deposit filed to a person) is left alone.
 - `npm run check` and `npm test -- --project ledger` pass.
+
+## Review
+
+### Gate 1 at a178ec2d — FAIL, repaired
+
+Sonnet 5.5. It found no defect in `src`. It failed the gate because two
+`Done when` clauses had nothing asserting them, and it showed this with plants
+that left the suite green:
+
+- **F1 (med):** the dry run's "writes nothing" and `--write`'s migration were
+  only run on books already at the latest schema. Repaired: the command's
+  fixture is at version 11. The dry run is checked by a sha256 of the file and
+  its WAL, plus `user_version` 11. `--write` is checked for 12 and the sixteen
+  names, and a second `--write` for `Filled: 0` and an unchanged hash.
+- **F2 (med):** "already has a category keeps it" was asserted for an override
+  only. Repaired: a test with a row the map covers, a row a rule filed with a
+  category, and a line already holding Other under the text `Voyage`.
+- **F3 (low):** a corrected line's `date` and `chargedTo` were unasserted.
+  Repaired: the fixture's `Voyage` line is charged, and the assertion covers
+  both. The `source: manual` change is recorded in the Log and left as built,
+  which was the gate's recommendation.
+- **F4 (low):** a retired category of a seed name had no fixture. Repaired.
+- **F5 (low):** the ledger `CLAUDE.md` gained a command-list line the Build did
+  not name. Kept: the list is where that tool's commands are found.
+- **F6 (low):** the Why's figures did not add up. They now read 475 lines, of
+  which 32 carry a word and 443 do not.
+- **F7 (low):** `done` before any gate. This section is the record.
+
+Each repair was checked by re-running the gate's plants against the new tests:
+the dry run writing the real file, no migration in `run`, a row guard that
+honours only an override, a seed blocked by a retired name, and a correction
+dropping `chargedTo`. Each turns one test red.
 
 ## Log
 
