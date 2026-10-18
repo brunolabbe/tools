@@ -81,3 +81,22 @@ other error. The same sha under `/workspaces/tools/.claude/worktrees/` passed
   person) between this ticket's id check and its merge, and `main` carried two
   lg-33 files from #525's merge until this landed (`npm run status` → `"lg-33"
 is used by more than one ticket`, exit 1).
+- 2026-10-18 — Built on `lg-36-annotate-test-helper-return-types` from `main`
+  029641b4; the fix is `e499389e`. Reproduced first, at 029641b4, in a detached
+  tree under the builder's scratch directory: farm, `npm run build` exit 0,
+  `npm run typecheck` exit 1, with the one TS2883 line and no other error.
+  - The other exports of `api/test/helpers/`, read by `grep -n -A3 "^export"`
+    over the directory and by the declaration emit (`tsc -p` into scratch, which
+    wrote every helper's `.d.ts`): `send` was the only inferred return type
+    naming a package outside the direct dependencies (`import("light-my-request")`).
+    The rest are annotated, or infer from a direct dependency (`Database.Database`
+    from `better-sqlite3`), a global (`RegExp`, `Date`), or string literals
+    (`VERBS`, `as const satisfies`). No other helper changed.
+  - After the annotation, at `e499389e`, in a detached tree under `/tmp`, farmed
+    and built: `npm run typecheck` exit 0, and `npm run check` exit 0 there too.
+    In the branch's own worktree `npm run check` exit 0, and
+    `npm test -- --project ledger` exit 0: 62 of 62 files, 1247 of 1247 tests.
+  - Not folded in: nothing else here became free. A guard against the next
+    helper with this shape would have to typecheck from outside the repo root;
+    that is a decision about where such a check runs, not a small piece, and it
+    was not measured here.
