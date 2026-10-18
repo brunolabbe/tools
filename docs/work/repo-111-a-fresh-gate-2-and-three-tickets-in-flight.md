@@ -60,9 +60,13 @@ of `SKILL.md` applied a cap.
 
 **A builder ran the tool's suites up to four times per ticket**: preflight
 before its push, preflight again in each round, the landing's `--land`
-preflight, and CI on the draft. A downloader preflight is ten to twelve
-minutes (`roles/builder.md` quoted "a twelve-minute preflight"), and the gate
-waited for the first of them, since the draft opened only after it.
+preflight, and CI on the draft, and the gate waited for the first of them,
+since the draft opened only after it. `roles/builder.md` quoted "a
+twelve-minute preflight"; measured on 2026-10-18 at `335efcd4` (dl-129's
+filing, branch `dl-129-trim-the-browser-resolver-suite`, PR #568), a
+downloader preflight is about two to three minutes:
+`npm test -- --project downloader` ran 84.30, 104.16 and 101.88 s, and
+`npm run check` 9 s on a built tree.
 
 **Intake asked for a batch but not for the decisions inside it.** The reason
 relayed with the owner's decision is that lg-30, lg-32, lg-33, lg-39 and lg-40
@@ -126,6 +130,21 @@ prompt names one time budget for all sweeps (15 minutes by default), and a
 search the orchestrator cannot size becomes a measurement ticket. The reason
 is lg-59's gate 1 and lg-40's gate 2 (Log, round 4).
 
+**Points 3 and 4 re-asked 2026-10-18 with a measurement: keep 3, revert 4.**
+The owner had kept both on the premise of a ten-to-twelve-minute downloader
+preflight. dl-129's filing (branch `dl-129-trim-the-browser-resolver-suite`,
+draft PR #568, measured at base `335efcd4`) found
+`npm test -- --project downloader` at 84.30, 104.16 and 101.88 s in a fresh
+worktree (124 files, 2,590 tests; runs 2 and 3 beside other agents' vitest
+workers), with `parallel-ranges.test.ts` finishing 18–20 s after the rest, and
+CI's `npm test` step at `335efcd4` (run 39126762378) at 231 s on ubuntu and
+388 s on Windows; the Fable session timed `npm run check` at 9 s. The old
+figures predate dl-117 (merged 2026-10-16). Options, put by the Fable session
+with `AskUserQuestion`: **keep 3, revert 4** (recommended, **chosen**); keep
+both; revert both. So the builder's first build still skips the suites (point
+3, and Done when 17's `awaiting:` stands), and a fix round runs preflight in
+full before its push again (point 4 reverted).
+
 ## Build
 
 1. `.claude/skills/orchestrate-tickets/SKILL.md`: step 2 states the cap, with
@@ -153,12 +172,17 @@ is lg-59's gate 1 and lg-40's gate 2 (Log, round 4).
    resumed with findings_, and `roles/fixer.md` _The work_: `npm run check`
    and `preflight.mjs --only mergeTree,ciCommands,review,title`, no full
    suite; `SKILL.md` step 4 reads CI's state on the head; `reference/sizing.md`
-   says the suites run twice per ticket.
+   says the suites run twice per ticket. **Superseded in part by the re-ask of points 3 and 4 (Decision, "keep 3, revert 4"):** the round
+   runs preflight in full again (Build 11).
 9. `SKILL.md` step 8: a third gate is a fresh dispatch too.
 10. The sweep budget: `reference/dispatching.md` _A gate prompt carries_,
     `roles/reviewer.md` _What makes a gate worth its cost_,
     `reference/sizing.md` _What a batch pays for_, and
     `reference/model-pairing.md`'s 2026-10-18 section.
+11. The re-ask of points 3 and 4: restore the round's full preflight in
+    `roles/builder.md` and `roles/fixer.md` from their `origin/main` wording,
+    reword `reference/sizing.md` and `SKILL.md` step 4 to match, and replace
+    every stale preflight or suite figure with the dl-129 measurement.
 
 ## Done when
 
@@ -206,12 +230,14 @@ is lg-59's gate 1 and lg-40's gate 2 (Log, round 4).
     and `preflight.mjs --only mergeTree,ciCommands,review,title`, then push
     and open the draft, and run no full suite; _Your report_ asks for CI's
     state on the head; _When you are resumed with findings_ step 2 runs no
-    full suite.
+    full suite. **Superseded in part by the re-ask of points 3 and 4 (Decision, "keep 3, revert 4"):** its last clause; Done when 23 replaces it.
 13. `roles/fixer.md` _The work_ runs `npm run check` and the fast preflight
-    checks for a round, and no full suite.
+    checks for a round, and no full suite. **Superseded by the re-ask of
+    points 3 and 4 (Decision, "keep 3, revert 4"):** Done when 23 replaces it.
 14. `SKILL.md` step 4 checks CI's state on the head in place of a local suite
     run, and `reference/sizing.md` _What a batch pays for_ says the suites run
-    twice per ticket.
+    twice per ticket. **Superseded in part by the re-ask of points 3 and 4 (Decision, "keep 3, revert 4"):** the sizing clause; Done when 23 replaces
+    it.
 15. `SKILL.md` step 8 says a third gate is also a fresh dispatch.
 16. `## Review` carries the owner's WAIVED line, `status` is `done`, and
     `node scripts/status.mjs --json` exits 0.
@@ -236,6 +262,17 @@ is lg-59's gate 1 and lg-40's gate 2 (Log, round 4).
     scopes its recipe to preflight, `--land` and a suite run, and sends a
     gate's sweeps to `roles/reviewer.md` _What makes a gate worth its cost_ by
     name, with the reason that every poll re-reads a large transcript.
+23. `roles/builder.md` _When you are resumed with findings_ step 2 and
+    `roles/fixer.md` _The work_ carry their pre-branch wording (a round runs
+    preflight in full before its push), with the measured figure in place of
+    the old one; `reference/sizing.md` says a first build runs no suite
+    locally and the suites still run in each round's preflight, the landing's
+    `--land` and CI on every push; `SKILL.md` step 4 says "a first build runs
+    no full suite".
+24. `grep -rn -E '598 s|twelve-minute|ten minutes|10–12 min|nine minutes|9 min' .claude/skills docs/work/repo-111-*.md`,
+    outside `reference/history.md`, the two figures and quotations of the old
+    figure, prints no current claim that a downloader preflight or suite takes
+    that long; the Log lists the matches before and after.
 
 ## Review
 
@@ -407,3 +444,54 @@ per-turn figure for lg-59 now reads "about 318k a turn after 155 of them, 196k
 on average" on `reviewer.md` and `model-pairing.md`, so neither number stands
 for the other; `git grep -n -E '318k|322k|196k|194k' -- .claude/skills` is how
 the two places were found.
+
+**2026-10-18, round 6 — points 3 and 4 re-asked; stale figures replaced.**
+The owner's answer and its measurement are in the Decision section. The
+measurement is dl-129's filing (branch `dl-129-trim-the-browser-resolver-suite`,
+draft PR #568); its CI figures were re-read here with
+`gh run view 39126762378 --json headSha,jobs`: head `335efcd4`, ubuntu
+`Run npm test` 12:20:09Z → 12:24:00Z (231 s), Windows 12:20:18Z → 12:26:46Z
+(388 s). The local runs and the 9 s `npm run check` are relayed, not re-run.
+
+- **Restored:** `roles/builder.md` _When you are resumed with findings_ step 2
+  is `origin/main`'s line again (`git diff origin/main` on the file no longer
+  touches it), and `roles/fixer.md` _The work_ carries `origin/main`'s
+  preflight bullet and exit-16 bullet, with "two to three minutes on a
+  downloader branch … (dl-129's filing, PR #568, 2026-10-18)" in place of "ten
+  minutes". The first-build rule in _Before you report_ stays; its exit-16
+  line now reads "none of the checks after it has run", true for both runs.
+- **Figures**, from
+  `grep -rn -E '598 s|twelve-minute|ten minutes|10–12 min|nine minutes|9 min' .claude/skills docs/work/repo-111-*.md`
+  outside `reference/history.md` (plus "ten to twelve", the spelling this
+  branch used). Before:
+  - `roles/builder.md` 107: "`--land` runs preflight in full once per ticket —
+    ten to twelve minutes on a downloader branch" → replaced by the measured
+    84–104 s project and 9 s check, sourced.
+  - `roles/common.md` 115: "a downloader preflight runs past it (598 s for the
+    suite alone)" → "A downloader preflight fits inside it now — its project
+    ran 84–104 s on 2026-10-18 at `335efcd4` … where it ran 598 s before
+    dl-117".
+  - `roles/fixer.md` 42: "a full run here costs ten to twelve minutes on a
+    downloader branch" → removed with the reverted round bullet.
+  - this ticket's Why, 63–64: "A downloader preflight is ten to twelve
+    minutes" → the measured figure, sourced.
+  - this ticket's Log, 48: "for 39 minutes" — a false positive of `9 min`.
+  - `review-ticket/gate.md` 99: "the downloader project runs nine minutes" —
+    **not in this branch's diff, left as it is; a stale line for the next
+    review session.**
+
+  After: the same grep prints `common.md`'s "598 s before dl-117" and
+  `model-pairing.md`'s and this ticket's "ten-to-twelve-minute" and "a
+  twelve-minute preflight", each quoting the old figure as old; the Log's
+  "39 minutes"; this ticket's Done when 24; and `gate.md` 99.
+
+- **Not replaced: the two figures.** `reference/flow.drawio.svg` still says
+  "preflight 10–12 min on a downloader branch", "downloader project ≈9 min",
+  "downloader ≈9–10 min", "preflight.mjs ≈10–12 min", and draws the reverted
+  rule ("No preflight", "report (no preflight in the round)"). Its text lives
+  twice, rendered and in the embedded diagram model, so it is the Fable
+  session's to regenerate. `lg-40-timeline.drawio.svg` is a dated measurement
+  and stays.
+- **`origin/main` moved** to `f58473f4` (lg-56, lg-41, dl-128, repo-110,
+  lg-52) during this round. None of it touches a path on this branch, and
+  preflight diffs `origin/main...HEAD`, so the branch was not merged.

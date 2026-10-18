@@ -27,11 +27,13 @@ agent's context grows with every turn, and every turn re-reads all of it. So:
   sweeps, four of them at the 600 s foreground cap; lg-40's gate 2 spent 18.8
   minutes the same way. So a gate prompt names a population per probe and one
   sweep budget ([dispatching.md](dispatching.md)).
-- **The suites run twice per ticket, not four times**: on CI against the
-  draft, and in the landing's `--land` preflight. The builder and each round
-  run `npm run check` and the fast preflight checks only (`roles/builder.md`),
-  so a gate may open a head CI has not yet proven, and grades that line
-  `unproven (gate)` until the leg has run on it.
+- **A first build runs no suite locally.** The builder runs `npm run check`
+  and the fast preflight checks, pushes, and leaves the suites to CI on the
+  draft (`roles/builder.md`), so a gate may open a head CI has not yet proven
+  and grades that line `unproven (gate)` until the leg has run on it. Locally
+  the suites still run in each round's preflight and in the landing's
+  `--land`, and CI runs them on every push. A downloader preflight is about
+  two to three minutes (dl-129's filing, PR #568, 2026-10-18).
 - **Turns cost more than tokens.** One plain command per call is the sandbox's
   rule, so an agent that needs a script writes it to a file and runs it once.
 - **Gates past the second have not paid.** Across 253 recorded gate sections,

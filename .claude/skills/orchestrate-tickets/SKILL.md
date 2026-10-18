@@ -96,7 +96,7 @@ the batch cannot proceed, put it to the user at once.
    not verify, any open decision, the head sha (confirm it with
    `git ls-remote --heads origin <branch>`), the draft PR number, and CI's
    state on that head (`gh pr checks <n>`) where a local suite run used to be:
-   the builder runs no full suite (`roles/builder.md`). Send a
+   a first build runs no full suite (`roles/builder.md`). Send a
    failing line back now, while the builder's cache is warm. When a `Done when`
    line names several subjects, check all of them in one message.
 

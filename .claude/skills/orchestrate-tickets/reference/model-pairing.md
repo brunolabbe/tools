@@ -68,6 +68,18 @@ a flag that skips only the suites is left to a later ticket. Owed by the first
 batch under the rule: per ticket, whether CI on the draft went red on
 something the dropped local run would have caught.
 
+**Re-asked the same day, the round's preflight came back** (owner,
+2026-10-18: "keep 3, revert 4", recommended, over "keep both" and "revert
+both"). The case for dropping it rested on a ten-to-twelve-minute downloader
+preflight. dl-129's filing (branch `dl-129-trim-the-browser-resolver-suite`,
+PR #568) measured it at `335efcd4`: `npm test -- --project downloader` ran
+84.30, 104.16 and 101.88 s (124 files, 2,590 tests; the last two beside other
+agents' vitest workers), `npm run check` 9 s on a built tree, and CI's whole
+`npm test` step 231 s on ubuntu and 388 s on Windows (run 39126762378). The
+older figures predate dl-117 (merged 2026-10-16). At two to three minutes a
+round's preflight is cheap against a round, so only the first build skips the
+suites.
+
 **A gate dispatch carries a sweep budget** (repo-111, owner, 2026-10-18).
 Options: fold it into repo-111 (recommended, chosen), file it as repo-112, or
 leave it. lg-59's gate 1, dispatched 21:24:40Z and read at 22:57Z while it

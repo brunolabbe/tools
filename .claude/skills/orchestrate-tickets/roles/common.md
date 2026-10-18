@@ -111,9 +111,11 @@ uncommitted and says nothing.
 `review-record.mjs --land`, which runs preflight inside it.** Run either in the
 background with its output and its exit code written to files in your scratch
 directory, then wait with `until [ -s <exit file> ]; do sleep 3; done`. The wait
-is a foreground call too, capped at 600 s, and a downloader preflight runs past
-it (598 s for the suite alone): a wait the harness "moved to the background" is
-not a failure — start another, or read the exit file in a later call. The
+is a foreground call too, capped at 600 s. A downloader preflight fits inside it
+now — its project ran 84–104 s on 2026-10-18 at `335efcd4` (dl-129's filing,
+PR #568), where it ran 598 s before dl-117 — but a wait the harness "moved to
+the background" is not a failure: start another, or read the exit file in a
+later call. The
 harness's "completed" notice reports the outer shell, not preflight; the exit
 file is the signal. The same shape for any suite that can run past two minutes:
 three resolver spec files took 490 s.

@@ -102,17 +102,19 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   head after its own fetch (repo-104), runs `ci.yml`'s other check-job
   commands, the `## Review` presence test and the title's type against the
   paths. `--only` cannot run `npm run check` without the tool suites (both are
-  its `check`), so `npm run check` above is the other half. **You run no full
-  suite**: CI runs every project on the draft while the gate works, and the
-  landing's `--land` runs preflight in full once per ticket — ten to twelve
-  minutes on a downloader branch, paid once instead of at every push.
+  its `check`), so `npm run check` above is the other half. **On a first build
+  you run no full suite**: CI runs every project on the draft while the gate
+  works. A round runs preflight in full before its push (_When you are resumed
+  with findings_), and so does the landing's `--land`. A downloader preflight
+  is about two to three minutes here: on 2026-10-18 at `335efcd4`,
+  `npm test -- --project downloader` ran 84–104 s and `npm run check` 9 s
+  (dl-129's filing, branch `dl-129-trim-the-browser-resolver-suite`, PR #568).
 - **Exit 16 has three causes; read the output, not the code.** Whichever it is,
   the last line says whether anything was skipped.
   - **A conflict with another open pull request's head** is not a fault in your
-    branch. The probe stops the run there, so **no `ci.yml` command, no
-    `## Review` check and no title check has run** and the last line ends
-    `; not run: …`: run the second command in the `== halted ==` block before
-    you report. Then push, open the draft, report the other pull
+    branch. The probe stops the run there, so **none of the checks after it
+    has run** and the last line ends `; not run: …`: run the second command in
+    the `== halted ==` block before you report. Then push, open the draft, report the other pull
     request's number and the paths, and stop: the merge order is the
     orchestrator's to set. A sibling that conflicts with `main` itself reports as
     a conflict with your HEAD, because HEAD carries `main`; that is the sibling's
@@ -166,9 +168,7 @@ the gate's own; where they disagree, the disagreement comes back as a finding.
    have pushed since you reported. If it is not a fast-forward, stop and report.
    Then, if `main` has moved since the build, merge it as _Before you report_
    says, before the fix (pl-56's round was that merge).
-2. Fix, run the narrowest checks and `npm run check`, commit, run the fast
-   preflight checks (_Before you report_), and push. No full suite: CI on the
-   draft and the landing's `--land` preflight stand for the round.
+2. Fix, run the narrowest checks, then preflight, then commit and push.
 3. Report per finding: fixed, with the command that failed before and passes
    after; refuted, with the command and output that refute it; or an open
    decision, as options. Name the new head sha.
