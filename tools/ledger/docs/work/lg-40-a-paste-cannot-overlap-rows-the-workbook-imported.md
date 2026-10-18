@@ -317,3 +317,15 @@ tools/ledger/api/test/statements.test.ts` → clean 92 passed (92); `later`
   five-row test; `>` made `>=` at `LONGEST_SEARCHED_DAY` → 1 failed | 91 passed,
   "matchPart: the longest day that is searched (F7)" › "a day of exactly the
   longest the search allows admits a part that starts and ends inside it".
+- 2026-10-18 — Fixed at landing by owner choice: gate 2, F9 — "The workbook
+  refusal and the `statements.ts` header promise the tolerances without their
+  two exceptions." The refusal's sentence "…and a paste may start or end partway
+  through a day. Their wording is never compared." now reads "…and a paste may
+  start or end partway through a day, except that a day the workbook both
+  re-dated and reordered is refused, and so is a paste that starts and ends
+  inside a day of more than 20 rows. Their wording is never compared."; the
+  `statements.ts` header and the `workbook-days.ts` header name both.
+  `npx vitest run tools/ledger/api/test/statements.test.ts
+tools/ledger/api/test/workbook-import.test.ts
+tools/ledger/api/test/workbook-days.test.ts` → 3 files, 124 passed (124); no
+  test asserts the refusal's text.

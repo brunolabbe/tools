@@ -37,10 +37,14 @@
  *   inside a day, which follow its own order, are never compared. So within a
  *   day the order may differ, a date a day off is accepted, two days off is not,
  *   and a day whose amounts differ by one row is not, even when it ends on the
- *   same balance. A row a paste stored is still compared field for field, in
- *   order. Every reading this makes possible is a reading like any other: two of
- *   them are refused as ambiguous. The workbook's rows keep their wording and
- *   dates; only the rows past the tail are stored. When nothing fits and the
+ *   same balance. Two exceptions are refused whatever the paste holds: a day the
+ *   workbook both re-dated and reordered (it is two runs, so it does not match),
+ *   and a paste that starts and ends inside a day of more than
+ *   `LONGEST_SEARCHED_DAY` rows (20), which is not searched. A row a paste
+ *   stored is still compared field for field, in order. Every reading this
+ *   makes possible is a reading like any other: two of them are refused as
+ *   ambiguous. The workbook's rows keep their wording and dates; only the rows
+ *   past the tail are stored. When nothing fits and the
  *   stored row the paste had to meet is the workbook's, the refusal names that
  *   row and the pasted row that opens from its balance, and does not ask for a
  *   longer stretch: that is the advice for a paste that falls short of the
@@ -57,7 +61,7 @@ import { dayAfter, formatCents, parseStatement } from "@ledger/books";
 import type { StatementRow } from "@ledger/books";
 import type { Database } from "better-sqlite3";
 import { classifyAdded, lastRowId } from "./classifications.ts";
-import { dayBefore, matchPart } from "./workbook-days.ts";
+import { LONGEST_SEARCHED_DAY, dayBefore, matchPart } from "./workbook-days.ts";
 
 /**
  * A stored row: the parser's row, with `seq` now the position in the whole
@@ -478,7 +482,7 @@ function workbookMismatch(newest: StoredRow, rows: readonly StatementRow[]): App
       : ` The pasted row ${describeRow(continuing)} opens from the ${left} it left: a paste that starts on that row continues the workbook.`;
   return new AppError(
     "STATEMENT_CHAIN_BROKEN",
-    `The paste does not line up with the rows imported from the workbook, which end on ${describeRow(newest)}. Those are compared by amount and balance a day at a time: a day's rows in any order, each dated within a day of the workbook's, and a paste may start or end partway through a day. Their wording is never compared.${next}`,
+    `The paste does not line up with the rows imported from the workbook, which end on ${describeRow(newest)}. Those are compared by amount and balance a day at a time: a day's rows in any order, each dated within a day of the workbook's, and a paste may start or end partway through a day, except that a day the workbook both re-dated and reordered is refused, and so is a paste that starts and ends inside a day of more than ${String(LONGEST_SEARCHED_DAY)} rows. Their wording is never compared.${next}`,
     {
       details: {
         date: newest.date,

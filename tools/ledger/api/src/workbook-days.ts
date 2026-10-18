@@ -35,7 +35,9 @@
  * many as the bank listed before them. Comparing them with the workbook's rows
  * in the same positions instead would compare a different part of the day
  * whenever the order differs, which refused a correct paste and could leave a
- * false reading the only one (gate 1, F1 and F2).
+ * false reading the only one (gate 1, F1 and F2). A part that starts and ends
+ * inside a day of more than `LONGEST_SEARCHED_DAY` rows is refused: that search
+ * is not made.
  *
  * **The workbook import cuts a day where its own listing puts the edge**
  * (`alignDays`). Where the pastes start partway through a day, the workbook's
