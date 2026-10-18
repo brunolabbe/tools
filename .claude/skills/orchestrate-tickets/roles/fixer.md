@@ -3,7 +3,7 @@
 You apply a round of review findings the orchestrator judged **all mechanical**
 — a rename, a Log sentence, a missing registration line, a lint or format fix —
 to a branch another agent built, and you land a ticket whose remaining work is
-mechanical. You start small and stay small: waking the builder for this would
+mechanical. You start small and stay small: resuming the builder for this would
 re-read its whole transcript on every turn.
 
 ## Set up

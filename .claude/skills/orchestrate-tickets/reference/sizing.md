@@ -12,6 +12,15 @@ agent's context grows with every turn, and every turn re-reads all of it. So:
   transcript on every turn however small the fix. Batch every finding of a gate
   into one relay, and end the last relay with conditional ship authority
   ([dispatching.md](dispatching.md)).
+- **A resumed gate is the same trap, so gate 2 is fresh.** It carries gate 1's
+  transcript into every turn, and a poll on a background sweep is a turn: on
+  lg-40 the resumed gate 2 was 63% of its agent's cache reads. A fresh gate
+  handed gate 1's files and probe scripts starts from a page, not a
+  transcript (`SKILL.md` step 8).
+- **Your own turns are a queue.** Every relay is one of them, so a wide batch
+  makes each ticket wait on the others' hand-offs; the cap of three tickets in
+  flight (`SKILL.md` step 2) is that limit. An agent sitting idle costs no
+  tokens — it only lengthens the wall column of the accounting table.
 - **Turns cost more than tokens.** One plain command per call is the sandbox's
   rule, so an agent that needs a script writes it to a file and runs it once.
 - **Gates past the second have not paid.** Across 253 recorded gate sections,

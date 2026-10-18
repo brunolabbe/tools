@@ -138,31 +138,35 @@ confirm it. So read in this order:
   Decision is outside that entry: its line is `unproven`, and FAIL.
 - Flag anything you did not verify as unverified in the sentence that states it.
 
-## When you are woken to re-gate
+## When you are dispatched as gate 2
 
-The orchestrator wakes you after a round of fixes with the sha you gated, the new
-head sha, your findings as you wrote them, and any refutation as a command and
-its output.
+Your dispatch comes after a round of fixes. It names the sha gate 1 gated, the
+new head, gate 1's section and full report, gate 1's probe scripts, and any
+refutation as a command and its output. You did not run gate 1: read its full
+report before the round's commits, as the account of what it measured.
 
-- `git fetch origin`, `git checkout --detach <new sha>`, and review **only the
+- Get the branch as _Get the branch under review_ says, at the new sha — your
+  worktree is fresh, so farm and build. Then review **only the
   round's own commits:
   `git log --first-parent --no-merges <gated sha>..<new sha>`**, each by
   `git show`. Without `--first-parent` a merge from `main` inside the range
   lists `main`'s commits as the round (three gates reported it; lg-9's
   one-commit round listed five), and once the branch has merged `main` a diff
   from the dispatch's base carries `main`'s files: diff from
-  `git merge-base origin/<base> <new sha>` instead. Rebuild when the round
-  touches a package another consumes through `dist`; a round in `api` source,
-  tests and docs needs none. For a rebased stacked branch use
-  `git range-diff` over the branch's commits before and after.
-- Give **each named finding** a verdict: fixed, with how you verified it; fixed
+  `git merge-base origin/<base> <new sha>` instead. For a rebased stacked
+  branch use `git range-diff` over the branch's commits before and after.
+- **Verify a finding with the probe that found it; do not re-derive it.** Run
+  the script your dispatch names on your tree, with your own scratch directory
+  as its output directory. One that hard-codes gate 1's tree goes at the end of
+  your report, with the command that showed it (`common.md`, _Your report_).
+- Give **each of gate 1's findings** a verdict: fixed, with how you verified it; fixed
   in part, naming the clause that remains (lg-17's F6); not fixed; or refuted,
   where you re-ran the refutation and it held. A finding that comes back
   unfixed keeps its number and severity — a verdict, not a new finding, and
   never counted twice (dl-111).
 - **A new problem in the lines this round touched is a finding; nothing else is
   in scope.** Do not re-run the whole review. One exception: re-read at the new
-  head any path an earlier finding of yours rests on that the round's merge of
+  head any path a gate-1 finding rests on that the round's merge of
   `main` touched (`git diff --name-only <gated sha> <new sha> -- <path>`):
   pl-56's F2 rested on `docs/02-DEPLOYMENT.md`, and the round's merge changed
   it.

@@ -60,7 +60,15 @@ the batch cannot proceed, put it to the user at once.
    `difficulty` — `npm run status` fails on one that does not — and you never
    rate or re-rate one yourself.
 
-3. **Dispatch builders**, one per ticket, as the agent the pairing table names.
+   **At most three tickets are in flight at once.** A ticket is in flight from
+   its builder's dispatch to its landing push, and runs one agent at a time —
+   builder, gate or fixer. Put the batch to the user in dispatch order: the
+   first three start, the rest wait in `board.md` and start as one lands. Every
+   hand-off is one of your turns, and past three tickets they queue behind each
+   other: the tools-e0 batch (2026-10-18, eleven pull requests) kept the
+   orchestrator 2h28m active in 2h47m of wall.
+
+3. **Dispatch builders**, one per ticket in flight, as the agent the pairing table names.
    Never pass `model`. Before each dispatch, create the ticket's scratch
    directories (`<scratchpad>/<id>/build`, `gate-1`, `gate-2`, `land`; `gate-3`
    if one is ever dispatched) and check
@@ -115,12 +123,16 @@ the batch cannot proceed, put it to the user at once.
    disagreement is a finding, relayed with both verdicts and no verdict of
    yours.
 
-8. **Re-gate once, scoped to the round.** Wake the same gate with `SendMessage`:
-   the sha it gated, the new head, its own findings as it wrote them, and any
-   refutation as a command and its output. It reviews the round's own commits
-   only — `git log --first-parent --no-merges <gated sha>..<new sha>`; a merge from `main`
-   inside the range is not the round — and returns one new `### Gate 2`
-   section.
+8. **Re-gate once, scoped to the round, with a fresh gate.** Dispatch a new
+   reviewer, the agent the pairing table names for the ticket, carrying gate
+   1's files and the round
+   ([reference/dispatching.md](reference/dispatching.md), _Re-gating_); gate
+   1's agent is not messaged again. A resumed gate re-reads gate 1's whole
+   transcript on every turn: lg-40's read 392k cache tokens a turn at gate 2
+   against 171k at gate 1. Gate 2 reviews the round's own commits only —
+   `git log --first-parent --no-merges <gated sha>..<new sha>`; a merge from
+   `main` inside the range is not the round — and returns one new
+   `### Gate 2` section.
 
    **Two gates is the default. A third runs when gate 2 itself raises a `high`
    — then it is narrow, scoped to that finding's fix, and needs no owner answer
@@ -190,7 +202,7 @@ files together.
 | `hard` | `builder-hard` (Opus 5.5, high) | `ticket-reviewer-sonnet` (Sonnet 5.5, xhigh) |
 | maintenance — a rebase, a merge from `main`, one Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | none, or `ticket-reviewer-sonnet` where one runs |
 | a docs-only chore — ticket files, tool docs, no source | `builder-standard` | one gate, narrow, after the PR opens |
-| a round's mechanical fixes, and a landing | `fixer` (Sonnet 5.5, high) | the round's gate, woken |
+| a round's mechanical fixes, and a landing | `fixer` (Sonnet 5.5, high) | gate 2: the ticket's own gate row, dispatched fresh |
 
 - Never `haiku` for a gate or a gate record; never `fable` for either role. A
   filing whose reproduction is in hand is a maintenance dispatch and runs on
@@ -347,7 +359,8 @@ rebuilt.
 
 Lead with what changed and what needs them. Name the finding that matters and
 why it would have bitten. Keep a board — ticket, gates, verdict, PR — and give
-merge order when branches are stacked or conflict. Close with `# Done` once
+merge order when branches are stacked or conflict. Name each ticket that waited
+for a slot (step 2), and from when to when. Close with `# Done` once
 nothing waits on an answer; open pull requests awaiting merge go under it, and
 so does every finding the severity floor left recorded and unfixed, named as
 such. A `high`, or a `med` an acceptance line depends on, that nobody has

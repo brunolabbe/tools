@@ -27,7 +27,7 @@ in `/workspaces/tools`). A completion with no `<worktree>` line is dispatched
 fresh, never resumed.
 
 **Before the landing, a round is not over because an agent said so.** A builder
-can always be woken for one more finding; hold the worktrees until the landing.
+can always be resumed for one more finding; hold the worktrees until the landing.
 
 **Isolated workflow agents that detach HEAD leave their worktree behind.** Remove
 those by hand after the run.

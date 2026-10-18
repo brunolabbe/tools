@@ -1,7 +1,8 @@
 # Concurrency
 
-**Reviewers occupy slots.** A cap of four means four agents total — planning around
-builders alone means constantly rediscovering the cap.
+**Reviewers occupy slots.** The cap is three tickets in flight (`SKILL.md` step
+2), and a ticket's gates and fixers run in its slot, one agent at a time —
+planning around builders alone means constantly rediscovering the cap.
 
 **Never run two tickets over one seam.** The most expensive agent in the reference
 session (559 k) was a builder that rebased three times onto a sibling branch whose
@@ -44,7 +45,7 @@ nothing announced the drop. A resumed builder's final report was lost the other
 way, after shipping, and had to be asked for again (2026-09-14). After sending to a running
 agent, confirm with `ListAgents` and with the artefact the message should
 produce — a push, a commit — and resend if neither appears. The resume figure
-above is not a constant either: one measured wake cost 25,443 tokens
+above is not a constant either: one measured resume cost 25,443 tokens
 (2026-09-12).
 
 **So is the scratchpad, and a collision there can reach outward.** Every agent in a
