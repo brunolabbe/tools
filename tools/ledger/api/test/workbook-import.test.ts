@@ -961,6 +961,7 @@ describe("the workbook against pasted rows that list a day in another order (lg-
   function pasteDay(
     db: Database.Database,
     amounts: readonly number[] = [-2_000, 1_000, 500],
+    lastDate = "2024-03-01",
   ): void {
     const words: Record<number, string> = {
       [-2_000]: "Achat /Quincaillerie Exemple",
@@ -968,8 +969,8 @@ describe("the workbook against pasted rows that list a day in another order (lg-
       500: "Virement /Caisse du Lac",
     };
     const rows = withBalances(
-      amounts.map((amountCents) => ({
-        date: "2024-03-01",
+      amounts.map((amountCents, index) => ({
+        date: index === amounts.length - 1 ? lastDate : "2024-03-01",
         description: words[amountCents] ?? "Autre",
         amountCents,
       })),
@@ -1037,5 +1038,22 @@ describe("the workbook against pasted rows that list a day in another order (lg-
     const after = books();
     expect(dump(after)).toEqual(before);
     after.close();
+  });
+
+  test("a date that differs within a reordered day is reported against the row's own match, not the row in its place", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    // The bank dates its last row of the day, the +5, the 2nd. In the workbook
+    // the +5 is the day's second row and the −20 its last.
+    pasteDay(db, undefined, "2024-03-02");
+    db.close();
+
+    const ran = await run(await workbook(withDay()), "--as", "alex");
+
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain(
+      'dated differently: 2024 row 3, 2024-03-01 "Versement" 5.00 $ (balance 1619.99 $); the paste says 2024-03-02',
+    );
+    expect(ran.out).not.toContain('"Achat" -20.00 $ (balance 1599.99 $); the paste says');
   });
 });
