@@ -62,14 +62,24 @@ downloader's cool ones stay as they are.
      _values_ stay per tool where they differ today: body text is 15px in
      downloader, 16px in planner and unset in ledger, and the stacks differ
      too;
+   - `--page-width`, the content column's `max-width`, defaulting to `62rem`.
+     Downloader's `.app` and planner's `.shell` both use 62rem today. Ledger's
+     `.shell` sets its own `40rem`: a phone-first column that stays narrow on
+     purpose. Each container then reads `max-width: var(--page-width)`;
    - `color-scheme: light dark`, and the only base rules the three files share
-     exactly today: `* { box-sizing: border-box }` and `body { margin: 0;
-background: var(--bg); color: var(--text) }`;
+     exactly today: `box-sizing: border-box` on `*`, and `margin: 0`,
+     `background: var(--bg)` and `color: var(--text)` on `body`;
    - `.sr-only`, which two tools define;
    - a header comment listing the **colour role names** every tool must set,
      and saying the values belong to the tool.
 
    It holds no colour values: the palette stays per tool.
+
+   **Trap:** breakpoints cannot be tokens. A custom property does not resolve
+   inside `@media (max-width: …)`. Planner's 46rem and 34rem and ledger's 48rem
+   stay as literals in each tool's stylesheet. Do not reach for a preprocessor
+   or `@custom-media` to get round it; that is a toolchain decision, not part of
+   this ticket.
 
 2. **Vocabulary.** The canonical colour roles are `--bg`, `--surface`,
    `--surface-2`, `--border`, `--text`, `--text-muted`, `--accent`,
@@ -129,9 +139,9 @@ packages/ui/` beside the `packages/core` manifest line, before `npm ci`.
    first: once with a `--muted` planted in a tool stylesheet, and once with a
    canonical role removed from one dark override.
 3. No tool's rendering changes. For each tool, the Log records the resolved
-   value of every canonical role in light and dark, before and after (read with
-   `getComputedStyle` in a Playwright session), and the two match. Each tool's
-   e2e suite passes.
+   value of every canonical role in light and dark, plus the page container's
+   computed `max-width`, before and after (read with `getComputedStyle` in a
+   Playwright session), and the two match. Each tool's e2e suite passes.
 4. All three Dockerfiles copy `packages/ui/package.json` before `npm ci`, and
    the three image workflows build green on the pull request.
 5. `.claude/rules/ui-package.md` exists with the component rule, and the root
@@ -142,4 +152,5 @@ packages/ui/` beside the `packages/core` manifest line, before `npm ci`.
 
 - 2026-10-18 — Filed after a scoping conversation with the owner. The two
   decisions above were put as options and answered there. The measurements in
-  **Why** were taken on `main@140bd78a`.
+  **Why** were taken on `main@140bd78a`. `--page-width` was added at the
+  owner's prompt: the container widths read 62rem / 62rem / 40rem there.
