@@ -864,6 +864,7 @@ describe("the isolation sweep", () => {
         `POST ${ROUTES.adminHouseholds}`,
         `POST ${ROUTES.adminMembers}`,
         `POST ${ROUTES.adminMemberRemove}`,
+        `POST ${ROUTES.adminMemberAddress}`,
         `POST ${ROUTES.adminPersonRename}`,
       ];
 

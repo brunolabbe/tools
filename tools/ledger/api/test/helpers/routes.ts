@@ -16,6 +16,8 @@ export const VERBS = {
   adminHouseholds: ["GET", ROUTES.adminHouseholds],
   adminMembers: ["POST", ROUTES.adminMembers.replace(":id", "home")],
   adminMemberRemove: ["POST", ROUTES.adminMemberRemove.replace(":id", "home")],
+  // lg-34: a member's address changed in one step, the admin's only.
+  adminMemberAddress: ["POST", ROUTES.adminMemberAddress.replace(":id", "home")],
   // lg-33: a person's shown name, the admin's only.
   adminPersonRename: ["POST", ROUTES.adminPersonRename.replace(":id", "home")],
   statements: ["POST", ROUTES.statements],

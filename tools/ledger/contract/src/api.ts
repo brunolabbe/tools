@@ -29,6 +29,8 @@ export const ROUTES = {
   adminHouseholds: `${API_PREFIX}/admin/households`,
   adminMembers: `${API_PREFIX}/admin/households/:id/members`,
   adminMemberRemove: `${API_PREFIX}/admin/households/:id/members/remove`,
+  // lg-34: a member's address, changed in one step by an admin only.
+  adminMemberAddress: `${API_PREFIX}/admin/households/:id/members/address`,
   // lg-33: a person's shown name, changed by an admin only; their id never changes.
   adminPersonRename: `${API_PREFIX}/admin/households/:id/people/rename`,
   statements: `${API_PREFIX}/statements`,
@@ -174,6 +176,21 @@ export interface RemoveMemberRequest {
 export const removeMemberRequestSchema = z.strictObject({
   address: z.string().min(1).max(320),
 }) satisfies z.ZodType<RemoveMemberRequest>;
+
+/**
+ * `POST /api/admin/households/:id/members/address` (lg-34): the address a
+ * member signs in with now, and the one to replace it with. The person is the
+ * same.
+ */
+export interface ChangeAddressRequest {
+  from: string;
+  to: string;
+}
+
+export const changeAddressRequestSchema = z.strictObject({
+  from: z.string().min(1).max(320),
+  to: z.string().min(1).max(320),
+}) satisfies z.ZodType<ChangeAddressRequest>;
 
 /**
  * `POST /api/admin/households/:id/people/rename` (lg-33): the person's id, and
