@@ -576,21 +576,24 @@ none exists.
 
 #### The owner's answers of 2026-10-18
 
-The questions were put to the owner by the orchestrator, with its
-recommendation first. Four answers:
+The orchestrator put four questions to the owner. Decisions A and B were
+first the lg-38 builder's recommendations, from its build report, which the
+orchestrator relayed. Four answers:
 
-1. **Build or drop (Done when 4).** Options: build (recommended), drop, or
-   measure more first. **The owner chose "measure more first", over the
-   recommendation.** lg-38 stays `in-flight`, and lg-56 runs a harder set of
-   fixtures before the owner decides.
-2. **If built, which model.** Options: Haiku 5.5 (recommended), Sonnet 5.5, or
-   Haiku with a Sonnet retry on refusal. **The owner chose Haiku 5.5**, the
-   recommended option.
-3. **If built, figures in what is sent (decision A).** Options: shown
-   (recommended) or masked. **The owner chose shown**, the recommended option.
+1. **Build or drop (Done when 4).** Options: build (the orchestrator's
+   recommendation), drop, or measure more first. **The owner chose "measure
+   more first", over the orchestrator's recommendation.** lg-38 stays
+   `in-flight`, and lg-56 runs a harder set of fixtures before the owner
+   decides.
+2. **If built, which model.** Options: Haiku 5.5 (the orchestrator's
+   recommendation), Sonnet 5.5, or Haiku with a Sonnet retry on refusal. **The
+   owner chose Haiku 5.5**, as recommended.
+3. **If built, figures in what is sent (decision A).** Options: shown (the
+   lg-38 builder's recommendation, relayed by the orchestrator) or masked.
+   **The owner chose shown**, as recommended.
 4. **If built, the swapped-label guard (decision B).** Options: confirm on
-   screen (recommended), a sign check, or both. **The owner chose confirm on
-   screen**, the recommended option.
+   screen (the lg-38 builder's recommendation, relayed by the orchestrator), a
+   sign check, or both. **The owner chose confirm on screen**, as recommended.
 
 Answers 2 to 4 are for the build if there is one; they decide nothing until
 the owner answers 1. lg-56 carries them as context, not as Build.

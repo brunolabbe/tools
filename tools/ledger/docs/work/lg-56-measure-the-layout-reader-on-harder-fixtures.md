@@ -5,7 +5,7 @@ title: Measure the layout reader again on harder fixtures, before lg-38 is built
 kind: work-package
 status: ready
 milestone: P6
-depends_on: [lg-38]
+depends_on: []
 difficulty: standard
 ---
 
@@ -38,6 +38,11 @@ The owner's answer of 2026-10-18 to "build or drop" was **measure more first**,
 over the recommendation to build. This ticket is that measurement. It hands
 lg-38's Done when 4 back to the owner with the harder numbers attached, and
 decides nothing itself.
+
+**It follows lg-38's merged harness (#542) and answers lg-38's Done when 4.**
+It has no `depends_on`: lg-38 stays `in-flight` until the owner decides build or
+drop, which waits on this ticket, so a `depends_on: [lg-38]` would withhold it
+from `npm run status -- --ready` for good.
 
 ## Context: the owner's preferences if lg-38 is built
 
@@ -182,3 +187,23 @@ the builder stops after step 2. Change no reader, schema or contract.
   opened.
 
 ## Log
+
+### 2026-10-18 — filed; `depends_on` dropped by the owner's answer
+
+Filed with `depends_on: [lg-38]`. That held it out of the ready list for good,
+because lg-38 stays `in-flight` until the owner decides build or drop, and that
+decision (lg-38's Done when 4) waits on this ticket:
+
+```
+$ npm run status -- --show lg-56
+  blocked by  lg-38 (in-flight)
+$ npm run status -- --ready --tool ledger
+lg-56-...: withheld from --ready — waits on lg-38
+```
+
+**The question, and the owner's answer.** The filing builder put it to the
+orchestrator, which asked the owner. Options: drop `depends_on` and say in the
+prose that the ticket follows lg-38's merged harness (the builder's
+recommendation); keep it and dispatch by hand, outside `--ready`; or move
+lg-38 to `done` with an `awaiting` line. **On 2026-10-18 the owner chose the
+first**, the recommended option. The Why now says so.
