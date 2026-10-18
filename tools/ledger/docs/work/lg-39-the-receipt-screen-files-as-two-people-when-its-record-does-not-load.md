@@ -93,6 +93,45 @@ charge to anyone.
 - CI on `c658e8e8`: every check passes except `test (windows-latest, informational)`, which was still pending when read. No line depends on it.
 - NFR: security n/a (no new input, URL or log line) · performance ✓ (two independent requests where `Promise.all` held one) · reliability — the med and the two lows above · maintainability — the categories low above.
 
+### Gate 2
+
+**Gate: PASS** (was CONCERNS) — 2026-10-18 · `c658e8e8..59d863dd`, the round is `22c1e672` · Opus 5.5, depth standard
+
+| Done when                                                                                                                             | Proof                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Household rejecting, `fetchMe` rejecting, household never answering: no "This was the other person's", no `chargedTo: null` filing | unchanged by the round: `web/test/receipts.test.tsx` › the three lg-39 hold tests ✓; the spec runs `25 passed (25)` at `59d863dd`                                                  |
+| 2. A failed load shown where the person works, and the other request's categories still offered                                       | unchanged by the round: same spec › "the household's record failing holds the form…" and › "categories failing to load do not hold the form, and can be asked for again (lg-39)" ✓ |
+| 3. `npm run check` and `npm test -- --project ledger` pass                                                                            | **verified** — check exit 0; ledger project exit 0, `1253 passed (1253)` in 62 files (gate 1: 1251, plus the round's two `test.each` cases)                                        |
+
+- **F1 (med) · fixed in part.** These are fixed, each checked against `59d863dd` with gate 1's one-member and no-member probes re-run:
+  - The "This was …" checkbox is gone (`checkbox false`).
+  - A tap cycles Shared ↔ Not shared and never lands on someone else's.
+  - The line is never sent with a charge: it files `chargedTo: null` only once nothing is someone else's.
+  - The round's new test, `web/test/receipts.test.tsx` › "%s: nobody to charge, so no one else's box, no one else's share, and a read one is not filed (lg-39)" (one member, no member), goes red three separate ways:
+    - against `c658e8e8`'s source: `2 failed | 23 passed (25)`, the checkbox present;
+    - with only the filing block removed: `Unable to find role="alert"`;
+    - with only the tap's skip removed: `Unable to find … "PAIN, Shared"`.
+
+  **One clause is not fixed**: the text "The other's" stays.
+  - The split line reads `The other's 0.00 $` in every one-member or no-member household, even when nothing is someone else's.
+  - An item that was read as someone else's keeps the button `BIERE 6X355, The other's` until it is tapped.
+  - The med was the silent misfiling, and nothing is filed on the strength of this text. The block shows a message right beside the item. So I grade the remaining clause **low**: false text that nothing relies on. No `Done when` line depends on it.
+
+- **The extension (a read item marked someone else's blocks the filing), attacked:**
+  - **No good filing is blocked.** With nothing marked someone else's, one-member and no-member households file at once. A two-member household still files a read `theirs` item as before (`[["shared",null],["theirs",null],["shared",null]]`). The block fires only where the server would refuse anyway (`chargedToOf`: "There is nobody else in the household to charge an item to.").
+  - **One tap clears it.** It moves `theirs` → `Shared`, the hint goes away, and the next "File as" goes through. Attaching to a joint-account row is blocked by the same message. It would have been refused anyway, under the row's own rule.
+  - **The message is where the person works.** A live `hint bad` line sits inside the items fieldset before any click, and the click adds an `alert` at the foot of the form.
+- **low** · new, in the lines the round touched (`fileAs` and `unfileable`) · after the tap clears the block, the foot `alert` "There is nobody else in the household to charge an item to." stays up until the next action that runs a request, while the hint beside the items is already gone. The falsehood is on the safe side: it says the receipt cannot be filed when it now can. Any problem set by `fileAs` behaves the same way, so the pattern is older than this round.
+- **dropped** · none.
+- **findings** · the round's hunt returned 1 new finding (the low above), carried. F1 is a verdict, not a new finding. F2–F4 are not in the round and are not regraded.
+- CI on `59d863dd`:
+  - pass: CodeQL, `changes`, `check` ×2, `codeql`, `dependency-review`, `docker`;
+  - pending when read: `test (ubuntu-latest)` and `test (windows-latest, informational)`.
+
+  No line is proven only by a CI leg, since Done when 3 was re-run locally.
+
+- NFR: security n/a · performance n/a · reliability ✓ (the server's refusal now shows up on the client, before the request) · maintainability — the two lows above.
+
 ## Log
 
 - 2026-10-18 — Filed at the landing of lg-30 (PR #529) by owner choice, as
