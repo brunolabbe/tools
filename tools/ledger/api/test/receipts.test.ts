@@ -29,6 +29,7 @@ import type { AppLogger } from "../src/logger.ts";
 import { merchantCategory } from "../src/receipts.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
+import type { Directory } from "../src/directory.ts";
 import {
   ALEX,
   SAM,
@@ -96,12 +97,14 @@ async function start(
     apiKey?: string;
     /** The household's members, alex and sam by default. */
     members?: Parameters<typeof memberDirectory>[0];
+    /** A directory the test keeps, to change its members after the books open. */
+    directory?: Directory;
   } = {},
 ): Promise<App> {
   if (options.files === true) dataDir = mkdtempSync(path.join(tmpdir(), "ledger-receipts-"));
   const lines = options.lines;
   app = await createApp({
-    directory: memberDirectory(options.members),
+    directory: options.directory ?? memberDirectory(options.members),
     config: {
       dataDir: dataDir ?? ":memory:",
       access: accessConfig(),
@@ -818,6 +821,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: GROCERIES,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "BIERE 6X355",
@@ -826,6 +830,7 @@ const BASKET: ReceiptProposal = {
       deposit: 60,
       spendingCategoryId: ALCOHOL,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "SAVON",
@@ -834,6 +839,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: HOUSEHOLD,
       share: "shared",
+      chargedTo: null,
     },
   ],
 };
@@ -1298,9 +1304,8 @@ describe("a cycle in a line's corrections (lg-10 gate 2, N2)", () => {
   });
 });
 
-// lg-23 gate 1, F2: in a household of three, "the other's" names nobody. It
-// charged the first person who was not the payer; it is refused until an item
-// can name whose it was (lg-30).
+// lg-23 gate 1, F2: in a household of three, "the other's" named nobody, and
+// lg-23 refused it. lg-30 names whose on each item, and lifts the refusal.
 describe("an item marked as the other's, among more than two", () => {
   const three = [
     [ALEX, "alex"],
@@ -1308,26 +1313,39 @@ describe("an item marked as the other's, among more than two", () => {
     [SAM, "sam"],
   ] as const;
 
-  test("is refused, and nothing is filed", async () => {
+  test("files a charge to each person the items name (lg-30)", async () => {
     const target = await start({ members: three });
     const receipt = await uploaded(target, ALEX);
+    const proposal = named(BASKET, "shared", ["theirs", "casey"], ["theirs", "sam"]);
 
     const response = await file(target, receipt.id, {
-      proposal: marked("shared", "theirs", "not-shared"),
+      proposal,
       destination: asLine(2_476, { spendingCategoryId: GROCERIES }),
     });
 
-    expect(response.statusCode, response.body).toBe(400);
-    expect(response.json<ErrorResponse>().error).toMatchObject({
-      code: "BAD_REQUEST",
-      message: expect.stringContaining("more than two people"),
-    });
-    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
-      n: 0,
-    });
-    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM receipt_filings").get()).toEqual({
-      n: 0,
-    });
+    expect(response.statusCode, response.body).toBe(200);
+    const filing = response.json<ReceiptFiling>();
+    const stored = homeBooks(target)
+      .prepare("SELECT id, person_id, amount_cents, charged_to FROM period_lines ORDER BY id")
+      .all() as { id: number; amount_cents: number }[];
+    // Apart 15,54 $ and 5,74 $: the shared line takes the cent, 3,48 $.
+    expect(stored).toEqual([
+      { id: filing.periodLineId, person_id: "alex", amount_cents: 348, charged_to: null },
+      { id: expect.any(Number), person_id: "alex", amount_cents: 1_554, charged_to: "casey" },
+      { id: expect.any(Number), person_id: "alex", amount_cents: 574, charged_to: "sam" },
+    ]);
+    expect(stored.reduce((sum, line) => sum + line.amount_cents, 0)).toBe(2_476);
+    expect(filing.charges).toEqual([
+      { chargedTo: "casey", lineId: stored[1]?.id },
+      { chargedTo: "sam", lineId: stored[2]?.id },
+    ]);
+    expect(filing.chargeLineId).toBe(stored[1]?.id);
+    expect(storedItems(target)).toEqual([
+      { share: "shared", charged_to: null, charge_line_id: null },
+      { share: "theirs", charged_to: "casey", charge_line_id: stored[1]?.id },
+      { share: "theirs", charged_to: "sam", charge_line_id: stored[2]?.id },
+    ]);
+    expect(filing.proposal.items.map((item) => item.chargedTo)).toEqual([null, "casey", "sam"]);
   });
 
   test("a receipt with nothing marked as the other's still files", async () => {
@@ -1386,7 +1404,7 @@ function couponItem(
   taxable: boolean,
   share: "not-shared" | "theirs",
 ): ReceiptProposal["items"][number] {
-  return { text, price, taxable, deposit: null, spendingCategoryId: null, share };
+  return { text, price, taxable, deposit: null, spendingCategoryId: null, share, chargedTo: null };
 }
 
 // lg-32, gate 1 F2: not-shared items are there but their amount rounds to 0.
@@ -1413,5 +1431,438 @@ describe("not-shared items that come to nothing (lg-32, gate 1 F2)", () => {
 
     expect(response.statusCode, response.body).toBe(200);
     expect(storedLines(target)).toEqual([{ amount_cents: 565, charged_to: "sam" }]);
+  });
+});
+
+// --- lg-30: whose a receipt item's charge is, among more than two people ---
+
+/** `BASKET`'s items marked in order, each a share or a share and whose it is. */
+function named(
+  receipt: ReceiptProposal,
+  ...marks: (ItemMark | [ItemMark, string])[]
+): ReceiptProposal {
+  return {
+    ...receipt,
+    items: receipt.items.map((item, index) => {
+      const mark = marks[index] ?? "shared";
+      return typeof mark === "string"
+        ? { ...item, share: mark, chargedTo: null }
+        : { ...item, share: mark[0], chargedTo: mark[1] };
+    }),
+  };
+}
+
+type ItemMark = ReceiptProposal["items"][number]["share"];
+
+function storedItems(
+  target: App,
+): { share: string; charged_to: string | null; charge_line_id: number | null }[] {
+  return homeBooks(target)
+    .prepare("SELECT share, charged_to, charge_line_id FROM receipt_items ORDER BY id")
+    .all() as { share: string; charged_to: string | null; charge_line_id: number | null }[];
+}
+
+const THREE = [
+  [ALEX, "alex"],
+  ["casey@example.test", "casey"],
+  [SAM, "sam"],
+] as const;
+
+/** `BASKET` as a refund: every price, deposit, tax and the total negated. */
+const BASKET_REFUND: ReceiptProposal = {
+  ...BASKET,
+  subtotal: -2_207,
+  gst: -90,
+  qst: -179,
+  total: -2_476,
+  items: BASKET.items.map((item) => ({
+    ...item,
+    price: -item.price,
+    deposit: item.deposit === null ? null : -item.deposit,
+  })),
+};
+
+/**
+ * 10,00 $ not shared and `price` someone else's, both taxable, with the rates'
+ * own taxes each rounded once, as a till prints them (lg-30 Build 2's receipts).
+ */
+function twoTaxed(price: number, whose: string | null = null): ReceiptProposal {
+  const subtotal = 1_000 + price;
+  const gst = Math.round((subtotal * 5_000) / 100_000);
+  const qst = Math.round((subtotal * 9_975) / 100_000);
+  return {
+    ...BASKET,
+    subtotal,
+    gst,
+    qst,
+    total: subtotal + gst + qst,
+    items: [
+      { ...couponItem("VIN", 1_000, true, "not-shared") },
+      { ...couponItem("FROMAGE", price, true, "theirs"), chargedTo: whose },
+    ],
+  };
+}
+
+const MORE_COMES_OFF =
+  "More comes off this receipt than the card was charged. Check the amount charged and the items.";
+
+describe("a theirs item that names nobody, among three (lg-30)", () => {
+  test("is refused, asking whose, and files nothing", async () => {
+    const target = await start({ members: THREE });
+    const receipt = await uploaded(target, ALEX);
+
+    const refused = await file(target, receipt.id, {
+      proposal: named(BASKET, "shared", "theirs", ["theirs", "sam"]),
+      destination: asLine(2_476),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("name whose"),
+    });
+    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+  });
+});
+
+describe("two people keep their requests and results (lg-30)", () => {
+  test("lg-10's charge names sam in charges and on its stored item", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: marked("shared", "theirs", "not-shared"),
+      destination: asLine(2_476, { spendingCategoryId: GROCERIES }),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const filing = response.json<ReceiptFiling>();
+    expect(filing.chargeLineId).not.toBeNull();
+    expect(filing.charges).toEqual([{ chargedTo: "sam", lineId: filing.chargeLineId }]);
+    expect(storedItems(target)).toEqual([
+      { share: "shared", charged_to: null, charge_line_id: null },
+      { share: "theirs", charged_to: "sam", charge_line_id: filing.chargeLineId },
+      { share: "not-shared", charged_to: null, charge_line_id: null },
+    ]);
+    expect(storedLines(target)).toEqual([
+      { amount_cents: 348, charged_to: null },
+      { amount_cents: 1_554, charged_to: "sam" },
+    ]);
+  });
+});
+
+describe("the names a theirs item may not carry (lg-30)", () => {
+  test.each([
+    [
+      "the payer",
+      named(BASKET, "shared", ["theirs", "alex"]),
+      "A charge is owed by the other person, not by whoever paid.",
+    ],
+    [
+      "a name the books do not hold",
+      named(BASKET, "shared", ["theirs", "robin"]),
+      "That person is not one of the household.",
+    ],
+    [
+      "a name on a shared item",
+      named(BASKET, ["shared", "sam"], "theirs"),
+      "The filing is not valid: check proposal.",
+    ],
+    [
+      "a name on a not-shared item",
+      named(BASKET, ["not-shared", "sam"], "theirs"),
+      "The filing is not valid: check proposal.",
+    ],
+  ])("refuses %s, and files nothing", async (_case, proposal, message) => {
+    const target = await start({ members: THREE });
+    const receipt = await uploaded(target, ALEX);
+
+    const refused = await file(target, receipt.id, { proposal, destination: asLine(2_476) });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error).toMatchObject({ code: "BAD_REQUEST", message });
+    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+  });
+
+  test("still refuses a theirs item on a joint-account row, with the same words", async () => {
+    const target = await start({ members: THREE });
+    await pasteRows(target);
+    const receipt = await uploaded(target, ALEX);
+
+    const refused = await file(target, receipt.id, {
+      proposal: named(BASKET, "shared", ["theirs", "sam"]),
+      destination: { to: "row", rowId: chargeRow(target) },
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error.message).toBe(
+      "A receipt on a joint-account row is shared whole: every item on it stays shared.",
+    );
+    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+  });
+});
+
+describe("a member who has left (lg-30)", () => {
+  async function departed(): Promise<App> {
+    const directory = memberDirectory(THREE);
+    const target = await start({ directory });
+    // The books enrolled casey when they opened; the directory no longer holds them.
+    directory.removeMember({
+      address: "casey@example.test",
+      by: "operator",
+      at: new Date("2026-10-02T00:00:00Z"),
+    });
+    expect(directory.people("home")).toEqual(["alex", "sam"]);
+    return target;
+  }
+
+  test("a theirs item that names nobody is the one other current member's", async () => {
+    const target = await departed();
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: named(BASKET, "shared", "theirs"),
+      destination: asLine(2_476),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(storedLines(target)).toEqual([
+      { amount_cents: 922, charged_to: null },
+      { amount_cents: 1_554, charged_to: "sam" },
+    ]);
+  });
+
+  test("and one that names them is charged to them", async () => {
+    const target = await departed();
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: named(BASKET, "shared", ["theirs", "casey"]),
+      destination: asLine(2_476),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(storedLines(target)).toEqual([
+      { amount_cents: 922, charged_to: null },
+      { amount_cents: 1_554, charged_to: "casey" },
+    ]);
+  });
+});
+
+describe("nothing shared, two people charged (lg-30)", () => {
+  test("files two charges, the cent of rounding off the largest", async () => {
+    const target = await start({ members: THREE });
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: named(BASKET, ["theirs", "casey"], ["theirs", "sam"], ["theirs", "casey"]),
+      destination: asLine(2_476),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const filing = response.json<ReceiptFiling>();
+    const stored = homeBooks(target)
+      .prepare("SELECT id, amount_cents, charged_to FROM period_lines ORDER BY id")
+      .all() as { id: number }[];
+    expect(stored).toEqual([
+      { id: filing.periodLineId, amount_cents: 923, charged_to: "casey" },
+      { id: expect.any(Number), amount_cents: 1_553, charged_to: "sam" },
+    ]);
+    expect(filing.chargeLineId).toBeNull();
+    expect(filing.charges).toEqual([
+      { chargedTo: "casey", lineId: stored[0]?.id },
+      { chargedTo: "sam", lineId: stored[1]?.id },
+    ]);
+  });
+
+  test("and on the refund, off the charge largest in size", async () => {
+    const target = await start({ members: THREE });
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: named(BASKET_REFUND, ["theirs", "casey"], ["theirs", "sam"], ["theirs", "casey"]),
+      destination: asLine(-2_476),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(storedLines(target)).toEqual([
+      { amount_cents: -923, charged_to: "casey" },
+      { amount_cents: -1_553, charged_to: "sam" },
+    ]);
+  });
+
+  test.each([
+    ["several", named(BASKET, ["theirs", "casey"], ["theirs", "sam"], ["theirs", "casey"])],
+    ["one", named(BASKET, ["theirs", "sam"], ["theirs", "sam"], ["theirs", "sam"])],
+  ])(
+    "a payment under the printed total, with %s charged, is refused as more coming off",
+    async (_case, proposal) => {
+      const target = await start({ members: THREE });
+      const receipt = await uploaded(target, ALEX);
+
+      const refused = await file(target, receipt.id, { proposal, destination: asLine(2_470) });
+
+      expect(refused.statusCode, refused.body).toBe(400);
+      expect(refused.json<ErrorResponse>().error).toMatchObject({
+        code: "BAD_REQUEST",
+        message: MORE_COMES_OFF,
+      });
+      expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+    },
+  );
+});
+
+describe("the rounding judged against the printed total (lg-30, on lg-32's F1)", () => {
+  test("a payment of the printed total files, where the items rounded together exceed it", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+    const proposal = twoTaxed(1_007);
+    expect(proposal.total).toBe(2_307);
+
+    const response = await file(target, receipt.id, { proposal, destination: asLine(2_307) });
+
+    expect(response.statusCode, response.body).toBe(200);
+    // 11,58 $ is sam's; the 11,50 $ not shared took the cent, 11,49 $, and files nothing.
+    expect(storedLines(target)).toEqual([{ amount_cents: 1_158, charged_to: "sam" }]);
+  });
+
+  test("a payment a cent under the printed total is refused, where the items rounded together allow it", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+    const proposal = twoTaxed(1_012);
+    expect(proposal.total).toBe(2_314);
+
+    const refused = await file(target, receipt.id, { proposal, destination: asLine(2_313) });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: MORE_COMES_OFF,
+    });
+    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+  });
+});
+
+describe("a theirs item that costs nothing (lg-30)", () => {
+  test("files no charge line, and keeps whose it was on the item", async () => {
+    const target = await start({ members: THREE });
+    const receipt = await uploaded(target, ALEX);
+    const proposal: ReceiptProposal = {
+      ...BASKET,
+      items: [...BASKET.items, { ...couponItem("SAC", 0, false, "theirs"), chargedTo: "casey" }],
+    };
+
+    const response = await file(target, receipt.id, { proposal, destination: asLine(2_476) });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const filing = response.json<ReceiptFiling>();
+    expect(storedLines(target)).toEqual([{ amount_cents: 2_476, charged_to: null }]);
+    expect(filing.charges).toEqual([]);
+    expect(filing.chargeLineId).toBeNull();
+    expect(storedItems(target).at(-1)).toEqual({
+      share: "theirs",
+      charged_to: "casey",
+      charge_line_id: null,
+    });
+  });
+});
+
+describe("a cent of rounding on a mixed receipt (lg-30)", () => {
+  test("comes off the not-shared amount, and files the two charges alone", async () => {
+    const target = await start({ members: THREE });
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: named(BASKET, "not-shared", ["theirs", "casey"], ["theirs", "sam"]),
+      destination: asLine(2_476),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json<ReceiptFiling>().chargeLineId).toBeNull();
+    expect(storedLines(target)).toEqual([
+      { amount_cents: 1_554, charged_to: "casey" },
+      { amount_cents: 574, charged_to: "sam" },
+    ]);
+  });
+});
+
+describe("the people the screen is not given (lg-30)", () => {
+  test("GET /api/people still answers the one key, people", async () => {
+    const target = await start({ members: THREE });
+
+    const response = await target.server.inject({
+      method: "GET",
+      url: ROUTES.people,
+      headers: as(ALEX),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(Object.keys(response.json<Record<string, unknown>>())).toEqual(["people"]);
+  });
+});
+
+// lg-30, gate 1 F1, fixed at landing (owner, 2026-10-18): main files this receipt.
+describe("a free shared item beside a cent of rounding (lg-30, gate 1 F1)", () => {
+  test("files the charge alone, as the same receipt without the free item does", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+    const items = [
+      couponItem("VIN", 2_074, true, "not-shared"),
+      { ...couponItem("SAC 0,00", 0, false, "theirs"), share: "shared" as const },
+      couponItem("FROMAGE", 309, true, "theirs"),
+      couponItem("PAIN", 1_892, true, "theirs"),
+    ];
+
+    const response = await file(target, receipt.id, {
+      proposal: {
+        ...BASKET,
+        subtotal: 4_275,
+        gst: 214,
+        qst: 426,
+        total: 4_915,
+        items,
+      },
+      destination: asLine(4_915),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(storedLines(target)).toEqual([{ amount_cents: 2_531, charged_to: "sam" }]);
+  });
+});
+
+// lg-30, gate 1 F2, fixed at landing (owner, 2026-10-18): a free theirs item files
+// no line, so `addLine` never meets its name and only `chargedToOf` does.
+describe("a free theirs item names a person the household does not hold (lg-30, gate 1 F2)", () => {
+  test.each([
+    ["a member of another household", "zoe", "That person is not one of the household."],
+    ["a name nobody holds", "nobody", "That person is not one of the household."],
+    ["the payer", "alex", "A charge is owed by the other person, not by whoever paid."],
+  ])("refuses %s, and files nothing", async (_case, name, message) => {
+    const directory = memberDirectory(THREE);
+    const change = { by: "operator", at: new Date("2026-10-01T00:00:00Z") };
+    directory.addHousehold({ id: "away", name: "Another", ...change });
+    directory.addMember({
+      household: "away",
+      address: "zoe@example.test",
+      person: "zoe",
+      ...change,
+    });
+    const target = await start({ directory });
+    const receipt = await uploaded(target, ALEX);
+    const free = { ...couponItem("SAC 0,00", 0, false, "theirs"), chargedTo: name };
+    const basket = named(BASKET, "shared", "shared", "shared");
+
+    const refused = await file(target, receipt.id, {
+      proposal: { ...basket, items: [...basket.items, free] },
+      destination: asLine(2_476),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error).toMatchObject({ code: "BAD_REQUEST", message });
+    expect([
+      count(target, "period_lines"),
+      count(target, "receipt_filings"),
+      count(target, "receipt_items"),
+    ]).toEqual([0, 0, 0]);
   });
 });

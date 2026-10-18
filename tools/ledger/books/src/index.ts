@@ -103,6 +103,7 @@ export {
 export type {
   CategoryAmount,
   MatchableRow,
+  ReceiptChargeSplit,
   ReceiptSplit,
   RowMatch,
   SalesTaxRates,

@@ -158,6 +158,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: 1,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "BIERE 6X355",
@@ -166,6 +167,7 @@ const BASKET: ReceiptProposal = {
       deposit: 60,
       spendingCategoryId: 2,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "SAVON",
@@ -174,6 +176,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: 3,
       share: "shared",
+      chargedTo: null,
     },
   ],
 };
@@ -710,6 +713,7 @@ describe("a receipt with nothing left shared (lg-32)", () => {
       sharedCents: 0,
       notSharedCents: 922,
       chargedCents: 1_554,
+      charges: [{ personId: null, cents: 1_554 }],
     });
   });
 
@@ -718,6 +722,7 @@ describe("a receipt with nothing left shared (lg-32)", () => {
       sharedCents: 0,
       notSharedCents: -922,
       chargedCents: -1_554,
+      charges: [{ personId: null, cents: -1_554 }],
     });
   });
 
@@ -725,10 +730,12 @@ describe("a receipt with nothing left shared (lg-32)", () => {
     const marks = NOTHING_LEFT(BASKET);
 
     // A cent short together too, so the cent is not rounding: -1 together, -2 apart.
+    // Since lg-30 the reason is the printed total: 2,475 is paid under 2,476.
     expect(splitReceipt(marks, SALES_TAX_RATES, 2_475)).toEqual({
       sharedCents: -2,
       notSharedCents: 923,
       chargedCents: 1_554,
+      charges: [{ personId: null, cents: 1_554 }],
     });
     expect(splitReceipt(marks, SALES_TAX_RATES, 2_470).sharedCents).toBe(-7);
   });
@@ -753,6 +760,7 @@ const COUPON: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: null,
       share: "not-shared",
+      chargedTo: null,
     },
     {
       text: "COUPON",
@@ -761,6 +769,7 @@ const COUPON: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: null,
       share: "not-shared",
+      chargedTo: null,
     },
     {
       text: "FROMAGE",
@@ -769,6 +778,7 @@ const COUPON: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: null,
       share: "theirs",
+      chargedTo: null,
     },
   ],
 };
@@ -782,6 +792,389 @@ describe("not-shared items that come to nothing (lg-32, gate 1 F2)", () => {
       sharedCents: 0,
       notSharedCents: -1,
       chargedCents: 565,
+      charges: [{ personId: null, cents: 565 }],
     });
+  });
+});
+
+// --- lg-30: a charge per person, and the rounding judged against the printed total ---
+
+/** `BASKET` with each item's share and whose it is, in order. */
+function whose(
+  receipt: ReceiptProposal,
+  ...marks: (ReceiptItem["share"] | [ReceiptItem["share"], string])[]
+): ReceiptProposal {
+  return {
+    ...receipt,
+    items: receipt.items.map((each, at) => {
+      const mark = marks[at] ?? "shared";
+      return typeof mark === "string"
+        ? { ...each, share: mark, chargedTo: null }
+        : { ...each, share: mark[0], chargedTo: mark[1] };
+    }),
+  };
+}
+
+/** `BASKET` as a refund: every price, deposit, tax and the total negated. */
+const BASKET_REFUND: ReceiptProposal = {
+  ...BASKET,
+  subtotal: -2_207,
+  gst: -90,
+  qst: -179,
+  total: -2_476,
+  items: BASKET.items.map((each) => ({
+    ...each,
+    price: -each.price,
+    deposit: each.deposit === null ? null : -each.deposit,
+  })),
+};
+
+/**
+ * Two taxable items, the first not shared and the second someone else's: 10,00 $
+ * and `price`. The taxes are the rates' own on the two, each rounded once, as a
+ * till prints them, so `checkReceipt` raises nothing.
+ */
+function TWO_TAXED(price: number): ReceiptProposal {
+  const subtotal = 1_000 + price;
+  const gst = Math.round((subtotal * 5_000) / 100_000);
+  const qst = Math.round((subtotal * 9_975) / 100_000);
+  return {
+    merchant: "Marché Exemple",
+    date: "2026-10-04",
+    subtotal,
+    gst,
+    qst,
+    total: subtotal + gst + qst,
+    items: [
+      {
+        text: "VIN",
+        price: 1_000,
+        taxable: true,
+        deposit: null,
+        spendingCategoryId: null,
+        share: "not-shared",
+        chargedTo: null,
+      },
+      {
+        text: "FROMAGE",
+        price,
+        taxable: true,
+        deposit: null,
+        spendingCategoryId: null,
+        share: "theirs",
+        chargedTo: "sam",
+      },
+    ],
+  };
+}
+
+describe("a charge per person (lg-30)", () => {
+  test("rounds each person's items apart, so the shared amount takes the cent", () => {
+    // Apart 15,54 $ and 5,74 $ (21,28 $); together 21,27 $ and 3,49 $ shared.
+    const split = splitReceipt(whose(BASKET, "shared", ["theirs", "casey"], ["theirs", "sam"]));
+
+    expect(split).toEqual({
+      sharedCents: 348,
+      notSharedCents: 0,
+      chargedCents: 2_128,
+      charges: [
+        { personId: "casey", cents: 1_554 },
+        { personId: "sam", cents: 574 },
+      ],
+    });
+  });
+
+  test("lists each person once, in the order their first item is printed", () => {
+    const split = splitReceipt(
+      whose(BASKET, ["theirs", "sam"], ["theirs", "casey"], ["theirs", "sam"]),
+    );
+
+    expect(split.charges.map((charge) => charge.personId)).toEqual(["sam", "casey"]);
+    // The bread and the soap are sam's together: 3,49 $ + 5,7372525 $ → 9,23 $.
+    expect(split.charges.map((charge) => charge.cents)).toEqual([923, 1_553]);
+  });
+
+  test("a charge that names nobody is its own entry, and one that comes to nothing is kept", () => {
+    const free: ReceiptProposal = {
+      ...BASKET,
+      items: [
+        ...whose(BASKET, ["theirs", "casey"], "theirs").items,
+        {
+          text: "SAC",
+          price: 0,
+          taxable: false,
+          deposit: null,
+          spendingCategoryId: null,
+          share: "theirs",
+          chargedTo: "sam",
+        },
+      ],
+    };
+
+    expect(splitReceipt(free).charges).toEqual([
+      { personId: "casey", cents: 349 },
+      { personId: null, cents: 1_554 },
+      { personId: "sam", cents: 0 },
+    ]);
+  });
+
+  test("the three parts make the payment in every split the earlier tests assert", () => {
+    const cases: [ReceiptProposal, number][] = [
+      [whose(BASKET, "shared", "theirs", "not-shared"), 2_476],
+      [whose(BASKET, "not-shared", "not-shared", "not-shared"), 2_476 + 300],
+      [whose(BASKET, "not-shared", "theirs", "not-shared"), 2_476],
+      [whose(BASKET, "shared", ["theirs", "casey"], ["theirs", "sam"]), 2_476],
+      [whose(BASKET, ["theirs", "casey"], ["theirs", "sam"], ["theirs", "casey"]), 2_476],
+      [whose(BASKET, "not-shared", ["theirs", "casey"], ["theirs", "sam"]), 2_476],
+      [whose(BASKET_REFUND, ["theirs", "casey"], ["theirs", "sam"], ["theirs", "casey"]), -2_476],
+      [COUPON, 564],
+    ];
+
+    for (const [receipt, paid] of cases) {
+      const split = splitReceipt(receipt, SALES_TAX_RATES, paid);
+      expect(split.sharedCents + split.notSharedCents + split.chargedCents).toBe(paid);
+      expect(split.charges.reduce((sum, charge) => sum + charge.cents, 0)).toBe(split.chargedCents);
+    }
+  });
+});
+
+describe("the rounding judged against the printed total (lg-30)", () => {
+  test("with nothing not shared, the cent comes off the charge largest in size", () => {
+    // casey 9,23 $ and sam 15,54 $ are 24,77 $ against 24,76 $ paid, the total.
+    expect(
+      splitReceipt(whose(BASKET, ["theirs", "casey"], ["theirs", "sam"], ["theirs", "casey"])),
+    ).toEqual({
+      sharedCents: 0,
+      notSharedCents: 0,
+      chargedCents: 2_476,
+      charges: [
+        { personId: "casey", cents: 923 },
+        { personId: "sam", cents: 1_553 },
+      ],
+    });
+  });
+
+  test("and on the refund of it, off the charge largest in size, not by value", () => {
+    expect(
+      splitReceipt(
+        whose(BASKET_REFUND, ["theirs", "casey"], ["theirs", "sam"], ["theirs", "casey"]),
+      ),
+    ).toEqual({
+      sharedCents: 0,
+      notSharedCents: 0,
+      chargedCents: -2_476,
+      charges: [
+        { personId: "casey", cents: -923 },
+        { personId: "sam", cents: -1_553 },
+      ],
+    });
+  });
+
+  test("with not-shared items, the cent comes off the not-shared amount", () => {
+    // Apart 3,49 $, 15,54 $ and 5,74 $ are 24,77 $; the not-shared bread takes the cent.
+    expect(
+      splitReceipt(whose(BASKET, "not-shared", ["theirs", "casey"], ["theirs", "sam"])),
+    ).toEqual({
+      sharedCents: 0,
+      notSharedCents: 348,
+      chargedCents: 2_128,
+      charges: [
+        { personId: "casey", cents: 1_554 },
+        { personId: "sam", cents: 574 },
+      ],
+    });
+  });
+
+  test("files a payment of the printed total that the items rounded together exceed", () => {
+    // 10,00 $ and 10,07 $: GST 1,00 $, QST 2,00 $, 23,07 $ printed. Apart 11,50 $
+    // and 11,58 $ (23,08 $); together 23,0790225 $ → 23,08 $, a cent over too.
+    const receipt = TWO_TAXED(1_007);
+    expect([receipt.gst, receipt.qst, receipt.total]).toEqual([100, 200, 2_307]);
+    expect(checkReceipt(receipt)).toEqual([]);
+
+    expect(splitReceipt(receipt)).toEqual({
+      sharedCents: 0,
+      notSharedCents: 1_149,
+      chargedCents: 1_158,
+      charges: [{ personId: "sam", cents: 1_158 }],
+    });
+  });
+
+  test("refuses a payment a cent under the printed total, which the items rounded together allow", () => {
+    // 10,00 $ and 10,12 $: GST 1,01 $, QST 2,01 $, 23,14 $ printed, 23,13 $ paid.
+    // Together 23,1329 $ → 23,13 $, which is what was paid; apart 23,14 $.
+    const receipt = TWO_TAXED(1_012);
+    expect([receipt.gst, receipt.qst, receipt.total]).toEqual([101, 201, 2_314]);
+    expect(checkReceipt(receipt)).toEqual([]);
+
+    expect(splitReceipt(receipt, SALES_TAX_RATES, 2_313)).toEqual({
+      sharedCents: -1,
+      notSharedCents: 1_150,
+      chargedCents: 1_164,
+      charges: [{ personId: "sam", cents: 1_164 }],
+    });
+  });
+
+  test("one person charged with everything: the printed total still decides", () => {
+    // 10,07 $ taxable alone is 11,5779825 $ → 11,58 $, against 11,57 $ printed
+    // (GST 0,50 $, QST 1,00 $): one part, rounded once, a cent over the total.
+    const one: ReceiptProposal = {
+      ...TWO_TAXED(1_007),
+      subtotal: 1_007,
+      gst: 50,
+      qst: 100,
+      total: 1_157,
+      items: TWO_TAXED(1_007).items.slice(1),
+    };
+    expect(checkReceipt(one)).toEqual([]);
+
+    expect(splitReceipt(one).charges).toEqual([{ personId: "sam", cents: 1_157 }]);
+    expect(splitReceipt(one).sharedCents).toBe(0);
+    expect(splitReceipt(one, SALES_TAX_RATES, 1_156).sharedCents).toBe(-2);
+  });
+
+  test("five people's parts can round 3 cents over the total, and that is still rounding", () => {
+    // Each item a part of its own, each rounded up by almost half a cent, and both
+    // printed taxes rounded down: 50,44 $ apart against 50,41 $ printed and paid.
+    const prices = [391, 1_172, 785, 384, 1_653];
+    const five: ReceiptProposal = {
+      merchant: "Marché Exemple",
+      date: "2026-10-04",
+      subtotal: 4_385,
+      gst: 219,
+      qst: 437,
+      total: 5_041,
+      items: prices.map((price, at) => ({
+        text: `ARTICLE ${String(at + 1)}`,
+        price,
+        taxable: true,
+        deposit: null,
+        spendingCategoryId: null,
+        share: "theirs",
+        chargedTo: `person${String(at + 1)}`,
+      })),
+    };
+    expect(checkReceipt(five)).toEqual([]);
+
+    const split = splitReceipt(five);
+
+    expect(split.sharedCents).toBe(0);
+    expect(split.charges.map((charge) => charge.cents)).toEqual([450, 1_348, 903, 442, 1_898]);
+  });
+
+  test("an excess larger than rounding can make is not adjusted", () => {
+    // Marked taxable on a receipt with no taxes: 11,50 $ comes off a 10,00 $ total.
+    const untaxed: ReceiptProposal = {
+      ...TWO_TAXED(1_000),
+      subtotal: 1_000,
+      gst: null,
+      qst: null,
+      total: 1_000,
+      items: TWO_TAXED(1_000).items.slice(1),
+    };
+
+    expect(splitReceipt(untaxed).sharedCents).toBe(-150);
+  });
+
+  test("a shared item that costs something takes no adjustment; a free one does not stop it", () => {
+    // Nothing left shared is read by cost (lg-30, owner 2026-10-18): a free shared
+    // bag beside the 2,307 receipt does not stop the cent being rounding.
+    const receipt = TWO_TAXED(1_007);
+    const free: ReceiptProposal = {
+      ...receipt,
+      items: [...receipt.items, itemLine(0, false, "shared")],
+    };
+
+    expect(splitReceipt(free)).toEqual({
+      sharedCents: 0,
+      notSharedCents: 1_149,
+      chargedCents: 1_158,
+      charges: [{ personId: "sam", cents: 1_158 }],
+    });
+
+    // A shared item of 0,01 $ beside parts that round 2 cents over: the shared
+    // item is something still shared, so the excess is not taken from the parts.
+    const costly: ReceiptProposal = {
+      merchant: null,
+      date: "2026-10-04",
+      subtotal: 1_249,
+      gst: 62,
+      qst: 124,
+      total: 1_435,
+      items: [
+        itemLine(111, true, "not-shared"),
+        itemLine(1, false, "shared"),
+        itemLine(137, true, "theirs", "sam"),
+        itemLine(1_000, true, "theirs", "casey"),
+      ],
+    };
+
+    expect(checkReceipt(costly)).toEqual([]);
+    expect(splitReceipt(costly).sharedCents).toBe(-1);
+  });
+});
+
+// lg-30, gate 1 F1 and F3, fixed at landing (owner, 2026-10-18).
+function itemLine(
+  price: number,
+  taxable: boolean,
+  share: "not-shared" | "shared" | "theirs",
+  chargedTo: string | null = null,
+): ReceiptItem {
+  return {
+    text: "X",
+    price,
+    taxable,
+    deposit: null,
+    spendingCategoryId: null,
+    share,
+    chargedTo,
+  };
+}
+
+describe("what still shared means, and where the bound ends (lg-30, gate 1)", () => {
+  test("a free shared item does not stop the cent being rounding", () => {
+    // Main files this receipt (2,531 to sam); a `SAC 0,00` line must not refuse it.
+    const withFree: ReceiptProposal = {
+      merchant: null,
+      date: "2026-10-04",
+      subtotal: 4_275,
+      gst: 214,
+      qst: 426,
+      total: 4_915,
+      items: [
+        itemLine(2_074, true, "not-shared"),
+        itemLine(0, false, "shared"),
+        itemLine(309, true, "theirs", "sam"),
+        itemLine(1_892, true, "theirs", "sam"),
+      ],
+    };
+
+    expect(checkReceipt(withFree)).toEqual([]);
+    expect(splitReceipt(withFree)).toEqual({
+      sharedCents: 0,
+      notSharedCents: 2_384,
+      chargedCents: 2_531,
+      charges: [{ personId: "sam", cents: 2_531 }],
+    });
+    // The same receipt without the free item, which both trees already file.
+    const without = { ...withFree, items: withFree.items.filter((entry) => entry.price > 0) };
+    expect(splitReceipt(without)).toEqual(splitReceipt(withFree));
+  });
+
+  test("an excess one cent past the bound is not adjusted", () => {
+    // 0,14 $ marked taxable on a receipt with no taxes costs 0,16 $: 2 cents over
+    // for one part, whose bound is 1.
+    const untaxed: ReceiptProposal = {
+      merchant: null,
+      date: "2026-10-04",
+      subtotal: 14,
+      gst: null,
+      qst: null,
+      total: 14,
+      items: [itemLine(14, true, "theirs", "sam")],
+    };
+
+    expect(splitReceipt(untaxed).sharedCents).toBe(-2);
   });
 });

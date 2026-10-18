@@ -278,6 +278,7 @@ describe("the model reader's items (lg-10)", () => {
         deposit: null,
         spendingCategoryId: 1,
         share: "shared",
+        chargedTo: null,
       },
       {
         text: "BIERE 6X355",
@@ -286,6 +287,7 @@ describe("the model reader's items (lg-10)", () => {
         deposit: 60,
         spendingCategoryId: 2,
         share: "shared",
+        chargedTo: null,
       },
       // "Toiletries" is not in the list: the item stays, its category is dropped.
       {
@@ -295,6 +297,7 @@ describe("the model reader's items (lg-10)", () => {
         deposit: null,
         spendingCategoryId: null,
         share: "shared",
+        chargedTo: null,
       },
       {
         text: "RABAIS",
@@ -303,6 +306,7 @@ describe("the model reader's items (lg-10)", () => {
         deposit: null,
         spendingCategoryId: null,
         share: "shared",
+        chargedTo: null,
       },
     ]);
   });

@@ -182,6 +182,7 @@ function toItem(read: ReadItem, categories: ReadonlyMap<string, number>): Receip
     spendingCategoryId:
       read.category === null ? null : (categories.get(folded(read.category)) ?? null),
     share: "shared",
+    chargedTo: null,
   };
 }
 

@@ -9,8 +9,10 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReceiptProposal, UploadedReceipt } from "@ledger/contract";
+import type { HouseholdResponse, ReceiptProposal, UploadedReceipt } from "@ledger/contract";
 import { MAX_RECEIPT_PHOTO_BYTES } from "@ledger/contract";
+import { fetchHousehold } from "../src/api/households.ts";
+import { fetchMe } from "../src/api/me.ts";
 import {
   fetchReceiptMatches,
   fileReceipt,
@@ -22,6 +24,8 @@ import { fetchSpendingCategories } from "../src/api/spending.ts";
 import { Receipts } from "../src/receipts/Receipts.tsx";
 
 vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
+vi.mock("../src/api/me.ts", () => ({ fetchMe: vi.fn() }));
+vi.mock("../src/api/households.ts", () => ({ fetchHousehold: vi.fn() }));
 vi.mock("../src/api/spending.ts", () => ({ fetchSpendingCategories: vi.fn() }));
 vi.mock("../src/api/receipts.ts", () => ({
   uploadReceipt: vi.fn(),
@@ -49,9 +53,40 @@ const READ: ReceiptProposal = {
   items: [],
 };
 
+/**
+ * The household's record (lg-22) with `people` as its current members, each
+ * under one address, and `left` in its history only, as someone who has left.
+ */
+function address(person: string): string {
+  return `${person}@example.test`;
+}
+
+function household(people: readonly string[], left: readonly string[] = []): HouseholdResponse {
+  const record = (person: string, action: "add" | "remove") => ({
+    address: address(person),
+    person,
+    action,
+    at: "2026-10-01T00:00:00.000Z",
+    by: "operator",
+  });
+  return {
+    household: { id: "home", name: "Home" },
+    members: people.map((person) => ({ address: address(person), person })),
+    history: [
+      ...[...people, ...left].map((person) => record(person, "add")),
+      ...left.map((person) => record(person, "remove")),
+    ],
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchMe).mockResolvedValue({
+    person: { id: "alex", email: "alex@example.test", household: "home" },
+    admin: false,
+  });
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "sam"]));
   vi.mocked(fetchSpendingCategories).mockResolvedValue([
     { id: 1, name: "Groceries", retired: false, createdAt: "x", createdBy: "migration" },
   ]);
@@ -68,6 +103,7 @@ beforeEach(() => {
     proposal: READ,
     periodLineId: 9,
     chargeLineId: null,
+    charges: [],
     rowId: null,
     filedAt: "x",
     filedBy: "alex",
@@ -289,6 +325,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: 1,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "BIERE 6X355",
@@ -297,6 +334,7 @@ const BASKET: ReceiptProposal = {
       deposit: 60,
       spendingCategoryId: 2,
       share: "shared",
+      chargedTo: null,
     },
     {
       text: "SAVON",
@@ -305,6 +343,7 @@ const BASKET: ReceiptProposal = {
       deposit: null,
       spendingCategoryId: null,
       share: "shared",
+      chargedTo: null,
     },
   ],
 };
@@ -351,6 +390,7 @@ test("files the items as marked, on what the card was charged", async () => {
     proposal: BASKET,
     periodLineId: 9,
     chargeLineId: 10,
+    charges: [{ chargedTo: "sam", lineId: 10 }],
     rowId: null,
     filedAt: "x",
     filedBy: "alex",
@@ -457,18 +497,122 @@ test("shows the Taxable check when a mark does not give the printed taxes, and s
   ).toEqual([false, false, true]);
 });
 
-// lg-23 gate 1, F2: among more than two, "the other's" names nobody, so the
-// screen does not offer it, on an item or on the whole receipt.
-test("among three people, an item cycles between shared and not shared only, and the receipt is nobody's", async () => {
-  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+// lg-23 gate 1, F2: among more than two, "the other's" named nobody, and the
+// screen did not offer it. lg-30 names whose on each item, from a picker.
+test("among three people, an item cycles to someone else's and names whose it is", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  vi.mocked(fileReceipt).mockResolvedValue({
+    id: 1,
+    receiptId: 3,
+    part: 1,
+    proposal: BASKET,
+    periodLineId: 9,
+    chargeLineId: 10,
+    charges: [
+      { chargedTo: "sam", lineId: 10 },
+      { chargedTo: "casey", lineId: 11 },
+    ],
+    rowId: null,
+    filedAt: "x",
+    filedBy: "alex",
+  });
   await readBasket();
 
   expect(shared()).toBe("Not shared 0.00 $ · Shared 24.76 $");
   fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
-  expect(shared()).toBe("Not shared 15.54 $ · Shared 9.22 $");
   fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Not shared" }));
-  expect(screen.getByRole("button", { name: "BIERE 6X355, Shared" })).toBeTruthy();
+  // Someone else's, starting on the first of the others.
+  const beer = screen.getByLabelText("Whose is BIERE 6X355") as HTMLSelectElement;
+  expect([...beer.options].map((option) => option.value)).toEqual(["casey", "sam"]);
+  fireEvent.change(beer, { target: { value: "sam" } });
+  expect(screen.getByRole("button", { name: "BIERE 6X355, sam's" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "SAVON, Shared" }));
+  fireEvent.click(screen.getByRole("button", { name: "SAVON, Not shared" }));
+  expect(screen.getByRole("button", { name: "SAVON, casey's" })).toBeTruthy();
 
-  expect(screen.queryByLabelText(/^This was/u)).toBeNull();
-  expect(screen.getByText(/as a line charged to them/u)).toBeTruthy();
+  // Apart 15,54 $ and 5,74 $; the shared amount takes the cent.
+  expect(shared()).toBe("Not shared 0.00 $ · sam's 15.54 $ · casey's 5.74 $ · Shared 3.48 $");
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(
+    vi
+      .mocked(fileReceipt)
+      .mock.calls[0]?.[1].proposal.items.map((item) => [item.share, item.chargedTo]),
+  ).toEqual([
+    ["shared", null],
+    ["theirs", "sam"],
+    ["theirs", "casey"],
+  ]);
+  expect(
+    await screen.findByText(
+      "Filed as alex's line in the period, and sam's and casey's items as charges.",
+    ),
+  ).toBeTruthy();
+});
+
+// --- lg-30: the people counted are the household's current members ---
+
+test("counts the household's current members from its record, not every name the books hold", async () => {
+  vi.mocked(fetchMe).mockResolvedValue({
+    person: { id: "alex", email: "alex@example.test", household: "maison" },
+    admin: false,
+  });
+  // One person under two addresses is one member.
+  vi.mocked(fetchHousehold).mockResolvedValue({
+    ...household(["alex", "sam"]),
+    members: [
+      { address: "alex@example.test", person: "alex" },
+      { address: "alex@work.example", person: "alex" },
+      { address: "sam@example.test", person: "sam" },
+    ],
+  });
+  await readBasket();
+
+  expect(fetchMe).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(fetchHousehold).mock.calls[0]?.[0]).toBe("maison");
+  expect(fetchPeople).not.toHaveBeenCalled();
+  // alex and sam, so the two-person screen.
+  expect(screen.getByRole("checkbox", { name: "This was sam's" })).toBeTruthy();
+});
+
+test("two current members and one who has left: the screen is the two-person one", async () => {
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "sam"], ["casey"]));
+  await readBasket();
+
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Not shared" }));
+
+  expect(screen.getByRole("button", { name: "BIERE 6X355, sam's" })).toBeTruthy();
+  expect(screen.queryByLabelText(/^Whose is/u)).toBeNull();
+  expect(screen.queryByText("This was someone else's")).toBeNull();
+  expect(screen.queryByLabelText("Whose it was")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items[1]).toMatchObject({
+    share: "theirs",
+    chargedTo: null,
+  });
+});
+
+test("among three people, the whole receipt can be someone else's, picked by name", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  await takePhoto();
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await waitFor(() => expect(field("Total").value).toBe("26.50"));
+
+  expect(screen.queryByText(/as a line charged to them/u)).toBeNull();
+  expect(screen.queryByLabelText("Whose it was")).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "This was someone else's" }));
+  const whose = screen.getByLabelText("Whose it was") as HTMLSelectElement;
+  expect([...whose.options].map((option) => option.value)).toEqual(["casey", "sam"]);
+  fireEvent.change(whose, { target: { value: "sam" } });
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toMatchObject({
+    to: "line",
+    chargedTo: "sam",
+  });
 });
