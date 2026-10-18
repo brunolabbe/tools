@@ -657,3 +657,26 @@ test("a one-cent deposit with nothing to pay directly still says who owes whom",
     "2026-02-28v3sam owes alex0.00 $0.01 $",
   ]);
 });
+
+test("a mouse gets the figures in a tip, a finger does not, and the readout keeps its height", async () => {
+  render(<Stats />);
+  const buffer = await card("Buffer balance");
+  const box = slider(buffer).closest(".chart-box");
+  if (box === null) throw new Error("no chart box");
+
+  fireEvent.pointerMove(slider(buffer), { pointerType: "touch", clientX: 0 });
+  expect(box.querySelector(".chart-tip")).toBeNull();
+
+  fireEvent.pointerMove(slider(buffer), { pointerType: "mouse", clientX: 0 });
+  expect(box.querySelector(".chart-tip")?.getAttribute("aria-hidden")).toBe("true");
+
+  fireEvent.pointerLeave(slider(buffer));
+  expect(box.querySelector(".chart-tip")).toBeNull();
+
+  // The tallest date's note holds the room even where the selected date has none.
+  const ghost = box.querySelector(".readout.ghost");
+  expect(ghost?.getAttribute("aria-hidden")).toBe("true");
+  expect(
+    ghost?.querySelector('[data-text="Achat /Entrepreneur Exemple: -800.00 $"]'),
+  ).not.toBeNull();
+});
