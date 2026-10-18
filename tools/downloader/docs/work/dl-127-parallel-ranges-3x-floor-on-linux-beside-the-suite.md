@@ -171,19 +171,53 @@ setting Linux to 2.5 now.
   `singleMs` was 8398 to 8539 throughout, so, as the ticket expected, the
   variance is in `splitMs`. Every run passed whole (2565 tests on base, 2584 on
   split). **Build step 4: the split arm did not fail more often.** Neither arm
-  failed, and the split's median is the higher of the two. Not counted: a
-  2026-10-17 pilot of 3 runs that died mid-series (3.435 base; 3.399 and 3.458
-  split) and two single-file smoke runs (3.422, 3.455).
+  failed, and the split's median is the higher of the two. The split arm is not
+  the split alone: between `76ce7d52` and `bf793fd6` dl-125 also changed
+  `engine/src/stream.ts` (+110), the code this test drives, and added the tests
+  behind the 19 extra (`engine/test/stream.test.ts`, `engine/test/helpers/media.ts`).
+  `parallel-ranges.test.ts` is identical in both arms. Not counted: a 2026-10-17
+  pilot that died mid-series, 4 readings (3.435 and 3.455 base, the second from a
+  run killed after this test; 3.399 and 3.458 split), and two single-file smoke
+  runs (3.422, 3.455).
+
+  Per-run ratios in slot order. Base: 3.438 3.454 3.400 3.464 3.472 3.439 3.425
+  3.435 3.466 3.431 3.445 3.467 3.449 3.481 3.433 3.447 3.449 3.406 3.441 3.443.
+  Split: 3.483 3.470 3.478 3.455 3.474 3.469 3.481 3.399 3.504 3.484 3.470 3.487
+  3.457 3.467 3.492 3.495 3.478 3.504 3.462 3.502.
 
   What 40 clean runs can and cannot exclude: at dl-117's one failure in six,
   (5/6)^40 ≈ 0.07 %; at dl-121's Windows rate of one in sixteen,
   (15/16)^40 ≈ 7.6 %. So the 95 % upper bound on a quiet Linux failure rate is
-  about 3/40 (one in thirteen), and about 3/20 per arm. The 2.97 is not
-  reproduced: its `splitMs` of 2852 is 367 ms above the slowest four-connection
-  run here, which is the 150 to 405 ms the test's comment records beside a
-  heavier load. dl-117's builder made its six runs during a batch, with other
-  worktrees taking gate slots just before and after. It saw no second gated
-  run when run 3 started, but it looked only at starts and ends, and the gate
-  cannot see work that does not go through it (builds, typechecks, e2e).
-  Concurrent load is the likeliest cause; neither ticket measured it. The test's comment now
-  carries the Linux numbers.
+  about 3/40 (one in thirteen), and about 3/20 per arm.
+
+  **The cause of the 2.97 is unknown.** Its `splitMs` of 2852 is 367 ms above
+  the slowest four-connection run here. Forty quiet runs did not reproduce it, and
+  neither did CPU contention alone: gate 1 pinned this test to 4 cores beside 12
+  busy loops (load average 6.5 to 10.8) and got 3.367 to 3.387, `splitMs` +80 to
+  +110 ms over idle against the failure's +430. dl-117's run 3 started with the
+  test gate's slot free; disk or memory pressure, a WSL2 host stall, and a rare
+  outlier at a quiet rate under one in thirteen are not excluded. Keeping 3
+  leaves a rare red Linux run possible, as dl-117's option 2 put it. CI has not
+  shown one: none of the 12 failed `ci.yml` runs created since 2026-10-06 carries
+  `to be greater than or equal to` in its failed log
+  (`gh run view <id> --log-failed`). The test's comment now carries the Linux
+  numbers.
+
+- 2026-10-18 — Gate 1 (CONCERNS, no high) fixed at landing. The owner was
+  away and had authorised taking the recommended choice. Every finding was a
+  text fix to this branch's own lines. **F1 (med):** the Log said "Concurrent
+  load is the likeliest cause". It now says the cause is unknown, cites the
+  gate's CPU-contention reproduction and the 40 quiet runs, and adds the CI
+  record, re-run here rather than relayed: 12 failed `ci.yml` runs since
+  2026-10-06, 0 with the message. The gate's 480-passing-legs estimate was left
+  out as unverified. **F2 (low):** the comment now marks 150 to 405 ms as the
+  `windows-latest` figure (dl-121's Log: loaded 2631 to 2854 against quiet
+  medians 2449 and 2481). The Linux lines name 12 cores, 11 workers and the
+  ~70 ms Linux slowdown (slowest 2485 against 2416 for this test alone).
+  **F3 (low):** the split arm's extra dl-125 change is named. **F4 (low):** the
+  per-run ratios and the pilot's fourth reading are in. **Open decision,
+  resolved by the recommendation:** whether the unexplained 2.97 earns more.
+  Options were (1) land, keep 3, cause stated as unknown; (2) set Linux to 2.5
+  on the 2.974; (3) file a cause-finding ticket with no reproduction to attach.
+  Taken: (1), which costs nothing and is reversible. Choose (2) or (3) later if
+  a red Linux run recurs.
