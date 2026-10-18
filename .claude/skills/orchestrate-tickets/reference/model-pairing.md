@@ -7,6 +7,45 @@ had been lines 11 to 151 of a 296-line file loaded into every builder — narrat
 that no builder needs to build, on the page that costs every dispatch. Nothing
 below is an instruction; the table is the instruction.
 
+## 2026-10-18: gate 2 is a fresh dispatch, and three tickets run at once
+
+**The owner chose both on 2026-10-18** (repo-111), after asking why gates take
+so long. The options were put as "Cut the waiting", then "Fresh narrow gate 2"
+(recommended) and "Cap concurrent tickets"; the owner took both, and rejected
+a direct builder–gate channel as making the process less trustable. The cap's
+size, three, is the recommended default, and the one parameter the owner may
+change.
+
+**Until then gate 2 was the gate-1 agent, woken with `SendMessage`, on the
+reasoning that "a woken gate costs a fraction of a fresh one".** lg-40 (PR
+#548, one-ticket batch on 960f4b26) measured the opposite, from the gate's
+transcript (`agent-a5490055183b61b89`, split at the wake, 04:27:08Z):
+
+| | Responses | Cache-read tokens | Per response | Active |
+| --- | --- | --- | --- | --- |
+| gate 1 | 99 | 16,953,045 | 171,242 | 31 min |
+| gate 2, woken | 73 | 28,624,318 | 392,113 | 38 min |
+
+The wake was 63% of the agent's cache reads. Every turn re-read gate 1's
+transcript, and 18.8 of gate 2's 24 minutes inside tool calls were waits on
+background sweeps, each poll a turn: it re-ran gate 1's exhaustive probes at
+the new head and at the gated sha as a control, beside six new attacks. The
+agent sat idle for the 39-minute round between the two, which cost nothing but
+inflates the wall column: gate agents in the history average 24 min active
+over 94 min wall (n=107), single-gate agents 14/26, two-gate agents 27/93. The
+recipe that reproduces the table is in repo-111's Log.
+
+**The cap answers the orchestrator's own queue.** lg-40's chain was build 26
+min, gate 1 31, round 36, gate 2 38, landing 8, and its five relays 7–8 min:
+about 5% of 147 min on a one-ticket batch. The tools-e0 batch of the same day
+(eleven pull requests, base 029641b4) kept its orchestrator 2h28m04s active in
+2h47m19s of wall, so every relay waited behind others; dl-114's gate
+(2026-10-13) was 15 min active over 9h42m wall, with two cold restarts.
+
+Two figures from that analysis, the loop as it ran before this change:
+[flow.drawio.svg](flow.drawio.svg) and lg-40's clock,
+[lg-40-timeline.drawio.svg](lg-40-timeline.drawio.svg).
+
 ## 2026-10-10: Haiku 5.5 replaces Haiku 4.5
 
 **`builder-mechanical` is pinned to `claude-haiku-5-5`**, at the owner's
