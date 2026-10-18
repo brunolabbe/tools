@@ -222,3 +222,208 @@ first**, the recommended option. The Why now says so.
 ### 2026-10-18 — gate records
 
 The gate records for the pull request that filed this entry and lg-56 are on PR #552's thread, not in a `## Review` section: gate 1 CONCERNS at `d76699a2`, gate 2 PASS at `1135f0a6`.
+
+### 2026-10-18 — Build steps 1 and 2: the fixtures and their pins; the paid run awaits the owner
+
+Steps 1 and 2 are built, offline, from `origin/main` at `335efcd4`. **Step 3,
+the paid run, and step 4, the report back, are the owner's and have not been
+started**: no model was called, no key was read, nothing was spent, and
+`status` stays `ready`. lg-38 is untouched.
+
+**What changed.** `api/test/layout/fixtures.ts` has seven more fixtures after
+the existing six (`LAYOUT_FIXTURE_NAMES` and `layoutFixtures()` both list them
+in the ticket's order); `api/test/layout.test.ts` and
+`api/test/layout-live-gate.test.ts` are updated for thirteen. No reader, schema
+or contract changed. Two small refactors in `fixtures.ts`, neither changing a
+fixture that existed: `accountSheets` takes an optional `heading` line, and the
+English detail map `english()` had inline is `inEnglish()`.
+
+```
+$ npm test -- --project ledger
+ Test Files  70 passed (70)
+      Tests  1445 passed (1445)
+$ npx vitest run api/test/layout.test.ts   (the spec alone)
+      Tests  51 passed (51)
+$ npm run check            exit 0
+```
+
+**The seven fixtures.** All from the seeded generator (seeds 56 to 64), every
+name, shop and amount invented. `Rows` is movements plus unfiled; `Tokens` is
+the harness's four-characters-a-token estimate of what is sent, schema
+excluded (the ceiling in `layout.test.ts` is 3 000; the largest of the thirteen
+is still `lg37` at 2 630).
+
+| Fixture               | Rows | Tokens | Shape                                                                                                          |
+| --------------------- | ---- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `swapped-labels`      | 75   | 1 416  | Two year sheets (2023, 2024, oldest first), bucket column `Compte 1` / `Compte 2`, carry-overs `Report annuel` |
+| `empty-columns-carry` | 95   | 1 461  | English, newest first, carry-overs; column E empty, the amount in F, balance G, note H                         |
+| `empty-columns-csv`   | 32   | 779    | `Date,Description,Withdrawals,,Deposits,Balance,`: a spacer D and a trailing empty G; no carry-over label      |
+| `bank-preamble`       | 32   | 744    | Title, `Account,…`, `Period,…` and a blank line above the header on row 5                                      |
+| `bank-two-dates`      | 32   | 935    | `Date posted`, `Date of transaction`, `Reference`, `Description`, `Amount`, `Balance`                          |
+| `bank-footer`         | 32   | 760    | Signed amount and balance, then `Total withdrawals`, `Total deposits`, `Closing balance` lines                 |
+| `bank-wide`           | 32   | 1 216  | Eleven columns, newest first; the date, description (E), amount (H) and balance (I) are the four needed        |
+
+**`swapped-labels`: where the evidence is, so a reader can judge it fair.**
+The bucket column's text is `Compte 1` for current expenses and `Compte 2` for
+the mortgage: the reverse of the order the prompt names them in ("the mortgage
+and … current expenses"), so the cheap guess is the swap. Three things in what
+is shown say which is which. (1) A heading in `B1` of each year sheet, `Compte
+1 : courant · Compte 2 : maison`. (2) A `Paiement prêt` of -1 049.87 on the
+20th of every month, 12 of 12 under `Compte 2` and under no other label
+(pinned in `layout.test.ts`, "swapped-labels: the buckets' labels do not say
+which is which…"), where the shared bills (`Électricité`, `Internet`, …) vary
+in amount and sit under `Compte 1`. (3) `Versement` rows under `Compte 2`,
+`Dépôt` under `Compte 1`. With the labels swapped every carry-over still
+chains, so the books take it. The fixture is fair only if (1) or (2) is read:
+a model that answers from the order of the labels is making the mistake it is
+here to catch.
+
+**Correct descriptions that are a judgement, and what the scorer will make of
+a different, reasonable one.**
+
+- `bank-two-dates`: the correct `date` is `Date posted` (A). The rows are in
+  posted order, and the transaction dates are out of order on some rows; the
+  header says which is which. The `Reference` column is left out of the
+  description (no role fits a bank's reference). **A model that files it as
+  `note` scores `let-through`** (checked: `note` on C scores `let-through`,
+  zero problems), because `imported()` includes the note, though nothing is
+  wrong. Read such a run by its `differences`, which will say
+  `account.columns`, before counting it as a let-through.
+- `bank-footer`: the last three rows shown to a model are the three footer
+  lines, because the view's last rows are the sheet's last rows: it sees no
+  final movement. That is the shape; it is a fixture on purpose.
+- `bank-preamble`: the account layout has no header-row field, so a preamble
+  changes nothing in what a description says: rows with no date are not
+  movements. The fixture tests whether a model is put off by it, not whether
+  the reader is.
+
+**Wrong descriptions pinned** (`layout.test.ts`, "lg-56's harder fixtures",
+the `MISTAKES` table; run on the committed head, not guessed). The three
+named in the brief:
+
+| Fixture               | Wrong description                            | Outcome       | What the reader says                                               |
+| --------------------- | -------------------------------------------- | ------------- | ------------------------------------------------------------------ |
+| `swapped-labels`      | the two buckets' labels swapped              | `let-through` | 75 movements, 0 problems                                           |
+| `empty-columns-carry` | amount pointing at the empty column E        | `refused`     | 6 problems, the first `2024!E49: a carry-over has no amount.`      |
+| `empty-columns-csv`   | withdrawal at D and deposit at G, both empty | `let-through` | reads 0 rows, skips 32, **0 problems**: the gap lg-38 gate 1 named |
+
+And one of the builder's choosing for each bank shape, with what it scored:
+
+| Fixture          | Wrong description                           | Outcome       | What the reader says                                                                     |
+| ---------------- | ------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
+| `bank-preamble`  | order flipped to newest-first               | `refused`     | 31 problems, the running balance breaks                                                  |
+| `bank-two-dates` | the date read from B, the transaction date  | `let-through` | 32 movements, 0 problems; `outOfOrder` holds 2 rows, which is reported and not a problem |
+| `bank-footer`    | amount and balance swapped                  | `refused`     | 34 problems, three of them `an amount with no date` on the footer lines                  |
+| `bank-wide`      | the detail read from D, the currency column | `let-through` | 32 movements, 0 problems                                                                 |
+
+Tried and not pinned: `bank-wide` with the amount on F (the category code),
+`refused`, 31 problems; `bank-preamble` with the sheet named `Account
+statement`, `refused`, 1 problem; `bank-preamble` and `bank-footer` and
+`bank-wide` with the balance left out, `refused`, 1 problem each (the "names no
+balance column" one): the correct description reads with no problem, so that one is
+an extra problem and is caught. `LAYOUT_FIXTURE_NAMES` against the names
+`layoutFixtures()` returns: one test, red when they differ (checked below).
+
+**Checks that were made to fail first.**
+
+- Deleting `"bank-wide"` from `LAYOUT_FIXTURE_NAMES` turned exactly "the names
+  the measurement runs are the fixtures there are, in the same order" red (`1
+failed | 50 passed (51)`); restored from the commit.
+- The harness's own test, `layout-live-gate.test.ts`, failed with thirteen
+  fixtures until it was updated (below), which is the check that the fake
+  model's records cover the new ones too (26 records for 2 runs of 13).
+
+**Not expressible, left out, named.**
+
+- **A total line with its figure in the amount column.** `readYear` reports
+  `an amount with no date` for a number in the amount column of a row with no
+  date, under any description, so such a footer cannot be read cleanly even
+  with the correct layout. `bank-footer` keeps its three figures in the
+  balance column, where the reader never looks on a dateless row. This is a
+  limit of the reader, not of the schema, and it is pinned in `layout.test.ts`
+  ("bank-footer: …"): the same file with the figures moved into the amount
+  column reads three problems, the first `an amount with no date`. It is an
+  unmeasured shape for a model: a real export that totals under the amount
+  column will not import whatever a model says.
+- **Decimal commas, semicolon delimiters and thousands separators** are not read
+  by `layout/csv.ts`. Unmeasured, as the brief says; the CSV reader is not
+  extended.
+
+**What the brief had wrong.**
+
+- "Three existing tests there loop over every fixture" in `layout.test.ts`:
+  two of them (the told-apart and the 3 000-token test) loop and needed no
+  change, and passed with thirteen; the third, the list of six names, was
+  hard-coded and changed. A **fourth** hard-coded six lives in
+  `api/test/layout-live-gate.test.ts` ("scores every run, writes a record per
+  run and the table…": the twelve asked names, 13 files, `**all** | 12`) and was
+  red; it now builds the expected list from `layoutFixtures()` and says 26
+  records, 27 files.
+- The told-apart test needed no exclusion for the new CSVs: each CSV is read by
+  its file name, so another CSV's layout finds no account sheet and reports a
+  problem.
+
+**Fold-in exception.** One piece looked free and was not folded in:
+`@anthropic-ai/sdk` is imported by `layout.test.ts` and `live/layout-run.ts`
+but not declared in `api/package.json` (lg-38 gate 1, low). Declaring it means
+a dependency line and a lockfile edit, which this ticket does not otherwise
+touch and which `npm audit` and the image-closure scan would then be asked
+about. Not folded in; lg-38's record already carries it. Nothing else was
+filed; lg-62 was not needed.
+
+**Step 3, the owner's command.** From the repository root, after `npm run
+build`, with `ANTHROPIC_CUSTOM_HEADERS` unset (`env -u` below does it for the
+one command) and `--out` outside the repository. Prices are lg-38's (Haiku
+$0.10 in and $0.50 out, Sonnet $2 and $10 per million tokens); check them
+against the current rates first, because the records carry whatever is typed.
+
+```sh
+# 1. Haiku 5.5, figures shown, all 13 fixtures, 10 runs: 130 runs, about $0.16
+env -u ANTHROPIC_CUSTOM_HEADERS LEDGER_LIVE_RUN=1 ANTHROPIC_API_KEY=<key> \
+  node --import tsx tools/ledger/api/test/live/layout-run.ts \
+  --model claude-haiku-5-5 --price-in 0.10 --price-out 0.50 \
+  --runs 10 --max-usd 5 --figures shown --out ~/ledger-layout-lg56-shown
+
+# 2. Haiku 5.5, figures masked, a DIFFERENT --out (a record's name does not carry --figures)
+env -u ANTHROPIC_CUSTOM_HEADERS LEDGER_LIVE_RUN=1 ANTHROPIC_API_KEY=<key> \
+  node --import tsx tools/ledger/api/test/live/layout-run.ts \
+  --model claude-haiku-5-5 --price-in 0.10 --price-out 0.50 \
+  --runs 10 --max-usd 5 --figures masked --out ~/ledger-layout-lg56-masked
+
+# 3. Which fixtures did Haiku shown not match on every run? (reads files, calls nothing)
+node -e 'const fs=require("node:fs");const d=process.argv[1];const s=new Set();for(const f of fs.readdirSync(d)){if(!f.endsWith(".json"))continue;const r=JSON.parse(fs.readFileSync(d+"/"+f,"utf8"));if(r.score.outcome!=="matched")s.add(r.fixture)}console.log([...s].join(","))' \
+  ~/ledger-layout-lg56-shown/claude-haiku-5-5
+
+# 4. Sonnet 5.5, shown, ONLY those fixtures (the comma list printed by 3).
+#    If 3 printed nothing, Haiku matched everything: there is no Sonnet run.
+env -u ANTHROPIC_CUSTOM_HEADERS LEDGER_LIVE_RUN=1 ANTHROPIC_API_KEY=<key> \
+  node --import tsx tools/ledger/api/test/live/layout-run.ts \
+  --model claude-sonnet-5-5 --price-in 2 --price-out 10 \
+  --runs 10 --max-usd 5 --figures shown --fixtures <list from 3> \
+  --out ~/ledger-layout-lg56-shown
+```
+
+What was checked of these offline, without a key: the three harness argument
+lists parse to the options shown below (`parseCli`, the real function; the Sonnet line's two fixtures are an example); a fake
+model driven through `measure` with command 1's exact options wrote 130 records
+and a `summary.md` of 13 fixture rows plus `**all**`; and command 3, run on
+that fake output where one fixture was answered wrongly, printed that fixture's
+name and only that. **Not run: the consent check on the script as invoked
+from the shell** (the sandbox refused a bare invocation of the live script,
+a paid command, and it was not worked around); that refusal is pinned by
+`layout-live-gate.test.ts` ("refuses without LEDGER_LIVE_RUN=1, and without a
+key"), which passed.
+
+```
+{"model":"claude-haiku-5-5","priceIn":0.1,"priceOut":0.5,"out":"…/ledger-layout-lg56-shown","runs":10,"maxUsd":5,"effort":"medium","figures":"shown"}
+{"model":"claude-haiku-5-5","priceIn":0.1,"priceOut":0.5,"out":"…/ledger-layout-lg56-masked","runs":10,"maxUsd":5,"effort":"medium","figures":"masked"}
+{"model":"claude-sonnet-5-5","priceIn":2,"priceOut":10,"out":"…/ledger-layout-lg56-shown","runs":10,"maxUsd":5,"effort":"medium","figures":"shown","fixtures":["bank-wide","swapped-labels"]}
+```
+
+The spend stop cannot trip on these: its ceiling is 16 000 output tokens plus
+the input at two characters a token, about $0.008 a Haiku run and $0.17 a Sonnet
+run, against a cap of $5 and an expected spend of $0.16 and under $2.2. The
+Sonnet records and the Haiku shown records share one `--out` because the model
+is a directory under it; only the masked run needs its own. **An estimate, not a
+measurement:** the API counts input at 1.8 to 3.4 times the harness's estimate
+(lg-38's Log), so the spend is dominated by output tokens.
