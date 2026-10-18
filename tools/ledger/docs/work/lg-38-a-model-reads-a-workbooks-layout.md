@@ -399,3 +399,214 @@ tools/ledger/docs/work/lg-38-a-model-reads-a-workbooks-layout.md` → the
 Unset it`, `with ` + `unset ANTHROPIC_CUSTOM_HEADERS` + ` in the shell
 first, or put` and `env -u ANTHROPIC_CUSTOM_HEADERS` + ` in front of each
 command. Run it`.
+
+### 2026-10-18 — the owner's paid run (Build 4), the recommendation (Build 5), and the owner's answers
+
+The owner ran the harness once per model. The records say how: effort
+`medium`, figures `shown`, 5 runs per fixture, 6 fixtures, 2 models, so 60
+runs in all. Each run's record and each model's `summary.md` are in
+`~/ledger-layout-lg38/<model>/`, outside the repository and not copied into
+it. They hold synthetic answers and scores only. This entry carries the
+tables, not the files.
+
+**Done when 3 is met by this entry. Done when 4 waits on lg-56**, which
+measures again with harder fixtures before the owner decides; see "The
+owner's answers" below. `status` stays `in-flight`.
+
+#### The measurement tables
+
+Each model's `summary.md`, verbatim.
+
+`claude-haiku-5-5/summary.md`:
+
+| Model            | Fixture        | Runs | Passed | Matched | Same import | Caught | Let through | Invalid | Input tokens (mean) | Output tokens (mean) | Cost per run (mean) |
+| ---------------- | -------------- | ---- | ------ | ------- | ----------- | ------ | ----------- | ------- | ------------------- | -------------------- | ------------------- |
+| claude-haiku-5-5 | lg7            | 5    | 5      | 4       | 1           | 0      | 0           | 0       | 6190                | 1214                 | $0.0012             |
+| claude-haiku-5-5 | lg37           | 5    | 5      | 5       | 0           | 0      | 0           | 0       | 9468                | 1312                 | $0.0016             |
+| claude-haiku-5-5 | moved          | 5    | 5      | 5       | 0           | 0      | 0           | 0       | 8080                | 1248                 | $0.0014             |
+| claude-haiku-5-5 | english        | 5    | 5      | 5       | 0           | 0      | 0           | 0       | 7924                | 1216                 | $0.0014             |
+| claude-haiku-5-5 | csv-balance    | 5    | 4      | 4       | 0           | 1      | 0           | 0       | 4928                | 563                  | $0.0008             |
+| claude-haiku-5-5 | csv-no-balance | 5    | 5      | 5       | 0           | 0      | 0           | 0       | 4787                | 382                  | $0.0007             |
+| claude-haiku-5-5 | **all**        | 30   | 29     | 28      | 1           | 1      | 0           | 0       | 6896                | 989                  | $0.0012             |
+
+Outcomes over 30 runs:
+
+- matched: 28
+- same-import: 1
+- refused: 1
+- let-through: 0
+- invalid: 0
+
+`claude-sonnet-5-5/summary.md`:
+
+| Model             | Fixture        | Runs | Passed | Matched | Same import | Caught | Let through | Invalid | Input tokens (mean) | Output tokens (mean) | Cost per run (mean) |
+| ----------------- | -------------- | ---- | ------ | ------- | ----------- | ------ | ----------- | ------- | ------------------- | -------------------- | ------------------- |
+| claude-sonnet-5-5 | lg7            | 5    | 5      | 5       | 0           | 0      | 0           | 0       | 6190                | 348                  | $0.0159             |
+| claude-sonnet-5-5 | lg37           | 5    | 5      | 3       | 2           | 0      | 0           | 0       | 9468                | 374                  | $0.0227             |
+| claude-sonnet-5-5 | moved          | 5    | 5      | 5       | 0           | 0      | 0           | 0       | 8080                | 338                  | $0.0195             |
+| claude-sonnet-5-5 | english        | 5    | 5      | 5       | 0           | 0      | 0           | 0       | 7924                | 332                  | $0.0192             |
+| claude-sonnet-5-5 | csv-balance    | 5    | 5      | 5       | 0           | 0      | 0           | 0       | 4928                | 177                  | $0.0116             |
+| claude-sonnet-5-5 | csv-no-balance | 5    | 5      | 5       | 0           | 0      | 0           | 0       | 4787                | 142                  | $0.0110             |
+| claude-sonnet-5-5 | **all**        | 30   | 30     | 28      | 2           | 0      | 0           | 0       | 6896                | 285                  | $0.0166             |
+
+Outcomes over 30 runs:
+
+- matched: 28
+- same-import: 2
+- refused: 0
+- let-through: 0
+- invalid: 0
+
+"Passed" is valid and verified: the answer parsed as a layout and reading
+the fixture through it gave the same problems the correct description gives.
+For `csv-no-balance` that is the one problem every description of it has,
+that nothing proves it; all ten of its runs report `problems: 1`, and all ten
+matched.
+
+#### The four runs that did not match
+
+I read these from the records. Each `score` block is quoted.
+
+- **`claude-haiku-5-5/csv-balance-1.json`**: `outcome: "refused"`,
+  `valid: true`, `verified: false`, `sameImport: false`, `matched: false`,
+  `issues: []`, `problems: 2`, `differences: ["account.yearPerSheet"]`. The
+  model answered `yearPerSheet: true` for the one CSV, `releve-2024.csv`;
+  every column in its answer is the correct one. **Caught.** The reading
+  reported 2 problems, so the import would have been refused and nothing
+  would have reached the books. The record keeps the count of problems, not
+  their text, so which verification fired is unmeasured.
+- **`claude-haiku-5-5/lg7-5.json`**: `outcome: "same-import"`,
+  `valid: true`, `verified: true`, `sameImport: true`, `matched: false`,
+  `issues: []`, `problems: 0`, `differences: ["ignored"]`. The model listed
+  `["Labels", "Budget", "Accueil"]` as ignored; the correct description lists
+  `["Labels", "Budget"]`. **Not refused, and nothing wrong was imported**: the
+  reading is the same as the correct description's, because the reader never
+  consults `ignored` (gate 1's low). Had it consulted it, naming `Accueil`,
+  which holds lg-7's salaries, would have been a wrong description; whether a
+  check would have caught that is unmeasured.
+- **`claude-sonnet-5-5/lg37-2.json`** and **`lg37-3.json`**:
+  `outcome: "same-import"`, `valid: true`, `verified: true`,
+  `sameImport: true`, `matched: false`, `issues: []`, `problems: 0`,
+  `differences: ["account.summary"]` in both. Both answered the summary
+  column `C` with the labels `["Solde Dép. Courantes", "Solde Hypothèque",
+"Total"]`; the correct description says `["Solde", "Total"]`. **Not
+  refused, and nothing wrong was imported**: the reading is identical.
+
+So, of the layout failures, **1 was caught by the verifications, 3 were
+harmless and not refused, and 0 were let through** (60 runs, 0 `let-through`
+in either table). No answer was `invalid` (0 of 60), so the structured
+output's advisory `enum` and `pattern` (gate 1's low) cost nothing here.
+
+#### Cost
+
+Computed from every record's `costUsd` at the prices the run used: Haiku
+$0.10 in and $0.50 out, Sonnet $2 in and $10 out, per million tokens. The
+totals rebuilt from the token counts agree with the sums of `costUsd`.
+
+|                      | Haiku 5.5 | Sonnet 5.5 |
+| -------------------- | --------- | ---------- |
+| Runs                 | 30        | 30         |
+| Input tokens, total  | 206,885   | 206,885    |
+| Output tokens, total | 29,678    | 8,556      |
+| Cost, total          | $0.0355   | $0.4993    |
+| Cost per run, mean   | $0.001184 | $0.016644  |
+
+The run cost $0.5349 in all. Sonnet is 14.05 times Haiku per run (total cost
+over total cost, $0.49933 over $0.0355275). Both models were sent the same requests (the same input tokens, fixture by
+fixture), so the input side is the same count and the price decides it.
+Haiku wrote about 3.5 times as many output tokens (a mean of 989 against
+285); it is still 14 times cheaper.
+
+Build 2 left the API's own input count unmeasured. It reads 2.2 to 2.3 times
+Build 2's estimate on every fixture, with the 1,461 tokens for the answer's
+schema added to it:
+
+| Fixture        | Estimated, with the schema | Counted by the API |
+| -------------- | -------------------------- | ------------------ |
+| lg7            | 2,802                      | 6,190              |
+| lg37           | 4,091                      | 9,468              |
+| moved          | 3,573                      | 8,080              |
+| english        | 3,502                      | 7,924              |
+| csv-balance    | 2,239                      | 4,928              |
+| csv-no-balance | 2,176                      | 4,787              |
+
+The cause is unmeasured. It also bears on the spend stop, whose input term is
+the request's characters over two (`layout-run.ts`, gate 1's low): the API's
+count is 1.8 to 3.4 times that term on every fixture. The ceiling is still
+dominated by its 16,000 output tokens, so the under-count is small beside it,
+but "the ceiling is one, not a guess" is not true of the input side.
+
+#### What the run does not cover
+
+- **60 runs, 6 synthetic fixtures, 0 let-through.** By the rule of three, 0 in
+  60 puts the let-through rate at no more than about 5% at 95% confidence
+  (3/60), and about 10% for one model alone (3/30). **That is an estimate,
+  and a weak one.** The five runs of a fixture read one workbook, so they are
+  not five independent households; the bound is on these six fixtures, not on
+  workbooks in general.
+- **The fixtures never exercise gate 1's let-through cases.** Swapped bucket
+  labels: every carry-over still matches, so the books take it. Amount
+  columns pointing at empty columns: with a carry-over label the carry-over
+  check refuses it, and with none, which is every CSV, nothing does (gate 1's
+  low: `csv-balance` read through such a layout reads 0 rows and reports 0
+  problems). No model chose either, but no fixture invited it either, so the
+  0 says the models did not make those mistakes where nothing tempted them.
+- **`--figures masked` was not run.** Every run showed figures, so what
+  showing them costs, or what hiding them loses, is unmeasured.
+- Two bank-CSV shapes only, both synthetic. No real bank export was used,
+  by the rule in Notes for the builder.
+- One effort setting (`medium`) and one prompt. "The books matching the
+  workbook" is not in the score (see Build, above).
+
+#### Recommendation (Build 5)
+
+On these six fixtures, **a model can describe the layout well enough**: 59 of
+60 runs passed the verifications and the sixtieth was refused by them, 56 of
+60 matched the hand-written description, 3 differed without changing the
+import, and 0 were let through. **Haiku 5.5 is sufficient on these
+fixtures**: it passed 29 of 30 against Sonnet's 30 of 30 and matched 28 of 30
+against 28 of 30, its one failure was caught, and it costs about 14 times
+less per import ($0.0012 against $0.0166). A difference of one run in 30 is
+not a difference this run can see.
+
+This does not claim the models are reliable on a workbook unlike these six,
+nor on the two cases above that no fixture exercises, nor with figures
+masked. It is a measurement that did not find a failure, not a proof that
+none exists.
+
+#### The owner's answers of 2026-10-18
+
+The orchestrator put four questions to the owner. Decisions A and B were
+first the lg-38 builder's recommendations, from its build report, which the
+orchestrator relayed. Four answers:
+
+1. **Build or drop (Done when 4).** Options: build (the orchestrator's
+   recommendation), drop, or measure more first. **The owner chose "measure
+   more first", over the orchestrator's recommendation.** lg-38 stays
+   `in-flight`, and lg-56 runs a harder set of fixtures before the owner
+   decides.
+2. **If built, which model.** Options: Haiku 5.5 (the orchestrator's
+   recommendation), Sonnet 5.5, or Haiku with a Sonnet retry on refusal. **The
+   owner chose Haiku 5.5**, as recommended.
+3. **If built, figures in what is sent (decision A).** Options: shown (the
+   lg-38 builder's recommendation, relayed by the orchestrator) or masked.
+   **The owner chose shown**, as recommended.
+4. **If built, the swapped-label guard (decision B).** Options: confirm on
+   screen (the lg-38 builder's recommendation, relayed by the orchestrator), a
+   sign check, or both. **The owner chose confirm on screen**, as recommended.
+
+Answers 2 to 4 are for the build if there is one; they decide nothing until
+the owner answers 1. lg-56 carries them as context, not as Build.
+
+**Done when, after this entry:**
+
+1. Proven, as at the gates (unchanged by this entry).
+2. Proven, as at the gates.
+3. **Met.** The tables and the outcomes are above, and each layout failure
+   says whether the verifications caught it.
+4. **Open, waiting on lg-56.** The recommendation is above; the build is
+   filed or the ticket dropped by the owner's decision after lg-56's run.
+
+### 2026-10-18 — gate records
+
+The gate records for the pull request that filed this entry and lg-56 are on PR #552's thread, not in a `## Review` section: gate 1 CONCERNS at `d76699a2`, gate 2 PASS at `1135f0a6`.
