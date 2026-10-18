@@ -109,3 +109,22 @@ charge to anyone.
     household never answers), plus the categories case.
   - Fold-in considered: none. The categories failure was not in the brief's
     reproduction but is the same `Promise.all` and is covered above.
+
+- 2026-10-18 — Round 1, gate 1's F1 (med). **The question:** a household that
+  _loads_ with one member (or none) still got the two-person form: "This was the
+  other person's", "The other's", and a ticked box filed `destination.chargedTo:
+null`, the payer's own shared line, with nothing said. The lines that compute
+  it were untouched by this branch (inherited), but it is the same wrong output
+  from a partial member list, in the same file. **Options:** (a) fix it on this
+  branch, recommended; (b) file it as its own ticket. **Answer:** owner,
+  2026-10-18, (a). **Done:** with `others` empty the whole-receipt box is not
+  rendered and `chargedTo` is never sent; a tap cycles shared and not shared and
+  skips someone else's (`nextShare`); an item that was _read_ as someone else's
+  is said to be unfileable ("There is nobody else in the household to charge an
+  item to.", the server's own words) and is not filed until tapped off it. One
+  member and no member are the same case here (`others` is empty), so one
+  `test.each` covers both; the zero-member case is the household's own record
+  missing the payer, which the screen cannot tell from one. Red at `c658e8e8`:
+  `2 failed | 23 passed (25)` (the box present); green: `25 passed (25)`,
+  `npx vitest run tools/ledger/web/test/receipts.test.tsx`. F2 to F4 (lows) are
+  left recorded as the gate wrote them, by owner choice.

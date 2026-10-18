@@ -707,3 +707,40 @@ test("categories failing to load do not hold the form, and can be asked for agai
   expect(fetchSpendingCategories).toHaveBeenCalledTimes(2);
   expect(fetchHousehold).toHaveBeenCalledTimes(1);
 });
+
+// --- lg-39: a household with nobody else in it ---
+
+test.each([
+  ["one member", ["alex"]],
+  ["no member", []],
+])(
+  "%s: nobody to charge, so no one else's box, no one else's share, and a read one is not filed (lg-39)",
+  async (_name, members) => {
+    vi.mocked(fetchHousehold).mockResolvedValue(household(members));
+    await readBasketWithTheirs();
+    await waitFor(() => expect(field("Total").value).toBe("24.76"));
+
+    // The whole receipt cannot be someone else's.
+    expect(screen.queryByRole("checkbox", { name: /^This was/u })).toBeNull();
+    // A tap cycles shared and not shared, and never lands on someone else's.
+    fireEvent.click(screen.getByRole("button", { name: "PAIN, Shared" }));
+    expect(screen.getByRole("button", { name: "PAIN, Not shared" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "PAIN, Not shared" }));
+    expect(screen.getByRole("button", { name: "PAIN, Shared" })).toBeTruthy();
+
+    // The six-pack was read as someone else's: it is said, and nothing is filed.
+    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "There is nobody else in the household to charge an item to.",
+    );
+    expect(fileReceipt).not.toHaveBeenCalled();
+
+    // Tapping it moves it off someone else's, and then it files, charging nobody.
+    fireEvent.click(screen.getByRole("button", { name: /^BIERE 6X355, / }));
+    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+    await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+    const filed = vi.mocked(fileReceipt).mock.calls[0]?.[1];
+    expect(filed?.proposal.items.map((item) => item.share)).not.toContain("theirs");
+    expect(filed?.destination).toMatchObject({ to: "line", chargedTo: null });
+  },
+);

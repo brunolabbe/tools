@@ -98,12 +98,20 @@ interface Draft {
 /** The form's fields that are a line of text. */
 type TextField = Exclude<keyof Draft, "items">;
 
+const NOBODY_ELSE = "There is nobody else in the household to charge an item to.";
+
 /** What a tap on an item makes it next. */
 const NEXT_SHARE: Record<ItemShare, ItemShare> = {
   shared: "not-shared",
   "not-shared": "theirs",
   theirs: "shared",
 };
+
+/** The tap's result; with nobody else in the household it skips someone else's. */
+function nextShare(share: ItemShare, alone: boolean): ItemShare {
+  const next = NEXT_SHARE[share];
+  return alone && next === "theirs" ? NEXT_SHARE[next] : next;
+}
 
 let lastItemKey = 0;
 
@@ -497,6 +505,9 @@ export function Receipts(): React.ReactElement {
   // With one other member "someone else's" is theirs and the request names
   // nobody, as it always did; with more, each item names whose (lg-30).
   const several = others.length > 1;
+  // With nobody else, nothing can be someone else's: an item cannot be charged
+  // and the receipt cannot be, and filing either would name no one (lg-39).
+  const alone = other === null;
   const whose = (item: ItemDraft): string | null =>
     !several
       ? null
@@ -574,7 +585,9 @@ export function Receipts(): React.ReactElement {
     ? "An item needs its text and its price before the receipt can be filed."
     : flags.includes("items-differ")
       ? FLAG_LABELS["items-differ"]
-      : null;
+      : alone && form.items.some((item) => item.share === "theirs")
+        ? NOBODY_ELSE
+        : null;
 
   const lookUp = (): void => {
     if (charged === null || charged === 0 || !dated) {
@@ -613,7 +626,7 @@ export function Receipts(): React.ReactElement {
                 amountCents: charged,
                 spendingCategoryId,
                 note: form.merchant.trim() === "" ? null : form.merchant.trim(),
-                chargedTo: theirs ? wholeWhose : null,
+                chargedTo: theirs && !alone ? wholeWhose : null,
               }
             : { to: "row", rowId: destination },
       });
@@ -714,7 +727,7 @@ export function Receipts(): React.ReactElement {
                   <button
                     type="button"
                     aria-label={`${name}, ${shareLabel(item.share, whose(item) ?? other)}`}
-                    onClick={() => setItem(index, { share: NEXT_SHARE[item.share] })}
+                    onClick={() => setItem(index, { share: nextShare(item.share, alone) })}
                   >
                     {shareLabel(item.share, whose(item) ?? other)}
                   </button>
@@ -768,7 +781,7 @@ export function Receipts(): React.ReactElement {
               Shared {formatCents(split.sharedCents)}
             </output>
           )}
-          {itemsUnread && <p className="hint bad">{unfileable}</p>}
+          {(itemsUnread || unfileable === NOBODY_ELSE) && <p className="hint bad">{unfileable}</p>}
         </fieldset>
         {field("charged", "Charged to the card (with any tip)")}
         <label htmlFor={`${id}-spending`}>Spending category</label>
@@ -779,18 +792,16 @@ export function Receipts(): React.ReactElement {
           noneLabel="None"
           onChange={setSpendingCategoryId}
         />
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={theirs}
-            onChange={(event) => setTheirs(event.target.checked)}
-          />
-          {several
-            ? "This was someone else's"
-            : other === null
-              ? "This was the other person's"
-              : `This was ${other}'s`}
-        </label>
+        {other !== null && (
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={theirs}
+              onChange={(event) => setTheirs(event.target.checked)}
+            />
+            {several ? "This was someone else's" : `This was ${other}'s`}
+          </label>
+        )}
         {theirs && several && (
           <>
             <label htmlFor={`${id}-whose`}>Whose it was</label>
