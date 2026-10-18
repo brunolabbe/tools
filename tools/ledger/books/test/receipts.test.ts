@@ -1080,16 +1080,10 @@ describe("the rounding judged against the printed total (lg-30)", () => {
     // Nothing left shared is read by cost (lg-30, owner 2026-10-18): a free shared
     // bag beside the 2,307 receipt does not stop the cent being rounding.
     const receipt = TWO_TAXED(1_007);
-    const bag = (price: number): ReceiptProposal["items"][number] => ({
-      text: "SAC",
-      price,
-      taxable: false,
-      deposit: null,
-      spendingCategoryId: null,
-      share: "shared",
-      chargedTo: null,
-    });
-    const free: ReceiptProposal = { ...receipt, items: [...receipt.items, bag(0)] };
+    const free: ReceiptProposal = {
+      ...receipt,
+      items: [...receipt.items, itemLine(0, false, "shared")],
+    };
 
     expect(splitReceipt(free)).toEqual({
       sharedCents: 0,
@@ -1100,19 +1094,6 @@ describe("the rounding judged against the printed total (lg-30)", () => {
 
     // A shared item of 0,01 $ beside parts that round 2 cents over: the shared
     // item is something still shared, so the excess is not taken from the parts.
-    const priced = (
-      price: number,
-      share: "not-shared" | "shared" | "theirs",
-      chargedTo: string | null,
-    ) => ({
-      text: "X",
-      price,
-      taxable: share !== "shared",
-      deposit: null,
-      spendingCategoryId: null,
-      share,
-      chargedTo,
-    });
     const costly: ReceiptProposal = {
       merchant: null,
       date: "2026-10-04",
@@ -1121,10 +1102,10 @@ describe("the rounding judged against the printed total (lg-30)", () => {
       qst: 124,
       total: 1_435,
       items: [
-        priced(111, "not-shared", null),
-        priced(1, "shared", null),
-        priced(137, "theirs", "sam"),
-        priced(1_000, "theirs", "casey"),
+        itemLine(111, true, "not-shared"),
+        itemLine(1, false, "shared"),
+        itemLine(137, true, "theirs", "sam"),
+        itemLine(1_000, true, "theirs", "casey"),
       ],
     };
 
@@ -1134,13 +1115,13 @@ describe("the rounding judged against the printed total (lg-30)", () => {
 });
 
 // lg-30, gate 1 F1 and F3, fixed at landing (owner, 2026-10-18).
-describe("what still shared means, and where the bound ends (lg-30, gate 1)", () => {
-  const line = (
-    price: number,
-    taxable: boolean,
-    share: "not-shared" | "shared" | "theirs",
-    chargedTo: string | null = null,
-  ): ReceiptItem => ({
+function itemLine(
+  price: number,
+  taxable: boolean,
+  share: "not-shared" | "shared" | "theirs",
+  chargedTo: string | null = null,
+): ReceiptItem {
+  return {
     text: "X",
     price,
     taxable,
@@ -1148,8 +1129,10 @@ describe("what still shared means, and where the bound ends (lg-30, gate 1)", ()
     spendingCategoryId: null,
     share,
     chargedTo,
-  });
+  };
+}
 
+describe("what still shared means, and where the bound ends (lg-30, gate 1)", () => {
   test("a free shared item does not stop the cent being rounding", () => {
     // Main files this receipt (2,531 to sam); a `SAC 0,00` line must not refuse it.
     const withFree: ReceiptProposal = {
@@ -1160,10 +1143,10 @@ describe("what still shared means, and where the bound ends (lg-30, gate 1)", ()
       qst: 426,
       total: 4_915,
       items: [
-        line(2_074, true, "not-shared"),
-        line(0, false, "shared"),
-        line(309, true, "theirs", "sam"),
-        line(1_892, true, "theirs", "sam"),
+        itemLine(2_074, true, "not-shared"),
+        itemLine(0, false, "shared"),
+        itemLine(309, true, "theirs", "sam"),
+        itemLine(1_892, true, "theirs", "sam"),
       ],
     };
 
@@ -1175,7 +1158,7 @@ describe("what still shared means, and where the bound ends (lg-30, gate 1)", ()
       charges: [{ personId: "sam", cents: 2_531 }],
     });
     // The same receipt without the free item, which both trees already file.
-    const without = { ...withFree, items: withFree.items.filter((item) => item.price > 0) };
+    const without = { ...withFree, items: withFree.items.filter((entry) => entry.price > 0) };
     expect(splitReceipt(without)).toEqual(splitReceipt(withFree));
   });
 
@@ -1189,7 +1172,7 @@ describe("what still shared means, and where the bound ends (lg-30, gate 1)", ()
       gst: null,
       qst: null,
       total: 14,
-      items: [line(14, true, "theirs", "sam")],
+      items: [itemLine(14, true, "theirs", "sam")],
     };
 
     expect(splitReceipt(untaxed).sharedCents).toBe(-2);
