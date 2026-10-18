@@ -163,6 +163,28 @@ household's books.
 - **findings** · the hunt returned 6; 3 carried, 3 dropped.
 - NFR: security ✓ (`q` never reaches SQL or a RegExp; every field is checked by the schema) · performance ✓ (5,022 rows: `q`+`sort` page in 16.8–34.2 ms against 11.3–14.8 ms unfiltered, 5 runs each) · reliability ✓, with the low above · maintainability: the low above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-18 · `980eeb78..efa7e413` · Opus 5.5, depth narrow (the round's two commits and the `rowsQuerySchema` seam they touch)
+
+| Done when                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 4. Every query the web sends today returns what it did; slice + `sort` or `q` → 400 | `api/test/spending-categories.test.ts` › "any lg-41 field on one chart slice is refused, and the chart's own lists are not" ✓ (all eight fields alone → 400 `BAD_REQUEST`; `scope=spending` alone, a category alone and the bare slice → 200). Gate cross-check: 183 caller-shape requests plus `GET /api/stats/spending` and the three internal `listRows` calls, byte-identical JSON at `335efcd4` and `efa7e413`, 0 non-200 |
+| 6. `npm run check` and `npm test -- --project ledger` pass                          | **verified** — check exit 0; ledger 1455 of 1455 in 71 files, exit 0, at efa7e413. On PR #563 at efa7e413, `check`, `docker`, `codeql`, `CodeQL` and `dependency-review` pass; `test (ubuntu-latest)` and `test (windows-latest, informational)` were still pending when read                                                                                                                                                  |
+
+Earlier findings:
+
+- **F1 (low, combining-mark `q` matches everything)** · not fixed. It stays recorded by the owner's choice of 2026-10-18, and the Log says so.
+- **F2 (low, lg-41 fields accepted on a slice list)** · fixed. Each of the eight fields alone, all 28 pairs and all eight together (37 combinations) answer 400 `BAD_REQUEST` on `scope=spending` with `spendingCategory=1`, with `spendingCategory=none`, and with `from`/`to`/`offset`/`limit` added. The same 37 combinations answer 200 with `scope=spending` alone, a category alone (id or `none`), and neither. Before the fix, gate 1 measured `minCents=2400` on the slice at 200.
+- **F3 (low, Show more's guard had no test)** · fixed. `web/test/history.test.tsx` › "a Show more answer that arrives after a filter change is not appended to the new list". With the `controller.signal.aborted` line in `showMore` removed, it was red in 10 of 10 runs. Restored, it was green in 10 of 10 runs, and the whole file passed 7 of 7.
+
+New in the round's lines:
+
+- **low** · no `Done when` line depends on it · `nfr:maintainability` — the new test waits a fixed 20 ms of real time (`setTimeout(resolve, 20)`) before it asserts the late row is absent. If a regression's stale render took longer than that, the test would pass without having seen it. That is false in the safe direction: the test cannot flake red, and it was red in 10 of 10 mutated runs here. Direction, not a measured remedy: release the late answer inside `await act(async () => …)`, which flushes React's work before the assertion.
+- **dropped** · `SLICE_REFUSED_FIELDS` is a hand-kept list beside the schema's fields, so a later field could miss the refusal. No such field exists, and nothing breaks today.
+- **findings** · the hunt returned 2; 1 carried, 1 dropped. Nothing in this gate is a `high`.
+- NFR: security ✓ (the refusal only narrows what is accepted) · performance n/a · reliability ✓ · maintainability — the low above.
+
 ## Log
 
 - 2026-10-18 · filed from the owner's request, with the three decisions above
