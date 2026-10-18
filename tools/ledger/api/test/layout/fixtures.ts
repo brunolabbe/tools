@@ -501,7 +501,7 @@ const HOUSEHOLD_COLUMNS: Record<AccountColumn, number> = {
 
 function lg37(): LayoutFixture {
   const names = ["Alex", "Sam"] as const;
-  const account = accountSheets(invent(37, [2022, 2023, 2024], 12), {
+  const account = accountSheets(recorded("lg37"), {
     columns: HOUSEHOLD_COLUMNS,
     headers: {
       date: "Date",
@@ -573,7 +573,7 @@ function lg37(): LayoutFixture {
 
 function moved(): LayoutFixture {
   const names = ["Camille", "Dominique"] as const;
-  const account = accountSheets(invent(38, [2023, 2024], 10), {
+  const account = accountSheets(recorded("moved"), {
     columns: { date: 1, detail: 2, amount: 3, balance: 4, bucket: 5, person: 6, note: 7 },
     headers: {
       date: "Jour",
@@ -669,10 +669,33 @@ function inEnglish(record: History): void {
   }
 }
 
+type RecordedName = "lg37" | "moved" | "english" | "swapped-labels" | "empty-columns-carry";
+
+/** The history a workbook fixture was written from: one place for the fixture and for a test that reads it back. */
+function recorded(name: RecordedName): History {
+  switch (name) {
+    case "lg37":
+      return invent(37, [2022, 2023, 2024], 12);
+    case "moved":
+      return invent(38, [2023, 2024], 10);
+    case "english": {
+      const record = invent(39, [2023, 2024], 9);
+      inEnglish(record);
+      return record;
+    }
+    case "swapped-labels":
+      return invent(56, [2023, 2024], 6);
+    case "empty-columns-carry": {
+      const record = invent(57, [2023, 2024], 7);
+      inEnglish(record);
+      return record;
+    }
+  }
+}
+
 function english(): LayoutFixture {
   const names = ["Jordan", "Riley"] as const;
-  const record = invent(39, [2023, 2024], 9);
-  inEnglish(record);
+  const record = recorded("english");
   const account = accountSheets(record, {
     columns: { date: 1, bucket: 2, detail: 3, person: 4, amount: 5, balance: 6, note: 7 },
     headers: {
@@ -797,10 +820,8 @@ function quoted(text: string): string {
 }
 
 function csvBalance(): LayoutFixture {
-  let balance = 251_210;
   const lines = ["Date,Description,Retrait,Dépôt,Solde"];
-  for (const row of statement(40, 5)) {
-    balance += row.cents;
+  for (const row of banked("csv-balance")) {
     const amount = dollars(Math.abs(row.cents)).toFixed(2);
     lines.push(
       [
@@ -808,7 +829,7 @@ function csvBalance(): LayoutFixture {
         quoted(row.detail),
         row.cents < 0 ? amount : "",
         row.cents > 0 ? amount : "",
-        dollars(balance).toFixed(2),
+        money(row.balance),
       ].join(","),
     );
   }
@@ -842,7 +863,7 @@ function csvBalance(): LayoutFixture {
 
 function csvNoBalance(): LayoutFixture {
   const lines = ["Date,Montant,Description"];
-  for (const row of statement(41, 4).toReversed()) {
+  for (const row of banked("csv-no-balance").toReversed()) {
     lines.push([row.date, dollars(row.cents).toFixed(2), quoted(row.detail)].join(","));
   }
   return {
@@ -887,6 +908,109 @@ function running(
   });
 }
 
+type BankName =
+  | "csv-balance"
+  | "csv-no-balance"
+  | "empty-columns-csv"
+  | "bank-preamble"
+  | "bank-two-dates"
+  | "bank-footer"
+  | "bank-wide";
+
+/**
+ * The rows a bank CSV fixture was written from, oldest first, with the balance
+ * each leaves: one place for the fixture and for a test that reads it back.
+ * `csv-no-balance` has no balance column, and its opening here is only a place
+ * to start from.
+ */
+function banked(
+  name: BankName,
+): { date: string; detail: string; cents: number; balance: number }[] {
+  switch (name) {
+    case "csv-balance":
+      return running(statement(40, 5), 251_210);
+    case "csv-no-balance":
+      return running(statement(41, 4), 0);
+    case "empty-columns-csv":
+      return running(statement(58, 4), 408_200);
+    case "bank-preamble":
+      return running(statement(59, 4), 276_450);
+    case "bank-two-dates":
+      return running(statement(61, 4), 189_730);
+    case "bank-footer":
+      return running(statement(62, 4), 95_320);
+    case "bank-wide":
+      return running(statement(64, 4), 351_080);
+  }
+}
+
+/** A movement as the generator wrote it, before any layout reads the file. */
+export interface WrittenRow {
+  date: string;
+  bucket: Bucket | null;
+  /** Index into the fixture's `people`, or `null`. */
+  person: number | null;
+  cents: number;
+  /** `null` where the fixture has no balance column. */
+  balance: number | null;
+  detail: string;
+  note: string | null;
+}
+
+/**
+ * What the generator wrote into a fixture, oldest first, so a test can hold the
+ * correct description's reading to it: a description that picks the wrong
+ * column is still a valid layout and still `matched` against itself (lg-56
+ * gate 1). `lg7` is not generated here and has none.
+ */
+export function writtenRows(name: string): WrittenRow[] | undefined {
+  switch (name) {
+    case "lg37":
+    case "moved":
+    case "english":
+    case "swapped-labels":
+    case "empty-columns-carry": {
+      const record = recorded(name);
+      let balance = record.opening.mortgage + record.opening["current-expenses"];
+      const out: WrittenRow[] = [];
+      for (const { rows } of record.years) {
+        for (const row of rows) {
+          if (row.cents === null) continue;
+          balance += row.cents;
+          out.push({
+            date: row.date,
+            bucket: row.bucket,
+            person: row.person,
+            cents: row.cents,
+            balance,
+            detail: row.detail,
+            note: row.note,
+          });
+        }
+      }
+      return out;
+    }
+    case "csv-balance":
+    case "csv-no-balance":
+    case "empty-columns-csv":
+    case "bank-preamble":
+    case "bank-two-dates":
+    case "bank-footer":
+    case "bank-wide":
+      return banked(name).map((row) => ({
+        date: row.date,
+        bucket: null,
+        person: null,
+        cents: row.cents,
+        balance: name === "csv-no-balance" ? null : row.balance,
+        detail: row.detail,
+        note: null,
+      }));
+    default:
+      return undefined;
+  }
+}
+
 /** `date` (yyyy-mm-dd) `days` earlier, as a calendar says. */
 function daysEarlier(date: string, days: number): string {
   const moment = new Date(`${date}T00:00:00Z`);
@@ -918,7 +1042,7 @@ function csvLayout(
 
 function swappedLabels(): LayoutFixture {
   const names = ["Maxime", "Léa"] as const;
-  const account = accountSheets(invent(56, [2023, 2024], 6), {
+  const account = accountSheets(recorded("swapped-labels"), {
     columns: { date: 1, detail: 2, bucket: 3, person: 4, amount: 5, balance: 6, note: 7 },
     headers: {
       date: "Date",
@@ -971,8 +1095,7 @@ function swappedLabels(): LayoutFixture {
 
 function emptyColumnsCarry(): LayoutFixture {
   const names = ["Noah", "Emma"] as const;
-  const record = invent(57, [2023, 2024], 7);
-  inEnglish(record);
+  const record = recorded("empty-columns-carry");
   const account = accountSheets(record, {
     // Column E is empty: the amount is the column after it.
     columns: { date: 1, bucket: 2, detail: 3, person: 4, amount: 6, balance: 7, note: 8 },
@@ -1027,7 +1150,7 @@ function emptyColumnsCsv(): LayoutFixture {
   // Withdrawals, an empty spacer, deposits, the balance, and the empty column
   // after the last comma that some exports end every line with.
   const lines = ["Date,Description,Withdrawals,,Deposits,Balance,"];
-  for (const row of running(statement(58, 4), 408_200)) {
+  for (const row of banked("empty-columns-csv")) {
     lines.push(
       [
         row.date,
@@ -1063,7 +1186,7 @@ function bankPreamble(): LayoutFixture {
     "",
     "Date,Description,Amount,Balance",
   ];
-  for (const row of running(statement(59, 4), 276_450)) {
+  for (const row of banked("bank-preamble")) {
     lines.push([row.date, quoted(row.detail), money(row.cents), money(row.balance)].join(","));
   }
   return {
@@ -1083,7 +1206,7 @@ function bankPreamble(): LayoutFixture {
 function bankTwoDates(): LayoutFixture {
   const next = random(60);
   const lines = ["Date posted,Date of transaction,Reference,Description,Amount,Balance"];
-  for (const [index, row] of running(statement(61, 4), 189_730).entries()) {
+  for (const [index, row] of banked("bank-two-dates").entries()) {
     // A purchase can post days after it was made; a deposit and the loan post the day they happen.
     const earlier = row.cents < 0 && row.detail !== "HYPOTHEQUE" && next() < 0.5;
     const made = earlier ? daysEarlier(row.date, 1 + Math.floor(next() * 5)) : row.date;
@@ -1114,7 +1237,7 @@ function bankTwoDates(): LayoutFixture {
 
 function bankFooter(): LayoutFixture {
   const lines = ["Booking date,Details,Amount,Running balance"];
-  const rows = running(statement(62, 4), 95_320);
+  const rows = banked("bank-footer");
   for (const row of rows) {
     lines.push([row.date, quoted(row.detail), money(row.cents), money(row.balance)].join(","));
   }
@@ -1156,7 +1279,7 @@ function bankWide(): LayoutFixture {
   const lines = [
     "Date,Branch,Teller,Currency,Description,Category code,Channel,Amount,Balance,Status,Batch",
   ];
-  const rows = running(statement(64, 4), 351_080);
+  const rows = banked("bank-wide");
   for (const [index, row] of rows.toReversed().entries()) {
     const channel =
       row.cents > 0 ? "DIRECT" : (["POS", "ONLINE", "ATM"][Math.floor(next() * 3)] ?? "POS");
@@ -1178,7 +1301,7 @@ function bankWide(): LayoutFixture {
   }
   return {
     name: "bank-wide",
-    shape: "a bank CSV, newest first, of eleven columns of which a description needs three",
+    shape: "a bank CSV, newest first, of eleven columns of which a description needs four",
     sheets: [csvSheet("full-export.csv", `${lines.join("\n")}\n`)],
     people: [],
     layout: csvLayout("full-export.csv", "newest-first", [

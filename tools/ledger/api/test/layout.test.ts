@@ -11,7 +11,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import { HOUSEHOLD_LAYOUT, readWorkbook } from "@ledger/books";
 import { workbookLayoutSchema } from "@ledger/contract";
 import type { WorkbookLayout } from "@ledger/contract";
-import { LAYOUT_FIXTURE_NAMES, layoutFixtures } from "./layout/fixtures.ts";
+import { LAYOUT_FIXTURE_NAMES, layoutFixtures, writtenRows } from "./layout/fixtures.ts";
 import type { LayoutFixture } from "./layout/fixtures.ts";
 import { scoreLayout } from "./layout/score.ts";
 import type { Outcome } from "./layout/score.ts";
@@ -390,9 +390,43 @@ describe("lg-56's harder fixtures", () => {
     ],
   ];
 
-  test.each(MISTAKES)("%s, %s: %s", (name, _mistake, change, outcome) => {
+  test.each(
+    MISTAKES.map(([name, mistake, change, outcome]) => ({ name, mistake, change, outcome })),
+  )("$name, $mistake: $outcome", ({ name, change, outcome }) => {
     const each = fixture(name);
     expect(scoreLayout(each, wrong(each.layout, change)).outcome).toBe(outcome);
+  });
+
+  // `scoreLayout(each, each.layout)` compares a layout with itself, so "matched"
+  // above holds for any valid layout. These hold the correct description to what
+  // the generator wrote: a detail read from the wrong column fails here, and
+  // nowhere else, if the reader has nothing to refuse (lg-56 gate 1).
+  const GENERATED = LAYOUT_FIXTURE_NAMES.filter((name) => name !== "lg7");
+
+  test("lg7 is the one fixture not generated here, so the only one without written rows", () => {
+    expect(LAYOUT_FIXTURE_NAMES.filter((name) => writtenRows(name) === undefined)).toEqual(["lg7"]);
+  });
+
+  test.each(GENERATED)("%s: its correct description reads what the generator wrote", (name) => {
+    const each = fixture(name);
+    const written = writtenRows(name);
+    expect(written?.length, name).toBeGreaterThan(15);
+    const reading = readWorkbook(each.sheets, { people: each.people, layout: each.layout });
+    const read = [...reading.movements, ...reading.unfiled].map((row) => ({
+      date: row.date,
+      bucket: row.bucket,
+      person: row.personId,
+      cents: row.amountCents,
+      balance: row.balanceCents,
+      detail: row.detail,
+      note: row.note,
+    }));
+    expect(read).toEqual(
+      (written ?? []).map((row) => ({
+        ...row,
+        person: row.person === null ? null : (each.people[row.person] ?? null),
+      })),
+    );
   });
 
   test("swapped-labels: the buckets' labels do not say which is which, the rows and the heading do", () => {
@@ -457,6 +491,9 @@ describe("lg-56's harder fixtures", () => {
     // The reader notices the order is off, and calls it no problem.
     expect(wrongly.outOfOrder.length).toBeGreaterThan(0);
     expect(wrongly.problems).toEqual([]);
+    // And the posted date is in order on every row.
+    const rightly = readWorkbook(each.sheets, { people: each.people, layout: each.layout });
+    expect(rightly.outOfOrder).toEqual([]);
   });
 
   test("bank-footer: the lines after the last movement hold no date, and their figures sit in the balance column", () => {
