@@ -132,3 +132,118 @@ takes one from probe c's output.
   gate's head-run outputs, `/tmp/claude-1000/lg-40/g2/gate-lg40c.txt` (probe c at
   `856d7efc`, the `both` lines and the `refusedOther` counts) and
   `/tmp/claude-1000/lg-40/g2c2/gate-lg40c2.txt` (probe c2).
+- 2026-10-18 — builder (Opus 5.5), **stopped at Build step 2's stop condition;
+  no source changed on this branch.** The rule is the owner's to choose, as
+  options below.
+
+  **Probes.** The gate's originals were still on disk and were used unchanged,
+  not rebuilt: probe c from
+  `/tmp/claude-1000/-workspaces-tools/76d8bfd3-5bf4-4dc1-8f0f-5cfd08c6379a/scratchpad/lg-40/gate-1/gate-lg40c.test.ts`
+  (sha256 `e461a876…d26de3`) and probe c2 from `…/lg-40/gate-2/gate-lg40c2.test.ts`
+  (sha256 `2c8fc618…577ebc`). Each was copied into `api/test/`, run with
+  `GATE_SEED=11` through `npx vitest run`, and deleted. Each vitest run exits 1:
+  the probe's one test passes the 20 s `testTimeout`, which is reported only after
+  the synchronous body has finished, so every cell line is still written.
+
+  **Step 1, at `335efcd4` (`main`, which holds lg-40's `f07e9c25`).** Probe c's and
+  probe c2's outputs are byte-identical to the gate's at `856d7efc` (`cmp` exit 0
+  against `/tmp/claude-1000/lg-40/g2/gate-lg40c.txt` and
+  `…/g2c2/gate-lg40c2.txt`). The counts are in the `lg-40` column of the table
+  below.
+
+  **The reduced case (for Done when 6).** Taken from probe c's second
+  `repeating/both` wrong accept, then reduced greedily: one bank row dropped at a
+  time, along with its workbook row, while the paste was still accepted wrongly.
+  The bank's rows are 2026-02-21 −5.00, 2026-02-21 −10.00, 2026-02-21 +10.00 and
+  2026-02-22 −5.00. The workbook holds the first three, listed as −10.00 (21st),
+  −5.00 (dated the 20th) and +10.00 (21st), from an opening of 1,000.00. A paste of
+  the bank's last three rows, opening from 995.00, is accepted at `335efcd4` with
+  0 already present and 3 added. The truth is 2 present and 1 added. The
+  workbook's day is cut into the runs `[−10.00]`, `[−5.00]` and `[+10.00]`, so
+  the true `k = 2` overlap is weighed against the run `[+10.00]` alone and fails.
+  Since −10.00 + 10.00 = 0, the paste opens from the tail's balance, so `k = 0`
+  fits and is the only reading. Under every variant below this case is refused
+  as ambiguous ("two ways"), which Done when 6 accepts.
+
+  **Step 2: the variants tried, all uncommitted.** Each rewrote `overlaps` in
+  `statements.ts` to read the workbook rows near the stretch's edges (within two
+  days; three for M) and cut runs over them. `workbookStarts` was widened to match.
+  The workbook import's `dayRuns` was not touched: lg-40's test pins
+  `[01, 01, 02, 01]` as three runs, and Done when 8 keeps that test unedited.
+
+  - **S**: a run continues across a change of date when the two dates are a day
+    apart and the row on the far side of the changed one returns to the run's
+    date. Discarded. Chains such as `[23, 24, 23, 24]` swallow two days, and
+    the date window then refuses a reading lg-40 admitted. Measured: `tiny/shift`
+    wrong accepts 0 → 1, `distinct/shift` and c2 `repeating` refused 0 → 1 each.
+    `both` wrong accepts 22 → 13 and 31 → 19.
+  - **S2**, the filed direction in its narrowest form: a row dated a day off,
+    listed between two rows of one date, belongs to their run, unless a neighbour
+    of it is such a row too, in which case lg-40's cut stands.
+  - **M1 / M2**, the widest form: every cut between two of the workbook's dates
+    is optional. The stretch matches if some cutting into blocks, each spanning
+    at most one (M1) or two (M2) calendar days, matches block by block
+    (`matchPart`, each bank row within a day of the block's dates). It is searched
+    as a walk over the date boundaries.
+
+  Each cell is `correct / wrongAccept / ambiguous / refusedOther`, 1,500 trials:
+
+  | cell                | lg-40                | S2                   | M1                 | M2                 |
+  | ------------------- | -------------------- | -------------------- | ------------------ | ------------------ |
+  | c distinct/plain    | 1500 / 0 / 0 / 0     | 1500 / 0 / 0 / 0     | 1500 / 0 / 0 / 0   | 1498 / 0 / 2 / 0   |
+  | c distinct/reorder  | 1500 / 0 / 0 / 0     | 1500 / 0 / 0 / 0     | 1500 / 0 / 0 / 0   | 1499 / 0 / 1 / 0   |
+  | c distinct/shift    | 1499 / 0 / 1 / 0     | 1499 / 0 / 1 / 0     | 1499 / 0 / 1 / 0   | 1498 / 0 / 2 / 0   |
+  | c distinct/both     | 1392 / 0 / 0 / 108   | 1426 / 0 / 0 / 74    | 1483 / 0 / 1 / 16  | 1499 / 0 / 1 / 0   |
+  | c repeating/plain   | 1333 / 0 / 167 / 0   | 1333 / 0 / 167 / 0   | 1239 / 0 / 261 / 0 | 1154 / 0 / 346 / 0 |
+  | c repeating/reorder | 1335 / 0 / 165 / 0   | 1335 / 0 / 165 / 0   | 1237 / 0 / 263 / 0 | 1156 / 0 / 344 / 0 |
+  | c repeating/shift   | 1335 / 0 / 165 / 0   | 1322 / 0 / 178 / 0   | 1250 / 0 / 250 / 0 | 1165 / 0 / 335 / 0 |
+  | c repeating/both    | 1256 / 22 / 157 / 65 | 1266 / 17 / 171 / 46 | 1243 / 3 / 249 / 5 | 1174 / 0 / 326 / 0 |
+  | c tiny/plain        | 1136 / 0 / 364 / 0   | 1136 / 0 / 364 / 0   | 977 / 0 / 523 / 0  | 900 / 0 / 600 / 0  |
+  | c tiny/reorder      | 1124 / 0 / 376 / 0   | 1124 / 0 / 376 / 0   | 950 / 0 / 550 / 0  | 862 / 0 / 638 / 0  |
+  | c tiny/shift        | 1179 / 0 / 321 / 0   | 1165 / 0 / 335 / 0   | 1033 / 0 / 467 / 0 | 927 / 0 / 573 / 0  |
+  | c tiny/both         | 1114 / 31 / 322 / 33 | 1115 / 20 / 341 / 24 | 997 / 3 / 496 / 4  | 881 / 0 / 619 / 0  |
+  | c2 distinct         | 1499 / 0 / 1 / 0     | 1499 / 0 / 1 / 0     | 1497 / 0 / 3 / 0   | 1497 / 0 / 3 / 0   |
+  | c2 repeating        | 1345 / 0 / 155 / 0   | 1336 / 0 / 164 / 0   | 1276 / 0 / 224 / 0 | 1198 / 0 / 302 / 0 |
+  | c2 tiny             | 1153 / 0 / 347 / 0   | 1142 / 0 / 358 / 0   | 984 / 0 / 516 / 0  | 884 / 0 / 616 / 0  |
+
+  Totals. The **cells with no day both re-dated and reordered** are probe c's
+  plain, reorder and shift cells plus probe c2, 18,000 trials in all:
+
+  | measure                                 | lg-40 | S2          | M1           | M2             |
+  | --------------------------------------- | ----- | ----------- | ------------ | -------------- |
+  | wrong accepts, `both` cells             | 53    | 37 (−16)    | 6 (−47)      | 0 (−53)        |
+  | ambiguous, cells with no such day       | 2,062 | 2,109 (+47) | 3,058 (+996) | 3,762 (+1,700) |
+  | ambiguous, `both` cells                 | 479   | 512         | 746          | 946            |
+  | correct pastes refused, `both` cells    | 206   | 144         | 25           | 0              |
+  | `distinct` only: ambiguous, no such day | 2     | 2           | 4            | 8              |
+
+  **Why this stops.** Every variant raises ambiguity in the cells that have no
+  such day by more than it removes wrong accepts. S2 adds 47 to remove 16, M1
+  adds 996 to remove 47, and M2 adds 1,700 to remove 53. Only M2 meets Done when
+  1–4; S2 and M1 leave wrong accepts and miss Done when 1. Wall time is not a
+  cost to weigh: probe c took 112–133 s and c2 30–40 s across all four, on a
+  shared machine.
+
+  **Open decision, for the owner.**
+
+  - **A. M2** (recommended): meets Done when 1–4. It removes every wrong
+    accept and every refused correct paste in the `both` cells. It nearly doubles
+    the ambiguity refusal with the adversarial alphabets, where every movement is
+    ±5.00 or ±10.00, but adds only 6 in 6,000 trials with `distinct`. An
+    ambiguity stores nothing and asks for a longer paste; a wrong accept stores
+    rows twice and says nothing. What it changes: "a day" becomes a block of
+    the workbook's rows spanning up to two calendar days. The header of
+    `workbook-days.ts`, the header of `statements.ts` and the
+    `workbookMismatch` wording all say so.
+  - **B. S2**, the direction as filed: 53 → 37 wrong accepts for +47
+    ambiguous. It is the smallest change to lg-40's day, but Done when 1 has to
+    be rewritten to accept the residue.
+  - **C. M1**: 53 → 6 for +996. Done when 1 has to be rewritten too.
+  - **D. No rule change.** Keep lg-40's rule and record the residue: 53 wrong
+    accepts in 9,000 adversarial `both` trials, zero with `distinct`. This was
+    lg-40's gate recommendation.
+
+  The experiment diffs (S2 alone, and S2 with M behind an environment switch)
+  and the reduction harness are in this session's scratch directory, which is not
+  durable. The variants above are described closely enough to rebuild them.
+  **Fold-in:** nothing was made free. With the rule unchosen, no source changed.
