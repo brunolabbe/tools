@@ -3,7 +3,7 @@ id: repo-110
 tool: repo
 title: The preflight test's gh shim cleanup throws EBUSY on the Windows leg
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -107,6 +107,83 @@ next-id.mjs's id-sweep wording when gh fails inside check 5". Grep for
    grades one green reading of an intermittent failure as such, not as a fix.
 6. `npm run check` passes, and `npx vitest run scripts/test/preflight.test.ts`
    reports every test in the file passing, with its count.
+
+## Review
+
+**Gate: FAIL** — 2026-10-18 · `335efcd4..611bc6a2` · Opus 5.5, depth full
+
+| Done when                                                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `grep -n "rmSync(shimDir"` finds one line, in the helper; the three tests call the helper                        | **not met** as worded — the grep prints nothing (exit 1). The second clause holds: the three tests Build names call `removeShimDir(shimDir)`, and the only `fs.rmSync` on a shim directory is `removeShimDir`'s default `remove` parameter (read from the diff). F1                                                                                                                                                                                                                                                              |
+| 2. A named spec throws `EBUSY` once, then succeeds, and passes                                                      | `scripts/test/preflight.test.ts` › "removeShimDir survives one EBUSY and then removes the directory (repo-110)" ✓ — asserts 2 calls, waits `[50]`, directory gone. Red when the retry is removed (EBUSY rethrown at once): 3 failed, this spec among them                                                                                                                                                                                                                                                                        |
+| 3. A leak still fails on Linux: three red, three green, by a spec that counts `preflight-ghshim-*` in `os.tmpdir()` | **unproven (open decision)** — the property is proven: with each site's `removeShimDir(shimDir)` commented out in turn, `scripts/test/preflight.test.ts` › "no preflight-ghshim directory this file made is left behind (repo-110)" went red 3 of 3 (`1 failed \| 108 passed (109)`, naming the leaked directory) and green 3 of 3 once restored (`109 passed (109)`). The clause naming the mechanism is not: no spec counts `os.tmpdir()`, and `.claude/rules/testing.md` says such a count races with concurrent sessions. F2 |
+| 4. Persistent `EBUSY` fails the test, naming the directory                                                          | `scripts/test/preflight.test.ts` › "removeShimDir fails naming the directory when EBUSY never clears (repo-110)" ✓ — `toThrow(dir)`, 8 calls, directory still there. Red when the last attempt returns instead of throwing. A probe test whose `finally` hit persistent `EBUSY` failed with `could not remove <dir>: still EBUSY after 8 attempts`, caused by the original `EBUSY`                                                                                                                                               |
+| 5. The Windows leg reads `preflight.test.ts` passing on the head, by run id                                         | proven (CI), as **one green reading of an intermittent failure, not a fix** — `test (windows-latest, informational)`, run 39165420249 job 117787261661 on `611bc6a2`: `scripts/test/preflight.test.ts (109 tests)` ✓, `Test Files 291 passed \| 2 skipped (293)`. Also run 39164706566 on `0a95eb4e`, which differs only by the ticket file. Neither log contains `EBUSY`, so neither shows the retry ran                                                                                                                        |
+| 6. `npm run check` passes; the file's every test passes, with its count                                             | verified — `npm run check` exit 0; `npx vitest run scripts/test/preflight.test.ts` → `109 passed (109)`; `npm test -- --project repo` → `562 passed (562)`, 14 files                                                                                                                                                                                                                                                                                                                                                             |
+
+- **high** · Done when 1 depends on it · F1 — the line's literal check fails:
+  `grep -n "rmSync(shimDir" scripts/test/preflight.test.ts` prints nothing,
+  with exit 1. The helper reaches `fs.rmSync` through the default parameter
+  `remove: ShimRemove = fs.rmSync`, so the grep text never occurs. The property
+  the grep stands for does hold. **Open decision:** (a) write the default as
+  `remove: ShimRemove = (shimDir, options) => fs.rmSync(shimDir, options),`.
+  Measured on the head: the grep then finds one line, in the helper; oxlint
+  exit 0, `tsc -p scripts/test --noEmit` exit 0, `oxfmt --check` exit 0, and
+  the file passes 109 of 109. Recommended: one line, and the brief's check
+  then works for the next reader as written. (b) The owner rewords Done when 1
+  to the property.
+- **med** · Done when 3 depends on it · F2 — this is an open decision. The line
+  names the mechanism, "a spec that counts `preflight-ghshim-*` directories in
+  `os.tmpdir()` before and after", and no such spec exists. The head records
+  the paths `makeShimDir` creates and asserts that none survives.
+  `.claude/rules/testing.md` says a count of the shared temp directory races
+  with concurrent sessions, so the brief's mechanism conflicts with a written
+  repo rule. The property itself is reproduced 3 red and 3 green. (a) The owner
+  rewords Done when 3 to the path-set spec. Recommended: no code. (b) Add a
+  count of the temp directory under a private `TMPDIR`. That is a direction
+  only; not measured.
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · F3 —
+  the leak spec's guard, `shimDirsMade.length >= 3`, is met by the three
+  `removeShimDir` unit specs on their own. `npx vitest run
+scripts/test/preflight.test.ts -t "repo-110"` gives `4 passed | 105 skipped`
+  and exit 0, with none of the three call sites run. A future shim test that
+  uses a raw `mkdtempSync` is invisible to the spec. The same order dependence
+  makes it go red falsely (the safe direction) whenever it runs first: under
+  `-t "left behind"` and under `--sequence.shuffle --sequence.seed=1` it fails
+  with `expected 0 to be greater than or equal to 3`. The branch Log says the
+  spec "passes vacuously under -t"; that is false for the first of those two
+  shapes, also in the safe direction. The full file, the `repo` project and
+  preflight's `npm test -- --project repo` all run it last, after the call
+  sites.
+- **low** · no live call site · F4 — if the remover throws `null` or
+  `undefined`, `(error as NodeJS.ErrnoException).code` raises a `TypeError`
+  that replaces the original error. Measured with an injected throw.
+  `fs.rmSync` throws only `Error`s.
+- **dropped** · `EPERM`, `ENOTEMPTY`, `EMFILE` and `ENOENT` are rethrown
+  unretried, after one call each, and an error with no `code` is rethrown
+  unchanged. This is what Build 2 asks for ("catches `EBUSY` only"), and a
+  spec pins it. A Windows image hold that surfaces as `EPERM` fails loudly,
+  which is the brief's intent. Not a defect.
+- **dropped** · `toThrow(dir)` cannot tell the wrapper from the original
+  `EBUSY`, because both messages contain the directory. The 8-call assertion
+  and the `cause` chain separate them, and the line only asks that the
+  directory be named. Not a defect.
+- **dropped** · the `repo` project run left 148 temp directories under a
+  private `TMPDIR`: `status-*`, `status-gate-*`, `next-id-*` and
+  `main-writes-*`. They come from other spec files, outside the reviewed
+  range.
+- **findings** · the hunt returned 7; 4 carried, 3 dropped.
+- Invariants: no shell, since the diff adds no spawn ✓. Style ✓: no `any`, no
+  `console`, `node:` builtins unchanged. The new specs are appended at the end:
+  all 100 base `test(` titles sit on the same lines on the head ✓.
+  `plantFakeGh` is byte-identical ✓. The other `fs.rmSync` calls (`makeRepo`,
+  the tool fixture, the origin/peer fixture) are unchanged ✓. Skipped, because
+  a test-only diff under `scripts/test/` cannot reach them: contract, AppError,
+  SSRF, redaction, progress, Dockerfile, routes.
+- NFR: security n/a (a test helper) · performance ✓ (persistent `EBUSY` costs
+  1402 ms measured, under the project's 30 s `testTimeout`) · reliability:
+  the effect on Windows is unmeasured, since two green legs with no `EBUSY` in
+  their logs do not show the retry fired · maintainability: F3.
 
 ## Log
 
