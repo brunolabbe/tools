@@ -1,5 +1,6 @@
 /**
- * The rules and the people they may name (lg-4; the people from lg-5's table).
+ * The rules and the people they may name (lg-4; the people from lg-5's table,
+ * and how each is shown from the household directory, lg-33).
  *
  * Every route is behind the identity check, and records who acted from
  * `personOf` — never from anything the body says. **Every write is a `POST`
@@ -15,6 +16,7 @@ import { AppError, ROUTES, ruleDraftSchema } from "@ledger/contract";
 import type { PeopleResponse, Rule, RuleDraft, RulesResponse } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
+import { shownName } from "../directory.ts";
 import { booksOf, personOf } from "../identity.ts";
 import { knownPeople } from "../people.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
@@ -65,8 +67,14 @@ export function registerRuleRoutes(app: FastifyInstance, context: AppContext): v
   // this comment, is what holds it. Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]
   app.get(ROUTES.people, { onRequest: read }, async (request) => {
-    // The household's table, which the directory's members fill (people.ts).
-    const body: PeopleResponse = { people: knownPeople(booksOf(request)) };
+    // The household's table, which the directory's members fill (people.ts),
+    // and how each is shown, which only the directory knows (lg-33).
+    const people = knownPeople(booksOf(request));
+    const names = context.directory.names(personOf(request).household);
+    const body: PeopleResponse = {
+      people,
+      names: Object.fromEntries(people.map((person) => [person, shownName(names, person)])),
+    };
     return body;
   });
 

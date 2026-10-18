@@ -68,6 +68,26 @@ export interface MembershipChange {
   by: string;
 }
 
+/** A person given a shown name, as the directory recorded it (lg-33). */
+export interface PersonRename {
+  action: "rename";
+  person: string;
+  name: string;
+  at: string;
+  by: string;
+}
+
+/** A person's id and the name they are shown under. */
+export interface ShownName {
+  person: string;
+  name: string;
+}
+
+/** How a person is shown: the name `Directory.names` gives them, or their id (lg-33). */
+export function shownName(names: ReadonlyMap<string, string>, person: string): string {
+  return names.get(person) ?? person;
+}
+
 interface Change {
   /** Who made it: an address, or `OPERATOR`. */
   by: string;
@@ -149,13 +169,33 @@ export class Directory {
    * removed, under which name, by whom and when. Filtered in the SQL, so no
    * other household's record is ever read for it.
    */
-  history(household: string): MembershipChange[] {
-    return this.#db
+  history(household: string): (MembershipChange | PersonRename)[] {
+    // Each table in its own id order, and the two merged by time; a membership
+    // and a rename at the same instant read membership first, since a person is
+    // only renamed once a membership has named them (lg-33).
+    const rows = this.#db
       .prepare(
-        `SELECT address, person, action, changed_at AS at, changed_by AS by
-         FROM memberships WHERE household_id = ? ORDER BY id`,
+        `SELECT 0 AS kind, id, address, person, action, NULL AS name,
+                changed_at AS at, changed_by AS by
+         FROM memberships WHERE household_id = ?
+         UNION ALL
+         SELECT 1 AS kind, id, NULL, person, 'rename', name, named_at, named_by
+         FROM person_names WHERE household_id = ?
+         ORDER BY at, kind, id`,
       )
-      .all(household) as MembershipChange[];
+      .all(household, household) as {
+      address: string | null;
+      person: string;
+      action: "add" | "remove" | "rename";
+      name: string | null;
+      at: string;
+      by: string;
+    }[];
+    return rows.map(({ address, person, action, name, at, by }) =>
+      action === "rename"
+        ? { action, person, name: name ?? person, at, by }
+        : { address: address ?? "", person, action, at, by },
+    );
   }
 
   households(): Household[] {
@@ -187,6 +227,84 @@ export class Directory {
   /** The names a household's current members stand under, once each. */
   people(household?: string): string[] {
     return [...new Set(this.members(household).map((member) => member.person))].toSorted();
+  }
+
+  /**
+   * Every person id a membership of the household has ever named, a member who
+   * has left included (lg-33): who can be given a shown name. `people` is only
+   * who stands now.
+   */
+  heldPeople(household: string): string[] {
+    return (
+      this.#db
+        .prepare("SELECT DISTINCT person FROM memberships WHERE household_id = ? ORDER BY person")
+        .all(household) as { person: string }[]
+    ).map((row) => row.person);
+  }
+
+  /**
+   * How each person the household has named is shown now, by id (lg-33). Only
+   * a renamed person is a key: anyone else is shown under their id, which
+   * `shownName` gives.
+   */
+  names(household: string): Map<string, string> {
+    const rows = this.#db
+      .prepare("SELECT person, name FROM current_person_names WHERE household_id = ?")
+      .all(household) as ShownName[];
+    return new Map(rows.map((row) => [row.person, row.name]));
+  }
+
+  /**
+   * Gives a person a shown name, keeping their id (lg-33). Refused as
+   * `PERSON_NOT_FOUND` for a person no membership of the household has named —
+   * an id the books know only from an old rule included — and as
+   * `PERSON_NAME_TAKEN` for a name another person is shown under or has as
+   * their id. Renaming a person back to their own id is a rename like any other.
+   */
+  renamePerson(rename: { household: string; person: string; name: string } & Change): ShownName {
+    refuseUnlessChange(rename);
+    if (typeof rename.household !== "string") refuse("The household is not a string.");
+    if (typeof rename.person !== "string") refuse("The person is not a string.");
+    if (typeof rename.name !== "string") refuse("The name is not a string.");
+    const person = rename.person.trim();
+    const name = rename.name.trim();
+    if (name === "" || name.length > 64) refuse("A person's name is 1 to 64 characters.");
+    return this.#db
+      .transaction(() => {
+        if (this.household(rename.household) === undefined) {
+          throw new AppError("HOUSEHOLD_NOT_FOUND", `There is no household "${rename.household}".`);
+        }
+        const held = this.heldPeople(rename.household);
+        if (!held.includes(person)) {
+          throw new AppError(
+            "PERSON_NOT_FOUND",
+            `No member of this household has been added as "${person}". A person the books know only from an old rule or classification cannot be renamed.`,
+          );
+        }
+        if (this.#nameTaken(rename.household, person, name, held)) {
+          throw new AppError(
+            "PERSON_NAME_TAKEN",
+            `Another person in this household is shown as "${name}", or has it as their id.`,
+          );
+        }
+        this.#db
+          .prepare(
+            `INSERT INTO person_names (household_id, person, name, named_at, named_by)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run(rename.household, person, name, rename.at.toISOString(), rename.by);
+        return { person, name };
+      })
+      .immediate();
+  }
+
+  /** Whether anyone but `person` is shown as `name` now or has it as their id. */
+  #nameTaken(household: string, person: string, name: string, held: readonly string[]): boolean {
+    if (held.some((other) => other !== person && other === name)) return true;
+    for (const [other, shown] of this.names(household)) {
+      if (other !== person && shown === name) return true;
+    }
+    return false;
   }
 
   addHousehold(household: Household & Change): Household {
@@ -254,7 +372,17 @@ export class Directory {
             `That address already belongs to the household "${standing.household}", as ${standing.person}. Remove it first.`,
           );
         }
-        // A household holds any number of names (lg-23): nothing is counted.
+        // A household holds any number of names (lg-23): nothing is counted. A
+        // new one is not a name another person is shown under (lg-33).
+        if (!this.heldPeople(member.household).includes(person)) {
+          const shownAs = [...this.names(member.household).values()];
+          if (shownAs.includes(person)) {
+            throw new AppError(
+              "PERSON_NAME_TAKEN",
+              `Another person in this household is shown as "${person}". Pick them from the list to add an address for them.`,
+            );
+          }
+        }
         this.#record({ address, household: member.household, person }, "add", member);
         return { address, household: member.household, person };
       })

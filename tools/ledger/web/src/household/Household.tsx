@@ -10,8 +10,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AppError } from "@ledger/contract";
-import type { AddMemberRequest, HouseholdResponse, MembershipRecord } from "@ledger/contract";
+import type { AddMemberRequest, HouseholdResponse } from "@ledger/contract";
 import { addHouseholdMember, fetchHousehold } from "../api/households.ts";
+import { shownName, usePeopleNames } from "../people.tsx";
+import type { ShownNames } from "../people.tsx";
 import { MemberForm } from "./MemberForm.tsx";
 
 type Load =
@@ -19,14 +21,29 @@ type Load =
   | { state: "failed"; message: string }
   | { state: "ready"; household: HouseholdResponse };
 
-function describe(record: MembershipRecord): string {
-  const what = record.action === "add" ? "added" : "removed";
-  const by = record.by === "operator" ? "the operator" : record.by;
-  return `${record.address} ${what} as ${record.person}, by ${by}`;
+type HistoryRecord = HouseholdResponse["history"][number];
+
+/**
+ * Each record in words, oldest first. A person is named as they are shown now,
+ * and a rename by what they were shown as before it and what after (lg-33).
+ */
+function describeAll(history: readonly HistoryRecord[], names: ShownNames): string[] {
+  const before = new Map<string, string>();
+  return history.map((record) => {
+    const by = record.by === "operator" ? "the operator" : record.by;
+    if (record.action === "rename") {
+      const was = before.get(record.person) ?? record.person;
+      before.set(record.person, record.name);
+      return `${was} renamed ${record.name}, by ${by}`;
+    }
+    const what = record.action === "add" ? "added" : "removed";
+    return `${record.address} ${what} as ${shownName(names, record.person)}, by ${by}`;
+  });
 }
 
 export function Household({ id }: { id: string }): React.ReactElement {
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const shown = usePeopleNames();
 
   const refresh = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
@@ -57,8 +74,15 @@ export function Household({ id }: { id: string }): React.ReactElement {
   }
 
   const { household, members, history } = load.household;
-  // Every name the household has held, since a name once in the books can return.
+  // The shell's map, with the members' own names over it: this answer is the
+  // newer of the two.
+  const names: ShownNames = {
+    ...shown,
+    ...Object.fromEntries(members.map((member) => [member.person, member.name])),
+  };
+  // Every person the household has held, since a person once in the books can return.
   const people = [...new Set(history.map((record) => record.person))].toSorted();
+  const described = describeAll(history, names);
   const add = async (member: AddMemberRequest) => {
     const added = await addHouseholdMember(id, member);
     await refresh();
@@ -74,13 +98,13 @@ export function Household({ id }: { id: string }): React.ReactElement {
       <ul className="members">
         {members.map((member) => (
           <li key={member.address}>
-            <strong>{member.person}</strong> <span>{member.address}</span>
+            <strong>{shownName(names, member.person)}</strong> <span>{member.address}</span>
           </li>
         ))}
       </ul>
 
       <h3>Add a member</h3>
-      <MemberForm people={people} onAdd={add} />
+      <MemberForm people={people} names={names} onAdd={add} />
       <p className="muted hint">
         Only whoever runs the ledger can remove a member, since removing cuts a person off from
         their records.
@@ -90,7 +114,8 @@ export function Household({ id }: { id: string }): React.ReactElement {
       <ol className="members">
         {history.toReversed().map((record, index) => (
           <li key={`${String(history.length - index)}`}>
-            <span className="muted">{record.at.slice(0, 10)}</span> <span>{describe(record)}</span>
+            <span className="muted">{record.at.slice(0, 10)}</span>{" "}
+            <span>{described[history.length - 1 - index]}</span>
           </li>
         ))}
       </ol>

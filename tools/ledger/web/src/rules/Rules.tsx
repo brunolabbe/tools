@@ -16,6 +16,7 @@ import { fetchSpendingCategories } from "../api/spending.ts";
 import { BUCKET_LABELS, answerLabel, criteriaLabel } from "../labels.ts";
 import { spendingNames } from "../spending/Picker.tsx";
 import { RuleForm } from "./RuleForm.tsx";
+import { usePeopleNames } from "../people.tsx";
 
 type Load =
   | { state: "loading" }
@@ -35,6 +36,7 @@ const BLANK = {
 } as const;
 
 export function Rules(): React.ReactElement {
+  const shown = usePeopleNames();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [open, setOpen] = useState<Open>({ kind: "none" });
   const [problem, setProblem] = useState<string | null>(null);
@@ -120,7 +122,7 @@ export function Rules(): React.ReactElement {
               <>
                 <p className="what">{rule.descriptionPattern}</p>
                 <p className="muted">
-                  {criteriaLabel(rule)} → {answerLabel(rule)}
+                  {criteriaLabel(rule)} → {answerLabel(rule, shown)}
                 </p>
                 {rule.spendingCategoryId !== null && (
                   <p className="muted">

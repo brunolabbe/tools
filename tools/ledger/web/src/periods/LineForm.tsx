@@ -10,6 +10,7 @@ import { parseTypedAmountCents } from "@ledger/books";
 import type { SpendingCategory } from "@ledger/contract";
 import { addLine } from "../api/periods.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
+import { shownName, usePeopleNames } from "../people.tsx";
 
 interface Props {
   people: readonly string[];
@@ -41,6 +42,7 @@ export function LineForm({
   onProblem,
 }: Props): React.ReactElement {
   const id = useId();
+  const names = usePeopleNames();
   const [payer, setPayer] = useState(people.includes(me) ? me : (people[0] ?? ""));
   const [date, setDate] = useState(today);
   const [amount, setAmount] = useState("");
@@ -95,7 +97,7 @@ export function LineForm({
       <select id={`${id}-payer`} value={payer} onChange={(event) => setPayer(event.target.value)}>
         {people.map((personId) => (
           <option key={personId} value={personId}>
-            {personId}
+            {shownName(names, personId)}
           </option>
         ))}
       </select>
@@ -133,7 +135,7 @@ export function LineForm({
           ? "This was someone else's"
           : other === null
             ? "This was the other person's"
-            : `This was ${other}'s`}
+            : `This was ${shownName(names, other)}'s`}
       </label>
       {theirs && others.length > 1 && (
         <>
@@ -145,7 +147,7 @@ export function LineForm({
           >
             {others.map((personId) => (
               <option key={personId} value={personId}>
-                {personId}
+                {shownName(names, personId)}
               </option>
             ))}
           </select>

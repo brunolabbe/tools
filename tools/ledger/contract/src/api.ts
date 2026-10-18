@@ -29,6 +29,8 @@ export const ROUTES = {
   adminHouseholds: `${API_PREFIX}/admin/households`,
   adminMembers: `${API_PREFIX}/admin/households/:id/members`,
   adminMemberRemove: `${API_PREFIX}/admin/households/:id/members/remove`,
+  // lg-33: a person's shown name, changed by an admin only; their id never changes.
+  adminPersonRename: `${API_PREFIX}/admin/households/:id/people/rename`,
   statements: `${API_PREFIX}/statements`,
   // lg-4: the rules, the inbox of unclassified rows, and who the rules may name.
   rules: `${API_PREFIX}/rules`,
@@ -107,10 +109,15 @@ export interface HouseholdSummary {
   name: string;
 }
 
-/** An address in a household now, and the person's name it stands under (lg-22). */
+/**
+ * An address in a household now, and the person it stands under (lg-22):
+ * `person` is the id the books store, which never changes, and `name` is how
+ * the person is shown (lg-33), the id until an admin renames them.
+ */
 export interface HouseholdMember {
   address: string;
   person: string;
+  name: string;
 }
 
 /**
@@ -133,7 +140,19 @@ export interface MembershipRecord {
 export interface HouseholdResponse {
   household: HouseholdSummary;
   members: HouseholdMember[];
-  history: MembershipRecord[];
+  history: (MembershipRecord | PersonNameRecord)[];
+}
+
+/**
+ * A person given a shown name by an admin (lg-33): `person` is their id, which
+ * the books keep, and `name` is what every screen shows from then on.
+ */
+export interface PersonNameRecord {
+  action: "rename";
+  person: string;
+  name: string;
+  at: string;
+  by: string;
 }
 
 /** `POST /api/households/:id/members` and its admin twin: an address, as a person. */
@@ -155,6 +174,27 @@ export interface RemoveMemberRequest {
 export const removeMemberRequestSchema = z.strictObject({
   address: z.string().min(1).max(320),
 }) satisfies z.ZodType<RemoveMemberRequest>;
+
+/**
+ * `POST /api/admin/households/:id/people/rename` (lg-33): the person's id, and
+ * the name to show them under. The id is never changed, so nothing the books
+ * store is rewritten.
+ */
+export interface RenamePersonRequest {
+  person: string;
+  name: string;
+}
+
+export const renamePersonRequestSchema = z.strictObject({
+  person: z.string().min(1).max(64),
+  name: z.string().min(1).max(64),
+}) satisfies z.ZodType<RenamePersonRequest>;
+
+/** A person's id and the name they are shown under, as a rename leaves them. */
+export interface PersonName {
+  person: string;
+  name: string;
+}
 
 /** `POST /api/admin/households`: a new household, with no members yet. */
 export interface CreateHouseholdRequest {
@@ -300,6 +340,12 @@ export interface RulesResponse {
  */
 export interface PeopleResponse {
   people: string[];
+  /**
+   * How each of `people` is shown (lg-33): the name the household directory
+   * gives them, or their id where it gives none. Every person is a key, so a
+   * screen never has to guess.
+   */
+  names: Record<string, string>;
 }
 
 /**

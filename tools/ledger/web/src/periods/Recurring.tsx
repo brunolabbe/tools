@@ -9,6 +9,7 @@ import { useId, useState } from "react";
 import { formatCents, parseTypedAmountCents } from "@ledger/books";
 import type { RecurringItem } from "@ledger/contract";
 import { addRecurring, changeRecurring } from "../api/periods.ts";
+import { shownName, usePeopleNames } from "../people.tsx";
 
 interface Props {
   items: readonly RecurringItem[];
@@ -65,6 +66,7 @@ function EndItem({
 
 export function Recurring({ items, people, me, busy, send, onProblem }: Props): React.ReactElement {
   const id = useId();
+  const names = usePeopleNames();
   const [payer, setPayer] = useState(people.includes(me) ? me : (people[0] ?? ""));
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
@@ -107,7 +109,7 @@ export function Recurring({ items, people, me, busy, send, onProblem }: Props): 
             <li key={item.id}>
               <p className="figure">
                 <span>
-                  {item.label} · {item.personId}
+                  {item.label} · {shownName(names, item.personId)}
                 </span>
                 <span className="amount">{formatCents(item.monthlyCents)} a month</span>
               </p>
@@ -135,7 +137,7 @@ export function Recurring({ items, people, me, busy, send, onProblem }: Props): 
         <select id={`${id}-payer`} value={payer} onChange={(event) => setPayer(event.target.value)}>
           {people.map((personId) => (
             <option key={personId} value={personId}>
-              {personId}
+              {shownName(names, personId)}
             </option>
           ))}
         </select>

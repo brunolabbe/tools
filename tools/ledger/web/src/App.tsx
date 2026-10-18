@@ -18,6 +18,11 @@
  * no household is refused by `/api/me` like a stranger, so the shell asks for
  * the admin's list before it says "no household": answered, the admin's screen
  * is the whole of the shell, with no books tab at all.
+ *
+ * lg-33: the shell fetches how each person is shown and hands it to every
+ * screen (`people.tsx`), again on every change of tab, so a rename made on the
+ * admin's screen is on the next one opened. Until it answers, or if it fails,
+ * each person is shown under their id.
  */
 
 import { useEffect, useState } from "react";
@@ -28,10 +33,13 @@ import { fetchHealth } from "./api/health.ts";
 import { fetchAdminHouseholds } from "./api/households.ts";
 import { fetchInbox } from "./api/inbox.ts";
 import { fetchMe } from "./api/me.ts";
+import { fetchPeopleNames } from "./api/people.ts";
 import { Home } from "./home/Home.tsx";
 import { Household } from "./household/Household.tsx";
 import { Inbox } from "./inbox/Inbox.tsx";
 import { NoHousehold } from "./NoHousehold.tsx";
+import { PeopleNamesProvider } from "./people.tsx";
+import type { ShownNames } from "./people.tsx";
 import { Periods } from "./periods/Periods.tsx";
 import { Receipts } from "./receipts/Receipts.tsx";
 import { Rules } from "./rules/Rules.tsx";
@@ -59,6 +67,7 @@ export function App(): React.ReactElement {
   const [inNoHousehold, setInNoHousehold] = useState(false);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [adminOnly, setAdminOnly] = useState(false);
+  const [names, setNames] = useState<ShownNames>({});
 
   useEffect(() => {
     const controller = new AbortController();
@@ -90,6 +99,17 @@ export function App(): React.ReactElement {
       .catch(() => undefined);
     return () => controller.abort();
   }, [tab]);
+
+  // Only a member has books to ask; a failure keeps the map it had.
+  const member = me !== null;
+  useEffect(() => {
+    if (!member) return;
+    const controller = new AbortController();
+    fetchPeopleNames(controller.signal)
+      .then(setNames)
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [tab, member]);
 
   if (adminOnly) {
     return (
@@ -170,17 +190,19 @@ export function App(): React.ReactElement {
         )}
       </nav>
       <main>
-        {tab === "home" && <Home />}
-        {tab === "stats" && <Stats />}
-        {tab === "period" && <Periods />}
-        {tab === "receipt" && <Receipts />}
-        {tab === "paste" && <StatementPaste />}
-        {tab === "inbox" && <Inbox onCount={setWaiting} />}
-        {tab === "rules" && <Rules />}
-        {tab === "spending" && <Spending />}
-        {tab === "salaries" && <Salaries />}
-        {tab === "household" && me !== null && <Household id={me.person.household} />}
-        {tab === "admin" && me?.admin === true && <Admin />}
+        <PeopleNamesProvider value={names}>
+          {tab === "home" && <Home />}
+          {tab === "stats" && <Stats />}
+          {tab === "period" && <Periods />}
+          {tab === "receipt" && <Receipts />}
+          {tab === "paste" && <StatementPaste />}
+          {tab === "inbox" && <Inbox onCount={setWaiting} />}
+          {tab === "rules" && <Rules />}
+          {tab === "spending" && <Spending />}
+          {tab === "salaries" && <Salaries />}
+          {tab === "household" && me !== null && <Household id={me.person.household} />}
+          {tab === "admin" && me?.admin === true && <Admin />}
+        </PeopleNamesProvider>
       </main>
       <Health />
     </div>

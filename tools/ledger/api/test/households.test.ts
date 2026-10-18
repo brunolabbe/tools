@@ -55,7 +55,7 @@ describe("an admin", () => {
       address: "Robin@Cabin.TEST",
       person: "robin",
     });
-    expect(added.json()).toEqual({ address: "robin@cabin.test", person: "robin" });
+    expect(added.json()).toEqual({ address: "robin@cabin.test", person: "robin", name: "robin" });
 
     const me = await send(app, "robin@cabin.test", "GET", ROUTES.me);
     expect(me.json<MeResponse>().person).toEqual({
@@ -68,7 +68,7 @@ describe("an admin", () => {
     });
     expect(
       (await send(app, "robin@cabin.test", "GET", ROUTES.people)).json<PeopleResponse>(),
-    ).toEqual({ people: ["robin"] });
+    ).toEqual({ people: ["robin"], names: { robin: "robin" } });
 
     // Books of its own: a rule filed there is not home's, and home's file is untouched.
     const rule = await send(app, "robin@cabin.test", "POST", ROUTES.rules, {
@@ -107,13 +107,17 @@ describe("an admin", () => {
 
     expect(response.json<AdminHouseholdsResponse>()).toEqual({
       households: [
-        { id: AWAY, name: "The other household", members: [{ address: KIM, person: "kim" }] },
+        {
+          id: AWAY,
+          name: "The other household",
+          members: [{ address: KIM, person: "kim", name: "kim" }],
+        },
         {
           id: HOUSEHOLD,
           name: "The test household",
           members: [
-            { address: ALEX, person: "alex" },
-            { address: SAM, person: "sam" },
+            { address: ALEX, person: "alex", name: "alex" },
+            { address: SAM, person: "sam", name: "sam" },
           ],
         },
       ],
@@ -128,10 +132,11 @@ describe("an admin", () => {
       address: SAM,
     });
 
-    expect(removed.json()).toEqual({ address: SAM, person: "sam" });
+    expect(removed.json()).toEqual({ address: SAM, person: "sam", name: "sam" });
     expect((await send(app, SAM, "GET", ROUTES.me)).statusCode).toBe(403);
     expect((await send(app, ALEX, "GET", ROUTES.people)).json<PeopleResponse>()).toEqual({
       people: ["alex", "sam"],
+      names: { alex: "alex", sam: "sam" },
     });
     expect(directory.history(HOUSEHOLD).at(-1)).toEqual({
       address: SAM,
@@ -243,10 +248,16 @@ describe("a member", () => {
     const body = response.json<HouseholdResponse>();
     expect(body.household).toEqual({ id: HOUSEHOLD, name: "The test household" });
     expect(body.members).toEqual([
-      { address: ALEX, person: "alex" },
-      { address: SAM, person: "sam" },
+      { address: ALEX, person: "alex", name: "alex" },
+      { address: SAM, person: "sam", name: "sam" },
     ]);
-    expect(body.history.map((record) => [record.action, record.address, record.by])).toEqual([
+    expect(
+      body.history.map((record) => [
+        record.action,
+        record.action === "rename" ? null : record.address,
+        record.by,
+      ]),
+    ).toEqual([
       ["add", ALEX, "operator"],
       ["add", SAM, "operator"],
       ["remove", SAM, ADMIN],
@@ -277,7 +288,11 @@ describe("a member", () => {
       person: "sam",
     });
 
-    expect(response.json()).toEqual({ address: "sam.phone@example.test", person: "sam" });
+    expect(response.json()).toEqual({
+      address: "sam.phone@example.test",
+      person: "sam",
+      name: "sam",
+    });
     expect(directory.history(HOUSEHOLD).at(-1)).toMatchObject({
       address: "sam.phone@example.test",
       action: "add",
