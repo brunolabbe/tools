@@ -616,3 +616,94 @@ test("among three people, the whole receipt can be someone else's, picked by nam
     chargedTo: "sam",
   });
 });
+
+// --- lg-39: the household has not loaded ---
+
+/** The basket read from a photo, its six-pack marked someone else's. */
+async function readBasketWithTheirs(): Promise<void> {
+  vi.mocked(fetchSpendingCategories).mockResolvedValue([
+    { id: 1, name: "Groceries", retired: false, createdAt: "x", createdBy: "migration" },
+    { id: 2, name: "Alcohol", retired: false, createdAt: "x", createdBy: "migration" },
+  ]);
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 3,
+    model: "claude-haiku-5-5",
+    proposals: [
+      {
+        proposal: {
+          ...BASKET,
+          items: BASKET.items.map((item) =>
+            item.text === "BIERE 6X355" ? { ...item, share: "theirs" as const } : item,
+          ),
+        },
+        flags: [],
+        merchantCategoryId: null,
+      },
+    ],
+  });
+  await takePhoto();
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+}
+
+function expectNoTwoPersonForm(): void {
+  expect(screen.queryByRole("form", { name: "The receipt" })).toBeNull();
+  expect(screen.queryByRole("checkbox")).toBeNull();
+  expect(screen.queryByRole("button", { name: /^File as/u })).toBeNull();
+  expect(screen.queryByLabelText("What is shared")).toBeNull();
+  expect(fileReceipt).not.toHaveBeenCalled();
+}
+
+test("the household's record failing holds the form, says so where the person is, and retries (lg-39)", async () => {
+  vi.mocked(fetchHousehold).mockRejectedValueOnce(new Error("boom"));
+  await readBasketWithTheirs();
+
+  // The failure is in the screen the person is on, not only on the first one.
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("The household did not load");
+  expectNoTwoPersonForm();
+
+  // Retrying asks for the record again, and not for the categories again.
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await waitFor(() => expect(field("Total").value).toBe("24.76"));
+  expect(fetchHousehold).toHaveBeenCalledTimes(2);
+  expect(fetchSpendingCategories).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("alert")).toBeNull();
+  // The categories the other request returned were kept.
+  const category = screen.getByLabelText("Category of BIERE 6X355") as HTMLSelectElement;
+  expect([...category.options].map((option) => option.text)).toContain("Alcohol");
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+});
+
+test("the signed-in person failing to load holds the form the same way (lg-39)", async () => {
+  vi.mocked(fetchMe).mockRejectedValue(new Error("boom"));
+  await readBasketWithTheirs();
+
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("The household did not load");
+  expect(fetchHousehold).not.toHaveBeenCalled();
+  expectNoTwoPersonForm();
+});
+
+test("a household that has not answered yet holds the form, and files nothing (lg-39)", async () => {
+  vi.mocked(fetchHousehold).mockReturnValue(new Promise(() => undefined));
+  await readBasketWithTheirs();
+
+  expect((await screen.findByRole("status")).textContent).toBe("Loading the household…");
+  expectNoTwoPersonForm();
+});
+
+test("categories failing to load do not hold the form, and can be asked for again (lg-39)", async () => {
+  vi.mocked(fetchSpendingCategories).mockRejectedValueOnce(new Error("boom"));
+  await readBasketWithTheirs();
+
+  await waitFor(() => expect(field("Total").value).toBe("24.76"));
+  // The household loaded, so the form is the household's own, with the failure beside it.
+  expect(screen.getByRole("checkbox", { name: "This was sam's" })).toBeTruthy();
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("The spending categories did not load");
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  expect(fetchSpendingCategories).toHaveBeenCalledTimes(2);
+  expect(fetchHousehold).toHaveBeenCalledTimes(1);
+});

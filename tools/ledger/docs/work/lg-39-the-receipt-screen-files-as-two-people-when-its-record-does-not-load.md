@@ -80,3 +80,32 @@ charge to anyone.
   inherited." The reproduction above is the gate's section 5, pasted. The probe
   spec was `gate-web.test.tsx` in the gate's scratch directory, which does not
   outlive the batch; the cases are described above so it can be written again.
+
+- 2026-10-18 — Built (branch `lg-39-receipts-wait-for-household`, from
+  `029641b4`). **The choice (Build 2): both options, because they answer
+  different halves.** The form is held behind the household's load, and the
+  categories load on their own.
+  - _Why hold the form rather than only disable the filing._ The "someone
+    else's" label, the share buttons, the live split line and the whole-receipt
+    checkbox are all computed from the member list; with it unknown each is a
+    guess that reads as a fact ("The other's", a two-person split). Holding the
+    whole form leaves no such surface, and the wait is normally invisible: the
+    form is reached after an upload and, usually, a read, both slower than two
+    small requests. The held screen says "Loading the household…" (a `status`),
+    or the failure with "Try again" and "Start over" (an `alert`), on the screen
+    the person is working on; `run` clears `problem`, which is why the old
+    first-screen alert vanished at the first action.
+  - _Why load the categories apart._ `Promise.all` dropped both when one
+    rejected. Each request is now its own `useLoad`, so the household failing
+    keeps the categories (retrying the household does not ask for them again)
+    and the categories failing does not hold the form: it shows its own alert
+    with a retry beside the form, and the form offers "None" until it comes.
+  - Not a contract or another screen's change: `Receipts.tsx` only; `fetchMe`
+    and `fetchHousehold` are untouched (Build 3).
+  - Red/green: the four new tests at the end of `web/test/receipts.test.tsx`
+    fail at the base source (`4 failed | 19 passed (23)`) and pass with the
+    change (`23 passed (23)`), `npx vitest run tools/ledger/web/test/receipts.test.tsx`.
+    One test per case in Done when 1 (household rejects, `fetchMe` rejects,
+    household never answers), plus the categories case.
+  - Fold-in considered: none. The categories failure was not in the brief's
+    reproduction but is the same `Promise.all` and is covered above.
