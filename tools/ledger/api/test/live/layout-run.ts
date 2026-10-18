@@ -306,7 +306,10 @@ export function parseCli(argv: readonly string[]): MeasureOptions {
   }
   const out = path.resolve(required("--out"));
   const inside = path.relative(REPOSITORY, out);
-  if (inside === "" || (!inside.startsWith("..") && !path.isAbsolute(inside))) {
+  if (
+    inside === "" ||
+    (inside !== ".." && !inside.startsWith(`..${path.sep}`) && !path.isAbsolute(inside))
+  ) {
     throw new Error(`--out ${out} is inside the repository; give a directory outside it.`);
   }
   return {

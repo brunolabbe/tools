@@ -105,7 +105,9 @@ the run is still open.
 owner's Anthropic key, the firewall opened to `api.anthropic.com`, each
 model's prices in USD per million tokens, and an output directory outside
 the repository. `ANTHROPIC_CUSTOM_HEADERS` must be unset: the harness
-refuses to run with it set (gate 1's med, fixed in round 1 below). Run it
+refuses to run with it set (gate 1's med, fixed in round 1 below). Unset it
+with `unset ANTHROPIC_CUSTOM_HEADERS` in the shell first, or put
+`env -u ANTHROPIC_CUSTOM_HEADERS` in front of each command. Run it
 once per model from the repository root, after `npm run build`:
 
 ```sh
@@ -308,3 +310,27 @@ The gate's `cli-probe.mts`, run on the fix, now gives:
 - `lg7,lg-37` → refused, naming `lg-37`.
 
 Still no model call and no spend.
+
+### 2026-10-18 — fixed at landing
+
+- 2026-10-18 — Fixed at landing by owner choice: gate 2, the `--out` guard
+  low — "the guard tests `inside.startsWith("..")` on the relative path, so a
+  directory inside the tree whose name starts with two dots (`<tree>/..hidden`,
+  `<tree>/..x/y`) reads as outside and is accepted." The condition in
+  `api/test/live/layout-run.ts` now refuses unless `inside` is `..`, or starts
+  with `..` and a path separator, or is absolute, with the `inside === ""`
+  refusal kept, as the gate's remedy states. No test added, by the owner's
+  choice; the symlink and `--model` gaps in the same finding stay recorded.
+  `npx vitest run tools/ledger/api/test/layout-live-gate.test.ts` →
+  `Tests  9 passed (9)`. A probe of `parseCli` with `--out`, before and after:
+  `<tree>/..hidden` and `<tree>/..x/y` went from `ACCEPTED` to `refused`;
+  `<tree>/results` and the tree itself stayed `refused`; the parent
+  `<tree>/..`, `<tree>-sibling/a` and `/tmp/ok` stayed `ACCEPTED`.
+- 2026-10-18 — Fixed at landing by owner choice: gate 2, the note that the
+  Log's owner command "does not say how to unset it". The paragraph above the
+  command now gives both ways. `sed -n 108,110p
+tools/ledger/docs/work/lg-38-a-model-reads-a-workbooks-layout.md` → the
+  lines `refuses to run with it set (gate 1's med, fixed in round 1 below).
+Unset it`, `with ` + `unset ANTHROPIC_CUSTOM_HEADERS` + ` in the shell
+first, or put` and `env -u ANTHROPIC_CUSTOM_HEADERS` + ` in front of each
+command. Run it`.
