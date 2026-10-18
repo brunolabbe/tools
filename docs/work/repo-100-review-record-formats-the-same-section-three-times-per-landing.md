@@ -150,8 +150,12 @@ readings were taken would have spoiled them.
   | `test (ubuntu-latest)`                 | 41,634 ms, 67 tests                            | 21,171 ms, 64 tests                        |
   | `test (windows-latest, informational)` | 121,328 ms, 67 tests                           | 121,660 ms, 64 tests                       |
 
-  Ubuntu halves, as the local pairs suggest. **Windows does not move**: 121 s
-  either side. Cutting the section's `oxfmt` spawns and four `land()` runs saved
+  A second ubuntu reading, from the pull request's later run 39089694781 at
+  d06865b1 (a change to this ticket file only, from e7658afd), is 31,289 ms, 64
+  tests. Against the one before-reading of 41,634 ms the two after-readings are
+  ratios of 0.51 and 0.75, so ubuntu falls by a quarter to a half on two
+  readings; it does not reliably halve. **Windows does not move**: 121.3 s
+  before, then 121.7 s and 124.3 s after (run 39089694781: 124,256 ms). Cutting the section's `oxfmt` spawns and four `land()` runs saved
   nothing there, so that leg's time is somewhere this change does not reach.
   repo-89's own readings were of the `--land` CLI case, which this ticket was told
   to leave alone and did; this is a reading of the whole file on that leg, not
@@ -164,3 +168,23 @@ readings were taken would have spoiled them.
   could in principle be avoided — it has no specification, since its input is a
   file in the repository's config, not a bare text, so it was not "already
   specified" and no ticket was filed (repo-106 stays unused).
+
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, L1 — "`formatMarkdown`'s
+  new docblock in `scripts/review-record.mjs` says the formatter 'runs in a fresh
+  directory under the OS temp dir, so no repository config reaches it', which
+  makes the cache exact. `oxfmt` 0.62.0 reads an `.oxfmtrc.json` from any
+  ancestor of that directory." The docblock now says an `.oxfmtrc.json` above the
+  temp directory can reach the formatter, so the cache is exact only while that
+  config does not change within a process; a comment-only change.
+  `grep -c "no repository config reaches it" scripts/review-record.mjs` → 0
+  (1 at d06865b1).
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, L2 — "the Log's
+  'Ubuntu halves' rests on one after-reading. The pull request's later run on
+  d06865b1 reads 31,289 ms (run 39089694781, `test (ubuntu-latest)`) … Against
+  the single 41,634 ms before-reading, the two after-readings give ratios of 0.51
+  and 0.75." Checked first: `gh run view 39089694781 --log`, `test
+(ubuntu-latest)` / `Run npm test`: `✓ repo scripts/test/review-record.test.ts
+(64 tests) 31289ms`; the Windows leg of that run reads `124256ms`. The Done-when
+  3 CI paragraph now carries the second reading and both ratios, and says
+  "falls by a quarter to a half on two readings; it does not reliably halve".
+  `grep -c "Ubuntu halves, as the local pairs" <ticket>` → 0 (1 at d06865b1).

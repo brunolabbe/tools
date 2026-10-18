@@ -709,9 +709,12 @@ export function locateGateBlock(markdown, gate, sectionText) {
  * Memoized by input text, within this process only (repo-100): `land()` splices
  * a section in a scratch clone, again for real, and then verifies it, and each
  * of those formats the same text — about 330 ms an `oxfmt` spawn. The output is
- * a function of the text and the pinned `oxfmt` alone (it runs in a fresh
- * directory under the OS temp dir, so no repository config reaches it), which
- * makes a cache keyed by the text exact. A throw is never cached, and the map dies with the process.
+ * a function of the text, the pinned `oxfmt` and any `.oxfmtrc.json` above the
+ * fresh directory under the OS temp dir it runs in (`oxfmt` reads one from any
+ * ancestor of that directory; the repository's own config is not among them).
+ * A cache keyed by the text is therefore exact only while that ancestor config
+ * does not change within a process, and nothing here changes it. A throw is
+ * never cached, and the map dies with the process.
  *
  * @param {string} text
  * @returns {string}
