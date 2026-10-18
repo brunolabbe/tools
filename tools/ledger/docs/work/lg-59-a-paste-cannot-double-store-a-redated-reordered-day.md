@@ -247,3 +247,98 @@ takes one from probe c's output.
   and the reduction harness are in this session's scratch directory, which is not
   durable. The variants above are described closely enough to rebuild them.
   **Fold-in:** nothing was made free. With the rule unchosen, no source changed.
+
+- 2026-10-18 — **the owner's answer**, relayed by the orchestrator. The
+  question as put: "lg-59 stopped at its step-2 stop condition … Which rule?"
+  The options: "A: M2, two-day blocks (builder's rec)", "B: S2, the direction as
+  filed", "C: M1, one-day blocks" and "D: No rule change". The owner chose **A:
+  M2**.
+
+- 2026-10-18 — builder (Opus 5.5), **M2 built** in `115bc190`.
+
+  **The rule as written.**
+  - In `workbook-days.ts`: `matchStretch` cuts the stored stretch, with the
+    workbook rows next to it, into blocks.
+  - A block is a row a paste stored (compared field for field by the caller),
+    or consecutive workbook rows cut where the workbook's date changes, whose
+    dates are at most `WIDEST_BLOCK_DAYS` (2) days apart.
+  - Some cutting must match block by block. The search walks the cuts from the
+    oldest row up, keeping which cuts some matching cutting reaches.
+  - A block matches by `matchBlock`: each pasted row dated from the day before
+    the block's earliest date to the day after its latest, then `matchPart`
+    with any date. Blocks wholly outside the stretch are not compared.
+  - In `statements.ts`: `overlaps` reads the workbook rows within two days of
+    the stretch's ends (`nearby`, replacing `restOfDay`). `workbookStarts`
+    reads three days either side, since a block's row may be that far from a
+    pasted row of it.
+  - The workbook import's `dayRuns` and `alignDays` are unchanged. lg-40's
+    `dayRuns` test pins `[01, 01, 02, 01]` as three runs.
+  - The headers of both files and the `workbookMismatch` message now say a day
+    is the workbook's rows dated no more than 2 days apart. The
+    `workbook-days.ts` header names the reduced case below as the case admitted.
+
+  **What it admits and refuses.**
+  - Admitted: a day the workbook both re-dated by a day and reordered. A
+    reading a block makes possible counts like any other, so two are refused as
+    ambiguous.
+  - Refused: rows more than two days apart in one block, and a pasted row two
+    days from every date of its block.
+  - Refused as before: a day whose amounts differ by one row, and a part that
+    starts and ends inside a block of more than `LONGEST_SEARCHED_DAY` rows.
+
+  **Observed while writing the tests, not a change.** When the true reading is
+  refused, a block's end can still admit a false one. A paste whose third row
+  the bank dates two days after the workbook's day (−5.00, −10.00, +10.00 then
+  +3.00, over the reduced case's workbook) was accepted as 1 present and 3
+  added. The block `[−5.00 on the 20th, +10.00 on the 21st]` ends on the pasted
+  −5.00's balance. It is lg-59's failure, a refused true reading leaving a
+  false one, reached through a date two days off. The probes never date a row
+  two days off, so they do not count it, and lg-40's rule refuses the same true
+  reading. No ticket filed: the bank's date is the truth, and a workbook date
+  two days off is outside what either rule tolerates. The test of a two-days-off
+  row uses amounts that do not cancel, so it shows the refusal it names.
+
+  **Probe c and probe c2 on `115bc190`.** These are the gate's probes, seed 11,
+  as in the step-1 entry. The cell lines are byte-identical to experiment M2's
+  (`cmp` exit 0); each vitest run exits 1 on the 20 s timeout, as before. Each
+  cell is `correct / wrongAccept / ambiguous / refusedOther`, then the change in
+  `ambiguous`:
+
+  | cell                | lg-40 (`335efcd4`)   | this branch (`115bc190`) | ambiguous |
+  | ------------------- | -------------------- | ------------------------ | --------- |
+  | c distinct/plain    | 1500 / 0 / 0 / 0     | 1498 / 0 / 2 / 0         | +2        |
+  | c distinct/reorder  | 1500 / 0 / 0 / 0     | 1499 / 0 / 1 / 0         | +1        |
+  | c distinct/shift    | 1499 / 0 / 1 / 0     | 1498 / 0 / 2 / 0         | +1        |
+  | c distinct/both     | 1392 / 0 / 0 / 108   | 1499 / 0 / 1 / 0         | +1        |
+  | c repeating/plain   | 1333 / 0 / 167 / 0   | 1154 / 0 / 346 / 0       | +179      |
+  | c repeating/reorder | 1335 / 0 / 165 / 0   | 1156 / 0 / 344 / 0       | +179      |
+  | c repeating/shift   | 1335 / 0 / 165 / 0   | 1165 / 0 / 335 / 0       | +170      |
+  | c repeating/both    | 1256 / 22 / 157 / 65 | 1174 / 0 / 326 / 0       | +169      |
+  | c tiny/plain        | 1136 / 0 / 364 / 0   | 900 / 0 / 600 / 0        | +236      |
+  | c tiny/reorder      | 1124 / 0 / 376 / 0   | 862 / 0 / 638 / 0        | +262      |
+  | c tiny/shift        | 1179 / 0 / 321 / 0   | 927 / 0 / 573 / 0        | +252      |
+  | c tiny/both         | 1114 / 31 / 322 / 33 | 881 / 0 / 619 / 0        | +297      |
+  | c2 distinct         | 1499 / 0 / 1 / 0     | 1497 / 0 / 3 / 0         | +2        |
+  | c2 repeating        | 1345 / 0 / 155 / 0   | 1198 / 0 / 302 / 0       | +147      |
+  | c2 tiny             | 1153 / 0 / 347 / 0   | 884 / 0 / 616 / 0        | +269      |
+
+  **Tests**, appended to `api/test/workbook-days.test.ts`:
+  - The reduced case (Done when 6). Its outcome on this branch is the
+    "two ways" refusal.
+  - The two readings it leaves, 2 stored from the block and 0 stored from the
+    continuation (Done when 7).
+  - A re-dated and reordered day with amounts that do not cancel, accepted with
+    its true counts and the workbook's rows untouched.
+  - A row two days off, refused.
+  - Unit tests of `matchBlock` and `matchStretch`.
+
+  Against lg-40's source (`git checkout 2f8e937d --` the two source files,
+  restored from `115bc190`), 8 of the 9 new tests fail. The ninth, the
+  two-days-off refusal, already held there. Only the test file's
+  `import type { DayEntry }` line was replaced; no lg-40 assertion was edited.
+
+  **Left as is.** `workbookMismatch` still names a continuing row only if it is
+  dated on or after the day before the workbook's newest. That is advice in a
+  refusal, not a reading, and no test or probe reached it.
+
+  **Fold-in:** nothing else was made free.
