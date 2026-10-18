@@ -98,3 +98,49 @@ store is rewritten.
   owner chose three tickets (this, lg-34, lg-35), admin only. lg-31 is skipped
   on purpose: lg-30's Log calls it "held elsewhere" and no file or branch holds
   it, so it is left alone rather than reused.
+- 2026-10-18 — Built (builder, base `029641b4`). Directory migration 5
+  (`person_names`, `current_person_names`, the held, unique and append-only
+  triggers), `Directory.renamePerson`, `names` and `heldPeople`,
+  `POST /api/admin/households/:id/people/rename` (`adminWrite`, `adminOf` again
+  in the handler), `PERSON_NOT_FOUND` 404 and `PERSON_NAME_TAKEN` 409,
+  `PeopleResponse.names`, `HouseholdMember.name`, and `web/src/people.tsx`:
+  `shownName` over the map the shell fetches from `GET /api/people` on every
+  change of tab, used by home, salaries, periods (lines, recurring, settlement,
+  deposits), rules, inbox and auto-filed, receipts, stats (own money,
+  contributions, salaries and ratio, settlements, card lines), household and
+  admin. A chart's colour still comes from the id's place in the list. The
+  admin screen lists each household's people with a Rename beside each.
+  Measured: `npm test -- --project ledger` 1271 of 1271 in 64 files;
+  `npm run check` exit 0. The new salaries spec run against the base's
+  `Salaries.tsx` in a second tree, with only `people.tsx` copied in, fails
+  1 of 8 (the new test, "Unable to find … Ratio in effect: Alex 60.0000 %"):
+  the auto-mode classifier refused a source mutation in this tree, so that
+  replaced the red step.
+  - **What the brief had wrong.** Build 3 points at `Directory.people`, which
+    is who stands _now_; "a person the directory has held" and Done when 5's
+    "no membership has named" are ever-named, so the check is the new
+    `Directory.heldPeople` (every person a membership record of the household
+    names), and a member who has left can be renamed. Build 7's admin screen
+    shows no history, and the admin listing carries none: the rename is its own
+    line in `Directory.history`, so `HouseholdResponse.history` and the member's
+    household screen show it ("alex renamed Alex, by …"); the admin screen does
+    not. Showing it there needs `history` on `AdminHousehold`, left to the
+    owner. The contract moved by three types more than Build 4 names, each
+    forced: `PersonNameRecord` in `HouseholdResponse.history` (the rename line),
+    `RenamePersonRequest` (the schema's type) and `PersonName` (the route's
+    answer).
+  - **Folded in.** The reverse of Build 2's rule: a new person id equal to a
+    name another person is shown under is refused, by `addMember`
+    (`PERSON_NAME_TAKEN`) and by a trigger in migration 5, since adding
+    `Bruno` beside `bruno` shown as `Bruno` is the same two-alike failure. The
+    member form maps a typed shown name back to its id, so picking an existing
+    person never meets it. The header of `contract/src/errors.ts` said "five"
+    directory codes, stale since lg-23 dropped `HOUSEHOLD_FULL`; it says four.
+  - **Changed beside it.** lg-30's API test "GET /api/people still answers the
+    one key, people" now expects `people` and `names` and is renamed for it;
+    four other suites' exact `{ people }` expectations became `toMatchObject`.
+  - **Not covered.** Uniqueness is exact text, as person ids are (`bruno` and
+    `Bruno` were already two ids). An id the books hold only from migration 3
+    is not in the directory, so a shown name is not checked against it: the
+    admin route reads no books. `household:ledger list` still prints ids, which
+    is what its `member` command takes.

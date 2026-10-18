@@ -141,7 +141,7 @@ describe("a household's books", () => {
     const response = await send(target, KIM, ROUTES.people);
 
     expect(response.statusCode, response.body).toBe(200);
-    expect(response.json<PeopleResponse>()).toEqual({ people: ["alex", "kim"] });
+    expect(response.json<PeopleResponse>()).toMatchObject({ people: ["alex", "kim"] });
     expect(existsSync(away)).toBe(true);
     expect(version(away)).toBe(version(householdBooksPath(dir, HOUSEHOLD)));
     expect(people(away)).toEqual(["alex", "kim"]);
@@ -223,7 +223,7 @@ describe("the boot and enrol path (lg-20's gate, F4, F5, F8)", () => {
 
       // alex is served, without sam, and nobody waited out the 5 s busy timeout.
       expect(alex.statusCode, alex.body).toBe(200);
-      expect(alex.json<PeopleResponse>()).toEqual({ people: ["alex"] });
+      expect(alex.json<PeopleResponse>()).toMatchObject({ people: ["alex"] });
       expect(sam.statusCode).toBe(504);
       expect(sam.json<ErrorResponse>().error).toMatchObject({ code: "TIMEOUT", retryable: true });
       expect(elapsedMs).toBeLessThan(2000);
@@ -231,7 +231,7 @@ describe("the boot and enrol path (lg-20's gate, F4, F5, F8)", () => {
       other.prepare("ROLLBACK").run();
 
       expect((await send(target, SAM, ROUTES.me)).statusCode).toBe(200);
-      expect((await send(target, ALEX, ROUTES.people)).json<PeopleResponse>()).toEqual({
+      expect((await send(target, ALEX, ROUTES.people)).json<PeopleResponse>()).toMatchObject({
         people: ["alex", "sam"],
       });
     } finally {
@@ -264,7 +264,7 @@ describe("the boot and enrol path (lg-20's gate, F4, F5, F8)", () => {
     expect(run("member", "away", KIM, "kim")).toBe(0);
     const kim = await send(target, KIM, ROUTES.people);
     expect(kim.statusCode, kim.body).toBe(200);
-    expect(kim.json<PeopleResponse>()).toEqual({ people: ["kim"] });
+    expect(kim.json<PeopleResponse>()).toMatchObject({ people: ["kim"] });
     expect(existsSync(householdBooksPath(dir, "away"))).toBe(true);
   });
 });
@@ -323,7 +323,7 @@ describe("the first open of a household whose books another process holds locked
 
         const after = await send(target, KIM, ROUTES.people);
         expect(after.statusCode, after.body).toBe(200);
-        expect(after.json<PeopleResponse>()).toEqual({ people: ["alex", "kim"] });
+        expect(after.json<PeopleResponse>()).toMatchObject({ people: ["alex", "kim"] });
         expect((await target.server.inject({ method: "GET", url: ROUTES.health })).statusCode).toBe(
           200,
         );
