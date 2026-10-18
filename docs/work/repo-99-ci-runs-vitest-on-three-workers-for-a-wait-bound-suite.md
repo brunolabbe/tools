@@ -7,7 +7,6 @@ status: done
 milestone: null
 depends_on: [dl-117]
 difficulty: mechanical
-awaiting: Done when 3, second half — the first push run of ci.yml on main after the merge whose unit matrix runs shows each test (...) job and its Run npm test step passing in gh run view <id> --json jobs, the informational Windows job included
 ---
 
 # repo-99 — CI runs vitest on three workers for a wait-bound suite
@@ -364,3 +363,18 @@ passed | 2 skipped (285)`, `Tests 5758 passed | 61 skipped (5819)`.
   and not the other (951 s, run 39058961193 attempt 2), which is below both
   four-worker figures (985 s, 923 s). Not checked by the gate: whether the
   other `main` runs ran the same 5819 tests (the Log gives 5772 for 9e157902).
+- 2026-10-18 — Done when 3, second half, met by owner choice on a dispatched
+  run, and `awaiting` cleared. The first push run of `ci.yml` on `main` whose
+  unit matrix ran was 39091589866 at 140bd78a. Its attempt 1 failed one test on
+  `test (windows-latest, informational)`:
+  `browser-resolver-press-targets.test.ts`, the dl-100 case "a Play press in a
+  frame from another site that only isPlayPress counts", with
+  `net::ERR_NO_BUFFER_SPACE` from `page.goto` on `127.0.0.1`, raised as
+  `UNREACHABLE`; `Tests 1 failed | 5846 passed`. Attempt 2 was cancelled by
+  #547's push to `main`
+  (`cancel-in-progress` on `ci-<ref>`), whose own run skipped the matrix as
+  docs-only. Dispatched run 39093422248 at 32b3f170 then passed `check`,
+  `test (ubuntu-latest)` and `test (windows-latest, informational)`, each
+  `Run npm test` step `success`. Not filed: the owner chose to file only if a
+  re-run failed again, and it did not; the failure is one sample, not a
+  reproduction.
