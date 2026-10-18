@@ -53,7 +53,8 @@ a `med` that was an open decision, at about 74 minutes of round and gate 2 on
 lg-40. None of those five tickets carried a `## Decision` heading: the gates
 raised those decisions from their own probes, so an intake question could not
 have asked them. What the rule does buy, a question the brief already poses
-answered before the build, is unmeasured.
+answered before the build, is unmeasured. Re-asked with that count, the
+owner kept the rule as built over trimming it to batches by tool.
 
 **The builder pushes before the slow checks, and no round runs a suite**
 (repo-111, owner, 2026-10-18: "1, 2, 3 and 4 seem like real wins"). A ticket's

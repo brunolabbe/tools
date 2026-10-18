@@ -7,6 +7,7 @@ status: done
 milestone: null
 depends_on: []
 difficulty: standard
+awaiting: Done when 17 — the first batch under these rules; per ticket, whether CI on the draft went red on something the dropped local suite run would have caught
 ---
 
 # repo-111 — A fresh gate 2, three tickets in flight, batches by tool, no suite before the gate
@@ -107,6 +108,16 @@ Later the same day, each from options the Fable session put with
 - **A third gate, when one runs, is a fresh dispatch too**, taken under this
   ticket on its builder's note that no page said how a gate 3 runs; gate 3's
   rules are otherwise unchanged.
+
+**Re-asked 2026-10-18, after the premise of the intake rule was refuted** (Log,
+round 2): none of the five ledger tickets named as its reason carried a
+`## Decision` heading, and every open decision in their `## Review` sections
+was a gate finding. Options: **keep A as built** (recommended by the builder
+and the Fable session, **chosen**); trim it to batches by tool. The reason that
+stands for asking open decisions at intake is the cheap one: a decision a
+brief already poses costs a question at intake, or a round after gate 1. The
+claim that it would have saved those five rounds is withdrawn, and the benefit
+is unmeasured.
 
 ## Build
 
@@ -316,3 +327,19 @@ builder, resumed by the owner's Fable session with the decisions above).
   stand after this change and copied over `reference/flow.drawio.svg`; three
   historical "woken" mentions stay in its notes, outside Done when 4's `*.md`
   pathspec.
+
+**2026-10-18, round 3 — the owner's answers to round 2's open decisions.**
+
+- **Decision A re-asked and kept.** The Fable session re-ran the count at
+  `origin/main` and the owner chose "keep A as built" over "trim to batches by
+  tool"; the recommendation was the builder's and the Fable session's. Re-run
+  here at `origin/main` = `335efcd4`:
+  `git grep -c '^## Decision' origin/main -- <the five lg-30, lg-32, lg-33, lg-39, lg-40 ticket paths>`
+  printed nothing and exited 1, which is zero matches in each of the five.
+  The Decision section records the answer and the reason that stands.
+- **`awaiting:` added** for Done when 17, by the owner's choice (option a),
+  in the shape of the existing lines; the Log bullet of round 2 stays as the
+  account of why it is owed.
+- **Retitled the pull request** to
+  `docs(repo): fresh gate 2, three in flight, batches by tool, no suite before the gate (repo-111)`,
+  option (a); the ticket's own title already names the four.
