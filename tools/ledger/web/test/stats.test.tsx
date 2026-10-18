@@ -421,9 +421,9 @@ test("every chart has a table twin with the same figures", async () => {
   const rows = within(table).getAllByRole("row");
   expect(rows.map((row) => row.textContent)).toEqual([
     "DatePaymentChange",
-    "2026-01-15700.00 $",
-    "2026-02-15700.00 $",
     "2026-03-15820.01 $+120.01 $",
+    "2026-02-15700.00 $",
+    "2026-01-15700.00 $",
   ]);
   expect(payment.queryByRole("slider")).toBeNull();
 
@@ -440,9 +440,9 @@ test("the settlements table names the formula each period was settled by", async
   const rows = within(settlements.getByRole("table")).getAllByRole("row");
   expect(rows.map((row) => row.textContent)).toEqual([
     "ClosedFormulaWho owesDirectInto the buffer",
-    "2026-01-31v1alex owes sam60.00 $120.00 $",
-    "2026-02-28v2alex owes sam70.00 $140.00 $",
     "2026-03-31v3alex owes sam80.00 $160.00 $",
+    "2026-02-28v2alex owes sam70.00 $140.00 $",
+    "2026-01-31v1alex owes sam60.00 $120.00 $",
   ]);
 });
 
@@ -460,7 +460,8 @@ test("the spending legend names each category and the grey for none, and the tab
   fireEvent.click(spending.getByRole("button", { name: "Show as a table" }));
   const rows = within(spending.getByRole("table")).getAllByRole("row");
   expect(rows[0]?.textContent).toBe("PeriodCardsAccountTotalGroceriesPharmacyUncategorised");
-  expect(rows[2]?.textContent).toBe(
+  // Newest first, so the open period heads the table.
+  expect(rows[1]?.textContent).toBe(
     "2026-02-01 to 2026-02-28 (open)40.00 $123.45 $163.45 $123.45 $0.00 $40.00 $",
   );
 });
@@ -656,4 +657,27 @@ test("a one-cent deposit with nothing to pay directly still says who owes whom",
     "ClosedFormulaWho owesDirectInto the buffer",
     "2026-02-28v3sam owes alex0.00 $0.01 $",
   ]);
+});
+
+test("a mouse gets the figures in a tip, a finger does not, and the readout keeps its height", async () => {
+  render(<Stats />);
+  const buffer = await card("Buffer balance");
+  const box = slider(buffer).closest(".chart-box");
+  if (box === null) throw new Error("no chart box");
+
+  fireEvent.pointerMove(slider(buffer), { pointerType: "touch", clientX: 0 });
+  expect(box.querySelector(".chart-tip")).toBeNull();
+
+  fireEvent.pointerMove(slider(buffer), { pointerType: "mouse", clientX: 0 });
+  expect(box.querySelector(".chart-tip")?.getAttribute("aria-hidden")).toBe("true");
+
+  fireEvent.pointerLeave(slider(buffer));
+  expect(box.querySelector(".chart-tip")).toBeNull();
+
+  // The tallest date's note holds the room even where the selected date has none.
+  const ghost = box.querySelector(".readout.ghost");
+  expect(ghost?.getAttribute("aria-hidden")).toBe("true");
+  expect(
+    ghost?.querySelector('[data-text="Achat /Entrepreneur Exemple: -800.00 $"]'),
+  ).not.toBeNull();
 });

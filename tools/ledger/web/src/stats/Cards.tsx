@@ -314,21 +314,6 @@ function BufferBody(props: { data: BufferStatsResponse; stale: boolean }): React
             .map((drop) => `${drop.description}: ${formatCents(drop.amountCents)}`)
         }
       />
-      {drops.length > 0 && (
-        <>
-          <h3 className="chart-subhead">Large drops</h3>
-          <ul className="figures">
-            {drops.map((drop) => (
-              <li key={drop.rowId}>
-                <span>
-                  <span className="muted">{drop.date}</span> {drop.description}
-                </span>
-                <span className="amount">{formatCents(drop.amountCents)}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
     </ChartCard>
   );
 }
