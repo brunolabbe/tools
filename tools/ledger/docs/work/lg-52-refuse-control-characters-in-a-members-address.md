@@ -40,11 +40,12 @@ older defect, reproduced on `main` below. **The lock-out itself is the gate's
 claim and is not measured here**: what is measured is that the row is accepted
 and stored.
 
-Low because only an admin can send it on the admin route, and only in a
-hand-built request, since the web input is `type="email"`. It is not only an
-admin route, though: a member can add an address through their own household's
-route (`POST /api/households/:id/members`), and the host command takes any
-argument it is given.
+The gate graded it low because, in its words, "only an admin can send it, and
+only in a hand-built request, since the web input is `type="email"`". The
+reproduction below shows the first half does not hold for adding an address: the
+member route, `POST /api/households/:id/members`, called as a non-admin member
+(alex), accepted `casey\u007f@example.test` with a `200`, and the host command
+takes any argument it is given. The grade is the gate's and is not re-rated here.
 
 ## Reproduction
 
@@ -80,7 +81,7 @@ readAddress("a\u0001@b.test") => "a\u0001@b.test"
 readAddress("a@b.test\u001b") => "a@b.test\u001b"
 readAddress("a@b\u007f.test") => "a@b\u007f.test"
 readAddress("a@b\u0085.test") => "a@b\u0085.test"
-readAddress("a@b​.test") => "a@b​.test"
+readAddress("a@b\u200b.test") => "a@b\u200b.test"
 readAddress("a@b\tc") => undefined
 readAddress("a@b\nc") => undefined
 readAddress("a b@c") => undefined
@@ -160,12 +161,12 @@ refused at boot unless the directory already has a member by that address, so it
 is not a writer.
 
 1. Change `ADDRESS` so that it refuses the C0 controls (`\u0000` to `\u001f`)
-   and DEL (`\u007f`), in one place, so that the three callers above, `removeMember`
-   and `LEDGER_ADMINS` all inherit it. Do not add a second check beside
-   `readAddress` in any caller.
+   and DEL (`\u007f`), in one place, so that the three callers above and
+   `LEDGER_ADMINS` all inherit it. Do not add a second check beside
+   `readAddress` in any caller. Removal is the one exception, item 4.
 2. Whether to refuse more than that is the builder's to measure and report, not
    to widen silently: `readAddress` also accepts the C1 controls (`\u0085` above)
-   and the zero-width characters (`​` above). They are outside the gate's
+   and the zero-width characters (`\u200b` above). They are outside the gate's
    finding. The floor is C0 and DEL.
 3. A directory test per refusal, written to fail on `main` first: `addMember`
    with a NUL, with another C0 control and with DEL is refused `BAD_REQUEST`
@@ -175,53 +176,78 @@ is not a writer.
    passes (`readAddress("a@b.test")`), so a regex that refuses everything cannot
    pass.
 
-### Open, and not settled here
+4. **Removal still names a stored row that carries a control character.**
+   `removeMember`, and through it the admin remove route and the host command's
+   `remove` verb, reads its address without the new check, so a directory that
+   already holds such a row can still have it removed. It keeps refusing what it
+   refused before this change: only the control-character refusal is not applied
+   there. A test inserts a row with a NUL past `Directory` (a direct insert, as
+   the reproduction's part 5 does) and removes it through `removeMember`, and
+   through the `remove` verb; run it against the tightened `ADDRESS` so it fails
+   if removal shares the strict check.
+5. **Narrow `directory.ts`'s header to what the schema checks.** Its header says
+   every write is checked "again by the schema's triggers". The schema's
+   `memberships.address` CHECK is `address = lower(trim(address)) AND address GLOB
+'?*@?*'` and the triggers check membership, not the character set, so reword the
+   claim to say so. No trigger and no migration are added.
+6. **For the owner, not a gate on the build:** whether a deployed directory
+   already holds such a row. Run this against `DIRECTORY_PATH` with `sqlite3` or
+   `better-sqlite3`:
 
-Both are reported to the orchestrator as options with a recommendation, not
-chosen in the build.
+   ```
+   SELECT address, hex(address) FROM memberships WHERE
+     instr(address, char(0)) > 0 OR instr(address, char(1)) > 0 OR ... OR
+     instr(address, char(31)) > 0 OR instr(address, char(127)) > 0
+   ```
 
-**A. Existing rows.** An existing directory may already hold an address with a
-control character. Tightening `ADDRESS` cannot repair it, and it changes what
-the code can do about it: `removeMember` reads its address through `readAddress`,
-so once `ADDRESS` refuses the character, **the admin remove route and the
-`remove` verb can no longer name that row**, and it becomes impossible to remove
-through the app or the host command. How to find out whether a deployed
-directory holds one, with a query that was run (against a directory with two
-clean rows and three bad ones, `NUL`, `ESC` and `DEL`):
+   with one `instr` per character from 0 to 31 and 127. It was run against a
+   directory with two clean rows and three bad ones (NUL, ESC, DEL):
 
-```
-$ node find.mts <worktree>        # find.mts is in the scratch directory
-query matched:
-  {"address":"del@b.test","hex":"64656C40627F2E74657374"}
-  {"address":"esc@b\u001bc.test","hex":"65736340621B632E74657374"}
-  {"address":"nul@b\u0000c","hex":"6E756C40620063"}
-rows in total: 5
-GLOB '*[^ -~]*' matched: "del@b.test" "esc@b\u001bc.test"
-```
+   ```
+   $ node find.mts <worktree>
+   query matched:
+     {"address":"del@b.test","hex":"64656C40627F2E74657374"}
+     {"address":"esc@b\u001bc.test","hex":"65736340621B632E74657374"}
+     {"address":"nul@b\u0000c","hex":"6E756C40620063"}
+   rows in total: 5
+   GLOB '*[^ -~]*' matched: "del@b.test" "esc@b\u001bc.test"
+   ```
 
-The query is `SELECT address, hex(address) FROM memberships WHERE
-instr(address, char(0)) > 0 OR instr(address, char(1)) > 0 OR ... OR
-instr(address, char(31)) > 0 OR instr(address, char(127)) > 0`, one `instr` per
-character, run with `sqlite3` or `better-sqlite3` against `DIRECTORY_PATH`. **A
-`GLOB` character class does not do it**: the last line shows it missing the NUL
-row, (measured; the reason is not). Query
-`memberships` rather than `current_members` to see removed rows too; the view
-is the ones that stand. The scratch script is
-`/tmp/claude-1000/-workspaces-tools/20bfbf0a-3b89-4e8d-940c-2389724a8d55/scratchpad/lg-52/build/find.mts`.
+   **A `GLOB` character class does not do it**: the last line shows it missing
+   the NUL row (measured; the reason is not). Query `memberships` rather than
+   `current_members` to see removed rows too; the view is the ones that stand.
+   The scratch script is
+   `/tmp/claude-1000/-workspaces-tools/20bfbf0a-3b89-4e8d-940c-2389724a8d55/scratchpad/lg-52/build/find.mts`.
+   A row found is removable by item 4; nothing here migrates it.
 
-If a row is found, the options include: let `removeMember` match an address
-without the new check, so the stored row can still be named and removed; a
-one-off migration that rewrites or removes it; or refuse at boot while one
-stands. Which, and whether the answer depends on what a deployed directory
-holds, is the owner's.
+## Decision — answered 2026-10-18 by the owner
 
-**B. The schema as a backstop.** `directory.ts`'s header says every write is
-checked "again by the schema's triggers", and the reproduction above shows a
-direct insert is not refused for a control character. A SQLite `CHECK` cannot be
-added to an existing table without rebuilding it; a `BEFORE INSERT` trigger can
-be added by a migration. Whether the brief should widen to the schema, or
-whether the header's claim should be narrowed to what the schema checks, is
-open. Item 1 is complete without it.
+Both questions were put to the owner as options, each with a recommendation, and
+both were answered with the recommended option.
+
+**Existing rows.** An existing directory may already hold an address with a
+control character, and tightening `ADDRESS` cannot repair it. It also changes
+what the code can do about it: `removeMember` reads its address through
+`readAddress`, so once `ADDRESS` refuses the character, the admin remove route
+and the `remove` verb could no longer name that row. Options:
+
+- (a) `removeMember` (and the host `remove` verb) match without the new check.
+- (b) A one-off migration that rewrites or removes the row.
+- (c) Refuse at boot while one stands.
+
+**Chosen: (a)**, the builder's recommendation. The precondition it carried was
+to run the query against the deployed directory first; the owner did not say
+whether they will, so the query is a step for the owner (item 6), not a gate on
+the build.
+
+**The schema as a backstop.** The `memberships.address` CHECK cannot gain a
+clause without rebuilding the table, and a direct insert past `Directory` is not
+refused for a control character (the reproduction's part 5). Options:
+
+- (a) Widen the brief to a `BEFORE INSERT` trigger added by a migration.
+- (b) Narrow the `directory.ts` header claim to what the schema actually checks.
+
+**Chosen: (b)**, the builder's recommendation. The trigger is not built (item 5).
 
 ## Done when
 
@@ -235,9 +261,12 @@ open. Item 1 is complete without it.
 - The host command's `member` verb exits non-zero for one and writes no row.
 - A `LEDGER_ADMINS` entry carrying one stops the boot, with the message that
   names its position and not the entry (the existing refusal).
-- The report to the orchestrator states what the query above found, or that no
-  deployed directory was available to run it against, and carries open items A
-  and B as options with a recommendation.
+- A row holding a NUL, inserted past `Directory`, is removed by `removeMember`
+  and by the host command's `remove` verb with the tightened `ADDRESS` in place
+  (a test that fails if removal shares the strict check).
+- `directory.ts`'s header no longer claims the schema checks more than it does.
+- The report says it did not run item 6's query against a deployed directory, or
+  what it found if the owner ran it; neither gates the build.
 - If PR #546 has merged by then, `changeAddress` with `to: "a@b\u0000c"` is
   refused by a test; if not, the Log says it was not checked.
 
@@ -247,3 +276,10 @@ open. Item 1 is complete without it.
   over "record only" and "fix on lg-34 now"). Reproduced on `origin/main@789ca9ba`
   before filing: every writer listed above accepted a control character, and the
   output is above. Nothing was built.
+- 2026-10-18 — The owner answered both open questions with the builder's
+  recommendations (existing rows: (a), removal matches without the new check;
+  schema backstop: (b), narrow the header, no trigger). Recorded under the
+  Decision heading, and the open section is now Build items 4 to 6. The query for
+  existing rows stays as a step for the owner. The Why now sets the gate's
+  "only an admin can send it" beside the member route, which accepted the same
+  address as a non-admin; the grade is not re-rated.
