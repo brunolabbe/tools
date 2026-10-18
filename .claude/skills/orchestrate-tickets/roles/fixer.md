@@ -34,13 +34,16 @@ re-read its whole transcript on every turn.
   without the force-push forbidden below. A landing-only dispatch pinned to a
   gated head does not merge: the merge moves the head past the gate and
   restarts CI (lg-15), and before a third gate it puts `main`'s commits into
-  the range that gate reads (dl-114). Then
-  `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`
-  — unless the landing is the only work left: `--land` runs preflight itself
-  after the push, and a run before it costs ten minutes for nothing.
+  the range that gate reads (dl-114). Then `npm run check`, commit, and the
+  fast preflight checks, as `roles/builder.md` _Before you report_ gives them
+  (`--only mergeTree,ciCommands,review,title`) — unless the landing is the only
+  work left: `--land` runs preflight itself after the push. **No full suite
+  for a round**: CI on the draft and the landing's `--land` preflight stand
+  for it, where a full run here costs ten to twelve minutes on a downloader
+  branch.
 - **Exit 16 from a conflict or a missing head stops the run** (repo-104): the
-  suites, the `## Review` check and the title check have **not run**, and
-  preflight's last line ends `; not run: check, …`. Read the `== halted ==`
+  checks after the probe have **not run**, and preflight's last line ends
+  `; not run: …`. Read the `== halted ==`
   block. A conflict with another open pull request's head is not a fault in the
   branch, and a sibling that conflicts with `main` itself reports against your
   HEAD (lg-21 and repo-103 against dl-110): run the block's second command (the
@@ -88,9 +91,9 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
   `docs/01-TICKETS.md` and adds nothing the dispatch did not name — no roadmap
   row, no status move (lg-23).
 - Then post each gate's full report to the pull request thread
-  (`gh pr comment <n> --body-file <f>`, the `report.md` your dispatch names
-  beside each gate file — the orchestrator wrote it from the gate's returned
-  text), make sure the body's Summary describes
+  (`gh pr comment <n> --body-file <f>`, the `gate-<n>@<sha>.full.md` your
+  dispatch names beside each gate file — the gate wrote it), make sure the
+  body's Summary describes
   the ticket's whole change and names every model as your dispatch states them,
   and run `gh pr ready <n>` unless the dispatch says to hold the draft.
 

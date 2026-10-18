@@ -75,11 +75,11 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
 - `npx oxfmt <the files you touched>` after touching any `.md`; `npm run
   format` walks the whole repo (1,105 files on pl-56). Fix lint by hand; never
   `npm run lint:fix`, which rewrites files outside the branch.
-- `npx oxlint <the packages you touched>` and `npm run check` before preflight:
-  seconds, against a twelve-minute preflight that stops on one lint line or one
-  type error `npx vitest run` never sees (lg-19's `exactOptionalPropertyTypes`
-  error failed only under `npm run check`).
-- `git fetch origin` before preflight: `--base origin/<base>` reads the ref this
+- `npx oxlint <the packages you touched>`, `npm run check`, and the narrowest
+  `npx vitest run` for what you changed — one spec file, then its package.
+  `npm run check` catches a type error `npx vitest run` never sees (lg-19's
+  `exactOptionalPropertyTypes` error failed only there).
+- `git fetch origin` before the fast checks: `--base origin/<base>` reads the ref this
   worktree holds, and `main` moves during a batch. **A moved `main` is taken by
   `git merge origin/<base>`, never by a rebase**: a rebased branch cannot reach
   `origin` without a force-push, and a merge of the same sha gives the same tree
@@ -96,22 +96,23 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
 - A new dependency: `npm audit --package-lock-only` before the push. CI's
   `dependency-review` job is not in preflight and goes red on a moderate
   advisory (lg-7).
-- `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`,
-  exit 0. It runs **a merge-tree probe against every other open pull request
-  head first, fetching `origin` itself just before it compares** (repo-104), so a
-  stale head is found in seconds, not after the suites. Then `npm run check`;
-  for each tool the diff touches with a path that is not markdown, the packages
-  those paths can reach (repo-101, repo-102: a markdown-only change under a tool
-  plans no suite); `core` and `repo` when `scripts/` moved; every other `ci.yml`
-  check-job command, the `## Review` presence test and the title's type against
-  the paths it touches. Run full `npm test` yourself if shared config moved.
+- **Commit, then run the fast preflight checks, not the suites**:
+  `node scripts/preflight.mjs --only mergeTree,ciCommands,review,title --base origin/<base> --title "<the pull request title>"`,
+  exit 0 — 16 s on repo-111's branch. It probes every other open pull request
+  head after its own fetch (repo-104), runs `ci.yml`'s other check-job
+  commands, the `## Review` presence test and the title's type against the
+  paths. `--only` cannot run `npm run check` without the tool suites (both are
+  its `check`), so `npm run check` above is the other half. **You run no full
+  suite**: CI runs every project on the draft while the gate works, and the
+  landing's `--land` runs preflight in full once per ticket — ten to twelve
+  minutes on a downloader branch, paid once instead of at every push.
 - **Exit 16 has three causes; read the output, not the code.** Whichever it is,
   the last line says whether anything was skipped.
   - **A conflict with another open pull request's head** is not a fault in your
-    branch. The probe stops the run there, so **no suite, no `## Review` check
-    and no title check has run** and the last line ends `; not run: check, …`:
-    run the `--only check,ciCommands,review,title` command in the `== halted ==`
-    block before you report. Then push, open the draft, report the other pull
+    branch. The probe stops the run there, so **no `ci.yml` command, no
+    `## Review` check and no title check has run** and the last line ends
+    `; not run: …`: run the second command in the `== halted ==` block before
+    you report. Then push, open the draft, report the other pull
     request's number and the paths, and stop: the merge order is the
     orchestrator's to set. A sibling that conflicts with `main` itself reports as
     a conflict with your HEAD, because HEAD carries `main`; that is the sibling's
@@ -149,8 +150,9 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
 
 `common.md` has the rules every report follows. Yours also carries:
 
-- the branch, the base as you resolved it, the **head sha you pushed** and the
-  draft PR number;
+- the branch, the base as you resolved it, the **head sha you pushed**, the
+  draft PR number, and CI's state on that head from `gh pr checks <n>` —
+  running is a state, not a pass;
 - **each `Done when` line with a verdict and the test that proves it** — the
   spec file and the test's name, or the command you re-ran — never "covered";
 - what the brief had wrong.
@@ -164,7 +166,9 @@ the gate's own; where they disagree, the disagreement comes back as a finding.
    have pushed since you reported. If it is not a fast-forward, stop and report.
    Then, if `main` has moved since the build, merge it as _Before you report_
    says, before the fix (pl-56's round was that merge).
-2. Fix, run the narrowest checks, then preflight, then commit and push.
+2. Fix, run the narrowest checks and `npm run check`, commit, run the fast
+   preflight checks (_Before you report_), and push. No full suite: CI on the
+   draft and the landing's `--land` preflight stand for the round.
 3. Report per finding: fixed, with the command that failed before and passes
    after; refuted, with the command and output that refute it; or an open
    decision, as options. Name the new head sha.

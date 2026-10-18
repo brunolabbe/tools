@@ -68,6 +68,21 @@ the batch cannot proceed, put it to the user at once.
    other: the tools-e0 batch (2026-10-18, eleven pull requests) kept the
    orchestrator 2h28m active in 2h47m of wall.
 
+   **Each option is a ready-made batch of one tool's tickets**, no more than
+   the cap, the recommended one first, each with its seam notes and a rough
+   cost from comparable rows in `reference/history.md`.
+   - A tool another session holds — `ListAgents` and `git worktree list` — is
+     left out, or offered explicitly as "beside <session>'s batch".
+   - When the owner named a tool, offer only its batches. When they named none
+     and no peer holds one, recommend the tool with the most unblocked `ready`
+     tickets.
+   - **Ask the candidates' open decisions in the same checkpoint**: each
+     `## Decision — open` question, and each `Done when` line a gate would
+     grade `unproven (open decision)`, as the seam map quotes them. The answers
+     travel in the build dispatch
+     ([reference/dispatching.md](reference/dispatching.md)), so no builder
+     starts on a question only the owner can settle.
+
 3. **Dispatch builders**, one per ticket in flight, as the agent the pairing table names.
    Never pass `model`. Before each dispatch, create the ticket's scratch
    directories (`<scratchpad>/<id>/build`, `gate-1`, `gate-2`, `land`; `gate-3`
@@ -79,7 +94,9 @@ the batch cannot proceed, put it to the user at once.
 4. **Check the build report before you spend a gate on it**: a verdict naming a
    test for every `Done when` line, every command with its output, what it could
    not verify, any open decision, the head sha (confirm it with
-   `git ls-remote --heads origin <branch>`), and the draft PR number. Send a
+   `git ls-remote --heads origin <branch>`), the draft PR number, and CI's
+   state on that head (`gh pr checks <n>`) where a local suite run used to be:
+   the builder runs no full suite (`roles/builder.md`). Send a
    failing line back now, while the builder's cache is warm. When a `Done when`
    line names several subjects, check all of them in one message.
 
@@ -138,7 +155,8 @@ the batch cannot proceed, put it to the user at once.
    — then it is narrow, scoped to that finding's fix, and needs no owner answer
    (dl-114's was put to the owner for nothing) — or when the owner asks for
    one, and then the owner's answer names its depth and scope.** The dispatch
-   carries the depth and scope either way. Anything less from gate 2 is handled by the floor in step 6 and
+   carries the depth and scope either way. A third gate is a fresh dispatch
+   too, for the same reason, handed the earlier gates' files as gate 2 is. Anything less from gate 2 is handled by the floor in step 6 and
    checked by preflight and CI, not by another gate. If a third gate raises
    another `high`, stop and put the state to the user. Across 253 recorded gate
    sections, the 47 past gate 2 found no high (adr/006).

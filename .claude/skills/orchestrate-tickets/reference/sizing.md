@@ -21,6 +21,11 @@ agent's context grows with every turn, and every turn re-reads all of it. So:
   makes each ticket wait on the others' hand-offs; the cap of three tickets in
   flight (`SKILL.md` step 2) is that limit. An agent sitting idle costs no
   tokens — it only lengthens the wall column of the accounting table.
+- **The suites run twice per ticket, not four times**: on CI against the
+  draft, and in the landing's `--land` preflight. The builder and each round
+  run `npm run check` and the fast preflight checks only (`roles/builder.md`),
+  so a gate may open a head CI has not yet proven, and grades that line
+  `unproven (gate)` until the leg has run on it.
 - **Turns cost more than tokens.** One plain command per call is the sandbox's
   rule, so an agent that needs a script writes it to a file and runs it once.
 - **Gates past the second have not paid.** Across 253 recorded gate sections,

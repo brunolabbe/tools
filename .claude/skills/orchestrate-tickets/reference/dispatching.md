@@ -37,7 +37,9 @@ the first dispatch with `node scripts/agent-cost.mjs --agent <id>`.
 - **The owner's answer, when the ticket is `needs-decision`**: the answer, its
   date and the options it was chosen from, pasted. The builder records it on
   the ticket and sets `ready` in its first commit (`roles/builder.md`). Name no
-  `status` yourself.
+  `status` yourself. An answer given at intake to a `ready` ticket's open
+  `Done when` line (`SKILL.md` step 2) travels the same way, and the builder
+  records it in its first commit.
 - **Ship authority, or not.** The default is: build, push, open a draft pull
   request, stop. Authority to land goes in the agent's own dispatch or a direct
   message from you, never through a gate.

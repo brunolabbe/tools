@@ -7,7 +7,7 @@ had been lines 11 to 151 of a 296-line file loaded into every builder — narrat
 that no builder needs to build, on the page that costs every dispatch. Nothing
 below is an instruction; the table is the instruction.
 
-## 2026-10-18: gate 2 is a fresh dispatch, and three tickets run at once
+## 2026-10-18: a fresh gate 2, three tickets at once, batches by tool, no suite before the gate
 
 **The owner chose both on 2026-10-18** (repo-111), after asking why gates take
 so long. The options were put as "Cut the waiting", then "Fresh narrow gate 2"
@@ -44,9 +44,35 @@ about 5% of 147 min on a one-ticket batch. The tools-e0 batch of the same day
 2h47m19s of wall, so every relay waited behind others; dl-114's gate
 (2026-10-13) was 15 min active over 9h42m wall, with two cold restarts.
 
-Two figures from that analysis, the loop as it ran before this change:
-[flow.drawio.svg](flow.drawio.svg) and lg-40's clock,
-[lg-40-timeline.drawio.svg](lg-40-timeline.drawio.svg).
+**Intake offers batches by tool, with their open decisions** (repo-111, owner,
+2026-10-18). The options were one question whose options are batches by tool
+(recommended, chosen), a separate tool question first, and the orchestrator
+picking when the owner names no tool. The reason relayed with the decision
+was that lg-30, lg-32, lg-33, lg-39 and lg-40 each came back from gate 1 with
+a `med` that was an open decision, at about 74 minutes of round and gate 2 on
+lg-40. None of those five tickets carried a `## Decision` heading: the gates
+raised those decisions from their own probes, so an intake question could not
+have asked them. What the rule does buy, a question the brief already poses
+answered before the build, is unmeasured.
+
+**The builder pushes before the slow checks, and no round runs a suite**
+(repo-111, owner, 2026-10-18: "1, 2, 3 and 4 seem like real wins"). A ticket's
+suites now run on CI against the draft and in the landing's `--land`
+preflight, where they ran at the build, at each round and at the landing
+besides CI. The trade is that a gate can open a head CI has not proven, which
+it already grades `unproven (gate)`. `preflight.mjs --only` cannot run
+`npm run check` without the suites, so the builder runs `npm run check` itself
+beside `--only mergeTree,ciCommands,review,title` (16 s on repo-111's branch);
+a flag that skips only the suites is left to a later ticket. Owed by the first
+batch under the rule: per ticket, whether CI on the draft went red on
+something the dropped local run would have caught.
+
+**A third gate is a fresh dispatch too**, for gate 2's reason, taken under
+repo-111 after its builder noted that no page said how a gate 3 runs.
+
+Two figures: [flow.drawio.svg](flow.drawio.svg), the loop as it runs under
+this change, and [lg-40-timeline.drawio.svg](lg-40-timeline.drawio.svg),
+lg-40's clock, the measurement that motivated it.
 
 ## 2026-10-10: Haiku 5.5 replaces Haiku 4.5
 
