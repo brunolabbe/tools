@@ -178,3 +178,23 @@ books/src` finds only report strings and the new constant). Left as the brief
     `vite` with `/api/*` stubbed; `app.test.tsx` passed unchanged apart from the
     one test added. Not measured: a real device, or the API's data.
   - Fold-in: none. Nothing the build made free was already specified.
+- 2026-10-18 · gate 1 (Opus 5.5) passed with three lows; the owner answered the
+  question "lg-41 passed gate 1 (#563) … What do you want?". Options: "Refuse
+  slice fields + F3 test, at landing", "Same, with a narrow re-gate", "Document
+  the bounds only (F2b)", "Land as built; lows recorded". Chosen: **"Same, with
+  a narrow re-gate"**. Fixed on that answer:
+  - `rowsQuerySchema` now refuses `bucket`, `person`, `direction`, `minCents`
+    and `maxCents` on `scope=spending` with a `spendingCategory`, as `q`, `sort`
+    and `order` already were (the gate's option (a)): the bounds compared the
+    row's whole amount, not the `sliceCents` the list shows. The brief's "leave
+    its meaning unchanged" holds for every lg-41 field. The test that expected
+    200 for a slice with `direction=out&minCents=1` now expects 400
+    `BAD_REQUEST` for each of the eight fields alone on a slice, and 200 for the
+    chart's own lists (`scope=spending` alone with narrowing fields, a category
+    alone with narrowing fields, the slice alone).
+  - A web test pins `showMore`'s `controller.signal.aborted` check: a Show more
+    answer released after a filter change is not appended to the new list. With
+    that line removed it fails on "Réponse tardive" in the list.
+  - **Recorded, not fixed:** a `q` made only of combining marks (`q=%CC%81`)
+    folds to `""` and matches every row, the same list as no `q`; harmless in the
+    safe direction. The `person=joint` limit stays as the brief chose.
