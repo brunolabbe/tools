@@ -31,7 +31,7 @@ figures, as its Log gives them:
 - 207 of 1,019 places are `named-premises`.
 - `lodging` names a premises in 28 of 320 places, and `food` in 25 of 259. These are
   places, not mentions: pl-57's Log also gives 47 of 402 and 36 of 322 mentions. This
-  ticket counts places.
+  ticket reports both, and its headline is the mentions figure (item 7).
 - pl-57's Log keeps a sensitivity line beside the 28. Eight of `lodging`'s
   named-premises rows name only a park, as a place for "a campground or chalet in
   park X", and pl-57's gate ruled those kind-of-place. Without them `lodging` names a
@@ -74,26 +74,39 @@ figures, as its Log gives them:
    out first, the objects checked are the sample.
 5. **The live run's shape is a reserved decision**, not an open question for this
    filing. The owner sets, at build time, the model families, the efforts, the number
-   of runs, the brief mix and the spend stop `--max-usd`. Two facts bear on that
+   of runs and the spend stop `--max-usd`; `run.ts` fixes which briefs a set covers. Two facts bear on that
    choice. pl-57's before population is 111 records: set A runs the six brief shapes
    once, and sets B to D (81 records) are `road-trip` runs. And `run.ts` has no brief
-   selector, with `--max-usd` defaulting to 10. Of pl-57's 1,019 places, 705 are
-   named under `road-trip`, a count of distinct places, so the mix moves the
-   before-and-after comparison.
+   selector, with `--max-usd` defaulting to 10, and no Build step changes it, so the
+   Log gives the sets `run.ts` ran and the briefs they covered. Of pl-57's 1,019
+   places, 705 are named under `road-trip`, a count of distinct places, so the briefs a
+   set covers move the before-and-after comparison.
 6. **The procedure for reaching 40 objects** (owner, 2026-10-17). The options were:
    (A) a seeded order over the stratum's keys, checked in that order until the stratum
    holds 40 distinct objects, or the keys run out, the record holding the order and
    the number of keys it took; and (B) an object rule fixed before searching, such as
    the place name with the locality dropped, which is not pl-57's object. The owner
    chose **(A)**, the recommendation.
+7. **The headline figure** (owner, 2026-10-18, on gate 2's G2). Build 1 has a
+   kind-of-place proposal write only the kind in `place.name`, so many proposals share
+   one `name|locality` key (`motel|percé`). Gate 2 counted on pl-57's data `lodging` at 258 kind-of-place keys
+   for 317 mentions and `food` at 215 for 262, because the names are free-form. The kind
+   keys would shrink and the premises keys would not, so a share counted on places
+   rises with no change in what is proposed. The options were: (A) keep the Build 1
+   `place.name` line and report the share on mentions beside places, with pl-57's 47 of
+   402 (`lodging`) and 36 of 322 (`food`) as the before figures, so a collapse of keys
+   cannot move the headline; and (B) revert the Build 1 line and give up the
+   `place.name` guidance. The owner chose **(A)**, the recommendation. The headline is
+   the share on mentions, and places are reported beside it.
 
 **Where the prompts live.** On `origin/main`, the specialist's brief is the `role`
 string in `SPECIALIST_DEFINITIONS`, in `tools/planner/agent/src/specialists.ts`.
 `systemPrompt` in `tools/planner/agent/src/prompt.ts` writes that `role` into the
 system prompt **before** the shared rules: after the line naming the specialist, and
 ahead of the "You propose options" paragraph and the "Rules, and they are not
-negotiable" block. In the real lodging prompt the role starts at character 99 and the
-Rules block at 452. `tools/planner/agent/src/roster.ts` also says "lodging", but its
+negotiable" block. The ordering holds for every brief shape. The offsets differ by shape (in the
+`road-trip` lodging prompt, the role starts at character 99 and the Rules block at
+452), and the Rules offset moves once Build 1 lengthens the role. `tools/planner/agent/src/roster.ts` also says "lodging", but its
 `because` lines are the reason a row of the roster gives, and no model receives them.
 That file is not changed.
 
@@ -118,8 +131,9 @@ That file is not changed.
 
 3. **The live run: paid, and a reserved decision.** Run pl-40's harness,
    `tools/planner/api/test/live/run.ts`, with `PLANNER_LIVE_RUN=1`. The owner sets the
-   model families, the efforts, the number of runs, the brief mix and `--max-usd` at
-   build time, as Why item 5 says, and the Log records them, the authorisation's date,
+   model families, the efforts, the number of runs and `--max-usd` at build time, as
+   Why item 5 says, and the Log records them with the sets `run.ts` ran and the briefs
+   they covered, the authorisation's date,
    and the run's measured cost. Do not start the run before that authorisation is in
    the Log.
    The `--out` directory is fresh for each run. Name it
@@ -133,8 +147,9 @@ That file is not changed.
    once pl-57 has merged so that the harness is on `main`. Classify the new run's
    places by pl-57's committed rubric, unchanged, by hand, and write the new run's own
    `classification.json`, as pl-57 did. Report `lodging`'s and `food`'s named-premises
-   share before and after, on that rubric. The before figures are pl-57's, 28 of 320
-   and 25 of 259, and the Log names the rubric each is on.
+   share before and after, on that rubric, on mentions (the headline, Why item 7) and
+   on places. The before figures are pl-57's: on mentions, 47 of 402 and 36 of 322; on
+   places, 28 of 320 and 25 of 259. The Log names the rubric each is on.
    **Add a population argument to `invention.ts`.** Its name and form are the
    builder's, and the Log gives them. The change covers four things, and the Log
    names how each was done:
@@ -165,9 +180,10 @@ That file is not changed.
    its keys, with the seed in the record, and check the keys in that order. An object
    is its first query, as pl-57 defined it (`check.queries[0] ?? place.key`). Write a
    key's first query into `verdicts.json` before searching it. A key whose first query
-   equals an object already checked adds no object, and takes that object's verdict.
-   Stop when the stratum holds 40 distinct objects, or when the ordered keys run out,
-   whichever comes first. The record holds the seed, the ordered keys, and the number
+   equals an object already checked adds no object. Each key keeps its own verdict,
+   judged from its own locality, and an object is not confirmed if any of its keys is,
+   as pl-57's `buildObjects` has it. Stop when the stratum holds 40 distinct first
+   queries, or when the ordered keys run out, whichever comes first. The record holds the seed, the ordered keys, and the number
    of keys it took to reach 40 objects, or the total when the keys ran out. The
    search budget is written down before the first query, as pl-57's Build step 5 did.
    Each verdict is one of pl-57's four: `exists`, `exists-elsewhere`, `closed` or
@@ -182,7 +198,8 @@ That file is not changed.
 6. **Report the rate, per object.** The not-confirmed rate for the stratum after the
    change, as objects not confirmed over objects checked, with a 95% Wilson interval.
    Set it beside pl-57's 3 of 19 (15.8%, 5.5–37.6) and against the bar above. Count the
-   parks apart, as pl-57's Log did, so the rate is shown with and without them. The Log
+   parks apart, as pl-57's Log did, so the rate is shown with and without them. Parks
+   are the rows the new run's classification tags `park-visit`. The Log
    says how many objects it rests on, so a rate on a small count reads as one.
 
 7. **End the Log with an open decision,** labelled as one, between a lookup scoped to
@@ -196,8 +213,9 @@ That file is not changed.
   `lodging` and `food` and nothing else. The Log quotes the diff's hunk headers.
 - `npx vitest run tools/planner/agent/test/prompt.test.ts` passes, and the Log gives
   its count of passed and total tests.
-- The Log gives the live run's command, the model families, efforts, number of runs,
-  brief mix and `--max-usd` the owner set at build time (a reserved decision), the
+- The Log gives the live run's command, the model families, efforts, number of runs
+  and `--max-usd` the owner set at build time (a reserved decision), the sets `run.ts`
+  ran and the briefs they covered, the
   authorisation's date, the run's measured cost, and the `--out` directory, with the
   check that it did not exist before the run.
 - `git diff --name-status origin/main -- tools/planner/api/test/fixtures/live` shows
@@ -206,20 +224,24 @@ That file is not changed.
 - `invention.ts`'s default run, with no population argument, still reproduces
   pl-57's record: `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx tools/planner/api/test/live/invention.ts`
   exits 0, and the Log gives that command's exit code, taken without a pipe.
+- The same check in the population argument's mode, run on the new run's records and
+  its own three files, regenerates the new run's record and exits 0, and the Log gives
+  its exit code, taken without a pipe.
 - With the new run's records on disk, the default's counts are "111 record files,
   1,019 places", as the Log gives them. A record planted under a `claude-*` directory
-  of `live/` leaves them at 111 and 1,019, and the Log shows that count with the
+  of `live/`, whose name carries no `-pl58-` marker and is not in the manifest, leaves them at 111 and 1,019, and the Log shows that count with the
   planted record present, before it is removed.
 - The re-measure gives `lodging`'s and `food`'s named-premises share before and after,
-  on one rubric, and the Log says which population and files each figure counts. The
+  on one rubric. The headline is the share on mentions, against pl-57's 47 of 402
+  (`lodging`) and 36 of 322 (`food`), with the share on places (28 of 320 and 25 of 259) beside it. The Log says which population and files each figure counts. The
   after population is the new run's records alone, selected by the population
   argument. `invention/2026-10-17.json` is unchanged, which `git diff --name-status`
   on it shows.
 - The record holds the seed, the ordered keys, the number of keys it took to reach 40
-  objects (or the total if the keys ran out), and each checked object's verdict with
-  its URL and the date it was read.
+  objects (or the total if the keys ran out), and each checked key's verdict, from its own locality, with its URL and the date it was
+  read, and the object each key belongs to.
 - The Log gives the stratum's not-confirmed rate per object, with its object count,
-  its 95% Wilson interval, the rate with the parks counted apart, and whether it clears
+  its 95% Wilson interval, the rate with the parks (the `park-visit` rows) counted apart, and whether it clears
   the bar: above about 10%, with the lower bound above 5%.
 - The Log says whether WebSearch ran in a general-purpose agent, and gives the times
   the firewall was opened and closed, or "not observed by the builder".
@@ -314,3 +336,29 @@ planted premises hotel|percé, which no record names`.
 - **Dropped by the reviewer, not changed here:** pl-57's head moving; merging the role
   change before its re-measure (a product decision, which the owner made); and the
   `difficulty` and `depends_on` fields (honest as filed).
+
+**2026-10-18 — Gate round 2 repair (fixer, Sonnet 5.5).** The narrow gate on
+`3fe20650` returned CONCERNS: two med (G1, G2), four low (G3 to G6), no high. This
+round is ticket text only.
+
+- **G1, med, a repeat key "takes that object's verdict" — fixed.** Build 5 now has each
+  key keep its own verdict from its own locality, an object not confirmed if any of its
+  keys is, and the stop rule counting distinct first queries. The sentence is gone.
+  `Done when` 8 asks for each key's verdict and its object.
+- **G2, med, open decision — the owner chose (A) on 2026-10-18.** Keep the Build 1
+  `place.name` line and report the share on mentions beside places, with pl-57's 47 of 402
+  and 36 of 322 as the before figures. Why item 7 records the options and the choice;
+  Why's "This ticket counts places" now says the headline is mentions; Build 4 and
+  `Done when` 7 name the mentions figure.
+- **G3, low, the plant's directory — fixed.** `Done when` 6 says the planted record's
+  directory carries no `-pl58-` marker and is not in the manifest.
+- **G4, low, the character offsets — fixed.** Why keeps the ordering claim, which holds
+  for every shape, and qualifies 99 and 452 as the `road-trip` shape's.
+- **G5, low, "brief mix" and "the parks counted apart" — fixed.** The Log gives the sets
+  `run.ts` ran and the briefs they covered (Why item 5, Build 3, `Done when` 3); parks
+  are the rows tagged `park-visit` (Build 6, `Done when` 9).
+- **G6, low, no regeneration check for the new record — fixed.** `Done when` 5 adds the
+  check in the population argument's mode, with its exit code in the Log.
+- **Gate records.** This is a filing, and the ticket stays `ready`, so a `## Review`
+  section would be refused (`reviewed-but-ready`). Both gates' full reports are
+  comments on PR #531.
