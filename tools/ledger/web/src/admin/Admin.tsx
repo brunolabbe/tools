@@ -1,8 +1,8 @@
 /**
  * The admin's screen (lg-22): every household and its members, with adding and
- * removing any member, renaming a person (lg-33), and creating a household. Only an admin is answered
- * (`LEDGER_ADMINS`), whether or not they are in a household, and being one shows
- * no household's books.
+ * removing any member, changing a member's address (lg-34), renaming a person
+ * (lg-33), and creating a household. Only an admin is answered (`LEDGER_ADMINS`),
+ * whether or not they are in a household, and being one shows no household's books.
  *
  * It lists every household's addresses in one place as well, because each must
  * also be admitted on the ledger's Access policy, which the operator does in the
@@ -15,6 +15,7 @@ import { AppError } from "@ledger/contract";
 import type { AddMemberRequest, AdminHousehold, CreateHouseholdRequest } from "@ledger/contract";
 import {
   adminAddMember,
+  adminChangeAddress,
   adminRemoveMember,
   adminRenamePerson,
   createHousehold,
@@ -98,6 +99,8 @@ function HouseholdCard(props: {
   const { household, onChange } = props;
   const headingId = useId();
   const [confirming, setConfirming] = useState<string | null>(null);
+  // The address being edited in place (lg-34); at most one, and never with a removal open.
+  const [editing, setEditing] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const people = [...new Set(household.members.map((member) => member.person))].toSorted();
@@ -140,7 +143,17 @@ function HouseholdCard(props: {
               <span>
                 <strong>{shownName(names, member.person)}</strong> {member.address}
               </span>
-              {confirming === member.address ? (
+              {editing === member.address ? (
+                <ChangeAddress
+                  household={household.id}
+                  address={member.address}
+                  onCancel={() => setEditing(null)}
+                  onChanged={async () => {
+                    setEditing(null);
+                    await onChange();
+                  }}
+                />
+              ) : confirming === member.address ? (
                 <span className="actions">
                   <button
                     type="button"
@@ -160,15 +173,32 @@ function HouseholdCard(props: {
                   </button>
                 </span>
               ) : (
-                <button
-                  type="button"
-                  className="small secondary"
-                  aria-label={`Remove ${member.address}`}
-                  disabled={busy}
-                  onClick={() => setConfirming(member.address)}
-                >
-                  Remove
-                </button>
+                <span className="actions">
+                  <button
+                    type="button"
+                    className="small secondary"
+                    aria-label={`Edit ${member.address}`}
+                    disabled={busy}
+                    onClick={() => {
+                      setConfirming(null);
+                      setEditing(member.address);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="small secondary"
+                    aria-label={`Remove ${member.address}`}
+                    disabled={busy}
+                    onClick={() => {
+                      setEditing(null);
+                      setConfirming(member.address);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </span>
               )}
             </li>
           ))}
@@ -207,6 +237,74 @@ function HouseholdCard(props: {
       )}
       <MemberForm people={people} names={names} onAdd={add} />
     </section>
+  );
+}
+
+/**
+ * A member's address, opened in place (lg-34). One request swaps it, so the
+ * person is never without an address; the new one still has to be admitted on
+ * the Access policy, which the note says.
+ */
+function ChangeAddress(props: {
+  household: string;
+  address: string;
+  onCancel: () => void;
+  onChanged: () => Promise<void>;
+}): React.ReactElement {
+  const { household, address, onCancel, onChanged } = props;
+  const id = useId();
+  const [typed, setTyped] = useState(address);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await adminChangeAddress(household, { from: address, to: typed.trim() });
+      await onChanged();
+    } catch (error: unknown) {
+      setProblem(AppError.from(error).message);
+      setBusy(false);
+    }
+  };
+
+  const submit = (event: React.SyntheticEvent): void => {
+    event.preventDefault();
+    if (typed.trim() === "") {
+      setProblem("Give the address to sign in with.");
+      return;
+    }
+    void save();
+  };
+
+  return (
+    <form className="member-form" onSubmit={submit}>
+      <label htmlFor={`${id}-address`}>New address for {address}</label>
+      <input
+        id={`${id}-address`}
+        type="email"
+        autoComplete="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        value={typed}
+        onChange={(event) => setTyped(event.target.value)}
+      />
+      <p className="muted hint">{ACCESS_POLICY_NOTE}</p>
+      {problem !== null && (
+        <p className="bad" role="alert">
+          {problem}
+        </p>
+      )}
+      <div className="actions">
+        <button type="submit" className="small" disabled={busy}>
+          Save
+        </button>
+        <button type="button" className="small secondary" disabled={busy} onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

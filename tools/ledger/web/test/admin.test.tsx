@@ -13,6 +13,7 @@ import { AppError } from "@ledger/contract";
 import type { AdminHousehold } from "@ledger/contract";
 import {
   adminAddMember,
+  adminChangeAddress,
   adminRemoveMember,
   adminRenamePerson,
   createHousehold,
@@ -24,6 +25,7 @@ vi.mock("../src/api/households.ts", () => ({
   fetchAdminHouseholds: vi.fn(),
   createHousehold: vi.fn(),
   adminAddMember: vi.fn(),
+  adminChangeAddress: vi.fn(),
   adminRemoveMember: vi.fn(),
   adminRenamePerson: vi.fn(),
 }));
@@ -221,4 +223,87 @@ test("puts the server's sentence in front of a refused rename", async () => {
   expect((await within(home).findByRole("alert")).textContent).toBe(
     "Another person in this household is already shown under that name.",
   );
+});
+
+// lg-34: an Edit beside each member's Remove opens the address in place; Save
+// sends one request, and the list then shows the new address under the same person.
+test("edits a member's address in one request, and lists the new address under the same person", async () => {
+  vi.mocked(adminChangeAddress).mockResolvedValue({
+    address: "sam.new@example.test",
+    person: "sam",
+    name: "sam",
+  });
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+  const home = card("The test household");
+
+  fireEvent.click(within(home).getByRole("button", { name: "Edit sam@example.test" }));
+  // The Access policy note shows with the form, since the new address needs admitting too.
+  expect(
+    within(home).getAllByText(/must also be admitted on the ledger.s Access policy/u),
+  ).toHaveLength(2);
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue([
+    HOUSEHOLDS[0] as AdminHousehold,
+    {
+      id: "home",
+      name: "The test household",
+      members: [
+        { address: "alex@example.test", person: "alex", name: "alex" },
+        { address: "sam.new@example.test", person: "sam", name: "sam" },
+      ],
+    },
+  ]);
+  fireEvent.change(within(home).getByLabelText("New address for sam@example.test"), {
+    target: { value: " sam.new@example.test " },
+  });
+  fireEvent.click(within(home).getByRole("button", { name: "Save" }));
+
+  await waitFor(() =>
+    expect(
+      within(card("The test household")).getByRole("button", {
+        name: "Edit sam.new@example.test",
+      }),
+    ).toBeTruthy(),
+  );
+  expect(vi.mocked(adminChangeAddress)).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(adminChangeAddress)).toHaveBeenCalledWith("home", {
+    from: "sam@example.test",
+    to: "sam.new@example.test",
+  });
+  // No remove and no add: one request did it.
+  expect(vi.mocked(adminRemoveMember)).not.toHaveBeenCalled();
+  expect(vi.mocked(adminAddMember)).not.toHaveBeenCalled();
+  const after = card("The test household");
+  const row = within(after).getByText("sam.new@example.test", { exact: false }).closest("li");
+  expect(row?.querySelector("strong")?.textContent).toBe("sam");
+  expect(after.textContent).not.toContain("sam@example.test");
+});
+
+test("puts the server's sentence in front of a refused new address, and keeps the old one listed", async () => {
+  vi.mocked(adminChangeAddress).mockRejectedValue(
+    new AppError(
+      "ADDRESS_ALREADY_A_MEMBER",
+      'That address already belongs to the household "away", as kim. Remove it first.',
+    ),
+  );
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+  const home = card("The test household");
+
+  fireEvent.click(within(home).getByRole("button", { name: "Edit sam@example.test" }));
+  fireEvent.change(within(home).getByLabelText("New address for sam@example.test"), {
+    target: { value: "kim@away.test" },
+  });
+  fireEvent.click(within(home).getByRole("button", { name: "Save" }));
+
+  expect((await within(home).findByRole("alert")).textContent).toContain('household "away"');
+  // The form stays open on what was typed, and the old address is still the one listed.
+  expect(
+    (within(home).getByLabelText("New address for sam@example.test") as HTMLInputElement).value,
+  ).toBe("kim@away.test");
+  const listed = within(home)
+    .getAllByRole("listitem")
+    .map((item) => item.textContent ?? "");
+  expect(listed.some((text) => text.includes("sam@example.test"))).toBe(true);
+  expect(vi.mocked(fetchAdminHouseholds)).toHaveBeenCalledTimes(1);
 });

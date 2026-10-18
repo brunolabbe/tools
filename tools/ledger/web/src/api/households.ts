@@ -9,6 +9,7 @@ import type {
   AddMemberRequest,
   AdminHousehold,
   AdminHouseholdsResponse,
+  ChangeAddressRequest,
   CreateHouseholdRequest,
   HouseholdMember,
   HouseholdResponse,
@@ -70,6 +71,17 @@ export async function adminRemoveMember(
   return await requestJson<HouseholdMember>(at(ROUTES.adminMemberRemove, household), {
     method: "POST",
     body: { address },
+  });
+}
+
+/** A member's address, swapped in one request (lg-34): the person and their books are the same. */
+export async function adminChangeAddress(
+  household: string,
+  change: ChangeAddressRequest,
+): Promise<HouseholdMember> {
+  return await requestJson<HouseholdMember>(at(ROUTES.adminMemberAddress, household), {
+    method: "POST",
+    body: change,
   });
 }
 

@@ -9,8 +9,9 @@
  *   it goes through an admin (`docs/00-ANALYSIS.md` §7).
  * - **The admin's**, under `/api/admin/`, for an address in `LEDGER_ADMINS` only
  *   (`adminOf`), who need not be in any household: every household and its
- *   members, a new household, adding or removing any member, and giving a
- *   person a shown name (lg-33), which changes no id and so nothing in the books.
+ *   members, a new household, adding or removing any member, changing a
+ *   member's address in one step (lg-34), and giving a person a shown name
+ *   (lg-33); neither of those two changes an id, so neither touches the books.
  *
  * Every guard runs in the route's `onRequest` hooks, before the body is
  * parsed, so a refusal is the same 403 whatever the request carries — a body
@@ -36,6 +37,7 @@ import {
   AppError,
   ROUTES,
   addMemberRequestSchema,
+  changeAddressRequestSchema,
   createHouseholdRequestSchema,
   removeMemberRequestSchema,
   renamePersonRequestSchema,
@@ -179,6 +181,26 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
       at: context.now(),
     });
     const body: HouseholdMember = memberOfHousehold(directory, removed);
+    return body;
+  });
+
+  // lg-34: the admin's only. One transaction, so a refused new address leaves the
+  // old one standing; the person id is unchanged, so no books are touched.
+  app.post(ROUTES.adminMemberAddress, { onRequest: adminWrite }, async (request) => {
+    const admin = adminOf(request);
+    const id = householdIdOf(request);
+    const draft = changeAddressRequestSchema.safeParse(request.body);
+    if (!draft.success) {
+      throw new AppError("BAD_REQUEST", "Send the address to replace and the one to use instead.");
+    }
+    namedHousehold(directory, id);
+    const changed = directory.changeAddress({
+      household: id,
+      ...draft.data,
+      by: admin,
+      at: context.now(),
+    });
+    const body: HouseholdMember = memberOfHousehold(directory, changed);
     return body;
   });
 

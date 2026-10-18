@@ -425,6 +425,50 @@ export class Directory {
       .immediate();
   }
 
+  /**
+   * Moves a person's sign-in from one address to another (lg-34): one
+   * transaction that removes `from` and adds `to` under the same person, so
+   * the person is never without an address between the two, and a refused add
+   * rolls the remove back with it. The person id is unchanged, so nothing in the
+   * household's books is touched. `from` must stand in `household`
+   * (`MEMBER_NOT_FOUND` otherwise, a stale screen included); `to` must be in no
+   * household at all, this one included (`ADDRESS_ALREADY_A_MEMBER`). Returns
+   * the membership that now stands.
+   */
+  changeAddress(change: { household: string; from: string; to: string } & Change): Member {
+    refuseUnlessChange(change);
+    if (typeof change.household !== "string") refuse("The household is not a string.");
+    if (typeof change.from !== "string") refuse("The address is not a string.");
+    if (typeof change.to !== "string") refuse("The new address is not a string.");
+    const from = readAddress(change.from);
+    if (from === undefined) refuse(NOT_AN_ADDRESS);
+    const to = readAddress(change.to);
+    if (to === undefined) refuse(NOT_AN_ADDRESS);
+    if (from === to) refuse("The new address is the one the person has already.");
+    return this.#db
+      .transaction(() => {
+        if (this.household(change.household) === undefined) {
+          throw new AppError("HOUSEHOLD_NOT_FOUND", `There is no household "${change.household}".`);
+        }
+        const standing = this.membershipOf(from);
+        if (standing === undefined || standing.household !== change.household) {
+          throw new AppError("MEMBER_NOT_FOUND");
+        }
+        const taken = this.membershipOf(to);
+        if (taken !== undefined) {
+          throw new AppError(
+            "ADDRESS_ALREADY_A_MEMBER",
+            `That address already belongs to the household "${taken.household}", as ${taken.person}. Remove it first.`,
+          );
+        }
+        this.#record({ address: from, ...standing }, "remove", change);
+        const moved = { address: to, ...standing };
+        this.#record(moved, "add", change);
+        return moved;
+      })
+      .immediate();
+  }
+
   #record(member: Member, action: "add" | "remove", change: Change): void {
     this.#db
       .prepare(
