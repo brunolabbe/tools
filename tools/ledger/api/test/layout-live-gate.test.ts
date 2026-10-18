@@ -104,31 +104,21 @@ describe("the layout measurement's harness", () => {
     const { ask, asked } = await answering();
     const records = await measure(options(), ask);
 
-    expect(asked).toEqual([
-      "lg7",
-      "lg7",
-      "lg37",
-      "lg37",
-      "moved",
-      "moved",
-      "english",
-      "english",
-      "csv-balance",
-      "csv-balance",
-      "csv-no-balance",
-      "csv-no-balance",
-    ]);
+    // Each fixture twice, in the order the measurement runs them.
+    const names = (await layoutFixtures()).flatMap((fixture) => [fixture.name, fixture.name]);
+    expect(names).toHaveLength(26);
+    expect(asked).toEqual(names);
     expect(records.every((record) => record.score.outcome === "matched")).toBe(true);
     // 2 000 in at $1 and 400 out at $5 a million.
     expect(records[0]?.costUsd).toBeCloseTo(0.004, 10);
     const written = readdirSync(path.join(dir, "fake-model")).toSorted();
-    expect(written).toHaveLength(13);
+    expect(written).toHaveLength(27);
     expect(written).toContain("summary.md");
     const table = readFileSync(path.join(dir, "fake-model", "summary.md"), "utf8");
     expect(table).toContain(
       "| fake-model | csv-no-balance | 2 | 2 | 2 | 0 | 0 | 0 | 0 | 2000 | 400 | $0.0040 |",
     );
-    expect(table).toContain("| fake-model | **all** | 12 | 12 | 12 |");
+    expect(table).toContain("| fake-model | **all** | 26 | 26 | 26 |");
   });
 
   test("an answer cut short, or not JSON, is scored invalid, never read", async () => {

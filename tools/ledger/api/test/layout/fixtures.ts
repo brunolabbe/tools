@@ -12,6 +12,19 @@
  * 4. `english`: English labels and sheet names, amount and balance swapped.
  * 5. `csv-balance`: a bank CSV, withdrawals and deposits apart, with a balance.
  * 6. `csv-no-balance`: a bank CSV with one signed amount and no balance.
+ *
+ * lg-56 adds seven harder ones, after those six so their order holds:
+ *
+ * 7. `swapped-labels`: bucket labels that do not say which bucket is which.
+ * 8. `empty-columns-carry`: a workbook with an empty column beside the amount.
+ * 9. `empty-columns-csv`: a bank CSV with empty columns among the figures.
+ * 10. `bank-preamble`: a bank CSV with title lines above the header.
+ * 11. `bank-two-dates`: a bank CSV with a posted date and a transaction date.
+ * 12. `bank-footer`: a bank CSV with closing-balance and total lines at the end.
+ * 13. `bank-wide`: a bank CSV of eleven columns, most of them not needed.
+ *
+ * Every bank shape is invented: it stands for a kind of export, not for any
+ * bank's, and stays within what `csv.ts` reads.
  */
 
 import { readSheets } from "../../src/xlsx.ts";
@@ -209,6 +222,8 @@ interface AccountStyle {
   carryOverLabel: string;
   /** Rows above the header that sum the year up, or none. */
   summary?: (year: number) => { column: number; figure: number; labels: string[] } | null;
+  /** A line of text above the header, in the detail column, on every sheet. */
+  heading?: string;
 }
 
 /** One sheet per year, its running balance a formula over the row before, as a workbook keeps it. */
@@ -239,6 +254,10 @@ function accountSheets(record: History, style: AccountStyle): Sheet[] {
         });
         at += 1;
       }
+    }
+    if (style.heading !== undefined) {
+      grid.set(at, columns.detail, style.heading);
+      at += 1;
     }
     for (const [key, column] of Object.entries(columns) as [AccountColumn, number][]) {
       grid.set(at, column, style.headers[key]);
@@ -634,9 +653,8 @@ function moved(): LayoutFixture {
   };
 }
 
-function english(): LayoutFixture {
-  const names = ["Jordan", "Riley"] as const;
-  const record = invent(39, [2023, 2024], 9);
+/** The invented history's French details and notes, in English. */
+function inEnglish(record: History): void {
   for (const year of record.years) {
     for (const row of year.rows) {
       row.detail =
@@ -649,6 +667,12 @@ function english(): LayoutFixture {
       if (row.note !== null) row.note = "see invoice";
     }
   }
+}
+
+function english(): LayoutFixture {
+  const names = ["Jordan", "Riley"] as const;
+  const record = invent(39, [2023, 2024], 9);
+  inEnglish(record);
   const account = accountSheets(record, {
     columns: { date: 1, bucket: 2, detail: 3, person: 4, amount: 5, balance: 6, note: 7 },
     headers: {
@@ -847,6 +871,325 @@ function csvNoBalance(): LayoutFixture {
   };
 }
 
+// --- lg-56's harder fixtures ---
+
+const money = (cents: number): string => dollars(cents).toFixed(2);
+
+/** A bank's rows with the balance each leaves, from `opening`. */
+function running(
+  rows: readonly { date: string; detail: string; cents: number }[],
+  opening: number,
+): { date: string; detail: string; cents: number; balance: number }[] {
+  let balance = opening;
+  return rows.map((row) => {
+    balance += row.cents;
+    return { ...row, balance };
+  });
+}
+
+/** `date` (yyyy-mm-dd) `days` earlier, as a calendar says. */
+function daysEarlier(date: string, days: number): string {
+  const moment = new Date(`${date}T00:00:00Z`);
+  moment.setUTCDate(moment.getUTCDate() - days);
+  return moment.toISOString().slice(0, 10);
+}
+
+/** A bank CSV's description: one sheet read by its file name, no buckets, carry-overs or periods. */
+function csvLayout(
+  name: string,
+  order: "newest-first" | "oldest-first",
+  columns: WorkbookLayout["account"]["columns"],
+): WorkbookLayout {
+  return {
+    account: {
+      sheets: { by: "name", names: [name] },
+      yearPerSheet: false,
+      order,
+      columns,
+      buckets: [],
+      carryOverLabel: null,
+      summary: null,
+    },
+    periods: null,
+    salaries: null,
+    ignored: [],
+  };
+}
+
+function swappedLabels(): LayoutFixture {
+  const names = ["Maxime", "Léa"] as const;
+  const account = accountSheets(invent(56, [2023, 2024], 6), {
+    columns: { date: 1, detail: 2, bucket: 3, person: 4, amount: 5, balance: 6, note: 7 },
+    headers: {
+      date: "Date",
+      detail: "Description",
+      bucket: "Compte",
+      person: "Qui",
+      amount: "Montant",
+      balance: "Solde",
+      note: "Note",
+    },
+    order: "oldest-first",
+    // The first-listed bucket is the one a reader would call the mortgage, and it is not.
+    bucketText: { mortgage: "Compte 2", "current-expenses": "Compte 1" },
+    names,
+    carryOverLabel: "Report annuel",
+    heading: "Compte 1 : courant · Compte 2 : maison",
+  });
+  return {
+    name: "swapped-labels",
+    shape: "bucket labels that do not say which bucket is which; the rows and a heading do",
+    sheets: [...account, listSheet("Notes", [["Rien ici"]])],
+    people: ["maxime", "lea"],
+    layout: {
+      account: {
+        sheets: { by: "year" },
+        yearPerSheet: true,
+        order: "oldest-first",
+        columns: [
+          { role: "date", column: "A" },
+          { role: "detail", column: "B" },
+          { role: "bucket", column: "C" },
+          { role: "person", column: "D" },
+          { role: "amount", column: "E" },
+          { role: "balance", column: "F" },
+          { role: "note", column: "G" },
+        ],
+        buckets: [
+          { bucket: "mortgage", labels: ["Compte 2"] },
+          { bucket: "current-expenses", labels: ["Compte 1"] },
+        ],
+        carryOverLabel: "Report annuel",
+        summary: null,
+      },
+      periods: null,
+      salaries: null,
+      ignored: ["Notes"],
+    },
+  };
+}
+
+function emptyColumnsCarry(): LayoutFixture {
+  const names = ["Noah", "Emma"] as const;
+  const record = invent(57, [2023, 2024], 7);
+  inEnglish(record);
+  const account = accountSheets(record, {
+    // Column E is empty: the amount is the column after it.
+    columns: { date: 1, bucket: 2, detail: 3, person: 4, amount: 6, balance: 7, note: 8 },
+    headers: {
+      date: "Date",
+      bucket: "Account",
+      detail: "Description",
+      person: "Who",
+      amount: "Amount",
+      balance: "Balance",
+      note: "Note",
+    },
+    order: "newest-first",
+    bucketText: { mortgage: "Home loan", "current-expenses": "Running costs" },
+    names,
+    carryOverLabel: "Carried over from last year",
+  });
+  return {
+    name: "empty-columns-carry",
+    shape: "year sheets with a carry-over label and an empty column left of the amount",
+    sheets: account.toReversed(),
+    people: ["noah", "emma"],
+    layout: {
+      account: {
+        sheets: { by: "year" },
+        yearPerSheet: true,
+        order: "newest-first",
+        columns: [
+          { role: "date", column: "A" },
+          { role: "bucket", column: "B" },
+          { role: "detail", column: "C" },
+          { role: "person", column: "D" },
+          { role: "amount", column: "F" },
+          { role: "balance", column: "G" },
+          { role: "note", column: "H" },
+        ],
+        buckets: [
+          { bucket: "mortgage", labels: ["Home loan"] },
+          { bucket: "current-expenses", labels: ["Running costs"] },
+        ],
+        carryOverLabel: "Carried over from last year",
+        summary: null,
+      },
+      periods: null,
+      salaries: null,
+      ignored: [],
+    },
+  };
+}
+
+function emptyColumnsCsv(): LayoutFixture {
+  // Withdrawals, an empty spacer, deposits, the balance, and the empty column
+  // after the last comma that some exports end every line with.
+  const lines = ["Date,Description,Withdrawals,,Deposits,Balance,"];
+  for (const row of running(statement(58, 4), 408_200)) {
+    lines.push(
+      [
+        row.date,
+        quoted(row.detail),
+        row.cents < 0 ? money(-row.cents) : "",
+        "",
+        row.cents > 0 ? money(row.cents) : "",
+        money(row.balance),
+        "",
+      ].join(","),
+    );
+  }
+  return {
+    name: "empty-columns-csv",
+    shape: "a bank CSV, oldest first, withdrawals and deposits apart with an empty column between",
+    sheets: [csvSheet("chequing-activity.csv", `${lines.join("\n")}\n`)],
+    people: [],
+    layout: csvLayout("chequing-activity.csv", "oldest-first", [
+      { role: "date", column: "A" },
+      { role: "detail", column: "B" },
+      { role: "withdrawal", column: "C" },
+      { role: "deposit", column: "E" },
+      { role: "balance", column: "F" },
+    ]),
+  };
+}
+
+function bankPreamble(): LayoutFixture {
+  const lines = [
+    "Account statement",
+    "Account,Everyday chequing",
+    "Period,2024-01-01 to 2024-04-30",
+    "",
+    "Date,Description,Amount,Balance",
+  ];
+  for (const row of running(statement(59, 4), 276_450)) {
+    lines.push([row.date, quoted(row.detail), money(row.cents), money(row.balance)].join(","));
+  }
+  return {
+    name: "bank-preamble",
+    shape: "a bank CSV with a title, an account line and a period line above the header",
+    sheets: [csvSheet("statement-q1.csv", `${lines.join("\n")}\n`)],
+    people: [],
+    layout: csvLayout("statement-q1.csv", "oldest-first", [
+      { role: "date", column: "A" },
+      { role: "detail", column: "B" },
+      { role: "amount", column: "C" },
+      { role: "balance", column: "D" },
+    ]),
+  };
+}
+
+function bankTwoDates(): LayoutFixture {
+  const next = random(60);
+  const lines = ["Date posted,Date of transaction,Reference,Description,Amount,Balance"];
+  for (const [index, row] of running(statement(61, 4), 189_730).entries()) {
+    // A purchase can post days after it was made; a deposit and the loan post the day they happen.
+    const earlier = row.cents < 0 && row.detail !== "HYPOTHEQUE" && next() < 0.5;
+    const made = earlier ? daysEarlier(row.date, 1 + Math.floor(next() * 5)) : row.date;
+    lines.push(
+      [
+        row.date,
+        made,
+        `R-${String(40_100 + index * 7)}`,
+        quoted(row.detail),
+        money(row.cents),
+        money(row.balance),
+      ].join(","),
+    );
+  }
+  return {
+    name: "bank-two-dates",
+    shape: "a bank CSV with the date a movement posted and the date it was made, and a reference",
+    sheets: [csvSheet("activity.csv", `${lines.join("\n")}\n`)],
+    people: [],
+    layout: csvLayout("activity.csv", "oldest-first", [
+      { role: "date", column: "A" },
+      { role: "detail", column: "D" },
+      { role: "amount", column: "E" },
+      { role: "balance", column: "F" },
+    ]),
+  };
+}
+
+function bankFooter(): LayoutFixture {
+  const lines = ["Booking date,Details,Amount,Running balance"];
+  const rows = running(statement(62, 4), 95_320);
+  for (const row of rows) {
+    lines.push([row.date, quoted(row.detail), money(row.cents), money(row.balance)].join(","));
+  }
+  const out = rows.filter((row) => row.cents < 0).reduce((sum, row) => sum - row.cents, 0);
+  const into = rows.filter((row) => row.cents > 0).reduce((sum, row) => sum + row.cents, 0);
+  // The figures sit in the balance column: one in the amount column of a row
+  // with no date is "an amount with no date", which every description of this
+  // file reads as a problem (lg-56's Log).
+  lines.push(`,Total withdrawals,,${money(out)}`);
+  lines.push(`,Total deposits,,${money(into)}`);
+  lines.push(`,Closing balance,,${money(rows.at(-1)?.balance ?? 0)}`);
+  return {
+    name: "bank-footer",
+    shape: "a bank CSV, oldest first, with total and closing-balance lines after the last movement",
+    sheets: [csvSheet("month-end.csv", `${lines.join("\n")}\n`)],
+    people: [],
+    layout: csvLayout("month-end.csv", "oldest-first", [
+      { role: "date", column: "A" },
+      { role: "detail", column: "B" },
+      { role: "amount", column: "C" },
+      { role: "balance", column: "D" },
+    ]),
+  };
+}
+
+/** The merchant category codes of the shops `statement` invents. */
+const CATEGORY_CODES: Record<string, number> = {
+  "EPICERIE DU COIN": 5411,
+  "PHARMACIE CENTRALE": 5912,
+  "QUINCAILLERIE BOIS": 5251,
+  "RESTO LE MIDI": 5812,
+  "STATION ESSENCE": 5541,
+  "DEPOT PAIE": 6012,
+  HYPOTHEQUE: 6513,
+};
+
+function bankWide(): LayoutFixture {
+  const next = random(63);
+  const lines = [
+    "Date,Branch,Teller,Currency,Description,Category code,Channel,Amount,Balance,Status,Batch",
+  ];
+  const rows = running(statement(64, 4), 351_080);
+  for (const [index, row] of rows.toReversed().entries()) {
+    const channel =
+      row.cents > 0 ? "DIRECT" : (["POS", "ONLINE", "ATM"][Math.floor(next() * 3)] ?? "POS");
+    lines.push(
+      [
+        row.date,
+        "QC-014",
+        `T${String(1 + (index % 9)).padStart(2, "0")}`,
+        "CAD",
+        quoted(row.detail),
+        String(CATEGORY_CODES[row.detail] ?? 5999),
+        channel,
+        money(row.cents),
+        money(row.balance),
+        "POSTED",
+        `B${row.date.replaceAll("-", "")}`,
+      ].join(","),
+    );
+  }
+  return {
+    name: "bank-wide",
+    shape: "a bank CSV, newest first, of eleven columns of which a description needs three",
+    sheets: [csvSheet("full-export.csv", `${lines.join("\n")}\n`)],
+    people: [],
+    layout: csvLayout("full-export.csv", "newest-first", [
+      { role: "date", column: "A" },
+      { role: "detail", column: "E" },
+      { role: "amount", column: "H" },
+      { role: "balance", column: "I" },
+    ]),
+  };
+}
+
 async function lg7(): Promise<LayoutFixture> {
   return {
     name: "lg7",
@@ -877,9 +1220,30 @@ export const LAYOUT_FIXTURE_NAMES: readonly string[] = [
   "english",
   "csv-balance",
   "csv-no-balance",
+  "swapped-labels",
+  "empty-columns-carry",
+  "empty-columns-csv",
+  "bank-preamble",
+  "bank-two-dates",
+  "bank-footer",
+  "bank-wide",
 ];
 
 /** Every fixture, in the order the measurement runs them. */
 export async function layoutFixtures(): Promise<LayoutFixture[]> {
-  return [await lg7(), lg37(), moved(), english(), csvBalance(), csvNoBalance()];
+  return [
+    await lg7(),
+    lg37(),
+    moved(),
+    english(),
+    csvBalance(),
+    csvNoBalance(),
+    swappedLabels(),
+    emptyColumnsCarry(),
+    emptyColumnsCsv(),
+    bankPreamble(),
+    bankTwoDates(),
+    bankFooter(),
+    bankWide(),
+  ];
 }
