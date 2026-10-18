@@ -1076,25 +1076,122 @@ describe("the rounding judged against the printed total (lg-30)", () => {
     expect(splitReceipt(untaxed).sharedCents).toBe(-150);
   });
 
-  test("a receipt with something still shared takes no adjustment", () => {
-    // A free shared bag beside the 2,307 receipt: the excess is refused, as lg-32 refused it.
+  test("a shared item that costs something takes no adjustment; a free one does not stop it", () => {
+    // Nothing left shared is read by cost (lg-30, owner 2026-10-18): a free shared
+    // bag beside the 2,307 receipt does not stop the cent being rounding.
     const receipt = TWO_TAXED(1_007);
-    const withBag: ReceiptProposal = {
-      ...receipt,
+    const bag = (price: number): ReceiptProposal["items"][number] => ({
+      text: "SAC",
+      price,
+      taxable: false,
+      deposit: null,
+      spendingCategoryId: null,
+      share: "shared",
+      chargedTo: null,
+    });
+    const free: ReceiptProposal = { ...receipt, items: [...receipt.items, bag(0)] };
+
+    expect(splitReceipt(free)).toEqual({
+      sharedCents: 0,
+      notSharedCents: 1_149,
+      chargedCents: 1_158,
+      charges: [{ personId: "sam", cents: 1_158 }],
+    });
+
+    // A shared item of 0,01 $ beside parts that round 2 cents over: the shared
+    // item is something still shared, so the excess is not taken from the parts.
+    const priced = (
+      price: number,
+      share: "not-shared" | "shared" | "theirs",
+      chargedTo: string | null,
+    ) => ({
+      text: "X",
+      price,
+      taxable: share !== "shared",
+      deposit: null,
+      spendingCategoryId: null,
+      share,
+      chargedTo,
+    });
+    const costly: ReceiptProposal = {
+      merchant: null,
+      date: "2026-10-04",
+      subtotal: 1_249,
+      gst: 62,
+      qst: 124,
+      total: 1_435,
       items: [
-        ...receipt.items,
-        {
-          text: "SAC",
-          price: 0,
-          taxable: false,
-          deposit: null,
-          spendingCategoryId: null,
-          share: "shared",
-          chargedTo: null,
-        },
+        priced(111, "not-shared", null),
+        priced(1, "shared", null),
+        priced(137, "theirs", "sam"),
+        priced(1_000, "theirs", "casey"),
       ],
     };
 
-    expect(splitReceipt(withBag).sharedCents).toBe(-1);
+    expect(checkReceipt(costly)).toEqual([]);
+    expect(splitReceipt(costly).sharedCents).toBe(-1);
+  });
+});
+
+// lg-30, gate 1 F1 and F3, fixed at landing (owner, 2026-10-18).
+describe("what still shared means, and where the bound ends (lg-30, gate 1)", () => {
+  const line = (
+    price: number,
+    taxable: boolean,
+    share: "not-shared" | "shared" | "theirs",
+    chargedTo: string | null = null,
+  ): ReceiptItem => ({
+    text: "X",
+    price,
+    taxable,
+    deposit: null,
+    spendingCategoryId: null,
+    share,
+    chargedTo,
+  });
+
+  test("a free shared item does not stop the cent being rounding", () => {
+    // Main files this receipt (2,531 to sam); a `SAC 0,00` line must not refuse it.
+    const withFree: ReceiptProposal = {
+      merchant: null,
+      date: "2026-10-04",
+      subtotal: 4_275,
+      gst: 214,
+      qst: 426,
+      total: 4_915,
+      items: [
+        line(2_074, true, "not-shared"),
+        line(0, false, "shared"),
+        line(309, true, "theirs", "sam"),
+        line(1_892, true, "theirs", "sam"),
+      ],
+    };
+
+    expect(checkReceipt(withFree)).toEqual([]);
+    expect(splitReceipt(withFree)).toEqual({
+      sharedCents: 0,
+      notSharedCents: 2_384,
+      chargedCents: 2_531,
+      charges: [{ personId: "sam", cents: 2_531 }],
+    });
+    // The same receipt without the free item, which both trees already file.
+    const without = { ...withFree, items: withFree.items.filter((item) => item.price > 0) };
+    expect(splitReceipt(without)).toEqual(splitReceipt(withFree));
+  });
+
+  test("an excess one cent past the bound is not adjusted", () => {
+    // 0,14 $ marked taxable on a receipt with no taxes costs 0,16 $: 2 cents over
+    // for one part, whose bound is 1.
+    const untaxed: ReceiptProposal = {
+      merchant: null,
+      date: "2026-10-04",
+      subtotal: 14,
+      gst: null,
+      qst: null,
+      total: 14,
+      items: [line(14, true, "theirs", "sam")],
+    };
+
+    expect(splitReceipt(untaxed).sharedCents).toBe(-2);
   });
 });

@@ -134,11 +134,14 @@ may vary if the Log says what changed and why.
    and QST each rounded separately, so the printed total can sit a cent either
    side of that number, and the old test cannot tell a real shortfall from the
    till's rounding. The rule, for a receipt with **nothing left shared** (every
-   item is not shared or `theirs`, so `itemsAddUp` guarantees the items make the
+   item is not shared or `theirs`, or is shared and costs nothing, **by cost**: price 0 and no
+   deposit, a `SAC 0,00` line; so `itemsAddUp` guarantees the items make the
    printed total): when the payment is **at or beyond the printed total, at its
    sign**, whatever the parts rounded apart leave over the payment is rounding, up
-   to 2 cents (one from printed against exact taxes, one from rounding the parts
-   apart), and the shared amount is 0. When the payment is **under the total**,
+   to `ceil(parts / 2)` cents, `parts` being the people charged plus one for the
+   not-shared amount when there are not-shared items (each part rounded apart is
+   off by at most half a cent, and the printed total by under a cent), and the
+   shared amount is 0. When the payment is **under the total**,
    in size at its sign, nothing is adjusted and the receipt is refused with the
    existing message. Two receipts the rule must handle, each a 10,00 $ taxable
    item not shared and a taxable item `theirs`, `checkReceipt` raising nothing on
@@ -604,6 +607,7 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     2,307 receipt is refused, as lg-32 refused it ("a receipt with something
     still shared takes no adjustment"). Whether some receipt with a shared item
     that lg-32's together test filed is now refused was not measured.
+    **Superseded 2026-10-18** (owner, Log): it is read by cost now.
   - **lg-32's tests, kept true.** In `books/test/receipts.test.ts`: "takes the
     cent the parts were rounded apart by off the not-shared amount", "does the
     same for the refund of it, negated", "still shows more than was charged,

@@ -283,8 +283,9 @@ export interface ReceiptSplit {
  * shared.
  *
  * **A few cents of rounding are not an excess** (lg-32, and lg-30 for the rule).
- * On a receipt with **nothing left shared** — every item not shared or
- * `theirs` — the items make the printed total (`itemsAddUp`), so when the
+ * On a receipt with **nothing left shared**, read by cost (lg-30, owner
+ * 2026-10-18) — every item not shared or `theirs`, or shared with price 0 and no
+ * deposit — the items make the printed total (`itemsAddUp`), so when the
  * payment is at or beyond that total, at its sign, whatever the parts rounded
  * apart leave over the payment is rounding: each part is rounded once, and the
  * printed taxes are each rounded once on the whole. The shared amount is then 0
@@ -320,7 +321,11 @@ export function splitReceipt(
   const charged = (): number => charges.reduce((sum, charge) => sum + charge.cents, 0);
   const sharedCents = paidCents - notSharedCents - charged();
 
-  const nothingShared = receipt.items.every((item) => item.share !== "shared");
+  // By cost, not by mark (lg-30 gate 1, F1): a shared item that costs nothing, a
+  // `SAC 0,00` line, leaves nothing shared to take the cent from.
+  const nothingShared = receipt.items.every(
+    (item) => item.share !== "shared" || (item.price === 0 && (item.deposit ?? 0) === 0),
+  );
   const parts = (notShared.length > 0 ? 1 : 0) + charges.length;
   const excess = sharedCents !== 0 && Math.sign(sharedCents) !== Math.sign(paidCents);
   // At or beyond the printed total in the payment's direction: a tip, or none.

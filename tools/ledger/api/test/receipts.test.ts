@@ -1800,3 +1800,69 @@ describe("the people the screen is not given (lg-30)", () => {
     expect(Object.keys(response.json<Record<string, unknown>>())).toEqual(["people"]);
   });
 });
+
+// lg-30, gate 1 F1, fixed at landing (owner, 2026-10-18): main files this receipt.
+describe("a free shared item beside a cent of rounding (lg-30, gate 1 F1)", () => {
+  test("files the charge alone, as the same receipt without the free item does", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+    const items = [
+      couponItem("VIN", 2_074, true, "not-shared"),
+      { ...couponItem("SAC 0,00", 0, false, "theirs"), share: "shared" as const },
+      couponItem("FROMAGE", 309, true, "theirs"),
+      couponItem("PAIN", 1_892, true, "theirs"),
+    ];
+
+    const response = await file(target, receipt.id, {
+      proposal: {
+        ...BASKET,
+        subtotal: 4_275,
+        gst: 214,
+        qst: 426,
+        total: 4_915,
+        items,
+      },
+      destination: asLine(4_915),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(storedLines(target)).toEqual([{ amount_cents: 2_531, charged_to: "sam" }]);
+  });
+});
+
+// lg-30, gate 1 F2, fixed at landing (owner, 2026-10-18): a free theirs item files
+// no line, so `addLine` never meets its name and only `chargedToOf` does.
+describe("a free theirs item names a person the household does not hold (lg-30, gate 1 F2)", () => {
+  test.each([
+    ["a member of another household", "zoe", "That person is not one of the household."],
+    ["a name nobody holds", "nobody", "That person is not one of the household."],
+    ["the payer", "alex", "A charge is owed by the other person, not by whoever paid."],
+  ])("refuses %s, and files nothing", async (_case, name, message) => {
+    const directory = memberDirectory(THREE);
+    const change = { by: "operator", at: new Date("2026-10-01T00:00:00Z") };
+    directory.addHousehold({ id: "away", name: "Another", ...change });
+    directory.addMember({
+      household: "away",
+      address: "zoe@example.test",
+      person: "zoe",
+      ...change,
+    });
+    const target = await start({ directory });
+    const receipt = await uploaded(target, ALEX);
+    const free = { ...couponItem("SAC 0,00", 0, false, "theirs"), chargedTo: name };
+    const basket = named(BASKET, "shared", "shared", "shared");
+
+    const refused = await file(target, receipt.id, {
+      proposal: { ...basket, items: [...basket.items, free] },
+      destination: asLine(2_476),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error).toMatchObject({ code: "BAD_REQUEST", message });
+    expect([
+      count(target, "period_lines"),
+      count(target, "receipt_filings"),
+      count(target, "receipt_items"),
+    ]).toEqual([0, 0, 0]);
+  });
+});
