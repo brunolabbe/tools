@@ -326,6 +326,16 @@ describe("GET /api/stats/spending", () => {
       "Pharmacy",
       "Restaurant",
       "Other",
+      "Property taxes",
+      "Electricity",
+      "Internet & phone",
+      "Subscriptions",
+      "Insurance",
+      "Home maintenance",
+      "Travel",
+      "Transport",
+      "Bank fees",
+      "Cash",
     ]);
     expect(categories[0]).toEqual({ id: groceries, name: "Groceries", retired: false });
   });
