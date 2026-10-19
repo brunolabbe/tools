@@ -1,0 +1,52 @@
+# repo-106's probe. DO NOT MERGE: this workflow exists on a throwaway pull
+# request and is deleted with its branch.
+#
+# It answers one question: where does `scripts/test/review-record.test.ts` spend
+# the ~121 s it takes on windows-latest, against ~21-41 s on ubuntu-latest. Three
+# readings per leg, each printed into the job log (the log is the record; there
+# is no artifact):
+#
+#   1. the spec alone, with vitest's verbose reporter and `--slowTestThreshold=0`
+#      so every test prints its own duration, not only the slow ones. No
+#      instrumentation: this is the per-test reading.
+#   2. one timed reading of `git`, `node` and `oxfmt` spawns, ten of each.
+#   3. the spec again with a preload that logs every `spawnSync` /
+#      `execFileSync`, so the count and time of the `oxfmt` and `git` spawns made
+#      inside the CLI children are known too. It is the instrumented run, so its
+#      durations are not the reading in (1).
+name: repo-106 probe
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    name: probe (${{ matrix.os }})
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: 1. review-record.test.ts, every test's duration
+        run: npx vitest run scripts/test/review-record.test.ts --reporter=verbose --slowTestThreshold=0
+
+      - name: 2. git, node and oxfmt spawn timings
+        if: always()
+        run: node scripts/probe/repo-106-spawn-timing.mjs timing
+
+      - name: 3. review-record.test.ts with every spawn logged
+        if: always()
+        run: node scripts/probe/repo-106-spawn-timing.mjs trace scripts/test/review-record.test.ts
