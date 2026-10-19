@@ -179,7 +179,7 @@ test("rows no rule filed are named as waiting in the inbox, with a button that o
   await store({ rowsAdded: 2, rowsAlreadyPresent: 0, tailBalanceCents: 210_000, rowsInInbox: 2 });
 
   const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
-  expect(card?.textContent).toContain("2 of the 2 rows added wait in the inbox");
+  expect(card?.textContent).toContain("All 2 rows added wait in the inbox");
   expect(card?.textContent).toContain("counts in neither bucket until you answer it");
   expect(card?.textContent).toContain("nothing is filed to Joint by default");
   fireEvent.click(screen.getByRole("button", { name: "Open the inbox" }));
@@ -236,4 +236,20 @@ test("a refused paste does not tell the shell anything was stored (lg-54)", asyn
 
   await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
   expect(onStored).not.toHaveBeenCalled();
+});
+
+test("one row added and waiting says the row waits, not '1 of the 1 rows' (lg-54)", async () => {
+  await store({ rowsAdded: 1, rowsAlreadyPresent: 0, tailBalanceCents: 210_000, rowsInInbox: 1 });
+
+  const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
+  expect(card?.textContent).toContain("The row added waits in the inbox");
+  expect(card?.textContent).not.toContain("1 of the 1");
+});
+
+test("every one of several rows added waiting says all of them wait (lg-54)", async () => {
+  await store({ rowsAdded: 5, rowsAlreadyPresent: 0, tailBalanceCents: 210_000, rowsInInbox: 5 });
+
+  const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
+  expect(card?.textContent).toContain("All 5 rows added wait in the inbox");
+  expect(card?.textContent).not.toContain("5 of the 5");
 });

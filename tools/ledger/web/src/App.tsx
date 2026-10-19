@@ -96,7 +96,7 @@ export function App(): React.ReactElement {
 
   // Asked again on every change of tab, and when a paste is stored (lg-54): a
   // person who stays on the paste screen sees the new number at once.
-  // A failure leaves the number out: the inbox says what went wrong when opened.
+  // A failure keeps the number shown before: the inbox says what went wrong when opened.
   useEffect(() => {
     const controller = new AbortController();
     fetchInbox(controller.signal)

@@ -173,10 +173,22 @@ function Filing({
   return (
     <>
       <p>
-        <strong>{report.rowsInInbox}</strong> of the {report.rowsAdded} rows added{" "}
-        {report.rowsInInbox === 1 ? "waits" : "wait"} in the inbox. A row in the inbox counts in
-        neither bucket until you answer it with a person and a bucket, and nothing is filed to Joint
-        by default.
+        {report.rowsInInbox === report.rowsAdded ? (
+          report.rowsAdded === 1 ? (
+            "The row added waits"
+          ) : (
+            <>
+              All <strong>{report.rowsInInbox}</strong> rows added wait
+            </>
+          )
+        ) : (
+          <>
+            <strong>{report.rowsInInbox}</strong> of the {report.rowsAdded} rows added{" "}
+            {report.rowsInInbox === 1 ? "waits" : "wait"}
+          </>
+        )}{" "}
+        in the inbox. A row in the inbox counts in neither bucket until you answer it with a person
+        and a bucket, and nothing is filed to Joint by default.
       </p>
       <button type="button" onClick={onOpenInbox}>
         Open the inbox

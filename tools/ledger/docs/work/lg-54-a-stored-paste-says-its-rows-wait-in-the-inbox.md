@@ -93,3 +93,26 @@ Two things hide it:
     fails 1 of 18 (the new count test); with `rowsInInbox: stored.rowsAdded`
     in `api/src/statements.ts`, `classifications.test.ts` plus `auto-file.test.ts`
     fail 3 of 59 (the three new report tests). Both restored; the tree is the commit.
+- 2026-10-19 — Fixed at landing by owner choice: gate 1, low (`nfr:maintainability`)
+  — "`Filing` in `web/src/statements/StatementPaste.tsx` renders (waiting,
+  added) = (1,1) as "1 of the 1 rows added waits in the inbox." The neighbouring
+  sentence pluralises correctly ("1 row added"), and no test stores a one-row
+  paste with a row waiting." The owner chose the first direction: the case
+  `rowsInInbox === rowsAdded` is worded on its own, "The row added waits in the
+  inbox." for one row and "All N rows added wait in the inbox." for N > 1; the
+  other cases keep "N of the M rows added wait(s)". Two web tests appended at the
+  end of `statement-paste.test.tsx`, (1,1) and (5,5).
+  `npx vitest run tools/ledger/web/test/statement-paste.test.tsx` → on 5b83df4a
+  with the two tests added, `Tests 2 failed | 13 passed (15)`, the (1,1) one with
+  `Received: "...1 of the 1 rows added waits in the inbox..."`; after the fix,
+  `Tests 15 passed (15)`. One existing assertion changed, the (2,2) one in "rows
+  no rule filed are named as waiting in the inbox, with a button that opens it
+  (lg-54)": "2 of the 2 rows added wait in the inbox" → "All 2 rows added wait in
+  the inbox".
+- 2026-10-19 — Fixed at landing by owner choice: gate 1, low (false text, safe
+  direction) — "the comment on `App`'s inbox-count effect says "A failure leaves
+  the number out". Measured: a failed re-fetch after a store keeps the earlier
+  "Inbox (2)"." The comment in `tools/ledger/web/src/App.tsx` now reads "A
+  failure keeps the number shown before: the inbox says what went wrong when
+  opened." `grep -c "leaves the number out" tools/ledger/web/src/App.tsx` → 0;
+  `grep -c "keeps the number shown before" tools/ledger/web/src/App.tsx` → 1.
