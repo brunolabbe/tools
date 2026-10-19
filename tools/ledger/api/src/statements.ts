@@ -27,20 +27,26 @@
  *   compares** (lg-40). Its row came in through a `statement_imports` row whose
  *   `source` is `'workbook'`, and carries the workbook's wording and no
  *   category, so it is never compared by description or category. Where the
- *   overlap reaches such rows, they are read day by day (`workbook-days.ts`):
- *   each stretch of consecutive workbook rows on one date, and the pasted rows
- *   in their positions, must hold the same amounts, counted with repeats, and
- *   end on the same balance, and each pasted row must be dated that day or a day
- *   either side. A paste may start or end partway through such a day: its rows
- *   there must be among the day's amounts and open from a balance the bank's day
- *   reaches at that point (`matchPart`), and the balances the workbook shows
- *   inside a day, which follow its own order, are never compared. So within a
- *   day the order may differ, a date a day off is accepted, two days off is not,
- *   and a day whose amounts differ by one row is not, even when it ends on the
- *   same balance. Two exceptions are refused whatever the paste holds: a day the
- *   workbook both re-dated and reordered (it is two runs, so it does not match),
- *   and a paste that starts and ends inside a day of more than
- *   `LONGEST_SEARCHED_DAY` rows (20), which is not searched. A row a paste
+ *   overlap reaches such rows, they are read day by day (`workbook-days.ts`),
+ *   a day being a **block**: consecutive workbook rows whose dates are at most
+ *   `WIDEST_BLOCK_DAYS` (2) days apart, cut where the workbook's date changes
+ *   or, between two rows it dates alike, where the bank's day ends, in
+ *   whichever cutting matches (lg-59). Each block, and the pasted rows in
+ *   their positions, must hold the same amounts, counted with repeats, and end
+ *   on the same balance, and each pasted row must be dated within a day of the
+ *   block's dates. A paste may start or end partway through such a day: its
+ *   rows there must be among the day's amounts and open from a balance the
+ *   bank's day reaches at that point (`matchPart`), and the balances the
+ *   workbook shows inside a day, which follow its own order, are never
+ *   compared. So within a day the order may differ, a date a day off is
+ *   accepted, two days off from every date of the block is not, and a day whose
+ *   amounts differ by one row is not, even when it ends on the same balance. A
+ *   day the workbook both re-dated and reordered is one block, so it matches:
+ *   the bank's −5.00, −10.00, +10.00 on the 21st, listed by the workbook as
+ *   −10.00 on the 21st, −5.00 on the 20th, +10.00 on the 21st. A part that
+ *   starts and ends inside a block of more than `LONGEST_SEARCHED_DAY` rows
+ *   (20) is not searched, so that block does not admit it, though a cutting
+ *   into smaller blocks still may. A row a paste
  *   stored is still compared field for field, in order. Every reading this
  *   makes possible is a reading like any other: two of them are refused as
  *   ambiguous. The workbook's rows keep their wording and dates; only the rows
@@ -57,11 +63,17 @@
 
 import { AppError } from "@ledger/contract";
 import type { ImportStatementReport } from "@ledger/contract";
-import { dayAfter, formatCents, parseStatement } from "@ledger/books";
+import { formatCents, parseStatement } from "@ledger/books";
 import type { StatementRow } from "@ledger/books";
 import type { Database } from "better-sqlite3";
 import { classifyAdded, lastRowId } from "./classifications.ts";
-import { LONGEST_SEARCHED_DAY, dayBefore, matchPart } from "./workbook-days.ts";
+import {
+  LONGEST_SEARCHED_DAY,
+  WIDEST_BLOCK_DAYS,
+  dayBefore,
+  daysAfter,
+  matchStretch,
+} from "./workbook-days.ts";
 
 /**
  * A stored row: the parser's row, with `seq` now the position in the whole
@@ -257,30 +269,37 @@ function candidates(db: Database, row: StatementRow): StoredRow[] {
 }
 
 /**
- * Every workbook row a paste starting on `row` could start on: dated that day
- * or a day either side, since the workbook's day may list `row` anywhere in it.
+ * Every workbook row a paste starting on `row` could start on: the workbook's
+ * day may list `row` anywhere in it, and a day is a block whose dates are up to
+ * `WIDEST_BLOCK_DAYS` apart, each pasted row within a day of them, so a row of
+ * that block may be dated as far from `row` as one more day than that.
  */
 function workbookStarts(db: Database, row: StatementRow): StoredRow[] {
+  const reach = WIDEST_BLOCK_DAYS + 1;
   return (
     db
-      .prepare(`${SELECT} WHERE source = 'workbook' AND date IN (?, ?, ?) ORDER BY seq DESC`)
-      .all(dayBefore(row.date), row.date, dayAfter(row.date)) as Columns[]
+      .prepare(`${SELECT} WHERE source = 'workbook' AND date >= ? AND date <= ? ORDER BY seq DESC`)
+      .all(daysAfter(row.date, -reach), daysAfter(row.date, reach)) as Columns[]
   ).map(toRow);
 }
 
 /**
- * The workbook rows of `edge`'s day on one side of it, oldest first: the rest of
- * a day a stretch of stored rows starts or ends partway through.
+ * The workbook rows next to `edge` on one side of it, oldest first, as far as
+ * any is dated within `WIDEST_BLOCK_DAYS` of it: every row a block holding
+ * `edge` could hold, the rest of a day a stretch of stored rows starts or ends
+ * partway through.
  */
-function restOfDay(db: Database, edge: StoredRow, side: "before" | "after"): StoredRow[] {
+function nearby(db: Database, edge: StoredRow, side: "before" | "after"): StoredRow[] {
   const query =
     side === "before"
       ? `${SELECT} WHERE seq < ? ORDER BY seq DESC`
       : `${SELECT} WHERE seq > ? ORDER BY seq ASC`;
+  const lowest = daysAfter(edge.date, -WIDEST_BLOCK_DAYS);
+  const highest = daysAfter(edge.date, WIDEST_BLOCK_DAYS);
   const found: StoredRow[] = [];
   for (const columns of db.prepare(query).iterate(edge.seq) as IterableIterator<Columns>) {
     const row = toRow(columns);
-    if (!row.fromWorkbook || row.date !== edge.date) break;
+    if (!row.fromWorkbook || row.date < lowest || row.date > highest) break;
     found.push(row);
   }
   return side === "before" ? found.toReversed() : found;
@@ -288,8 +307,8 @@ function restOfDay(db: Database, edge: StoredRow, side: "before" | "after"): Sto
 
 /**
  * Whether these stored rows are the pasted rows in their places: a row a paste
- * stored field for field, and a stretch of workbook rows on one date day by day.
- * Such a stretch is weighed against its whole day (`matchPart`), the rows the
+ * stored field for field, and the workbook's rows a block at a time
+ * (`matchStretch`, lg-59). A block at either end is weighed whole, the rows the
  * stretch leaves out included, since a paste may start or end partway through a
  * day whose order the workbook does not keep.
  */
@@ -298,26 +317,16 @@ function overlaps(
   stored: readonly StoredRow[],
   pasted: readonly StatementRow[],
 ): boolean {
-  if (stored.length !== pasted.length) return false;
-  let start = 0;
-  while (start < stored.length) {
-    const first = stored[start] as StoredRow;
-    if (!first.fromWorkbook) {
-      if (!sameRow(first, pasted[start] as StatementRow)) return false;
-      start += 1;
-      continue;
-    }
-    let end = start + 1;
-    while (stored[end]?.fromWorkbook === true && stored[end]?.date === first.date) end += 1;
-    const earlier = start === 0 ? restOfDay(db, first, "before") : [];
-    const later = end === stored.length ? restOfDay(db, stored[end - 1] as StoredRow, "after") : [];
-    const day = [...earlier, ...stored.slice(start, end), ...later];
-    if (!matchPart(day, earlier.length, pasted.slice(start, end), "a day either side")) {
-      return false;
-    }
-    start = end;
+  const oldest = stored[0];
+  const newest = stored.at(-1);
+  if (stored.length !== pasted.length || oldest === undefined || newest === undefined) {
+    return stored.length === pasted.length;
   }
-  return true;
+  const earlier = oldest.fromWorkbook ? nearby(db, oldest, "before") : [];
+  const later = newest.fromWorkbook ? nearby(db, newest, "after") : [];
+  return matchStretch([...earlier, ...stored, ...later], earlier.length, pasted, (offset) =>
+    sameRow(stored[offset] as StoredRow, pasted[offset] as StatementRow),
+  );
 }
 
 /** Up to `limit` stored rows from position `from` on, oldest first. */
@@ -482,7 +491,7 @@ function workbookMismatch(newest: StoredRow, rows: readonly StatementRow[]): App
       : ` The pasted row ${describeRow(continuing)} opens from the ${left} it left: a paste that starts on that row continues the workbook.`;
   return new AppError(
     "STATEMENT_CHAIN_BROKEN",
-    `The paste does not line up with the rows imported from the workbook, which end on ${describeRow(newest)}. Those are compared by amount and balance a day at a time: a day's rows in any order, each dated within a day of the workbook's, and a paste may start or end partway through a day, except that a day the workbook both re-dated and reordered is refused, and so is a paste that starts and ends inside a day of more than ${String(LONGEST_SEARCHED_DAY)} rows. Their wording is never compared.${next}`,
+    `The paste does not line up with the rows imported from the workbook, which end on ${describeRow(newest)}. Those are compared by amount and balance a day at a time, a day being the workbook's rows dated no more than ${String(WIDEST_BLOCK_DAYS)} days apart: a day's rows in any order, each dated within a day of the workbook's dates for that day, and a paste may start or end partway through a day, except that a paste that starts and ends inside a day of more than ${String(LONGEST_SEARCHED_DAY)} rows is not searched there. Their wording is never compared.${next}`,
     {
       details: {
         date: newest.date,
