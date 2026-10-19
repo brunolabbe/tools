@@ -111,3 +111,6 @@ it costs, measured at filing:
   default), which the first filing had as "read the limit". The limit on
   refusals by client address moved here from lg-20, since only this ticket lets
   a stranger reach the check.
+- 2026-10-19 — Asked again while clearing the decision queue; the owner keeps it
+  deferred. Still `needs-decision`: the allowlist stays until the owner wants the
+  ledger open to anyone.
