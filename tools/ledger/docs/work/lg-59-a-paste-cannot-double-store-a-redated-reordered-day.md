@@ -294,9 +294,15 @@ takes one from probe c's output.
   −5.00's balance. It is lg-59's failure, a refused true reading leaving a
   false one, reached through a date two days off. The probes never date a row
   two days off, so they do not count it, and lg-40's rule refuses the same true
-  reading. No ticket filed: the bank's date is the truth, and a workbook date
-  two days off is outside what either rule tolerates. The test of a two-days-off
-  row uses amounts that do not cancel, so it shows the refusal it names.
+  reading. ~~No ticket filed: the bank's date is the truth, and a workbook date
+  two days off is outside what either rule tolerates.~~ _Corrected 2026-10-19
+  (gate 1, F2): that settled in prose what was the owner's to decide, and it
+  left out that lg-40's rule refuses the whole paste where this one stores it.
+  Gate 1 counted 172 wrong accepts at this head that the base did not make, in
+  108,000 random trials with offsets of two and three days; 17 of them drop a
+  new bank row. The owner chose to record it and file lg-61; the figures are in
+  the entry of 2026-10-19._ The test of a two-days-off row uses amounts that do
+  not cancel, so it shows the refusal it names.
 
   **Probe c and probe c2 on `115bc190`.** These are the gate's probes, seed 11,
   as in the step-1 entry. The cell lines are byte-identical to experiment M2's
@@ -342,3 +348,136 @@ takes one from probe c's output.
   refusal, not a reading, and no test or probe reached it.
 
   **Fold-in:** nothing else was made free.
+
+- 2026-10-18 — **the owner's answers to gate 1** (Sonnet 5.5, FAIL at
+  `5349ba45`), relayed by the orchestrator.
+  - **F1**, in-tolerance wrong accepts where two bank days meet on one
+    workbook date. The question: "lg-59 gate 1 … is FAIL … What do you want?"
+    The options: "A: bounded extra cut (gate's rec)", "B: keep the rule, state
+    the limit" and "Park lg-59 unmerged". The owner chose **A**. This is the
+    owner's **amendment to the M2 choice**: a block no longer ends only where the
+    workbook's date changes.
+  - **F2**, wrong accepts outside the tolerance. The options: "Record it, file a
+    2–3-day probe ticket (Recommended)", "Narrow the block window in this
+    branch" and "Record it, file nothing". The owner chose **record it and file
+    the probe**, as lg-61.
+
+- 2026-10-19 — builder (Opus 5.5), **gate 1's round** at `69d2470c`, after
+  merging `main` at `f58473f4` (`cc7c860c`; lg-41 and lg-52 touched ledger code,
+  not these files).
+
+  **F1, the cut as written** (`dayEnds` in `workbook-days.ts`). Between two
+  workbook rows of one date, a block may also end where the pasted rows' date
+  changes there and the workbook's balance after the row equals the pasted
+  row's. Only inside the stretch: at its edges the bank's neighbouring row is not
+  in the paste, and lg-40's partial-block reading covers a day the paste starts or
+  ends inside.
+  - The balance condition removes no reading. A block ending there must close
+    on that balance anyway, whether it is whole or the stretch's first. The
+    condition only keeps the search off cuts that cannot match.
+  - **Why this bound and not the other one gate 1 named** (any cut inside a run
+    of one date of at most `LONGEST_SEARCHED_DAY` rows). That bound adds a cut
+    at every row of a short run, the quadratic search the gate measured at 298 s
+    for the unbounded form, up to 20 rows a date. It would also admit readings
+    that split one bank day in two. The bank's own date change bounds the extra
+    cuts by the paste's days, and it is where a day of the bank's can end.
+  - **What it admits:** R7's and R5's true readings. R7 is now refused as "two
+    ways" (readings of 1 and 3 stored), not stored with the wrong split; R5 is
+    accepted as 3 present and 1 new.
+  - **What it still refuses:** a cut inside a run of one date where the bank's
+    date does not change, or the balances differ.
+
+  **The gate's 5-row enumeration** (`gate-lg59-exh.test.ts`, `GATE_MODE=
+tolerance`, head only with `GATE_NOBASE=1`, 20 shards). It ran on this round's
+  source before the two header sentences and the `workbookMismatch` wording
+  changed, which touch no reading:
+
+  | space                    | variants | gate head `5349ba45`: correct / ambiguous / refused / wrong | this round                    |
+  | ------------------------ | -------- | ----------------------------------------------------------- | ----------------------------- |
+  | 5 rows, ±10.00           | 554,088  | 202,880 / 351,176 / 0 / **32**                              | 202,728 / 351,360 / 0 / **0** |
+  | 4 rows, ±10.00           | 27,552   | 13,106 / 14,446 / 0 / 0                                     | identical                     |
+  | 4 rows, ±10.00 and −5.00 | 163,296  | 123,876 / 39,420 / 0 / 0                                    | identical                     |
+
+  The 32 wrong accepts become ambiguous refusals. 152 correct readings become
+  ambiguous too, for +184 ambiguous in all, against +274 and −242 correct for the
+  gate's unbounded cut.
+
+  **The gate's timing harness** (`gate-lg59-time.test.ts`), 40 and 200 rows a
+  date, every amount pattern and mode, run alone. These are wall times, ms, and
+  every outcome matches the gate head's where it has one:
+
+  | pasted rows | rows a date | amounts     | gate base | gate head | this round |
+  | ----------- | ----------- | ----------- | --------- | --------- | ---------- |
+  | 1,000       | 40          | const, tail | 187       | 1,083     | 1,169      |
+  | 1,000       | 40          | alt, tail   | 214       | 1,329     | 2,282      |
+  | 4,000       | 40          | alt, tail   | 890       | 5,417     | 9,132      |
+  | 8,000       | 40          | const, tail | 1,791     | 9,799     | 10,231     |
+  | 8,000       | 40          | alt, tail   | 1,962     | 12,035    | 18,918     |
+  | 2,000       | 200         | const, tail | 1,843     | 12,246    | 13,030     |
+  | 2,000       | 200         | alt, inside | 2,283     | 19,666    | 29,195     |
+
+  Constant and period-five amounts cost what they did. Alternating amounts cost
+  about 1.5 to 1.7 times the gate's head: there the balances repeat, so a wrong
+  overlap meets more cuts the balance check lets through. The gate's unbounded
+  cut took 298,375 ms and 570,647 ms on the two 1,000-row shapes above.
+
+  **Probes c and c2 at `69d2470c`**, seed 11, against `115bc190`. Each cell is
+  `correct / wrongAccept / ambiguous / refusedOther`, then the change in
+  ambiguous from `115bc190`. The lg-40 column is in the entry above.
+
+  | cell                | `115bc190`         | `69d2470c`         | ambiguous |
+  | ------------------- | ------------------ | ------------------ | --------- |
+  | c distinct/plain    | 1498 / 0 / 2 / 0   | 1498 / 0 / 2 / 0   | 0         |
+  | c distinct/reorder  | 1499 / 0 / 1 / 0   | 1499 / 0 / 1 / 0   | 0         |
+  | c distinct/shift    | 1498 / 0 / 2 / 0   | 1498 / 0 / 2 / 0   | 0         |
+  | c distinct/both     | 1499 / 0 / 1 / 0   | 1499 / 0 / 1 / 0   | 0         |
+  | c repeating/plain   | 1154 / 0 / 346 / 0 | 1154 / 0 / 346 / 0 | 0         |
+  | c repeating/reorder | 1156 / 0 / 344 / 0 | 1156 / 0 / 344 / 0 | 0         |
+  | c repeating/shift   | 1165 / 0 / 335 / 0 | 1164 / 0 / 336 / 0 | +1        |
+  | c repeating/both    | 1174 / 0 / 326 / 0 | 1172 / 0 / 328 / 0 | +2        |
+  | c tiny/plain        | 900 / 0 / 600 / 0  | 899 / 0 / 601 / 0  | +1        |
+  | c tiny/reorder      | 862 / 0 / 638 / 0  | 858 / 0 / 642 / 0  | +4        |
+  | c tiny/shift        | 927 / 0 / 573 / 0  | 923 / 0 / 577 / 0  | +4        |
+  | c tiny/both         | 881 / 0 / 619 / 0  | 878 / 0 / 622 / 0  | +3        |
+  | c2 distinct         | 1497 / 0 / 3 / 0   | 1497 / 0 / 3 / 0   | 0         |
+  | c2 repeating        | 1198 / 0 / 302 / 0 | 1196 / 0 / 304 / 0 | +2        |
+  | c2 tiny             | 884 / 0 / 616 / 0  | 877 / 0 / 623 / 0  | +7        |
+
+  Against lg-40's head, the `both` cells' wrong accepts are 0 and 0, against 22
+  and 31, and their refused correct pastes are 0, 0 and 0, against 108, 65 and 33.
+
+  **F2, the residual outside the tolerance, as gate 1 measured it at
+  `5349ba45`.** This round does not change it: R1 and R8 reproduce unchanged by
+  the gate's `gate-lg59-repro.test.ts` on this source.
+  - In 108,000 random trials with workbook rows dated up to two or three days
+    off: 1,116 wrong accepts at this head against 2,852 at lg-40's. 172 of them
+    happen at this head only, and 17 of those drop a new bank row.
+  - Enumerated with one workbook row 2 or 3 days off: 4 rows over ±5/±10, 5,280
+    of 163,840 wrong (224 head only) against 11,776; 5 rows over ±10, 4,912 of
+    81,920 (626 head only) against 11,424.
+
+  Filed as **lg-61**, `ready`, with R1 and R8 as its reproductions.
+
+  **F3, the mutants**, each applied alone and the spec run, restored from
+  `69d2470c` after each (`mutate.mjs` in this session's scratch directory):
+  - `workbookStarts` reach 3 → 2: red "a paste wholly inside the history may
+    start three days from the workbook row it starts on".
+  - `nearby` lower window 2 → 1: red "a stretch's first block takes in a
+    workbook row two days before it", and R5.
+  - `nearby` upper window 2 → 1: red "a stretch's last block takes in a
+    workbook row two days after it".
+  - blocks wholly outside the stretch weighed like the rest: red "a row next to
+    the stretch that no block holding the stretch can take in is left out".
+  - a cut at every index: red "and nowhere else inside a run of one date".
+  - this round's cut removed: red "between two rows of one date, a block may end
+    where the bank's date changes", R7 and R5.
+
+  With `5349ba45`'s two source files in place, the spec has 3 of 34 red: R7, R5
+  and the cut test. They are green at `69d2470c`.
+
+  **The low findings.** The two false sentences are corrected:
+  `workbook-days.ts` now says a reading a block makes possible counts like any
+  other, and `statements.ts` and the `workbookMismatch` message now say a part
+  inside a block of more than 20 rows is not searched, not that the paste is
+  refused. The performance low and the `DateWindow` low stay recorded, as gate 1
+  wrote them.
