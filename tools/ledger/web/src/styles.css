@@ -739,3 +739,27 @@ svg.chart .selected-band {
   border-left: 3px solid var(--accent);
   padding-left: 0.5rem;
 }
+
+/*
+ * The history screen (lg-41). On a phone the filters fold behind one toggle and
+ * the rows stay one column each; from 48rem the toggle goes and the filters sit in
+ * two columns above the list.
+ */
+.filters:not(.open) {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .filters:not(.open) {
+    display: block;
+  }
+
+  .filters-toggle {
+    display: none;
+  }
+
+  .filters .rule-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 1rem;
+  }
+}

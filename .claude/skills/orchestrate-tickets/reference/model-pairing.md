@@ -7,6 +7,99 @@ had been lines 11 to 151 of a 296-line file loaded into every builder — narrat
 that no builder needs to build, on the page that costs every dispatch. Nothing
 below is an instruction; the table is the instruction.
 
+## 2026-10-18: a fresh gate 2, three tickets at once, batches by tool, no suite before the gate, a sweep budget
+
+**The owner chose both on 2026-10-18** (repo-111), after asking why gates take
+so long. The options were put as "Cut the waiting", then "Fresh narrow gate 2"
+(recommended) and "Cap concurrent tickets"; the owner took both, and rejected
+a direct builder–gate channel as making the process less trustable. The cap's
+size, three, is the recommended default, and the one parameter the owner may
+change.
+
+**Until then gate 2 was the gate-1 agent, woken with `SendMessage`, on the
+reasoning that "a woken gate costs a fraction of a fresh one".** lg-40 (PR
+#548, one-ticket batch on 960f4b26) measured the opposite, from the gate's
+transcript (`agent-a5490055183b61b89`, split at the wake, 04:27:08Z):
+
+| | Responses | Cache-read tokens | Per response | Active |
+| --- | --- | --- | --- | --- |
+| gate 1 | 99 | 16,953,045 | 171,242 | 31 min |
+| gate 2, woken | 73 | 28,624,318 | 392,113 | 38 min |
+
+The wake was 63% of the agent's cache reads. Every turn re-read gate 1's
+transcript, and 18.8 of gate 2's 24 minutes inside tool calls were waits on
+background sweeps, each poll a turn: it re-ran gate 1's exhaustive probes at
+the new head and at the gated sha as a control, beside six new attacks. The
+agent sat idle for the 39-minute round between the two, which cost nothing but
+inflates the wall column: gate agents in the history average 24 min active
+over 94 min wall (n=107), single-gate agents 14/26, two-gate agents 27/93. The
+recipe that reproduces the table is in repo-111's Log. **No fresh gate 2 has
+been measured yet**: the first batch under the rule is the reading, against
+lg-40's 28.6 M.
+
+**The cap answers the orchestrator's own queue.** lg-40's chain was build 26
+min, gate 1 31, round 36, gate 2 38, landing 8, and its five relays 7–8 min:
+about 5% of 147 min on a one-ticket batch. The tools-e0 batch of the same day
+(eleven pull requests, base 029641b4) kept its orchestrator 2h28m04s active in
+2h47m19s of wall, so every relay waited behind others; dl-114's gate
+(2026-10-13) was 15 min active over 9h42m wall, with two cold restarts.
+
+**Intake offers batches by tool, with their open decisions** (repo-111, owner,
+2026-10-18). The options were one question whose options are batches by tool
+(recommended, chosen), a separate tool question first, and the orchestrator
+picking when the owner names no tool. The reason relayed with the decision
+was that lg-30, lg-32, lg-33, lg-39 and lg-40 each came back from gate 1 with
+a `med` that was an open decision, at about 74 minutes of round and gate 2 on
+lg-40. None of those five tickets carried a `## Decision` heading: the gates
+raised those decisions from their own probes, so an intake question could not
+have asked them. What the rule does buy, a question the brief already poses
+answered before the build, is unmeasured. Re-asked with that count, the
+owner kept the rule as built over trimming it to batches by tool.
+
+**The builder pushes before the slow checks, and no round runs a suite**
+(repo-111, owner, 2026-10-18: "1, 2, 3 and 4 seem like real wins"). A ticket's
+suites now run on CI against the draft and in the landing's `--land`
+preflight, where they ran at the build, at each round and at the landing
+besides CI. The trade is that a gate can open a head CI has not proven, which
+it already grades `unproven (gate)`. `preflight.mjs --only` cannot run
+`npm run check` without the suites, so the builder runs `npm run check` itself
+beside `--only mergeTree,ciCommands,review,title` (16 s on repo-111's branch);
+a flag that skips only the suites is left to a later ticket. Owed by the first
+batch under the rule: per ticket, whether CI on the draft went red on
+something the dropped local run would have caught.
+
+**Re-asked the same day, the round's preflight came back** (owner,
+2026-10-18: "keep 3, revert 4", recommended, over "keep both" and "revert
+both"). The case for dropping it rested on a ten-to-twelve-minute downloader
+preflight. dl-129's filing (branch `dl-129-trim-the-browser-resolver-suite`,
+PR #568) measured it at `335efcd4`: `npm test -- --project downloader` ran
+84.30, 104.16 and 101.88 s (124 files, 2,590 tests; the last two beside other
+agents' vitest workers), `npm run check` 9 s on a built tree, and CI's whole
+`npm test` step 231 s on ubuntu and 388 s on Windows (run 39126762378). The
+older figures predate dl-117 (merged 2026-10-16). At two to three minutes a
+round's preflight is cheap against a round, so only the first build skips the
+suites.
+
+**A gate dispatch carries a sweep budget** (repo-111, owner, 2026-10-18).
+Options: fold it into repo-111 (recommended, chosen), file it as repo-112, or
+leave it. lg-59's gate 1, dispatched 21:24:40Z and read at 22:57Z while it
+still ran, had been asked to re-run lg-40's two probes at seed 11 on head and
+base and then "build your own pastes" over several dimensions, with no bound
+on the population or the time. By 22:57:28Z it had made 155 responses
+(30,347,322 cache-read tokens: 196k a response on average, and about 318k a
+turn by the last two) and spent 49.5 minutes in waits on its own sweeps, four
+finished at the 600 s cap and a fifth open. lg-40's gate 2 had the same shape
+(18.8 minutes of sweep waits, above). The budget is 15 minutes for all of a
+gate's sweeps unless the dispatch names another, and a search the
+orchestrator cannot size becomes a measurement ticket.
+
+**A third gate is a fresh dispatch too**, for gate 2's reason, taken under
+repo-111 after its builder noted that no page said how a gate 3 runs.
+
+Two figures: [flow.drawio.svg](flow.drawio.svg), the loop as it runs under
+this change, and [lg-40-timeline.drawio.svg](lg-40-timeline.drawio.svg),
+lg-40's clock, the measurement that motivated it.
+
 ## 2026-10-10: Haiku 5.5 replaces Haiku 4.5
 
 **`builder-mechanical` is pinned to `claude-haiku-5-5`**, at the owner's

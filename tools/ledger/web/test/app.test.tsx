@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { InboxRow } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
@@ -150,6 +150,11 @@ vi.mock("../src/api/spending.ts", () => ({
   fetchSpendingMap: vi.fn().mockResolvedValue([]),
   fetchUncategorisedRows: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
   setRowSpendingCategory: vi.fn(),
+}));
+
+// lg-41: the history tab lists the bank rows through its own client module.
+vi.mock("../src/api/rows.ts", () => ({
+  fetchRows: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
 }));
 
 test("the categories tab shows the spending categories screen", async () => {
@@ -333,4 +338,19 @@ test("the shell hands every screen the shown names, asked again on a change of t
     await screen.findByText("Ratio in effect: Alex 60.0000 % · sam 40.0000 %, since 2025-01-01."),
   ).toBeTruthy();
   expect(screen.getByLabelText("Alex’s salary")).toBeTruthy();
+});
+
+// lg-41: after Period, a screen listing every bank row.
+test("the history tab follows the period tab and shows the history screen (lg-41)", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  render(<App />);
+
+  const tabs = within(screen.getByRole("navigation", { name: "Screens" }))
+    .getAllByRole("button")
+    .map((button) => button.textContent);
+  expect(tabs.indexOf("History")).toBe(tabs.indexOf("Period") + 1);
+  fireEvent.click(screen.getByRole("button", { name: "History" }));
+
+  expect(await screen.findByRole("heading", { name: "History" })).toBeTruthy();
+  expect(await screen.findByText("0 rows match.")).toBeTruthy();
 });

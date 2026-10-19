@@ -10,9 +10,12 @@
  * routes (`routes/households.ts`), each change signed by whoever made it.
  *
  * Every write is checked here first, so a refusal carries a sentence an
- * operator can act on, and again by the schema's triggers
- * (`db/directory-schema.ts`), so a writer that skips this class is refused all
- * the same.
+ * operator can act on. The schema checks less (`db/directory-schema.ts`): a
+ * household id's shape, a household name's and a person's length and trim, that
+ * an address is lower-cased, trimmed and has an `@` with something either side,
+ * and the membership rules its triggers hold. It does not check an address's
+ * character set, so a writer that skips this class is not refused for a control
+ * character in one (lg-52).
  */
 
 import { mkdirSync } from "node:fs";
@@ -27,7 +30,14 @@ const HOUSEHOLD_ID = /^[a-z]{1,32}$/u;
 const RESERVED_IDS = new Set(["con", "prn", "aux", "nul"]);
 
 /** One `@`, something either side, and nothing a list or a shell would split on. */
-const ADDRESS = /^[^\s@,;]+@[^\s@,;]+$/u;
+const ADDRESS_SHAPE = /^[^\s@,;]+@[^\s@,;]+$/u;
+/**
+ * The C0 controls and DEL, which `\s` does not cover beyond tab and newline: an
+ * address carrying one is stored and then no Access token can name it (lg-52).
+ * The C1 controls and the zero-width characters are lg-57's.
+ */
+// oxlint-disable-next-line no-control-regex -- the controls are the point
+const CONTROL = /[\u0000-\u001f\u007f]/u;
 /** The sentence for an address that is not one, whichever method was given it. */
 const NOT_AN_ADDRESS = "That is not an email address.";
 
@@ -36,8 +46,19 @@ export const OPERATOR = "operator";
 
 /** A lower-cased address, or `undefined` when the text is not one. */
 export function readAddress(raw: string): string | undefined {
+  const address = readStoredAddress(raw);
+  return address !== undefined && !CONTROL.test(address) ? address : undefined;
+}
+
+/**
+ * `readAddress` without the control-character refusal, for naming a row that
+ * already stands: a directory made before lg-52 may hold an address with a NUL,
+ * and removal must still be able to take it out. It refuses what removal
+ * refused before.
+ */
+function readStoredAddress(raw: string): string | undefined {
   const address = raw.trim().toLowerCase();
-  return ADDRESS.test(address) ? address : undefined;
+  return ADDRESS_SHAPE.test(address) ? address : undefined;
 }
 
 export function isHouseholdId(value: string): boolean {
@@ -402,12 +423,13 @@ export class Directory {
    * Takes an address out of its household — out of `household`, when one is
    * named, and refused if it is not there, so a screen that has gone stale
    * cannot remove an address from a household it has since moved to. Returns
-   * the membership it ended.
+   * the membership it ended. The address is read without the control-character
+   * refusal, so a row that already holds one can still be removed (lg-52).
    */
   removeMember(member: { address: string; household?: string } & Change): Member {
     refuseUnlessChange(member);
     if (typeof member.address !== "string") refuse("The address is not a string.");
-    const address = readAddress(member.address);
+    const address = readStoredAddress(member.address);
     if (address === undefined) refuse(NOT_AN_ADDRESS);
     return this.#db
       .transaction(() => {

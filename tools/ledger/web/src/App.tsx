@@ -34,6 +34,7 @@ import { fetchAdminHouseholds } from "./api/households.ts";
 import { fetchInbox } from "./api/inbox.ts";
 import { fetchMe } from "./api/me.ts";
 import { fetchPeopleNames } from "./api/people.ts";
+import { History } from "./history/History.tsx";
 import { Home } from "./home/Home.tsx";
 import { Household } from "./household/Household.tsx";
 import { Inbox } from "./inbox/Inbox.tsx";
@@ -52,6 +53,7 @@ type Tab =
   | "home"
   | "stats"
   | "period"
+  | "history"
   | "receipt"
   | "paste"
   | "inbox"
@@ -156,6 +158,9 @@ export function App(): React.ReactElement {
         <button type="button" aria-pressed={tab === "period"} onClick={() => setTab("period")}>
           Period
         </button>
+        <button type="button" aria-pressed={tab === "history"} onClick={() => setTab("history")}>
+          History
+        </button>
         <button type="button" aria-pressed={tab === "receipt"} onClick={() => setTab("receipt")}>
           Receipt
         </button>
@@ -194,6 +199,7 @@ export function App(): React.ReactElement {
           {tab === "home" && <Home />}
           {tab === "stats" && <Stats />}
           {tab === "period" && <Periods />}
+          {tab === "history" && <History />}
           {tab === "receipt" && <Receipts />}
           {tab === "paste" && <StatementPaste />}
           {tab === "inbox" && <Inbox onCount={setWaiting} />}

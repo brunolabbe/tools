@@ -3,7 +3,7 @@ id: lg-52
 tool: ledger
 title: Refuse control characters in a member's address, for every writer
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -151,10 +151,10 @@ every writer refuses them. **Every writer of an address on `main`:**
   command's `remove` verb. It reads its address through `readAddress` too, which
   matters below.
 - `LEDGER_ADMINS` in `config.ts`, which reads each entry through `readAddress`.
-- Unmerged, on PR #546: `Directory.changeAddress` (lg-34), whose `to` goes
-  through `readAddress` as `addMember`'s does. It is covered by this change once
-  both are on `main`; until then it is the gate's example and not a writer on
-  `main`. Whoever lands second checks the other.
+- `Directory.changeAddress` (lg-34, merged as PR #546, `dbf4cd5f`), whose `to`
+  goes through `readAddress` as `addMember`'s does, so it inherits the change.
+  Its `from` goes through `readAddress` too, and is not the removal exception of
+  item 4 (see the Log).
 
 `DEV_IDENTITY` is lower-cased and never goes through `readAddress`, but it is
 refused at boot unless the directory already has a member by that address, so it
@@ -323,6 +323,32 @@ says so, and the wider set is lg-57.
 - If PR #546 has merged by then, `changeAddress` with `to: "a@b\u0000c"` is
   refused by a test; if not, the Log says it was not checked.
 
+## Review
+
+**Gate: PASS** — 2026-10-18 · `335efcd4..6566fb3d` · Opus 5.5, depth full
+
+| Done when                                                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `readAddress` refuses NUL, the other C0 controls and DEL; `a@b.test` still passes                                                               | `api/test/directory.test.ts` › "is not an address to readAddress, in the local part, the domain or at the end, while a clean one is" ✓ — goes red when `CONTROL` is taken out of `readAddress`                                                                                                                                                           |
+| Both add routes answer `400` and write no row, red at the base first                                                                            | `api/test/households.test.ts` › "is refused 400 by the admin's add route and by a member's, and no row is written" ✓ — one assertion per route inside the loop; red with `directory.ts` from `335efcd4` (11 of 116 red over the four touched files)                                                                                                      |
+| The `member` verb exits non-zero and writes no row                                                                                              | `api/test/household-command.test.ts` › "refuses an address with %s on the member verb, exits non-zero and writes no row" (NUL, ESC, DEL) ✓                                                                                                                                                                                                               |
+| A `LEDGER_ADMINS` entry with one stops the boot, naming its position and not the entry                                                          | `api/test/config-access.test.ts` › "refuses an admin entry with a control character, naming its position and not the entry" ✓; also measured as a real process, ESC and DEL: exit 2, "LEDGER_ADMINS entry 2 is not an address."                                                                                                                          |
+| A NUL row inserted past `Directory` is removed by `removeMember` and the `remove` verb, by a test that fails if removal shares the strict check | `api/test/directory.test.ts` › "is no obstacle to removing a row that already stands with one, which the schema let in" ✓ and `api/test/household-command.test.ts` › "still removes a row that already holds a NUL, which the schema let in" ✓ — both red (with the admin remove route's test, 3 of 116) when `removeMember` reads through `readAddress` |
+| Removal keeps refusing the five inputs with `BAD_REQUEST`, and `readAddress` keeps returning `undefined` for them                               | `api/test/directory.test.ts` › "removal still refuses %j as BAD_REQUEST" (one per input) ✓ and "keeps returning undefined for what it refused before" ✓                                                                                                                                                                                                  |
+| `directory.ts`'s header no longer claims the schema checks more than it does                                                                    | **verified** by reading the header of `api/src/directory.ts`; it now under-states the schema (F3)                                                                                                                                                                                                                                                        |
+| The report says item 6's query was not run                                                                                                      | **verified** — the Log's last entry: "Not run: item 6's query against a deployed directory; the owner's."                                                                                                                                                                                                                                                |
+| With #546 merged, `changeAddress` to `a@b\u0000c` is refused by a test                                                                          | `api/test/directory.test.ts` › "is refused by changeAddress as the new address, and nothing changes" ✓; the route answers `400` for NUL, ESC and DEL (gate's own spec)                                                                                                                                                                                   |
+
+- **low** · open decision · no `Done when` line depends on it · F1 — `changeAddress` reads `from` through the strict `readAddress`, so a stored row holding a control character cannot be the `from` of a change: `POST …/members/address` answers `400` "That is not an email address." for text the admin did not type, and the admin screen offers Change on every row. Remove and re-add under the same person works (measured for NUL, ESC and DEL: `200`, `200`), so nothing — lg-35's retire included — is locked out. Options: (a) keep it, as the brief's item 1 names removal as the only exception — recommended; (b) read `from` through `readStoredAddress`, a one-word change and a test, which widens the exception past the owner's Decision.
+- **low** · the Log's middle red/green entry gives the removal-strict run as "3 failed | 98 passed (101)" beside "the same four files"; 101 is three files (`config-access.test.ts` holds 15). Over the four, the same mutation measures 3 failed | 113 passed (116). False about a denominator nothing relies on.
+- **low** · `nfr:maintainability` · F3 — `directory.ts`'s header lists what the schema checks and leaves out the person's and the household name's length-and-trim checks. False in the safe direction: it claims the schema checks less than it does.
+- **dropped** · a row whose address carries a whitespace control (a trailing tab, a tab inside, a leading VT) is not removable (`MEMBER_NOT_FOUND` or `BAD_REQUEST`). No writer has ever stored one: `readAddress` has trimmed and refused `\s` since lg-20, so only a raw insert reaches it. Older than the branch, with no live call site.
+- **dropped** · Done when 2 asks for "a route test per route" and both routes share one test. Each route has its own assertion, and a regression in either alone fails it. A difference in form only.
+- **dropped** · a NUL at the start of an address cannot be stored even by a raw insert (the schema's `GLOB` stops at the NUL). That is an observation, not a defect.
+- **findings** · the hunt returned 6; 3 carried, 3 dropped.
+- CI on `6566fb3d`: every check passes; `test (windows-latest, informational)` was still pending when read. That leg is read, not graded.
+- NFR: security ✓ (every writer refuses; the lenient reader is private to `removeMember` and writes only a `remove` record for a row that already stands) · performance n/a · reliability ✓ · maintainability — F3.
+
 ## Log
 
 - 2026-10-18 — Filed from lg-34's gate 1, F1, at the owner's decision (file it,
@@ -398,3 +424,54 @@ bytes`, and with `env: { X: "a\u0000b" }` → `ERR_INVALID_ARG_VALUE The propert
   the spec from (the gate did, about 200 lines).
 - 2026-10-18 — lg-57 filed at the owner's decision: the C1 controls and the
   zero-width characters, which item 2 now leaves out. It depends on this ticket.
+- 2026-10-18 — Built. `ADDRESS` is now two constants in `api/src/directory.ts`:
+  `ADDRESS_SHAPE`, the old pattern, and `CONTROL`, `/[\u0000-\u001f\u007f]/u`
+  (the line carries an `oxlint-disable-next-line no-control-regex`; without it
+  `npx oxlint tools/ledger/api/src/directory.ts` → `error eslint(no-control-regex)`).
+  `readAddress` refuses on either, and a private `readStoredAddress` checks the
+  shape alone; `removeMember` reads through it, so removal keeps refusing exactly
+  what it refused and takes a row that holds a control character. `addMember`,
+  `changeAddress` and `LEDGER_ADMINS` (via `config.ts`) inherit `readAddress`
+  unchanged. Both headers reworded (item 5); no trigger, no migration.
+- 2026-10-18 — Red against the base. The new specs were run with
+  `tools/ledger/api/src/directory.ts` restored from `origin/main@335efcd4`:
+  `npx vitest run` of `directory`, `households`, `household-command` and
+  `config-access` → `Tests  11 failed | 105 passed (116)`; the 11 are the
+  `readAddress` sweep, `addMember` ×4 (NUL, SOH, ESC, DEL), `changeAddress` to a
+  NUL, the `member` verb ×3, both routes (one test), and the `LEDGER_ADMINS`
+  entry. The removal tests and the five-input refusals pass at the base, as they
+  must. Then with the tightened `readAddress` also on `removeMember` (one line
+  changed) → `Tests  3 failed | 113 passed (116)`, the three removal tests (class,
+  admin route, `remove` verb): they fail if removal shares the strict check.
+  With the change: `Tests  116 passed (116)` over the same four files.
+- 2026-10-18 — What the brief had wrong or left open. (a) Its "Unmerged, on PR
+  #546" bullet: `changeAddress` is on `main` (`dbf4cd5f`), so it is a writer
+  here and `directory.test.ts` refuses `to: "a@b\u0000c"`. (b) `readAddress`
+  trims, so a control character that is whitespace (`\t`, `\n`, `\v`, `\f`, `\r`)
+  at an address's end was never stored: `readAddress("a@b.test\t")` returns
+  `a@b.test`, before and after. The sweep asserts that, not a refusal, for those
+  five at the end. (c) `changeAddress`'s `from` goes through the strict
+  `readAddress`, so a stored row with a control character cannot be the `from` of
+  a change, though it can be removed and re-added. The brief names `removeMember`
+  alone as the exception and this change keeps to it; making `from` read through
+  `readStoredAddress` is a one-word edit, and is the open decision in the report.
+- 2026-10-18 — Not run: item 6's query against a deployed directory; the owner's.
+- 2026-10-18 — Owner's answer on gate 1's F1 (`changeAddress` reads `from`
+  through the strict `readAddress`, so a stored row with a control character
+  cannot be the `from` of a change). Asked: "lg-52 passed gate 1 (#560), no high
+  or med. Builder and gate disagree on F1 (low). What do you want?" Options:
+  "Keep `from` strict; fix F2/F3 at landing", "Keep `from` strict; leave lows
+  recorded", "Widen `from`; fix lows too". Chosen: "Keep `from` strict; fix
+  F2/F3 at landing" — the gate's recommendation, overriding the builder's, which
+  was to widen `from` through `readStoredAddress`. No code change for F1.
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, the Log's removal-strict
+  count — "the Log's middle red/green entry gives the removal-strict run as '3
+  failed | 98 passed (101)' beside 'the same four files'; 101 is three files".
+  The entry now gives 113 passed (116). Three files → `Tests  101 passed (101)`;
+  four, with `config-access` → `Tests  116 passed (116)`.
+- 2026-10-18 — Fixed at landing by owner choice: gate 1, F3 — "`directory.ts`'s
+  header lists what the schema checks and leaves out the person's and the
+  household name's length-and-trim checks". The header now names a household
+  name's and a person's length and trim among them; `name` and `person` carry a
+  length range and a trim check in `db/directory-schema.ts`. Counting "length and trim" in
+  `directory.ts` gives 1.

@@ -1,7 +1,9 @@
 /**
  * The household directory (lg-20): its schema and the class that writes it.
- * Each rule is held twice — by `Directory`, with a sentence for the operator,
- * and by the schema, so that a writer which skips the class is refused too.
+ * Each rule is held by `Directory`, with a sentence for the operator, and
+ * most of them again by the schema, so that a writer which skips the class is
+ * refused too. An address's character set is held by `Directory` alone: the
+ * schema checks its case, its trim and its `@`, not a control character (lg-52).
  */
 
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -12,7 +14,7 @@ import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
 import { AppError } from "@ledger/contract";
 import { migrateDirectory } from "../src/db/directory-schema.ts";
-import { Directory, isHouseholdId } from "../src/directory.ts";
+import { Directory, isHouseholdId, readAddress } from "../src/directory.ts";
 import { ALEX, SAM, STRANGER } from "./helpers/access.ts";
 import { WRITES_IN_PLACE } from "./helpers/append-only.ts";
 
@@ -878,4 +880,123 @@ describe("changing a member's address", () => {
     expect(stateOf(directory)).toEqual(before);
     directory.close();
   });
+});
+
+// lg-52: `\s` covers tab and newline and not the other C0 controls or DEL, so an
+// address carrying one was stored and then no Access token could name it.
+/** A character as `\uXXXX`, so a failure names a control a terminal would swallow. */
+const shown = (text: string) =>
+  text.replace(/[^ -~]/gu, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+
+describe("an address with a control character", () => {
+  /** The C0 controls and DEL, which the class refuses wherever they sit. */
+  const CONTROLS = [...Array.from({ length: 32 }, (_, i) => i), 0x7f].map((point) =>
+    String.fromCodePoint(point),
+  );
+
+  test("is not an address to readAddress, in the local part, the domain or at the end, while a clean one is", () => {
+    // The clean address first, so a pattern that refuses everything cannot pass.
+    expect(readAddress("a@b.test")).toBe("a@b.test");
+    expect(readAddress(" A@B.Test ")).toBe("a@b.test");
+    for (const control of CONTROLS) {
+      expect(readAddress(`a${control}x@b.test`), shown(control)).toBeUndefined();
+      expect(readAddress(`a@b${control}c`), shown(control)).toBeUndefined();
+      // A control that is whitespace at the end is trimmed off, as it always was.
+      const trailing = readAddress(`a@b.test${control}`);
+      expect(trailing, shown(control)).toBe(control.trim() === "" ? "a@b.test" : undefined);
+    }
+  });
+
+  test("keeps returning undefined for what it refused before", () => {
+    for (const text of ["no-at-sign", "a b@c", "a@@c", "", "a@b,c"]) {
+      expect(readAddress(text), text).toBeUndefined();
+    }
+  });
+
+  test.each([
+    ["a NUL", "casey@b\u0000c"],
+    ["a SOH", "casey\u0001@example.test"],
+    ["an ESC", "casey@example.test\u001b"],
+    ["a DEL", "casey\u007f@example.test"],
+  ])(
+    "is refused by addMember with %s as BAD_REQUEST, in the operator's sentence, and no row is written",
+    (_label, address) => {
+      const directory = withHousehold();
+      const before = stateOf(directory);
+
+      expect(
+        code(() => directory.addMember({ household: "home", address, person: "casey", ...CHANGE })),
+      ).toBe("BAD_REQUEST");
+      expect(() =>
+        directory.addMember({ household: "home", address, person: "casey", ...CHANGE }),
+      ).toThrow("That is not an email address.");
+
+      expect(stateOf(directory)).toEqual(before);
+      // The same call with a clean address is added, so the refusal is the character's.
+      expect(
+        directory.addMember({ household: "home", address: CASEY, person: "casey", ...CHANGE })
+          .address,
+      ).toBe(CASEY);
+      directory.close();
+    },
+  );
+
+  test("is refused by changeAddress as the new address, and nothing changes", () => {
+    const directory = withHousehold();
+    directory.addMember({ household: "home", address: SAM, person: "sam", ...CHANGE });
+    const before = stateOf(directory);
+
+    expect(
+      code(() =>
+        directory.changeAddress({ household: "home", from: SAM, to: "a@b\u0000c", ...CHANGE }),
+      ),
+    ).toBe("BAD_REQUEST");
+
+    expect(stateOf(directory)).toEqual(before);
+    directory.close();
+  });
+
+  test("is no obstacle to removing a row that already stands with one, which the schema let in", () => {
+    const db = raw();
+    // Past `Directory`, as a directory made before lg-52 holds it.
+    insert(db, { address: "sam@b\u0000c", person: "sam" });
+    insert(db, { address: "kim@b\u007f.test", person: "kim" });
+    const directory = new Directory(db);
+    expect(directory.members().map((member) => member.address)).toEqual([
+      "kim@b\u007f.test",
+      "sam@b\u0000c",
+    ]);
+
+    const removed = directory.removeMember({ address: "sam@b\u0000c", ...CHANGE });
+    const removedDel = directory.removeMember({
+      address: " KIM@b\u007f.test",
+      household: "home",
+      ...CHANGE,
+    });
+
+    expect(removed).toEqual({ address: "sam@b\u0000c", household: "home", person: "sam" });
+    expect(removedDel).toEqual({ address: "kim@b\u007f.test", household: "home", person: "kim" });
+    expect(directory.members()).toEqual([]);
+    expect(directory.history("home").map((record) => record.action)).toEqual([
+      "add",
+      "add",
+      "remove",
+      "remove",
+    ]);
+    directory.close();
+  });
+
+  test.each([["no-at-sign"], ["a b@c"], ["a@@c"], [""], ["a@b,c"]])(
+    "removal still refuses %j as BAD_REQUEST",
+    (address) => {
+      const directory = withHousehold();
+      directory.addMember({ household: "home", address: SAM, person: "sam", ...CHANGE });
+      const before = stateOf(directory);
+
+      expect(code(() => directory.removeMember({ address, ...CHANGE }))).toBe("BAD_REQUEST");
+
+      expect(stateOf(directory)).toEqual(before);
+      directory.close();
+    },
+  );
 });
