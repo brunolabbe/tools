@@ -12,6 +12,28 @@ agent's context grows with every turn, and every turn re-reads all of it. So:
   transcript on every turn however small the fix. Batch every finding of a gate
   into one relay, and end the last relay with conditional ship authority
   ([dispatching.md](dispatching.md)).
+- **A resumed gate is the same trap, so gate 2 is fresh.** It carries gate 1's
+  transcript into every turn, and a poll on a background sweep is a turn: on
+  lg-40 the resumed gate 2 was 63% of its agent's cache reads. A fresh gate
+  handed gate 1's files and probe scripts starts from a page, not a
+  transcript (`SKILL.md` step 8).
+- **Your own turns are a queue.** Every relay is one of them, so a wide batch
+  makes each ticket wait on the others' hand-offs; the cap of three tickets in
+  flight (`SKILL.md` step 2) is that limit. An agent sitting idle costs no
+  tokens — it only lengthens the wall column of the accounting table.
+- **An unbounded gate search is paid in waits, and every wait is turns.**
+  lg-59's gate 1 (2026-10-18), asked to build its own pastes with no bound,
+  had spent 49.5 of its first 93 minutes in waits on its own background
+  sweeps, four of them at the 600 s foreground cap; lg-40's gate 2 spent 18.8
+  minutes the same way. So a gate prompt names a population per probe and one
+  sweep budget ([dispatching.md](dispatching.md)).
+- **A first build runs no suite locally.** The builder runs `npm run check`
+  and the fast preflight checks, pushes, and leaves the suites to CI on the
+  draft (`roles/builder.md`), so a gate may open a head CI has not yet proven
+  and grades that line `unproven (gate)` until the leg has run on it. Locally
+  the suites still run in each round's preflight and in the landing's
+  `--land`, and CI runs them on every push. A downloader preflight is about
+  two to three minutes (dl-129's filing, PR #568, 2026-10-18).
 - **Turns cost more than tokens.** One plain command per call is the sandbox's
   rule, so an agent that needs a script writes it to a file and runs it once.
 - **Gates past the second have not paid.** Across 253 recorded gate sections,

@@ -6,8 +6,8 @@ prompt that repeats them pays twice and buries the part that is yours.
 
 **The frontmatter is read at launch from the shared checkout; the role pages at
 the agent's first command, from `origin/main`.** So a branch that edits a role
-page is built and gated under the page on `main`, and a woken agent runs the page
-it read at its first launch. After a merge that changes a definition — a model,
+page is built and gated under the page on `main`, and a resumed agent runs the
+page it read at its first launch. After a merge that changes a definition — a model,
 an effort, a tool — bring the shared checkout to `main` before the next
 dispatch, and check
 the first dispatch with `node scripts/agent-cost.mjs --agent <id>`.
@@ -37,7 +37,9 @@ the first dispatch with `node scripts/agent-cost.mjs --agent <id>`.
 - **The owner's answer, when the ticket is `needs-decision`**: the answer, its
   date and the options it was chosen from, pasted. The builder records it on
   the ticket and sets `ready` in its first commit (`roles/builder.md`). Name no
-  `status` yourself.
+  `status` yourself. An answer given at intake to a `ready` ticket's open
+  `Done when` line (`SKILL.md` step 2) travels the same way, and the builder
+  records it in its first commit.
 - **Ship authority, or not.** The default is: build, push, open a draft pull
   request, stop. Authority to land goes in the agent's own dispatch or a direct
   message from you, never through a gate.
@@ -56,7 +58,8 @@ Gate yield tracks prompt specificity, not gate count or runtime.
 
 - **Nothing from the build**: the ticket id and path, the base sha, the head
   sha, the pull request number, the scratch directory. Never the builder's
-  report or a summary of it.
+  report or a summary of it. Gate 2 also carries gate 1's files and the round
+  (_Re-gating_, below).
 - **Where the section goes**:
   `<scratch>/<id>/gate-<n>/gate-<n>@<short head sha>.md`, first line
   `## Review` for gate 1 and `### Gate <n>` after — the names `roles/reviewer.md`
@@ -64,6 +67,14 @@ Gate yield tracks prompt specificity, not gate count or runtime.
   batches flag the conflict, and some wrote both.
 - **What to attack**: the riskiest decision, the seam with the longest reach,
   the claim you least believe. Name the real input to run first.
+- **A population for each probe, and one sweep budget.** Every probe you ask
+  for names its population — the alphabet, or the seed and the count — and
+  the prompt names one time budget for all the gate's sweeps, 15 minutes
+  unless you say otherwise. Size each population before you write it (_Dry-run
+  anything you prescribe_, above). A search you cannot size is not a gate
+  attack; it is a measurement ticket. "Build your own pastes" over several
+  dimensions, with no bound, kept lg-59's gate 1 waiting on its own sweeps for
+  49.5 of its first 93 minutes.
 - **Which failure the positive control must plant.**
 - **What is already settled** and must not be redone.
 - **The depth**, and for a `mechanical` ticket, "narrow": the named attacks and
@@ -150,10 +161,21 @@ which cannot reach `origin` without a force-push
 
 ## Re-gating
 
-Wake the **same** gate, once (`SKILL.md` step 8): the sha it gated, the new head,
-its own findings as it wrote them, each refutation as a command and its output.
-Not the fixer's account. A woken gate costs a fraction of a fresh one; never
-dispatch a fresh reviewer for round two.
+Dispatch a **fresh** reviewer for gate 2, once (`SKILL.md` step 8), as the agent
+the pairing table names for the ticket, with `<scratch>/<id>/gate-2` as its
+scratch directory. Never `SendMessage` gate 1's agent for it; every poll a
+resumed gate makes on a background sweep re-reads gate 1's transcript. The
+prompt carries, beside the gate-1 items above:
+
+- **The sha gate 1 gated and the new head**, and the round as a range:
+  `git log --first-parent --no-merges <gated sha>..<new sha>`.
+- **Gate 1's section file and its `.full.md` report**, by path, and its
+  findings pasted as it wrote them.
+- **Gate 1's probe scripts**, by path in `<scratch>/<id>/gate-1/`, to re-run on
+  the new head rather than re-derive; they take the tree and the output
+  directory as arguments (`roles/common.md`).
+- **Each refutation as a command and its output.** Not the builder's or the
+  fixer's account.
 
 ## Watching agents
 
@@ -161,7 +183,7 @@ dispatch a fresh reviewer for round two.
   write nothing for minutes. Probe with a message asking for what it has.
 - Never read an agent's output file to check on it; it is the full transcript.
   `ListAgents` says what is running, and `TaskStop` ends a runaway.
-- A `completed` agent is still reachable: `SendMessage` wakes it.
+- A `completed` agent is still reachable: `SendMessage` resumes it.
 
 ## An answered decision has to be recorded even when you do not build it
 
