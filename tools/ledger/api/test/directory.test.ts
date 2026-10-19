@@ -1103,3 +1103,54 @@ describe("an address with a C1 control or a zero-width character", () => {
     directory.close();
   });
 });
+
+// lg-57: `from` names a row that already stands, so it is read as removal reads it.
+describe("changeAddress and a stored row holding a C1 control or a zero-width character", () => {
+  test("moves the row to a clean address, which the schema let it be stored without", () => {
+    const db = raw();
+    // Past `Directory`, as a directory made before lg-57 holds it.
+    insert(db, { address: "sam@b\u0085c", person: "sam" });
+    insert(db, { address: "kim@b\u200b.test", person: "kim" });
+    const directory = new Directory(db);
+
+    const moved = directory.changeAddress({
+      household: "home",
+      from: "sam@b\u0085c",
+      to: SAM,
+      ...CHANGE,
+    });
+    const movedZeroWidth = directory.changeAddress({
+      household: "home",
+      from: " KIM@b\u200b.test",
+      to: CASEY,
+      ...CHANGE,
+    });
+
+    expect(moved).toEqual({ address: SAM, household: "home", person: "sam" });
+    expect(movedZeroWidth).toEqual({ address: CASEY, household: "home", person: "kim" });
+    expect(directory.members()).toEqual([
+      { address: CASEY, household: "home", person: "kim" },
+      { address: SAM, household: "home", person: "sam" },
+    ]);
+    directory.close();
+  });
+
+  test("still refuses one as the new address, and nothing changes", () => {
+    const db = raw();
+    insert(db, { address: "sam@b\u0085c", person: "sam" });
+    const directory = new Directory(db);
+    const before = stateOf(directory);
+
+    for (const to of ["a@b\u0085c", "a\u009f@b.test", "a@b\u200bc"]) {
+      expect(
+        code(() =>
+          directory.changeAddress({ household: "home", from: "sam@b\u0085c", to, ...CHANGE }),
+        ),
+        to,
+      ).toBe("BAD_REQUEST");
+    }
+
+    expect(stateOf(directory)).toEqual(before);
+    directory.close();
+  });
+});

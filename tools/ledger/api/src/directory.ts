@@ -463,7 +463,10 @@ export class Directory {
     if (typeof change.household !== "string") refuse("The household is not a string.");
     if (typeof change.from !== "string") refuse("The address is not a string.");
     if (typeof change.to !== "string") refuse("The new address is not a string.");
-    const from = readAddress(change.from);
+    // `from` names a row that already stands, so it is read as removal reads it: a
+    // directory made before lg-52 or lg-57 may hold an unseen character, and the
+    // person must still be movable off it. `to` is new, so it gets the full check.
+    const from = readStoredAddress(change.from);
     if (from === undefined) refuse(NOT_AN_ADDRESS);
     const to = readAddress(change.to);
     if (to === undefined) refuse(NOT_AN_ADDRESS);
