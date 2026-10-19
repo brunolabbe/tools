@@ -5800,3 +5800,58 @@ The owner's paid lg-38 run (60 model calls, $0.5349 by the records' `costUsd`) i
 4. `scripts/next-id.mjs` (a script, to file or record) — labels a ticket "merged" when its file is on `main`, although the work's pull request is open. A builder reads that as the opposite of the fact it acts on. Reproduction: `node scripts/next-id.mjs lg | grep lg-40` → `merged lg-40`, while `gh pr view 548 --json state --jq .state` → `OPEN`.
 
 **Worked, and worth keeping:** asking the gate for exhaustive probes over small alphabets found F2, a silent wrong accept that no Done-when line could reach, and gate 2 reran the same probes to confirm the round (30,664 wrong at cea53bf7, then 0 of 505,120). Two decided filings ran on `builder-mechanical` in parallel with the landing, for $0.22 together.
+
+### Batch 2026-10-18 (tools-69, lg-52 lg-41 lg-56 lg-59 dl-128 repo-110, lg-61 lg-62 filed) — base 335efcd4
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | a62702fb1f662c795 | seam-mapper, 14 ready tickets | 1m23s / 1m23s | 0 | $0.3139 |
+| #560 | merged d84c8852 | Sonnet 5.5 / high | a32a699a30ed9f713 | builder-standard, lg-52 | 6m57s / 6m55s | 0 | $1.1121 |
+| #560 | merged d84c8852 | Opus 5.5 / high | a91bd34f0a43e206a | ticket-reviewer-opus, lg-52 gate 1 | 8m11s / 8m04s | 0 | $2.8306 |
+| #560 | merged d84c8852 | Sonnet 5.5 / high | ab690df56aa1b1d35 | fixer, lg-52 landing + two lows at landing | 3m18s / 3m18s | 0 | $0.4853 |
+| #561 | merged 1fc7e450 | Sonnet 5.5 / high | a97502a963e52e120 | builder-standard, dl-128 | 10m48s / 9m07s | 0 | $0.7918 |
+| #561 | merged 1fc7e450 | Opus 5.5 / high | a8085af28a7e4a40b | ticket-reviewer-opus, dl-128 gate 1 | 12m37s / 18m53s | 0 | $2.4669 |
+| #561 | merged 1fc7e450 | Sonnet 5.5 / high | ad608e94535059da9 | fixer, dl-128 landing + F1–F4 at landing | 8m33s / 8m29s | 0 | $0.6560 |
+| #562 | merged f58473f4 | Sonnet 5.5 / high | a74f778b39702b54b | builder-standard, lg-56 slice + round 1 + landing (in-flight) | 21m20s / 54m52s | 0 | $3.5801 |
+| #562 | merged f58473f4 | Opus 5.5 / high | a9d94ce78be6abd3d | ticket-reviewer-opus, lg-56 gates 1–2 | 14m42s / 36m34s | 0 | $4.2454 |
+| #563 | merged 370f7448 | Sonnet 5.5 / high | a52a119dca0ae8792 | builder-standard, lg-41 | 14m57s / 14m57s | 0 | $2.0067 |
+| #563 | merged 370f7448 | Opus 5.5 / high | a0e07eb644b081445 | ticket-reviewer-opus, lg-41 gate 1 + narrow gate 2 | 20m05s / 43m39s | 0 | $5.4406 |
+| #563 | merged 370f7448 | Sonnet 5.5 / high | a1c805973e9bacc25 | fixer, lg-41 round (contract refinement + web test) | 6m55s / 6m54s | 0 | $0.5928 |
+| #563 | merged 370f7448 | Sonnet 5.5 / high | adabe33637825db08 | fixer, lg-41 landing | 2m20s / 2m15s | 0 | $0.2444 |
+| #559 | merged e0b86518 | Sonnet 5.5 / high | a2e8cba61b0e237f7 | builder-standard, repo-110 | 6m47s / 15m35s | 0 | $0.7567 |
+| #559 | merged e0b86518 | Opus 5.5 / high | a75e1ffc7c63907f1 | ticket-reviewer-opus, repo-110 gates 1–2 | 13m10s / 32m02s | 0 | $3.0578 |
+| #559 | merged e0b86518 | Sonnet 5.5 / high | a5668e2671a986bfa | fixer, repo-110 round (F1 line, DW3 reword) | 3m41s / 2m38s | 0 | $0.2446 |
+| #559 | merged e0b86518 | Sonnet 5.5 / high | a0930d9613a77840b | fixer, repo-110 landing | 4m38s / 4m38s | 0 | $0.2372 |
+| #564 | open, ready, CodeQL green at 7c8c4881 | Opus 5.5 / high | a9b7c7c9b359319d1 | builder-hard, lg-59 measure + M2 + gate-1 round + lg-61 filing + landing | 1h03m54s / 7h21m03s | 2 | $17.8921 |
+| #564 | open, ready, CodeQL green at 7c8c4881 | Sonnet 5.5 / xhigh | a2fd8c8650f059328 | ticket-reviewer-sonnet, lg-59 gates 1–2 (gate 2 stopped by the owner) | 1h42m24s / 6h30m30s | 0 | $16.8158 |
+| #569 | open, ready | Haiku 5.5 / high | a3ff5a6aec0f2ea1c | builder-mechanical, lg-62 filing (maintenance) | 5m04s / 5m04s | 0 | $0.0535 |
+| — | — | Opus 5.5 / high | orchestrator 196311b6 | orchestrator (floor) | 2h20m41s / 7h30m38s | 2 | $16.2954 |
+| | | | | **total** (rates read 2026-10-10) | 7h52m28s | 4 | **$80.1197** |
+
+**Tickets:**
+
+- lg-52 → #560, gate 1 PASS (F1 low open decision kept strict by owner; two lows fixed at landing), merged d84c8852.
+- dl-128 → #561, gate 1 CONCERNS (premise refuted: the floor test already had a 25 s budget; F1 med + three lows fixed at landing; no clock change by owner choice), merged 1fc7e450.
+- lg-56 → #562, slice: gate 1 CONCERNS (F1 med fixed in a round by owner choice beyond the floor; F2 med option a), gate 2 PASS (new low fixed at landing), landed `in-flight`, merged f58473f4; Build steps 3–4 are the owner's paid run.
+- lg-41 → #563, gate 1 PASS (slice-fields low option a and Show-more low fixed in a round by owner choice), narrow gate 2 PASS (new low recorded), merged 370f7448.
+- repo-110 → #559, gate 1 FAIL (F1 high: Done when 1's literal grep; F2 med: Done when 3 reworded by the owner), gate 2 PASS, merged e0b86518.
+- lg-59 → #564, stopped at its step 2 (owner chose M2 of four measured rules), gate 1 FAIL (F1 high: no cut where two bank days share a date, 32 of 554,088; owner chose a bounded cut), gate 2 CONCERNS (F4 low fixed at landing; F5 low recorded), awaiting merge.
+- lg-61 → filed in #564 (gate 1 F2 of lg-59, by owner choice).
+- lg-62 → #569, filed (lg-59 gate 2's trace of a one-off `isolation.test.ts` failure).
+- main push CI at f58473f4: CI, ledger, security and release all success, both test legs.
+
+**Defects in the skill:**
+
+1. `roles/reviewer.md` › _What you are not given, on purpose_ — step 1 says to read the ticket down to `## Log` and stop, but any diff of the ticket prints the branch's Log entries, so two gates (lg-52, repo-110) read the builder's Log before the source. Reproduction: `git diff --stat 335efcd4 611bc6a2 -- docs/work/repo-110-file-preflight-shim-ebusy-windows.md` → `1 file changed, 63 insertions(+)`, all of them Log; `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -c -E "':!|exclude"` → `0`.
+2. `review-ticket/gate.md` › _Severity and the gate_ — no verdict for a `Done when` line met in property by a mechanism its words do not name (repo-110 Done when 1 and 3); the gate fell back on dl-100's precedent and graded one FAIL/high and the other an open decision. Reproduction: `git grep -c -i -E "deviat|met in property|different mechanism" origin/main -- .claude/skills/review-ticket/gate.md` → no output, exit 1.
+3. `reference/records.md` › _Fixed at landing_ — "Scope the command above `## Log`" does not fit a fix to text inside the Log (dl-128 F1 and F4), and a `grep -c` on a phrase a comment wraps across lines reads 0 before the fix too, so the proof passes vacuously. Reproduction: `git show 669b245f:tools/downloader/resolvers/test/browser/browser-resolver-departure-and-floor.test.ts | grep -c "the one way the minimum is not held"` → `0`; the same with `"that is the one way the"` → `1`.
+4. `roles/common.md` › _Point every run at the narrowest thing that can fail_ — a long synchronous vitest probe exits 1 on the 20 s `testTimeout` after writing every result, so an exit code read alone calls a finished run failed; my own stop message to lg-59's gate 2 named "an `.exit` holding 0" as the completeness test, which would have excluded every finished shard. Reproduction: `cat <scratchpad>/lg-59/build/out/base/summary.txt` → `gate-lg40c vitest exit 1`; `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -c -i -E "testTimeout|timed out in"` → `0`.
+5. `roles/common.md` › same heading — a probe copied into a package's `test/` makes a concurrent `npm run check` fail on `oxfmt --check`. Reproduction: `grep -m1 "Format issues" <scratchpad>/lg-59/build/check2.out` → `Format issues found in above 1 files.`; `check3.out`, after the probe was removed, exits 0.
+6. `roles/reviewer.md` › _What makes a gate worth its cost_ — no warning that a ledger replay through the test helpers' `startApp()` hits the default 120 reads a minute; lg-41 gate 1's first base/head caller dump had 67 of 183 requests `429` and `cmp` still exited 0. Reproduction: `gh pr view 563 --json comments --jq '.comments[].body' | grep -c "non200 67"` → `1`.
+7. `roles/builder.md` › _When you are resumed with findings_ — covers findings, not an owner's decision on a build stopped at its stop condition, nor a decision arriving with findings; lg-59's builder hit both and recorded each as a Log amendment. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n "^## "` → no heading for a resume carrying an owner's decision.
+
+**Worked, and worth keeping:**
+
+- A gate told to establish the ticket's premise from source before grading (dl-128): it refuted the brief's 25 s-vs-20 s budget, and the builder's competing clock hypothesis, with 60 of 60 measured backward steps, so no production change was made on a guess.
+- lg-59's gate-2 runaway (6h30m wall, about 300 enumeration shards, from a dispatch that said "widen" with no bound) is the case repo-111's sweep budget in `reference/dispatching.md` (#565, a58bb490, merged mid-batch) now covers; the owner stopped it, and the gate wrote its verdict from the finished shards with the rest named unmeasured.
+- Killing a runaway gate's work by its process group (`kill -TERM -- -<pgid>` after `ps -o pid,args -g <pgid>` showed only its own runs), then its orphaned `until` waits, before messaging it to write up.
