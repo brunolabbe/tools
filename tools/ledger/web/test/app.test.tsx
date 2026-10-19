@@ -16,6 +16,7 @@ import { fetchAdminHouseholds, fetchHousehold } from "../src/api/households.ts";
 import { fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
 import { fetchMe } from "../src/api/me.ts";
 import { fetchPeopleNames } from "../src/api/people.ts";
+import { importStatement } from "../src/api/statements.ts";
 import { fetchPeople, fetchRules } from "../src/api/rules.ts";
 import { fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
 import { App } from "../src/App.tsx";
@@ -23,6 +24,7 @@ import { App } from "../src/App.tsx";
 vi.mock("../src/api/health.ts", () => ({ fetchHealth: vi.fn() }));
 vi.mock("../src/api/me.ts", () => ({ fetchMe: vi.fn() }));
 vi.mock("../src/api/people.ts", () => ({ fetchPeopleNames: vi.fn() }));
+vi.mock("../src/api/statements.ts", () => ({ importStatement: vi.fn() }));
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
 vi.mock("../src/api/salaries.ts", () => ({
   fetchSalaries: vi.fn(),
@@ -353,4 +355,46 @@ test("the history tab follows the period tab and shows the history screen (lg-41
 
   expect(await screen.findByRole("heading", { name: "History" })).toBeTruthy();
   expect(await screen.findByText("0 rows match.")).toBeTruthy();
+});
+
+// lg-54: the count is asked again when a paste is stored, not only on the next tab.
+test("the inbox tab's count changes when a paste is stored, with no change of tab (lg-54)", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  render(<App />);
+  await screen.findByRole("button", { name: "Inbox" });
+  fireEvent.click(screen.getByRole("button", { name: "Paste" }));
+  fireEvent.change(screen.getByLabelText("Transactions copied from AccèsD"), {
+    target: {
+      value: [
+        "Septembre 2026",
+        "Date\tDescription\tMontant\tSolde\tlien",
+        "12 SEP12 Septembre",
+        "Loyer/Prêt hypothécaire",
+        "Hypothèque /Prêteur Exemple",
+        "",
+        "−700,00 $\t2 100,00 $\t",
+        "12 Septembre Hypothèque /Prêteur Exemple −700,00 $",
+        "Total\t−700,00 $",
+        "",
+      ].join("\n"),
+    },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  vi.mocked(importStatement).mockResolvedValue({
+    rowsAdded: 1,
+    rowsAlreadyPresent: 0,
+    tailBalanceCents: 210_000,
+    rowsInInbox: 1,
+  });
+  vi.mocked(fetchInbox).mockResolvedValue([
+    { ...WAITING, id: 1, description: "Hypothèque /Prêteur Exemple", amountCents: -70_000 },
+  ]);
+
+  fireEvent.click(screen.getByRole("button", { name: "Confirm and store" }));
+
+  expect(await screen.findByRole("button", { name: "Inbox (1)" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Statement stored" })).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "Open the inbox" }));
+  expect(await screen.findByRole("heading", { name: "Inbox" })).toBeTruthy();
 });

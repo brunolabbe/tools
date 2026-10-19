@@ -13,6 +13,11 @@
  *    a report, or with an error that names the row or the amount. The text
  *    stays in the box on a refusal, so it can be corrected and tried again.
  *
+ * After a store the screen says how many of the rows it just added wait in the
+ * inbox (lg-54), in the words that matter: such a row counts in neither bucket
+ * until it is answered, and nothing is filed to Joint by default. The count is
+ * the report's own, so it describes this paste and not the whole inbox.
+ *
  * Built for a phone: one column, a text size that does not make iOS zoom the
  * page, and buttons a thumb can hit.
  */
@@ -30,7 +35,14 @@ type Step =
   | { kind: "storing"; rows: StatementRow[] }
   | { kind: "stored"; report: ImportStatementReport };
 
-export function StatementPaste(): React.ReactElement {
+export interface StatementPasteProps {
+  /** Called once a paste is stored, so the shell can ask for the inbox's count again. */
+  onStored: () => void;
+  /** Takes the person to the inbox tab. */
+  onOpenInbox: () => void;
+}
+
+export function StatementPaste({ onStored, onOpenInbox }: StatementPasteProps): React.ReactElement {
   const [text, setText] = useState("");
   const [step, setStep] = useState<Step>({ kind: "editing" });
   const [problem, setProblem] = useState<string | null>(null);
@@ -55,7 +67,10 @@ export function StatementPaste(): React.ReactElement {
     setProblem(null);
     setStep({ kind: "storing", rows });
     importStatement(text)
-      .then((report) => setStep({ kind: "stored", report }))
+      .then((report) => {
+        setStep({ kind: "stored", report });
+        onStored();
+      })
       .catch((error: unknown) => {
         // The API's own sentence: it names the row, or the unexplained amount.
         setProblem(AppError.from(error).message);
@@ -79,6 +94,7 @@ export function StatementPaste(): React.ReactElement {
           {report.rowsAlreadyPresent} already stored. The account now stands at{" "}
           <strong>{formatCents(report.tailBalanceCents)}</strong>.
         </output>
+        <Filing report={report} onOpenInbox={onOpenInbox} />
         <button type="button" onClick={startOver}>
           Paste another
         </button>
@@ -140,5 +156,32 @@ export function StatementPaste(): React.ReactElement {
         </>
       )}
     </section>
+  );
+}
+
+/** What became of the rows just added: nothing said when none was added. */
+function Filing({
+  report,
+  onOpenInbox,
+}: {
+  report: ImportStatementReport;
+  onOpenInbox: () => void;
+}): React.ReactElement | null {
+  if (report.rowsAdded === 0) return null;
+  if (report.rowsInInbox === 0) {
+    return <p>Every row added was filed, by a rule or by what you answered before.</p>;
+  }
+  return (
+    <>
+      <p>
+        <strong>{report.rowsInInbox}</strong> of the {report.rowsAdded} rows added{" "}
+        {report.rowsInInbox === 1 ? "waits" : "wait"} in the inbox. A row in the inbox counts in
+        neither bucket until you answer it with a person and a bucket, and nothing is filed to Joint
+        by default.
+      </p>
+      <button type="button" onClick={onOpenInbox}>
+        Open the inbox
+      </button>
+    </>
   );
 }

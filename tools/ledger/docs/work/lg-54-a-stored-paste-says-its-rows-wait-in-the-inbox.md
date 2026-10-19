@@ -63,3 +63,28 @@ Two things hide it:
 
 - 2026-10-18: filed from the owner's question while pasting the first statement
   into rule-less books.
+- 2026-10-19 (builder, Claude Sonnet 5.5): built on branch `lg-54-paste-inbox-count`.
+  - **Where the count comes from: the report grows a count (a contract change).**
+    `ImportStatementReport` gains `rowsInInbox`, how many of the `rowsAdded` no
+    rule and no history filed. The reason: Build 1 asks for the rows _just added_,
+    and `fetchInbox` returns the whole inbox, earlier pastes' rows included, so a
+    count taken from it would be a different and larger number whenever the
+    inbox was not empty before (and would need a second request that can fail
+    after the store has succeeded). The API already had the figure and threw it
+    away: `classifyAdded` returns how many rows it filed, and `importStatement`
+    now reports `rowsAdded - filed`. The field is required and flat, beside
+    `rowsAdded`, so lg-58's optional `datesDiffering` can sit next to it without
+    touching it. Cost: 13 whole-report assertions in `api/test/statements.test.ts`
+    and `api/test/workbook-days.test.ts` (36 tests failed on the required field)
+    take the new key; they are mechanical.
+  - The screen line reads "N of the M rows added wait in the inbox. A row in the
+    inbox counts in neither bucket until you answer it with a person and a
+    bucket, and nothing is filed to Joint by default.", with an "Open the inbox"
+    button; "Every row added was filed, by a rule or by what you answered before."
+    when none waits; nothing about filing when no row was added. "Paste another"
+    is kept.
+  - `StatementPaste` takes `onStored` and `onOpenInbox`, both required so a
+    caller cannot forget the wiring silently. `App` bumps a counter in `onStored`
+    that is an added dependency of the inbox-count effect, so the tab's number is
+    asked again at once.
+  - Fold-in: none free. lg-58's screen line and field are its own.

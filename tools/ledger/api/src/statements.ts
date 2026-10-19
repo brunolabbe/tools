@@ -170,12 +170,13 @@ export function importStatement(context: ImportContext, text: string): ImportSta
       .transaction(() => {
         // Taken before the rows are stored, so the paste's own are the ones after it.
         const before = lastRowId(context.db);
-        const report = store(context, rows, oldest, newest);
+        const stored = store(context, rows, oldest, newest);
         // A row with exactly one matching rule is classified here; the rest wait
         // in the inbox (lg-4). Inside the paste's transaction, so a paste is
         // never stored without its classifications or classified without it.
-        classifyAdded(context, before);
-        return report;
+        const filed = classifyAdded(context, before);
+        // The report says how many of this paste's own rows wait (lg-54).
+        return { ...stored, rowsInInbox: stored.rowsAdded - filed };
       })
       .immediate();
   } catch (error: unknown) {
@@ -195,7 +196,7 @@ function store(
   rows: StatementRow[],
   oldest: StatementRow,
   newest: StatementRow,
-): ImportStatementReport {
+): Omit<ImportStatementReport, "rowsInInbox"> {
   const { db } = context;
   const count = (db.prepare("SELECT count(*) AS n FROM statement_rows").get() as { n: number }).n;
   const tail = latest(db, "DESC", 1)[0];

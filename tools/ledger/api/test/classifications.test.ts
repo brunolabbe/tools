@@ -8,7 +8,13 @@
 
 import { afterEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
-import type { ClassificationRecord, ErrorResponse, InboxRow, RuleDraft } from "@ledger/contract";
+import type {
+  ClassificationRecord,
+  ErrorResponse,
+  ImportStatementReport,
+  InboxRow,
+  RuleDraft,
+} from "@ledger/contract";
 import type { App } from "../src/server.ts";
 import { SAM, homeBooks } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
@@ -538,5 +544,64 @@ describe("classifying a row again", () => {
     expect(response.statusCode).toBe(400);
     expect(response.json<ErrorResponse>().error.code).toBe("BAD_REQUEST");
     expect(classifications(target)).toEqual([]);
+  });
+});
+
+describe("the report says how many of a paste's rows wait (lg-54)", () => {
+  async function pasteReport(target: App, text: string): Promise<ImportStatementReport> {
+    const response = await target.server.inject({
+      method: "POST",
+      url: ROUTES.statements,
+      payload: { text },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    return response.json<ImportStatementReport>();
+  }
+
+  test("with no rule every added row waits, and with two rules the other two do", async () => {
+    const bare = await start();
+    expect(await pasteReport(bare, paste())).toMatchObject({ rowsAdded: 4, rowsInInbox: 4 });
+    await bare.shutdown();
+
+    const target = await start();
+    await addRule(target, TRANSFER_RULE);
+    await addRule(target, MORTGAGE_RULE);
+
+    const report = await pasteReport(target, paste());
+
+    // The transfer at the usual amount and the mortgage are filed; the other
+    // transfer and the groceries wait, and the inbox holds exactly those.
+    expect(report).toMatchObject({ rowsAdded: 4, rowsInInbox: 2 });
+    expect(await readInbox(target)).toHaveLength(2);
+  });
+
+  test("a paste that adds nothing reports none waiting, though the inbox is not empty", async () => {
+    const target = await start();
+    await pasteStatement(target);
+
+    const again = await pasteReport(target, paste());
+
+    expect(again).toMatchObject({ rowsAdded: 0, rowsAlreadyPresent: 4, rowsInInbox: 0 });
+    expect(await readInbox(target)).toHaveLength(4);
+  });
+
+  test("a second paste counts only its own rows, not the ones already waiting", async () => {
+    const target = await start();
+    await pasteReport(target, paste(0, 2));
+
+    const second = await pasteReport(target, paste(0, 4));
+
+    expect(second).toMatchObject({ rowsAdded: 2, rowsAlreadyPresent: 2, rowsInInbox: 2 });
+    expect(await readInbox(target)).toHaveLength(4);
+  });
+
+  test("when every added row is filed, none is reported waiting", async () => {
+    const target = await start();
+    await addRule(target, TRANSFER_RULE);
+    await addRule(target, MORTGAGE_RULE);
+
+    const report = await pasteReport(target, paste(0, 2));
+
+    expect(report).toMatchObject({ rowsAdded: 2, rowsInInbox: 0 });
   });
 });

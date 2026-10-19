@@ -66,6 +66,8 @@ type Tab =
 export function App(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("home");
   const [waiting, setWaiting] = useState<number | null>(null);
+  // Bumped when a paste is stored, which leaves rows waiting with no change of tab.
+  const [stored, setStored] = useState(0);
   const [inNoHousehold, setInNoHousehold] = useState(false);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [adminOnly, setAdminOnly] = useState(false);
@@ -92,7 +94,8 @@ export function App(): React.ReactElement {
     return () => controller.abort();
   }, []);
 
-  // Asked again on every change of tab, which is when a paste has just left some.
+  // Asked again on every change of tab, and when a paste is stored (lg-54): a
+  // person who stays on the paste screen sees the new number at once.
   // A failure leaves the number out: the inbox says what went wrong when opened.
   useEffect(() => {
     const controller = new AbortController();
@@ -100,7 +103,7 @@ export function App(): React.ReactElement {
       .then((rows) => setWaiting(rows.length))
       .catch(() => undefined);
     return () => controller.abort();
-  }, [tab]);
+  }, [tab, stored]);
 
   // Only a member has books to ask; a failure keeps the map it had.
   const member = me !== null;
@@ -201,7 +204,12 @@ export function App(): React.ReactElement {
           {tab === "period" && <Periods />}
           {tab === "history" && <History />}
           {tab === "receipt" && <Receipts />}
-          {tab === "paste" && <StatementPaste />}
+          {tab === "paste" && (
+            <StatementPaste
+              onStored={() => setStored((count) => count + 1)}
+              onOpenInbox={() => setTab("inbox")}
+            />
+          )}
           {tab === "inbox" && <Inbox onCount={setWaiting} />}
           {tab === "rules" && <Rules />}
           {tab === "spending" && <Spending />}
