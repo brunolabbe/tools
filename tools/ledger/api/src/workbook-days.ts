@@ -25,8 +25,12 @@
  * **A paste reads a day as a block of up to three calendar dates** (lg-59,
  * `matchStretch`). Its days are any cutting of the stretch into blocks of
  * consecutive workbook rows, each block's dates no more than
- * `WIDEST_BLOCK_DAYS` (2) days apart and each cut falling where the workbook's
- * date changes, that matches block by block. Each of the bank's rows must be
+ * `WIDEST_BLOCK_DAYS` (2) days apart, that matches block by block. A cut falls
+ * where the workbook's date changes, and also between two rows it dates alike
+ * where the bank's date changes between the pasted rows in their places and
+ * the balances agree there (`dayEnds`, lg-59 gate 1): two of the bank's days
+ * the workbook dates alike where they meet are still two days. No other cut
+ * falls inside a run of one date. Each of the bank's rows must be
  * dated within a day of the block's dates: from the day before its earliest to
  * the day after its latest. So a day the workbook both re-dated and reordered
  * matches: the bank's 21st of −5.00, −10.00, +10.00, which the workbook lists
@@ -34,9 +38,9 @@
  * from the 20th to the 21st holding the bank's three rows. Cut on the
  * workbook's dates alone, it was three runs, none of them the bank's
  * counterpart; the true reading was refused and a false one could be the only
- * reading left, storing rows twice (lg-59). A block is a reading like any
- * other: where two cuttings give two readings of a paste, it is refused as
- * ambiguous. Rows dated more than two days apart are never one block, and a
+ * reading left, storing rows twice (lg-59). A reading a block makes possible
+ * counts like any other: a paste that two numbers of already-stored rows both
+ * fit, through whichever cuttings, is refused as ambiguous. Rows dated more than two days apart are never one block, and a
  * bank row two days from every date of its block does not match it.
  *
  * **A paste may start or end partway through one of those blocks**
@@ -257,6 +261,25 @@ export function matchBlock(
   return dated && matchPart(block, before, part, "any");
 }
 
+/**
+ * Whether one of the bank's days ends between two pasted rows, `last` and
+ * `next`, where the workbook lists `stored` last before them, dating it as it
+ * dates the row after (lg-59, gate 1 F1). The bank's date changes there, and the
+ * workbook's balance after `stored` is the bank's after `last`, as it is
+ * wherever one day ends and the next begins on both sides. A cut is weighed
+ * nowhere else inside a run of one date: where the balances differ no cutting
+ * there could match, and where the bank's date does not change no bank day ends.
+ * So such cuts are at most as many as the paste's days.
+ */
+function dayEnds(
+  stored: DayEntry,
+  last: DayEntry | undefined,
+  next: DayEntry | undefined,
+): boolean {
+  if (last === undefined || next === undefined) return false;
+  return last.date !== next.date && last.balanceCents === stored.balanceCents;
+}
+
 /** A stored row as a paste reads it: its date, amount and balance, and whose it is. */
 export interface StretchRow extends DayEntry {
   readonly fromWorkbook: boolean;
@@ -285,12 +308,21 @@ export function matchStretch(
 ): boolean {
   const end = start + pasted.length;
   if (start < 0 || end > rows.length) return false;
-  // Where a block may begin or end: wherever the date changes or a row is a paste's.
+  // Where a block may begin or end: wherever the workbook's date changes or a
+  // row is a paste's, and between two rows the workbook dates alike where the
+  // bank's day ends (`dayEnds`).
   const cuts = [0];
   for (let index = 1; index < rows.length; index++) {
     const left = rows[index - 1] as StretchRow;
     const right = rows[index] as StretchRow;
-    if (!left.fromWorkbook || !right.fromWorkbook || left.date !== right.date) cuts.push(index);
+    if (
+      !left.fromWorkbook ||
+      !right.fromWorkbook ||
+      left.date !== right.date ||
+      dayEnds(left, pasted[index - 1 - start], pasted[index - start])
+    ) {
+      cuts.push(index);
+    }
   }
   cuts.push(rows.length);
   const reached = cuts.map((_, index) => index === 0);

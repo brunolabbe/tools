@@ -29,8 +29,9 @@
  *   category, so it is never compared by description or category. Where the
  *   overlap reaches such rows, they are read day by day (`workbook-days.ts`),
  *   a day being a **block**: consecutive workbook rows whose dates are at most
- *   `WIDEST_BLOCK_DAYS` (2) days apart, cut where the workbook's date changes,
- *   in whichever cutting matches (lg-59). Each block, and the pasted rows in
+ *   `WIDEST_BLOCK_DAYS` (2) days apart, cut where the workbook's date changes
+ *   or, between two rows it dates alike, where the bank's day ends, in
+ *   whichever cutting matches (lg-59). Each block, and the pasted rows in
  *   their positions, must hold the same amounts, counted with repeats, and end
  *   on the same balance, and each pasted row must be dated within a day of the
  *   block's dates. A paste may start or end partway through such a day: its
@@ -42,10 +43,10 @@
  *   amounts differ by one row is not, even when it ends on the same balance. A
  *   day the workbook both re-dated and reordered is one block, so it matches:
  *   the bank's −5.00, −10.00, +10.00 on the 21st, listed by the workbook as
- *   −10.00 on the 21st, −5.00 on the 20th, +10.00 on the 21st. One case is
- *   refused whatever the paste holds: a paste that starts and ends inside a
- *   block of more than `LONGEST_SEARCHED_DAY` rows (20), which is not
- *   searched. A row a paste
+ *   −10.00 on the 21st, −5.00 on the 20th, +10.00 on the 21st. A part that
+ *   starts and ends inside a block of more than `LONGEST_SEARCHED_DAY` rows
+ *   (20) is not searched, so that block does not admit it, though a cutting
+ *   into smaller blocks still may. A row a paste
  *   stored is still compared field for field, in order. Every reading this
  *   makes possible is a reading like any other: two of them are refused as
  *   ambiguous. The workbook's rows keep their wording and dates; only the rows
@@ -490,7 +491,7 @@ function workbookMismatch(newest: StoredRow, rows: readonly StatementRow[]): App
       : ` The pasted row ${describeRow(continuing)} opens from the ${left} it left: a paste that starts on that row continues the workbook.`;
   return new AppError(
     "STATEMENT_CHAIN_BROKEN",
-    `The paste does not line up with the rows imported from the workbook, which end on ${describeRow(newest)}. Those are compared by amount and balance a day at a time, a day being the workbook's rows dated no more than ${String(WIDEST_BLOCK_DAYS)} days apart: a day's rows in any order, each dated within a day of the workbook's dates for that day, and a paste may start or end partway through a day, except that a paste that starts and ends inside a day of more than ${String(LONGEST_SEARCHED_DAY)} rows is refused. Their wording is never compared.${next}`,
+    `The paste does not line up with the rows imported from the workbook, which end on ${describeRow(newest)}. Those are compared by amount and balance a day at a time, a day being the workbook's rows dated no more than ${String(WIDEST_BLOCK_DAYS)} days apart: a day's rows in any order, each dated within a day of the workbook's dates for that day, and a paste may start or end partway through a day, except that a paste that starts and ends inside a day of more than ${String(LONGEST_SEARCHED_DAY)} rows is not searched there. Their wording is never compared.${next}`,
     {
       details: {
         date: newest.date,

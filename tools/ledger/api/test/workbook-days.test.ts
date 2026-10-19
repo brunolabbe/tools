@@ -426,3 +426,173 @@ describe("a paste meeting a day the workbook both re-dated and reordered (lg-59)
     expect(storedRows(db)).toEqual(before);
   });
 });
+
+// lg-59 gate 1. F1: two of the bank's days the workbook dates alike where they
+// meet, so no change of the workbook's date cuts them apart. F3: what no test
+// reached before.
+
+/** Workbook rows for `matchStretch`, from 1 000.00. */
+function stretchRows(rows: readonly [string, number][]): StretchRow[] {
+  return dated(100_000, rows).map((row) => ({ ...row, fromWorkbook: true }));
+}
+
+describe("matchStretch: a cut where the bank's day ends (lg-59, gate 1 F1)", () => {
+  // The workbook lists +10.00 on the 20th, −5.00 and +3.00 on the 22nd, −1.00 on
+  // the 24th. The bank lists −5.00, +10.00, then −1.00, +3.00: each pair is one
+  // of its days, and the workbook dates the rows where the two meet the 22nd.
+  const workbook = stretchRows([
+    ["2026-02-20", 1_000],
+    ["2026-02-22", -500],
+    ["2026-02-22", 300],
+    ["2026-02-24", -100],
+  ]);
+  const bank = (first: string, second: string): DayEntry[] =>
+    dated(100_000, [
+      [first, -500],
+      [first, 1_000],
+      [second, -100],
+      [second, 300],
+    ]);
+
+  test("between two rows of one date, a block may end where the bank's date changes", () => {
+    expect(matchStretch(workbook, 0, bank("2026-02-21", "2026-02-23"), () => true)).toBe(true);
+  });
+
+  test("and nowhere else inside a run of one date", () => {
+    // The bank's rows all on the 22nd: none of its days ends between them.
+    expect(matchStretch(workbook, 0, bank("2026-02-22", "2026-02-22"), () => true)).toBe(false);
+  });
+});
+
+describe("matchStretch: blocks wholly outside the stretch are not weighed (lg-59, gate 1 F3)", () => {
+  test("a row next to the stretch that no block holding the stretch can take in is left out", () => {
+    // The 19th and the 23rd are four days apart, so no block holds both, and the
+    // 19th cannot join the stretch's block without the 23rd between them.
+    const rows = stretchRows([
+      ["2026-02-19", 100],
+      ["2026-02-23", 200],
+      ["2026-02-21", 300],
+    ]);
+    const pasted = dated(100_300, [["2026-02-21", 300]]);
+
+    expect(matchStretch(rows, 2, pasted, () => true)).toBe(true);
+  });
+});
+
+describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, gate 1)", () => {
+  test("R7: two bank days the workbook dates alike where they meet are not stored twice", () => {
+    // The bank: 20th −10.00, +10.00; 21st −10.00, +10.00; 22nd +10.00. The
+    // workbook holds the first four, listed +10.00 on the 19th, −10.00 on the
+    // 20th, +10.00 on the 20th, −10.00 on the 22nd. The paste is the bank's last
+    // four rows from 990.00: three already stored, one new.
+    const db = workbookDb([
+      ["2026-02-19", 1_000],
+      ["2026-02-20", -1_000],
+      ["2026-02-20", 1_000],
+      ["2026-02-22", -1_000],
+    ]);
+    const before = storedRows(db);
+    const rows = bankRows([
+      ["2026-02-20", 1_000],
+      ["2026-02-21", -1_000],
+      ["2026-02-21", 1_000],
+      ["2026-02-22", 1_000],
+    ]);
+
+    const result = outcome(() => paste(db, rows, 99_000));
+
+    if ("rowsAdded" in (result as object)) {
+      expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 3, tailBalanceCents: 101_000 });
+      expect(storedRows(db).slice(0, 4)).toEqual(before);
+    } else {
+      expect(result).toMatchObject({ code: "STATEMENT_ROW_CONFLICT" });
+      expect((result as { message: string }).message).toContain("two ways");
+      expect(storedRows(db)).toEqual(before);
+    }
+  });
+
+  test("R5: a paste whose true reading needs that cut is accepted with it", () => {
+    // The bank: 20th +25.00; 21st −7.77, +0.31; 22nd −7.77, +99.00; 25th +56.00.
+    // The workbook lists +0.31 on the 22nd, +25.00 on the 20th, −7.77 on the 22nd,
+    // +99.00 on the 22nd, −7.77 on the 23rd. The paste starts at the bank's +0.31.
+    const db = workbookDb([
+      ["2026-02-22", 31],
+      ["2026-02-20", 2_500],
+      ["2026-02-22", -777],
+      ["2026-02-22", 9_900],
+      ["2026-02-23", -777],
+    ]);
+    const before = storedRows(db);
+    const rows = bankRows([
+      ["2026-02-21", 31],
+      ["2026-02-22", -777],
+      ["2026-02-22", 9_900],
+      ["2026-02-25", 5_600],
+    ]);
+
+    expect(paste(db, rows, 101_723)).toEqual({
+      rowsAdded: 1,
+      rowsAlreadyPresent: 3,
+      tailBalanceCents: 116_477,
+    });
+    expect(storedRows(db).slice(0, 5)).toEqual(before);
+  });
+
+  test("a paste wholly inside the history may start three days from the workbook row it starts on", () => {
+    // The workbook: −12.34 on the 20th, +56.00 on the 22nd, −7.77 on the 26th.
+    // The bank dates the first two the 23rd: a block from the 20th to the 22nd
+    // admits the 23rd, three days after its first row.
+    const db = workbookDb([
+      ["2026-02-20", -1_234],
+      ["2026-02-22", 5_600],
+      ["2026-02-26", -777],
+    ]);
+    const rows = bankRows([
+      ["2026-02-23", -1_234],
+      ["2026-02-23", 5_600],
+    ]);
+
+    expect(paste(db, rows, 100_000)).toEqual({
+      rowsAdded: 0,
+      rowsAlreadyPresent: 2,
+      tailBalanceCents: 103_589,
+    });
+  });
+
+  test("a stretch's first block takes in a workbook row two days before it", () => {
+    // The bank's 21st is +56.00, −12.34; the workbook lists −12.34 on the 20th,
+    // +56.00 on the 22nd. The paste starts at the bank's −12.34.
+    const db = workbookDb([
+      ["2026-02-20", -1_234],
+      ["2026-02-22", 5_600],
+    ]);
+    const rows = bankRows([
+      ["2026-02-21", -1_234],
+      ["2026-02-22", 2_500],
+    ]);
+
+    expect(paste(db, rows, 105_600)).toEqual({
+      rowsAdded: 1,
+      rowsAlreadyPresent: 1,
+      tailBalanceCents: 106_866,
+    });
+  });
+
+  test("a stretch's last block takes in a workbook row two days after it", () => {
+    // The bank's 21st is +56.00, −12.34; the workbook lists −12.34 on the 20th,
+    // +56.00 on the 22nd, then +3.00 on 2 March. The paste is the bank's +56.00
+    // alone, wholly inside the history.
+    const db = workbookDb([
+      ["2026-02-20", -1_234],
+      ["2026-02-22", 5_600],
+      ["2026-03-02", 300],
+    ]);
+    const rows = bankRows([["2026-02-21", 5_600]]);
+
+    expect(paste(db, rows, 100_000)).toEqual({
+      rowsAdded: 0,
+      rowsAlreadyPresent: 1,
+      tailBalanceCents: 104_666,
+    });
+  });
+});
