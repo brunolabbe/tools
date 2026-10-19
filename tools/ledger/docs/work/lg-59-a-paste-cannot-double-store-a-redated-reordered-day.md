@@ -481,3 +481,18 @@ tolerance`, head only with `GATE_NOBASE=1`, 20 shards). It ran on this round's
   inside a block of more than 20 rows is not searched, not that the paste is
   refused. The performance low and the `DateWindow` low stay recorded, as gate 1
   wrote them.
+
+- 2026-10-19 — **the owner's answer to gate 2** (Sonnet 5.5, CONCERNS at
+  `b7efbfef`), relayed by the orchestrator. The question: "… What should the
+  landing do?" The options: "Fix F4 at landing; F5 recorded (Recommended)",
+  "Land as is; both recorded" and "Also add F5 to lg-61". The owner chose **"Fix
+  F4 at landing; F5 recorded (Recommended)"**. F5, and gate 1's performance and
+  `DateWindow` lows, stay recorded unfixed. `main` at `33a8451d` was merged
+  first; its three commits touch no ledger path.
+
+- 2026-10-19 — Fixed at landing by owner choice: gate 2, F4 — "`matchStretch`'s
+  doc comment still says a block is "a stretch of the workbook's rows cut where
+  its date changes (`matchBlock`)": it omits the new cut `dayEnds` adds three
+  functions above it."
+  `grep -A2 'Some cutting of .rows. into blocks must match' tools/ledger/api/src/workbook-days.ts | grep -c dayEnds`
+  → 1.

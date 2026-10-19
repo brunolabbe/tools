@@ -294,7 +294,8 @@ export interface StretchRow extends DayEntry {
  * field for field.
  *
  * Some cutting of `rows` into blocks must match, each block a row a paste
- * stored or a stretch of the workbook's rows cut where its date changes
+ * stored or a stretch of the workbook's rows cut where its date changes, or
+ * between two rows of one date where the bank's day ends (`dayEnds`)
  * (`matchBlock`). Blocks wholly outside the stretch are not compared: the rows
  * they hold are not the paste's. The cuttings are searched from the oldest row
  * up, as the set of cuts some matching cutting reaches, so no cutting is weighed
