@@ -26,6 +26,7 @@ a set of conventions. They do not share a domain. Today:
 
 ```
 packages/core        tool-agnostic primitives: error machinery, job transitions, redaction
+packages/ui          the web UIs' shared look: design tokens, then components as a second tool needs them
 tools/<tool>/
   contract/          that tool's types, error codes, zod schemas — its seam
   <libraries>/       whatever that tool needs (the downloader has resolvers, engine)

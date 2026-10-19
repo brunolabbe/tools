@@ -1,0 +1,85 @@
+/*
+ * The names every web UI in this repo shares (repo-108). Import it before the
+ * tool's own stylesheet, so the tool's `:root` wins where it sets a value of its
+ * own:
+ *
+ *     import "@webtools/ui/tokens.css";
+ *     import "./styles.css";
+ *
+ * Names are shared; palettes are not. This file holds NO colour value, and the
+ * owner's decision (2026-10-18) was that planner's warm greys and downloader's
+ * cool ones stay as they are.
+ *
+ * COLOUR ROLES a tool must set, in its light `:root` and again in its
+ * `@media (prefers-color-scheme: dark)` override. The values belong to the tool;
+ * `packages/ui/test/tokens.test.ts` fails when a stylesheet leaves one out or
+ * uses a retired spelling (`--muted`, `--bad`):
+ *
+ *     --bg            page background
+ *     --surface       cards and panels
+ *     --surface-2     a second surface level, for wells and table stripes
+ *     --border        hairlines
+ *     --text          body text
+ *     --text-muted    secondary text
+ *     --accent        links, focus, the primary action
+ *     --accent-text   text on an --accent background
+ *     --ok            success
+ *     --warn          caution
+ *     --danger        error
+ *
+ * A role only one tool needs (downloader's --blocked, planner's --warn-bg)
+ * stays in that tool's stylesheet until a second tool does.
+ *
+ * Breakpoints are not tokens: a custom property does not resolve inside
+ * `@media (max-width: ...)`, so each stylesheet writes its own literals.
+ *
+ * Defaults below are the value most tools already used; a tool that differs
+ * (the body size, the font stack) sets its own in its `:root`.
+ */
+
+:root {
+  /* Lets the browser style its own widgets to match the theme. */
+  color-scheme: light dark;
+
+  --radius: 10px;
+
+  /* The gap between a screen's blocks. */
+  --gap: 1rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* The content column. A phone-first tool narrows it in its own `:root`. */
+  --page-width: 62rem;
+
+  --font-sans: system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Read by a screen reader, not shown: a legend or a caption that repeats what is on screen. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -1,56 +1,57 @@
 /*
- * Tokens first, one set per theme, so a component never names a colour.
- * `light dark` on `color-scheme` (and in the document head) lets the browser
- * style its own widgets to match, which is the half of dark mode CSS cannot do.
+ * Tokens first, one set per theme, so a component never names a colour. The
+ * names are `@webtools/ui/tokens.css`'s (it also sets `color-scheme`, which lets
+ * the browser style its own widgets to match, the half of dark mode CSS cannot
+ * do); the values are this tool's.
  */
 :root {
-  color-scheme: light dark;
-
   --bg: #fbfaf8;
   --surface: #ffffff;
+  --surface-2: #f4f1ec;
   --border: #e3ddd4;
   --text: #201d19;
-  --muted: #6b6459;
-  --bad: #a3341f;
+  --text-muted: #6b6459;
   --accent: #2f5d50;
   --accent-text: #ffffff;
+  /*
+   * `--ok` and `--warn` were never defined here: `.provenance` read them with
+   * the fallbacks below, which are their values now, in both themes, so that
+   * naming them changed no pixel (repo-108). Dark values suited to the dark
+   * surface are a visible change and a ticket of their own.
+   */
+  --ok: #2f6f4f;
+  --warn: #8a6d1f;
+  --danger: #a3341f;
   --warn-bg: #fdf5e6;
 
-  --radius: 10px;
-  --gap: 1rem;
+  /* Values for the names `@webtools/ui/tokens.css` declares. */
+  --font-size-base: 16px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #17150f;
     --surface: #201d16;
+    --surface-2: #2a261c;
     --border: #35301f;
     --text: #f0ece4;
-    --muted: #a49b8a;
-    --bad: #e8836a;
+    --text-muted: #a49b8a;
     --accent: #7fbfa8;
     --accent-text: #14170f;
+    --ok: #2f6f4f;
+    --warn: #8a6d1f;
+    --danger: #e8836a;
     --warn-bg: #2a2415;
   }
 }
 
-* {
-  box-sizing: border-box;
-}
-
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font:
-    16px/1.55 system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
+  font: var(--font-size-base) / 1.55 var(--font-sans);
 }
 
 .shell {
-  max-width: 62rem;
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: 3rem 1.25rem;
 }
@@ -63,7 +64,7 @@ h1 {
 
 .lede {
   margin: 0 0 2rem;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .status {
@@ -78,7 +79,7 @@ h1 {
 }
 
 .bad {
-  color: var(--bad);
+  color: var(--danger);
 }
 
 dl {
@@ -89,7 +90,7 @@ dl {
 }
 
 dt {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 dd {
@@ -148,7 +149,7 @@ dd {
 .help,
 .hint,
 .muted {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .hint {
@@ -160,7 +161,7 @@ dd {
 .crumb,
 .notice {
   margin: 0;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.95rem;
 }
 
@@ -244,7 +245,7 @@ fieldset.choices.tight {
 }
 
 .row label {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
@@ -259,7 +260,7 @@ fieldset.choices.tight {
 }
 
 .unit {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 /* --- Actions --- */
@@ -307,7 +308,7 @@ button.link.inline {
   display: inline;
   width: auto;
   padding: 0;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 button.link:hover .prompt {
@@ -328,7 +329,7 @@ ul.answers li + li {
 
 .prompt {
   font-size: 0.9rem;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .value {
@@ -366,7 +367,7 @@ ul.answers li + li {
 .run .gaps ul {
   margin: 0;
   padding-left: 1.2rem;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .run .gaps li {
@@ -431,7 +432,7 @@ ul.answers li + li {
 }
 
 .where {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
@@ -446,7 +447,7 @@ ul.answers li + li {
  */
 .provenance {
   font-size: 0.85rem;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .provenance .mark {
@@ -485,7 +486,7 @@ ul.answers li + li {
 .unchecked ul {
   margin: 0;
   padding-left: 1.2rem;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .gaps li,
@@ -550,21 +551,10 @@ ul.answers li + li {
 
 .health {
   margin-top: 2rem;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
 .health p {
   margin: 0;
-}
-
-/* A legend that is read but not shown: the prompt above it is the same words. */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }

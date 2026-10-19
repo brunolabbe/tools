@@ -31,6 +31,7 @@ WORKDIR /app
 # less often than the source does.
 COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
+COPY packages/ui/package.json packages/ui/
 COPY tools/planner/contract/package.json tools/planner/contract/
 COPY tools/planner/intake/package.json tools/planner/intake/
 COPY tools/planner/itinerary/package.json tools/planner/itinerary/

@@ -178,12 +178,19 @@ interface ToolImage {
   /** The directories the API's runtime resolution graph needs. */
   readonly closure: readonly string[];
   /**
-   * Bundled, not resolved: Vite inlines every `@<tool>/*` import into
+   * Bundled, not resolved: Vite inlines every workspace import into
    * `web/dist/app`, so the runtime never resolves one for the UI. The two lines
    * each Dockerfile spends on `web` do a different job — shipping the bundle the
-   * API serves same-origin — and are deliberately outside this scan.
+   * API serves same-origin — and are outside the runtime check.
    */
-  readonly bundledOnly: string;
+  readonly bundledOnly: readonly string[];
+  /**
+   * Everything the UI build resolves — `web` and the workspaces it depends on,
+   * `@webtools/ui` among them (repo-108). The build stage needs their manifests
+   * before `npm ci`, or the symlink is never made and Vite cannot resolve the
+   * import; the runtime stage needs none of them.
+   */
+  readonly webClosure: readonly string[];
   readonly preInstall: string;
   readonly runtime: string;
 }
@@ -266,10 +273,19 @@ async function readImages(): Promise<ImageScan> {
       continue;
     }
 
+    // A tool with no `web` is a tool with no UI to build, which is not a fault.
+    const web = WORKSPACES.has(`@${tool}/web`) ? closureFrom(`@${tool}/web`) : null;
+    if (web !== null && web.problems.length > 0) {
+      problems.push(...web.problems.map((problem) => `${where}: ${problem}`));
+      continue;
+    }
+    const webClosure = web?.dirs ?? [];
+
     images.push({
       tool,
       closure: closure.dirs,
-      bundledOnly: `tools/${tool}/web`,
+      bundledOnly: webClosure.filter((dir) => !closure.dirs.includes(dir)),
+      webClosure,
       preInstall: text.slice(build, install),
       runtime: text.slice(runtime),
     });
@@ -315,6 +331,21 @@ describe("each tool's image carries every workspace its API resolves", () => {
     expect(missing).toEqual([]);
   });
 
+  test("every workspace the UI build resolves has its manifest copied before `npm ci`", () => {
+    const missing: string[] = [];
+    for (const image of IMAGES) {
+      const lines = copyLines(image.preInstall);
+      for (const dir of image.webClosure) {
+        const line = `COPY ${dir}/package.json ${dir}/`;
+        if (!lines.includes(line)) missing.push(`tools/${image.tool}/Dockerfile: ${line}`);
+      }
+    }
+    // The API's closure above never reaches a web-only workspace, so without this
+    // the omission surfaces only as a Vite build that cannot resolve an import,
+    // in the image job and nowhere else (repo-108).
+    expect(missing).toEqual([]);
+  });
+
   test("every workspace in the closure has its manifest and `dist` in the runtime stage", () => {
     const missing: string[] = [];
     for (const image of IMAGES) {
@@ -336,7 +367,7 @@ describe("each tool's image carries every workspace its API resolves", () => {
   test("neither list ships a workspace the API does not resolve", () => {
     const stale: string[] = [];
     for (const image of IMAGES) {
-      const carried = new Set([...image.closure, image.bundledOnly]);
+      const carried = new Set([...image.closure, ...image.bundledOnly]);
       for (const [stage, section] of [
         ["build", image.preInstall],
         ["runtime", image.runtime],

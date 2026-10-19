@@ -28,6 +28,7 @@ WORKDIR /app
 # less often than the source does.
 COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
+COPY packages/ui/package.json packages/ui/
 COPY tools/ledger/contract/package.json tools/ledger/contract/
 COPY tools/ledger/books/package.json tools/ledger/books/
 COPY tools/ledger/receipts/package.json tools/ledger/receipts/
