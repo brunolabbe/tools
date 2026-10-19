@@ -547,17 +547,17 @@ describe("classifying a row again", () => {
   });
 });
 
-describe("the report says how many of a paste's rows wait (lg-54)", () => {
-  async function pasteReport(target: App, text: string): Promise<ImportStatementReport> {
-    const response = await target.server.inject({
-      method: "POST",
-      url: ROUTES.statements,
-      payload: { text },
-    });
-    expect(response.statusCode, response.body).toBe(200);
-    return response.json<ImportStatementReport>();
-  }
+async function pasteReport(target: App, text: string): Promise<ImportStatementReport> {
+  const response = await target.server.inject({
+    method: "POST",
+    url: ROUTES.statements,
+    payload: { text },
+  });
+  expect(response.statusCode, response.body).toBe(200);
+  return response.json<ImportStatementReport>();
+}
 
+describe("the report says how many of a paste's rows wait (lg-54)", () => {
   test("with no rule every added row waits, and with two rules the other two do", async () => {
     const bare = await start();
     expect(await pasteReport(bare, paste())).toMatchObject({ rowsAdded: 4, rowsInInbox: 4 });

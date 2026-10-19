@@ -74,7 +74,7 @@ Two things hide it:
     away: `classifyAdded` returns how many rows it filed, and `importStatement`
     now reports `rowsAdded - filed`. The field is required and flat, beside
     `rowsAdded`, so lg-58's optional `datesDiffering` can sit next to it without
-    touching it. Cost: 13 whole-report assertions in `api/test/statements.test.ts`
+    touching it. Cost: 21 whole-report assertions in `api/test/statements.test.ts`
     and `api/test/workbook-days.test.ts` (36 tests failed on the required field)
     take the new key; they are mechanical.
   - The screen line reads "N of the M rows added wait in the inbox. A row in the
@@ -88,3 +88,8 @@ Two things hide it:
     that is an added dependency of the inbox-count effect, so the tab's number is
     asked again at once.
   - Fold-in: none free. lg-58's screen line and field are its own.
+  - Red/green, each mutation restored from the commit: with the inbox effect's
+    dependency list back to `[tab]`, `npx vitest run tools/ledger/web/test/app.test.tsx`
+    fails 1 of 18 (the new count test); with `rowsInInbox: stored.rowsAdded`
+    in `api/src/statements.ts`, `classifications.test.ts` plus `auto-file.test.ts`
+    fail 3 of 59 (the three new report tests). Both restored; the tree is the commit.

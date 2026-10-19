@@ -67,10 +67,9 @@ export function StatementPaste({ onStored, onOpenInbox }: StatementPasteProps): 
     setProblem(null);
     setStep({ kind: "storing", rows });
     importStatement(text)
-      .then((report) => {
-        setStep({ kind: "stored", report });
-        onStored();
-      })
+      .then((report) => setStep({ kind: "stored", report }))
+      // After the store answered, so the shell asks for a count that includes it.
+      .then(onStored)
       .catch((error: unknown) => {
         // The API's own sentence: it names the row, or the unexplained amount.
         setProblem(AppError.from(error).message);
