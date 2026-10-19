@@ -44,8 +44,15 @@ an inventory.
 
 ## What you return
 
-Nothing but this, and keep it under about forty lines:
+Nothing but this, and keep it under about forty lines, **grouped by tool**: the
+orchestrator offers the owner batches of one tool's tickets, so the groups are
+the options it builds from.
 
+- **Each candidate's open decisions, quoted, as findings**: the question under a
+  `## Decision — open` heading, and each `Done when` line a gate would grade
+  `unproven (open decision)` — one the build cannot meet until the owner
+  chooses. The owner answers them at intake, beside the batch question; one
+  left out is asked after gate 1, at the cost of a round.
 - **A collision matrix.** One row per pair that shares a file or a seam, naming
   the file. Pairs that share nothing do not get a row.
 - **For each collision, which half is cheaper to hold.** Not which to run — which

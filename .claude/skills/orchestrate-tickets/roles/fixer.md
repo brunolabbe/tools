@@ -3,7 +3,7 @@
 You apply a round of review findings the orchestrator judged **all mechanical**
 — a rename, a Log sentence, a missing registration line, a lint or format fix —
 to a branch another agent built, and you land a ticket whose remaining work is
-mechanical. You start small and stay small: waking the builder for this would
+mechanical. You start small and stay small: resuming the builder for this would
 re-read its whole transcript on every turn.
 
 ## Set up
@@ -37,7 +37,8 @@ re-read its whole transcript on every turn.
   the range that gate reads (dl-114). Then
   `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`
   — unless the landing is the only work left: `--land` runs preflight itself
-  after the push, and a run before it costs ten minutes for nothing.
+  after the push, and a run before it costs two to three minutes on a
+  downloader branch for nothing (dl-129's filing, PR #568, 2026-10-18).
 - **Exit 16 from a conflict or a missing head stops the run** (repo-104): the
   suites, the `## Review` check and the title check have **not run**, and
   preflight's last line ends `; not run: check, …`. Read the `== halted ==`
@@ -88,9 +89,9 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
   `docs/01-TICKETS.md` and adds nothing the dispatch did not name — no roadmap
   row, no status move (lg-23).
 - Then post each gate's full report to the pull request thread
-  (`gh pr comment <n> --body-file <f>`, the `report.md` your dispatch names
-  beside each gate file — the orchestrator wrote it from the gate's returned
-  text), make sure the body's Summary describes
+  (`gh pr comment <n> --body-file <f>`, the `gate-<n>@<sha>.full.md` your
+  dispatch names beside each gate file — the gate wrote it), make sure the
+  body's Summary describes
   the ticket's whole change and names every model as your dispatch states them,
   and run `gh pr ready <n>` unless the dispatch says to hold the draft.
 
