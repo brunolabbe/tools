@@ -24,7 +24,9 @@ import {
   findAgentTranscript,
   formatDollars,
   formatDuration,
+  estimateOutput,
   normaliseModel,
+  OUTPUT_ESTIMATE,
   sessionOf,
   parseArgs,
   priceFile,
@@ -34,6 +36,7 @@ import {
   render,
   sumUsage,
   USAGE,
+  visibleOutput,
 } from "../agent-cost.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -76,6 +79,9 @@ test("sums the four billed fields over every assistant record, ignoring other re
     cacheWrite1h: 0,
     cacheRead: 7000,
     output: 200,
+    recordedOutput: 200,
+    unfinishedResponses: 2,
+    estimatedResponses: 0,
     syntheticSkipped: 0,
     efforts: ["unrecorded"],
     coldRestarts: 0,
@@ -95,6 +101,9 @@ test("prices the Sonnet fixture at the hand-computed dollar figure", () => {
     cacheWrite1h: 0,
     cacheRead: 7000,
     output: 200,
+    recordedOutput: 200,
+    unfinishedResponses: 2,
+    estimatedResponses: 0,
     syntheticSkipped: 0,
     efforts: ["unrecorded"],
     coldRestarts: 0,
@@ -115,6 +124,9 @@ test("prices the Opus fixture at the hand-computed dollar figure", () => {
     cacheWrite1h: 0,
     cacheRead: 150000,
     output: 3000,
+    recordedOutput: 3000,
+    unfinishedResponses: 2,
+    estimatedResponses: 0,
     syntheticSkipped: 0,
     efforts: ["unrecorded"],
     coldRestarts: 0,
@@ -180,6 +192,9 @@ test("sumUsage groups a streamed response by requestId, keeping only its final o
     cacheWrite1h: 0,
     cacheRead: 0,
     output: 303, // not 8 + 8 + 303 = 319
+    recordedOutput: 303,
+    unfinishedResponses: 1,
+    estimatedResponses: 0,
     syntheticSkipped: 0,
     efforts: ["unrecorded"],
     coldRestarts: 0,
@@ -198,6 +213,9 @@ test("the streamed fixture's grouped sums differ from what an ungrouped sum over
     cacheWrite1h: 0,
     cacheRead: 50000, // req_1's kept record (0) + req_2 (50000)
     output: 1503, // req_1's largest (303) + req_2 (1200)
+    recordedOutput: 1503,
+    unfinishedResponses: 0,
+    estimatedResponses: 0,
     syntheticSkipped: 0,
     efforts: ["unrecorded"],
     coldRestarts: 0,
@@ -258,6 +276,9 @@ test("sumUsage skips a synthetic session-limit record from both the model check 
     cacheWrite1h: 0,
     cacheRead: 150000,
     output: 3000,
+    recordedOutput: 3000,
+    unfinishedResponses: 2,
+    estimatedResponses: 0,
     syntheticSkipped: 1,
     efforts: ["unrecorded"],
     coldRestarts: 0,
@@ -342,6 +363,9 @@ test("priceFile fails loudly on a model id missing from RATES, rather than prici
     cacheWrite1h: 0,
     cacheRead: 0,
     output: 5,
+    recordedOutput: 5,
+    unfinishedResponses: 0,
+    estimatedResponses: 0,
     syntheticSkipped: 0,
     efforts: ["unrecorded"],
     coldRestarts: 0,
@@ -459,6 +483,9 @@ test("sumUsage splits the 1-hour write out, names every effort, and counts the c
     cacheWrite1h: 30000,
     cacheRead: 21000,
     output: 400,
+    recordedOutput: 400,
+    unfinishedResponses: 3,
+    estimatedResponses: 0,
     syntheticSkipped: 0,
     efforts: ["high", "medium"],
     coldRestarts: 1, // r3: 30000 written of 31010, 19 min after r2, past r2's 5-minute write
@@ -655,4 +682,99 @@ test("Haiku 5.5's long-prompt card is positive in every column and dearer than i
   for (const [field, value] of Object.entries(card)) {
     expect(value, field).toBeGreaterThan(base[field as keyof typeof base]);
   }
+});
+
+// --- repo-112: output the transcript no longer records ----------------------
+//
+// `lost-output.jsonl` is two Sonnet 5.5 responses in the shape Claude Code
+// 2.1.300 leaves behind. req_a never gets its final record: three records, one
+// per block (a redacted thinking block with a 1000-character signature, 160
+// characters of text, a `Bash` call whose input is `{"command":"ls"}`), each
+// carrying the stream's opening count of 8. req_b does get its final record,
+// with a non-null stop_reason and 50 output tokens, though its `Write` input
+// alone is far longer than 50 tokens would print.
+
+const lostOutputFixture = path.join(FIXTURES, "lost-output.jsonl");
+
+test("visibleOutput counts text, a tool call's name and JSON input, and a redacted thinking block's signature", () => {
+  expect(
+    visibleOutput([
+      { type: "text", text: "abcd" },
+      { type: "tool_use", name: "Bash", input: { command: "ls" } }, // 4 + 16
+      { type: "thinking", thinking: "", signature: "s".repeat(50) },
+      { type: "thinking", thinking: "seen", signature: "s".repeat(70) }, // its text, not its signature
+    ]),
+  ).toEqual({ chars: 28, signature: 50 });
+  expect(visibleOutput("not an array")).toEqual({ chars: 0, signature: 0 });
+  expect(visibleOutput(undefined)).toEqual({ chars: 0, signature: 0 });
+});
+
+test("estimateOutput adds characters at the fitted rate and thinking past the signature offset", () => {
+  // 180 / 1.8 = 100, plus 1000 * 0.277 - 266 = 11
+  expect(estimateOutput({ chars: 180, signature: 1000 })).toBe(111);
+  // 500 * 0.277 - 266 is negative: a short signature adds nothing
+  expect(estimateOutput({ chars: 180, signature: 500 })).toBe(100);
+  expect(estimateOutput({ chars: 0, signature: 0 })).toBe(0);
+  expect(OUTPUT_ESTIMATE).toEqual({
+    charsPerToken: 1.8,
+    thinkingTokensPerSignatureChar: 0.277,
+    thinkingSignatureOffset: 266,
+  });
+});
+
+test("a response with no final record is raised to its estimate; one with a final record keeps its count", () => {
+  const totals = sumUsage(readFileSync(lostOutputFixture, "utf8"), lostOutputFixture);
+  // req_a: 160 text + 4 + 16 tool chars = 180 -> 111 with its signature; req_b keeps 50
+  expect(totals.responses.map((r) => r.output)).toEqual([111, 50]);
+  expect(totals.output).toBe(161);
+  expect(totals.recordedOutput).toBe(58); // 8 + 50
+  expect(totals.unfinishedResponses).toBe(1);
+  expect(totals.estimatedResponses).toBe(1);
+});
+
+test("the estimate prices the response: Sonnet 5.5 at 20 input and 161 output tokens", () => {
+  // 20 * $2 + 161 * $10 per 1e6 = $0.00165
+  expect(processFile(lostOutputFixture).dollars).toBeCloseTo(0.00165, 12);
+});
+
+test("an estimate below the count already recorded never lowers it", () => {
+  const content = [
+    '{"type":"assistant","requestId":"r1","message":{"model":"claude-opus-5-5","stop_reason":null,"content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":1,"output_tokens":40}}}',
+  ].join("\n");
+  const totals = sumUsage(content, "partial.jsonl");
+  expect(totals.output).toBe(40);
+  expect(totals.unfinishedResponses).toBe(1);
+  expect(totals.estimatedResponses).toBe(0);
+});
+
+test("render names the estimate on the row and the total, with the recorded figure beside it", () => {
+  const out = render([{ ...processFile(lostOutputFixture), file: "lost.jsonl" }]);
+  const [row, total] = out.split("\n");
+  expect(row).toContain("output=161 ");
+  expect(row).toContain(
+    `(rates read ${RATES_READ_ON}; output estimated for 1 of 2 responses, recorded 58)`,
+  );
+  expect(total).toContain(
+    `(rates read ${RATES_READ_ON}; output estimated for 1 of 2 responses, recorded 58)`,
+  );
+});
+
+test("render prints no estimate note when nothing was raised", () => {
+  const out = render([{ ...processFile(sonnetFixture), file: "sonnet.jsonl" }]);
+  expect(out).not.toContain("estimated");
+  expect(out).toContain(`(rates read ${RATES_READ_ON})`);
+});
+
+test("the CLI labels an estimated row and still exits 0", () => {
+  const result = spawnSync("node", [CLI, lostOutputFixture], RUN);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("output estimated for 1 of 2 responses, recorded 58");
+  expect(result.stderr).toBe("");
+});
+
+test("visibleOutput skips a null or non-object content entry instead of throwing", () => {
+  expect(visibleOutput([null, 7, "x", { type: "text", text: "ok" }])).toEqual({
+    chars: 2,
+    signature: 0,
+  });
 });
