@@ -1000,3 +1000,106 @@ describe("an address with a control character", () => {
     },
   );
 });
+
+// lg-57: the C1 controls and the zero-width characters, which lg-52 left out.
+// None shows in a member list or an email client, so an address that holds one
+// is a row nobody can sign in as. Each is written as an escape.
+describe("an address with a C1 control or a zero-width character", () => {
+  /** The ends of the C1 range and the one the ticket names, then the zero-width set. */
+  const INVISIBLE = [
+    ["U+0080", "\u0080"],
+    ["U+0085", "\u0085"],
+    ["U+009F", "\u009f"],
+    ["U+200B", "\u200b"],
+    ["U+200C", "\u200c"],
+    ["U+200D", "\u200d"],
+  ] as const;
+
+  test("is not an address to readAddress, while a clean one and a non-ASCII letter are", () => {
+    // The clean addresses first, so a pattern that refuses everything outside ASCII cannot pass.
+    expect(readAddress("a@b.test")).toBe("a@b.test");
+    expect(readAddress("é@b.test")).toBe("é@b.test");
+    expect(readAddress("a@é.test")).toBe("a@é.test");
+    for (const [name, character] of INVISIBLE) {
+      expect(readAddress(`a${character}x@b.test`), name).toBeUndefined();
+      expect(readAddress(`a@b${character}c`), name).toBeUndefined();
+      expect(readAddress(`a@b.test${character}`), name).toBeUndefined();
+    }
+  });
+
+  // The BOM is White_Space to JavaScript's `\s`, so `ADDRESS_SHAPE` already refused it
+  // and this one cannot fail first: it is a guard. At the very ends `trim` removes it,
+  // as it removes any whitespace.
+  test("refuses U+FEFF inside an address, as it already did", () => {
+    expect(readAddress("a\ufeff@b.test")).toBeUndefined();
+    expect(readAddress("a@b\ufeffc")).toBeUndefined();
+    expect(readAddress("\ufeffa@b.test")).toBe("a@b.test");
+  });
+
+  test.each([
+    ["a U+0085", "casey\u0085@example.test"],
+    ["a U+009F", "casey@example.test\u009f"],
+    ["a U+200B", "casey@b\u200bc.test"],
+    ["a U+200D", "casey\u200d@example.test"],
+    ["a U+FEFF", "ca\ufeffsey@example.test"],
+  ])(
+    "is refused by addMember with %s as BAD_REQUEST, in the operator's sentence, and no row is written",
+    (_label, address) => {
+      const directory = withHousehold();
+      const before = stateOf(directory);
+
+      expect(
+        code(() => directory.addMember({ household: "home", address, person: "casey", ...CHANGE })),
+      ).toBe("BAD_REQUEST");
+      expect(() =>
+        directory.addMember({ household: "home", address, person: "casey", ...CHANGE }),
+      ).toThrow("That is not an email address.");
+
+      expect(stateOf(directory)).toEqual(before);
+      expect(
+        directory.addMember({ household: "home", address: CASEY, person: "casey", ...CHANGE })
+          .address,
+      ).toBe(CASEY);
+      directory.close();
+    },
+  );
+
+  test("is refused by changeAddress as the new address, and nothing changes", () => {
+    const directory = withHousehold();
+    directory.addMember({ household: "home", address: SAM, person: "sam", ...CHANGE });
+    const before = stateOf(directory);
+
+    for (const to of ["a@b\u0085c", "a\u200b@b.test"]) {
+      expect(
+        code(() => directory.changeAddress({ household: "home", from: SAM, to, ...CHANGE })),
+      ).toBe("BAD_REQUEST");
+    }
+
+    expect(stateOf(directory)).toEqual(before);
+    directory.close();
+  });
+
+  test("is no obstacle to removing a row that already stands with one, which the schema let in", () => {
+    const db = raw();
+    // Past `Directory`, as a directory made before lg-57 holds it.
+    insert(db, { address: "sam@b\u0085c", person: "sam" });
+    insert(db, { address: "kim@b\u200b.test", person: "kim" });
+    const directory = new Directory(db);
+
+    const removed = directory.removeMember({ address: "sam@b\u0085c", ...CHANGE });
+    const removedZeroWidth = directory.removeMember({
+      address: " KIM@b\u200b.test",
+      household: "home",
+      ...CHANGE,
+    });
+
+    expect(removed).toEqual({ address: "sam@b\u0085c", household: "home", person: "sam" });
+    expect(removedZeroWidth).toEqual({
+      address: "kim@b\u200b.test",
+      household: "home",
+      person: "kim",
+    });
+    expect(directory.members()).toEqual([]);
+    directory.close();
+  });
+});

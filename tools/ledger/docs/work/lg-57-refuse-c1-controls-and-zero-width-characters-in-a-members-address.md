@@ -14,7 +14,8 @@ difficulty: standard
 ## Why
 
 lg-52 refuses the C0 controls (`\u0000` to `\u001f`) and DEL (`\u007f`) in a
-member's address, in `ADDRESS` in `api/src/directory.ts`, and leaves a wider set
+member's address, in `CONTROL` in `api/src/directory.ts` (the check
+`readAddress` makes after `ADDRESS_SHAPE`), and leaves a wider set
 to this ticket on purpose: its Build item 2 says the floor is C0 and DEL only,
 and its Decision section records the owner's answer to how wide the refusal is.
 The set left is the C1 controls (`\u0080` to `\u009f`) and the zero-width
@@ -62,7 +63,7 @@ has work to do for it.
 
 ## Build
 
-It extends lg-52's single `ADDRESS` change, in the same place, so that every
+It extends lg-52's single `CONTROL` change, in the same place, so that every
 writer lg-52 lists inherits it: `Directory.addMember` (the admin route, the
 member route and the host `member` verb) and `LEDGER_ADMINS` through
 `readAddress`. **Do not add a second check beside `readAddress` in any caller**,
@@ -73,7 +74,7 @@ without the new check (its Build item 4), so a directory that already holds an
 address with one of these characters can still have it removed, and no schema
 trigger and no migration is added.
 
-1. Extend `ADDRESS` to refuse `\u0080` to `\u009f`, `​` to `‍` and
+1. Extend `CONTROL` (renamed `UNSEEN`) to refuse `\u0080` to `\u009f`, `​` to `‍` and
    `﻿`. Refuse nothing else: this ticket names the set and does not widen
    it.
 2. A test per refusal, written to fail on `main` first, in the shape of lg-52's
@@ -109,3 +110,24 @@ trigger and no migration is added.
   stays at C0 and DEL. Reproduced on `origin/main@9ec8943e` before filing: the
   output is above, and `﻿` is the one of the set that is already refused.
   Nothing was built.
+- 2026-10-19 — Built on `origin/main@96da35c8`, branch `lg-57-address-control-chars`.
+  **What the brief had wrong:** it names `ADDRESS` in `api/src/directory.ts`, which
+  lg-52's landing split into `ADDRESS_SHAPE` (the `\s`-based shape) and `CONTROL`
+  (the C0 and DEL class `readAddress` tests after it, and `readStoredAddress` leaves
+  out so removal still matches a stored row). The refusal went into `CONTROL`, renamed
+  `UNSEEN` because it is no longer only controls:
+  `/[\u0000-\u001f\u007f-\u009f\u200b-\u200d\ufeff]/u`. Nothing else was widened.
+  `\ufeff` is listed in the class though `\s` already refused it, so the set reads
+  whole; `trim` still removes it at the very ends, as it does any whitespace. The
+  brief's prose above is corrected to the real name.
+  Red first: the new tests, run against the old class with
+  `npx vitest run tools/ledger/api/test/{directory,households,household-command,config-access}.test.ts`
+  (the four files named singly), gave `Tests  12 failed | 121 passed (133)`:
+  readAddress, addMember for U+0085, U+009F, U+200B and U+200D, changeAddress, the
+  admin and member routes, the host `member` verb four times, and the
+  `LEDGER_ADMINS` entry. With the class widened, `Tests  133 passed (133)`. What
+  passed on the old class are the guards: U+FEFF refused inside an address (and
+  `addMember` with it), the clean `a@b.test` and `é@b.test`, and removal of stored
+  rows holding U+0085 or U+200B through `removeMember`, the admin remove route and
+  the host `remove` verb. No fold-in: no other already-specified piece became free;
+  the web paste screen's own address handling is lg-54's.
