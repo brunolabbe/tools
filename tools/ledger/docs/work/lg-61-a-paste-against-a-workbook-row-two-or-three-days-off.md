@@ -340,3 +340,95 @@ refusedOther`:
   it as leaving 3,142 wrong and still storing R1 wrongly. The owner chose **A,
   wide 2/3**, which overrode no recommendation. Build step 3's named
   directions are marked superseded by this answer.
+
+- 2026-10-20 — builder (Opus 5.5), **A built** in `b8f3db26`, on `main` at
+  `da4673e1` (merged in `900b1d4f`; repo-108's `packages/ui` linked by hand into
+  this worktree's farm, which lacked it).
+
+  **The rule as written.**
+  - `workbook-days.ts`: a `DateTolerance` (`widestBlockDays`, `daysOff`), with
+    `STORED_TOLERANCE` (2, 1), lg-59's rule unchanged, and `RIVAL_TOLERANCE`
+    (2, `RIVAL_DAYS_OFF` = 3). `matchBlock` and `matchStretch` take one, and
+    default to `STORED_TOLERANCE`.
+  - `statements.ts`: `readings`, `overlaps`, `nearby` and `workbookStarts` take
+    the tolerance. `workbookStarts` reaches `widestBlockDays + daysOff`: 3 days
+    as before on `STORED_TOLERANCE`, and 5 on `RIVAL_TOLERANCE`. `store` reads
+    the paste on `STORED_TOLERANCE` as before. When that finds exactly one
+    reading, it reads the paste again on `RIVAL_TOLERANCE`, and any other
+    reading found throws `ambiguousAcrossDays`. Nothing is ever stored on a
+    rival reading. Both files' headers say so.
+  - **The final message**, as R1 gets it: `The paste starting at 2026-02-20
+"Virement 0" -5.00 $ (balance 995.00 $) can be read two ways: as 1 already
+stored and 3 new, which fits what is stored, or as 3 already stored and 1 new,
+which fits it too if the workbook dated a row up to 3 days from the bank's
+date, pairing rows that far apart. The books cannot tell which was meant, so
+nothing was stored. Paste a stretch that starts on an earlier row, or on the
+first row not stored yet, so only one reading fits.` Its code is
+    `STATEMENT_ROW_CONFLICT`, and its `details` have the shape the in-tolerance
+    refusal's have (`readings`, most stored first, and the oldest row). The
+    in-tolerance "two ways" message is unchanged. Its advice to paste a longer
+    stretch holds there, but not here: R1's true reading never fits, so no
+    longer paste is stored. A paste starting on the first row not yet stored
+    is, as a test shows.
+  - **The lg-58 seam.** The pairing a stored paste rests on stays in
+    `matchBlock`'s call to `matchPart`. That is the one reading `STORED_TOLERANCE`
+    found; the rival pass only refuses. `matchBlock`'s doc comment says this is
+    the one place a pasted row meets the workbook's rows of its day.
+
+  **Tests**, appended to `api/test/workbook-days.test.ts`:
+  - R1 and R8 (Done when 1). Each asserts that the outcome is the true reading,
+    or a refusal that is `STATEMENT_ROW_CONFLICT` with "two ways" or
+    `STATEMENT_CHAIN_BROKEN`, and that the workbook's rows are unchanged. Both
+    are now refused as "two ways". R1 also pins its two readings and "up to 3
+    days".
+  - `matchBlock` on `RIVAL_TOLERANCE`: a row 3 days off is weighed, and one 4
+    days off is not.
+  - The refusal's advice: R1's workbook and the bank's one new row alone are
+    stored as 0 present and 1 new.
+  - Mutants, each restored from `b8f3db26`. With the rival throw disabled
+    (`rivals.length > 99`), R1 and R8 fail, 2 of 38. With `RIVAL_TOLERANCE`'s
+    `daysOff` at 2, R1 and the `matchBlock` test fail, 2 of 38.
+
+  **Done when 2 and 3, at `b8f3db26`.** Run as in step 1; the base's outcomes
+  were read from the cache step 1 wrote at `335efcd4`.
+
+  | space          | variants | this branch                   | head only | base                             |
+  | -------------- | -------- | ----------------------------- | --------- | -------------------------------- |
+  | 4 rows, ±5/±10 | 163,840  | 105,180 / 0 / 22,980 / 35,680 | 0         | 78,182 / 11,776 / 3,738 / 70,144 |
+  | 5 rows, ±10    | 81,920   | 36,380 / 0 / 33,012 / 12,528  | 0         | 33,744 / 11,424 / 7,940 / 28,812 |
+
+  These match experiment A's row in the entry of 2026-10-20 above, count for
+  count. Probes c and c2 at seed 11 are byte-identical to the "wide 2/3" column
+  of that entry's cell table (`cmp` exit 0 on both files): `wrongAccept` 0 in
+  every cell and `refusedOther` 0 in the `both` cells, and in every other cell.
+  Against `main`, each cell's change is that column's against "leave (`main`)":
+  - `distinct`: no change in any cell.
+  - `repeating`: plain +36, reorder +35, shift +31, `both` +39, c2 +42
+    ambiguous.
+  - `tiny`: plain +73, reorder +81, shift +90, `both` +95, c2 +86 ambiguous.
+
+  Each of the 16 enumeration shards exits 0, and both probe runs exit 1 on the
+  20 s timeout, as before. The gate's R1–R8 repro at `b8f3db26`:
+  - R1, R6 and R8 are refused as "two ways".
+  - R3 and R7 are refused as "two ways", as on `main`.
+  - R4 and R5 are accepted with their true counts, as on `main`.
+
+  **Time, at `b8f3db26` against `main` (`00977771`)**, gate 1's harness, 54
+  cases, the two trees side by side. The 1-minute load average was sampled every
+  30 s, 16 samples from 02:26:54 to 02:33:59: mean 5.8, 2.7 to 11.7, on 12
+  cores. Totals: 460,426 ms on `main` and 790,953 ms here (×1.72).
+  - The worst ratio is ×3.30, at 1,000 rows of constant amounts at 40 a date,
+    pasted onto the tail: 1,731 → 5,707 ms. No case is worse than ×5.
+  - The cases the owner was quoted: 1,000 alternating rows inside the history,
+    5,929 → 8,462 ms (×1.43); 2,000 alternating rows at 200 a date inside,
+    32,325 → 84,998 ms (×2.63).
+  - The slowest case here is that last one, at 85.0 s.
+  - Outcomes changed: 2 of 54, 200 alternating rows at 40 a date, inside the
+    history and missing it, both from a correct accept to "two ways", as
+    measured in the experiment.
+
+  **Checks.** `npm run check` exits 0. `npm test -- --project ledger`: 1,566 of
+  1,566 in 71 files.
+
+  **Fold-in:** the in-tolerance `ambiguous` and the new refusal share two
+  helpers, `described` and `said`. Nothing else was made free.
