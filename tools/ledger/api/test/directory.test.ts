@@ -1034,6 +1034,7 @@ describe("an address with a C1 control or a zero-width character", () => {
     expect(readAddress("a\ufeff@b.test")).toBeUndefined();
     expect(readAddress("a@b\ufeffc")).toBeUndefined();
     expect(readAddress("\ufeffa@b.test")).toBe("a@b.test");
+    expect(readAddress("a@b.test\ufeff")).toBe("a@b.test");
   });
 
   test.each([

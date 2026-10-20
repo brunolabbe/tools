@@ -157,3 +157,14 @@ trigger and no migration is added.
   3. **Stale `ADDRESS`.** Three mentions above the Log named the old constant; they
      now read `ADDRESS_SHAPE` (the Reproduction's U+FEFF paragraph), `UNSEEN` (Build
      item 4) and `UNSEEN` (lg-52's `CONTROL`) in Done when 6.
+- 2026-10-20 — Round 2, after gate 2 (med and low, fixed with no third gate, under
+  the severity floor).
+  1. **Med, trailing U+FEFF.** Done when 1's "trimmed at either end" had an assertion
+     for the leading end only. Added `expect(readAddress("a@b.test﻿")).toBe("a@b.test")`
+     to "refuses U+FEFF inside an address, as it already did" in
+     `api/test/directory.test.ts`.
+  2. **Low, `changeAddress` and a `from` that matches no row.** Because `from` is now
+     read with `readStoredAddress`, as `removeMember` does, a `from` carrying a C0
+     control or DEL that matches no row answers `MEMBER_NOT_FOUND` (404 through the
+     admin route) where `origin/main@96da35c8` answered `BAD_REQUEST`. No row is
+     written either way, and no member has that address, so both answers are true.
