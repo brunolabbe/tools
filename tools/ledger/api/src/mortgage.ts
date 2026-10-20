@@ -74,7 +74,7 @@ export function mortgageStatus(db: Database, today: string): MortgageResponse {
       endedOn,
       lastPaymentOn,
       closedOn,
-      left: mortgage.own.some((person) => person.ownCents !== 0),
+      left: mortgage.balanceCents !== 0,
       balanceCents: mortgage.balanceCents,
       own: mortgage.own,
     };

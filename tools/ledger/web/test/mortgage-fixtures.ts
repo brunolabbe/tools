@@ -49,6 +49,30 @@ export const ENDED_EMPTY: MortgageResponse = {
   ],
 };
 
+/**
+ * A bucket at zero whose parts are not: alex paid in 1 000.00 $ and one joint payment of
+ * 1 000.00 $ took it all, so alex holds 500.00 $ and sam is 500.00 $ short.
+ */
+export const ENDED_UNEVEN: MortgageResponse = {
+  ...ENDED,
+  left: false,
+  balanceCents: 0,
+  own: [
+    { personId: "alex", ownCents: 50000 },
+    { personId: "sam", ownCents: -50000 },
+  ],
+};
+
+/** Money left (600.00 $) and one part below zero: alex holds 1 100.00 $ of it and sam owes 500.00 $. */
+export const ENDED_OWES: MortgageResponse = {
+  ...ENDED,
+  balanceCents: 60000,
+  own: [
+    { personId: "alex", ownCents: 110000 },
+    { personId: "sam", ownCents: -50000 },
+  ],
+};
+
 export const NONE: MortgageResponse = {
   ...LIVE,
   record: {

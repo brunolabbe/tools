@@ -12,9 +12,9 @@
 import { useEffect, useState } from "react";
 import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
-import type { BucketsResponse, MortgageResponse } from "@ledger/contract";
+import type { BucketsResponse } from "@ledger/contract";
 import { fetchBuckets } from "../api/buckets.ts";
-import { showsHomeSection, useMortgage } from "../mortgage.ts";
+import { endedSentence, showsHomeSection, useMortgage } from "../mortgage.ts";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
@@ -37,15 +37,6 @@ export function leadSentence(mortgage: BucketsResponse["mortgage"], names: Shown
   return two
     ? `${who} has paid ${by} more.`
     : `${who} has paid the most, ${by} more than the next.`;
-}
-
-/**
- * What is left once the mortgage has ended, and whose it is (lg-55): the model
- * already holds every dollar in the bucket as one person's, so it goes back to
- * them as it stands, and a row filed to them that takes it out brings it down.
- */
-export function endedSentence(mortgage: MortgageResponse): string {
-  return `The mortgage ended on ${mortgage.closedOn ?? "a day the books do not name"}. The ${formatCents(mortgage.balanceCents)} left in the bucket is each person's own, theirs to take back.`;
 }
 
 export function Home(): React.ReactElement {
@@ -92,7 +83,7 @@ export function Home(): React.ReactElement {
             ))}
           </ul>
           <p className="lead">
-            {ended === null ? leadSentence(mortgage, names) : endedSentence(ended)}
+            {ended === null ? leadSentence(mortgage, names) : endedSentence(ended, names)}
           </p>
           <p className="muted hint">In the bucket: {formatCents(mortgage.balanceCents)}</p>
         </section>

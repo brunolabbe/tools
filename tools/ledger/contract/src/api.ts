@@ -721,7 +721,7 @@ export interface MortgageResponse {
   lastPaymentOn: string | null;
   /** `yyyy-mm-dd` when `state` is `ended`: the later of `endedOn` and `lastPaymentOn`. */
   closedOn: string | null;
-  /** Whether the bucket still holds anything, in anyone's name. */
+  /** Whether the bucket still holds anything: its balance is not zero, whatever each person's part. */
   left: boolean;
   /** What the bucket holds, and whose each part is: theirs to take back. */
   balanceCents: number;

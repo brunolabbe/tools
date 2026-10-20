@@ -12,8 +12,11 @@
  */
 
 import { useEffect, useState } from "react";
+import { formatCents } from "@ledger/books";
 import type { MortgageResponse, StatsRange } from "@ledger/contract";
 import { fetchMortgage } from "./api/mortgage.ts";
+import { shownName } from "./people.tsx";
+import type { ShownNames } from "./people.tsx";
 
 export type MortgageLoad =
   | { state: "loading" }
@@ -78,6 +81,33 @@ export function showsHomeSection(mortgage: MortgageResponse | null): boolean {
   if (mortgage === null || mortgage.state === "live") return true;
   if (mortgage.state === "none") return false;
   return mortgage.left;
+}
+
+/**
+ * What an ended mortgage leaves, in words, for the home screen and the own-money
+ * card (lg-55). The balance is said only when it is not zero; a person whose part
+ * is above zero is told it is theirs to take back, and one whose part is below
+ * zero is told what they owe, since a bucket one person paid more than half of
+ * leaves the other's part negative. A part of exactly zero is not mentioned.
+ */
+export function endedSentence(mortgage: MortgageResponse, names: ShownNames): string {
+  const day = mortgage.closedOn ?? mortgage.endedOn ?? "a day the books do not name";
+  const balance =
+    mortgage.balanceCents > 0
+      ? ` ${formatCents(mortgage.balanceCents)} is left in the bucket.`
+      : mortgage.balanceCents < 0
+        ? ` The bucket is ${formatCents(-mortgage.balanceCents)} short.`
+        : "";
+  const take = mortgage.own
+    .filter((person) => person.ownCents > 0)
+    .map((person) => `${shownName(names, person.personId)} ${formatCents(person.ownCents)}`);
+  const owe = mortgage.own
+    .filter((person) => person.ownCents < 0)
+    .map((person) => `${shownName(names, person.personId)} owes ${formatCents(-person.ownCents)}`);
+  const own =
+    take.length === 0 ? "" : ` It is each person's own, theirs to take back: ${take.join(", ")}.`;
+  const owed = owe.length === 0 ? "" : ` ${owe.join(", ")}.`;
+  return `The mortgage ended on ${day}.${balance}${own}${owed}`;
 }
 
 /** Whether the close, and so what is left, is something the range reaches. */

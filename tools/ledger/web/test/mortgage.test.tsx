@@ -9,6 +9,7 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type {
   BucketsResponse,
@@ -30,8 +31,9 @@ import {
 } from "../src/api/stats.ts";
 import { Home } from "../src/home/Home.tsx";
 import { Household } from "../src/household/Household.tsx";
+import { endedSentence } from "../src/mortgage.ts";
 import { Stats } from "../src/stats/Stats.tsx";
-import { ENDED, ENDED_EMPTY, LIVE, NONE } from "./mortgage-fixtures.ts";
+import { ENDED, ENDED_EMPTY, ENDED_OWES, ENDED_UNEVEN, LIVE, NONE } from "./mortgage-fixtures.ts";
 
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
@@ -139,8 +141,8 @@ async function stats(): Promise<void> {
   render(<Stats />);
   await screen.findByRole("heading", { name: "Settlements" });
   await waitFor(() => expect(vi.mocked(fetchMortgage)).toHaveBeenCalled());
-  // Let the answer land: the mortgage cards are taken as live until it does.
-  await Promise.resolve();
+  // Let the answer land: the mortgage cards are held until it does.
+  await new Promise((done) => setTimeout(done, 0));
 }
 
 /** From the first day of a range picked by hand. */
@@ -193,7 +195,7 @@ test("stats of books ended with money left name each person's part as their own,
   const own = card("Own money in the mortgage");
   expect(
     own.getByText(
-      "The mortgage ended on 2026-03-31. What is left in the bucket is each person's own, theirs to take back: alex 149.99 $, sam 50.00 $.",
+      "The mortgage ended on 2026-03-31. 199.99 $ is left in the bucket. It is each person's own, theirs to take back: alex 149.99 $, sam 50.00 $.",
     ),
   ).toBeTruthy();
   expect(screen.queryByText(LIVE_EMPTY_OWN)).toBeNull();
@@ -268,7 +270,7 @@ test("home of books ended with money left names each person's part and whose it 
   ).toBeTruthy();
   expect(
     mortgage.getByText(
-      "The mortgage ended on 2026-03-31. The 199.99 $ left in the bucket is each person's own, theirs to take back.",
+      "The mortgage ended on 2026-03-31. 199.99 $ is left in the bucket. It is each person's own, theirs to take back: alex 149.99 $, sam 50.00 $.",
     ),
   ).toBeTruthy();
   // In place of who is ahead.
@@ -337,6 +339,131 @@ test("a mortgage that could not be read leaves the screens as they were", async 
   ).toBeTruthy();
 });
 
+test("books ended with the bucket at zero but parts that are not, draw no Own card and no Home section", async () => {
+  vi.mocked(fetchMortgage).mockResolvedValue(ENDED_UNEVEN);
+  vi.mocked(fetchBuckets).mockResolvedValue({
+    ...BUCKETS,
+    mortgage: {
+      balanceCents: 0,
+      own: ENDED_UNEVEN.own,
+      lead: { personId: "alex", byCents: 100000 },
+    },
+  });
+  vi.mocked(fetchMortgagePayments).mockResolvedValue({ range: NO_RANGE, payments: [] });
+  vi.mocked(fetchMortgageOwn).mockResolvedValue({ range: NO_RANGE, people: [], points: [] });
+  await stats();
+
+  pickFrom("2026-05-01");
+
+  await waitFor(() =>
+    expect(screen.queryByRole("heading", { name: "Mortgage payment" })).toBeNull(),
+  );
+  expect(screen.queryByRole("heading", { name: "Own money in the mortgage" })).toBeNull();
+  cleanup();
+
+  render(<Home />);
+  await screen.findByRole("heading", { name: "Buffer" });
+  expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
+});
+
+test("a part above zero is theirs to take back and a part below zero is owed, on Home and on the Own card", async () => {
+  vi.mocked(fetchMortgage).mockResolvedValue(ENDED_OWES);
+  const expected = `The mortgage ended on 2026-03-31. ${formatCents(60000)} is left in the bucket. It is each person's own, theirs to take back: alex ${formatCents(110000)}. sam owes ${formatCents(50000)}.`;
+  vi.mocked(fetchBuckets).mockResolvedValue({
+    ...BUCKETS,
+    mortgage: { balanceCents: 60000, own: ENDED_OWES.own, lead: null },
+  });
+
+  render(<Home />);
+  const heading = await screen.findByRole("heading", { name: "Mortgage" });
+  const home = within(heading.closest("section") as HTMLElement);
+  expect(home.getByText(expected)).toBeTruthy();
+  // Nobody is told that a negative sum is theirs.
+  expect(home.getByText(expected).textContent).not.toMatch(/\s[-\u2212]\d/u);
+  cleanup();
+
+  vi.mocked(fetchMortgagePayments).mockResolvedValue({ range: NO_RANGE, payments: [] });
+  vi.mocked(fetchMortgageOwn).mockResolvedValue({ range: NO_RANGE, people: [], points: [] });
+  await stats();
+  pickFrom("2026-05-01");
+  expect(await card("Own money in the mortgage").findByText(expected)).toBeTruthy();
+});
+
+test("the sentence drops the balance when it is zero, and says a short bucket is short", () => {
+  expect(endedSentence(ENDED_UNEVEN, {})).toBe(
+    `The mortgage ended on 2026-03-31. It is each person's own, theirs to take back: alex ${formatCents(50000)}. sam owes ${formatCents(50000)}.`,
+  );
+  expect(
+    endedSentence(
+      { ...ENDED_OWES, balanceCents: -10000, own: [{ personId: "sam", ownCents: -10000 }] },
+      { sam: "Sam" },
+    ),
+  ).toBe(
+    `The mortgage ended on 2026-03-31. The bucket is ${formatCents(10000)} short. Sam owes ${formatCents(10000)}.`,
+  );
+});
+
+test("a household recorded as none never draws the mortgage cards or asks for their series", async () => {
+  vi.mocked(fetchMortgage).mockResolvedValue(NONE);
+  await stats();
+
+  expect(screen.queryByRole("heading", { name: "Mortgage payment" })).toBeNull();
+  expect(vi.mocked(fetchMortgagePayments)).not.toHaveBeenCalled();
+  expect(vi.mocked(fetchMortgageOwn)).not.toHaveBeenCalled();
+});
+
+test("the mortgage cards wait for the read, and a failed read draws them as live", async () => {
+  const held: { answer?: (value: typeof LIVE) => void } = {};
+  vi.mocked(fetchMortgage).mockReturnValue(
+    new Promise((done) => {
+      held.answer = done;
+    }),
+  );
+  render(<Stats />);
+  await screen.findByRole("heading", { name: "Settlements" });
+  expect(screen.queryByRole("heading", { name: "Mortgage payment" })).toBeNull();
+  expect(vi.mocked(fetchMortgagePayments)).not.toHaveBeenCalled();
+
+  held.answer?.(LIVE);
+  expect(await screen.findByRole("heading", { name: "Mortgage payment" })).toBeTruthy();
+  cleanup();
+
+  vi.mocked(fetchMortgagePayments).mockClear();
+  vi.mocked(fetchMortgage).mockRejectedValue(new AppError("UNREACHABLE"));
+  render(<Stats />);
+  expect(await screen.findByRole("heading", { name: "Mortgage payment" })).toBeTruthy();
+  expect(await screen.findByRole("heading", { name: "Own money in the mortgage" })).toBeTruthy();
+  expect(vi.mocked(fetchMortgagePayments)).toHaveBeenCalled();
+});
+
+test("the end marker is told from a renewal's: unequal payments, the last one a payment after the end date", async () => {
+  vi.mocked(fetchMortgage).mockResolvedValue({
+    ...ENDED,
+    endedOn: "2026-03-01",
+    lastPaymentOn: "2026-03-15",
+    closedOn: "2026-03-15",
+  });
+  vi.mocked(fetchMortgagePayments).mockResolvedValue({
+    range: NO_RANGE,
+    payments: [
+      { date: "2026-01-15", cents: 70000, previousCents: null, changed: false },
+      { date: "2026-02-15", cents: 71234, previousCents: 70000, changed: true },
+      { date: "2026-03-15", cents: 71234, previousCents: 71234, changed: false },
+    ],
+  });
+  await stats();
+
+  const payment = card("Mortgage payment");
+  // The renewal's dot and the end's: two, and only the last point says it ended.
+  expect(payment.getByRole("slider").querySelectorAll("circle.marker")).toHaveLength(2);
+  expect(
+    payment.getAllByText("Last payment on 2026-03-15; the mortgage ended.").length,
+  ).toBeGreaterThan(0);
+  fireEvent.keyDown(payment.getByRole("slider"), { key: "ArrowLeft" });
+  expect(payment.getAllByText("Changed from 700.00 $ to 712.34 $.").length).toBeGreaterThan(0);
+  expect(payment.queryAllByText(/Last payment on/u)).toHaveLength(0);
+});
+
 // --- The form ---
 
 const HOUSEHOLD = {
@@ -365,9 +492,7 @@ test("the household screen shows what stands and sets an end date", async () => 
     expect(vi.mocked(saveMortgage)).toHaveBeenCalledWith({ state: "ended", endedOn: "2026-03-31" }),
   );
   expect(
-    await form().findByText(
-      "The mortgage ended on 2026-03-31. 199.99 $ is left in the bucket, each person's own to take back.",
-    ),
+    await form().findByText("The mortgage ended on 2026-03-31. 199.99 $ is left in the bucket."),
   ).toBeTruthy();
 });
 

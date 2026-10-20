@@ -227,6 +227,23 @@ describe("the close and what is left", () => {
     expect(ended.own.every((person) => person.ownCents === 0)).toBe(true);
   });
 
+  test("a bucket at zero has nothing left, whatever each person's part", async () => {
+    // alex pays in 1 000.00 $ and one joint payment of 1 000.00 $ takes it all:
+    // the balance is zero, alex holds +500.00 $ and sam is -500.00 $.
+    const target = await start([
+      { date: "2026-01-05", description: ALEX_IN, amountCents: 100_000 },
+      { date: "2026-01-15", category: "Hypothèque", description: PAYMENT, amountCents: -100_000 },
+    ]);
+
+    const ended = await say(target, { state: "ended", endedOn: "2026-03-31" });
+
+    expect(ended).toMatchObject({ left: false, balanceCents: 0 });
+    expect(ended.own).toEqual([
+      { personId: "alex", ownCents: 50_000 },
+      { personId: "sam", ownCents: -50_000 },
+    ]);
+  });
+
   test("a household with no payment at all closes on its end date", async () => {
     const target = await start();
 

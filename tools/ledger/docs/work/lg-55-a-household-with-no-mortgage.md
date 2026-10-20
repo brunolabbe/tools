@@ -206,3 +206,54 @@ ledger`, 1594 of 1594 in 73 files, exit 0; `npm run check` exit 0. The
     isolation writes carry a distinct end date per household). **Not run:** a red
     state of the new web tests against the base's source; they assert behaviour
     the base has no code for (the end marker, the hidden cards).
+- 2026-10-20 (round 1, after gate 1 at e0f792e1): the owner answered the gate's
+  decisions. Each is a test.
+  - **F1, "nothing left" is the balance** (owner: `left` is
+    `balanceCents !== 0`, over keeping the parts rule). `api/src/mortgage.ts`; the
+    contract comment, `00-ANALYSIS.md` §4 and the Log above now say so.
+    `api/test/mortgage.test.ts` "a bucket at zero has nothing left, whatever each
+    person's part" (alex 1 000.00 $ in, one joint 1 000.00 $ payment: `left: false`,
+    alex +500.00 $, sam -500.00 $); `web/test/mortgage.test.tsx` "books ended with
+    the bucket at zero but parts that are not, draw no Own card and no Home
+    section". The earlier "measured" line above (16 of 16) predates this; the
+    round's figures are below.
+  - **F2, a negative part is owed** (owner: name it as owed; drop the balance
+    sentence at zero). One function, `endedSentence` in `web/src/mortgage.ts`,
+    serves Home and the Own card. The strings, for the owner:
+    - money left, parts above zero: "The mortgage ended on 2026-03-31. 199.99 $ is
+      left in the bucket. It is each person's own, theirs to take back: alex 149.99
+      $, sam 50.00 $."
+    - with a part below zero: "The mortgage ended on 2026-03-31. 600.00 $ is left
+      in the bucket. It is each person's own, theirs to take back: alex 1100.00 $.
+      sam owes 500.00 $."
+    - balance zero (the function's own case; the cards close before it is shown):
+      "The mortgage ended on 2026-03-31. It is each person's own, theirs to take
+      back: alex 500.00 $. sam owes 500.00 $."
+    - balance below zero: "The mortgage ended on 2026-03-31. The bucket is 100.00 $
+      short. Sam owes 100.00 $." (my addition; the owner did not name it.)
+    - A part of exactly zero is not mentioned. The household screen's standing line
+      drops the part clause: "The mortgage ended on 2026-03-31. 199.99 $ is left in
+      the bucket."
+      Tests: "a part above zero is theirs to take back and a part below zero is owed,
+      on Home and on the Own card" (both signs, both places) and "the sentence drops
+      the balance when it is zero, and says a short bucket is short".
+  - **F3, the mortgage cards wait for the read** (owner: hold them, as Home does;
+    a failed read draws them as live; overrides my "keep as built"). `Stats.tsx`
+    draws neither card while `useMortgage` is loading. Tests: "a household recorded
+    as none never draws the mortgage cards or asks for their series"
+    (`fetchMortgagePayments` and `fetchMortgageOwn` never called) and "the mortgage
+    cards wait for the read, and a failed read draws them as live". The cost the
+    gate named is real: the other cards sit one render earlier than these. Because
+    those two now mount one render later, `card()` in `stats.test.tsx` waits up to
+    4 s instead of 1 s: its first test, a cold render of ten charts, took 1.1 to
+    1.4 s alone and failed in a parallel run at 1.5 s with the old limit.
+  - **`tools/ledger/CLAUDE.md`** gained the proposed line, in the paragraph on
+    appended records, unchanged by F1: "The household's word on its mortgage is the
+    same (lg-55, `current_mortgage_record`: live, ended on a day, or none); it
+    decides which views are shown and never what is counted."
+  - **The two other lows stay unfixed:** "today" is the API's UTC clock, as
+    `salaries.ts`, `periods.ts` and `routes/stats.ts` already use; and the
+    equal-payment fixture. The varied-fixture test was free and is in: "the end
+    marker is told from a renewal's" (payments 700.00, 712.34, 712.34 $; the last a
+    payment dated after `endedOn`): two dots, and only the last point carries
+    "Last payment on …".

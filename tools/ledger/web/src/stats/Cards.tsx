@@ -34,7 +34,7 @@ import {
   fetchSpendingStats,
 } from "../api/stats.ts";
 import { formatShare, personLabel } from "../labels.ts";
-import { reachesClose, spansClose } from "../mortgage.ts";
+import { endedSentence, reachesClose, spansClose } from "../mortgage.ts";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 import { ChartCard, ColumnChart, LineChart } from "./Chart.tsx";
@@ -211,13 +211,7 @@ export function MortgageOwnCard({
   const names = usePeopleNames();
   const closed = mortgage !== null && mortgage.state === "ended" ? mortgage : null;
   const left = closed !== null && closed.left && reachesClose(closed, range) ? closed : null;
-  const note =
-    left === null
-      ? null
-      : `The mortgage ended on ${left.closedOn ?? left.endedOn ?? "a day the books do not name"}. What is left in the bucket is each person's own, theirs to take back: ${left.own
-          .filter((person) => person.ownCents !== 0)
-          .map((person) => `${shownName(names, person.personId)} ${formatCents(person.ownCents)}`)
-          .join(", ")}.`;
+  const note = left === null ? null : endedSentence(left, names);
   return (
     <Loaded title="Own money in the mortgage" series={series}>
       {({ points, people }, stale) => {

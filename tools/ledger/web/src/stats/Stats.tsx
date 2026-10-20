@@ -47,7 +47,9 @@ export function Stats(): React.ReactElement {
   const [custom, setCustom] = useState<{ from: string; to: string }>({ from: "", to: "" });
   const today = isoDay(new Date());
   const said = useMortgage();
-  // Until it is read the household is taken to have a live mortgage, so the page does not jump for the common case.
+  // The two mortgage cards wait for it, as Home does, so a household with no mortgage never asks for
+  // their series; a read that failed draws them as live (`useMortgage` answers null).
+  const waiting = said.state === "loading";
   const mortgage = said.state === "ready" ? said.mortgage : null;
 
   const crossed = custom.from !== "" && custom.to !== "" && custom.from > custom.to;
@@ -103,8 +105,12 @@ export function Stats(): React.ReactElement {
           </div>
         )}
       </section>
-      {showsPaymentCard(mortgage, sent) && <MortgagePaymentCard range={sent} mortgage={mortgage} />}
-      {showsOwnCard(mortgage, sent) && <MortgageOwnCard range={sent} mortgage={mortgage} />}
+      {!waiting && showsPaymentCard(mortgage, sent) && (
+        <MortgagePaymentCard range={sent} mortgage={mortgage} />
+      )}
+      {!waiting && showsOwnCard(mortgage, sent) && (
+        <MortgageOwnCard range={sent} mortgage={mortgage} />
+      )}
       <ContributionCards range={sent} />
       <BufferCard range={sent} />
       <SalaryCards range={sent} />

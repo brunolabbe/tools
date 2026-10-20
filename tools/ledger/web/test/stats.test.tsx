@@ -304,12 +304,17 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 async function card(title: string): Promise<ReturnType<typeof within>> {
   let found: HTMLElement | null = null;
   // The loading card and the drawn one are different elements, so look again each time.
-  await waitFor(() => {
-    const section = screen.getByRole("heading", { name: title }).closest("section");
-    if (section === null) throw new Error(`no card for ${title}`);
-    within(section).getByRole("slider");
-    found = section;
-  });
+  await waitFor(
+    () => {
+      const section = screen.getByRole("heading", { name: title }).closest("section");
+      if (section === null) throw new Error(`no card for ${title}`);
+      within(section).getByRole("slider");
+      found = section;
+      // The mortgage cards are drawn once /api/mortgage has answered (lg-55), one render
+      // later than the rest, and the first test of the file is the cold one.
+    },
+    { timeout: 4000 },
+  );
   if (found === null) throw new Error(`no card for ${title}`);
   return within(found);
 }
