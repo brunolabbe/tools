@@ -320,7 +320,10 @@ refusedOther`:
   rule finds now. The wider search only adds refusals, so the pairing
   `matchStretch` accepts stays where it is, in `matchBlock`'s call to
   `matchPart`. B moves it into the pairing function, which computes it
-  explicitly.
+  explicitly. (Added at landing, gate 1's first low: under A the pairing is
+  decided there but not returned. lg-58 must make `matchPart` and
+  `matchStretch` return it, and record only from the stored pass, since the
+  rival pass runs through the same code.)
 
   **Fold-in:** none. No source changed, so nothing was made free.
 
@@ -370,10 +373,15 @@ first row not stored yet, so only one reading fits.` Its code is
     stretch holds there, but not here: R1's true reading never fits, so no
     longer paste is stored. A paste starting on the first row not yet stored
     is, as a test shows.
-  - **The lg-58 seam.** The pairing a stored paste rests on stays in
+  - **The lg-58 seam.** The pairing a stored paste rests on is decided in
     `matchBlock`'s call to `matchPart`. That is the one reading `STORED_TOLERANCE`
-    found; the rival pass only refuses. `matchBlock`'s doc comment says this is
-    the one place a pasted row meets the workbook's rows of its day.
+    found; the rival pass only refuses. The pairing is decided there but not
+    returned: `matchPart` answers a boolean and `matchStretch` keeps only which
+    cuts are reachable. lg-58 must make both return it, and must record only
+    from the stored pass, since the rival pass runs through the same code with
+    its 3-day readings and the cuttings that did not win. (Reworded at landing,
+    gate 1's first low; this bullet had said the doc comment names the pairing
+    as `matchPart`'s.)
 
   **Tests**, appended to `api/test/workbook-days.test.ts`:
   - R1 and R8 (Done when 1). Each asserts that the outcome is the true reading,
@@ -432,3 +440,25 @@ first row not stored yet, so only one reading fits.` Its code is
 
   **Fold-in:** the in-tolerance `ambiguous` and the new refusal share two
   helpers, `described` and `said`. Nothing else was made free.
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, first low
+  (`nfr:maintainability`, lg-58's seam) — "`matchBlock`'s comment ("the pairing
+  a stored paste rests on is `matchPart`'s") overstates it." `matchBlock`'s doc
+  comment in `workbook-days.ts` now says the pairing is decided there but not
+  returned, that lg-58 must make `matchPart` and `matchStretch` return it, and
+  that lg-58 must record only from the stored pass, since the rival pass runs
+  through the same code. This Log's two statements of the seam (experiment A's
+  "The seam lg-58 builds on" and the builder's "The lg-58 seam") say the same.
+  Fixed together with the next entry, in one commit, as both are comment edits
+  to `workbook-days.ts`. `grep -c "not returned: .matchPart. answers a boolean"
+tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, second low (text) —
+  "the code states what the rival pass covers and not what it leaves: a
+  workbook row dated 4 days off still stores R1's wrong split (3 added, 1
+  present) in all six date contexts I ran, on `main` and on the head alike."
+  A comment at `RIVAL_DAYS_OFF` in `workbook-days.ts` now says a workbook row
+  dated 4 or more days off is not weighed, and that a paste like R1 against
+  such a row is still stored with the wrong split, as on `main`. Same commit as
+  the previous entry. `grep -c "4 or more days off is not weighed"
+tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).

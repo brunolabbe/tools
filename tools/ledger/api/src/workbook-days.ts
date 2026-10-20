@@ -121,6 +121,10 @@ export const STORED_TOLERANCE: DateTolerance = { widestBlockDays: WIDEST_BLOCK_D
 /**
  * The days off the wider tolerance allows (lg-61): a workbook row dated as far as
  * this from the bank's still makes a rival reading.
+ *
+ * A workbook row dated 4 or more days off is not weighed. A paste like R1 (the
+ * true reading never fits, so a false split is the only one left) against such a
+ * row is still stored with the wrong split, as it is on `main`.
  */
 export const RIVAL_DAYS_OFF = 3;
 
@@ -286,8 +290,13 @@ export function alignDays(
  * within `tolerance.daysOff` of them (a day, on `STORED_TOLERANCE`), and the
  * amounts and balances as `matchPart` weighs them.
  *
- * This is the one place a pasted row meets the workbook's rows of its day: the
- * pairing a stored paste rests on is `matchPart`'s, called from here.
+ * This is the one place a pasted row meets the workbook's rows of its day, and
+ * the pairing a stored paste rests on is decided here, in `matchPart`'s call.
+ * It is not returned: `matchPart` answers a boolean and `matchStretch` keeps
+ * only which cuts are reachable, so no pairing exists to read yet. lg-58 must
+ * make both return it. It must record only from the stored pass: the rival pass
+ * (`RIVAL_TOLERANCE`) runs through this same code, with its 3-day readings and
+ * the cuttings that did not win.
  */
 export function matchBlock(
   block: readonly DayEntry[],
