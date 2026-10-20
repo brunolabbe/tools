@@ -562,3 +562,24 @@ consistent-function-scoping` above `pausedThenRead` (its fixture is imported now
   whose verdict is absence") widen to the 24, reword Done when 4, and expect about 81 %; (3)
   widen and also re-prove each of the 24 against a mutation first. The owner decides;
   nothing here settles it.
+
+- 2026-10-20, CI reading — draft pull request #585, head `0b3168f0`, run 39357017111 (the
+  `CI` workflow; `test (ubuntu-latest)` job 118414064396, windows job 118414064300). **Done
+  when 8: not met.** The ubuntu leg's seven browser files took 287.0 s summed (39.2 + 29.7 +
+  39.5 + 50.2 + 46.6 + 42.6 + 39.1), 90.2 % of the 318 s of run 39126762378, against the
+  85 % bar (270 s). The `npm test` step took 209 s (`Duration 208.68s`, 02:06:35 to
+  02:10:04); the new engine files took 22.9, 22.4 and 22.8 s. Windows (informational):
+  `Duration 323.89s`, `Tests 6195 passed | 61 skipped (6256)`, the seven browser files 296.2 s.
+  All checks SUCCESS (`check` x2, `e2e (direct)`, `e2e (sniffer)`, `docker`, `codeql`,
+  `dependency-review`, `changes`, both test legs) except `CodeQL`, below. The figure is
+  where the local reading predicted (about 91 %); it is the open decision in the entry
+  above, not a flake.
+  **`CodeQL` is red on this head, and the cause is the move.** The check page prints
+  "Server-side request forgery", Critical, in
+  `tools/downloader/engine/test/helpers/parallel-ranges-fixture.ts` at line 510, which is
+  `startProxy`'s `http.request(target, ...)`, the fixture forward proxy dl-98 excused under
+  docs/adr/005 in `parallel-ranges.test.ts`. A dismissal binds to an alert instance, so the relocated call is
+  a new alert. The `// codeql[js/request-forgery]` comment moved with the code and now names
+  its new file and the move (this commit). The mechanism is `security.yml`'s dismissal step
+  after the push to `main`, as dl-98's `awaiting:` line recorded; landing this branch
+  needs the owner's recorded excusal, as dl-98's did (the lg-5 precedent).
