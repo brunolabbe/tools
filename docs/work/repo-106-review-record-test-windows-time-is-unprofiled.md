@@ -169,7 +169,7 @@ scripts/probe/repo-106-spawn-timing.mjs trace scripts/test/review-record.test.ts
   contention is named, not measured, because this probe ran the file by itself.
   The matrix line, ANSI codes removed: `test (windows-latest, informational)  Run
 npm test  ✓ repo scripts/test/review-record.test.ts (64 tests) 112084ms`. In
-  that run it is the longest of 285 files on the Windows leg (next:
+  that run it is the longest of 292 timed test files on the Windows leg (next:
   `tools/downloader/engine/test/parallel-ranges.test.ts`, 75,288 ms) inside a
   vitest `Duration` of 407.24 s; on ubuntu it is 25 s and outside the top six.
   That Windows leg has one red test, `browser-resolver-consent-and-links.test.ts
@@ -213,13 +213,27 @@ npm test  ✓ repo scripts/test/review-record.test.ts (64 tests) 112084ms`. In
   | whole-ticket `oxfmt` (`spliceSection`, `:492`)                                                                       |            41 / 41 |     16,033 |        18.2 % |    10,632 |       44.8 % |
   | section `oxfmt` (`formatMarkdown`, `:742`)                                                                           |            40 / 37 |     14,170 |        16.0 % |     8,702 |       36.7 % |
   | other `git`: `push` 34 (8,820 ms), the test file's own other 388 (18,422 ms), inside the CLI children 118 (5,311 ms) |          540 / 540 |     32,553 |        36.9 % |     1,707 |        7.2 % |
-  | the 25 CLI children's own node start and module load, `preflight.mjs`, `gh pr`, `npm run`, `node -p`                 |                n/a |      2,607 |         3.0 % |     1,395 |        5.9 % |
-  | not a spawn: in-process JavaScript and filesystem work                                                               |                n/a |      1,309 |         1.5 % |       262 |        1.1 % |
+  | the 25 CLI children's own node start and module load                                                                 |                n/a |      2,193 |         2.5 % |     1,261 |        5.3 % |
+  | not a spawn: in-process JavaScript and filesystem work                                                               |                n/a |      1,723 |         2.0 % |       396 |        1.7 % |
+  - Row 5 excludes the spawns `preflight.mjs` makes (5 `git`, `gh pr`,
+    `npm run`: 276.9 ms on windows, 134.3 ms on ubuntu), which sit inside the
+    CLI-side `node preflight.mjs` record already counted whole, and the first
+    `node -p` record (137.8 ms on windows, before any test). The 5 `git`
+    spawns are among the "test file's own other 388" in row 4.
   - **Fixture setup** is two things. The directories and files are not a cost:
-    the whole non-spawn remainder is 1.5 %, and one `mkdtemp` plus a write is
-    0.7 ms. The fixtures' git commands are 24.5 %, and that is an **upper
-    bound** on fixture setup, because the same four subcommands also run in
-    test bodies, and the probe does not tell the two apart.
+    the whole non-spawn remainder is 2.0 %, and one `mkdtemp` plus a write is
+    0.7 ms. The probe does not tell the fixtures' git commands from the same
+    subcommands in test bodies, and the first row is not a bound on them: its
+    299 spawns (24.5 %) include 131 that are not fixture setup (50 `config`,
+    40 `add`, 41 `commit`; 45 of the 50 `config` come from `land()`'s
+    in-process scratch clone, the rest from test bodies and `land()`), and
+    `withLandRepo` adds `remote add`, `rev-parse`, `push -u` and `checkout -qb`
+    outside the row. Counted from the code, fixture setup is 240 spawns: 30
+    `withTicketRepo` runs (12 direct call sites and the 18 inside
+    `withLandRepo`) at 5 each, plus 18 `withLandRepo` runs at 5 more each.
+    Priced at the Windows means below, an **estimate**, that is about 19.3 s,
+    21.9 % of the file. The spawns a copied template could replace are the 30
+    runs' `init`, `config` x 2, `add` and `commit`: about 10.6 s on means.
   - **The whole-ticket `oxfmt` spawn** is 18.2 % on Windows: 41 spawns, 28 of
     them made in the vitest worker itself (the tests that call `land()` or
     `spliceSection` in-process), 13 inside the CLI children, mean 391 ms. There is one spawn site and 41 reach
@@ -347,3 +361,45 @@ npm test  ✓ repo scripts/test/review-record.test.ts (64 tests) 112084ms`. In
   |  62 | failedChecks reads the checks off preflight's last line, and none off a lin... |         0 |          1 |
   |  63 | land() after a halted merge-tree failure names every check that is still op... |       869 |       3730 |
   |  64 | formatMarkdown spawns oxfmt once for repeated identical input, and again fo... |       462 |        712 |
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, F1 — "the 'fixture-shaped
+  git' row (299 spawns, 21,648 ms, 24.5 %) is called 'an upper bound on fixture
+  setup because the same four subcommands also run in test bodies'. That
+  reasoning is false". The bound is replaced, in the Fixture setup bullet above
+  and in repo-113's Why and Build step 3, by the count from the code and its
+  priced estimate, labelled an estimate. **One figure differs from the finding:**
+  it writes 245 spawns, but its own formula (30 `withTicketRepo` runs x 5 plus
+  18 `withLandRepo` runs x 5) is 240, its own subtraction (299 - 131 = 168 in
+  row, plus 72 outside) is 240, and its price (about 19.3 s, 21.9 %) is the
+  price of 240; 240 is what is written. Before, at `709475f6`: `git show
+709475f6:<repo-106> | grep -c "that is an \*\*uppe[r]"` → 1, and the same
+  pattern for `21,64[8]` on repo-113 → 2. After: `bash <scratch>/land/prove.sh` →
+  `fixture setup is 24[0] spawns => 1 ; 1` (repo-106 whole file ; repo-113 above
+  its `## Log`), `estimate of up to about 10.[6] s => 0 ; 1` (the 0 is that
+  repo-106 does not carry step 3), and for the old wording, counted above this
+  first Fixed-at-landing entry, `an upper bound => 0 ; 0` and `upper bound => 0 ; 0`.
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, F2 — "row 5 ... double-counts.
+  The 7 spawns that `preflight.mjs` makes ... sit inside the cli-side `node
+preflight.mjs` record, and that record is counted whole. The windows trace's
+  first record, `node -p` ..., starts before any test". Row 5 and the
+  not-a-spawn row are corrected in the table to the finding's figures, the rows
+  still add to 88,320 ms and 23,732 ms, and a bullet under the table says what
+  row 5 excludes and that the 5 `git` spawns sit in row 4's "other 388". Before,
+  at `709475f6`: the grep for the old row-5 figure `2,60[7]` → 1 and for the old
+  not-a-spawn figure `1,30[9]` → 1. After: `bash <scratch>/land/prove.sh` →
+  `2,19[3] .*2.5 % => 1 ; 0`, `1,72[3] .*2.0 % => 1 ; 0`, and for the old text above
+  this entry `2,607 => 0 ; 0`, `1,309 => 0 ; 0`, `module load, .preflight => 0 ; 0`.
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, F3 — "'the longest of 285
+  files on the Windows leg' — that leg of run 39344302900 prints 292 timed file
+  lines". Corrected here and in repo-113's Why, which repeated it. Before, at
+  `709475f6`: `longest of 28[5]` → 1 in repo-106 and 1 in repo-113 above its Log.
+  After: `bash <scratch>/land/prove.sh` → `longest of 29[2] timed => 1 ; 1` and, for
+  the old text above this entry, `longest of 285 => 0 ; 0`. The patterns that
+  find the new text carry a bracket so this entry does not match itself; the
+  old-text counts stop at the first Fixed-at-landing entry with `awk
+'/Fixed at landing by owner choice/{exit} {print}'`, because these entries
+  quote what they removed; repo-113's are taken above its `## Log` with `awk
+'/^## Log/{exit} {print}'`.
+- 2026-10-20 — Owner's answer on repo-113, asked with the options "keep it ready
+  (Recommended, the builder's) / drop it / keep but park it": **keep it ready**.
+  repo-113's status stays `ready`.

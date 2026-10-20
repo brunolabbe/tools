@@ -26,10 +26,14 @@ holds every number below.
 - **`oxfmt` is 34.2 %**: 81 spawns, 30,203 ms, 373 ms each. That is 1.5 times its
   Ubuntu cost, so it does not explain the gap between the legs; `git` does
   (79.7 % of the 64.6 s difference).
-- The fixtures' own `git init`, `git config`, `git add` and `git commit` are 299
-  spawns and 21,648 ms (24.5 %), an upper bound because test bodies also run
-  `add` and `commit`.
-- The file is the longest of 285 on the Windows leg in the matrix run (112,084 ms
+- The probe's row of `git init`, `git config`, `git add` and `git commit` is 299
+  spawns and 21,648 ms (24.5 %), and it is not a bound on fixture setup: 131 of
+  the 299 are not fixture setup, and `withLandRepo` adds four more subcommands
+  outside the row. Counted from the code, fixture setup is 240 spawns, an
+  **estimate** of about 19.3 s (21.9 %) at the Windows means; the spawns a
+  copied template can replace are the 30 `withTicketRepo` runs' `init`,
+  `config` x 2, `add` and `commit`, about 10.6 s.
+- The file is the longest of 292 timed test files on the Windows leg in the matrix run (112,084 ms
   of a 407 s vitest `Duration`).
 
 The file spawns real `git` and `oxfmt` on purpose: its header says the CLI tests
@@ -61,8 +65,9 @@ Do not change an assertion, a test name or the number of tests (64).
    test runs a `git commit` through the CLI under test that relies on the
    repository's config; three of the `config` spawns are made inside the CLI.
 3. **Build the committed fixture repository once per file and copy it per test**
-   (`fs.cpSync`), in place of `init`, `config`, `add` and `commit` per test: up to
-   21,648 ms, less the copy, which is unmeasured on Windows. A `.git` directory
+   (`fs.cpSync`), in place of `init`, `config`, `add` and `commit` per test: an
+   estimate of up to about 10.6 s (30 runs at 352 ms on the Windows means),
+   less the copy, which is unmeasured on Windows. A `.git` directory
    with no remote is relocatable; the fixtures that add a bare remote or a clone
    keep doing that per test. Time the copy on Windows in the draft's own leg
    before keeping this step.
