@@ -5,7 +5,7 @@ title: Draw the plans-list border that names a colour nobody defines, and make t
 kind: fix
 status: ready
 milestone: null
-depends_on: []
+depends_on: [repo-108]
 difficulty: standard
 ---
 
@@ -67,14 +67,14 @@ The stylesheet's own comment says the marks exist so that a reader can tell a
 verified line from the model talking at a glance (analysis §5); in dark both sit
 below the bar.
 
-**The sibling, unmerged: repo-108**, PR #578, branch `repo-108-share-design-tokens`.
-It moves planner's shared tokens into a new `packages/ui/src/tokens.css` and
-defines planner's `--ok` and `--warn` in both themes, at exactly the fallback
-values above, in dark as well. So it does not fix defect 2: the dark pair still
-fails, now behind a defined name instead of a fallback. **Read this ticket's Build
-after repo-108 merges** (the stylesheet that defines the tokens will have moved);
-there is no `depends_on`, because the ticket is valid on `main` either way and
-neither defect is repo-108's to fix.
+**The sibling: repo-108**, PR #578, branch `repo-108-share-design-tokens`. It
+moves the names planner shares into a new `packages/ui/src/tokens.css`, which
+holds no colour value, and defines planner's `--ok` and `--warn` in both themes
+in planner's own `styles.css`, at exactly the fallback values above, in dark as
+well. So it does not fix defect 2: the dark pair still fails, now behind a
+defined name instead of a fallback. **This ticket depends on repo-108** (the
+owner's instruction of 2026-10-20), so the Build below describes the state after
+it merges; neither defect is repo-108's to fix.
 
 ## Build
 
@@ -88,7 +88,7 @@ neither defect is repo-108's to fix.
    against `--surface` and `--bg` in dark (`--warn-bg` is not a background any mark
    sits on, so it is not required, but clearing it too costs nothing). Keep the two
    distinguishable from each other and from `--accent` (`#7fbfa8` in dark) and
-   `--bad` (`#e8836a`), because telling them apart is the marks' only job. Measured
+   `--danger` (`#e8836a`, formerly `--bad`), because telling them apart is the marks' only job. Measured
    candidates, so the choice starts from a number (`candidates.mts`; ratios on
    `--surface` / `--bg` / `--warn-bg`):
 
@@ -99,17 +99,15 @@ neither defect is repo-108's to fix.
    | `#d4b155` | `--warn` |        8.18 |   8.88 |        7.51 |
    | `#c9a64a` | `--warn` |        7.24 |   7.85 |        6.64 |
 
-   Where they go depends on when this is built. Before repo-108 merges, `--ok` and
-   `--warn` are defined nowhere, so add them to `:root` (light, at today's
-   fallback values) and to the dark override. After it merges, they are defined
-   in both themes in the shared tokens file, and only the dark values change; check
-   whether another tool's stylesheet reads the same names before editing them
-   there, because that file is shared and this ticket is not licence to recolour
-   another tool's UI.
+   Where they go: after repo-108, `--ok` and `--warn` are defined in both themes in
+   planner's own `tools/planner/web/src/styles.css` (its `:root` and its dark
+   override), and only the two dark lines change. `packages/ui/src/tokens.css` is
+   not edited: it holds names and no colour value, and repo-108's test asserts
+   that. Read `--bad` as `--danger`, which is what repo-108 renames it to.
 
 3. **A test that would have caught both.** `tools/planner/web/test/` runs under
    jsdom, which draws no CSS, so neither defect could fail a test today. Add one
-   spec that reads the stylesheet text (and, after repo-108, the shared tokens
+   spec that reads the stylesheet text (and the shared tokens
    file it imports) and asserts: (a) every `var(--name)` that has no fallback is
    defined as `--name:` somewhere in those files; (b) the dark `--ok` and `--warn`
    clear 4.5:1 against dark `--surface` and `--bg`, and the light pair clears it
@@ -219,3 +217,33 @@ tools/planner/web/src/styles.css` prints only `6291ee58`, and the same for the
   `border-bottom: 1px solid var(--border);` and leaves out the `:last-child`
   exclusion, which was named as a separate choice and not taken. Recorded in this
   commit, which changes no source.
+- **2026-10-20 — gate 1 (narrow, `ticket-reviewer-opus`).** Its full report is on
+  the thread of PR #582, not spliced here: this pull request files the ticket and
+  leaves it `ready`, so it carries no `## Review` and no `--land`
+  (`reference/records.md`). Its one **med** finding is the entry below; its one
+  **low** is moot, see the entry after.
+- **2026-10-20 — Fixed at landing by owner choice: gate 1, med —** "no `Done when`
+  line depends on it · `nfr:maintainability` — Build step 2 tells the builder how
+  to proceed once repo-108 has merged, and that part is wrong. It says the tokens
+  'are defined in both themes in the shared tokens file' and that the builder
+  should check other tools 'before editing them there'. The sibling paragraph adds
+  that 'the stylesheet that defines the tokens will have moved'. At repo-108's tip
+  neither is true: the shared tokens file holds names and no colour value, and
+  planner's `--ok`/`--warn` values stay in `tools/planner/web/src/styles.css`'s
+  own `:root` and its dark override. Repo-108 also renames `--bad` to `--danger`."
+  Applied as the gate's suggested fix states it: after repo-108 only the two dark
+  lines in planner's own stylesheet change, the shared tokens file is not edited,
+  `--bad` reads as `--danger`, and the parenthetical is dropped. The Why paragraph
+  that said repo-108 "defines" the pair, with the tokens file as the only file
+  named, now says where. Proof, scoped above `## Log`:
+  `awk '/^## Log/{exit} {print}' <ticket> | grep -c "will have moved"` → 0,
+  the same with `"shared tokens file"` → 0, and the same with `-e "--danger"` → 2.
+- **2026-10-20 — Added at landing by the owner's instruction, not a gate fix:
+  `depends_on: [repo-108]`.** The owner chose "F1 + depends_on repo-108" over "F1
+  only" and "land as gated". That makes the gate's **low** moot (built before
+  repo-108 merges, Build step 2 would add the same `--ok`/`--warn` lines in the
+  same block as repo-108, so the second to merge conflicts; a merge-order cost,
+  not a defect). With the dependency in place the Build describes only the state
+  after repo-108 and carries no "if built before" branch. repo-108 is cited as
+  prose: PR #578, branch `repo-108-share-design-tokens`. No re-gate. The gate's
+  section is untouched.
