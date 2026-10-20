@@ -89,6 +89,10 @@ rowsAlreadyPresent=1`, `R8 … accepted rowsAdded=0 rowsAlreadyPresent=2`.
      more than a day row for row, in some pairing;
    - leave the rule and record the residual.
 
+   _Superseded 2026-10-20 by the owner's answer in the Log: the two narrowing
+   directions above made the residual worse when measured, and the owner chose
+   "wide 2/3", a direction not listed here, over leaving the rule._
+
    Try each as an uncommitted experiment. Record its effect on the enumeration,
    and on probes c and c2, beside step 1's numbers. A direction that brings back
    any of lg-59's in-tolerance wrong accepts, or that raises probe c's or c2's
@@ -319,3 +323,20 @@ refusedOther`:
   explicitly.
 
   **Fold-in:** none. No source changed, so nothing was made free.
+
+- 2026-10-20 — **the owner's answer**, relayed by the orchestrator. The
+  question was the Build step 3 stop above, as the builder reported it. The
+  options as put:
+  - **A, wide 2/3** (the builder's recommendation): 0 wrong in both spaces,
+    +474 "two ways" in 18,000 in-tolerance trials, about ×1.9 overall, worst
+    case 4.2 s → 21.8 s at 1,000 alternating rows and 58.5 s → 185 s at 2,000
+    rows at 200 a date, measured under load;
+  - **B, pair + wide 2/3**: +383 ambiguous, but 25,828 fewer one-off 4-row
+    pastes stored correctly, about ×2.2;
+  - **C, leave the rule** and record the 850-case residual through Done when
+    2's escape, with Done when 1 rewritten.
+
+  Option D, "pair alone", was not put as an option; the question's text named
+  it as leaving 3,142 wrong and still storing R1 wrongly. The owner chose **A,
+  wide 2/3**, which overrode no recommendation. Build step 3's named
+  directions are marked superseded by this answer.
