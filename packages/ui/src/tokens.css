@@ -14,9 +14,10 @@
  * `@media (prefers-color-scheme: dark)` override. The values belong to the tool;
  * `packages/ui/test/tokens.test.ts` fails when a stylesheet leaves one out or
  * uses a retired spelling (`--muted`, `--bad`). One role per line, the line
- * starting with its name; the test reads every line that starts that way, so
- * a role listed here is a role it enforces, and a name that is merely
- * mentioned in a sentence is not:
+ * starting with its name; the test reads every line that starts that way, and
+ * every `--name` on such a line counts as a role it enforces, its description
+ * included, so a description that names another property adds that property
+ * to the list:
  *
  *     --bg            page background
  *     --surface       cards and panels

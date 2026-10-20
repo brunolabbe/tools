@@ -369,3 +369,14 @@ omission the Trap describes. Shown failing: with `COPY packages/ui/...`removed f
     entry, and the header now says so. The unplanted header reads exactly 11
     roles: bg, surface, surface-2, border, text, text-muted, accent,
     accent-text, ok, warn, danger.
+- 2026-10-20 — Fixed at landing by owner choice: gate 3, F4 — "The `tokens.css`
+  header says 'a name that is merely mentioned in a sentence is not' read. That
+  is false for a mention inside an entry's description, or a mention that a
+  rewrap puts at the start of a line", option (a): the header sentence now says
+  every `--name` on an entry line counts, its description included, as
+  `headerRoles`' doc comment already did. No code changed. The proof is outside
+  the ticket, so no scope above `## Log` applies. The checks, on
+  `packages/ui/src/tokens.css`: `grep -c merely` → 0 (was 1);
+  `grep -c "its description"` → 1; and
+  `npx vitest run packages/ui/test/tokens.test.ts` → `26 passed (26)`. F2 and
+  F5 stay recorded unfixed.
