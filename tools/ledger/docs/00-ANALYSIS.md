@@ -217,8 +217,8 @@ and no row is invented to move it. What each person holds on the close is
 theirs, and a later row filed to them that takes it out of the bucket brings
 their part down to zero. "Nothing left" means the bucket's balance is zero: a
 person's part can be negative at a zero balance (one person's deposits exceed their half of
-the payments and the other's fall short), and the screens then say who owes it, while the mortgage
-views close all the same. It is not moved into current expenses as shared money
+the payments and the other's fall short), and no screen shows that imbalance between people after the close (a cost the owner
+accepted), while the mortgage views close all the same. It is not moved into current expenses as shared money
 (the owner chose this on 2026-10-19). Which views follow the close is in §9.
 
 ## 5. The settlement formula

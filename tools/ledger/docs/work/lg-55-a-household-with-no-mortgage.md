@@ -276,3 +276,10 @@ ledger`, 1594 of 1594 in 73 files, exit 0; `npm run check` exit 0. The
   sentence drops the balance when it is zero, and says a short bucket is short" now
   pins "The mortgage ended on 2026-03-31. alex is owed 500.00 $, sam owes 500.00 $."
   Same command, same count as the entry above.
+- 2026-10-20 — Fixed at landing by owner choice: gate 2, med 2 — "The sentence the
+  round added to `docs/00-ANALYSIS.md` §4 says that at a zero balance with a
+  negative part "the screens then say who owes it". Measured on all 3 zero-balance
+  shapes, none does." `00-ANALYSIS.md` §4 now says no screen shows that imbalance
+  between people after the close, the cost the owner accepted with F1's option A.
+  `grep -c "screens then say who owes it" tools/ledger/docs/00-ANALYSIS.md` → 1
+  before, 0 after.
