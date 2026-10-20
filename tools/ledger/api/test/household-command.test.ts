@@ -219,3 +219,46 @@ describe("the household command and a control character", () => {
     expect(read((directory) => directory.members())).toEqual([]);
   });
 });
+
+// lg-57: the C1 controls and the zero-width characters. Neither can be typed with
+// certainty in a shell, so they are passed to the function as strings.
+describe("the household command and a C1 control or a zero-width character", () => {
+  test.each([
+    ["a U+0085", "sam@b\u0085c"],
+    ["a U+009F", "sam\u009f@b.test"],
+    ["a U+200B", "sam@b\u200bc.test"],
+    ["a U+200D", "sam\u200d@b.test"],
+  ])(
+    "refuses an address with %s on the member verb, exits non-zero and writes no row",
+    (_label, address) => {
+      run("add", "home", "Home");
+
+      const ran = run("member", "home", address, "sam");
+
+      expect(ran.code).toBe(1);
+      expect(ran.err).toContain("That is not an email address.");
+      expect(read((directory) => directory.members())).toEqual([]);
+      expect(run("member", "home", "sam@b.test", "sam").code, "the clean address").toBe(0);
+    },
+  );
+
+  test("still removes a row that already holds a U+0085 or a U+200B, which the schema let in", () => {
+    run("add", "home", "Home");
+    const db = new Database(directoryPath);
+    const insert = db.prepare(
+      `INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
+       VALUES (?, 'home', ?, 'add', 'x', 'operator')`,
+    );
+    insert.run("sam@b\u0085c", "sam");
+    insert.run("kim@b\u200bc", "kim");
+    db.close();
+    expect(read((directory) => directory.members().length)).toBe(2);
+
+    const first = run("remove", "sam@b\u0085c");
+    const second = run("remove", "kim@b\u200bc");
+
+    expect(first.code, first.err).toBe(0);
+    expect(second.code, second.err).toBe(0);
+    expect(read((directory) => directory.members())).toEqual([]);
+  });
+});

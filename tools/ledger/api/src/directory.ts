@@ -32,12 +32,13 @@ const RESERVED_IDS = new Set(["con", "prn", "aux", "nul"]);
 /** One `@`, something either side, and nothing a list or a shell would split on. */
 const ADDRESS_SHAPE = /^[^\s@,;]+@[^\s@,;]+$/u;
 /**
- * The C0 controls and DEL, which `\s` does not cover beyond tab and newline: an
- * address carrying one is stored and then no Access token can name it (lg-52).
- * The C1 controls and the zero-width characters are lg-57's.
+ * What `\s` does not cover and no one can see: the C0 controls and DEL (lg-52),
+ * the C1 controls and the zero-width characters (lg-57). An address carrying one
+ * is stored and then no Access token can name it. The BOM is White_Space to `\s`
+ * and was refused before; it is listed so the set reads whole.
  */
 // oxlint-disable-next-line no-control-regex -- the controls are the point
-const CONTROL = /[\u0000-\u001f\u007f]/u;
+const UNSEEN = /[\u0000-\u001f\u007f-\u009f\u200b-\u200d\ufeff]/u;
 /** The sentence for an address that is not one, whichever method was given it. */
 const NOT_AN_ADDRESS = "That is not an email address.";
 
@@ -47,14 +48,14 @@ export const OPERATOR = "operator";
 /** A lower-cased address, or `undefined` when the text is not one. */
 export function readAddress(raw: string): string | undefined {
   const address = readStoredAddress(raw);
-  return address !== undefined && !CONTROL.test(address) ? address : undefined;
+  return address !== undefined && !UNSEEN.test(address) ? address : undefined;
 }
 
 /**
- * `readAddress` without the control-character refusal, for naming a row that
- * already stands: a directory made before lg-52 may hold an address with a NUL,
- * and removal must still be able to take it out. It refuses what removal
- * refused before.
+ * `readAddress` without the refusal of unseen characters, for naming a row that
+ * already stands: a directory made before lg-52 or lg-57 may hold an address
+ * with a NUL, a C1 control or a zero-width character, and removal must still be
+ * able to take it out. It refuses what removal refused before.
  */
 function readStoredAddress(raw: string): string | undefined {
   const address = raw.trim().toLowerCase();
@@ -462,7 +463,10 @@ export class Directory {
     if (typeof change.household !== "string") refuse("The household is not a string.");
     if (typeof change.from !== "string") refuse("The address is not a string.");
     if (typeof change.to !== "string") refuse("The new address is not a string.");
-    const from = readAddress(change.from);
+    // `from` names a row that already stands, so it is read as removal reads it: a
+    // directory made before lg-52 or lg-57 may hold an unseen character, and the
+    // person must still be movable off it. `to` is new, so it gets the full check.
+    const from = readStoredAddress(change.from);
     if (from === undefined) refuse(NOT_AN_ADDRESS);
     const to = readAddress(change.to);
     if (to === undefined) refuse(NOT_AN_ADDRESS);

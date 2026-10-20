@@ -198,3 +198,16 @@ describe("loadApiConfig: the directory is never one of the books", () => {
     }
   });
 });
+
+// lg-57: the C1 controls and the zero-width characters in an admin entry. Neither
+// can sit in a meaningful environment value, so `loadApiConfig` is given the string.
+describe("loadApiConfig: LEDGER_ADMINS and a C1 control or a zero-width character", () => {
+  test("refuses an admin entry with one, naming its position and not the entry", () => {
+    expect(refusal({ LEDGER_ADMINS: `${ALEX}, ${SAM}` }), "the clean entries").toBeUndefined();
+    for (const entry of ["boss@x\u0085.test", "boss\u009f@x.test", "boss@x\u200b.test"]) {
+      const message = refusal({ LEDGER_ADMINS: `${ALEX}, ${entry}` });
+      expect(message).toMatch(/LEDGER_ADMINS entry 2 is not an address/u);
+      expect(message).not.toContain("boss");
+    }
+  });
+});

@@ -3,7 +3,7 @@ id: lg-62
 tool: ledger
 title: The isolation sweep's marks can match a photo's random file name
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -138,6 +138,25 @@ the first step of **Build**, and the filer wrote no test code.
 4. The Log names the option chosen under Build step 2 and why, and says whether
    any read route returns a photo file name.
 
+## Review
+
+**Gate: PASS** — 2026-10-19 · `96da35c8..a496a1fd` · Opus 5.5, depth standard
+
+| Done when                                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Planted photo-name case red on `origin/main`, green on the branch; test, command and both exit codes in the Log | `api/test/isolation.test.ts` › "does not take a stored photo's random name for the other household's figure" ✓. Its assertion `expect(storedLeaks(app)).toEqual([])` carries it. The gate re-ran it against the base's `storedLeaks` (`JSON.stringify(rows)`): exit 1, failing at that assertion with `"home's receipts holds away's 2227, 3227"` and `"away's receipts holds home's 3119, 4113"`, so it fails for the ticket's reason and not a setup one. At the head the spec ran 4 of 4, three times out of three. The Log has the command and both exits |
+| 2. Positive control red with the leak planted, green without, on the branch; test and output in the Log            | `api/test/isolation.test.ts` › "still reports the other household's figure held in a column it searches" ✓. It asserts `[]` before the plant and exactly `["away's receipts holds home's 3119"]` after. The gate's own control also failed as it should: home's `lineCents` in away's `people.added_at` and away's `monthlyCents` in home's `receipts.bytes` were reported as `"away's people holds home's 3119"` and `"home's receipts holds away's 3227"`. So the exclusion drops one column, not the whole `receipts` table                                |
+| 3. `npm run check` exits 0 and `npm test -- --project ledger` exits 0, counts in the Log                           | **verified**. The gate re-ran both at `a496a1fd`: check exit 0, ledger exit 0, `Test Files 71 passed (71)`, `Tests 1529 passed (1529)`, which matches the Log. The test diff deletes no test and rewords no assertion                                                                                                                                                                                                                                                                                                                                         |
+| 4. Log names the option and why, and says whether any read route returns a photo name                              | **verified** by reading. The Log names Option B and why Option A cannot cover the integer amount columns, and says no read route returns a photo name. `toReceipt` in `api/src/receipts.ts` maps no `photo`. The new read-body guard (`<route> names a photo`) fired when the gate planted the reader's own stored name, and again with the other household's, in `GET people`'s body (exit 1 both times; it never ran red before this gate)                                                                                                                  |
+
+- **low** · no `Done when` line depends on it · `nfr:maintainability`: the read-body guard in "each household reads its own records through every read route…" compares only whole stored names (`response.body.includes(name)` over `photoNamesOf`). A body that showed a photo's UUID without its extension, or part of it, would bring the flake back into the read sweep and the guard would not see it. No route today shows any part of the name. The error is on the safe side: nothing relies on the guard for more than it checks.
+- **dropped** · attack 1, does part of the stored name come from the request? It does not. `photoName` in `api/src/receipt-photos.ts` returns `${randomUUID()}.${EXTENSIONS[mediaType]}`. In `uploadReceipt` (`api/src/receipts.ts`), `mediaType` comes from `imageTypeOf(bytes)`, which reads the bytes' magic numbers, not the request's type or filename. The `INSERT INTO receipts (photo, …)` writes what `photos.save` returned. The household is a directory segment taken from the identity check and is never part of the name. `receiptPhotoPath` refuses any name outside `PHOTO_NAME`. Excluding the column hides no cross-household path: `photoLeaks` still compares each household's names with its own directory by exact name.
+- **dropped** · attack 2, does another stored column hold random text? There is none. The gate dumped every table `storedLeaks` reads during the full sweep: 19 tables, 135 columns with rows. The two settlement tables are empty, and every column in them is an integer or a person id. The only random text is `receipts.photo`: 4 names per sweep run, 2 per household. That was the base's exposure, about 4 × 0.12 %, or roughly 0.5 % a run. The one value the service makes up that is not deterministic is `spending_categories.created_at`, which the migration seeds from the wall clock (`strftime(… 'now')`). It cannot match by chance: its longest run of digits is the four-digit year (2026), and no four-digit mark is 2026. Integer ids, `seq`, `balance_cents` and `parts_per_million` are computed deterministically from the fixture, so a collision there would fail every run, not some runs.
+- **dropped** · attack 5, does the large sweep still check the same photo directory? It does. `start()` and `photoLeaks(app)` default to `PHOTOS`, as on the base. The new tests' `mkdtempSync(path.join(PHOTOS, "named-"|"control-"))` directories sit beside `PHOTOS/receipts`, not inside it, so they never enter the large sweep's comparison.
+- **findings** · the hunt returned 4: 1 carried, 3 dropped.
+- NFR: security ✓ (no source change; the stored name is wholly server-generated) · performance n/a (spec runs in seconds) · reliability ✓ (the base's flake is removed and a guard covers the read sweep) · maintainability: one low, above.
+- CI on `a496a1fd`: every check green except `test (windows-latest, informational)`, which was still in progress when read. That leg is informational and no line depends on it.
+
 ## Log
 
 - **2026-10-19 — filed (maintenance dispatch).** Base `origin/main` at
@@ -150,3 +169,54 @@ the first step of **Build**, and the filer wrote no test code.
   `mechanical` default did not fit. No `## Decision` heading, because the
   choice is the builder's to make and records, not an owner question, and that
   heading requires `status: needs-decision`.
+
+- **2026-10-19 — built (builder, Sonnet 5.5).** Base `origin/main` at
+  `96da35c8`. All in `tools/ledger/api/test/isolation.test.ts`; no source file
+  changed.
+  - **Red on the base (Done when 1).** The test `the isolation sweep > does not
+take a stored photo's random name for the other household's figure` renames
+    each household's one uploaded photo to a UUID-shaped name holding the other's
+    `lineCents` and `monthlyCents` (`00003119-0000-4000-8000-000000004113.jpg`
+    for away, `00002227-…-000000003227.jpg` for home), in the row and on disk. Run
+    with the old `storedLeaks`: `npx vitest run
+tools/ledger/api/test/isolation.test.ts` exit 1, `Tests 1 failed | 3 passed
+(4)`, with `"home's receipts holds away's 2227, 3227"` and `"away's receipts
+holds home's 3119, 4113"`. With the fix, same command: exit 0, `Tests 4
+passed (4)`.
+  - **Option B chosen (Done when 4).** Option A cannot work for the amount
+    columns: they are integer cents, stored as JSON numbers, and every decimal
+    digit is a hex character, so no digit string is a mark a name cannot hold;
+    only the word, address and quoted-id marks have a character outside
+    `[0-9a-f-]`, so A would leave the very figures the sweep exists to catch
+    unswept. B keeps every amount column searched and leaves exactly one column
+    out: `storedLeaks` now searches each row through `withoutServiceNames`, which
+    drops `receipts.photo` (generated by `randomUUID()` in `receipt-photos.ts`,
+    not household data), with the reason in the code. `photoLeaks` still checks
+    each photo by exact name against its household's directory, and the new test
+    asserts it is `[]` for the planted names, so placement stays covered.
+  - **Positive control (Done when 2).** `the isolation sweep > still reports the
+other household's figure held in a column it searches` writes home's
+    `lineCents` into away's `receipts.uploaded_at` and expects `storedLeaks` to
+    be exactly `["away's receipts holds home's 3119"]`, after first asserting it
+    is `[]` without the plant. It passes on the branch (`4 passed (4)` above) and
+    it also passed on the base, as it must: it fails only for a sweep that
+    searches less than it should.
+  - **Read routes and photo names (Done when 4).** No route in `READS` returns a
+    photo file name: `Receipt` in `contract/src/receipts.ts` has no `photo` field
+    (`id`, `mediaType`, `bytes`, `uploadedAt`, `uploadedBy`), and `receipts.photo`
+    is named in `api/src` only by the store and by `receipts.ts`'s own load. Not
+    only read off the types: the read sweep now also fails with `<route> names a
+photo` if any read body contains either household's exact stored photo name.
+    That guard passes; it was not itself mutated to see it fail, so it is
+    asserted by reading, not by a red run.
+  - **Test shape.** The two new tests are at the end of the suite and use their
+    own photo directory under `PHOTOS` (`start(photos)`, `photoLeaks(app,
+photos)` take it as an optional argument), because the sweep above leaves its
+    files in `PHOTOS` and `photoLeaks` compares a directory with the receipts
+    that name its files.
+  - **Checks (Done when 3).** `npm run check` exit 0; `npx oxlint
+tools/ledger/api` exit 0; `npm test -- --project ledger` exit 0, `Test Files
+71 passed (71)`, `Tests 1529 passed (1529)`, in the branch's worktree.
+  - **Folded in:** nothing. The read-body photo-name guard is the Build's own
+    step 4. I did not audit the other tables for further generated text columns,
+    so none is claimed absent; `receipts.photo` is the only one the ticket names.

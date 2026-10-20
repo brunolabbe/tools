@@ -407,3 +407,56 @@ describe("an address with a control character", () => {
     expect(stored.membershipOf("mallory@evil\u0000.test")).toBeUndefined();
   });
 });
+
+// lg-57: the C1 controls and the zero-width characters, through the same two routes.
+describe("an address with a C1 control or a zero-width character", () => {
+  const BAD = ["casey@b\u0085c.test", "casey\u009f@example.test", "casey\u200b@example.test"];
+
+  test("is refused 400 by the admin's add route and by a member's, and no row is written", async () => {
+    const { app, directory } = await start();
+    const before = directorySnapshot(directory);
+
+    for (const address of BAD) {
+      const asAdmin = await send(app, ADMIN, "POST", of("adminMembers", HOUSEHOLD), {
+        address,
+        person: "casey",
+      });
+      const asMember = await send(app, ALEX, "POST", of("householdMembers", HOUSEHOLD), {
+        address,
+        person: "casey",
+      });
+
+      for (const refused of [asAdmin, asMember]) {
+        expect(refused.statusCode, refused.body).toBe(400);
+        expect(refused.json<ErrorResponse>().error.code).toBe("BAD_REQUEST");
+      }
+    }
+
+    expect(directorySnapshot(directory)).toBe(before);
+    const admin = await send(app, ADMIN, "POST", of("adminMembers", HOUSEHOLD), {
+      address: CASEY,
+      person: "casey",
+    });
+    expect(admin.statusCode, admin.body).toBe(200);
+  });
+
+  test("on a row that already stands is still removed by the admin's remove route", async () => {
+    // Past `Directory`, as a directory made before lg-57 holds it.
+    const db = new Database(":memory:");
+    migrateDirectory(db);
+    const stored = new Directory(db);
+    stored.addHousehold({ id: HOUSEHOLD, name: "Home", by: "operator", at: NOW });
+    db.prepare(
+      `INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
+       VALUES (?, ?, 'mallory', 'add', 'x', 'operator')`,
+    ).run("mallory@evil\u200b.test", HOUSEHOLD);
+    const running = await start(stored);
+
+    const removed = await send(running.app, ADMIN, "POST", of("adminMemberRemove", HOUSEHOLD), {
+      address: "mallory@evil\u200b.test",
+    });
+
+    expect(removed.statusCode, removed.body).toBe(200);
+    expect(stored.membershipOf("mallory@evil\u200b.test")).toBeUndefined();
+  });
+});

@@ -248,11 +248,16 @@ export interface ImportStatementRequest {
  * paste held, so a paste pasted twice reads `0` and all of them the second time.
  * `tailBalanceCents` is the account's balance after the newest stored row, which
  * is what the user checks against the bank's own figure.
+ *
+ * `rowsInInbox` is how many of the `rowsAdded` no rule and no history filed, so
+ * they wait in the inbox (lg-54): never more than `rowsAdded`, and `0` when none
+ * was added. It counts this paste's own rows; the inbox may hold earlier ones.
  */
 export interface ImportStatementReport {
   rowsAdded: number;
   rowsAlreadyPresent: number;
   tailBalanceCents: number;
+  rowsInInbox: number;
 }
 
 /**

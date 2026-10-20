@@ -5855,3 +5855,40 @@ The owner's paid lg-38 run (60 model calls, $0.5349 by the records' `costUsd`) i
 - A gate told to establish the ticket's premise from source before grading (dl-128): it refuted the brief's 25 s-vs-20 s budget, and the builder's competing clock hypothesis, with 60 of 60 measured backward steps, so no production change was made on a guess.
 - lg-59's gate-2 runaway (6h30m wall, about 300 enumeration shards, from a dispatch that said "widen" with no bound) is the case repo-111's sweep budget in `reference/dispatching.md` (#565, a58bb490, merged mid-batch) now covers; the owner stopped it, and the gate wrote its verdict from the finished shards with the rest named unmeasured.
 - Killing a runaway gate's work by its process group (`kill -TERM -- -<pgid>` after `ps -o pid,args -g <pgid>` showed only its own runs), then its orphaned `until` waits, before messaging it to write up.
+
+### Batch 2026-10-19 (tools-1c, lg-54 lg-62 lg-57) — base 96da35c8
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | a6017e0258900e7d7 | seam-mapper, 14 tickets | 1m14s / 1m14s | 0 | $0.3100 |
+| #574 | open, ready, checks green at 7d58c3ea | Sonnet 5.5 / high | a8b300cfe5e7ffbd7 | builder-standard, lg-54 | 7m57s / 7m56s | 0 | $1.1439 |
+| #574 | open, ready, checks green at 7d58c3ea | Opus 5.5 / high | a5c7484c80a752081 | ticket-reviewer-opus, lg-54 gate 1 | 8m19s / 8m10s | 0 | $2.3743 |
+| #574 | open, ready, checks green at 7d58c3ea | Sonnet 5.5 / high | a75ebb24d1a267dff | fixer, lg-54 two lows at landing + landing | 5m05s / 4m19s | 0 | $0.3912 |
+| #571 | open, ready, checks green at 71e962c9 | Sonnet 5.5 / high | afb5b71d0fb534871 | builder-standard, lg-62 | 4m36s / 4m35s | 0 | $0.6191 |
+| #571 | open, ready, checks green at 71e962c9 | Opus 5.5 / high | af30aefb9bb0295e1 | ticket-reviewer-opus, lg-62 gate 1 | 8m59s / 8m43s | 0 | $2.0710 |
+| #571 | open, ready, checks green at 71e962c9 | Sonnet 5.5 / high | a3c889fe950a63a5c | fixer, lg-62 landing | 1m30s / 1m29s | 0 | $0.1667 |
+| #573 | open, ready at 32021323 | Sonnet 5.5 / high | ab71a379e1d54a1dc | builder-standard, lg-57 + round 1 | 8m24s / 22m53s | 0 | $1.2162 |
+| #573 | open, ready at 32021323 | Opus 5.5 / high | a8a78c5b7055fa4d9 | ticket-reviewer-opus, lg-57 gate 1 | 9m46s / 9m31s | 0 | $2.4439 |
+| #573 | open, ready at 32021323 | Opus 5.5 / high | a1b0e3ece06f232a5 | ticket-reviewer-opus, lg-57 gate 2 (narrow) | 11m45s / 11m10s | 0 | $2.7711 |
+| #573 | open, ready at 32021323 | Sonnet 5.5 / high | acc3e344fa03fedf7 | fixer, lg-57 gate-2 round + landing | 2m59s / 2m54s | 0 | $0.3112 |
+| — | — | Opus 5.5 / high | orchestrator e5caf24b | orchestrator (floor) | 39m39s / 43m03s | 0 | $4.0110 |
+| | | | | **total** (rates read 2026-10-10) | 1h50m14s | 0 | **$17.8296** |
+
+**Tickets:**
+
+- lg-54 → #574, gate 1 PASS (three lows; the (1,1) wording and App's stale comment fixed at landing by owner choice; `.then(onStored)` before `.catch` recorded unfixed). Contract change `ImportStatementReport.rowsInInbox`, sanctioned by its Build 3.
+- lg-62 → #571, gate 1 PASS (one low recorded unfixed: the read-body guard matches whole photo names only).
+- lg-57 → #573, gate 1 FAIL (high: U+FEFF at either end trimmed where Done when 1 read literally asked for refusal; owner reworded the line. Low: `changeAddress` could not move a stored bad row; owner folded in `readStoredAddress`. Low: stale `ADDRESS` prose), gate 2 FAIL (med: trailing U+FEFF unasserted; low: a no-row `from` with a C0 control now answers `MEMBER_NOT_FOUND`; both fixed by the lander, no third gate).
+- main CI before the batch: the 14:31 UTC scheduled run at 96da35c8 passed check and both test legs, the first matrix run over lg-59's code.
+
+**Defects in the skill:**
+
+1. `review-ticket/gate.md` › _Steps_, step 4 — the bullet on a line that reads two ways grades it "as the open-decision case below", which that section makes CONCERNS, while _Severity and the gate_ makes a test asserting the opposite of the line a `high` and FAIL; lg-57's gate 1 settled the conflict by dl-100's record, not the page. Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n -E "reads two ways|asserts the opposite of an acceptance"` → `58:     names the clause (lg-8's Done when 5). A line that reads two ways, one met` and `198:  higher. **A test that asserts the opposite of an acceptance line is a`.
+2. `roles/reviewer.md` › _What makes a gate worth its cost_, the private-`TMPDIR` bullet — it says to make the short directory first and run TypeScript with `node --import tsx`, but not that the working directory must stay inside the worktree, where `tsx` resolves; lg-57's gate 2 lost a run to it. Reproduction: `mkdir -p /tmp/claude-1000/repro-tsx && env -C /tmp/claude-1000/repro-tsx node --import tsx -e 'console.log(1)' 2>&1 | grep -m1 ERR_` → `  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);`; the same from `/workspaces/tools` → `1`.
+3. `roles/common.md` › _The sandbox refuses some ordinary shell shapes_ — nothing warns that the Write and Edit tools can turn a typed `\uXXXX` escape into the literal character; lg-57's builder (both rounds) and both its gates wrote invisible characters into tests, the ticket and gate sections, and each repaired them with a script, after which a gate record could otherwise carry an invisible character unnoticed. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -c -i -E "escape|literal (invisible|character)"` → `0`; `grep -cP '\x{feff}' <scratchpad>/lg-57/gate-2/zz-gate2-feff.test.ts` → `1`, in a probe whose author typed the escape.
+
+**Worked, and worth keeping:**
+
+- The seam map's disjoint batch: three tickets on three file sets ran concurrently and landed with no rebase and no merge from `main`, though `main` moved twice (#572, #575) under them.
+- A gate attack with a sized population (36 code points × 4 positions = 144 inputs) found the U+FEFF edge that a test-per-line reading had passed.
+- Reading an informational Windows failure before setting it aside: lg-54's was a downloader browser test (`page.goto: net::ERR_NO_BUFFER_SPACE`) on a ledger-only branch.

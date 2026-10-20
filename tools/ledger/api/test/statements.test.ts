@@ -161,6 +161,7 @@ describe("POST /api/statements", () => {
       rowsAdded: 6,
       rowsAlreadyPresent: 0,
       tailBalanceCents: ROWS[5]?.balanceCents,
+      rowsInInbox: 6,
     });
     // Oldest = 0, in the order the account lived, whatever order the paste listed.
     const rows = homeBooks(target)
@@ -183,6 +184,7 @@ describe("POST /api/statements", () => {
       rowsAdded: 0,
       rowsAlreadyPresent: 6,
       tailBalanceCents: first.tailBalanceCents,
+      rowsInInbox: 0,
     });
     expect(stored(target)).toEqual(before);
     // A paste that stored nothing is not an import: there is no row to point at.
@@ -201,6 +203,7 @@ describe("POST /api/statements", () => {
       rowsAdded: 4,
       rowsAlreadyPresent: 2,
       tailBalanceCents: ROWS[9]?.balanceCents,
+      rowsInInbox: 4,
     });
     const rows = stored(target);
     expect(rows.map((row) => row.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -229,6 +232,7 @@ describe("POST /api/statements", () => {
       rowsAdded: 0,
       rowsAlreadyPresent: 3,
       tailBalanceCents: ROWS[9]?.balanceCents,
+      rowsInInbox: 0,
     });
   });
 
@@ -485,7 +489,12 @@ describe("a row's identity is not unique, so a paste is read by position", () =>
 
     const result = await report(target, of([RETOUR, X], 6000));
 
-    expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 1, tailBalanceCents: 6000 });
+    expect(result).toEqual({
+      rowsAdded: 1,
+      rowsAlreadyPresent: 1,
+      tailBalanceCents: 6000,
+      rowsInInbox: 1,
+    });
     expect(stored(target).map((row) => row.description)).toEqual([
       "Virement X",
       "Retour",
@@ -539,7 +548,12 @@ describe("a row's identity is not unique, so a paste is read by position", () =>
 
     const result = await report(target, of([Z, X, RETOUR, X, Y], 4700));
 
-    expect(result).toEqual({ rowsAdded: 2, rowsAlreadyPresent: 3, tailBalanceCents: 5800 });
+    expect(result).toEqual({
+      rowsAdded: 2,
+      rowsAlreadyPresent: 3,
+      tailBalanceCents: 5800,
+      rowsInInbox: 2,
+    });
   });
 
   test("a paste of rows the history holds twice over is refused, never guessed at", async () => {
@@ -562,7 +576,12 @@ describe("a row's identity is not unique, so a paste is read by position", () =>
 
     const result = await report(target, renderPaste(withBalances([down], 1500)));
 
-    expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 0, tailBalanceCents: 1000 });
+    expect(result).toEqual({
+      rowsAdded: 1,
+      rowsAlreadyPresent: 0,
+      tailBalanceCents: 1000,
+      rowsInInbox: 1,
+    });
   });
 
   test("an older paste that stops short of the oldest stored row is older history, not a gap", async () => {
@@ -883,7 +902,12 @@ describe("a paste that meets the workbook's rows", () => {
       ),
     );
 
-    expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 4, tailBalanceCents: 63_000 });
+    expect(result).toEqual({
+      rowsAdded: 1,
+      rowsAlreadyPresent: 4,
+      tailBalanceCents: 63_000,
+      rowsInInbox: 1,
+    });
     const after = stored(target);
     expect(after.slice(0, 5)).toEqual(before);
     expect(after[5]).toMatchObject({
@@ -909,7 +933,12 @@ describe("a paste that meets the workbook's rows", () => {
 
     const result = await report(target, of([...overlap, PURCHASE], BEFORE_MARCH));
 
-    expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 4, tailBalanceCents: 63_000 });
+    expect(result).toEqual({
+      rowsAdded: 1,
+      rowsAlreadyPresent: 4,
+      tailBalanceCents: 63_000,
+      rowsInInbox: 1,
+    });
     expect(stored(target).slice(0, 5)).toEqual(before);
   });
 
@@ -1093,7 +1122,12 @@ describe("a paste that meets the workbook's rows", () => {
       of([BANK.taxes, BANK.deposit, BANK.transfer], BEFORE_MARCH),
     );
 
-    expect(result).toEqual({ rowsAdded: 0, rowsAlreadyPresent: 3, tailBalanceCents: 65_000 });
+    expect(result).toEqual({
+      rowsAdded: 0,
+      rowsAlreadyPresent: 3,
+      tailBalanceCents: 65_000,
+      rowsInInbox: 0,
+    });
     expect(stored(target)).toEqual(before);
   });
 });
@@ -1178,6 +1212,7 @@ describe("a paste partway through one of the workbook's days", () => {
         rowsAdded: 1,
         rowsAlreadyPresent: 3 - start,
         tailBalanceCents: 100_520,
+        rowsInInbox: 1,
       });
       expect(stored(target).slice(0, 3)).toEqual(before);
     },
@@ -1214,7 +1249,12 @@ describe("a paste partway through one of the workbook's days", () => {
 
     // With the next day's row, only the true reading fits.
     const result = await report(target, of([...lastTwo, bankRow(NEXT, 2)], 100_000));
-    expect(result).toEqual({ rowsAdded: 2, rowsAlreadyPresent: 1, tailBalanceCents: 101_750 });
+    expect(result).toEqual({
+      rowsAdded: 2,
+      rowsAlreadyPresent: 1,
+      tailBalanceCents: 101_750,
+      rowsInInbox: 2,
+    });
     expect(stored(target).map((row) => [row.amount_cents, row.balance_cents])).toEqual([
       [1_000, 101_000],
       [1_000, 102_000],
@@ -1255,7 +1295,12 @@ describe("a paste partway through one of the workbook's days", () => {
         ),
       );
 
-      expect(result).toEqual({ rowsAdded: 0, rowsAlreadyPresent: 3, tailBalanceCents: 65_000 });
+      expect(result).toEqual({
+        rowsAdded: 0,
+        rowsAlreadyPresent: 3,
+        tailBalanceCents: 65_000,
+        rowsInInbox: 0,
+      });
       expect(stored(target)).toEqual(before);
     },
   );
@@ -1361,6 +1406,7 @@ describe("a paste wholly inside a reordered day the workbook lists between two o
           rowsAdded: 0,
           rowsAlreadyPresent: to - from,
           tailBalanceCents: 100_000 + 900 - 1_234 + 5_600 - 777 - 250,
+          rowsInInbox: 0,
         });
       }
       expect(stored(target)).toEqual(before);

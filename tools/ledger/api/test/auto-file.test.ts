@@ -16,6 +16,7 @@ import type {
   AutoFiledRow,
   BucketsResponse,
   ClosedPeriod,
+  ImportStatementReport,
   InboxRow,
   PeriodsResponse,
   RowsResponse,
@@ -819,5 +820,29 @@ describe("every reader of the standing classification answers an automatic filin
       );
       expect(ran.out).not.toContain("in the inbox");
     });
+  });
+});
+
+describe("a row history filed is not reported as waiting (lg-54)", () => {
+  test("of two rows added, the one filed from history is not counted and the one that waits is", async () => {
+    const target = await start();
+    const stretch = [
+      market(1, -10000),
+      market(2, -9000),
+      market(3, -10000),
+      market(10, -11500),
+      market(11, -12500),
+    ];
+    await pasteSlice(target, stretch, 0, 3);
+    for (const index of [0, 1, 2]) await answer(target, idAt(index), SAM_CURRENT);
+
+    const response = await target.server.inject({
+      method: "POST",
+      url: ROUTES.statements,
+      payload: { text: renderPaste(withBalances(stretch, 500000).slice(3, 5)) },
+    });
+
+    // 15 % above the latest answer is filed from history; 25 % above waits.
+    expect(response.json<ImportStatementReport>()).toMatchObject({ rowsAdded: 2, rowsInInbox: 1 });
   });
 });
