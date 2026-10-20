@@ -233,6 +233,24 @@ pick a reading.
 3. **Leave it.** Locally the project stays bound by one 72-78 s file. CI is
    not affected, because CI time follows the summed time.
 
+## Decision note D — answered 2026-10-20 by Bruno Labbé
+
+**D — chosen: "Keep the 32, reword line 8" (the orchestrator's recommendation; it
+overrode the builder's, which was option 2).** Asked on 2026-10-20 by the
+orchestrator (session tools-11) with `AskUserQuestion`, after the build measured
+Decision A's scope: "dl-129 misses its CI bar, Done when 8. Under your Decision A,
+only 32 tests may use the shorter waits, and CI's Ubuntu leg then sums the seven
+browser files to 287.0 s, which is 90.2% of 318 s against a bar of 85%. A was given
+on an estimated saving of 50–80 s; the measured saving is about 27 s. The builder
+wants to also shorten the waits for 24 'negative' tests, which assert that a decoy
+was not pressed or a card not requested. As filed, A says 'every negative test keeps
+both sleeps'." Options offered: (1) keep the 32 and reword Done when 8 to the
+measured result, keeping A as given; (2) widen to the 24 as they are, changing A and
+Done when 4 to exclude only tests whose verdict is an absence (projected about 82 %
+on CI from one comparable run, unverified); (3) widen with each of the 24 first
+proven by a mutation. Option 1 was chosen: Decision A and Done when 4 stand, and
+Done when 8 is reworded below. The builder's widened patch is not applied.
+
 ## Done when
 
 1. The Log holds the three before-runs and three after-runs of Build step 1,
@@ -266,11 +284,11 @@ pick a reading.
    project; the Log holds every run's ratio with its count, minimum, median
    and maximum, and the floor in the spec is still 3 on Linux and 2.5 on
    Windows.
-8. CI: the PR's own `test (ubuntu-latest)` log shows the seven browser files'
-   summed time at most 85 % of 318 s (run 39126762378 at `335efcd4`). Report
-   the `npm test` step time on both legs with run ids, but do not grade it.
-   CI's main runs at four workers spread from 232 to 273 s (repo-99), wider
-   than the 12 to 20 s this ticket expects to save.
+8. CI: the PR's own `test (ubuntu-latest)` log's seven browser files' summed
+   time, and its ratio to 318 s (run 39126762378 at `335efcd4`), are in the Log
+   with the run id. The 85 % bar was dropped by Decision note D: Decision A's
+   scope saves about 8 to 10 %, inside CI's spread. Report the `npm test` step
+   time on both legs with run ids, but do not grade it or the ratio.
 9. No test in the Build's floor list has changed its wait, its fixture's timing
    or its assertion: `git diff` of those test bodies shows nothing but a move.
 10. `npm run check` passes, and `npm test -- --project downloader` passes in
@@ -583,3 +601,5 @@ consistent-function-scoping` above `pausedThenRead` (its fixture is imported now
   its new file and the move (this commit). The mechanism is `security.yml`'s dismissal step
   after the push to `main`, as dl-98's `awaiting:` line recorded; landing this branch
   needs the owner's recorded excusal, as dl-98's did (the lg-5 precedent).
+
+- 2026-10-20, maintenance (Haiku 5.5) — recorded Decision note D and reworded Done when 8 to it; no code changed.
