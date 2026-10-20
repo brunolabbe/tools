@@ -50,6 +50,24 @@ on _its_ date, so a later record never moves an earlier payment. Filed `ready`
 and independent of [lg-55](./lg-55-a-household-with-no-mortgage.md); the two
 touch the same card and the seam-mapper orders them at intake.
 
+## Decision — answered 2026-10-20 by the owner, asked at intake
+
+When a person retires at a close (lg-35) while a dated `shares` record is in
+effect, how are later joint mortgage payments split?
+
+1. **Redistribute pro rata** (recommended): from the retirement date, the
+   retired person's part goes to the remaining people in proportion to their
+   own parts, until a new record is filed. The sum always holds, nobody has to
+   act, and the Own money card marks the change as it does for a new record.
+2. **Fall back to equal**: the shares record lapses on the retirement date.
+3. **Refuse the retirement** while a shares record names that person.
+
+**Answer: 1, redistribute pro rata.** For `equal`, lg-35's rule already holds:
+the retired person is out from the retirement's date, and Build 2's "people
+the books hold on the payment's date" adds that a person is out before they
+are first named. For `ratio`, the ratio confirmed at the close names only the
+people who remain. A test covers a retirement under each of the three modes.
+
 ## Build
 
 The contract change is the owner's decision above; it licenses this record and
