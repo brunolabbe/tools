@@ -283,3 +283,11 @@ ledger`, 1594 of 1594 in 73 files, exit 0; `npm run check` exit 0. The
   between people after the close, the cost the owner accepted with F1's option A.
   `grep -c "screens then say who owes it" tools/ledger/docs/00-ANALYSIS.md` → 1
   before, 0 after.
+- 2026-10-20 — Fixed at landing by owner choice: gate 2, low 1 — "`mortgageStanding`
+  (`household/MortgageSetting.tsx`) reads "-500.00 $ is left in the bucket." when
+  the balance is negative. Home says "The bucket is 500.00 $ short." for the same
+  books." At a negative balance `mortgageStanding` now reads "The bucket is 500.00
+  $ short.", as Home does; the new test is "the household screen's line says a
+  short bucket is short, as Home does". `npx vitest run
+tools/ledger/web/test/mortgage.test.tsx` → 1 failed of 22 against the previous
+  `MortgageSetting.tsx` (the new test), 22 passed of 22 against this one.

@@ -35,7 +35,12 @@ export function mortgageStanding(mortgage: MortgageResponse): string {
     mortgage.closedOn !== null && mortgage.closedOn !== mortgage.endedOn
       ? ` A payment out of the bucket came on ${mortgage.closedOn}, so it closes then.`
       : "";
-  const left = mortgage.left ? ` ${formatCents(mortgage.balanceCents)} is left in the bucket.` : "";
+  // The same words Home uses for a bucket that holds less than nothing.
+  const left = !mortgage.left
+    ? ""
+    : mortgage.balanceCents < 0
+      ? ` The bucket is ${formatCents(-mortgage.balanceCents)} short.`
+      : ` ${formatCents(mortgage.balanceCents)} is left in the bucket.`;
   return `${ended}${closed}${left}`;
 }
 

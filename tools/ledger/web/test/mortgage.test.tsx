@@ -31,6 +31,7 @@ import {
 } from "../src/api/stats.ts";
 import { Home } from "../src/home/Home.tsx";
 import { Household } from "../src/household/Household.tsx";
+import { mortgageStanding } from "../src/household/MortgageSetting.tsx";
 import { endedSentence } from "../src/mortgage.ts";
 import { Stats } from "../src/stats/Stats.tsx";
 import { ENDED, ENDED_EMPTY, ENDED_OWES, ENDED_UNEVEN, LIVE, NONE } from "./mortgage-fixtures.ts";
@@ -436,6 +437,15 @@ test("with a part below zero the parts above it are owed, so three people do not
     ),
   ).toBe(
     `The mortgage ended on 2026-03-31. The bucket is ${formatCents(40000)} short. Alex is owed ${formatCents(10000)}, Sam owes ${formatCents(50000)}.`,
+  );
+});
+
+test("the household screen's line says a short bucket is short, as Home does", () => {
+  expect(mortgageStanding({ ...ENDED, balanceCents: -50000, left: true })).toBe(
+    `The mortgage ended on 2026-03-31. The bucket is ${formatCents(50000)} short.`,
+  );
+  expect(mortgageStanding(ENDED)).toBe(
+    "The mortgage ended on 2026-03-31. 199.99 $ is left in the bucket.",
   );
 });
 
