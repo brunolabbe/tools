@@ -24,7 +24,7 @@
  */
 
 import { Buffer } from "node:buffer";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -236,9 +236,9 @@ afterAll(() => {
   rmSync(PHOTOS, { recursive: true, force: true });
 });
 
-async function start(): Promise<App> {
+async function start(photos: string = PHOTOS): Promise<App> {
   return await createApp({
-    photos: filePhotoStore(PHOTOS),
+    photos: filePhotoStore(photos),
     directory: twoHouseholds(),
     config: {
       dataDir: ":memory:",
@@ -785,6 +785,21 @@ function answeredRoutes(app: App): string[] {
 }
 
 /**
+ * A row without the columns whose value the service makes up, not a household:
+ * `receipts.photo` is `randomUUID()` and an extension (lg-62). A figure of four
+ * digits is a substring of about one such name in eight hundred, since hex holds
+ * every decimal digit, and the sweep reported it as the other household's. No
+ * mark can be chosen to avoid it, because an amount is stored as an integer with
+ * no character a hex name lacks. The name is not searched; `photoLeaks` checks
+ * each photo against the household's directory by its exact name instead.
+ */
+function withoutServiceNames(table: string, row: unknown): unknown {
+  if (table !== "receipts" || typeof row !== "object" || row === null) return row;
+  const { photo: _photo, ...rest } = row as Record<string, unknown>;
+  return rest;
+}
+
+/**
  * What each household's file holds that it should not: a table holding the
  * other household's marks, or a table whose row count differs between the two
  * files. Read straight from the files, not through any route.
@@ -808,7 +823,7 @@ function storedLeaks(app: App): string[] {
     [AWAY, HOME],
   ] as const) {
     for (const [table, rows] of held.get(own.id) ?? []) {
-      const text = JSON.stringify(rows);
+      const text = JSON.stringify(rows.map((row) => withoutServiceNames(table, row)));
       const shown = marks(other).filter((mark) => text.includes(mark));
       if (shown.length > 0)
         found.push(`${own.id}'s ${table} holds ${other.id}'s ${shown.join(", ")}`);
@@ -822,13 +837,21 @@ function storedLeaks(app: App): string[] {
   return found;
 }
 
+/** The file names a household's receipts hold. */
+function photoNamesOf(app: App, household: Household): string[] {
+  const rows = app.books.of(household.id).prepare("SELECT photo FROM receipts").all() as {
+    photo: string;
+  }[];
+  return rows.map((row) => row.photo);
+}
+
 /**
  * A receipt photo kept outside its household's directory (lg-8): each
  * household's directory holds exactly the photos its own receipts name. A photo
  * saved under the other household's directory and loaded from there shows
  * through no read, since every photo's name is new.
  */
-function photoLeaks(app: App): string[] {
+function photoLeaks(app: App, photos: string = PHOTOS): string[] {
   const found: string[] = [];
   for (const household of [HOME, AWAY]) {
     const named = (
@@ -836,7 +859,7 @@ function photoLeaks(app: App): string[] {
         photo: string;
       }[]
     ).map((row) => row.photo);
-    const directory = path.join(PHOTOS, "receipts", household.id);
+    const directory = path.join(photos, "receipts", household.id);
     const kept = existsSync(directory) ? readdirSync(directory).toSorted() : [];
     if (named.length === 0) found.push(`${household.id} has no receipts to compare`);
     if (JSON.stringify(kept) !== JSON.stringify(named)) {
@@ -905,6 +928,11 @@ describe("the isolation sweep", () => {
           expect(response.status, `${where}: ${response.body}`).toBe(200);
           const shown = marks(other).filter((mark) => response.body.includes(mark));
           if (shown.length > 0) leaks.push(`${where} shows ${other.id}'s ${shown.join(", ")}`);
+          // A read that showed a photo's file name would make the figures
+          // searched above able to match a random name (lg-62): none does.
+          const named = [own, other].flatMap((household) => photoNamesOf(app, household));
+          if (named.some((name) => response.body.includes(name)))
+            leaks.push(`${where} names a photo`);
           // Its own: the read shows something, so its silence about the other
           // household is not an empty answer's.
           if (!marks(own).some((mark) => response.body.includes(mark))) silent.push(where);
@@ -915,6 +943,62 @@ describe("the isolation sweep", () => {
       expect(silent).toEqual([]);
       expect(storedLeaks(app)).toEqual([]);
       expect(photoLeaks(app)).toEqual([]);
+    } finally {
+      await app.shutdown();
+    }
+  });
+
+  test("does not take a stored photo's random name for the other household's figure", async () => {
+    // Its own photo directory: the sweep above leaves its photos in PHOTOS, and
+    // photoLeaks compares a directory with the receipts that name its files.
+    const photos = mkdtempSync(path.join(PHOTOS, "named-"));
+    const app = await start(photos);
+    try {
+      for (const household of [HOME, AWAY]) {
+        await post<Receipt>(app, household, ROUTES.receipts, photoOf(household), "receipts");
+      }
+      // A photo is named by a random UUID, 36 characters of hex, so a figure of
+      // four digits is in about one name in eight hundred (lg-62). Planted here
+      // as UUID-shaped names that hold the other household's figures.
+      for (const [own, other] of [
+        [HOME, AWAY],
+        [AWAY, HOME],
+      ] as const) {
+        const db = app.books.of(own.id);
+        const { photo } = db.prepare("SELECT photo FROM receipts").get() as { photo: string };
+        const name = `${String(other.lineCents).padStart(8, "0")}-0000-4000-8000-${String(other.monthlyCents).padStart(12, "0")}.jpg`;
+        const directory = path.join(photos, "receipts", own.id);
+        renameSync(path.join(directory, photo), path.join(directory, name));
+        db.prepare("UPDATE receipts SET photo = ?").run(name);
+        // Planted where the sweep reads: the name holds the other's figures.
+        expect(name).toContain(String(other.lineCents));
+        expect(name).toContain(String(other.monthlyCents));
+      }
+
+      expect(storedLeaks(app)).toEqual([]);
+      expect(photoLeaks(app, photos)).toEqual([]);
+    } finally {
+      await app.shutdown();
+    }
+  });
+
+  test("still reports the other household's figure held in a column it searches", async () => {
+    const photos = mkdtempSync(path.join(PHOTOS, "control-"));
+    const app = await start(photos);
+    try {
+      for (const household of [HOME, AWAY]) {
+        await post<Receipt>(app, household, ROUTES.receipts, photoOf(household), "receipts");
+      }
+      expect(storedLeaks(app)).toEqual([]);
+
+      // The positive control: a text column that is not the photo's name holds
+      // home's figure in away's file, which is a leak. Without it the test above
+      // would pass for a sweep that searched nothing.
+      app.books
+        .of(AWAY.id)
+        .prepare("UPDATE receipts SET uploaded_at = ?")
+        .run(`${NOW.toISOString()} ${HOME.lineCents}`);
+      expect(storedLeaks(app)).toEqual([`away's receipts holds home's ${HOME.lineCents}`]);
     } finally {
       await app.shutdown();
     }
