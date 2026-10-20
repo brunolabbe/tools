@@ -198,6 +198,37 @@ packages/ui/` beside the `packages/core` manifest line, before `npm ci`.
 - **findings** · the hunt returned 2 new candidates: the parser shapes, carried as F1's remaining clause rather than a new finding, and the merged-in web code, dropped. With gate 1's three findings, 3 carried.
 - NFR: security n/a · performance n/a · reliability ✓ (image closure holds a–d and now c2) · maintainability: F1.
 
+### Gate 3
+
+**Gate: PASS** — 2026-10-20 · `041db427..f40a69cc` (round: `b5299fe1`, `77b9579f`, `f40a69cc`; merge base with main `00977771`) · Opus 5.5, narrow: F1's fix only
+
+| Done when                                                                                | Proof at `f40a69cc`                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1, 3, 4, 5                                                                               | settled by gates 1 and 2, not regraded. CI at `f40a69cc`: planner `e2e`, downloader `e2e (direct)` and `e2e (sniffer)`, and three `docker` jobs pass                                                               |
+| 2. Guard passes; fails on a planted `--muted` and on a role removed from a dark override | settled, not regraded. `packages/ui/test/tokens.test.ts` 26 of 26 unplanted, locally                                                                                                                               |
+| 6. `npm run check` and `npm test` pass                                                   | CI `check` (×2) and `test (ubuntu-latest)` pass at `f40a69cc`. `npm run check` exit 0 locally, with no warning under `packages/ui`. `test (windows-latest, informational)` was still pending when read; not graded |
+
+- **high** · F1 · **fixed** · gate 2's `header-shapes.sh` re-run at `f40a69cc`. Unplanted: `26 passed (26)`, exit 0. `control`, `indent-1`, `indent-4`, `indent-6`, `tab`, `tab-after-name`, `two-on-line`, `two-on-line-second`, `no-description`, `after-blank`, `long-name-one-space`, `long-name-16` and `crlf` each gave `1 failed | 25 passed (26)`, exit 1. The failing test was `tokens.css › its header lists exactly the roles the guard enforces…`, with the planted name under `listedButNotEnforced`. `in-prose` gave `26 passed (26)`, by design, and the header now says that a mention is not an entry. All 15 match the builder's account. The `tokens.css` header now writes the entry rule down ("One role per line, the line starting with its name"), and `headerRoles`' doc comment in `packages/ui/test/support/stylesheet.ts` matches the code. `COLOUR_ROLES`' doc ("a role added to one and not the other fails there") and `.claude/rules/ui-package.md` ("every colour role listed in `tokens.css`'s header") are now true for every line the header's own rule calls an entry. The unplanted header reads 11 roles, as the Log says.
+- **low** · F4 · no `Done when` line depends on it · **over-read**. `headerRoles` takes every `--name` on an entry line, its description included, and every `--name` on any line that starts with a bare `--` name. The `tokens.css` header says "a name that is merely mentioned in a sentence is not" read. That is false for a mention inside an entry's description, or a mention that a rewrap puts at the start of a line. The existing entry `--accent-text   text on an --accent background` already has this shape: it passes only because `--accent` is itself a role. The falsehood runs in the safe direction. An honest edit fails the equality test loudly and names the extra name; nothing passes that should fail. Probe (`read-probe.mts`, the branch's own `headerRoles` against `COLOUR_ROLES`, as the test compares them). The equality fails for:
+  - a description naming a tool-local role (` *     --warn          caution; planner's --warn-bg stays its own` gives `[--warn-bg]`);
+  - a description naming the retired spelling (`secondary text (was --muted)` gives `[--muted]`);
+  - the existing "A role only one tool needs (downloader's --blocked, planner's --warn-bg)" sentence rewrapped after "downloader's" (`[--blocked,--warn-bg]`);
+  - a wrapped prose line starting `--link, which --accent replaced.` (`[--link]`);
+  - a commented example ` *   --example: value;` (`[--example]`);
+  - ` * --- see below` (`[---]`).
+
+  The first two were confirmed through vitest: `1 failed | 25 passed (26)`. Not read, and correctly passing: ` * -- see below` and ` *     color: var(--text-muted);`. A wrapped line that names only roles is read, but it is harmless because the reader dedupes into a set. Two remedies, so an open decision for the record:
+  - (a), recommended: reword the header sentence to say that every `--name` on an entry line counts, its description included. `headerRoles`' doc already says so. The over-read stays, and stays loud.
+  - (b): read only the leading comma-separated run of names. This drops the `two-on-line-second` shape that the branch's `the header reader` test pins, so it reopens an under-read.
+
+  Neither was run.
+
+- **low** · F5 · no `Done when` line depends on it · **under-read outside the header's written rule**. A role entered as `` *     `--info`        informational`` (backticked) or ` *   - --info          informational` (a markdown bullet) is not read. The equality test passes (`26 passed (26)`, exit 0, confirmed through vitest), so the role is listed for a human and enforced by nothing. That is the unsafe direction, but the header now states the rule these break ("the line starting with its name"), against eleven entries written the conforming way. Neither shape is an accident of copying a neighbour, unlike the indent, tab and long-name shapes gate 2 found. Direction, not a tested remedy: allow an optional backtick or `- ` before the `--` in the line test.
+- **dropped** · a role entry in a second `/* … */` block after the header is not read (equality passes). It is not a defect, because every text (`tokens.css`, `stylesheet.ts`, `ui-package.md`) scopes the list to the header.
+- **dropped** · ` *     --info:   informational` (a trailing colon) is read as `--info` and fails the equality test as it should.
+- **findings** · the hunt returned 4 candidates in the round's lines: over-read (F4), under-read by backtick or bullet (F5), second comment block (dropped), trailing colon (dropped). With gate 2's F1 (fixed), 3 carried. F2 is left under the severity floor, and F3 was fixed at gate 2; neither is regraded.
+- NFR: security n/a · performance n/a · reliability ✓ (the guard reads all 13 of gate 2's planted shapes) · maintainability: F4, F5.
+
 ## Log
 
 - 2026-10-18 — Filed after a scoping conversation with the owner. The two
