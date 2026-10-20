@@ -194,6 +194,18 @@ function gitIn(dir: string, ...args: string[]): string {
   return result.stdout.trim();
 }
 
+/**
+ * What `git config user.email` and `user.name` write, written to `.git/config`
+ * directly: two spawns saved per repository, and 40 ms each on Windows (repo-113).
+ * It is the repository's own config rather than `GIT_AUTHOR_*` in the environment
+ * because `--land` commits in the fixture repository through the repository's
+ * config, and a scratch clone does not inherit that config — an environment
+ * identity would hide a `--land` that stopped setting its clone's own.
+ */
+function setIdentity(dir: string, email: string, name: string): void {
+  fs.appendFileSync(path.join(dir, ".git", "config"), `[user]\n\temail = ${email}\n\tname = ${name}\n`);
+}
+
 const TICKET_PATH = "docs/work/zz-1-test-ticket.md";
 
 /** A minimal but real ticket, with a real cited file beside it. */
@@ -242,8 +254,7 @@ function withTicketRepo(whyProse = "Reasons."): {
 } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-")));
   gitIn(dir, "init", "-q", "-b", "main");
-  gitIn(dir, "config", "user.email", "review-record@example.test");
-  gitIn(dir, "config", "user.name", "review-record test");
+  setIdentity(dir, "review-record@example.test", "review-record test");
 
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(
@@ -1316,8 +1327,7 @@ test('land() names "push" when the remote already holds a commit this branch has
       shell: false,
     });
     expect(clone.status).toBe(0);
-    gitIn(otherDir, "config", "user.email", "other@example.test");
-    gitIn(otherDir, "config", "user.name", "other");
+    setIdentity(otherDir, "other@example.test", "other");
     gitIn(otherDir, "checkout", "-q", "feature");
     fs.writeFileSync(path.join(otherDir, "elsewhere.txt"), "elsewhere\n");
     gitIn(otherDir, "add", "-A");
@@ -1692,8 +1702,7 @@ test("land() prints the reset command on a push failure too, not only on preflig
       shell: false,
     });
     expect(clone.status).toBe(0);
-    gitIn(otherDir, "config", "user.email", "other@example.test");
-    gitIn(otherDir, "config", "user.name", "other");
+    setIdentity(otherDir, "other@example.test", "other");
     gitIn(otherDir, "checkout", "-q", "feature");
     fs.writeFileSync(path.join(otherDir, "elsewhere.txt"), "elsewhere\n");
     gitIn(otherDir, "add", "-A");
