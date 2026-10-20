@@ -7,7 +7,7 @@ status: done
 milestone: null
 depends_on: [dl-96, dl-102]
 difficulty: hard
-awaiting: CodeQL's js/request-forgery alert on startProxy in tools/downloader/engine/test/parallel-ranges.test.ts — reads dismissed (Suppressed via SARIF) on main's security tab after the first push to main following this merge
+awaiting: CodeQL's js/request-forgery alert on startProxy, in tools/downloader/engine/test/helpers/parallel-ranges-fixture.ts since dl-129 — reads dismissed (Suppressed via SARIF) on main's security tab after the first push to main following dl-129's merge
 ---
 
 # dl-98 — Parallel ranged reads for a progressive source throttled per connection
@@ -692,3 +692,5 @@ leg stays red on this merge; it is informational.
   on the owner's answer of 2026-10-12, who also ruled that a unit assertion
   still counts as dl-98's "Cover 403 and 503 too": the coverage was kept, in
   cheaper form, not dropped. 429 stays as the end-to-end row.
+
+- 2026-10-20 — awaiting line repointed by dl-129 (its Decision note F): dl-129's split moved startProxy to engine/test/helpers/parallel-ranges-fixture.ts.

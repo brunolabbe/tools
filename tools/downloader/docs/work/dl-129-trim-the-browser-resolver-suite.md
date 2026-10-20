@@ -251,6 +251,33 @@ on CI from one comparable run, unverified); (3) widen with each of the 24 first
 proven by a mutation. Option 1 was chosen: Decision A and Done when 4 stand, and
 Done when 8 is reworded below. The builder's widened patch is not applied.
 
+## Decision note E — answered 2026-10-20 by Bruno Labbé
+
+**E — chosen: "Reword to the split's count" (option 1; the gate's and the
+orchestrator's recommendation).** Asked on 2026-10-20 by the orchestrator with
+`AskUserQuestion`, on gate 1's med: "Done when 6 says the project's Tests count
+stays the same, but Done when 3 requires pin tests, and the builder added four
+(2590 → 2594). The split itself keeps its 43 tests by name. Which way?" Options:
+(1) "Reword to the split's count": line 6 reads that the parallel-ranges tests'
+count is the same (43), met. (2) "Keep it literal, fold the pins": fold the four
+pins into existing tests in a builder round. Option 1 was chosen; Done when 6 is
+reworded below.
+
+## Decision note F — answered 2026-10-20 by Bruno Labbé
+
+**F — chosen: "Excuse; rewrite dl-98's line" (option 1; the gate's
+recommendation).** Asked on 2026-10-20 by the orchestrator with `AskUserQuestion`,
+on gate 1's med: "CodeQL is red on #585 because splitting parallel-ranges.test.ts
+moved dl-98's already-excused SSRF alert (startProxy) into
+engine/test/helpers/parallel-ranges-fixture.ts. The gate checked the moved
+comment: it carries every field adr/005 asks for, and with the guard removed, a
+named test goes red. How should the relocation be excused?" Options: (1) "Excuse;
+rewrite dl-98's line": the owner excuses the relocated alert under adr/005 as for
+dl-98, and this PR rewrites dl-98's `awaiting:` line to the new path; dl-129
+carries no awaiting line. (2) "Excuse; dl-129 own line": dl-129 carries its own
+awaiting line and dl-98's goes stale. Option 1 was chosen: the owner excuses the
+relocated alert.
+
 ## Done when
 
 1. The Log holds the three before-runs and three after-runs of Build step 1,
@@ -278,7 +305,8 @@ Done when 8 is reworded below. The builder's widened patch is not applied.
 6. `parallel-ranges.test.ts` is split along its `describe` blocks, every moved
    body unchanged by `git diff --color-moved`, the describe "dl-98: a
    progressive source throttled per connection" whole in one file, and the
-   project's `Tests` count the same before and after. No downloader test file
+   parallel-ranges tests' count the same before and after (43; Decision note E:
+   the project's count rises by Done when 3's four pins). No downloader test file
    runs longer than 60 s in any of the three after-runs' JSON reports.
 7. The 3x floor test ran at least ten times after the split, beside the whole
    project; the Log holds every run's ratio with its count, minimum, median
