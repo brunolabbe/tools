@@ -250,3 +250,17 @@ member: 400 }`; "retiring: expected [Function add] to throw an error") and
   a close has applied their return"; the rest is kept.
   `grep -c "whose echo failed" tools/ledger/CLAUDE.md` → 1 (0 at `HEAD` before
   the fix).
+- 2026-10-20 — Fixed at landing by owner choice: gate 2, low 2
+  (`nfr:maintainability`) — "the edge the builder takes has no test". A retire
+  and a return both waiting for one close leave the person in and an add is
+  taken; `retire-person.test.ts` gained, at its end, "an address under a person
+  whose retire a return cancelled before any close" → "is taken, and the close
+  leaves them in the books and in the settlement" (retire, return, add under
+  casey 200, close, `GET /api/people` gives `retired: []`, the settlement lists
+  casey). `tools/ledger/CLAUDE.md` and `00-ANALYSIS.md` §7 now say a retire a
+  return cancels before the close lets the add through. Red against a trigger
+  that refuses the case (`memberships_not_under_retired`'s first condition
+  rewritten to "a retire no close has applied exists"): `npx vitest run
+tools/ledger/api/test/retire-person.test.ts tools/ledger/api/test/directory.test.ts`
+  → `Tests  1 failed | 95 passed (96)`, the new test failing on `expected 500 to
+be 200`; restored → `Tests  96 passed (96)`.

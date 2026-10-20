@@ -559,7 +559,9 @@ entirely.
   the next close" in the directory (`retirements`, directory migration 6),
   refused while any address stands under the person; and no address is added
   under them while the retirement waits for its close or holds, until a close
-  has applied a return (_the owner, 2026-10-20, lg-35's gate 1_). So nobody who
+  has applied a return (_the owner, 2026-10-20, lg-35's gate 1_); a retire
+  that a return cancels before the close lets the add through, since the person
+  was never out. So nobody who
   can sign in is retired, with one gap: when a close's echo to the directory
   (below) fails, a return recorded before the next close reads as cancelling a
   retirement the books have applied, and an address can then be added. The

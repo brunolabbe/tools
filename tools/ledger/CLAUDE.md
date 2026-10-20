@@ -216,7 +216,8 @@ the books settle between everyone in them, and a name stays in them once there.
 Removing an address never removes a name. **A person is retired from the books
 only at a close** (lg-35), only once no address stands under them, and no
 address is added under them again until a close has applied their return (bar
-a close whose echo failed):
+a close whose echo failed; a retire cancelled by a return before the close lets
+the add through):
 `people_retirements` says from which day, `peopleOn` in `books` answers who is
 in, and the history keeps everyone. **People change only at a close**: a
 ratio whose people differ from the open period's is refused if it would take

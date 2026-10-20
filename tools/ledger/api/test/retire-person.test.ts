@@ -526,3 +526,39 @@ describe("an address under a retired person", () => {
     }
   });
 });
+
+describe("an address under a person whose retire a return cancelled before any close", () => {
+  // lg-35's gate 2, low 2: the edge the builder takes had no test.
+  test("is taken, and the close leaves them in the books and in the settlement", async () => {
+    const { app, directory } = await start();
+    expect(
+      (await confirm(app, "2026-01-01", { alex: 4_000_000, sam: 4_000_000, casey: 2_000_000 }))
+        .statusCode,
+    ).toBe(200);
+    await retireCasey(app);
+    const back = await send(app, ADMIN, "POST", RETIRE, { person: "casey", action: "return" });
+    expect(back.statusCode, back.body).toBe(200);
+    // The retire and the return wait for one close and cancel out: casey is in.
+    expect((await standing(app, "casey"))?.standing).toBe("in");
+
+    const MEMBERS = ROUTES.adminMembers.replace(":id", HOUSEHOLD);
+    const added = await send(app, ADMIN, "POST", MEMBERS, {
+      address: "casey.phone@example.test",
+      person: "casey",
+    });
+    expect(added.statusCode, added.body).toBe(200);
+    expect(directory.members(HOUSEHOLD).map((member) => member.person)).toContain("casey");
+
+    const closed = await close(app, null, "2026-03-31");
+    expect(closed.statusCode, closed.body).toBe(200);
+
+    expect(await ok<PeopleResponse>(app, "GET", ROUTES.people)).toMatchObject({
+      people: ["alex", "casey", "sam"],
+      retired: [],
+    });
+    expect(closed.json<ClosedPeriod>().settlement.shares.map((share) => share.personId)).toContain(
+      "casey",
+    );
+    expect((await standing(app, "casey"))?.standing).toBe("in");
+  });
+});
