@@ -19,7 +19,7 @@ import {
   startBrowserHarness,
 } from "./helpers/browser-harness.ts";
 import type { Waits } from "./helpers/browser-harness.ts";
-import { STREAM_WAITS } from "./helpers/stream-waits.ts";
+import { AT_ONCE_WAITS, STREAM_WAITS } from "./helpers/stream-waits.ts";
 
 let server: FixtureServer;
 let pool: BrowserPool;
@@ -72,7 +72,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async (_name, pathname, shown) => {
           server.requests.length = 0;
-          const result = await probe(pathname, confirming(STREAM_WAITS));
+          const result = await probe(pathname, confirming(AT_ONCE_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain(shown);
@@ -106,7 +106,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async (_name, pathname, shown) => {
           server.requests.length = 0;
-          const result = await probe(pathname, confirming(STREAM_WAITS));
+          const result = await probe(pathname, confirming(AT_ONCE_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain(shown);
@@ -164,7 +164,7 @@ describe("a consent dialog whose button no vendor selector matches (dl-82)", () 
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       server.requests.length = 0;
       const result = await probe(
         `/consent-label.html?label=${encodeURIComponent("Sono d'accordo")}`,
@@ -212,7 +212,7 @@ describe("the widened consent labels are pressed only inside a consent container
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       server.requests.length = 0;
       const result = await probe("/consent-inline-strip.html", resolver);
 
@@ -293,7 +293,7 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
     "presses a consent bar before a newsletter dialog that comes first in the document",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const { outcome, requests } = await press("/consent-order-dialog.html", STREAM_WAITS);
+      const { outcome, requests } = await press("/consent-order-dialog.html", AT_ONCE_WAITS);
 
       const consentAt = requests.indexOf("/beacon/consent-accepted");
       const newsletterAt = requests.indexOf("/beacon/newsletter-hocapito");
@@ -311,7 +311,7 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
     "presses a widened label inside a role=dialog in a cross-origin frame",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const { outcome, requests } = await press("/consent-xo-dialog.html", STREAM_WAITS);
+      const { outcome, requests } = await press("/consent-xo-dialog.html", AT_ONCE_WAITS);
 
       expect(requests).toContain("/beacon/xo-accepted");
       expect((outcome as ProbeResult).variants[0]?.url).toBe(server.secondaryUrl(MASTER));

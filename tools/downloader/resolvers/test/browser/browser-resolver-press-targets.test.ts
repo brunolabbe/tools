@@ -17,7 +17,7 @@ import {
   startBrowserHarness,
 } from "./helpers/browser-harness.ts";
 import type { Waits } from "./helpers/browser-harness.ts";
-import { STREAM_WAITS } from "./helpers/stream-waits.ts";
+import { AT_ONCE_WAITS, STREAM_WAITS } from "./helpers/stream-waits.ts";
 
 let server: FixtureServer;
 let pool: BrowserPool;
@@ -142,7 +142,7 @@ describe("BrowserResolver", () => {
           server.requests.length = 0;
           const result = await probe(
             "/age-false-signup-age-button.html",
-            confirming(undefined, STREAM_WAITS),
+            confirming(undefined, AT_ONCE_WAITS),
           );
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
@@ -209,8 +209,9 @@ describe("a click-only player box beside a press that did not start a player (dl
   function streamingWith(
     hls = recordingHlsParser(),
     emptyMinWaitMs = NO_EMPTY_FLOOR_MS,
+    waits: Waits = STREAM_WAITS,
   ): BrowserResolver {
-    return resolverWith(hls, emptyMinWaitMs, STREAM_WAITS);
+    return resolverWith(hls, emptyMinWaitMs, waits);
   }
 
   // `ctl=none`, no control at all, was the first row here until dl-113: every row
@@ -228,7 +229,10 @@ describe("a click-only player box beside a press that did not start a player (dl
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       server.requests.length = 0;
-      const result = await probe("/box-with-control.html?ctl=autoplay", streamingWith());
+      const result = await probe(
+        "/box-with-control.html?ctl=autoplay",
+        streamingWith(undefined, undefined, AT_ONCE_WAITS),
+      );
 
       expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
       expect(server.requests).toContain("/beacon/control-autoplay");

@@ -16,3 +16,27 @@
  * the wait: left at 1200 it would cost the 300 ms this was meant to save.
  */
 export const STREAM_WAITS = { quietMs: 200, minWaitMs: 200 } as const;
+
+/**
+ * `STREAM_WAITS` and the two fixed sleeps shortened (dl-129, decision A).
+ *
+ * `BrowserResolver` pays 500 ms (`LANDING_URL_SETTLE_MS`) after `load` and 900 ms
+ * (`PROVOKE_PASS_PAUSE_MS`) between its two provocation passes on every probe. The
+ * first proves nothing but a redirect or a router rewrite that lands after `load`
+ * (dl-55); the second covers a player that mounts late. A page whose player is on
+ * the document at once needs neither, and 200 ms is the wait loop's tick, the
+ * least a wait here can mean.
+ *
+ * **Only a test that expects a stream, whose fixture has no timer, no input-gated
+ * mount and no late layer, and that does not assert something was left unpressed
+ * or unrequested, may take this.** A not-pressed assertion is what the second pass
+ * guards: it runs after the first pass's stream is captured, and a pause too short
+ * for the request to land lets a step press what `hasPlayable` would have held
+ * back. The tests that prove either sleep, and the negative tests, keep the
+ * production values.
+ */
+export const AT_ONCE_WAITS = {
+  ...STREAM_WAITS,
+  landingSettleMs: 200,
+  passPauseMs: 200,
+} as const;

@@ -17,7 +17,7 @@ import {
   startBrowserHarness,
 } from "./helpers/browser-harness.ts";
 import type { Waits } from "./helpers/browser-harness.ts";
-import { STREAM_WAITS } from "./helpers/stream-waits.ts";
+import { AT_ONCE_WAITS, STREAM_WAITS } from "./helpers/stream-waits.ts";
 
 let server: FixtureServer;
 let pool: BrowserPool;
@@ -60,8 +60,9 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
   function streamingWith(
     hls = recordingHlsParser(),
     emptyMinWaitMs = NO_EMPTY_FLOOR_MS,
+    waits: Waits = STREAM_WAITS,
   ): BrowserResolver {
-    return resolverWith(hls, emptyMinWaitMs, STREAM_WAITS);
+    return resolverWith(hls, emptyMinWaitMs, waits);
   }
 
   // Not `pointermove`: headless Chromium sends one at (0,0) while a page loads,
@@ -118,7 +119,10 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
       server.requests.length = 0;
       // No `<video>`, no play-ish selector or text, no link: the box itself is
       // the only thing a person could press.
-      const result = await probe("/player-box-click-only.html", streamingWith());
+      const result = await probe(
+        "/player-box-click-only.html",
+        streamingWith(undefined, undefined, AT_ONCE_WAITS),
+      );
 
       expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
     },
@@ -270,7 +274,10 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         server.requests.length = 0;
-        const result = await probe("/cross-origin-play-only.html", streamingWith());
+        const result = await probe(
+          "/cross-origin-play-only.html",
+          streamingWith(undefined, undefined, AT_ONCE_WAITS),
+        );
 
         expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
         expect(server.requests).toContain("/media/related/master.m3u8");

@@ -26,7 +26,7 @@ import {
   probes,
   startBrowserHarness,
 } from "./helpers/browser-harness.ts";
-import { STREAM_WAITS } from "./helpers/stream-waits.ts";
+import { AT_ONCE_WAITS, STREAM_WAITS } from "./helpers/stream-waits.ts";
 
 let server: FixtureServer;
 let pool: BrowserPool;
@@ -57,7 +57,7 @@ describe("BrowserResolver", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       const result = await probe("/mse.html", resolver);
 
       // The page reports the scheme of video.src in its title. Proving it was
@@ -97,7 +97,7 @@ describe("BrowserResolver", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       // Nothing is fetched until the overlay is gone and the button is clicked,
       // so reaching a variant at all proves both steps ran.
       const result = await probe("/hls.html", resolver);
@@ -115,7 +115,7 @@ describe("BrowserResolver", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const dash = recordingDashParser();
-      const resolver = new BrowserResolver({ pool, dashParser: dash.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, dashParser: dash.parser, ...AT_ONCE_WAITS });
       const result = await probe("/dash.html", resolver);
 
       // Matched on Content-Type alone — the URL has no extension at all.
@@ -134,7 +134,7 @@ describe("BrowserResolver", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       const result = await probe("/iframe-parent.html", resolver);
 
       expect(result.title).toBe("Conference talk — embedded player");
@@ -150,7 +150,7 @@ describe("BrowserResolver", () => {
         pool,
         hlsParser: throwingHlsParser,
         dashParser: throwingDashParser,
-        ...STREAM_WAITS,
+        ...AT_ONCE_WAITS,
       });
       const result = await probe("/mse.html", resolver);
 
@@ -165,7 +165,7 @@ describe("BrowserResolver", () => {
 
   test("works with the real parsers wired in", { timeout: TEST_TIMEOUT_MS }, async () => {
     // No injection: whatever dl-1 has landed is exercised for real.
-    const resolver = new BrowserResolver({ pool, ...STREAM_WAITS });
+    const resolver = new BrowserResolver({ pool, ...AT_ONCE_WAITS });
     // The one probe that asks for a locale (dl-113): the default-locale probe
     // above only shows "en", which a fr-CA header also contains.
     const result = await probe("/mse.html", resolver, options({ locale: "fr-CA" }));
@@ -293,7 +293,7 @@ describe("stage narration", () => {
       const resolver = new BrowserResolver({
         pool,
         hlsParser: hls.parser,
-        ...STREAM_WAITS,
+        ...AT_ONCE_WAITS,
         emptyMinWaitMs: 9000,
       });
       const seen: ProbeStageEvent[] = [];
@@ -389,7 +389,7 @@ describe("the surface click reaches a player inside an open shadow root (dl-61)"
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       server.requests.length = 0;
       // The page's only video is inside an open shadow root and starts only
       // on `click`: a chooser that sees light-DOM videos alone never clicks.
@@ -405,7 +405,7 @@ describe("the surface click reaches a player inside an open shadow root (dl-61)"
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       server.requests.length = 0;
       // The same shadow-root player as above, embedded from the secondary origin:
       // the index branch of `clickChosenVideo`, not the marked-element one. A
@@ -443,7 +443,7 @@ describe("PLAY_SCRIPT reaches a shadow-root player that only starts on play() (d
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       server.requests.length = 0;
       // The page's only video is inside an open shadow root and starts only
       // when something calls `.play()` on it: a chooser that stops at the
@@ -469,7 +469,7 @@ describe("a progressive file is not demoted to a segment (dl-78)", () => {
   });
 
   async function probeFile(pathname: string): Promise<ProbeResult> {
-    const resolver = new BrowserResolver({ pool, ...STREAM_WAITS });
+    const resolver = new BrowserResolver({ pool, ...AT_ONCE_WAITS });
     return await resolver.resolve(new URL(files.url(pathname)), options());
   }
 
@@ -500,7 +500,7 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       const result = await probe("/untyped-hls-text.html", resolver);
 
       expect(result.variants[0]?.protocol).toBe("hls");

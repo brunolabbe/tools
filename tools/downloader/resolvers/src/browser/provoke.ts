@@ -1833,6 +1833,15 @@ async function provokeFrame(
 }
 
 /**
+ * The sleep between `provokePlayback`'s two passes (dl-129, naming the literal
+ * 900 it was). It covers players that mount late: the second pass is the one
+ * that finds what the input mounted. Production never changes it; a test whose
+ * player is on the page at once may shorten it through `passPauseMs`, and a
+ * test pins this value.
+ */
+export const PROVOKE_PASS_PAUSE_MS = 900;
+
+/**
  * Two passes: players are frequently lazy-mounted, and the frame that holds the
  * real player often only exists after the consent banner is gone. Between them,
  * the input pass (`provokeInput`): a page that injects its player on the first
@@ -1860,6 +1869,13 @@ export async function provokePlayback(
      * on purpose.
      */
     clickTimeoutMs?: number | undefined;
+    /**
+     * dl-129: the sleep between the two passes. Defaults to
+     * `PROVOKE_PASS_PAUSE_MS`. Only a test that expects a stream whose player
+     * mounts at once may shorten it: a player that mounts late is what the
+     * default is for.
+     */
+    passPauseMs?: number | undefined;
   },
 ): Promise<void> {
   const pageOrigin = originOf(page.url());
@@ -1890,7 +1906,10 @@ export async function provokePlayback(
       if (remaining(options.deadline) >= 1500) {
         await provokeInput(page, { pressed, hasPlayable });
       }
-      await sleep(budget(options.deadline, 900), options.signal);
+      await sleep(
+        budget(options.deadline, options.passPauseMs ?? PROVOKE_PASS_PAUSE_MS),
+        options.signal,
+      );
     }
   }
 }
