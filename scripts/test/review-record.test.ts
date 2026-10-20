@@ -17,7 +17,7 @@ import type * as ChildProcess from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { expect, test, vi } from "vitest";
+import { afterAll, expect, test, vi } from "vitest";
 
 // A pass-through spy on `spawnSync`, so the formatMarkdown test (repo-100) can
 // count `oxfmt` spawns while every other test here still spawns for real.
@@ -203,7 +203,10 @@ function gitIn(dir: string, ...args: string[]): string {
  * identity would hide a `--land` that stopped setting its clone's own.
  */
 function setIdentity(dir: string, email: string, name: string): void {
-  fs.appendFileSync(path.join(dir, ".git", "config"), `[user]\n\temail = ${email}\n\tname = ${name}\n`);
+  fs.appendFileSync(
+    path.join(dir, ".git", "config"),
+    `[user]\n\temail = ${email}\n\tname = ${name}\n`,
+  );
 }
 
 const TICKET_PATH = "docs/work/zz-1-test-ticket.md";
@@ -242,17 +245,14 @@ function baseTicket(whyProse: string): string {
   ].join("\n");
 }
 
+const DEFAULT_WHY = "Reasons.";
+
 /**
- * A throwaway repository with `src/tls.ts` (for anchored citations to point
- * at) and one ticket, committed — the same shape `citations-gate.test.ts`
- * builds, so a passing citation here means the same thing it means there.
+ * `git init`, an identity, `src/tls.ts` and one ticket, committed. This is the
+ * whole of a fixture repository that has no remote; `withTicketRepo` builds it
+ * once and copies it (below), and builds it directly when a test needs other prose.
  */
-function withTicketRepo(whyProse = "Reasons."): {
-  dir: string;
-  ticketAbs: string;
-  cleanup: () => void;
-} {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-")));
+function buildTicketRepo(dir: string, whyProse: string): void {
   gitIn(dir, "init", "-q", "-b", "main");
   setIdentity(dir, "review-record@example.test", "review-record test");
 
@@ -274,8 +274,55 @@ function withTicketRepo(whyProse = "Reasons."): {
 
   gitIn(dir, "add", "-A");
   gitIn(dir, "commit", "-qm", "the ticket, before any review");
+}
 
-  return { dir, ticketAbs, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+/**
+ * The committed fixture, built once per file (repo-113): `init`, `add` and
+ * `commit` are 270 ms on the Windows leg and ran for each of about 30 tests.
+ * A non-bare repository with no remote holds no absolute path, so a copy of its
+ * directory is a repository of its own. Anything with a remote or a clone is
+ * still built per test on top of the copy — those spawns are what the tests are about.
+ */
+let ticketRepoTemplate: string | undefined;
+
+function ticketRepoTemplateDir(): string {
+  if (ticketRepoTemplate === undefined) {
+    ticketRepoTemplate = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "review-record-template-")),
+    );
+    buildTicketRepo(ticketRepoTemplate, DEFAULT_WHY);
+  }
+  return ticketRepoTemplate;
+}
+
+afterAll(() => {
+  if (ticketRepoTemplate !== undefined) {
+    fs.rmSync(ticketRepoTemplate, { recursive: true, force: true });
+  }
+});
+
+/**
+ * A throwaway repository with `src/tls.ts` (for anchored citations to point
+ * at) and one ticket, committed — the same shape `citations-gate.test.ts`
+ * builds, so a passing citation here means the same thing it means there.
+ */
+function withTicketRepo(whyProse = DEFAULT_WHY): {
+  dir: string;
+  ticketAbs: string;
+  cleanup: () => void;
+} {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-")));
+  if (whyProse === DEFAULT_WHY) {
+    fs.cpSync(ticketRepoTemplateDir(), dir, { recursive: true });
+  } else {
+    buildTicketRepo(dir, whyProse);
+  }
+
+  return {
+    dir,
+    ticketAbs: path.join(dir, TICKET_PATH),
+    cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 function writeSectionFile(dir: string, name: string, body: string): string {
