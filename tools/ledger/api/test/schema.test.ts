@@ -13,7 +13,7 @@ describe("the schema's migrations", () => {
   test("migration 1 stores the statement rows and the imports they came from", () => {
     const db = open();
 
-    expect(db.pragma("user_version", { simple: true })).toBe(13);
+    expect(db.pragma("user_version", { simple: true })).toBe(14);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()
@@ -83,7 +83,7 @@ describe("the schema's migrations", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(13);
+    expect(db.pragma("user_version", { simple: true })).toBe(14);
     expect(db.prepare("SELECT count(*) AS n FROM statement_imports").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -103,7 +103,7 @@ describe("the schema's migrations", () => {
     migrate(db);
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(13);
+    expect(db.pragma("user_version", { simple: true })).toBe(14);
     expect(db.prepare("SELECT source FROM statement_imports").all()).toEqual([{ source: "paste" }]);
     expect(db.prepare("SELECT note FROM statement_rows").all()).toEqual([{ note: null }]);
     expect(() =>
@@ -170,7 +170,7 @@ describe("migration 9's receipt items (lg-10)", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(13);
+    expect(db.pragma("user_version", { simple: true })).toBe(14);
     expect(db.prepare("SELECT period_line_id, charge_line_id FROM receipt_filings").all()).toEqual([
       { period_line_id: 1, charge_line_id: null },
     ]);
@@ -239,7 +239,7 @@ describe("migration 11's whose (lg-30)", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(13);
+    expect(db.pragma("user_version", { simple: true })).toBe(14);
     expect(
       db
         .prepare(

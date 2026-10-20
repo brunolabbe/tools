@@ -15,6 +15,7 @@ import { addHouseholdMember, fetchHousehold } from "../api/households.ts";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 import { MemberForm } from "./MemberForm.tsx";
+import { MortgageSetting } from "./MortgageSetting.tsx";
 
 type Load =
   | { state: "loading" }
@@ -90,35 +91,38 @@ export function Household({ id }: { id: string }): React.ReactElement {
   };
 
   return (
-    <section aria-labelledby="household-heading" className="card">
-      <h2 id="household-heading">Household</h2>
-      <p className="muted">{household.name}</p>
+    <>
+      <section aria-labelledby="household-heading" className="card">
+        <h2 id="household-heading">Household</h2>
+        <p className="muted">{household.name}</p>
 
-      <h3>Members</h3>
-      <ul className="members">
-        {members.map((member) => (
-          <li key={member.address}>
-            <strong>{shownName(names, member.person)}</strong> <span>{member.address}</span>
-          </li>
-        ))}
-      </ul>
+        <h3>Members</h3>
+        <ul className="members">
+          {members.map((member) => (
+            <li key={member.address}>
+              <strong>{shownName(names, member.person)}</strong> <span>{member.address}</span>
+            </li>
+          ))}
+        </ul>
 
-      <h3>Add a member</h3>
-      <MemberForm people={people} names={names} onAdd={add} />
-      <p className="muted hint">
-        Only whoever runs the ledger can remove a member, since removing cuts a person off from
-        their records.
-      </p>
+        <h3>Add a member</h3>
+        <MemberForm people={people} names={names} onAdd={add} />
+        <p className="muted hint">
+          Only whoever runs the ledger can remove a member, since removing cuts a person off from
+          their records.
+        </p>
 
-      <h3>History</h3>
-      <ol className="members">
-        {history.toReversed().map((record, index) => (
-          <li key={`${String(history.length - index)}`}>
-            <span className="muted">{record.at.slice(0, 10)}</span>{" "}
-            <span>{described[history.length - 1 - index]}</span>
-          </li>
-        ))}
-      </ol>
-    </section>
+        <h3>History</h3>
+        <ol className="members">
+          {history.toReversed().map((record, index) => (
+            <li key={`${String(history.length - index)}`}>
+              <span className="muted">{record.at.slice(0, 10)}</span>{" "}
+              <span>{described[history.length - 1 - index]}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+      <MortgageSetting />
+    </>
   );
 }

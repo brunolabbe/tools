@@ -656,7 +656,33 @@ const MIGRATIONS: readonly string[] = [
     ORDER BY position;
   `,
 
-  // 13 — a person retired from the books at a close, or back (lg-35).
+  // 13 — what the household says about its mortgage (lg-55): live, ended on a
+  // day, or none. No row means live, so a household that never says anything
+  // reads exactly as before. A later record supersedes the earlier; none is edited.
+  `
+  CREATE TABLE mortgage_records (
+    id INTEGER PRIMARY KEY,
+    state TEXT NOT NULL CHECK (state IN ('live', 'ended', 'none')),
+    -- yyyy-mm-dd, and only for 'ended'.
+    ended_on TEXT,
+    supersedes INTEGER REFERENCES mortgage_records (id),
+    entered_at TEXT NOT NULL,
+    -- The Access identity's configured name (Person.id), never an address.
+    entered_by TEXT NOT NULL,
+    CHECK ((state = 'ended') = (ended_on IS NOT NULL))
+  );
+
+  -- Each record is corrected at most once, and there is one first record: one
+  -- chain, so exactly one record stands.
+  CREATE UNIQUE INDEX mortgage_records_supersedes ON mortgage_records (supersedes) WHERE supersedes IS NOT NULL;
+  CREATE UNIQUE INDEX mortgage_records_first ON mortgage_records ((1)) WHERE supersedes IS NULL;
+
+  CREATE VIEW current_mortgage_record AS
+    SELECT * FROM mortgage_records
+    WHERE NOT EXISTS (SELECT 1 FROM mortgage_records newer WHERE newer.supersedes = mortgage_records.id);
+  `,
+
+  // 14 — a person retired from the books at a close, or back (lg-35).
   `
   -- Who is in each period: an admin's request, recorded in the household
   -- directory, copied here by the close that applies it, so the books say who

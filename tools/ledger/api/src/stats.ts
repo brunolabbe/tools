@@ -53,7 +53,7 @@ interface FiledColumns {
 }
 
 /** Every classified row, in the account's order. A row nobody has filed is in no bucket yet. */
-function filedRows(db: Database): StatRow[] {
+export function filedRows(db: Database): StatRow[] {
   return (
     db
       .prepare(

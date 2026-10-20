@@ -170,6 +170,9 @@ corrected salary never moves a ratio already confirmed from it. So are period
 lines and recurring items (lg-6, `current_period_lines` and
 `current_recurring_items`); a period is a row only once closed, and its
 recorded settlement is never recomputed, because the next close is cumulative.
+The household's word on its mortgage is the same (lg-55,
+`current_mortgage_record`: live, ended on a day, or none); it decides which views
+are shown and never what is counted.
 `api/test/classification-schema.test.ts` scans the API source for an `UPDATE` or
 a `DELETE`.
 
