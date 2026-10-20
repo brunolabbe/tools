@@ -201,10 +201,10 @@ ${rest}`;
   });
 });
 
-describe("the header reader", () => {
-  const header = (...lines: string[]): string =>
-    ["/*", " * COLOUR ROLES:", " *", ...lines, " *", " * prose.", " */", ":root {}"].join("\n");
+const header = (...lines: string[]): string =>
+  ["/*", " * COLOUR ROLES:", " *", ...lines, " *", " * prose.", " */", ":root {}"].join("\n");
 
+describe("the header reader", () => {
   // Each is a way an editor adds a role to the list that the guard must still see.
   test.each([
     ["aligned", " *     --info          informational"],
