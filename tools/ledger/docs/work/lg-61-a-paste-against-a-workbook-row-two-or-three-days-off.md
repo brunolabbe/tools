@@ -217,7 +217,7 @@ rowsAlreadyPresent=1`, `R8 … accepted rowsAdded=0 rowsAlreadyPresent=2`.
 
   The enumerations, then probes c and c2 summed. "No such day" means probe c's
   plain, reorder and shift cells plus probe c2: 18,000 trials, none with a day
-  re-dated two days off. `both` is probe c's four `both` cells, 6,000 trials.
+  re-dated two days off. `both` is probe c's three `both` cells, 4,500 trials.
   "Distinct" is the `distinct` cells of both probes, 7,500 trials.
 
   | direction    | 4 rows: c / W / a / r             | head only (drop) | 5 rows: c / W / a / r             | head only (drop) | ambiguous, no such day | `both` | distinct |
@@ -462,3 +462,12 @@ tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
   such a row is still stored with the wrong split, as on `main`. Same commit as
   the previous entry. `grep -c "4 or more days off is not weighed"
 tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 2, low 1 (text, false in
+  the safe direction) — "the Log's step-3 paragraph says "`both` is probe c's
+  four `both` cells, 6,000 trials". Probe c has three `both` cells (one per
+  alphabet), 4,500 trials." In that sentence, in the experiment entry's
+  enumeration paragraph, "four" is now "three" and "6,000" is now "4,500".
+  `sed -n 220p` on this ticket → "re-dated two days off. `both` is probe c's
+  three `both` cells, 4,500 trials." (the gated head's line 220 had "four" and
+  "6,000").
