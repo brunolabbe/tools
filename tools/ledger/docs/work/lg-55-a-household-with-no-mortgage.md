@@ -156,6 +156,41 @@ reshape anything else in `@ledger/contract`.
 - **findings** · the hunt returned 8; 5 carried, 3 dropped.
 - NFR: security ✓ (isolation and rate limits picked up) · performance — `mortgageStatus` reads every filed row on each GET, the same cost as the stats routes · reliability — the two meds above · maintainability — the low above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-20 · `e0f792e1..09f9bf76` (base `00977771`) · Opus 5.5, the round only
+
+| Done when                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4. Ended with money left: each part named as their own; bucket at zero: no Own card, no Home section | `api/test/mortgage.test.ts` › "a bucket at zero has nothing left, whatever each person's part" (`left: false` at alex +500.00 $, sam −500.00 $) and `web/test/mortgage.test.tsx` › "books ended with the bucket at zero but parts that are not, draw no Own card and no Home section" ✓, with the two money-left tests' strings updated. Positive control: `left` planted back to the parts rule turns the API test red (`expected { … } to match object { left: false, balanceCents: +0 }`, 1 of 17).                     |
+| 7. `npm run check` and `npm test -- --project ledger`                                                | verified — `npm run check` exit 0; `npm test -- --project ledger` 1601 of 1601 in 73 files, exit 0 (gate 1: 1594; the round adds 7). PR #581 at `09f9bf76`: every check passes except `test (windows-latest, informational)`, which fails in `tools/downloader/resolvers/test/browser/browser-resolver-consent-and-links.test.ts` › "does not press a checkout form's submit button" (`expected 'UNREACHABLE' to be 'NO_MEDIA_FOUND'`). The diff touches only `tools/ledger`, and that leg passed on `main` at `00977771`. |
+
+Gate 1's findings:
+
+- **F1 (med), fixed.** `mortgageStatus` sets `left` to `balanceCents !== 0`. Gate 1's P5 now answers `left: false` with `balanceCents: 0` and alex +500.00 $ / sam −500.00 $; it answered `true` at `e0f792e1`. Every reader of `left` follows from it: `showsOwnCard` and `showsHomeSection` in `web/src/mortgage.ts`, the note on `MortgageOwnCard`, and `mortgageStanding`. On every zero-balance shape (3 of 3), the Home section is absent and the Own card is absent for a range after the close.
+- **F2 (med), fixed as the owner directed.** A part below zero is now named as owed ("Sam owes 500.00 $"). No screen can show the balance sentence at 0. Over 11 constructible shapes of balance sign × part sign (2 people and 3), no negative sum is said to be anyone's. The new wording has its own flaws, below.
+- **F3 (low), fixed.** Stats holds both cards while the read is pending, for none, ended, live and a failed read: no card is drawn and neither series is requested. After the read, none draws nothing and never makes a request. Ended, live and failed each draw both cards. Positive control: with the hold removed, all 4 shapes draw and request both cards while pending, and the round's two tests go red (2 of 20). Raising `card()`'s wait to 4 s masks nothing. With it put back at 1 s, `stats.test.tsx` passed 17 of 17 in 10 of 10 runs. Its first test took 708–1561 ms at this head and 595–975 ms with the hold removed. A render that never resolves still fails, because `card()` waits for the slider.
+- **F4 (low), not fixed, recorded by the owner.** P4 reads as it did at gate 1.
+- **F5 (low), fixed.** `mortgage.test.tsx` › "the end marker is told from a renewal's…" uses unequal payments. Gate 1's `mutate.mjs` now turns 2 of 20 tests red, against 1 of 14 before.
+
+New, in the lines the round touched:
+
+- **med** · no `Done when` line depends on it · When any part is below zero, `endedSentence` tells people they can take back more than the bucket holds. The sentence's "It" stands for the balance, but the positive parts listed after it add up to more than that balance. Measured:
+  - At 900.00 $ left, it reads "900.00 $ is left in the bucket. It is each person's own, theirs to take back: Alex 1100.00 $, Kim 300.00 $. Sam owes 500.00 $."
+  - With a short bucket, it reads "The bucket is 400.00 $ short. It is each person's own, theirs to take back: Alex 100.00 $. Sam owes 500.00 $."
+
+  This happens through the real route: a joint payment larger than the deposits gives balance −100.00 $, with alex +400.00 $ and sam −500.00 $. The error runs in the unsafe direction, because a person can withdraw money the bucket does not hold. The debt named in the same sentence softens it. Fix direction: when any part is below zero, say the positive parts are owed to those people, not theirs to take back now.
+
+- **med** · no `Done when` line depends on it · The sentence the round added to `docs/00-ANALYSIS.md` §4 says that at a zero balance with a negative part "the screens then say who owes it". Measured on all 3 zero-balance shapes, none does: there is no Home section, no Own card after the close, no note on the Own card, and the household line reads only "The mortgage ended on 2026-03-31." This is the cost gate 1 named for the option the owner chose. The error runs in the unsafe direction: a reader would believe the imbalance between members stays visible.
+- **low** · `mortgageStanding` (`household/MortgageSetting.tsx`) reads "-500.00 $ is left in the bucket." when the balance is negative. Home says "The bucket is 500.00 $ short." for the same books. This is reachable through the route (3 of 3 shapes there were negative). The error runs in the safe direction: nobody withdraws a negative sum.
+- **low** · no live call site · At a zero balance, `endedSentence` returns "The mortgage ended on 2026-03-31. It is each person's own, …". The "It" there has nothing to refer to except the mortgage. The round's test "the sentence drops the balance when it is zero…" pins that text. Neither screen draws it.
+- **dropped** · a person id starting a sentence in lowercase ("sam owes …") when a person has no shown name. `leadSentence` on `main` has the same shape (`${who} has paid the most`), so the round did not introduce it.
+- **dropped** · amounts formatted as "1100.00 $". That is `formatCents`, the formatter behind Home's list beside the sentence and every other figure in the ledger.
+- **dropped** · a part of exactly 0 is left out of the sentence. The docstring states this, and Home's list above the sentence still shows that person at 0.00 $.
+- **dropped** · the 4 s `card()` wait hiding a slowdown. Refuted under F3 above.
+- **findings** · the hunt returned 8; 4 carried, 4 dropped. None is a `high`.
+- NFR: security n/a (no route or guard changed) · performance — one render later for the two mortgage cards, about +200 ms on the cold test · reliability — the two meds above · maintainability — the lows above. The `tools/ledger/CLAUDE.md` line is true: `current_mortgage_record` is read only by `mortgageStatus`, records are only ever `INSERT`ed, and no stats, buckets or settlement module reads the record.
+
 ## Log
 
 - 2026-10-18: filed from the owner's question about how Stats handles a
