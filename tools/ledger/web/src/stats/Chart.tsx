@@ -148,9 +148,21 @@ export function ChartCard(props: {
   stale: boolean;
   /** Why what is drawn is out of date, when reading it again failed. */
   failure?: string | null;
+  /** A sentence the card says beside its caption, apart from what is drawn (lg-55). */
+  note?: string | null;
   children: ReactNode;
 }): React.ReactElement {
-  const { title, caption, legend, table, empty, stale, failure = null, children } = props;
+  const {
+    title,
+    caption,
+    legend,
+    table,
+    empty,
+    stale,
+    failure = null,
+    note = null,
+    children,
+  } = props;
   const [asTable, setAsTable] = useState(false);
   const headingId = useId();
   return (
@@ -161,6 +173,7 @@ export function ChartCard(props: {
     >
       <h2 id={headingId}>{title}</h2>
       <p className="muted hint">{caption}</p>
+      {note !== null && <p className="lead">{note}</p>}
       {failure !== null && (
         <p className="bad" role="alert">
           {failure}

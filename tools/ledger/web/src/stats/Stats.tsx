@@ -17,6 +17,7 @@ import {
   SettlementsCard,
   SpendingCard,
 } from "./Cards.tsx";
+import { showsOwnCard, showsPaymentCard, useMortgage } from "../mortgage.ts";
 
 type Preset = "all" | "year" | "twelve" | "custom";
 
@@ -45,6 +46,9 @@ export function Stats(): React.ReactElement {
   const [preset, setPreset] = useState<Preset>("all");
   const [custom, setCustom] = useState<{ from: string; to: string }>({ from: "", to: "" });
   const today = isoDay(new Date());
+  const said = useMortgage();
+  // Until it is read the household is taken to have a live mortgage, so the page does not jump for the common case.
+  const mortgage = said.state === "ready" ? said.mortgage : null;
 
   const crossed = custom.from !== "" && custom.to !== "" && custom.from > custom.to;
   const range: StatsRange =
@@ -99,8 +103,8 @@ export function Stats(): React.ReactElement {
           </div>
         )}
       </section>
-      <MortgagePaymentCard range={sent} />
-      <MortgageOwnCard range={sent} />
+      {showsPaymentCard(mortgage, sent) && <MortgagePaymentCard range={sent} mortgage={mortgage} />}
+      {showsOwnCard(mortgage, sent) && <MortgageOwnCard range={sent} mortgage={mortgage} />}
       <ContributionCards range={sent} />
       <BufferCard range={sent} />
       <SalaryCards range={sent} />

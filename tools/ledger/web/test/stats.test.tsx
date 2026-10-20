@@ -30,8 +30,11 @@ import {
   fetchSettlementsStats,
   fetchSpendingStats,
 } from "../src/api/stats.ts";
+import { fetchMortgage } from "../src/api/mortgage.ts";
 import { Stats } from "../src/stats/Stats.tsx";
+import { LIVE } from "./mortgage-fixtures.ts";
 
+vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
 vi.mock("../src/api/stats.ts", () => ({
   fetchMortgagePayments: vi.fn(),
   fetchSalariesStats: vi.fn(),
@@ -271,6 +274,7 @@ const SETTLEMENTS: SettlementsStatsResponse = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchMortgagePayments).mockResolvedValue(PAYMENTS);
+  vi.mocked(fetchMortgage).mockResolvedValue(LIVE);
   vi.mocked(fetchMortgageOwn).mockResolvedValue(OWN);
   vi.mocked(fetchContributions).mockResolvedValue(CONTRIBUTIONS);
   vi.mocked(fetchBufferStats).mockResolvedValue(BUFFER);

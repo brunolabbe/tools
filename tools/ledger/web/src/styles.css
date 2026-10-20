@@ -271,6 +271,27 @@ select {
   overflow-wrap: anywhere;
 }
 
+/* lg-55: what the household says of its mortgage; the choices stack on a phone. */
+.mortgage-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.mortgage-form fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.mortgage-form .choice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .hint {
   margin: 0;
   font-size: 0.875rem;

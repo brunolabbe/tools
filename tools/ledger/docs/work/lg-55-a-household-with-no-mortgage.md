@@ -139,3 +139,70 @@ reshape anything else in `@ledger/contract`.
 - 2026-10-19: the owner chose (B), and the balance left going back to each
   person. Build and Done when rewritten for it; the cited code still read as
   filed on `main` at 96da35c8. Moved to `ready`.
+- 2026-10-20: built on `origin/main` 00977771, branch `lg-55-no-mortgage-reads-as-such`.
+  - **The record.** Migration 13 (`mortgage_records`, `current_mortgage_record`):
+    `state` in `live | ended | none`, `ended_on` only for `ended` (a `CHECK`
+    holds that), `supersedes`, `entered_at`, `entered_by`; one unique index on
+    `supersedes` and one on the constant `(1)` where `supersedes IS NULL`, so one
+    chain and exactly one record stands. No `UPDATE`, no `DELETE`.
+    `classification-schema.test.ts` still passes. The seven `user_version` asserts
+    (`schema`, `auto-file`, `spending-backfill`) moved from 12 to 13. **If lg-35
+    lands first it takes 13 and this becomes 14**: those same lines are the
+    textual conflict.
+  - **The contract: one small route**, `GET`/`POST /api/mortgage`
+    (`ROUTES.mortgage`), read by both screens and written by the form, rather than
+    a field on `BucketsResponse` and the two stats responses. Reason: three
+    responses carrying the same five fields is three places to keep in step, and
+    it leaves `BucketsResponse` alone, which lg-35 also edits. It answers the
+    record, `state`, `endedOn`, `lastPaymentOn`, `closedOn` (the later of the
+    end date and the last joint payment, `null` unless ended), `left` and the
+    bucket's `balanceCents` and `own`. Nothing else in `@ledger/contract` changed.
+  - **"Refused by the schema" needed a clock the contract does not have.** The
+    brief says an end date after today is refused by the schema;
+    `mortgageRecordRequestSchemaOn(today)` is that schema, built by the route with
+    the API's clock, over `mortgageRecordRequestSchema` (the shape, for a caller
+    with no clock). Saying what already stands, or `live` over no record, files
+    nothing.
+  - **The close and what is left** are `api/src/mortgage.ts`, reading
+    `mortgagePayments` and `bucketsAsOf` as they are; `filedRows` in
+    `api/src/stats.ts` gained an `export` and nothing else. `books/src/stats.ts`
+    is untouched, so lg-63's rewrite of it does not meet this branch there.
+  - **The screens** follow `web/src/mortgage.ts`: the Mortgage payment card ends
+    its line on the last payment with a marker (the renewal's mechanism) and the
+    note "Last payment on <date>; the mortgage ended." when the range holds the
+    close; a range wholly after it, or _none_, does not draw it. The Own money
+    card stays while anything is left, with a sentence naming each person's part
+    (`ChartCard` gained an optional `note`), and goes when the bucket is at zero
+    and the range is wholly after the close. Home drops the section for _none_ or
+    ended-and-empty, and for ended-with-money replaces who is ahead with what is
+    left and whose it is. The two live empty messages are kept for a live mortgage
+    only; an ended one says "No payment is in this range; the mortgage ended on
+    <date>." and "Nothing moved in the bucket in this range." instead. A range
+    that ends before the close is drawn exactly as before, with no marker and
+    no note about the money left.
+  - **Until `/api/mortgage` answers, and if it fails, the screens read as live.**
+    Stats draws the two cards as live while it loads, so the common case does not
+    jump; Home waits for it with the buckets. This is a choice, not in the brief.
+  - **The form** is `web/src/household/MortgageSetting.tsx`, a card under the
+    household's on the household tab: three radio choices, an `Ended on` date
+    capped at today, Save. It sits there, and not on Stats or Home, because it is a
+    fact about the household and not about a month, and the tab is where the
+    household is already edited. A small `.mortgage-form` CSS block was added
+    before `.hint` in `styles.css`; `main.tsx` is untouched.
+  - **`docs/00-ANALYSIS.md`** §4 gained "A mortgage that ends, or never was" and §9
+    a paragraph on the views closing from the close.
+  - **Not folded in:** lg-63 rewrites the same card's arithmetic and the brief
+    forbids touching it here. Nothing else small and specified came free.
+  - **Proposed line for `tools/ledger/CLAUDE.md`** (not added: the Build does not
+    name the file): in the paragraph on appended records, "the household's word
+    on its mortgage is the same (lg-55, `current_mortgage_record`); it decides
+    which views are shown and never what is counted."
+  - **Measured at the commit this entry is in:** `npx vitest run
+tools/ledger/api/test/mortgage.test.ts`, 16 of 16; `npm test -- --project
+ledger`, 1594 of 1594 in 73 files, exit 0; `npm run check` exit 0. The
+    isolation sweep (`isolation.test.ts`) and `route-limits.test.ts` picked the
+    route up from the lists they already walk, once `mortgage` was added to
+    `VERBS`, to the isolation writes and reads and to the two-verb list (the
+    isolation writes carry a distinct end date per household). **Not run:** a red
+    state of the new web tests against the base's source; they assert behaviour
+    the base has no code for (the end marker, the hidden cards).

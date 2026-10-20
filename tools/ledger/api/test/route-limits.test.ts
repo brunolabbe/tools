@@ -199,6 +199,7 @@ describe("the routes that answer two verbs", () => {
   test.each([
     ["salaries", ROUTES.salaries],
     ["ratios", ROUTES.ratios],
+    ["mortgage", ROUTES.mortgage],
     ["recurring", ROUTES.recurring],
     ["periodLines", ROUTES.periodLines],
   ])("GET %s refuses the second request in a minute too", async (_name, url) => {

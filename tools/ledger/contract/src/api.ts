@@ -47,6 +47,8 @@ export const ROUTES = {
   buckets: `${API_PREFIX}/buckets`,
   salaries: `${API_PREFIX}/salaries`,
   ratios: `${API_PREFIX}/ratios`,
+  // lg-55: what the household says about its mortgage — live, ended on a day, or none.
+  mortgage: `${API_PREFIX}/mortgage`,
   // lg-6: periods of personal-card spending, their lines, the recurring items,
   // and closing a period with the settlement it computes.
   periods: `${API_PREFIX}/periods`,
@@ -657,6 +659,73 @@ export interface RatiosResponse {
   asOf: string;
   ratios: Ratio[];
   inEffect: Ratio | null;
+}
+
+/**
+ * What a household says about its mortgage (lg-55): `live` (the default, and
+ * the correction that takes either of the others back), `ended` on a day, or
+ * `none` (it never had one).
+ */
+export const MORTGAGE_STATES = ["live", "ended", "none"] as const;
+export type MortgageState = (typeof MORTGAGE_STATES)[number];
+
+/** `POST /api/mortgage`: what the household now says. `endedOn` is only for `ended`. */
+export type MortgageRecordRequest =
+  | { state: "live" }
+  | { state: "none" }
+  | { state: "ended"; endedOn: string };
+
+/**
+ * The request's shape, for a caller that has no clock. A route reads a body
+ * with `mortgageRecordRequestSchemaOn`, which also refuses an end date after today.
+ */
+export const mortgageRecordRequestSchema = z.discriminatedUnion("state", [
+  z.strictObject({ state: z.literal("live") }),
+  z.strictObject({ state: z.literal("none") }),
+  z.strictObject({ state: z.literal("ended"), endedOn: isoDateSchema }),
+]) satisfies z.ZodType<MortgageRecordRequest>;
+
+/** The schema a route reads a body with: an end date after `today` (`yyyy-mm-dd`) is refused. */
+export function mortgageRecordRequestSchemaOn(today: string): z.ZodType<MortgageRecordRequest> {
+  return mortgageRecordRequestSchema.refine(
+    (request) => request.state !== "ended" || request.endedOn <= today,
+    { message: "The mortgage cannot end on a day that has not come.", path: ["endedOn"] },
+  );
+}
+
+/** One record of it. Never edited: a later record supersedes it, and both are kept. */
+export interface MortgageRecord {
+  id: number;
+  state: MortgageState;
+  /** `yyyy-mm-dd`, for `ended` only. */
+  endedOn: string | null;
+  supersedes: number | null;
+  enteredAt: string;
+  enteredBy: string;
+}
+
+/**
+ * `GET /api/mortgage`, and what `POST` answers: the record that stands (`null`
+ * when nobody has said anything, which reads as `live`) and what the screens
+ * need from it. The mortgage **closes** on the later of its end date and the last
+ * joint payment out of the bucket, so a payment pasted after the record moves
+ * the close with it. Everything here is computed on read, as of `asOf`.
+ */
+export interface MortgageResponse {
+  /** Today, by the API's clock. */
+  asOf: string;
+  record: MortgageRecord | null;
+  state: MortgageState;
+  endedOn: string | null;
+  /** The last joint payment out of the bucket, over the whole history. */
+  lastPaymentOn: string | null;
+  /** `yyyy-mm-dd` when `state` is `ended`: the later of `endedOn` and `lastPaymentOn`. */
+  closedOn: string | null;
+  /** Whether the bucket still holds anything, in anyone's name. */
+  left: boolean;
+  /** What the bucket holds, and whose each part is: theirs to take back. */
+  balanceCents: number;
+  own: OwnMoney[];
 }
 
 /**
