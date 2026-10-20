@@ -367,11 +367,18 @@ describe("each tool's image carries every workspace its API resolves", () => {
   test("neither list ships a workspace the API does not resolve", () => {
     const stale: string[] = [];
     for (const image of IMAGES) {
-      const carried = new Set([...image.closure, ...image.bundledOnly]);
+      // The build stage installs whatever the UI build resolves; the runtime
+      // stage ships the API's closure and the `web` bundle, and no web-only
+      // workspace, which Vite has already inlined (repo-108).
+      const carriedBy = {
+        build: new Set([...image.closure, ...image.bundledOnly]),
+        runtime: new Set([...image.closure, `tools/${image.tool}/web`]),
+      };
       for (const [stage, section] of [
         ["build", image.preInstall],
         ["runtime", image.runtime],
       ] as const) {
+        const carried = carriedBy[stage];
         for (const line of copyLines(section)) {
           for (const match of line.matchAll(
             /(?:^|[\s/])((?:packages|tools\/[^/\s]+)\/[^/\s]+)\//gu,
