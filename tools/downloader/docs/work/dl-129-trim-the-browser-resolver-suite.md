@@ -404,3 +404,161 @@ pick a reading.
   `origin/main` 00977771. The owner's answer C (CI binds, local supports) is
   recorded under `## Decision note — answered 2026-10-20 by Bruno Labbé`; no
   Done when line was edited. `status` was already `ready`.
+
+- 2026-10-20, build (Sonnet 5.5; branch `dl-129-trim-browser-sleeps`, base `origin/main` 00977771) —
+  **What changed.** (a) `BrowserResolverOptions` gained `landingSettleMs` and
+  `passPauseMs`; `provokePlayback` gained `passPauseMs`; the literal `900` is now
+  `PROVOKE_PASS_PAUSE_MS`, and `LANDING_URL_SETTLE_MS` is exported. Defaults 500 and 900,
+  passed by no production caller. (b) `AT_ONCE_WAITS` in
+  `test/browser/helpers/stream-waits.ts` (`STREAM_WAITS` plus 200 ms for both), taken by the
+  32 tests listed below. (c) `parallel-ranges.test.ts` is three spec files and a helper.
+  (d) The F9 pair polls instead of `sleep(4_000)`.
+  **Done when 1, the alternated runs** (`npm test -- --project downloader
+--reporter=default --reporter=json --outputFile.json=<scratch>/<tag>.json`; every run
+  printed `test-gate: slot-0, 1 of 2 runs active (...): 11 workers` and exited 0; before =
+  a detached tree at 00977771, after = this branch). Two warm-ups were thrown away (before
+  115.02 s, after 100.18 s). "Foreign workers" is `ps -eo args | grep -c
+'[w]orkers/forks.js'` at the start, which can count a previous run's workers still
+  exiting. The machine carried two peer batches throughout, so these runs are supporting
+  evidence under the owner's answer C, not a graded line:
+
+  | run      | foreign workers | load start → end | `Duration` | summed file time | seven browser files | `parallel-ranges*` files |
+  | -------- | --------------- | ---------------- | ---------- | ---------------- | ------------------- | ------------------------ |
+  | before 1 | 1               | 8.96 → 18.78     | 99.68 s    | 761.6 s          | 328.3 s             | 70.5 s (1 file)          |
+  | after 1  | 10              | 18.78 → 21.19    | 102.64 s   | 775.4 s          | 318.2 s             | 25.5 + 25.0 + 23.5 s     |
+  | before 2 | 10              | 21.19 → 21.17    | 103.68 s   | 788.3 s          | 341.6 s             | 71.3 s (1 file)          |
+  | after 2  | 10              | 21.17 → 18.79    | 92.38 s    | 728.4 s          | 318.6 s             | 25.6 + 25.5 + 23.1 s     |
+  | before 3 | 6               | 18.79 → 15.61    | 81.26 s    | 681.2 s          | 333.8 s             | 69.7 s (1 file)          |
+  | after 3  | 1               | 15.61 → 13.81    | 75.80 s    | 615.6 s          | 284.8 s             | 21.3 + 21.4 + 20.7 s     |
+
+  Order of runs: before 1, after 1, before 2, after 2, before 3, after 3. Tests: 2590 passed
+  and 2 skipped before; 2594 and 2 skipped after (the four added tests are the pins of Done
+  when 3). **Done when 2 (supporting, not graded, answer C):** the mean of the seven browser
+  files is 334.6 s before and 307.2 s over the three after-runs, 8.2 % lower; over all ten
+  after-runs (after 4 to 10 were run for Done when 7) it is 305.9 s, 8.6 % lower. That is
+  under 15 %, and the reason is the eligibility rule, not load: see Done when 4 and the
+  open decision. Paired by test (before 1 to 3 against after 1 to 10, mean test durations),
+  the seven files' tests sum to 355.9 s and 322.0 s. `Duration` and summed time swing by
+  100 s with the machine (after 3 ran beside 1 foreign worker, after 1 beside 10).
+  **Done when 3, the defaults.** `browser-resolver-departure-and-floor.test.ts`, "the two
+  fixed sleeps every probe pays keep their production values (dl-129)" (4 tests). It mocks
+  `sleep` in `abort.ts` to a recording pass-through and asserts the literals: a resolver
+  given neither option sleeps 500 once and 900 once, and one given `landingSettleMs: 250,
+passPauseMs: 350` sleeps those and neither 500 nor 900. Mutations (committed first,
+  restored with `git checkout <sha> -- <path>`): `LANDING_URL_SETTLE_MS` 500 to 400 fails
+  "the defaults are 500 ms after load and 900 ms between the passes" (`expected 400 to be
+500`) and "a resolver given neither option sleeps 500 ms ..." (`expected [] to have a
+length of 1 but got +0`); `PROVOKE_PASS_PAUSE_MS` 900 to 800 fails the same two
+  (`expected 800 to be 900`); adding `passPauseMs: 100` to the `BrowserResolver` call in
+  `api/src/resolvers.ts` fails "no production source passes either option" (`expected [
+'api/src/resolvers.ts' ] to deeply equal []`). That last test scans every
+  `tools/downloader/*/src` for the two names outside the two files that own them.
+  **Done when 4, the tests that take `AT_ONCE_WAITS`** (32; each expects a stream, its
+  fixture has no `setTimeout`, `setInterval`, `requestAnimationFrame`, input-gated mount or
+  `?late` layer, checked by grep of `test/fixtures/pages` and by reading the page, and none
+  asserts that something was left unpressed or unrequested). `age-gate`: "an Italian gate in
+  a fixed layer, told to confirm, yields its stream", "a gate whose layer lives in an open
+  shadow root, told to confirm, yields its stream". `capture`: "captures the master playlist
+  behind an MSE blob: player", "dismisses a consent banner and captures a click-to-play HLS
+  stream", "captures a DASH manifest served from an extensionless signed URL", "captures a
+  stream from a same-origin iframe embed", "falls back to an opaque variant when the parser
+  throws", "works with the real parsers wired in", "reports each phase it actually reaches,
+  in order, and none it does not", "starts a shadow-root player when the page is probed
+  directly", "indexes candidates in the locator's own order ...", "starts a shadow-root
+  player with no click listener at all", "a file whose server answers every Range request
+  with a short 206 is offered at its real size", "an HLS playlist served as text/plain from
+  an extensionless route is an hls outcome". `consent-and-links`: the four "a dl-48 gate
+  built as a link ... is pressed, and yields its stream" rows, the two "a structural gate
+  built as a link ... is pressed" rows, "presses \"Sono d'accordo\" and finds the stream
+  behind it", "still presses an old label on a cookie strip ...", "presses a consent bar
+  before a newsletter dialog ...", "presses a widened label inside a role=dialog in a
+  cross-origin frame". `departure-and-floor`: "a fragment-only change on play is not a
+  departure ...", "the landing URL is the page reached after a redirect ...", "adding ?t= on
+  play is not a departure", "a minWaitMs below it is the one the wait is handed" (through a
+  new optional second parameter of its `quietWait` helper; the floor test beside it passes
+  none). `player-input`: "clicks the middle of the largest player-ish box when no <video>
+  was clicked", "a scripted play() run there starts a player that listens for nothing
+  else". `press-targets`: "accepted residue: a sign-up layer's Age: 18 button is pressed,
+  and the stream is still found", "ctl=autoplay (a toggle labelled Autoplay) is pressed but
+  does not hold back the box click". Their durations fell by 0.8 to 1.75 s each, to about
+  1.0 s. **Left on both sleeps on purpose:** every test in the Build's floor list,
+  `consent-scope.test.ts` whole (it calls `provokePlayback` and counts presses), the tests
+  with a timer or input in the fixture (`guard-script-redirect`, `guard-router-rewrite`,
+  `age-gate.html?late`, `delayed-player`, `player-poster-related-grid`,
+  `input-gated-player`, the scroll and nudge pages), and 24 tests that find a stream and
+  also assert a decoy was not pressed or a card was not requested (the open decision
+  below). **Step 3:** 0 tests moved. Every test still on `BASE_WAITS`, `quietMs: 1200` or no
+  waits asserts an error code or is in the floor list (`grep -n "quietMs: 1200\|BASE_WAITS\|
+quietMs: 6000\|new BrowserResolver({ pool })"` over the seven files).
+  **Done when 5, the F9 pair.** `pausedThenRead` now polls: it waits until A has been handed
+  its 200 KB, `feeder.stats().deliveredBytes` has stayed put for 400 ms, and at least 2.3 s
+  have passed since A's request (the 2 s window plus 0.3 s, as the 4 s sleep outlasted it:
+  a meter that counted A's paused time would have split by then, and the unchanged
+  `expect(mode).toBe("single")` says it did not), inside a 4 s bound with the stats in the
+  failure message. The assertions after the wait are unchanged. Ten runs of each
+  (`repeat.sh`, `-t "F9: a paused request"`, so 20 test runs a side, load average 10 to 21):
+  before, in the base tree, 10 of 10 and 10 of 10, 6.09 to 6.40 s and 6.36 to 6.47 s; after,
+  10 of 10 and 10 of 10, 4.32 to 4.45 s and 4.65 to 4.72 s. Mutations after the change: the
+  meter's `allPaused` test `size === members.size` to `size > 0` fails "F9: a paused request
+  left open does not stop the meter for one that is reading" (`expected null not to be
+null`); a no-op `pause()` passes both F9 tests in the base tree (2 of 2) and after (2 of
+  2), so the sleep never proved it.
+  **Done when 6, the split.** `engine/test/parallel-ranges.test.ts` (dl-98 progressive,
+  cancel, egress proxy: 10 tests), `parallel-ranges-refusals.test.ts` (refusals, fallback,
+  gate 1: 19) and `parallel-ranges-limits.test.ts` (feeder limits, gate 2, dl-108: 14), and
+  `helpers/parallel-ranges-fixture.ts`, whose origin, counters and helpers are module state,
+  so each file's `beforeAll(startOrigin, SLOW)` starts its own. 43 tests before and after,
+  and `parallel-ranges-meter.test.ts` is unchanged (15), so `vitest run
+tools/downloader/engine/test/parallel-ranges` reads `Tests 58 passed (58)`. Moved bodies:
+  the three files and the helper were written from line slices of the original
+  (`split.py`), and a multiset comparison of trimmed lines (`moved.mts`) finds in the new
+  files every line of the original except imports, the `export` keyword, the three hook
+  signatures, the two lines of the F9 sleep, and the `// oxlint-disable-next-line
+consistent-function-scoping` above `pausedThenRead` (its fixture is imported now, so it
+  captures nothing; moving it out of the describe would re-indent a body that is otherwise
+  a move). No file ran longer than 56.8 s in after 1 to 3 (largest `press-targets`, 55.6,
+  56.8 and 50.2 s; the new files 20.7 to 25.6 s). The project's `Tests` count is 2590 before
+  and 2594 after: the difference is the four pins of Done when 3, which the split does not
+  change.
+  **Done when 7, the floor.** 11 runs beside the whole downloader project (the warm-up
+  after-run and after 1 to 10, with an uncommitted edit that appended each run's `singleMs`,
+  `splitMs` and ratio to a file, restored from the commit): minimum 3.260, median 3.380,
+  maximum 3.455, none under 3; `singleMs` 8396 to 8682, `splitMs` 2443 to 2635; in run order
+  3.373 3.312 3.373 3.455 3.430 3.380 3.443 3.349 3.260 3.386 3.408. The floors in the spec
+  are untouched: `const floor = process.platform === "win32" ? 2.5 : 3`. The load average
+  was 9 to 21 throughout, so these ran harsher than dl-127's (3.399 to 3.504).
+  **Done when 9.** No floor-list test changed its wait, fixture timing or assertion: the
+  browser ones are untouched, `quietWait`'s second parameter is optional and the floor test
+  passes none, and the 3x test moved with its describe (the multiset check above).
+  **Done when 10.** `npm run check` exit 0 at the final commit. The downloader project
+  passed in after 1, 2 and 3 (`Tests 2594 passed | 2 skipped (2596)`) and in a final run
+  after rebuilding `dist` (101.56 s). It failed once in an extra run, after 8:
+  `api/test/tiers-on-the-terminating-proxy.test.ts` › "still refuses a certificate the proxy
+  could not verify — dl-37 Done-when 2", `expected 'UNREACHABLE' to be
+'TLS_VERIFICATION_FAILED'`, at load 18. Alone, that test passed 20 of 20 in the base tree;
+  whole-project, 0 of 4 base runs failed and 1 of 12 of this branch's. The failing path is a
+  navigation error, which ends before either changed sleep, so the diff does not reach it;
+  the test's own comment calls the verdict a side channel. No ticket filed: there is no
+  reproduction.
+  **What the brief had wrong.** (1) The 68 tests in the 1 to 2 s band are not all eligible:
+  Decision A's rule and Done when 4 admit 32, and the saving is about 34 to 38 s of summed
+  time, not 50 to 80, which is 8 to 9 % of the seven files, not 15 %. (2) The floor list
+  says the "surface click chooses the player" describe proves the 500 ms settle; the tests
+  that do are the two guard rows with a redirect and a rewrite after `load` (their fixtures
+  have timers, so the timer rule keeps them on production values), and that describe stays
+  on both sleeps as listed. (3) Done when 6 says the project's `Tests` count is the same
+  before and after, and Done when 3 asks for a test that is not in the base.
+  **Folded in / not.** Nothing folded in. The 24 tests of the open decision were not taken
+  in: the owner's rule reads against them. **Open decision for the orchestrator: Done when 8
+  cannot be met by the 32 tests.** Measured on this branch with a scratch edit giving
+  `AT_ONCE_WAITS` to 24 more tests (stream expected, fixture free of timers and inputs, but
+  each also asserts a decoy was not pressed or a card not requested), three runs of the
+  seven files: summed file time 272.0, 263.3 and 280.4 s, against 334.6 s before and about
+  306 s with the 32, so 18.7 % below before, and every test passed (151 of 151, 3 of 3
+  runs). dl-115's own comment in `stream-waits.ts` says a stream test that also asserts a
+  not-pressed may take `STREAM_WAITS`; Decision A and Done when 4 say "or something left
+  unpressed or unrequested". Options: (1) keep the 32, and accept that line 8 reads about
+  91 % on CI (318 s times 306/335); (2, recommended if the owner reads the clause as "tests
+  whose verdict is absence") widen to the 24, reword Done when 4, and expect about 81 %; (3)
+  widen and also re-prove each of the 24 against a mutation first. The owner decides;
+  nothing here settles it.
