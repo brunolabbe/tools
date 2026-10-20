@@ -188,3 +188,26 @@ Stop after step 2 if step 1 prices step 3 at less than it costs to review.
   - `npm run check`: exit 0. `npm run build` fails in the three `web`
     workspaces on `@webtools/ui/tokens.css` (unresolved import in the farm),
     which this branch does not touch and `scripts/test` does not read.
+
+- **2026-10-20** — **Done when 3: the draft's own Windows leg.** PR #590 at
+  `2b8b3f37` (its code is `b7d392a0`; the later commit is the Log), ci.yml run
+  `39516664093`, `test (windows-latest, informational)` job `118950394147`,
+  finished `pass`. The `Run npm test` line, ANSI codes removed:
+  `✓ repo scripts/test/review-record.test.ts (64 tests) 77252ms`, inside a
+  vitest `Duration` of 310.09 s.
+
+  | Leg, ci.yml matrix `Run npm test` line | repo-106, run `39344302900` | this draft, run `39516664093` |
+  | -------------------------------------- | --------------------------: | ----------------------------: |
+  | windows-latest                         |                  112,084 ms |                     77,252 ms |
+  | ubuntu-latest                          |                   25,462 ms |                     27,935 ms |
+  | windows `Duration` (whole vitest run)  |                    407.24 s |                      310.09 s |
+
+  **One reading each side is not a significant difference.** The Windows file is
+  34.8 s shorter (31 %), which is more than the 10.2 s the spawn counts price,
+  and the Ubuntu file is 2.5 s _longer_ on a change that cannot slow it, so the
+  matrix's contention between test files moves the number by more than the
+  change does (the other files' timings were not compared). Read it as "did not get slower, and probably faster", not as 31 %.
+  The copy's own cost on Windows is not separable from one reading and is
+  unmeasured; the total did not rise. Whether the saving shortens the leg's wall
+  time is still the open question the ticket named: the `Duration` fell, but one
+  run does not say by how much of that this file is.
