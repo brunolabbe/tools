@@ -5969,3 +5969,41 @@ The owner's paid lg-38 run (60 model calls, $0.5349 by the records' `costUsd`) i
 - Reading the peer sessions' `board.md` files before offering a batch: it showed that tools-dd had queued lg-58 and lg-63 and tools-13 held repo-109, which `git worktree list` did not.
 - Recomputing the builder's projection before asking: its "18.7 % lower, about 81 % on CI" compared seven-file runs with whole-project runs. On matching runs the gain was nearer 9 % (projected about 82 %), and the owner chose on that figure.
 - The gate's positive control on the F9 poll refuted the ticket's own premise: the base's `sleep(4_000)` passed a pause that never engages, 3 of 3 times.
+
+### Batch 2026-10-20 (tools-dd, lg-55 lg-35 lg-61) — base 00977771
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / high | a6242a08ab67dfd60 | seam-mapper, 7 candidates | 1m53s / 1m53s | 0 | $0.3684 |
+| #581 | merged 5c6077f3 | Sonnet 5.5 / high | ab6d6c5b0f07ba0c7 | builder-standard, lg-55 + round 1 | 30m38s / 44m56s | 0 | $4.7067 |
+| #581 | merged 5c6077f3 | Opus 5.5 / high | ac68e48cc09be8a78 | ticket-reviewer-opus, lg-55 gate 1 | 11m01s / 11m01s | 0 | $2.8626 |
+| #581 | merged 5c6077f3 | Opus 5.5 / high | ada17a44c3c9ceb28 | ticket-reviewer-opus, lg-55 gate 2 | 13m37s / 13m35s | 0 | $2.7669 |
+| #581 | merged 5c6077f3 | Sonnet 5.5 / high | a9795e5706fe33cd6 | fixer, lg-55 landing + 4 fixes at landing | 9m37s / 14m56s | 0 | $0.7354 |
+| #583 | merged e155da25 | Opus 5.5 / high | a4a68bfc9c6ff7af7 | builder-hard, lg-35 + round 1 | 54m49s / 1h32m01s | 0 | $14.3404 |
+| #583 | merged e155da25 | Sonnet 5.5 / xhigh | a60d4a18aa4f80437 | ticket-reviewer-sonnet, lg-35 gate 1 | 13m51s / 13m25s | 0 | $2.5630 |
+| #583 | merged e155da25 | Sonnet 5.5 / xhigh | a61c4a327f6c7e5f6 | ticket-reviewer-sonnet, lg-35 gate 2 | 11m44s / 11m41s | 0 | $2.2394 |
+| #583 | merged e155da25 | Sonnet 5.5 / high | a61b3d87c67602e2a | fixer, lg-35 merge main + renumber to 14 + 2 fixes at landing + landing | 8m46s / 15m17s | 0 | $0.8714 |
+| #586 | open, ready, green at eb5d7c5d | Opus 5.5 / high | ab42d381136c41309 | builder-hard, lg-61 Build 1–3 measurement, stop, then option A | 47m11s / 2h07m10s | 0 | $9.3671 |
+| #586 | open, ready, green at eb5d7c5d | Sonnet 5.5 / xhigh | a5586a2bbd75730e0 | ticket-reviewer-sonnet, lg-61 gate 1 | 24m57s / 24m21s | 0 | $2.9669 |
+| #586 | open, ready, green at eb5d7c5d | Sonnet 5.5 / xhigh | a39c20a654034cb3b | ticket-reviewer-sonnet, lg-61 gate 2 (narrow: Done when 3) | 9m19s / 9m17s | 0 | $1.2172 |
+| #586 | open, ready, green at eb5d7c5d | Sonnet 5.5 / high | ac0f11c9dd6120b88 | fixer, lg-61 landing + 4 fixes at landing | 6m49s / 12m51s | 0 | $0.6698 |
+| — | — | Opus 5.5 / high | orchestrator 6f7039e2 | orchestrator (floor) | 1h10m15s / 3h44m33s | 0 | $6.6778 |
+| | | | | **total** (rates read 2026-10-10) | 5h14m25s | 0 | **$52.3531** |
+
+**Tickets:**
+- lg-55 → #581: gate 1 CONCERNS (2 med, 3 low; owner chose F1 `left` = balance, F2 a negative part named as owed, F3 cards held until the read, the builder's `tools/ledger/CLAUDE.md` line added), round 1, gate 2 CONCERNS (2 med and 2 low new, none on a `Done when` line; all four fixed at landing by owner choice), merged 5c6077f3; main push CI success at 5c6077f3, both test legs.
+- lg-35 → #583: gate 1 CONCERNS (F1 med open decision → owner chose "refuse the add until they return"; inbox picker, contract additions and `BAD_REQUEST` signed off as built; 2 lows recorded unfixed), round 1, gate 2 PASS (2 lows, fixed at landing); renumbered to books migration 14 after #581 merged (owner's merge order), merged e155da25; main push CI success at e155da25, both test legs.
+- lg-61 → #586: builder stopped at Build step 3 (both named directions ×2–5 worse); owner chose A, wide 2/3, over B and C. Gate 1 FAIL on Done when 3 alone (not run; see item 1), 5 lows (3 fixed at landing, the contract comment and the advice wording recorded); gate 2 narrow PASS (Done when 3 verified, 15 of 15 cells; 2 lows, 1 fixed at landing). Ready, all checks pass at eb5d7c5d, awaiting merge.
+
+**Defects in the skill:**
+
+1. `reference/dispatching.md` › _A gate prompt carries_ — silent on whether "what to attack" bounds which `Done when` lines the gate proves. lg-61 gate 1 left Done when 3 unrun because the attack list did not name it, and returned FAIL on that line alone; a narrow gate 2 ($1.2172) closed it with no code change. Reproduction: `git show origin/lg-61-day-off-workbook-split:tools/ledger/docs/work/lg-61-a-paste-against-a-workbook-row-two-or-three-days-off.md | grep -c "not in this dispatch's attack list"` → `1`.
+2. `.claude/scripts/worktree-farm.sh` (script, relied on by `roles/common.md` › _Your worktree_) — gives no warning when the branch has merged a `main` that adds a workspace the shared checkout lacks (repo-108's `packages/ui`), so "if the farm warns that the shared checkout is stale, stop" never fires; six agents this batch linked it by hand. Reproduction: in a worktree at `da4673e1` or later, `bash /workspaces/tools/.claude/scripts/worktree-farm.sh` → `farm built: 402 top-level entries…` and no warning; `ls node_modules/@webtools/` → `core`; `npm run build` → exit 1, `Rollup failed to resolve import "@webtools/ui/tokens.css"`. `node .claude/scripts/check-farm-freshness.mjs /workspaces/tools` at the shared checkout's `00977771` → exit 0.
+3. `reference/records.md` › _Fixed at landing_ — the scoped `grep -c` above `## Log` cannot show a fix whose text is itself in the Log (lg-61's fixes c and d), and the page is silent on two findings fixed by one change (both lg-55's and lg-61's landers put two entries in one commit). Reproduction: on the ticket at `c7a2399f`, `grep -c "both. cells, 4,500 trials" tools/ledger/docs/work/lg-61-a-paste-against-a-workbook-row-two-or-three-days-off.md` counts the Log entry's own command; the lander used `sed -n 220p` instead.
+4. `roles/common.md` › _Your worktree_, the second-tree recipe — does not say the Edit tool cannot write a second tree. Reproduction: an Edit on `/workspaces/tools/.claude/worktrees/builder-lg61-exp/tools/ledger/api/src/workbook-days.ts` from lg-61's builder → "This agent is isolated in the worktree … its writes are limited to that folder"; a `cp` from scratch through Bash worked.
+5. `roles/builder.md` › _Before you report_ — `npx vitest run <spec>` works only from the worktree root. Reproduction: `cd tools/ledger && npx vitest run api/test/schema.test.ts` → `No test files found, exiting with code 1`.
+
+**Worked, and worth keeping:**
+- Two branches taking one migration number: the owner set the merge order at the gate checkpoint, and one fixer did merge `main`, renumber, the fixes at landing and `--land` in a single dispatch after the first merged (lg-35, $0.8714), preflight running against the real base.
+- A gate attack that imports `main` and the head in one process over the ticket's whole enumeration, with six named violation kinds (lg-61 gate 1: 245,760 variants, 0 violations).
+- A builder stopped on a measured stop condition and pushed a Log-only commit with no PR; the owner chose from its measured options and the same agent resumed with its harness intact (lg-61).
