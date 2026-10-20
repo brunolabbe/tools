@@ -17,9 +17,10 @@ squiggle both unless `files.associations` maps them to `jsonc`.
 
 `oxfmt` is opinionated in the gofmt sense, but it is not a one-key formatter:
 **at 0.62.0, the pinned version, it honours `ignorePatterns`, `printWidth`,
-`proseWrap`, `singleQuote` and `tabWidth`.** `proseWrap: "always"` is what switches
-markdown wrapping on, and `printWidth` is the width it wraps to (default 100;
-`printWidth` alone leaves markdown untouched). Keys that are not oxfmt's, like
+`proseWrap`, `singleQuote` and `tabWidth`, among others** (those five are the ones
+measured; the `configuration_schema.json` shipped with oxfmt is the full list).
+`proseWrap: "always"` is what switches markdown wrapping on, and `printWidth` is the
+width it wraps to (default 100; `printWidth` alone leaves markdown untouched). Keys that are not oxfmt's, like
 `quoteStyle` and `lineWidth`, parse without error and are silently ignored, so do
 not add them. This repo's `.oxfmtrc.json` sets only `ignorePatterns`, so the output
 is oxfmt's defaults (double quotes, 100 columns, prose never reflowed): do not argue

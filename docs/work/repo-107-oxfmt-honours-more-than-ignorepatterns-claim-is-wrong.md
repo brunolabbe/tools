@@ -152,7 +152,9 @@ file inside the repo is not tested here.
   given through `-c <path>` to a config outside the parent chain
   (`scratchpad/repo-107/build/measure2.mjs`) gave the same `a.md` line counts: 1
   for `printWidth` alone, 2 for `proseWrap` alone, 24 for both. So a config named
-  with `-c`, as the repo's root file is, honours them as a discovered parent does.
+  with `-c` honours them as a discovered parent does; the repo's root file is found
+  by discovery from the working directory (`package.json` runs bare `oxfmt` and
+  `oxfmt --check`), not given with `-c`.
   **Unmeasured:** whether a key set in the repo's own `.oxfmtrc.json` changes a file
   inside the repo (no key but `ignorePatterns` was put in that file, and the
   branch does not change it), `useTabs`, and the other oxfmt keys beyond the nine
@@ -196,3 +198,21 @@ ignore rules.`, as the dispatch measured, so it cannot be formatted by the tool
   `.oxfmtrc.json` ignores (`.claude/`); and the filing's "`printWidth` alone
   changes nothing" holds only for markdown — `printWidth` changes code at once
   (`a.ts` 5 to 33 lines), so the pages' list needed it as a code key too.
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, the first low
+  (`nfr:maintainability`) — "Both pages list five keys as the ones oxfmt honours, and
+  the list reads as complete. It is not." The owner chose "fix both at landing" on
+  2026-10-19; both pages now say the five are the measured ones, "among others", and
+  name the `configuration_schema.json` shipped with oxfmt as the full list.
+  `ls node_modules/oxfmt/configuration_schema.json` → the file exists, and
+  `Object.keys(schema.properties).length` → `26`, with `lineWidth` and `quoteStyle`
+  absent. `grep -c "configuration_schema.json" CLAUDE.md .claude/rules/toolchain-config.md`
+  → `CLAUDE.md:1`, `.claude/rules/toolchain-config.md:1`.
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, the second low (Log only) —
+  "The Log's step 1 says a config named with `-c` is how the repo's root file is
+  given. It is not." The Log's step-1 sentence now says the root file is found by
+  discovery from the working directory. `grep -n "runs ba[r]e" <ticket>`
+  prints only the step-1 line, 156 (the bracket keeps this entry from matching).
+  `grep -n '"oxfmt' package.json` shows `54:    "format:check": "oxfmt --check",`,
+  bare, with no `-c`.
