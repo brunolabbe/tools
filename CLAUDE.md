@@ -75,10 +75,13 @@ Per-tool commands (`dev`, `e2e`) live in that tool's `CLAUDE.md`.
 Tooling: **oxlint** and **oxfmt** (not eslint/prettier). Config in
 `.oxlintrc.json` and `.oxfmtrc.json`.
 
-Both config files are **JSONC despite the `.json` extension**, and `oxfmt` honours
-only `ignorePatterns` at the pinned version — do not argue with its output, run
-`npm run format` and move on. The detail, and why the fixture ignore pattern needs
-its `**/`, is in
+Both config files are **JSONC despite the `.json` extension**, and `oxfmt` 0.62.0
+(the pinned version) honours `ignorePatterns`, `printWidth`, `proseWrap`,
+`singleQuote` and `tabWidth`, among others (the `configuration_schema.json` shipped
+with oxfmt is the full list), but silently ignores `lineWidth` and `quoteStyle`. This
+repo's file sets only `ignorePatterns`, so the output is oxfmt's defaults — do not
+argue with it, run `npm run format` and move on. The detail, and why the fixture
+ignore pattern needs its `**/`, is in
 [`.claude/rules/toolchain-config.md`](./.claude/rules/toolchain-config.md).
 
 ## Rules
