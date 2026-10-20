@@ -348,3 +348,24 @@ omission the Trap describes. Shown failing: with `COPY packages/ui/...`removed f
     ticket lifted, to preserve a padding nothing can see. The Build's "only
     where identical in effect" was read as "in what renders"; the Log's earlier
     claim that ledger's rule was identical was too strong.
+
+- 2026-10-20 — Round 2, after gate 2 (FAIL at `041db427`, F1 fixed in part).
+  - **F1, fixed (`b5299fe1`).** Round 1's `headerRoles` recognised one exact
+    layout (` *`, five spaces, the name, two spaces), so a longer name, another
+    indent, a tab or a bare name was listed for a human and enforced by
+    nothing. It now reads every header line whose first token after the
+    comment margin starts with `--`, whatever the whitespace, and every `--name`
+    on that line, so a second role on a line is read too. The `tokens.css`
+    header says the rule (one role per line, the line starting with its name),
+    and `tokens.test.ts` pins the shapes in its own `the header reader` cases.
+  - **Gate 2's shapes, re-run** with its `header-shapes.sh` and
+    `plant-header-shapes.mjs` at `b5299fe1`, each restored from that sha with
+    `git checkout`: unplanted `26 passed (26)`; `control`, `indent-1`,
+    `indent-4`, `indent-6`, `tab`, `tab-after-name`, `two-on-line`,
+    `two-on-line-second`, `no-description`, `after-blank`,
+    `long-name-one-space`, `long-name-16` and `crlf` each `1 failed | 25 passed (26)`,
+    with the planted name under `listedButNotEnforced`. `in-prose` stays
+    `26 passed (26)`, by design: a name inside a sentence is a mention, not an
+    entry, and the header now says so. The unplanted header reads exactly 11
+    roles: bg, surface, surface-2, border, text, text-muted, accent,
+    accent-text, ok, warn, danger.
