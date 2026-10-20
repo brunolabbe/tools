@@ -3,7 +3,7 @@ id: repo-107
 tool: repo
 title: CLAUDE.md and the toolchain rule say oxfmt honours only ignorePatterns, and a parent config wraps markdown at 0.62.0
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -103,6 +103,56 @@ file inside the repo is not tested here.
    longer say that `ignorePatterns` is the only key honoured, and name the keys
    step 1 measured, with the version. `npm run check` passes after the edit.
 4. The edit is in a batch the owner selected, and the Log names that batch.
+
+## Review
+
+**Gate: PASS** — 2026-10-19 · `6dd274bd..296ddd35` (merge base `6dd274bd`) · Opus 5.5, depth narrow
+
+| Done when                                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The Log holds the command and output for each step-1 key, the control, and the exit code and line count of each | **verified**: the Log's step-1 table has nine rows, each with an exit code and `a.md`/`a.ts` line counts, and names `measure.mjs` and the command. The gate re-ran `measure.mjs` into a fresh directory and got the same exit code, line counts and quote/indent effect on all nine rows. Positive control: `singleQuote` (listed as honoured) turned `"hello"` into `'hello'`, and `quoteStyle` (listed as ignored) left it as `"hello"` |
+| 2. The Log holds the step-2 result for the `ignorePatterns` exit 2, with command and output                        | **verified**: the Log reports it reproduced. The gate's own run matched: `["*.md"]` with one target and with two targets both exit 2 with `Expected at least one target file. All matched files may have been excluded by ignore rules.`, and `["a.md"]` with two targets exits 0 with only `a.md` left alone                                                                                                                             |
+| 3. Both pages drop "only `ignorePatterns`", name the measured keys with the version, and `npm run check` passes    | **verified** by reading: both pages name `0.62.0`, the five honoured keys and the two ignored ones. `npm run check` is ci.yml's `check` job, which passed on `296ddd35` (47 s). `oxfmt --check CLAUDE.md <ticket>` exits 0. See the **low** on how complete the list is                                                                                                                                                                   |
+| 4. The edit is in a batch the owner selected, and the Log names that batch                                         | **verified**: settled by the dispatch. The Log names "tools-13, 2026-10-19: repo-108, repo-107, repo-106"                                                                                                                                                                                                                                                                                                                                 |
+
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · Both pages
+  list five keys as the ones oxfmt honours, and the list reads as complete. It is
+  not. At 0.62.0, in the same parent-config fixture shape, `{"useTabs": true}`
+  changed indentation to a tab and `{"semi": false}` removed the semicolons, both
+  exit 0. The `configuration_schema.json` that ships with 0.62.0 has 26
+  top-level keys, and neither `lineWidth` nor `quoteStyle` is one of them. The
+  error is in the safe direction: a reader would believe fewer keys work, and the
+  repo tells them not to add style keys anyway. Fix direction, not tested as
+  wording: say the five are the ones measured "among others", or name the schema
+  as the full list.
+- **low** · Log only · The Log's step 1 says a config named with `-c` is how
+  "the repo's root file is" given. It is not: `package.json` runs bare `oxfmt` and
+  `oxfmt --check`, so the root file is found by discovery from the working
+  directory. The conclusion still holds, because the gate's attack 1 (below) shows
+  that a key in a discovered copy of the repo's own config is honoured.
+- **dropped** · the new paragraph on the rules page is hand-wrapped to uneven
+  widths. Not a defect: `.oxfmtrc.json` ignores `.claude/`, which is settled.
+- **findings** · the hunt returned 3; 2 carried, 1 dropped.
+- Attack 1, the repo's own config on a markdown file inside the repo (the case
+  the Log calls unmeasured). Setup: the repo's `.oxfmtrc.json` plus
+  `docs/01-TICKETS.md` (572 lines, longest 127 characters) in a scratch tree with
+  the same relative layout, oxfmt by absolute path from that root:
+  - control: `--check` exit 0, 572 lines after the write;
+  - `proseWrap: "always"` + `printWidth: 40`: `--check` exit 1, 971 lines after;
+  - `lineWidth: 40` alone: `--check` exit 0, 572 lines after.
+
+  The same two configs passed with `-c` against the in-tree file gave `--check`
+  exit 1 and exit 0. The pages' claim holds.
+
+- Attack 3: a config three directories above the file was picked up both with
+  the working directory at the repo root, where the repo's own config is nearer
+  the working directory, and with it at the file's directory. Both wrapped the
+  bullet to 24 lines, against 1 with no config. The exit 2 holds as stated.
+- Attack 4: `docs` is `"hidden": true` in `release-please-config.json`, and
+  `scripts/commit-message.mjs --text` accepts the title (exit 0). This releases
+  nothing.
+- Invariants: docs-only diff. Every code invariant was skipped as unreachable.
+- NFR: security n/a · performance n/a · reliability n/a · maintainability — the low above.
 
 ## Log
 
