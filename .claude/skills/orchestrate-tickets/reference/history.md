@@ -5892,3 +5892,49 @@ The owner's paid lg-38 run (60 model calls, $0.5349 by the records' `costUsd`) i
 - The seam map's disjoint batch: three tickets on three file sets ran concurrently and landed with no rebase and no merge from `main`, though `main` moved twice (#572, #575) under them.
 - A gate attack with a sized population (36 code points × 4 positions = 144 inputs) found the U+FEFF edge that a test-per-line reading had passed.
 - Reading an informational Windows failure before setting it aside: lg-54's was a downloader browser test (`page.goto: net::ERR_NO_BUFFER_SPACE`) on a ledger-only branch.
+
+### Batch 2026-10-19 (tools-13, repo-106 repo-107 repo-108, pl-59 and repo-113 filed) — base f7436872
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a9719b561fd2e9f2e | seam-mapper, 6 tickets | 1m53s / 1m51s | 0 | $0.4002 |
+| #576 | open, ready, checks green at 11c7ea92 | Sonnet 5.5 / high | ade56e80acae3b949 | builder-standard, repo-107 | 4m23s / 4m22s | 0 | $0.4801 |
+| #576 | open, ready, checks green at 11c7ea92 | Opus 5.5 / high | ac83e1940ff328026 | ticket-reviewer-opus, repo-107 gate 1 (narrow) | 6m07s / 6m06s | 0 | $1.3184 |
+| #576 | open, ready, checks green at 11c7ea92 | Sonnet 5.5 / high | a16ce74d474bbbb7d | fixer, repo-107 two lows at landing + landing | 2m55s / 2m54s | 0 | $0.3878 |
+| #579 | open, ready, checks green at a86c8d46 | Sonnet 5.5 / high | a8758a8e846893eb0 | builder-standard, repo-106 + probe #577 + repo-113 filed | 16m16s / 25m23s | 0 | $2.1610 |
+| #579 | open, ready, checks green at a86c8d46 | Opus 5.5 / high | a71c44d65cb52020b | ticket-reviewer-opus, repo-106 gate 1 | 10m53s / 10m52s | 0 | $2.8056 |
+| #579 | open, ready, checks green at a86c8d46 | Sonnet 5.5 / high | a602c740f61966268 | fixer, repo-106 three findings at landing + landing | 7m52s / 7m50s | 0 | $0.7445 |
+| #578 | open, ready, checks green at b7ca4539 | Sonnet 5.5 / high | ac5e00bd77a14f3b3 | builder-standard, repo-108 + rounds 1–2 | 33m32s / 1h10m57s | 0 | $4.3567 |
+| #578 | open, ready, checks green at b7ca4539 | Opus 5.5 / high | a1ad5a345f3415181 | ticket-reviewer-opus, repo-108 gate 1 | 13m51s / 13m19s | 0 | $3.6961 |
+| #578 | open, ready, checks green at b7ca4539 | Opus 5.5 / high | a64a639c34e470fa9 | ticket-reviewer-opus, repo-108 gate 2 | 8m52s / 7m52s | 0 | $1.7598 |
+| #578 | open, ready, checks green at b7ca4539 | Opus 5.5 / high | a866295afe96a3fbb | ticket-reviewer-opus, repo-108 gate 3 (narrow, F1) | 7m05s / 6m50s | 0 | $1.4752 |
+| #578 | open, ready, checks green at b7ca4539 | Sonnet 5.5 / high | a877d2ebd301d6653 | fixer, repo-108 F4 at landing + landing | 7m00s / 6m58s | 0 | $0.3174 |
+| #582 | open, ready, CodeQL running at 447c755a | Sonnet 5.5 / high | a8dcf545a94e5e280 | builder-standard, pl-59 filing + owner's answer recorded | 9m23s / 20m16s | 0 | $0.7702 |
+| #582 | open, ready, CodeQL running at 447c755a | Opus 5.5 / high | a925223c2af957649 | ticket-reviewer-opus, pl-59 gate 1 (narrow) | 5m22s / 5m22s | 0 | $1.3303 |
+| #582 | open, ready, CodeQL running at 447c755a | Sonnet 5.5 / high | a13a6a1ff41b12630 | fixer, pl-59 F1 at landing + depends_on, filing path | 4m51s / 4m48s | 0 | $0.4753 |
+| — | — | Opus 5.5 / high | orchestrator 9c0cd8ed | orchestrator (floor) | 1h22m33s / 1h54m07s | 0 | $6.1024 |
+| | | | | **total** (rates read 2026-10-10) | 3h42m48s | 0 | **$28.5811** |
+
+**Tickets:**
+
+- repo-107 → #576, gate 1 PASS (two lows fixed at landing by owner choice: the key list marked "among others" with the shipped schema named as the full list; the Log's `-c` sentence corrected).
+- repo-106 → #579, probe #577 closed and its branch deleted (verified 0), gate 1 CONCERNS (F1 med: the fixture "upper bound" reasoning; F2, F3 low; all three fixed at landing by owner choice; the lander wrote 240 for the gate's 245, which the gate's own formula gives). Filed repo-113, kept `ready` by the owner.
+- repo-108 → #578, gate 1 FAIL (F1 high: the guard held `COLOUR_ROLES ⊆ header` while four texts promised equality), gate 2 FAIL (F1 fixed in part: the header reader took one whitespace shape; F3 low fixed), gate 3 narrow PASS (F4 low fixed at landing by owner choice; F2 and F5 low recorded unfixed).
+- pl-59 → #582, filed by owner choice from repo-108's build notes; the owner answered its border decision before the gate; gate 1 narrow CONCERNS (med fixed at landing; `depends_on: [repo-108]` added at landing by the owner's instruction, which made the low moot). No `--land`: a filing left `ready`.
+
+**Defects in the skill:**
+
+1. `reference/records.md` › _Fixed at landing_ — recurs from the 2026-10-18 tools-69 entry: "Scope the command above `## Log`" proves nothing when the corrected text is in the Log (repo-107's second low, repo-106's F1–F3), and the page is silent on a fix outside the ticket file (repo-108 F4, in `tokens.css`). Reproduction: `git show 296ddd35:docs/work/repo-107-oxfmt-honours-more-than-ignorepatterns-claim-is-wrong.md | awk '/^## Log/{exit} {print}' | grep -c "as the repo's root file is"` → `0`; the same without the `awk` → `1`.
+2. `reference/records.md` › _Fixed at landing_ — the entry form quotes "the gate's sentence" with no warning that a backtick span wrapped across lines is broken by `oxfmt`: the continuation line is dedented out of the list item. repo-108's lander rewrote its entry for it. Reproduction: `printf -- '# T\n\n## Log\n\n- 2026-10-20 — Fixed at landing: "the header says \x60a name merely\n  mentioned in a sentence is not\x60". Done.\n' > w.md`, then `npx oxfmt --check w.md` → exit `1`; after `npx oxfmt w.md`, the second line has lost its two-space indent and left the bullet.
+3. `reference/records.md` › _Fixed at landing_ — "applied as the finding states it — the gate's wording" gives no rule for a finding whose stated figure contradicts its own arithmetic. repo-106's F1 said "fixture setup is 245 spawns" beside "30 `withTicketRepo` runs × 5, plus 18 `withLandRepo` extras × 5"; the lander chose 240 and flagged it. Reproduction: `gh pr view 579 --json comments --jq '.comments[].body' | grep -c "fixture setup is 245 spawns"` → `1` (gate 1's full report); `echo $((30*5+18*5))` → `240`.
+4. `roles/builder.md` › _Before you report_ — says to run `npx oxfmt <the files you touched>` after touching markdown, but `.oxfmtrc.json` ignores `.claude/`, so that command exits 2 on any `.claude/rules/` page and the builder cannot tell whether the fault is theirs. Reproduction: `npx oxfmt --check .claude/rules/toolchain-config.md` → exit `2`, `Expected at least one target file. All matched files may have been excluded by ignore rules.`
+5. `roles/builder.md` › _Before you report_ — silent on a `Done when` line naming an e2e suite that has no spec (repo-108's "each tool's e2e suite passes" against ledger), or one that fails identically on the base. The builder and gate 1 each improvised a base run. Reproduction: `ls tools/ledger/e2e/*.spec.ts` → `No such file or directory`; `grep -c -i -E "no spec|No tests found|fails identically" .claude/skills/orchestrate-tickets/roles/builder.md` → `0`.
+6. `roles/common.md` › _Your worktree_ — the farm-then-build steps a gate follows do not say that a branch adding a workspace needs it linked by hand. The bullet that does (_A dependency your ticket adds is not in the farm_) is written for the builder. Gates 1, 2 and 3 of repo-108 and its lander each hit `npm error workspace @planner/web@0.1.0` before linking. Reproduction: `ls /workspaces/tools/node_modules/@webtools/` → `core` only, while `git show origin/repo-108-share-design-tokens:packages/ui/package.json` exists.
+7. `roles/common.md` › _Reading a pull request's checks_ — no warning that `gh run view` needs a git working directory to find the repository. repo-106's builder lost a call to it. Reproduction: from `<scratch>/close`, `gh run view 39344302900 --json conclusion` → exit `1`, `failed to determine base repo: failed to run git: fatal: not a git repository`.
+
+**Worked, and worth keeping:**
+
+- A gate told to attack a builder's unplanned edit to a repo-wide guard with plants on base and head: repo-108's gate 1 ran plants (a)–(d) on `image-closure.test.ts` at both shas, and showed the guard intact before anyone argued about scope.
+- Handing each later gate the earlier gate's plant scripts by path: gate 2's `header-shapes.sh` became the table the builder's round 2 and gate 3 both re-ran, 15 shapes each, with no re-derivation.
+- A probe pull request confined to two new files outside the `repo` vitest glob: siblings' preflight merges never ran it, and it was closed with its branch deleted (verified `0`) as the next action.
+- Asking the owner a fresh filing's open decision before its gate, so the ticket landed `ready` instead of `needs-decision`, with one extra message to a live builder.
