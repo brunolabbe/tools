@@ -14,6 +14,7 @@ import { formatCents } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type { BucketsResponse } from "@ledger/contract";
 import { fetchBuckets } from "../api/buckets.ts";
+import { endedSentence, showsHomeSection, useMortgage } from "../mortgage.ts";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
@@ -41,6 +42,7 @@ export function leadSentence(mortgage: BucketsResponse["mortgage"], names: Shown
 export function Home(): React.ReactElement {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const names = usePeopleNames();
+  const said = useMortgage();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -53,7 +55,9 @@ export function Home(): React.ReactElement {
     return () => controller.abort();
   }, []);
 
-  if (load.state === "loading") return <p className="muted">Adding up the buckets…</p>;
+  if (load.state === "loading" || said.state === "loading") {
+    return <p className="muted">Adding up the buckets…</p>;
+  }
   if (load.state === "failed") {
     return (
       <p className="bad" role="alert">
@@ -63,22 +67,27 @@ export function Home(): React.ReactElement {
   }
 
   const { mortgage, buffer, unclassified, asOf } = load.buckets;
+  const ended = said.mortgage?.state === "ended" ? said.mortgage : null;
   return (
     <>
-      <section className="card" aria-labelledby="mortgage-heading">
-        <h2 id="mortgage-heading">Mortgage</h2>
-        <p className="muted hint">Each person&rsquo;s own money in the bucket.</p>
-        <ul className="figures">
-          {mortgage.own.map((person) => (
-            <li key={person.personId}>
-              <span>{shownName(names, person.personId)}</span>
-              <span className="amount">{formatCents(person.ownCents)}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="lead">{leadSentence(mortgage, names)}</p>
-        <p className="muted hint">In the bucket: {formatCents(mortgage.balanceCents)}</p>
-      </section>
+      {showsHomeSection(said.mortgage) && (
+        <section className="card" aria-labelledby="mortgage-heading">
+          <h2 id="mortgage-heading">Mortgage</h2>
+          <p className="muted hint">Each person&rsquo;s own money in the bucket.</p>
+          <ul className="figures">
+            {mortgage.own.map((person) => (
+              <li key={person.personId}>
+                <span>{shownName(names, person.personId)}</span>
+                <span className="amount">{formatCents(person.ownCents)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="lead">
+            {ended === null ? leadSentence(mortgage, names) : endedSentence(ended, names)}
+          </p>
+          <p className="muted hint">In the bucket: {formatCents(mortgage.balanceCents)}</p>
+        </section>
+      )}
       <section className="card" aria-labelledby="buffer-heading">
         <h2 id="buffer-heading">Buffer</h2>
         <p className="figure">

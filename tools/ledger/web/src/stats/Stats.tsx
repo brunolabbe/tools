@@ -17,6 +17,7 @@ import {
   SettlementsCard,
   SpendingCard,
 } from "./Cards.tsx";
+import { showsOwnCard, showsPaymentCard, useMortgage } from "../mortgage.ts";
 
 type Preset = "all" | "year" | "twelve" | "custom";
 
@@ -45,6 +46,11 @@ export function Stats(): React.ReactElement {
   const [preset, setPreset] = useState<Preset>("all");
   const [custom, setCustom] = useState<{ from: string; to: string }>({ from: "", to: "" });
   const today = isoDay(new Date());
+  const said = useMortgage();
+  // The two mortgage cards wait for it, as Home does, so a household with no mortgage never asks for
+  // their series; a read that failed draws them as live (`useMortgage` answers null).
+  const waiting = said.state === "loading";
+  const mortgage = said.state === "ready" ? said.mortgage : null;
 
   const crossed = custom.from !== "" && custom.to !== "" && custom.from > custom.to;
   const range: StatsRange =
@@ -99,8 +105,12 @@ export function Stats(): React.ReactElement {
           </div>
         )}
       </section>
-      <MortgagePaymentCard range={sent} />
-      <MortgageOwnCard range={sent} />
+      {!waiting && showsPaymentCard(mortgage, sent) && (
+        <MortgagePaymentCard range={sent} mortgage={mortgage} />
+      )}
+      {!waiting && showsOwnCard(mortgage, sent) && (
+        <MortgageOwnCard range={sent} mortgage={mortgage} />
+      )}
       <ContributionCards range={sent} />
       <BufferCard range={sent} />
       <SalaryCards range={sent} />

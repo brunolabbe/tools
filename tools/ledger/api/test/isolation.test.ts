@@ -79,6 +79,8 @@ interface Household {
   salaryCents: number;
   lineCents: number;
   monthlyCents: number;
+  /** The day it says its mortgage ended (lg-55), distinct so a record that crosses over is seen. */
+  endedOn: string;
 }
 
 const HOME: Household = {
@@ -91,6 +93,7 @@ const HOME: Household = {
   salaryCents: 6_111_300,
   lineCents: 3_119,
   monthlyCents: 4_113,
+  endedOn: "2026-08-17",
 };
 
 const AWAY: Household = {
@@ -103,6 +106,7 @@ const AWAY: Household = {
   salaryCents: 5_222_700,
   lineCents: 2_227,
   monthlyCents: 3_227,
+  endedOn: "2026-08-19",
 };
 
 /** What a body must not hold when it was read by the other household: its marks. */
@@ -117,6 +121,7 @@ function marks(household: Household): string[] {
     String(household.salaryCents),
     String(household.lineCents),
     String(household.monthlyCents),
+    household.endedOn,
   ];
 }
 
@@ -539,6 +544,12 @@ const WRITES: Write[] = [
     },
   },
   {
+    route: "mortgage",
+    async run(app, h) {
+      await post(app, h, ROUTES.mortgage, { state: "ended", endedOn: h.endedOn }, this.route);
+    },
+  },
+  {
     route: "recurring",
     async run(app, h, written) {
       const item = await post<RecurringItem>(
@@ -721,6 +732,7 @@ const READS: {
   { route: "buckets", method: "GET", url: `${ROUTES.buckets}?asOf=2026-09-30` },
   { route: "salaries", method: "GET", url: ROUTES.salaries },
   { route: "ratios", method: "GET", url: `${ROUTES.ratios}?asOf=2026-09-30` },
+  { route: "mortgage", method: "GET", url: ROUTES.mortgage },
   { route: "periods", method: "GET", url: ROUTES.periods },
   { route: "periodOpen", method: "GET", url: `${ROUTES.periodOpen}?end=2026-09-30` },
   // Closed periods' lines as well as the open one's (lg-19), so no span is

@@ -31,6 +31,7 @@ export const VERBS = {
   buckets: ["GET", ROUTES.buckets],
   salaries: ["POST", ROUTES.salaries],
   ratios: ["POST", ROUTES.ratios],
+  mortgage: ["POST", ROUTES.mortgage],
   periods: ["GET", ROUTES.periods],
   periodOpen: ["GET", ROUTES.periodOpen],
   periodClose: ["POST", ROUTES.periodClose],
