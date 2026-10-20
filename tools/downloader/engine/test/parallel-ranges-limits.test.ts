@@ -252,6 +252,7 @@ describe("dl-98 round 2: what gate 2 found", () => {
       durationSec: () => size / 20_000_000,
     });
     let aBytes = 0;
+    const startedA = performance.now();
     const a = await new Promise<http.IncomingMessage>((resolve) => {
       http.get(feeder.url, { headers: { range: "bytes=0-" }, agent: false }, (response) => {
         response.on("data", (chunk: Buffer) => {
@@ -261,8 +262,28 @@ describe("dl-98 round 2: what gate 2 found", () => {
         resolve(response);
       });
     });
-    // Long enough for the loopback's buffers to fill and the pause to engage.
-    await sleep(4_000);
+    // The pause has engaged when the loopback's buffers have filled and the feeder
+    // has stopped handing A bytes (dl-129, in place of a fixed 4 s): A was given its
+    // 200 KB, and what the feeder has delivered then stays put for 400 ms. Waited
+    // for no less than the 2 s window plus 0.3 s, as the fixed sleep outlasted it:
+    // a meter that counted A's paused time would have closed its window and split
+    // by then, and the assertion below is what says it did not. The bound is the
+    // old sleep's, so a pause that never engages fails here and says what it saw.
+    let delivered = -1;
+    let stableSince = performance.now();
+    await until(
+      () => {
+        const now = performance.now();
+        const bytes = feeder.stats().deliveredBytes;
+        if (bytes !== delivered) {
+          delivered = bytes;
+          stableSince = now;
+        }
+        return aBytes >= 200_000 && now - stableSince >= 400 && now - startedA >= 2_300;
+      },
+      4_000,
+      () => JSON.stringify({ aBytes, ...feeder.stats() }),
+    );
     expect(feeder.stats().mode).toBe("single");
     if (closeA) a.destroy();
     await sleep(300);
