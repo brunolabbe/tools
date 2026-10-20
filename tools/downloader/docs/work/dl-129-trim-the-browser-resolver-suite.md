@@ -183,7 +183,25 @@ dl-117's way, keeping the 3x-floor describe whole and re-measuring the floor
 at least ten times (Build steps 4 to 6). The other options offered were "a
 separate ticket" (option 2) and "leave it" (option 3).
 
-The question and options as filed, kept for the record:
+## Decision note — answered 2026-10-20 by Bruno Labbé
+
+**C — chosen: "CI binds, local supports" (option 1, recommended).** Asked on
+2026-10-20 by the orchestrator (session tools-11) with `AskUserQuestion`:
+"How should dl-129's timing lines be proven? Done when 2 (local ≥15 % drop)
+reads machine load as much as code, and two peer batches are loading the
+machine now." Done when 8 (CI ubuntu, at most 85 % of 318 s) is the timing bar.
+Line 2's local before/after runs are logged as supporting evidence with the
+concurrent load noted (test-gate line, foreign workers, load average, which
+line 1 already asks for) and are not failed on load. Lines 5 and 7 are pass
+counts, not timings, and load only makes them harsher, so they bind as
+written. The other options offered were "Local, only when quiet" (option 2,
+line 2 binds as written and waits for the machine to go quiet) and "Reword
+line 2 now" (option 3, drop the local 15 % bar). This re-confirms the same
+owner's answer given in another session on 2026-10-19 ("CI ubuntu leg binds",
+chosen over "Local, only when quiet"), which was never written to the ticket.
+No Done when line was edited.
+
+The question and options as filed for A and B, kept for the record:
 
 **A. May a test shorten the two fixed sleeps that every probe pays?** dl-115
 records the owner's 2026-10-12 ruling: "The two sleeps above stay: dl-55 (tests
@@ -381,3 +399,8 @@ pick a reading.
   CI (the "File order" note above) was left alone, with no `repo-` ticket
   filed. The owner's Fable session chose this on the filing agent's
   recommendation. It was not put to the owner.
+
+- 2026-10-20 — Build started on branch `dl-129-trim-browser-sleeps` from
+  `origin/main` 00977771. The owner's answer C (CI binds, local supports) is
+  recorded under `## Decision note — answered 2026-10-20 by Bruno Labbé`; no
+  Done when line was edited. `status` was already `ready`.
