@@ -21,11 +21,10 @@
  * places, applies the hand classification, draws the sample, joins the verdicts,
  * and prints and writes every table the ticket's Log quotes.
  *
- * 1. Reads every `candidatesAccepted` under `api/test/fixtures/live/`, excluding
- *    `hours-coverage/` and `invention/` (this harness's own output), and dedupes
- *    the `Place`s on lower-cased `name|locality` — pl-56's key, so the 1,019
- *    places are the same 1,019. It keeps the model family that named each one,
- *    from the record's directory, `claude-<family>-5-5-<effort>`.
+ * 1. Reads every `candidatesAccepted` in the record files the population names
+ *    (below), and dedupes the `Place`s on lower-cased `name|locality` — pl-56's
+ *    key, so the 1,019 places are the same 1,019. It keeps the model family that
+ *    named each one, from the record's directory, `claude-<family>-5-5-<effort>`.
  * 2. Reads `invention/classification.json`: the rubric, and one hand-assigned
  *    class per place. A place with no class, or a class the rubric does not
  *    define, is an error; nothing is defaulted.
@@ -33,6 +32,30 @@
  * 4. Joins `invention/verdicts.json`, the by-hand web checks, to the sample.
  * 5. Reconciles the classification with pl-56's `reading` column.
  * 6. Writes `invention/2026-10-17.json`, the record, and prints the tables.
+ *
+ * ## The population, and `--after <run>` (pl-58)
+ *
+ * pl-58 re-measures after changing the `lodging` and `food` prompts, on a new
+ * live run whose records sit in the same `live/` directory. Four things are
+ * therefore selected by one argument, and the default is fixed by a file so
+ * that adding records cannot move it:
+ *
+ * - **Population.** With no argument: the 111 record files listed in
+ *   `invention/population-pl57.json`, the manifest, and nothing else — a record
+ *   planted under any other `claude-*` directory is not read. With
+ *   `--after pl58-<date>`: every `.json` under the `claude-*-pl58-<date>`
+ *   directories, which are the new run's, and nothing in the manifest.
+ * - **Files.** With no argument: pl-57's `invention/classification.json`,
+ *   `verdicts.json` and `2026-10-17.json`. With the argument: the same three
+ *   names under `invention/pl58-<date>/`, the record being `<date>.json`, and
+ *   the record says `ticket: "pl-58"`. `--after` never writes pl-57's record.
+ * - **Draw.** With no argument: pl-57's 50 per family. With the argument:
+ *   a seeded order over the new run's `lodging`-or-`food` named-premises keys,
+ *   taken in that order until 40 distinct objects (first queries) have a
+ *   verdict or the keys run out; the record holds the seed, the order, the
+ *   keys it took and each key's object.
+ * - **Reconciliation** with pl-56 runs over the places pl-56 also read; pl-56
+ *   never saw the new run's other places.
  *
  * ## Environment
  *
@@ -46,7 +69,7 @@
  *   sampled place has a verdict. How a gate re-derives the Log's numbers.
  */
 
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -90,6 +113,12 @@ export const SAMPLE_PER_FAMILY = 50;
 export const SAMPLE_SEED = 20261017;
 /** The fewest queries a `not-found` verdict may rest on. */
 export const MIN_QUERIES_FOR_NOT_FOUND = 3;
+/** pl-58: the recorded seed of the stratum's key order. */
+export const STRATUM_SEED = 20261020;
+/** pl-58: distinct objects (first queries) the ordered stratum keys are checked to. */
+export const STRATUM_TARGET_OBJECTS = 40;
+/** The name every pl-58 run directory ends in: `claude-<family>-5-5-<effort>-pl58-<date>`. */
+export const RUN_PATTERN = /^pl58-\d{4}-\d{2}-\d{2}$/;
 
 export interface NamedPlace {
   key: string;
@@ -163,23 +192,102 @@ interface PlHoursRow {
 // ---------------------------------------------------------------------------
 
 const LIVE_DIR = fileURLToPath(new URL("../fixtures/live/", import.meta.url));
-const RECORD_DIR = path.join(LIVE_DIR, "invention");
-const HOURS_RECORD = path.join(LIVE_DIR, "hours-coverage", "2026-10-17.json");
-export const RECORD_FILE = path.join(RECORD_DIR, "2026-10-17.json");
-export const CLASSIFICATION_FILE = path.join(RECORD_DIR, "classification.json");
-export const VERDICTS_FILE = path.join(RECORD_DIR, "verdicts.json");
 
-/** Every `.json` under `dir`, recursively, minus the two directories that are not live-run records. */
-function recordFiles(dir: string): string[] {
-  return (readdirSync(dir, { recursive: true }) as string[])
+/** The files one invocation reads and writes, and the live directory it reads from. */
+export interface Layout {
+  liveDir: string;
+  /** `undefined` is pl-57's population; a `pl58-<date>` label is the new run. */
+  run: string | undefined;
+  recordFile: string;
+  classificationFile: string;
+  verdictsFile: string;
+  hoursRecord: string;
+}
+
+export function layoutFor(liveDir: string, run: string | undefined): Layout {
+  const recordDir = path.join(liveDir, "invention");
+  const hoursRecord = path.join(liveDir, "hours-coverage", "2026-10-17.json");
+  if (run === undefined) {
+    return {
+      liveDir,
+      run,
+      recordFile: path.join(recordDir, "2026-10-17.json"),
+      classificationFile: path.join(recordDir, "classification.json"),
+      verdictsFile: path.join(recordDir, "verdicts.json"),
+      hoursRecord,
+    };
+  }
+  if (!RUN_PATTERN.test(run)) {
+    throw new Error(`--after takes a label like pl58-2026-10-20, got ${run}`);
+  }
+  const own = path.join(recordDir, run);
+  return {
+    liveDir,
+    run,
+    recordFile: path.join(own, `${run.slice("pl58-".length)}.json`),
+    classificationFile: path.join(own, "classification.json"),
+    verdictsFile: path.join(own, "verdicts.json"),
+    hoursRecord,
+  };
+}
+
+/** `--after <run>` or `--after=<run>`; nothing else is accepted. */
+export function parseInventionCli(argv: readonly string[]): { run: string | undefined } {
+  let run: string | undefined;
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index] ?? "";
+    if (token === "--after") {
+      const value = argv[index + 1];
+      if (value === undefined || value.startsWith("--"))
+        throw new Error("--after needs a run label");
+      run = value;
+      index += 1;
+    } else if (token.startsWith("--after=")) {
+      run = token.slice("--after=".length);
+    } else {
+      throw new Error(`unknown argument ${token}. Usage: invention.ts [--after pl58-<date>]`);
+    }
+  }
+  return { run };
+}
+
+/**
+ * The record files the population names, as absolute paths.
+ *
+ * The default reads the manifest and never walks `live/`, so a record added
+ * there cannot join pl-57's 111. The new run is the opposite: it is found by
+ * its directory marker, because its files are not known until it has run.
+ */
+export function populationFiles(layout: Layout): string[] {
+  const { liveDir, run } = layout;
+  if (run === undefined) {
+    const manifest = JSON.parse(
+      readFileSync(path.join(liveDir, "invention", "population-pl57.json"), "utf8"),
+    ) as {
+      files: string[];
+    };
+    return manifest.files.map((relative) => {
+      const file = path.join(liveDir, ...relative.split("/"));
+      if (!existsSync(file))
+        throw new Error(`the manifest names ${relative}, which is not on disk`);
+      return file;
+    });
+  }
+  const suffix = `-${run}`;
+  const directories = readdirSync(liveDir, { withFileTypes: true })
     .filter(
-      (name) =>
-        name.endsWith(".json") &&
-        !name.startsWith("hours-coverage") &&
-        !name.startsWith("invention"),
+      (entry) =>
+        entry.isDirectory() && /^claude-[a-z]+-/.test(entry.name) && entry.name.endsWith(suffix),
     )
-    .toSorted()
-    .map((name) => path.join(dir, name));
+    .map((entry) => entry.name)
+    .toSorted();
+  if (directories.length === 0) throw new Error(`no claude-*${suffix} directory under ${liveDir}`);
+  return directories.flatMap((directory) =>
+    (readdirSync(path.join(liveDir, directory), { recursive: true }) as string[])
+      .filter((name) => name.endsWith(".json"))
+      .toSorted()
+      .map((name) => path.join(liveDir, directory, name)),
+  );
 }
 
 function placesOf(candidate: Candidate): Place[] {
@@ -209,9 +317,11 @@ function bump(counts: Record<string, number>, key: string): void {
   counts[key] = (counts[key] ?? 0) + 1;
 }
 
-export function collectPlaces(dir: string): { places: NamedPlace[]; files: number } {
+export function collectPlaces(
+  dir: string,
+  files: string[],
+): { places: NamedPlace[]; files: number } {
   const byKey = new Map<string, NamedPlace>();
-  const files = recordFiles(dir);
   for (const file of files) {
     const family = familyOf(path.relative(dir, file));
     const record = JSON.parse(readFileSync(file, "utf8")) as LiveRecordShape;
@@ -294,6 +404,11 @@ export function mulberry32(seed: number): () => number {
  * nothing else — not on the order the fixtures were walked.
  */
 export function draw(eligible: string[], size: number, seed: number): string[] {
+  return seededOrder(eligible, seed).slice(0, size).toSorted();
+}
+
+/** The whole seeded shuffle, in the order it came out: `draw` takes a prefix of it. */
+export function seededOrder(eligible: string[], seed: number): string[] {
   const pool = [...eligible].toSorted();
   const random = mulberry32(seed);
   for (let i = pool.length - 1; i > 0; i -= 1) {
@@ -304,7 +419,59 @@ export function draw(eligible: string[], size: number, seed: number): string[] {
     pool[i] = b;
     pool[j] = a;
   }
-  return pool.slice(0, size).toSorted();
+  return pool;
+}
+
+/** pl-58: the new run's `lodging` or `food` named-premises keys, in one seeded order. */
+export function stratumOrder(
+  places: NamedPlace[],
+  classification: ClassificationFile,
+  seed: number,
+): string[] {
+  const eligible = places
+    .filter(
+      (place) =>
+        classification.classes[place.key]?.class === "named-premises" &&
+        ("lodging" in place.specialists || "food" in place.specialists),
+    )
+    .map((place) => place.key);
+  return seededOrder(eligible, seed);
+}
+
+export interface StratumWalk {
+  /** The keys taken, in order: a prefix of the order. */
+  checked: string[];
+  /** Key → its object, the first query of its check. */
+  objectOf: Record<string, string>;
+  objects: number;
+  /** `target`: enough objects. `exhausted`: the keys ran out. `incomplete`: the next key has no verdict yet. */
+  stop: "target" | "exhausted" | "incomplete";
+}
+
+/**
+ * Takes the ordered keys one by one until `target` distinct objects have a
+ * verdict, or the keys run out. A key whose first query equals one already
+ * taken adds a key and no object, so the key count and the object count differ.
+ */
+export function walkStratum(
+  order: string[],
+  checks: Record<string, Check>,
+  target: number,
+): StratumWalk {
+  const checked: string[] = [];
+  const objectOf: Record<string, string> = {};
+  const objects = new Set<string>();
+  for (const key of order) {
+    const check = checks[key];
+    if (check === undefined)
+      return { checked, objectOf, objects: objects.size, stop: "incomplete" };
+    checked.push(key);
+    const id = check.queries[0] ?? key;
+    objectOf[key] = id;
+    objects.add(id);
+    if (objects.size >= target) return { checked, objectOf, objects: objects.size, stop: "target" };
+  }
+  return { checked, objectOf, objects: objects.size, stop: "exhausted" };
 }
 
 export function sampleByFamily(
@@ -527,7 +694,7 @@ export function buildVerdictTables(
 /** Throws on a verdict the ticket's rules do not allow. */
 export function assertChecks(checks: Record<string, Check>, sampled: Set<string>): void {
   for (const [key, check] of Object.entries(checks)) {
-    if (!sampled.has(key)) throw new Error(`a verdict for ${key}, which no family drew`);
+    if (!sampled.has(key)) throw new Error(`a verdict for ${key}, which the draw did not take`);
     if (!(VERDICTS as readonly string[]).includes(check.verdict)) {
       throw new Error(`${key}: ${check.verdict} is not a verdict`);
     }
@@ -545,10 +712,11 @@ export function assertChecks(checks: Record<string, Check>, sampled: Set<string>
 }
 
 export interface InventionRecord {
-  ticket: "pl-57";
+  ticket: "pl-57" | "pl-58";
   runDate: string;
   seed: number;
-  samplePerFamily: number;
+  /** `null` under `--after`: the new run is drawn as one stratum, not per family. */
+  samplePerFamily: number | null;
   rubric: Rubric;
   liveRecords: number;
   places: number;
@@ -585,7 +753,27 @@ export interface InventionRecord {
     sampleByVerdict: Record<string, { located: number; notLocated: number }>;
   };
   unchecked: string[];
+  /** Present under `--after` only, so pl-57's record keeps its exact shape. */
+  stratumDraw?: StratumDraw;
   rows: unknown[];
+}
+
+/** pl-58's ordered-key draw over the new run's `lodging`-or-`food` named-premises keys. */
+export interface StratumDraw {
+  run: string;
+  seed: number;
+  targetObjects: number;
+  stratumKeys: number;
+  /** Every stratum key, in the seeded order the checks follow. */
+  order: string[];
+  /** How many keys the walk took: to the target, or all of them when they ran out. */
+  keysTaken: number;
+  objects: number;
+  stop: StratumWalk["stop"];
+  /** Key → the object (first query) it belongs to, for the keys taken. */
+  objectOf: Record<string, string>;
+  /** The same objects with every object whose keys are all `park-visit` set aside. */
+  withoutParks: { objects: number; notConfirmed: string };
 }
 
 const badCount = (cells: { bad: boolean }[]): number => cells.filter((cell) => cell.bad).length;
@@ -676,20 +864,35 @@ export function buildRecord(inputs: {
   classification: ClassificationFile;
   verdicts: VerdictsFile;
   hoursRows: PlHoursRow[];
+  /** `undefined` is pl-57's population and draw; a `pl58-<date>` label is the new run. */
+  run?: string | undefined;
+  /** Objects the ordered stratum is taken to; only `--after` reads it. */
+  target?: number;
 }): InventionRecord {
-  const { places, files, classification, verdicts, hoursRows } = inputs;
+  const { places, files, classification, verdicts, hoursRows, run } = inputs;
+  const target = inputs.target ?? STRATUM_TARGET_OBJECTS;
   assertClassified(places, classification);
-  const sample = sampleByFamily(places, classification);
+  const order = run === undefined ? [] : stratumOrder(places, classification, STRATUM_SEED);
+  const walk = run === undefined ? undefined : walkStratum(order, verdicts.checks, target);
+  const sample: Record<string, string[]> =
+    walk === undefined ? sampleByFamily(places, classification) : { stratum: walk.checked };
   const sampled = new Set(Object.values(sample).flat());
   assertChecks(verdicts.checks, sampled);
   const hoursByKey = new Map(hoursRows.map((row) => [row.key, row]));
-  const unchecked = [...sampled].filter((key) => verdicts.checks[key] === undefined).toSorted();
+  // The walk stops at the first key with no verdict, so the keys still to check
+  // are the rest of the order; once the target or the end is reached, none are.
+  const unchecked =
+    walk === undefined
+      ? [...sampled].filter((key) => verdicts.checks[key] === undefined).toSorted()
+      : walk.stop === "incomplete"
+        ? order.slice(walk.checked.length)
+        : [];
   const rows = places
     .toSorted((a, b) => a.key.localeCompare(b.key))
     .map((place) => {
       const classified = classification.classes[place.key] as ClassifiedPlace;
       const hours = hoursByKey.get(place.key);
-      const drawnUnder = FAMILIES.filter((family) => sample[family]?.includes(place.key));
+      const drawnUnder = Object.keys(sample).filter((name) => sample[name]?.includes(place.key));
       const check = verdicts.checks[place.key];
       return {
         key: place.key,
@@ -713,18 +916,24 @@ export function buildRecord(inputs: {
   const placesByFamily: Counts = {};
   for (const place of places)
     for (const family of Object.keys(place.families)) bump(placesByFamily, family);
+  // pl-56 read the old 1,019 places only; the new run's other places are not in
+  // its rows, and `reconcile` rejects the reverse, a pl-56 row this run lacks.
+  const reconcilable =
+    run === undefined
+      ? hoursRows
+      : hoursRows.filter((row) => classification.classes[row.key] !== undefined);
   return {
-    ticket: "pl-57",
+    ticket: run === undefined ? "pl-57" : "pl-58",
     runDate: verdicts.runDate,
-    seed: SAMPLE_SEED,
-    samplePerFamily: SAMPLE_PER_FAMILY,
+    seed: run === undefined ? SAMPLE_SEED : STRATUM_SEED,
+    samplePerFamily: run === undefined ? SAMPLE_PER_FAMILY : null,
     rubric: classification.rubric,
     liveRecords: files,
     places: places.length,
     mentions: places.reduce((sum, place) => sum + place.mentions, 0),
     placesByFamily,
     tables: buildTables(places, classification),
-    reconciliation: reconcile(hoursRows, classification),
+    reconciliation: reconcile(reconcilable, classification),
     sample,
     budget: verdicts.budget,
     verdictTables: buildVerdictTables(sample, verdicts.checks),
@@ -732,7 +941,57 @@ export function buildRecord(inputs: {
     sampleByObject: buildObjects(places, verdicts.checks, sampled),
     osmCrossTabs: buildOsmCrossTabs(places, classification, verdicts.checks, sampled, hoursByKey),
     unchecked,
+    ...(run === undefined || walk === undefined
+      ? {}
+      : {
+          stratumDraw: buildStratumDraw({
+            run,
+            target,
+            order,
+            walk,
+            classification,
+            checks: verdicts.checks,
+          }),
+        }),
     rows,
+  };
+}
+
+function buildStratumDraw(inputs: {
+  run: string;
+  target: number;
+  order: string[];
+  walk: StratumWalk;
+  classification: ClassificationFile;
+  checks: Record<string, Check>;
+}): StratumDraw {
+  const { run, target, order, walk, classification, checks } = inputs;
+  // An object is set aside as a park only when every key that reached it is a
+  // `park-visit`: a premises that shares a first query with a park stays in.
+  const keysOf = new Map<string, string[]>();
+  for (const key of walk.checked) {
+    const id = walk.objectOf[key] as string;
+    keysOf.set(id, [...(keysOf.get(id) ?? []), key]);
+  }
+  const rest: { bad: boolean }[] = [];
+  for (const keys of keysOf.values()) {
+    const allParks = keys.every((key) => classification.classes[key]?.edge.includes("park-visit"));
+    if (!allParks) rest.push({ bad: keys.some((key) => checks[key]?.verdict !== "exists") });
+  }
+  return {
+    run,
+    seed: STRATUM_SEED,
+    targetObjects: target,
+    stratumKeys: order.length,
+    order,
+    keysTaken: walk.checked.length,
+    objects: walk.objects,
+    stop: walk.stop,
+    objectOf: walk.objectOf,
+    withoutParks: {
+      objects: rest.length,
+      notConfirmed: `${badCount(rest)} of ${rest.length}, ${rate(badCount(rest), rest.length)}`,
+    },
   };
 }
 
@@ -779,6 +1038,19 @@ export function render(record: InventionRecord): string {
   out.push(classTable("by brief", t.byBrief));
   out.push(classTable("by specialist, distinct places", t.bySpecialist));
   out.push(classTable("by specialist, mentions", t.mentionsBySpecialist));
+  // pl-58's headline: the named-premises share of lodging's and food's proposals,
+  // on mentions first and on distinct places beside it.
+  for (const specialist of ["lodging", "food"]) {
+    const share = (counts: Counts | undefined): string => {
+      const total = CLASSES.reduce((sum, cls) => sum + (counts?.[cls] ?? 0), 0);
+      const named = counts?.["named-premises"] ?? 0;
+      return `${named} of ${total} (${total === 0 ? "n/a" : pct(named / total)})`;
+    };
+    out.push(
+      `${specialist}, named-premises share: mentions ${share(t.mentionsBySpecialist[specialist])}; ` +
+        `places ${share(t.bySpecialist[specialist])}`,
+    );
+  }
   out.push(
     `edge tags:\n${Object.entries(t.edgeTags)
       .toSorted()
@@ -848,6 +1120,15 @@ export function render(record: InventionRecord): string {
       `${record.sampleByObject.lodgingOrFood.objects} objects, not confirmed ` +
       record.sampleByObject.lodgingOrFood.notConfirmed,
   );
+  const stratum = record.stratumDraw;
+  if (stratum !== undefined) {
+    out.push(
+      `stratum draw (${stratum.run}, seed ${stratum.seed}): ${stratum.stratumKeys} lodging-or-food ` +
+        `named-premises keys; ${stratum.keysTaken} keys taken for ${stratum.objects} of ` +
+        `${stratum.targetObjects} objects (${stratum.stop}); without the park-visit objects: ` +
+        `${stratum.withoutParks.objects} objects, not confirmed ${stratum.withoutParks.notConfirmed}`,
+    );
+  }
   out.push(`sampled places with no verdict: ${record.unchecked.length}`);
   return out.join("\n\n");
 }
@@ -856,19 +1137,21 @@ export function render(record: InventionRecord): string {
 // main
 // ---------------------------------------------------------------------------
 
-function load(): InventionRecord {
-  const { places, files } = collectPlaces(LIVE_DIR);
-  const classification = readClassification(CLASSIFICATION_FILE);
-  const verdicts = existsSync(VERDICTS_FILE)
-    ? (JSON.parse(readFileSync(VERDICTS_FILE, "utf8")) as VerdictsFile)
+export function load(layout: Layout): InventionRecord {
+  const { places, files } = collectPlaces(layout.liveDir, populationFiles(layout));
+  const classification = readClassification(layout.classificationFile);
+  const verdicts = existsSync(layout.verdictsFile)
+    ? (JSON.parse(readFileSync(layout.verdictsFile, "utf8")) as VerdictsFile)
     : { runDate: "", budget: { written: "", queriesBeforeNotFound: [], osm: "" }, checks: {} };
-  const hoursRows = (JSON.parse(readFileSync(HOURS_RECORD, "utf8")) as { rows: PlHoursRow[] }).rows;
-  return buildRecord({ places, files, classification, verdicts, hoursRows });
+  const hoursRows = (JSON.parse(readFileSync(layout.hoursRecord, "utf8")) as { rows: PlHoursRow[] })
+    .rows;
+  return buildRecord({ places, files, classification, verdicts, hoursRows, run: layout.run });
 }
 
 function main(): void {
   const mode = assertInventionConsent(process.env);
-  const record = load();
+  const layout = layoutFor(LIVE_DIR, parseInventionCli(process.argv.slice(2)).run);
+  const record = load(layout);
   console.log(render(record));
   if (mode === "live") {
     console.log("\nworksheet: sampled places with no verdict yet");
@@ -879,7 +1162,7 @@ function main(): void {
     return;
   }
   if (process.env["PLANNER_INVENTION_CHECK"] === "1") {
-    const committed = existsSync(RECORD_FILE) ? readFileSync(RECORD_FILE, "utf8") : "";
+    const committed = existsSync(layout.recordFile) ? readFileSync(layout.recordFile, "utf8") : "";
     if (committed !== serialise(record)) {
       throw new Error("the committed record is not what the inputs regenerate");
     }
@@ -891,8 +1174,10 @@ function main(): void {
     );
     return;
   }
-  writeFileSync(RECORD_FILE, serialise(record));
-  console.log(`\nwrote ${path.relative(process.cwd(), RECORD_FILE)}`);
+  // Only the file the argument selected: `--after` can never reach pl-57's record.
+  mkdirSync(path.dirname(layout.recordFile), { recursive: true });
+  writeFileSync(layout.recordFile, serialise(record));
+  console.log(`\nwrote ${path.relative(process.cwd(), layout.recordFile)}`);
 }
 
 const invokedDirectly =
