@@ -262,13 +262,14 @@ describe("dl-98 round 2: what gate 2 found", () => {
         resolve(response);
       });
     });
-    // The pause has engaged when the loopback's buffers have filled and the feeder
-    // has stopped handing A bytes (dl-129, in place of a fixed 4 s): A was given its
-    // 200 KB, and what the feeder has delivered then stays put for 400 ms. Waited
-    // for no less than the 2 s window plus 0.3 s, as the fixed sleep outlasted it:
-    // a meter that counted A's paused time would have closed its window and split
-    // by then, and the assertion below is what says it did not. The bound is the
-    // old sleep's, so a pause that never engages fails here and says what it saw.
+    // What this poll establishes is that the loopback has stopped taking A's bytes
+    // (dl-129, in place of a fixed 4 s): A was given its 200 KB, and what the
+    // feeder has delivered then stays put for 400 ms. It does not prove that the
+    // pause engaged: delivered bytes also plateau once the loopback is full when
+    // nothing paused the origin. Waited for no less than the 2 s window plus 0.3 s,
+    // as the fixed sleep outlasted it: a meter that counted A's paused time would
+    // have closed its window and split by then, and the assertion below is what
+    // says it did not.
     let delivered = -1;
     let stableSince = performance.now();
     await until(

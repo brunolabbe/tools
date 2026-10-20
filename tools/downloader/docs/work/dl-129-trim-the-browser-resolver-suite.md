@@ -631,3 +631,5 @@ consistent-function-scoping` above `pausedThenRead` (its fixture is imported now
   needs the owner's recorded excusal, as dl-98's did (the lg-5 precedent).
 
 - 2026-10-20, maintenance (Haiku 5.5) — recorded Decision note D and reworded Done when 8 to it; no code changed.
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, the first low — "the comment on the new poll in `pausedThenRead` is false, in a direction that overclaims a check: 'a pause that never engages fails here and says what it saw'" (reworded, first direction only, to what the poll establishes: the loopback stopped taking A's bytes). `grep -c "a pause that never engages fails here" tools/downloader/engine/test/parallel-ranges-limits.test.ts` → 0 (1 at the gated head).
