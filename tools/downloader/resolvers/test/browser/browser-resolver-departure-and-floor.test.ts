@@ -442,7 +442,10 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
    * and provocation are outside it. `quietMs` is small so that only the minimum
    * can hold the wait: the page's last request is a second old by then.
    */
-  async function quietWait(minWaitMs: number | undefined): Promise<{
+  async function quietWait(
+    minWaitMs: number | undefined,
+    sleeps: Pick<BrowserResolverOptions, "landingSettleMs" | "passPauseMs"> = {},
+  ): Promise<{
     waitedMs: number;
     handedMs: number | undefined;
     reachedQuiet: boolean | undefined;
@@ -453,6 +456,7 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
       hlsParser: recordingHlsParser().parser,
       quietMs: 200,
       ...(minWaitMs === undefined ? {} : { minWaitMs }),
+      ...sleeps,
     });
     let stopwatch: (() => number) | undefined;
     let waitedMs: number | undefined;
@@ -512,7 +516,11 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
     "a minWaitMs below it is the one the wait is handed",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const { handedMs } = await quietWait(STREAM_WAITS.minWaitMs);
+      // Only the handed value is read, and `/mse.html` mounts its player at once.
+      const { handedMs } = await quietWait(STREAM_WAITS.minWaitMs, {
+        landingSettleMs: AT_ONCE_WAITS.landingSettleMs,
+        passPauseMs: AT_ONCE_WAITS.passPauseMs,
+      });
 
       expect(handedMs).toBe(STREAM_WAITS.minWaitMs);
     },
