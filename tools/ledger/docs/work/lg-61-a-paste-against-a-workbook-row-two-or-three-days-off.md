@@ -143,6 +143,47 @@ The FAIL is the rubric's letter and has one cause: Done when 3 (lg-59's probes c
 - **findings** · the hunt returned 7; 5 carried, 2 dropped.
 - NFR: security ✓ (no new input surface; the refusal names the oldest pasted row as the in-tolerance one does) · performance ✓ against the owner's bound (36-case grid ×1.64 overall, worst ×3.58; the three worst the Log names ×2.78, ×3.08, ×2.09, side by side on a loaded machine; 2,000 alternating rows at 200 a date is 31.6 s on `main` and 97.3 s here) · reliability ✓ (0 differing stores in 245,760 variants) · maintainability — above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-20 · `5c6077f3..32c20df2` · Sonnet 5.5, depth narrow (Done when 3, and Done when 4's step-3 clause, at the head gate 1 gated; there was no round, so no new commits)
+
+Gate 1 returned FAIL on one cause: Done when 3 was not run. It is run now, at the same head, with lg-59's probes c and c2 at seed 11 (the sha256 of both specs match the ticket's Log). Every other row and finding of gate 1 stands as written; none was re-run.
+
+| Done when                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3. Probes c and c2 at seed 11: `wrongAccept` 0 in every cell, `refusedOther` 0 in the `both` cells | **verified**, 15 of 15 cells, 1,500 trials each (22,500 trials), nothing unmeasured. `wrongAccept` 0 in all 15. `refusedOther` 0 in all 15, so 0 in c's three `both` cells (distinct, repeating, tiny). `refusedMidDay` is 0 in all 15 too. Every cell's counts sum to 1,500 and `correct` runs from 777 to 1,499, so the zeroes are not an empty harness. No test on the branch asserts this line; it was re-run, not read. Table below.                                                                                              |
+| 4. Step 3's tally is in the Log with each cell's change named                                      | step-3 clause **verified**: the Log's per-cell table, "wide 2/3" column, equals the table below in 15 of 15 cells, `correct / wrongAccept / ambiguous / refusedOther` each, no difference. The change against `main` that the Log names per row group (repeating: plain +36, reorder +35, shift +31, `both` +39, c2 +42; tiny: +73, +81, +90, +95, c2 +86; `distinct`: none) equals head minus a `main`-equivalent run in all 15 cells. The Log's "leave (`main`)" column equals that `main`-equivalent run in 15 of 15 cells as well. |
+
+Per-cell table at the head, `correct / wrongAccept / ambiguous / refusedOther` (`refusedMidDay` 0 everywhere). The last column is head minus the control run (`RIVAL_DAYS_OFF` = 1, which is `main`'s rule), in `ambiguous`; `correct` falls by the same amount and nothing else moves.
+
+| cell                  | head               | the Log's "wide 2/3" | change vs `main` |
+| --------------------- | ------------------ | -------------------- | ---------------- |
+| c distinct/plain      | 1498 / 0 / 2 / 0   | same                 | 0                |
+| c distinct/reorder    | 1499 / 0 / 1 / 0   | same                 | 0                |
+| c distinct/shift      | 1498 / 0 / 2 / 0   | same                 | 0                |
+| c distinct/both       | 1499 / 0 / 1 / 0   | same                 | 0                |
+| c repeating/plain     | 1118 / 0 / 382 / 0 | same                 | +36              |
+| c repeating/reorder   | 1121 / 0 / 379 / 0 | same                 | +35              |
+| c repeating/shift     | 1133 / 0 / 367 / 0 | same                 | +31              |
+| c repeating/both      | 1133 / 0 / 367 / 0 | same                 | +39              |
+| c tiny/plain          | 826 / 0 / 674 / 0  | same                 | +73              |
+| c tiny/reorder        | 777 / 0 / 723 / 0  | same                 | +81              |
+| c tiny/shift          | 833 / 0 / 667 / 0  | same                 | +90              |
+| c tiny/both           | 783 / 0 / 717 / 0  | same                 | +95              |
+| c2 distinct/disjoint  | 1497 / 0 / 3 / 0   | same                 | 0                |
+| c2 repeating/disjoint | 1154 / 0 / 346 / 0 | same                 | +42              |
+| c2 tiny/disjoint      | 791 / 0 / 709 / 0  | same                 | +86              |
+
+**Positive control, and what it showed.** The control the dispatch named, `RIVAL_DAYS_OFF = 1`, was planted in a second tree (confirmed by grep) and **does not make these probes report `wrongAccept` above 0**: it is 0 in all 15 cells. The plant turns the rival pass into the stored pass, which is `main`'s rule, and `main` already had `wrongAccept` 0 on these in-tolerance probes (its cells equal the Log's "leave (`main`)" column). So that control is valid for the repo's R1 and R8 tests, where gate 1 used it, and cannot be shown on c and c2. What the instrument can do was shown on the lg-40 base tree: probe c there gives `wrongAccept` 22 in repeating/both and 31 in tiny/both, and `refusedOther` 108, 65 and 33 in the three `both` cells, byte-identical to lg-59's gate-1 `base-c.txt` (`cmp` exit 0). Probe c2 was not run on the base (lg-59's earlier base run shows 0 in all three cells).
+
+- **low** · no `Done when` line depends on it · text, false in the safe direction · the Log's step-3 paragraph says "`both` is probe c's four `both` cells, 6,000 trials". Probe c has three `both` cells (one per alphabet), 4,500 trials. The `both` column of its enumeration table is right: 951 for `main` is 1 + 328 + 622, and 1,085 for wide 2/3 is 1 + 367 + 717, three cells. Only the count and the denominator are wrong, and nothing relies on them.
+- **low** · no `Done when` line depends on it · `nfr:maintainability` · Done when 3 cannot fail on this change's `wrongAccept`: the rival pass only turns an accept into a refusal, and `main` already met the line (0 and 0 in the same 15 cells). The line is a non-regression check and gates nothing the branch adds. It is met, not wrong, so it is not a defect in the build. Recorded so a reader does not take "probes c and c2 pass" as evidence that the rival pass removes anything.
+- **gate 1's findings** · 5 lows carried, 2 dropped; no commit has landed since, so each is **not fixed**, unchanged, and none is above `low`. Not re-run.
+- **findings** · this narrow gate's hunt returned 2; 2 carried, 0 dropped.
+- **Unmeasured** · gate 1's note stands: the lg-40 base's column of step 1's enumeration tally was not re-derived by either gate (its wrong-accept counts, 11,776 and 11,424, equal the ticket's Why table, which has the same source). It carries no verdict here: Done when 2 is met by 0 wrong accepts whatever the base's count is.
+- **Does any line remain unproven?** No. With gate 1's rows (1 proven, 2 verified, 4's step 1 verified, 5 proven by CI at this head) and these two, every `Done when` line is proven or verified, and nothing is above `low`. Nothing is a `high`; no third gate is called for.
+- NFR: security n/a · performance n/a (not re-measured here) · reliability ✓ (22,500 trials, 0 wrong accepts, 0 other refusals) · maintainability — above.
+
 ## Log
 
 - 2026-10-18 — filed by lg-59's builder (Opus 5.5), in lg-59's branch, on the
