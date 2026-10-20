@@ -36,6 +36,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 # less often than the source does.
 COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
+COPY packages/ui/package.json packages/ui/
 COPY tools/downloader/contract/package.json tools/downloader/contract/
 COPY tools/downloader/resolvers/package.json tools/downloader/resolvers/
 COPY tools/downloader/engine/package.json tools/downloader/engine/

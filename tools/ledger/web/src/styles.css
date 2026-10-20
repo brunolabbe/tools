@@ -3,20 +3,23 @@
  * widens for a desktop. Both people use this from a phone more than from
  * anything else — a receipt is photographed where it is paid.
  *
- * Tokens first, one set per theme, so a component never names a colour.
- * `light dark` on `color-scheme` (and in the document head) lets the browser
- * style its own widgets to match, which is the half of dark mode CSS cannot do.
+ * Tokens first, one set per theme, so a component never names a colour. The
+ * names are `@webtools/ui/tokens.css`'s (it also sets `color-scheme`, which lets
+ * the browser style its own widgets to match, the half of dark mode CSS cannot
+ * do); the values are this tool's.
  */
 :root {
-  color-scheme: light dark;
-
   --bg: #f8f9fa;
   --surface: #ffffff;
+  --surface-2: #f0f2f4;
   --border: #dde1e6;
   --text: #1b1f24;
-  --muted: #5d6670;
-  --bad: #a3341f;
+  --text-muted: #5d6670;
   --accent: #1f5f8b;
+  --accent-text: #ffffff;
+  --ok: #1d7a4d;
+  --warn: #9a6400;
+  --danger: #a3341f;
 
   /*
    * The charts' categorical slots (lg-9), in the `dataviz` skill's fixed order,
@@ -36,19 +39,23 @@
   /* No spending category: a neutral, so it recedes behind the ones that mean something. */
   --series-none: #898781;
 
-  --radius: 10px;
-  --gap: 1rem;
+  /* A phone-first column, narrower than the shared default on purpose. */
+  --page-width: 40rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #111418;
     --surface: #1a1e23;
+    --surface-2: #21262c;
     --border: #2c323a;
     --text: #eceff2;
-    --muted: #9aa4ae;
-    --bad: #e8836a;
+    --text-muted: #9aa4ae;
     --accent: #7db4dc;
+    --accent-text: #0b0e12;
+    --ok: #5fd39b;
+    --warn: #e5b567;
+    --danger: #e8836a;
 
     --series-1: #3987e5;
     --series-2: #d95926;
@@ -61,20 +68,13 @@
   }
 }
 
-* {
-  box-sizing: border-box;
-}
-
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-sans);
   line-height: 1.5;
 }
 
 .shell {
-  max-width: 40rem;
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: var(--gap);
   display: grid;
@@ -94,11 +94,11 @@ h1 {
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .bad {
-  color: var(--bad);
+  color: var(--danger);
 }
 
 .health {
@@ -171,7 +171,7 @@ button:disabled {
 
 .rows .when {
   grid-area: 1 / 1;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.875rem;
 }
 
@@ -182,7 +182,7 @@ button:disabled {
 }
 
 .rows .amount.out {
-  color: var(--bad);
+  color: var(--danger);
 }
 
 .rows .what {
@@ -249,7 +249,7 @@ select {
 .answer label,
 .member-form label {
   font-size: 0.875rem;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 /* lg-22: a household's members and history, one per line, an address wrapping
@@ -323,7 +323,7 @@ select {
 }
 
 .inbox .when {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.875rem;
 }
 
@@ -332,7 +332,7 @@ select {
 }
 
 .inbox .amount.out {
-  color: var(--bad);
+  color: var(--danger);
 }
 
 .inbox .what,
@@ -342,7 +342,7 @@ select {
 
 .matching {
   font-size: 0.875rem;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 /*
@@ -424,15 +424,6 @@ label.check {
 label.check input {
   width: 1.25rem;
   min-height: 1.25rem;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 /*
@@ -543,7 +534,7 @@ svg.chart:focus-visible {
 }
 
 svg.chart text {
-  fill: var(--muted);
+  fill: var(--text-muted);
   font-size: 12px;
 }
 
@@ -560,7 +551,7 @@ svg.chart .crosshair {
 }
 
 svg.chart .baseline {
-  stroke: var(--muted);
+  stroke: var(--text-muted);
 }
 
 svg.chart .line {
@@ -625,7 +616,7 @@ svg.chart .selected-band {
 }
 
 .readout-heading {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .readout-rows {
@@ -732,7 +723,7 @@ svg.chart .selected-band {
 }
 
 .items .item.not-shared > input {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .items .item.theirs {

@@ -17,9 +17,11 @@
   --warn: #9a6400;
   --danger: #b3261e;
   --blocked: #6d4aad;
-  --radius: 10px;
   --shadow: 0 1px 2px rgb(16 25 31 / 8%), 0 6px 20px rgb(16 25 31 / 5%);
-  color-scheme: light dark;
+
+  /* Values for the names `@webtools/ui/tokens.css` declares. */
+  --font-size-base: 15px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -70,10 +72,6 @@
   --blocked: #c1a6ff;
 }
 
-* {
-  box-sizing: border-box;
-}
-
 html,
 body {
   margin: 0;
@@ -81,18 +79,11 @@ body {
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
-  font:
-    15px/1.55 system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  font: var(--font-size-base) / 1.55 var(--font-sans);
 }
 
 code {
-  font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 0.88em;
 }
 
@@ -114,7 +105,7 @@ code {
 }
 
 .app {
-  max-width: 62rem;
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: 1.5rem 1rem 4rem;
 }
