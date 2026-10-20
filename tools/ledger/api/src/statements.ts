@@ -49,7 +49,12 @@
  *   into smaller blocks still may. A row a paste
  *   stored is still compared field for field, in order. Every reading this
  *   makes possible is a reading like any other: two of them are refused as
- *   ambiguous. The workbook's rows keep their wording and dates; only the rows
+ *   ambiguous. The one reading found must also have no rival when the
+ *   workbook's dates are allowed `RIVAL_DAYS_OFF` (3) days off the bank's
+ *   (lg-61): a row the workbook dated two or three days off puts the true
+ *   reading out of reach, and the one left can be false, so a rival there
+ *   refuses the paste as ambiguous too. Nothing is ever stored on the wider
+ *   reading. The workbook's rows keep their wording and dates; only the rows
  *   past the tail are stored. When nothing fits and the
  *   stored row the paste had to meet is the workbook's, the refusal names that
  *   row and the pasted row that opens from its balance, and does not ask for a
@@ -69,11 +74,15 @@ import type { Database } from "better-sqlite3";
 import { classifyAdded, lastRowId } from "./classifications.ts";
 import {
   LONGEST_SEARCHED_DAY,
+  RIVAL_DAYS_OFF,
+  RIVAL_TOLERANCE,
+  STORED_TOLERANCE,
   WIDEST_BLOCK_DAYS,
   dayBefore,
   daysAfter,
   matchStretch,
 } from "./workbook-days.ts";
+import type { DateTolerance } from "./workbook-days.ts";
 
 /**
  * A stored row: the parser's row, with `seq` now the position in the whole
@@ -203,10 +212,16 @@ function store(
 
   let alreadyPresent = 0;
   if (tail !== undefined) {
-    const found = readings(db, rows, oldest, count, tail);
+    const found = readings(db, rows, oldest, count, tail, STORED_TOLERANCE);
     if (found.length === 0) fail(db, rows, oldest, newest, tail);
     const [first] = found;
     if (found.length > 1 || first === undefined) throw ambiguous(oldest, rows.length, found);
+    // The one reading must have no rival with the workbook's dates further off
+    // (lg-61): where the true reading is out of reach, it would be a false one.
+    const rivals = readings(db, rows, oldest, count, tail, RIVAL_TOLERANCE).filter(
+      (present) => present !== first,
+    );
+    if (rivals.length > 0) throw ambiguousAcrossDays(oldest, rows.length, first, rivals);
     alreadyPresent = first;
   }
 
@@ -272,11 +287,12 @@ function candidates(db: Database, row: StatementRow): StoredRow[] {
 /**
  * Every workbook row a paste starting on `row` could start on: the workbook's
  * day may list `row` anywhere in it, and a day is a block whose dates are up to
- * `WIDEST_BLOCK_DAYS` apart, each pasted row within a day of them, so a row of
- * that block may be dated as far from `row` as one more day than that.
+ * `tolerance.widestBlockDays` apart, each pasted row within `tolerance.daysOff`
+ * of them, so a row of that block may be dated as far from `row` as the two
+ * together.
  */
-function workbookStarts(db: Database, row: StatementRow): StoredRow[] {
-  const reach = WIDEST_BLOCK_DAYS + 1;
+function workbookStarts(db: Database, row: StatementRow, tolerance: DateTolerance): StoredRow[] {
+  const reach = tolerance.widestBlockDays + tolerance.daysOff;
   return (
     db
       .prepare(`${SELECT} WHERE source = 'workbook' AND date >= ? AND date <= ? ORDER BY seq DESC`)
@@ -286,17 +302,22 @@ function workbookStarts(db: Database, row: StatementRow): StoredRow[] {
 
 /**
  * The workbook rows next to `edge` on one side of it, oldest first, as far as
- * any is dated within `WIDEST_BLOCK_DAYS` of it: every row a block holding
- * `edge` could hold, the rest of a day a stretch of stored rows starts or ends
- * partway through.
+ * any is dated within `tolerance.widestBlockDays` of it: every row a block
+ * holding `edge` could hold, the rest of a day a stretch of stored rows starts or
+ * ends partway through.
  */
-function nearby(db: Database, edge: StoredRow, side: "before" | "after"): StoredRow[] {
+function nearby(
+  db: Database,
+  edge: StoredRow,
+  side: "before" | "after",
+  tolerance: DateTolerance,
+): StoredRow[] {
   const query =
     side === "before"
       ? `${SELECT} WHERE seq < ? ORDER BY seq DESC`
       : `${SELECT} WHERE seq > ? ORDER BY seq ASC`;
-  const lowest = daysAfter(edge.date, -WIDEST_BLOCK_DAYS);
-  const highest = daysAfter(edge.date, WIDEST_BLOCK_DAYS);
+  const lowest = daysAfter(edge.date, -tolerance.widestBlockDays);
+  const highest = daysAfter(edge.date, tolerance.widestBlockDays);
   const found: StoredRow[] = [];
   for (const columns of db.prepare(query).iterate(edge.seq) as IterableIterator<Columns>) {
     const row = toRow(columns);
@@ -317,16 +338,21 @@ function overlaps(
   db: Database,
   stored: readonly StoredRow[],
   pasted: readonly StatementRow[],
+  tolerance: DateTolerance,
 ): boolean {
   const oldest = stored[0];
   const newest = stored.at(-1);
   if (stored.length !== pasted.length || oldest === undefined || newest === undefined) {
     return stored.length === pasted.length;
   }
-  const earlier = oldest.fromWorkbook ? nearby(db, oldest, "before") : [];
-  const later = newest.fromWorkbook ? nearby(db, newest, "after") : [];
-  return matchStretch([...earlier, ...stored, ...later], earlier.length, pasted, (offset) =>
-    sameRow(stored[offset] as StoredRow, pasted[offset] as StatementRow),
+  const earlier = oldest.fromWorkbook ? nearby(db, oldest, "before", tolerance) : [];
+  const later = newest.fromWorkbook ? nearby(db, newest, "after", tolerance) : [];
+  return matchStretch(
+    [...earlier, ...stored, ...later],
+    earlier.length,
+    pasted,
+    (offset) => sameRow(stored[offset] as StoredRow, pasted[offset] as StatementRow),
+    tolerance,
   );
 }
 
@@ -349,7 +375,8 @@ function from(db: Database, position: number, limit: number): StoredRow[] {
  * - A paste wholly inside the history: every row already stored, so `rows.length`.
  *
  * Either way the stored rows are compared by `overlaps`: the workbook's day by
- * day, a paste's field for field (lg-40).
+ * day, a paste's field for field (lg-40), the workbook's dates allowed as far
+ * off as `tolerance`.
  */
 function readings(
   db: Database,
@@ -357,6 +384,7 @@ function readings(
   oldest: StatementRow,
   count: number,
   tail: StoredRow,
+  tolerance: DateTolerance,
 ): number[] {
   const found = new Set<number>();
   const window = latest(db, "DESC", rows.length).toReversed();
@@ -364,12 +392,15 @@ function readings(
     const fits =
       k === 0
         ? oldest.balanceCents - oldest.amountCents === tail.balanceCents
-        : overlaps(db, window.slice(window.length - k), rows.slice(0, k));
+        : overlaps(db, window.slice(window.length - k), rows.slice(0, k), tolerance);
     if (fits) found.add(k);
   }
   if (rows.length <= count) {
-    for (const candidate of [...candidates(db, oldest), ...workbookStarts(db, oldest)]) {
-      if (overlaps(db, from(db, candidate.seq, rows.length), rows)) found.add(rows.length);
+    const starts = [...candidates(db, oldest), ...workbookStarts(db, oldest, tolerance)];
+    for (const candidate of starts) {
+      if (overlaps(db, from(db, candidate.seq, rows.length), rows, tolerance)) {
+        found.add(rows.length);
+      }
     }
   }
   // Most already-stored first, so the readings list reads from "nothing new" up.
@@ -529,21 +560,57 @@ function beforeHistory(oldestStored: StoredRow): AppError {
   );
 }
 
-/** Two readings of one paste are both consistent with the books and store different things. */
-function ambiguous(oldest: StatementRow, total: number, present: number[]): AppError {
-  const described = present.map((stored) => ({
-    rowsAdded: total - stored,
-    rowsAlreadyPresent: stored,
-  }));
-  const said = described
-    .map((r) => `${r.rowsAlreadyPresent} already stored and ${r.rowsAdded} new`)
-    .join(", or ");
+/** A reading as the error's `details` and its message name it. */
+function described(
+  total: number,
+  stored: number,
+): { rowsAdded: number; rowsAlreadyPresent: number } {
+  return { rowsAdded: total - stored, rowsAlreadyPresent: stored };
+}
+
+function said(reading: { rowsAdded: number; rowsAlreadyPresent: number }): string {
+  return `${reading.rowsAlreadyPresent} already stored and ${reading.rowsAdded} new`;
+}
+
+/**
+ * The one reading the tolerance admits has a rival once the workbook's dates are
+ * allowed `RIVAL_DAYS_OFF` days off (lg-61). Either may be the truth: the rival
+ * is what the paste means if the workbook misdated a row, so neither is stored.
+ */
+function ambiguousAcrossDays(
+  oldest: StatementRow,
+  total: number,
+  found: number,
+  rivals: readonly number[],
+): AppError {
+  const both = [found, ...rivals]
+    .toSorted((a, b) => b - a)
+    .map((stored) => described(total, stored));
+  const others = rivals.map((stored) => `as ${said(described(total, stored))}`).join(", or ");
   return new AppError(
     "STATEMENT_ROW_CONFLICT",
-    `The paste starting at ${describeRow(oldest)} can be read two ways, and each fits what is stored: ${said}. The same rows come round again in the account, so the books cannot tell which was meant. Paste a longer stretch that starts on an earlier row, so only one reading fits.`,
+    `The paste starting at ${describeRow(oldest)} can be read two ways: as ${said(described(total, found))}, which fits what is stored, or ${others}, which fits it too if the workbook dated a row up to ${String(RIVAL_DAYS_OFF)} days from the bank's date, pairing rows that far apart. The books cannot tell which was meant, so nothing was stored. Paste a stretch that starts on an earlier row, or on the first row not stored yet, so only one reading fits.`,
     {
       details: {
-        readings: described,
+        readings: both,
+        date: oldest.date,
+        description: oldest.description,
+        amountCents: oldest.amountCents,
+        balanceCents: oldest.balanceCents,
+      },
+    },
+  );
+}
+
+/** Two readings of one paste are both consistent with the books and store different things. */
+function ambiguous(oldest: StatementRow, total: number, present: number[]): AppError {
+  const all = present.map((stored) => described(total, stored));
+  return new AppError(
+    "STATEMENT_ROW_CONFLICT",
+    `The paste starting at ${describeRow(oldest)} can be read two ways, and each fits what is stored: ${all.map(said).join(", or ")}. The same rows come round again in the account, so the books cannot tell which was meant. Paste a longer stretch that starts on an earlier row, so only one reading fits.`,
+    {
+      details: {
+        readings: all,
         date: oldest.date,
         description: oldest.description,
         amountCents: oldest.amountCents,
