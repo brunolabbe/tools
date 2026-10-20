@@ -15,9 +15,11 @@
   --accent-text: #ffffff;
   /*
    * `--ok` and `--warn` were never defined here: `.provenance` read them with
-   * the fallbacks below, which are their values now, in both themes, so that
-   * naming them changed no pixel (repo-108). Dark values suited to the dark
-   * surface are a visible change and a ticket of their own.
+   * the fallbacks below, which are the light values. repo-108 named them, in
+   * both themes, so that naming them changed no pixel; pl-59 then gave the dark
+   * theme values of its own, because the light pair measured 2.81 and 3.43 on
+   * the dark `--surface`, under the 4.5:1 a small label needs.
+   * `test/stylesheet.test.ts` holds both pairs to that bar.
    */
   --ok: #2f6f4f;
   --warn: #8a6d1f;
@@ -39,8 +41,8 @@
     --text-muted: #a49b8a;
     --accent: #7fbfa8;
     --accent-text: #14170f;
-    --ok: #2f6f4f;
-    --warn: #8a6d1f;
+    --ok: #6fc77a;
+    --warn: #d4b155;
     --danger: #e8836a;
     --warn-bg: #2a2415;
   }
@@ -384,7 +386,7 @@ ul.answers li + li {
 
 .plans li {
   padding: 0.4rem 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border);
 }
 
 .day {

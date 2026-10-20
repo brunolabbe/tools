@@ -247,3 +247,54 @@ tools/planner/web/src/styles.css` prints only `6291ee58`, and the same for the
   after repo-108 and carries no "if built before" branch. repo-108 is cited as
   prose: PR #578, branch `repo-108-share-design-tokens`. No re-gate. The gate's
   section is untouched.
+- **2026-10-20 — built** (branch `pl-59-list-border-dark-marks`, from `93bfa1f1`,
+  which carries repo-108). Three numbers:
+  - **Border: option 1.** `.plans li` now reads `border-bottom: 1px solid var(--border);`,
+    every row including the last. `grep -rn "var(--line" tools/planner/web/src`
+    prints nothing (exit 1).
+  - **Dark values:** `--ok: #6fc77a`, `--warn: #d4b155`, only the two dark lines
+    in `tools/planner/web/src/styles.css`; `packages/ui/src/tokens.css` is not
+    edited. `--ok` is **not** one of the brief's candidates: `#6fbf94` and
+    `#5fae85` sit 11 and 10 degrees of hue from the dark `--accent` (`#7fbfa8`),
+    which is close enough that a "Sourced" mark and a link read as one colour,
+    and the brief asks that they stay apart. `#6fc77a` is 31 degrees away. `--warn`
+    is the brief's `#d4b155` (115 degrees from the accent, 32 from `--danger`).
+  - **Ratios** (WCAG 2.x, the spec's own formula; `--surface` / `--bg` /
+    `--warn-bg`): dark `--ok` 8.11 / 8.80 / 7.44, dark `--warn` 8.18 / 8.88 / 7.51.
+    Light, unchanged and still passing: `--ok` 5.99 / 5.74, `--warn` 4.90 / 4.69
+    (on `--surface` / `--bg`).
+- **Red/green, both states recorded.** The new spec is
+  `tools/planner/web/test/stylesheet.test.ts`. Against the stylesheet as it stood
+  at `93bfa1f1` (spec added, source untouched),
+  `npx vitest run tools/planner/web/test/stylesheet.test.ts` failed **6 of 16**:
+  five on the stylesheet and a sixth that was a bug in the spec's own synthetic
+  fixture (a `#fff` the colour parser refuses), fixed before the green. The five:
+  - `a var() with no fallback names a custom property someone declares`:
+    `expected [ '--line' ] to deeply equal []`;
+  - dark `--ok` on `--surface` 2.81, on `--bg` 3.05; dark `--warn` on `--surface`
+    3.43, on `--bg` 3.73 (each `expected … to be greater than or equal to 4.5`),
+    which are the filing's four dark numbers to the second decimal.
+
+  After the edit, `npx vitest run tools/planner/web/test/stylesheet.test.ts packages/ui`:
+  2 files, 42 of 42 passed (the second is repo-108's `tokens.test.ts`, run to
+  prove the new dark values break none of its checks).
+
+- **Folded in:** the comment above planner's light `:root` said dark values "are
+  a visible change and a ticket of their own"; this is that ticket, so the
+  sentence now says what happened and points at the spec.
+- **Not folded in: the `var(--ok, #2f6f4f)` / `var(--warn, #8a6d1f)` fallbacks** on
+  the `.provenance` rules. Both names are defined in both themes now, so the
+  fallbacks are dead code, and build step 3(a) skips a `var()` that carries a
+  fallback, so they would hide a future missing definition from the spec. Dropping
+  them is a choice the brief does not make; it is stated as an open decision in
+  the report, not settled here.
+- **What the brief had wrong.** Its line number for `var(--line)` is 387 at
+  `93bfa1f1`, not 386 (the earlier base). And the worktree farm does not link
+  `packages/ui`, so `npm run build` failed on
+  `Rollup failed to resolve import "@webtools/ui/tokens.css"` until
+  `ln -s ../../packages/ui node_modules/@webtools/ui` was done by hand (the farm
+  links only what the shared checkout has).
+- **Not measured.** Rendered pixels (no browser), forced-colors mode, and whether
+  `#6fc77a` and `#d4b155` look distinguishable to a reader with colour-vision
+  deficiency; the hue figures above are HSV degrees computed from the hex values,
+  not a perceptual metric.
