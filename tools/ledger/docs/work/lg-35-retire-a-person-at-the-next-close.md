@@ -243,3 +243,10 @@ member: 400 }`; "retiring: expected [Function add] to throw an error") and
   `npx vitest run` over `schema.test.ts`, `retire-person.test.ts`,
   `mortgage.test.ts`, `auto-file.test.ts` and `spending-backfill.test.ts` →
   `Test Files 5 passed (5)`, `Tests 71 passed (71)`.
+- 2026-10-20 — Fixed at landing by owner choice: gate 2, low 1
+  (`nfr:reliability`) — "the new rule is bypassed through the recorded-unfixed
+  echo, and `tools/ledger/CLAUDE.md` states it without the exception". The
+  line the branch added now says "(bar a close whose echo failed)" after "until
+  a close has applied their return"; the rest is kept.
+  `grep -c "whose echo failed" tools/ledger/CLAUDE.md` → 1 (0 at `HEAD` before
+  the fix).
