@@ -18,7 +18,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
 import { shownName } from "../directory.ts";
 import { booksOf, personOf } from "../identity.ts";
-import { knownPeople } from "../people.ts";
+import { knownPeople, peopleInOpenPeriod } from "../people.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 import { createRule, currentRules, editRule, retireRule } from "../rules.ts";
 import type { RuleContext } from "../rules.ts";
@@ -94,12 +94,14 @@ export function registerRuleRoutes(app: FastifyInstance, context: AppContext): v
   // codeql[js/missing-rate-limiting]
   app.get(ROUTES.people, { onRequest: read }, async (request) => {
     // The household's table, which the directory's members fill (people.ts),
-    // and how each is shown, which only the directory knows (lg-33).
-    const people = knownPeople(booksOf(request));
+    // split into who is in from the open period on and who has been retired
+    // (lg-35), and how each is shown, which only the directory knows (lg-33).
+    const { people, retired } = peopleInOpenPeriod(booksOf(request));
     const names = context.directory.names(personOf(request).household);
     const body: PeopleResponse = {
       people,
-      names: distinctNames(people, names),
+      retired,
+      names: distinctNames([...people, ...retired].toSorted(), names),
     };
     return body;
   });

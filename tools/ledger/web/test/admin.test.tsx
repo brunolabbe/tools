@@ -16,6 +16,7 @@ import {
   adminChangeAddress,
   adminRemoveMember,
   adminRenamePerson,
+  adminRetirePerson,
   createHousehold,
   fetchAdminHouseholds,
 } from "../src/api/households.ts";
@@ -28,6 +29,7 @@ vi.mock("../src/api/households.ts", () => ({
   adminChangeAddress: vi.fn(),
   adminRemoveMember: vi.fn(),
   adminRenamePerson: vi.fn(),
+  adminRetirePerson: vi.fn(),
 }));
 
 const HOUSEHOLDS: AdminHousehold[] = [
@@ -35,6 +37,7 @@ const HOUSEHOLDS: AdminHousehold[] = [
     id: "away",
     name: "The other household",
     members: [{ address: "kim@away.test", person: "kim", name: "kim" }],
+    people: [{ person: "kim", name: "kim", standing: "in" }],
   },
   {
     id: "home",
@@ -42,6 +45,10 @@ const HOUSEHOLDS: AdminHousehold[] = [
     members: [
       { address: "alex@example.test", person: "alex", name: "alex" },
       { address: "sam@example.test", person: "sam", name: "sam" },
+    ],
+    people: [
+      { person: "alex", name: "alex", standing: "in" },
+      { person: "sam", name: "sam", standing: "in" },
     ],
   },
 ];
@@ -91,7 +98,7 @@ test("creates a household, adds a member to it and shows the list again", async 
   fireEvent.change(within(fresh).getByLabelText("Name"), { target: { value: "The cabin" } });
   vi.mocked(fetchAdminHouseholds).mockResolvedValue([
     ...HOUSEHOLDS,
-    { id: "cabin", name: "The cabin", members: [] },
+    { id: "cabin", name: "The cabin", members: [], people: [] },
   ]);
   fireEvent.click(within(fresh).getByRole("button", { name: "Create household" }));
 
@@ -182,6 +189,10 @@ test("renames a person, and prints the shown name after the rename, not the id",
         { address: "alex@example.test", person: "alex", name: "Alex" },
         { address: "sam@example.test", person: "sam", name: "sam" },
       ],
+      people: [
+        { person: "alex", name: "Alex", standing: "in" },
+        { person: "sam", name: "sam", standing: "in" },
+      ],
     },
   ]);
   fireEvent.click(within(home).getByRole("button", { name: "Rename alex" }));
@@ -251,6 +262,7 @@ test("edits a member's address in one request, and lists the new address under t
         { address: "alex@example.test", person: "alex", name: "alex" },
         { address: "sam.new@example.test", person: "sam", name: "sam" },
       ],
+      people: (HOUSEHOLDS[1] as AdminHousehold).people,
     },
   ]);
   fireEvent.change(within(home).getByLabelText("New address for sam@example.test"), {
@@ -306,4 +318,69 @@ test("puts the server's sentence in front of a refused new address, and keeps th
     .map((item) => item.textContent ?? "");
   expect(listed.some((text) => text.includes("sam@example.test"))).toBe(true);
   expect(vi.mocked(fetchAdminHouseholds)).toHaveBeenCalledTimes(1);
+});
+
+// lg-35: each person's standing beside their Rename, a member who has left
+// included, and the one request that standing offers.
+test("lists everyone the household has named with where they stand, and retires one from the next close", async () => {
+  const withCasey = (standing: "in" | "retiring"): AdminHousehold[] => [
+    HOUSEHOLDS[0] as AdminHousehold,
+    {
+      ...(HOUSEHOLDS[1] as AdminHousehold),
+      people: [
+        { person: "alex", name: "alex", standing: "in" },
+        { person: "casey", name: "Casey", standing },
+        { person: "sam", name: "sam", standing: "retired" },
+      ],
+    },
+  ];
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue(withCasey("in"));
+  vi.mocked(adminRetirePerson).mockResolvedValue({
+    person: "casey",
+    name: "Casey",
+    standing: "retiring",
+  });
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+  const people = within(card("The test household")).getByRole("list", {
+    name: "People in The test household",
+  });
+  // casey has no address and is still listed, under the shown name.
+  expect([...people.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
+    "alex in the booksRenameRetire",
+    "Casey in the booksRenameRetire",
+    "sam retiredRenameBring back",
+  ]);
+
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue(withCasey("retiring"));
+  fireEvent.click(within(people).getByRole("button", { name: "Retire Casey" }));
+
+  await waitFor(() =>
+    expect(within(card("The test household")).getByText("retiring at the next close")).toBeTruthy(),
+  );
+  expect(vi.mocked(adminRetirePerson)).toHaveBeenCalledWith("home", {
+    person: "casey",
+    action: "retire",
+  });
+  expect(
+    within(card("The test household")).getByRole("button", { name: "Keep Casey in" }),
+  ).toBeTruthy();
+});
+
+test("puts the server's sentence in front of a refused retirement", async () => {
+  vi.mocked(adminRetirePerson).mockRejectedValue(
+    new AppError(
+      "BAD_REQUEST",
+      "Remove every address under sam first: nobody who can sign in is retired.",
+    ),
+  );
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+  const home = card("The test household");
+
+  fireEvent.click(within(home).getByRole("button", { name: "Retire sam" }));
+
+  expect((await within(home).findByRole("alert")).textContent).toContain(
+    "Remove every address under sam first",
+  );
 });

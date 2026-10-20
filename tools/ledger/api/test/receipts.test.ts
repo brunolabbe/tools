@@ -1797,9 +1797,10 @@ describe("a cent of rounding on a mixed receipt (lg-30)", () => {
 });
 
 describe("the people the screen is not given (lg-30)", () => {
-  // lg-33 added `names`, a contract change the owner asked for (2026-10-17);
-  // what lg-30 held still holds: no list of the current members rides here.
-  test("GET /api/people still answers people, and only names beside it", async () => {
+  // lg-33 added `names`, a contract change the owner asked for (2026-10-17), and
+  // lg-35 `retired`, the books' people retired at a close, which is no list of
+  // the current members either; what lg-30 held still holds: none rides here.
+  test("GET /api/people still answers people, and only retired and names beside it", async () => {
     const target = await start({ members: THREE });
 
     const response = await target.server.inject({
@@ -1809,7 +1810,11 @@ describe("the people the screen is not given (lg-30)", () => {
     });
 
     expect(response.statusCode, response.body).toBe(200);
-    expect(Object.keys(response.json<Record<string, unknown>>())).toEqual(["people", "names"]);
+    expect(Object.keys(response.json<Record<string, unknown>>())).toEqual([
+      "people",
+      "retired",
+      "names",
+    ]);
   });
 });
 

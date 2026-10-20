@@ -221,6 +221,103 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
     WHEN NEW.id IS NOT NULL AND EXISTS (SELECT 1 FROM person_names WHERE id = NEW.id)
     BEGIN SELECT RAISE(ABORT, 'a shown name record is appended, never replaced'); END;
   `,
+  // 6 — a person retired from the books, or brought back, at the next close (lg-35).
+  `
+  -- An admin's request: retire a person from the books at the next close, or
+  -- bring a retired one back at the next close after it. The request lives here
+  -- because an admin reads no books and may be in no household; the close that
+  -- applies it copies it into the household's books (people_retirements), which
+  -- then say who was in each period without this file.
+  CREATE TABLE retirements (
+    id INTEGER PRIMARY KEY,
+    household_id TEXT NOT NULL REFERENCES households (id),
+    -- The person's id, as memberships.person names them.
+    person TEXT NOT NULL CHECK (length(person) BETWEEN 1 AND 64 AND person = trim(person)),
+    action TEXT NOT NULL CHECK (action IN ('retire', 'return')),
+    recorded_at TEXT NOT NULL,
+    -- Who asked: an admin's address.
+    recorded_by TEXT NOT NULL
+  );
+
+  CREATE INDEX retirements_person ON retirements (household_id, person, id);
+
+  -- Only a person a membership of the household has named is retired or returned.
+  CREATE TRIGGER retirements_held BEFORE INSERT ON retirements
+    WHEN NOT EXISTS (
+      SELECT 1 FROM memberships WHERE household_id = NEW.household_id AND person = NEW.person
+    )
+    BEGIN SELECT RAISE(ABORT, 'a retirement is for a person the household has held'); END;
+
+  -- Nobody who can still sign in is retired: every address under the person goes
+  -- first, and memberships_not_under_retired below keeps a new one from coming
+  -- back while the retirement waits or holds. The one gap is a close whose echo
+  -- (retirements_applied) failed to be written: until the next close writes it,
+  -- a return can read as cancelling a retirement the books have applied.
+  CREATE TRIGGER retirements_no_address BEFORE INSERT ON retirements
+    WHEN NEW.action = 'retire'
+      AND EXISTS (
+        SELECT 1 FROM current_members
+        WHERE household_id = NEW.household_id AND person = NEW.person
+      )
+    BEGIN SELECT RAISE(ABORT, 'a person is retired only once no address stands under them'); END;
+
+  -- A record changes the person's latest state: a retire for someone in, a
+  -- return for someone retired. A person with no record is in. By id, which
+  -- only ever grows, as current_members is ordered.
+  CREATE TRIGGER retirements_change_state BEFORE INSERT ON retirements
+    WHEN coalesce((
+        SELECT action FROM retirements
+        WHERE household_id = NEW.household_id AND person = NEW.person
+        ORDER BY id DESC LIMIT 1
+      ), 'return') = NEW.action
+    BEGIN SELECT RAISE(ABORT, 'a retirement record changes the person''s state'); END;
+
+  CREATE TRIGGER retirements_never_updated BEFORE UPDATE ON retirements
+    BEGIN SELECT RAISE(ABORT, 'a retirement record is appended, never edited'); END;
+  CREATE TRIGGER retirements_never_deleted BEFORE DELETE ON retirements
+    BEGIN SELECT RAISE(ABORT, 'a retirement record is appended, never deleted'); END;
+  CREATE TRIGGER retirements_never_replaced BEFORE INSERT ON retirements
+    WHEN NEW.id IS NOT NULL AND EXISTS (SELECT 1 FROM retirements WHERE id = NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'a retirement record is appended, never replaced'); END;
+
+  -- That a close has applied a request to the household's books, and from which
+  -- day, written by the close after its books commit. It is what lets the admin
+  -- screen tell "retiring at the next close" from "retired" without reading any
+  -- books. The books are the record of who was in; this is only the echo of it,
+  -- and a close writes any echo an earlier one failed to.
+  CREATE TABLE retirements_applied (
+    retirement_id INTEGER PRIMARY KEY REFERENCES retirements (id),
+    -- yyyy-mm-dd: the day after the period the close ended.
+    from_date TEXT NOT NULL,
+    applied_at TEXT NOT NULL
+  );
+
+  CREATE TRIGGER retirements_applied_never_updated BEFORE UPDATE ON retirements_applied
+    BEGIN SELECT RAISE(ABORT, 'an applied retirement is appended, never edited'); END;
+  CREATE TRIGGER retirements_applied_never_deleted BEFORE DELETE ON retirements_applied
+    BEGIN SELECT RAISE(ABORT, 'an applied retirement is appended, never deleted'); END;
+  CREATE TRIGGER retirements_applied_never_replaced BEFORE INSERT ON retirements_applied
+    WHEN EXISTS (SELECT 1 FROM retirements_applied WHERE retirement_id = NEW.retirement_id)
+    BEGIN SELECT RAISE(ABORT, 'an applied retirement is appended, never replaced'); END;
+
+  -- No address is added under a person whose retirement waits for a close or
+  -- has been applied, until a return is applied (lg-35's gate 1, F1; the
+  -- owner, 2026-10-20): their latest request is a retire (retiring, retired),
+  -- or the latest a close applied is (returning). A retire and a return both
+  -- waiting for one close leave neither, and the person is in.
+  CREATE TRIGGER memberships_not_under_retired BEFORE INSERT ON memberships
+    WHEN NEW.action = 'add'
+      AND (
+        (SELECT action FROM retirements
+          WHERE household_id = NEW.household_id AND person = NEW.person
+          ORDER BY id DESC LIMIT 1) = 'retire'
+        OR (SELECT retirements.action FROM retirements
+          JOIN retirements_applied ON retirements_applied.retirement_id = retirements.id
+          WHERE retirements.household_id = NEW.household_id AND retirements.person = NEW.person
+          ORDER BY retirements.id DESC LIMIT 1) = 'retire'
+      )
+    BEGIN SELECT RAISE(ABORT, 'an address is added under a retired person only once their return is applied'); END;
+  `,
 ];
 
 /** Brings a directory up to `target`, every migration by default. */

@@ -28,6 +28,7 @@ import {
   startHouseholds,
 } from "./helpers/households.ts";
 import type { Harness, Method } from "./helpers/households.ts";
+import type { Directory } from "../src/directory.ts";
 import { VERBS } from "./helpers/routes.ts";
 
 type RouteName = keyof typeof ROUTES;
@@ -38,10 +39,24 @@ interface Probe {
   /** The path, aimed at home, the household whose records the sweep guards. */
   url: string;
   payload?: Record<string, unknown> | string;
+  /**
+   * What the directory must hold first for the request to succeed, run before
+   * the snapshot: a retirement is only for a person with no address (lg-35).
+   */
+  setup?: (directory: Directory) => void;
 }
 
 const at = (route: RouteName): string => ROUTES[route].replace(":id", HOUSEHOLD);
 const NEW_ADDRESS = "casey@example.test";
+
+/** robin, held by home with no address left: who an admin may retire (lg-35). */
+function robinHasLeft(directory: Directory): void {
+  const change = { by: "operator", at: new Date("2026-10-02T00:00:00Z") };
+  const address = "robin@example.test";
+  if (directory.heldPeople(HOUSEHOLD).includes("robin")) return;
+  directory.addMember({ household: HOUSEHOLD, address, person: "robin", ...change });
+  directory.removeMember({ address, household: HOUSEHOLD, ...change });
+}
 
 /** Every household route, each a request a member of home would see succeed. */
 const HOUSEHOLD_PROBES: Probe[] = [
@@ -91,6 +106,14 @@ const ADMIN_PROBES: Probe[] = [
     url: at("adminPersonRename"),
     payload: { person: "sam", name: "Samantha" },
   },
+  // lg-35: a member is refused it too, a retirement of someone else included.
+  {
+    route: "adminPersonRetire",
+    method: "POST",
+    url: at("adminPersonRetire"),
+    payload: { person: "robin", action: "retire" },
+    setup: robinHasLeft,
+  },
 ];
 
 /**
@@ -127,6 +150,7 @@ async function start(): Promise<Harness> {
  * with the directory and every household's books compared before and after.
  */
 async function sweep({ app, directory }: Harness, email: string, probes: readonly Probe[]) {
+  for (const probe of probes) probe.setup?.(directory);
   const before = { directory: directorySnapshot(directory), books: booksSnapshot(app) };
   const admitted: string[] = [];
   for (const probe of probes) {
@@ -157,7 +181,7 @@ describe("the sweep", () => {
       (route) => isAdminRoute(route) || isHouseholdRoute(route),
     );
 
-    expect(routes.length).toBe(7);
+    expect(routes.length).toBe(8);
     expect(new Set(probes.map((probe) => probe.route))).toEqual(new Set(routes));
     for (const route of routes) {
       for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const) {
@@ -176,6 +200,7 @@ describe("the sweep", () => {
     "control: an admin in no household is answered by %s",
     async (_name, probe) => {
       const { app, directory } = await start();
+      probe.setup?.(directory);
       const before = directorySnapshot(directory);
 
       const response = await send(app, ADMIN, probe.method, probe.url, probe.payload);

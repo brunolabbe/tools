@@ -14,8 +14,16 @@
  * stored row names stays named after they stop being able to sign in (a name is
  * permanent: `docs/00-ANALYSIS.md` §7). No name is seeded from the repository: a
  * fresh database with an empty directory has no people.
+ *
+ * A person can be **retired** from the books at a close (lg-35): they stay in
+ * this table, every stored row still names them, and `people_retirements` says
+ * from which day they are not in — and from which day they are again, after a
+ * return. The history reads everyone here; what concerns the open period or
+ * after reads `peopleInOpenPeriod`.
  */
 
+import { dayAfter, peopleOn } from "@ledger/books";
+import type { RetirementInput } from "@ledger/books";
 import type { Database } from "better-sqlite3";
 
 /** Adds every name the table does not hold yet. Returns how many were added. */
@@ -32,6 +40,44 @@ export function knownPeople(db: Database): string[] {
   return (db.prepare("SELECT id FROM people ORDER BY id").all() as { id: string }[]).map(
     (row) => row.id,
   );
+}
+
+/**
+ * Every retirement and return the books hold, oldest first (lg-35): what
+ * `peopleOn` in `books` reads to say who is in on a date. Who is in is that
+ * function, over `knownPeople` and these; nothing here decides it again.
+ */
+export function retirementsOf(db: Database): RetirementInput[] {
+  return (
+    db.prepare("SELECT person_id, action, from_date FROM people_retirements ORDER BY id").all() as {
+      person_id: string;
+      action: RetirementInput["action"];
+      from_date: string;
+    }[]
+  ).map((row) => ({ personId: row.person_id, action: row.action, fromDate: row.from_date }));
+}
+
+/** The open period's first day: the day after the last close, or `null` before any. */
+export function openPeriodStart(db: Database): string | null {
+  const { end } = db.prepare("SELECT max(end_date) AS end FROM periods").get() as {
+    end: string | null;
+  };
+  return end === null ? null : dayAfter(end);
+}
+
+/**
+ * Who is in from the open period on, and who the books hold that is not
+ * (lg-35): what a screen offers, and what the history still names. Before any
+ * close nobody can have been retired, so everyone is in.
+ */
+export function peopleInOpenPeriod(db: Database): { people: string[]; retired: string[] } {
+  return db.transaction(() => {
+    const everyone = knownPeople(db);
+    const start = openPeriodStart(db);
+    const people = start === null ? everyone : peopleOn(everyone, retirementsOf(db), start);
+    const isIn = new Set(people);
+    return { people, retired: everyone.filter((person) => !isIn.has(person)) };
+  })();
 }
 
 export interface Enroller {

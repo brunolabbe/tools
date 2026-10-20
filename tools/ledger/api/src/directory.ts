@@ -21,6 +21,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { AppError } from "@ledger/contract";
+import type { PersonStanding } from "@ledger/contract";
 import Database from "better-sqlite3";
 import { migrateDirectory } from "./db/directory-schema.ts";
 
@@ -104,6 +105,18 @@ export interface ShownName {
   person: string;
   name: string;
 }
+
+/** An admin's request to retire a person from the books, or bring them back (lg-35). */
+export interface RetirementRequest {
+  id: number;
+  person: string;
+  action: "retire" | "return";
+  /** ISO instant it was recorded. */
+  at: string;
+}
+
+/** Where a person stands in the books, as the directory can tell it (lg-35). */
+type Standing = PersonStanding;
 
 /** How a person is shown: the name `Directory.names` gives them, or their id (lg-33). */
 export function shownName(names: ReadonlyMap<string, string>, person: string): string {
@@ -338,6 +351,133 @@ export class Directory {
     return false;
   }
 
+  /**
+   * Every retirement and return recorded for the household, oldest first
+   * (lg-35): what a close reads to apply the ones its books do not hold yet.
+   */
+  retirements(household: string): RetirementRequest[] {
+    return this.#db
+      .prepare(
+        `SELECT id, person, action, recorded_at AS at FROM retirements
+         WHERE household_id = ? ORDER BY id`,
+      )
+      .all(household) as RetirementRequest[];
+  }
+
+  /**
+   * Where each person the household has named stands (lg-35), by id: in or
+   * retired as the latest request a close has applied leaves them, and retiring
+   * or returning when a later request no close has applied yet would change
+   * that. A retirement and a return both waiting cancel out, as the close will
+   * make of them. A person with no request is in.
+   */
+  standings(household: string): Map<string, Standing> {
+    const rows = this.#db
+      .prepare(
+        `SELECT retirements.person, retirements.action,
+                retirements_applied.retirement_id IS NOT NULL AS applied
+         FROM retirements
+         LEFT JOIN retirements_applied ON retirements_applied.retirement_id = retirements.id
+         WHERE retirements.household_id = ?
+         ORDER BY retirements.id`,
+      )
+      .all(household) as { person: string; action: "retire" | "return"; applied: number }[];
+    const books = new Map<string, boolean>();
+    const asked = new Map<string, boolean>();
+    for (const row of rows) {
+      const retired = row.action === "retire";
+      asked.set(row.person, retired);
+      if (row.applied === 1) books.set(row.person, retired);
+    }
+    return new Map(
+      this.heldPeople(household).map((person): [string, Standing] => {
+        const now = books.get(person) ?? false;
+        const next = asked.get(person) ?? false;
+        if (now === next) return [person, now ? "retired" : "in"];
+        return [person, next ? "retiring" : "returning"];
+      }),
+    );
+  }
+
+  /**
+   * Records an admin's request to retire a person from the books at the next
+   * close, or to bring a retired one back at the next close after it (lg-35).
+   * Refused as `PERSON_NOT_FOUND` for a person no membership of the household
+   * has named, and as a bad request for a retirement while an address stands
+   * under the person, or a request that would not change where they stand.
+   * Returns where they stand after it.
+   */
+  retirePerson(
+    request: { household: string; person: string; action: "retire" | "return" } & Change,
+  ): { person: string; standing: Standing } {
+    refuseUnlessChange(request);
+    if (typeof request.household !== "string") refuse("The household is not a string.");
+    if (typeof request.person !== "string") refuse("The person is not a string.");
+    if (request.action !== "retire" && request.action !== "return") {
+      refuse("A person is retired or returned.");
+    }
+    const person = request.person.trim();
+    return this.#db
+      .transaction(() => {
+        if (this.household(request.household) === undefined) {
+          throw new AppError(
+            "HOUSEHOLD_NOT_FOUND",
+            `There is no household "${request.household}".`,
+          );
+        }
+        const standing = this.standings(request.household).get(person);
+        if (standing === undefined) {
+          throw new AppError(
+            "PERSON_NOT_FOUND",
+            `No member of this household has been added as "${person}".`,
+          );
+        }
+        const shown = shownName(this.names(request.household), person);
+        if (request.action === "retire") {
+          if (standing === "retired" || standing === "retiring") {
+            refuse(`${shown} is already retired, or retiring at the next close.`);
+          }
+          if (this.members(request.household).some((member) => member.person === person)) {
+            refuse(`Remove every address under ${shown} first: nobody who can sign in is retired.`);
+          }
+        } else if (standing === "in" || standing === "returning") {
+          refuse(`${shown} is not retired, so there is nothing to bring them back from.`);
+        }
+        this.#db
+          .prepare(
+            `INSERT INTO retirements (household_id, person, action, recorded_at, recorded_by)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run(request.household, person, request.action, request.at.toISOString(), request.by);
+        return { person, standing: this.standings(request.household).get(person) ?? "in" };
+      })
+      .immediate();
+  }
+
+  /**
+   * Records that a close applied these requests to the household's books, and
+   * from which day (lg-35); any already recorded are left as they are, so a
+   * close can write the whole list its books hold and mend an echo an earlier
+   * close failed to write.
+   */
+  markApplied(applied: readonly { id: number; fromDate: string }[], at: Date): number {
+    refuseUnlessChange({ at, by: OPERATOR });
+    const insert = this.#db.prepare(
+      `INSERT INTO retirements_applied (retirement_id, from_date, applied_at)
+       SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM retirements_applied WHERE retirement_id = ?)
+         AND EXISTS (SELECT 1 FROM retirements WHERE id = ?)`,
+    );
+    return this.#db
+      .transaction(() =>
+        applied.reduce(
+          (count, { id, fromDate }) =>
+            count + insert.run(id, fromDate, at.toISOString(), id, id).changes,
+          0,
+        ),
+      )
+      .immediate();
+  }
+
   addHousehold(household: Household & Change): Household {
     const notAnId = (shown: string): never =>
       refuse(
@@ -413,6 +553,17 @@ export class Directory {
               `Another person in this household is shown as "${person}". Pick them from the list to add an address for them.`,
             );
           }
+        }
+        // lg-35's gate 1, F1: nobody signs in under a person whose retirement
+        // waits or holds, until a close has applied their return.
+        const retirement = this.standings(member.household).get(person) ?? "in";
+        if (retirement !== "in") {
+          const shown = shownName(this.names(member.household), person);
+          refuse(
+            retirement === "retiring"
+              ? `${shown} is retiring at the next close. Keep them in first, then add the address.`
+              : `${shown} is retired from the books. Bring them back, and add the address once the next close has applied the return.`,
+          );
         }
         this.#record({ address, household: member.household, person }, "add", member);
         return { address, household: member.household, person };

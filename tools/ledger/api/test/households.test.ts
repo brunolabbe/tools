@@ -71,7 +71,7 @@ describe("an admin", () => {
     });
     expect(
       (await send(app, "robin@cabin.test", "GET", ROUTES.people)).json<PeopleResponse>(),
-    ).toEqual({ people: ["robin"], names: { robin: "robin" } });
+    ).toEqual({ people: ["robin"], retired: [], names: { robin: "robin" } });
 
     // Books of its own: a rule filed there is not home's, and home's file is untouched.
     const rule = await send(app, "robin@cabin.test", "POST", ROUTES.rules, {
@@ -114,6 +114,7 @@ describe("an admin", () => {
           id: AWAY,
           name: "The other household",
           members: [{ address: KIM, person: "kim", name: "kim" }],
+          people: [{ person: "kim", name: "kim", standing: "in" }],
         },
         {
           id: HOUSEHOLD,
@@ -121,6 +122,10 @@ describe("an admin", () => {
           members: [
             { address: ALEX, person: "alex", name: "alex" },
             { address: SAM, person: "sam", name: "sam" },
+          ],
+          people: [
+            { person: "alex", name: "alex", standing: "in" },
+            { person: "sam", name: "sam", standing: "in" },
           ],
         },
       ],
@@ -139,6 +144,7 @@ describe("an admin", () => {
     expect((await send(app, SAM, "GET", ROUTES.me)).statusCode).toBe(403);
     expect((await send(app, ALEX, "GET", ROUTES.people)).json<PeopleResponse>()).toEqual({
       people: ["alex", "sam"],
+      retired: [],
       names: { alex: "alex", sam: "sam" },
     });
     expect(directory.history(HOUSEHOLD).at(-1)).toEqual({

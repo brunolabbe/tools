@@ -11,6 +11,10 @@
  * A blank salary leaves that person out of the entry, and so out of the ratio it
  * proposes (lg-29). The proposal's shares are on the screen before anyone
  * confirms, which is the check that a salary was left blank on purpose.
+ *
+ * Only the people in from the open period on are asked for (lg-35): a person
+ * retired at a close is not, and while the ratio in effect still names one the
+ * screen says a ratio without them is needed. No ratio is changed for them.
  */
 
 import { useCallback, useEffect, useId, useState } from "react";
@@ -95,6 +99,11 @@ export function Salaries(): React.ReactElement {
   }
 
   const { people, salaries, inEffect } = load;
+  // `people` is who is in from the open period on (lg-35), so anyone else the
+  // ratio in effect names has been retired at a close.
+  const retiredIn = (inEffect?.shares ?? [])
+    .map((share) => share.personId)
+    .filter((personId) => !people.includes(personId));
 
   const chooseYear = (value: string): void => {
     setYear(value);
@@ -171,6 +180,17 @@ export function Salaries(): React.ReactElement {
           ? "No ratio is in effect yet."
           : `Ratio in effect: ${sharesLabel(inEffect.shares, names)}, since ${inEffect.effectiveFrom}.`}
       </p>
+      {retiredIn.length > 0 && (
+        <p className="bad">
+          <output>
+            {retiredIn.map((personId) => shownName(names, personId)).join(", ")}{" "}
+            {retiredIn.length === 1 ? "has" : "have"} been retired from the books, and the ratio in
+            effect still names them. The period cannot close until a ratio without them is
+            confirmed: enter the salaries without them, and confirm it from the open period&rsquo;s
+            first day.
+          </output>
+        </p>
+      )}
 
       <p className="muted">
         A blank salary leaves that person out of the year&rsquo;s ratio. A salary already on record

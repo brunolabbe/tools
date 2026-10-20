@@ -33,6 +33,8 @@ export const ROUTES = {
   adminMemberAddress: `${API_PREFIX}/admin/households/:id/members/address`,
   // lg-33: a person's shown name, changed by an admin only; their id never changes.
   adminPersonRename: `${API_PREFIX}/admin/households/:id/people/rename`,
+  // lg-35: a person retired from the books, or brought back, from the next close; an admin only.
+  adminPersonRetire: `${API_PREFIX}/admin/households/:id/people/retire`,
   statements: `${API_PREFIX}/statements`,
   // lg-4: the rules, the inbox of unclassified rows, and who the rules may name.
   rules: `${API_PREFIX}/rules`,
@@ -226,9 +228,44 @@ export const createHouseholdRequestSchema = z.strictObject({
   name: z.string().min(1).max(80),
 }) satisfies z.ZodType<CreateHouseholdRequest>;
 
+/**
+ * `POST /api/admin/households/:id/people/retire` (lg-35): retire a person from
+ * the books at the next close, or bring a retired one back at the next close
+ * after it. A retirement is refused while an address stands under the person.
+ */
+export interface RetirePersonRequest {
+  person: string;
+  action: "retire" | "return";
+}
+
+export const retirePersonRequestSchema = z.strictObject({
+  person: z.string().min(1).max(64),
+  action: z.enum(["retire", "return"]),
+}) satisfies z.ZodType<RetirePersonRequest>;
+
+/**
+ * Where a person stands in the books (lg-35): `in`; `retiring` at the next
+ * close; `retired`; or `returning` at the next close. A request waits in the
+ * directory until a close applies it to the books.
+ */
+export type PersonStanding = "in" | "retiring" | "retired" | "returning";
+
+/**
+ * Every person a membership of the household has named, a member who has left
+ * included, as an admin sees them (lg-35): their id, how they are shown, and
+ * where they stand. The answer to a retirement is one of these.
+ */
+export interface AdminPerson {
+  person: string;
+  name: string;
+  standing: PersonStanding;
+}
+
 /** A household and its members, as an admin sees it. */
 export interface AdminHousehold extends HouseholdSummary {
   members: HouseholdMember[];
+  /** Everyone the household has named, with where they stand (lg-35). */
+  people: AdminPerson[];
 }
 
 /** `GET /api/admin/households`: every household, for an admin only. */
@@ -363,11 +400,20 @@ export interface RulesResponse {
  * on, so a row that names someone still does after the configuration changes.
  */
 export interface PeopleResponse {
+  /**
+   * Who is in the books from the open period on (lg-35): what a screen offers
+   * to pick. Everyone, until a person is retired at a close.
+   */
   people: string[];
   /**
-   * How each of `people` is shown (lg-33): the name the household directory
-   * gives them, or their id where it gives none. Every person is a key, so a
-   * screen never has to guess.
+   * Everyone else the books hold: retired at a close and not back (lg-35). The
+   * history still names them, so a screen that lists the past lists them too.
+   */
+  retired: string[];
+  /**
+   * How each of `people` and `retired` is shown (lg-33): the name the household
+   * directory gives them, or their id where it gives none. Every person is a
+   * key, so a screen never has to guess.
    */
   names: Record<string, string>;
 }

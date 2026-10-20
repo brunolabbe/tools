@@ -37,7 +37,7 @@ import type {
 } from "@ledger/contract";
 import type { Database } from "better-sqlite3";
 import { closedPeriods, currentLines, currentRecurring } from "./periods.ts";
-import { knownPeople } from "./people.ts";
+import { knownPeople, retirementsOf } from "./people.ts";
 import { listRows } from "./rows.ts";
 import { chartedAs, receiptsOnRows } from "./slices.ts";
 import { currentRatios, currentSalaries } from "./salaries.ts";
@@ -105,7 +105,8 @@ export function mortgageOwnStats(db: Database, range: StatsRange): MortgageOwnRe
     return {
       range,
       people: everyone(people, rows),
-      points: mortgageOwnSeries(rows, people, range),
+      // The home screen's split (lg-35): no share of a joint row for a person retired on its date.
+      points: mortgageOwnSeries(rows, people, range, retirementsOf(db)),
     };
   })();
 }

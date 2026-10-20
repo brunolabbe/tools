@@ -551,11 +551,41 @@ entirely.
   stores it on rules and classifications, and lg-5's `people` table holds every
   name the household's members have stood under, and the person ids already
   stored on rules and classifications, and nothing else. Nothing removes one,
-  so a renamed or departed person stays a person: listed by `/api/people`,
-  asked for on the salaries screen, and given a share of the mortgage's joint
-  rows. Removing an address never removes a name from the books (lg-23). Changing an address is safe;
-  changing the name it stands under is not. Retiring a person is future work,
-  for when someone first needs it.
+  so a departed person stays a person the books name. Removing an address never
+  removes a name from the books (lg-23). Changing an address is safe; changing
+  the name it stands under is not.
+- **A person is retired from the books at the next close.** _Decided by the
+  owner on 2026-10-17, in lg-35; built in lg-35._ An admin records "retire at
+  the next close" in the directory (`retirements`, directory migration 6),
+  refused while any address stands under the person; and no address is added
+  under them while the retirement waits for its close or holds, until a close
+  has applied a return (_the owner, 2026-10-20, lg-35's gate 1_); a retire
+  that a return cancels before the close lets the add through, since the person
+  was never out. So nobody who
+  can sign in is retired, with one gap: when a close's echo to the directory
+  (below) fails, a return recorded before the next close reads as cancelling a
+  retirement the books have applied, and an address can then be added. The
+  person takes part in the open period and it
+  settles with them in it; the close copies the request into the books
+  (`people_retirements`, books migration 14) from the day after its `end_date`,
+  and every period after leaves them out — so people still change only at a
+  close (§5), and the admin route reads no books. A return, recorded the same
+  way, brings them back from the next close after it; a retirement and a return
+  both waiting for one close cancel out. The books say who was in each period
+  without the directory, so a backup of the data directory restores it. From the
+  day it holds, a ratio naming the person is refused (`PERSON_RETIRED`), and so
+  is closing a period weighed at one; no ratio is changed for the household, and
+  the salaries screen says one without them is needed. `/api/people` answers who
+  is in from the open period on, which is what the salaries screen, the rules and
+  the period's line form offer, and the retired beside them; a joint mortgage
+  row dated on or after the day gives them no share, one before still does. The
+  history — stats, past periods and settlements, the history's filter, a stored
+  row's owner in the inbox — keeps every person who was there. The admin screen
+  shows each person in, retiring at the next close, retired, or returning at the
+  next close; the close echoes to the directory which requests it applied, which
+  is how the admin screen tells the two apart without reading any books. The two
+  readings not chosen were the admin route opening the books to take the open
+  period's first day, and a member recording it.
 - **The id is permanent; the name a person is shown under is not.** _Decided by
   the owner on 2026-10-17, in lg-33, reversing lg-5's "kept as built" for the
   display name only._ The name a membership first gave a person stays their id,

@@ -13,8 +13,17 @@ export async function fetchRules(signal?: AbortSignal): Promise<Rule[]> {
   return (await requestJson<RulesResponse>(ROUTES.rules, { signal })).rules;
 }
 
-export async function fetchPeople(signal?: AbortSignal): Promise<string[]> {
-  return (await requestJson<PeopleResponse>(ROUTES.people, { signal })).people;
+/**
+ * Who is in from the open period on, which is what a screen offers to pick; or,
+ * with `"everyone"`, those and everyone retired at a close besides (lg-35), for
+ * a screen about the past — the history's filter, a stored row's owner.
+ */
+export async function fetchPeople(
+  signal?: AbortSignal,
+  who: "in" | "everyone" = "in",
+): Promise<string[]> {
+  const answer = await requestJson<PeopleResponse>(ROUTES.people, { signal });
+  return who === "in" ? answer.people : [...answer.people, ...answer.retired].toSorted();
 }
 
 export async function createRule(draft: RuleDraft): Promise<Rule> {

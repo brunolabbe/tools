@@ -266,3 +266,40 @@ test("prints a person's shown name after a rename, never the id, and sends the i
   });
   expect(document.body.textContent).not.toMatch(/\balex\b/u);
 });
+
+// lg-35: casey retired at a close is not asked for, and while the ratio in
+// effect names them the screen says a ratio without them is needed.
+test("asks only for the people in, and says a ratio without a retired person is needed", async () => {
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  const withCasey: Ratio = {
+    ...RATIO,
+    shares: [
+      { personId: "alex", partsPerMillion: 400_000, salaryId: 1 },
+      { personId: "casey", partsPerMillion: 200_000, salaryId: 5 },
+      { personId: "sam", partsPerMillion: 400_000, salaryId: 2 },
+    ],
+  };
+  vi.mocked(fetchRatios).mockResolvedValue({
+    asOf: "2026-10-03",
+    ratios: [withCasey],
+    inEffect: withCasey,
+  });
+  render(
+    <PeopleNamesProvider value={{ alex: "alex", casey: "Casey", sam: "sam" }}>
+      <Salaries />
+    </PeopleNamesProvider>,
+  );
+
+  expect((await screen.findByRole("status")).textContent).toContain(
+    "Casey has been retired from the books, and the ratio in effect still names them.",
+  );
+  expect(screen.queryByLabelText("Casey’s salary")).toBeNull();
+  expect(field("alex’s salary")).toBeTruthy();
+});
+
+test("says nothing of a retirement while everyone the ratio names is in", async () => {
+  render(<Salaries />);
+
+  await screen.findByText("Ratio in effect: alex 60.0000 % · sam 40.0000 %, since 2025-01-01.");
+  expect(screen.queryByRole("status")).toBeNull();
+});

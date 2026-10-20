@@ -75,7 +75,11 @@ describe("an admin renames a person", () => {
     });
     expect(salaries.statusCode, salaries.body).toBe(200);
     const before = (await send(app, SAM, "GET", ROUTES.people)).json<PeopleResponse>();
-    expect(before).toEqual({ people: ["bruno", "sam"], names: { bruno: "bruno", sam: "sam" } });
+    expect(before).toEqual({
+      people: ["bruno", "sam"],
+      retired: [],
+      names: { bruno: "bruno", sam: "sam" },
+    });
 
     const renamed = await send(app, ADMIN, "POST", RENAME, { person: "bruno", name: "Bruno" });
 
@@ -208,6 +212,7 @@ describe("the people answer never shows two people alike", () => {
     const answer = (await send(app, SAM, "GET", ROUTES.people)).json<PeopleResponse>();
     expect(answer).toEqual({
       people: ["bruno", "casey", "sam"],
+      retired: [],
       names: { bruno: "bruno", casey: "casey", sam: "sam" },
     });
     expect(new Set(Object.values(answer.names)).size).toBe(answer.people.length);

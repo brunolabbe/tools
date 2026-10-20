@@ -20,6 +20,12 @@
  * rebate. Any rule would do; this one needs no state and gives the same answer
  * to every reader.
  *
+ * **A person retired from the books** (lg-35) has no share of a joint row dated
+ * on or after the day their retirement takes effect, and keeps their share of
+ * every row before it. So the joint total is kept in parts, one for each set of
+ * people who were in when its rows were dated, and each part is split once, on
+ * its own cumulative total, between them (`JointTotals`).
+ *
  * **The buffer** (the current-expenses bucket) is shared money, owned at the
  * ratio, and lg-6 settles it. What it needs from here is the balance and each
  * person's cumulative contributions: the sum of the rows filed to that person.
@@ -30,6 +36,8 @@
 
 import { AppError } from "@ledger/contract";
 import type { Bucket, OwnMoney } from "@ledger/contract";
+import { retiredOn } from "./people.ts";
+import type { RetirementInput } from "./people.ts";
 
 /** A stored row as the books see it: when, how much, and how it is classified. */
 export interface FiledRow {
@@ -102,15 +110,73 @@ export function splitCents(total: number, count: number): number[] {
   );
 }
 
-/** Each person's own money in the mortgage bucket as of `asOf`, and who is ahead. */
+/**
+ * A bucket's joint total, kept apart for each set of people retired when its
+ * rows were dated (lg-35), so that each part is split only between the people
+ * who were in then. With no retirement there is one part, split between
+ * everyone, which is the rule as it always was.
+ */
+export class JointTotals {
+  readonly #parts = new Map<string, { retired: ReadonlySet<string>; cents: number }>();
+  readonly #retirements: readonly RetirementInput[];
+
+  constructor(retirements: readonly RetirementInput[]) {
+    this.#retirements = retirements;
+  }
+
+  add(date: string, cents: number): void {
+    const retired = retiredOn(this.#retirements, date);
+    const key = [...retired].toSorted().join("\n");
+    const part = this.#parts.get(key) ?? { retired, cents: 0 };
+    part.cents += cents;
+    this.#parts.set(key, part);
+  }
+
+  /**
+   * Each of `ids`' share, `ids` sorted. The parts with the same people in are
+   * summed first, so a person who left and came back splits one total and not
+   * two, and each sum is split once between those people, so the odd cent goes
+   * to the first of them by id and never drifts. A part nobody was in, which no
+   * household reaches, is split between everyone rather than left unattributed.
+   */
+  sharesOf(ids: readonly string[]): number[] {
+    const byPeople = new Map<string, { people: string[]; cents: number }>();
+    for (const part of this.#parts.values()) {
+      const inThen = ids.filter((id) => !part.retired.has(id));
+      const people = inThen.length === 0 ? [...ids] : inThen;
+      const key = people.join("\n");
+      const held = byPeople.get(key) ?? { people, cents: 0 };
+      held.cents += part.cents;
+      byPeople.set(key, held);
+    }
+    const position = new Map(ids.map((id, index) => [id, index]));
+    const shares = ids.map(() => 0);
+    for (const { people, cents } of byPeople.values()) {
+      for (const [index, share] of splitCents(cents, people.length).entries()) {
+        const at = position.get(people[index] ?? "");
+        if (at !== undefined) shares[at] = (shares[at] ?? 0) + share;
+      }
+    }
+    return shares;
+  }
+}
+
+/**
+ * Each person's own money in the mortgage bucket as of `asOf`, and who is ahead.
+ * `retirements` are the books' (lg-35), oldest first; a joint row gives no
+ * share to a person retired on its date.
+ */
 export function mortgageAsOf(
   rows: readonly FiledRow[],
   people: readonly string[],
   asOf: string,
+  retirements: readonly RetirementInput[] = [],
 ): MortgagePosition {
   const filed = inBucket(rows, "mortgage", asOf);
   const ids = everyone(people, filed);
-  const halves = splitCents(sumOf(filed.filter((row) => row.personId === null)), ids.length);
+  const joint = new JointTotals(retirements);
+  for (const row of filed) if (row.personId === null) joint.add(row.date, row.amountCents);
+  const halves = joint.sharesOf(ids);
   const own = ids.map((personId, index) => ({
     personId,
     ownCents: sumOf(filed.filter((row) => row.personId === personId)) + (halves[index] ?? 0),

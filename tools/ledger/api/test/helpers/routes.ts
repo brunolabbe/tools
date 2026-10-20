@@ -20,6 +20,8 @@ export const VERBS = {
   adminMemberAddress: ["POST", ROUTES.adminMemberAddress.replace(":id", "home")],
   // lg-33: a person's shown name, the admin's only.
   adminPersonRename: ["POST", ROUTES.adminPersonRename.replace(":id", "home")],
+  // lg-35: a person retired from the books at the next close, the admin's only.
+  adminPersonRetire: ["POST", ROUTES.adminPersonRetire.replace(":id", "home")],
   statements: ["POST", ROUTES.statements],
   rules: ["GET", ROUTES.rules],
   rule: ["POST", ROUTES.rule.replace(":id", "1")],

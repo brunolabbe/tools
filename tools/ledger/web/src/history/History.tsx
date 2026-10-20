@@ -141,7 +141,8 @@ export function History(): React.ReactElement {
     void (async (): Promise<void> => {
       try {
         const [who, spending] = await Promise.all([
-          fetchPeople(controller.signal),
+          // The history names everyone it ever held, retired at a close or not (lg-35).
+          fetchPeople(controller.signal, "everyone"),
           fetchSpendingCategories(controller.signal),
         ]);
         setPeople(who);

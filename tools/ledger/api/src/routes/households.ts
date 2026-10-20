@@ -12,6 +12,8 @@
  *   members, a new household, adding or removing any member, changing a
  *   member's address in one step (lg-34), and giving a person a shown name
  *   (lg-33); neither of those two changes an id, so neither touches the books.
+ *   Retiring a person, or bringing them back (lg-35), is a request the
+ *   household's next close applies to its books; the route touches none.
  *
  * Every guard runs in the route's `onRequest` hooks, before the body is
  * parsed, so a refusal is the same 403 whatever the request carries — a body
@@ -41,9 +43,11 @@ import {
   createHouseholdRequestSchema,
   removeMemberRequestSchema,
   renamePersonRequestSchema,
+  retirePersonRequestSchema,
 } from "@ledger/contract";
 import type {
   AdminHouseholdsResponse,
+  AdminPerson,
   HouseholdMember,
   HouseholdResponse,
   HouseholdSummary,
@@ -73,6 +77,19 @@ function membersOf(directory: Directory, household: string): HouseholdMember[] {
 function memberOfHousehold(directory: Directory, member: Member): HouseholdMember {
   const name = shownName(directory.names(member.household), member.person);
   return { address: member.address, person: member.person, name };
+}
+
+/**
+ * Everyone the household has named, a member who has left included, with how
+ * each is shown and where they stand in the books (lg-35), by id.
+ */
+function peopleOf(directory: Directory, household: string): AdminPerson[] {
+  const names = directory.names(household);
+  return [...directory.standings(household)].map(([person, standing]) => ({
+    person,
+    name: shownName(names, person),
+    standing,
+  }));
 }
 
 /** The household an admin named, or `HOUSEHOLD_NOT_FOUND`. */
@@ -134,6 +151,7 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
       households: directory.households().map((household) => ({
         ...household,
         members: membersOf(directory, household.id),
+        people: peopleOf(directory, household.id),
       })),
     };
     return body;
@@ -220,6 +238,30 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
       by: admin,
       at: context.now(),
     });
+    return body;
+  });
+
+  // lg-35: the admin's only. A request recorded here and applied to the books by
+  // the household's next close, so this reads and writes no books either.
+  app.post(ROUTES.adminPersonRetire, { onRequest: adminWrite }, async (request) => {
+    const admin = adminOf(request);
+    const id = householdIdOf(request);
+    const draft = retirePersonRequestSchema.safeParse(request.body);
+    if (!draft.success) {
+      throw new AppError("BAD_REQUEST", "Send the person's id, and retire or return.");
+    }
+    namedHousehold(directory, id);
+    const { person, standing } = directory.retirePerson({
+      household: id,
+      ...draft.data,
+      by: admin,
+      at: context.now(),
+    });
+    const body: AdminPerson = {
+      person,
+      name: shownName(directory.names(id), person),
+      standing,
+    };
     return body;
   });
 }
