@@ -17,12 +17,15 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
+import type { ImportStatementReport } from "@ledger/contract";
 import { importStatement } from "../src/api/statements.ts";
 import { StatementPaste } from "../src/statements/StatementPaste.tsx";
 
 vi.mock("../src/api/statements.ts", () => ({ importStatement: vi.fn() }));
 
 const stored = vi.mocked(importStatement);
+const onStored = vi.fn();
+const onOpenInbox = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -52,7 +55,7 @@ const PASTE = [
 ].join("\n");
 
 function paste(text: string): void {
-  render(<StatementPaste />);
+  render(<StatementPaste onStored={onStored} onOpenInbox={onOpenInbox} />);
   fireEvent.change(screen.getByLabelText("Transactions copied from AccèsD"), {
     target: { value: text },
   });
@@ -75,7 +78,12 @@ test("previews the parsed rows, newest first, and stores nothing until confirmed
 });
 
 test("confirming sends the pasted text and shows the report", async () => {
-  stored.mockResolvedValue({ rowsAdded: 1, rowsAlreadyPresent: 1, tailBalanceCents: 210_000 });
+  stored.mockResolvedValue({
+    rowsAdded: 1,
+    rowsAlreadyPresent: 1,
+    tailBalanceCents: 210_000,
+    rowsInInbox: 1,
+  });
   paste(PASTE);
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
 
@@ -139,7 +147,12 @@ test("a paste with a header and no rows is refused before anything is sent", () 
 });
 
 test("Paste another empties the box and goes back to the start", async () => {
-  stored.mockResolvedValue({ rowsAdded: 2, rowsAlreadyPresent: 0, tailBalanceCents: 210_000 });
+  stored.mockResolvedValue({
+    rowsAdded: 2,
+    rowsAlreadyPresent: 0,
+    tailBalanceCents: 210_000,
+    rowsInInbox: 2,
+  });
   paste(PASTE);
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm and store" }));
@@ -151,4 +164,92 @@ test("Paste another empties the box and goes back to the start", async () => {
   expect(box.value).toBe("");
   expect(screen.queryByRole("status")).toBeNull();
   expect(screen.getByRole("button", { name: "Preview" })).toBeTruthy();
+});
+
+/** Previews and confirms the invented paste, with the API answering `report`. */
+async function store(report: ImportStatementReport): Promise<void> {
+  stored.mockResolvedValue(report);
+  paste(PASTE);
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm and store" }));
+  await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
+}
+
+test("rows no rule filed are named as waiting in the inbox, with a button that opens it (lg-54)", async () => {
+  await store({ rowsAdded: 2, rowsAlreadyPresent: 0, tailBalanceCents: 210_000, rowsInInbox: 2 });
+
+  const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
+  expect(card?.textContent).toContain("All 2 rows added wait in the inbox");
+  expect(card?.textContent).toContain("counts in neither bucket until you answer it");
+  expect(card?.textContent).toContain("nothing is filed to Joint by default");
+  fireEvent.click(screen.getByRole("button", { name: "Open the inbox" }));
+  expect(onOpenInbox).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("button", { name: "Paste another" })).toBeTruthy();
+});
+
+test("only some rows waiting names that number out of the rows added (lg-54)", async () => {
+  await store({ rowsAdded: 3, rowsAlreadyPresent: 1, tailBalanceCents: 210_000, rowsInInbox: 1 });
+
+  expect(screen.getByText(/of the 3 rows added waits in the inbox/u).textContent).toContain(
+    "1 of the 3 rows added waits in the inbox",
+  );
+});
+
+test("a paste whose rows were all filed names none as waiting (lg-54)", async () => {
+  await store({ rowsAdded: 2, rowsAlreadyPresent: 0, tailBalanceCents: 210_000, rowsInInbox: 0 });
+
+  expect(screen.getByText(/Every row added was filed/u)).toBeTruthy();
+  expect(screen.queryByText(/in the inbox/u)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Open the inbox" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Paste another" })).toBeTruthy();
+});
+
+test("a paste that added no rows says nothing about filing (lg-54)", async () => {
+  await store({ rowsAdded: 0, rowsAlreadyPresent: 2, tailBalanceCents: 210_000, rowsInInbox: 0 });
+
+  expect(screen.queryByText(/inbox/iu)).toBeNull();
+  expect(screen.queryByText(/filed/u)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Open the inbox" })).toBeNull();
+});
+
+test("the shell is told once the paste is stored, and not before (lg-54)", async () => {
+  stored.mockResolvedValue({
+    rowsAdded: 1,
+    rowsAlreadyPresent: 0,
+    tailBalanceCents: 210_000,
+    rowsInInbox: 1,
+  });
+  paste(PASTE);
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  expect(onStored).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Confirm and store" }));
+  await waitFor(() => expect(onStored).toHaveBeenCalledTimes(1));
+});
+
+test("a refused paste does not tell the shell anything was stored (lg-54)", async () => {
+  stored.mockRejectedValue(new AppError("STATEMENT_CHAIN_BROKEN", "Not stored."));
+  paste(PASTE);
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Confirm and store" }));
+
+  await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+  expect(onStored).not.toHaveBeenCalled();
+});
+
+test("one row added and waiting says the row waits, not '1 of the 1 rows' (lg-54)", async () => {
+  await store({ rowsAdded: 1, rowsAlreadyPresent: 0, tailBalanceCents: 210_000, rowsInInbox: 1 });
+
+  const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
+  expect(card?.textContent).toContain("The row added waits in the inbox");
+  expect(card?.textContent).not.toContain("1 of the 1");
+});
+
+test("every one of several rows added waiting says all of them wait (lg-54)", async () => {
+  await store({ rowsAdded: 5, rowsAlreadyPresent: 0, tailBalanceCents: 210_000, rowsInInbox: 5 });
+
+  const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
+  expect(card?.textContent).toContain("All 5 rows added wait in the inbox");
+  expect(card?.textContent).not.toContain("5 of the 5");
 });

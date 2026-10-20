@@ -340,7 +340,7 @@ describe("a paste meeting a day the workbook both re-dated and reordered (lg-59)
 
     const result = outcome(() => paste(db, rows, 99_500));
 
-    const truth = { rowsAdded: 1, rowsAlreadyPresent: 2, tailBalanceCents: 99_000 };
+    const truth = { rowsAdded: 1, rowsAlreadyPresent: 2, tailBalanceCents: 99_000, rowsInInbox: 1 };
     if ("rowsAdded" in (result as object)) {
       expect(result).toEqual(truth);
       expect(storedRows(db).slice(0, 3)).toEqual(before);
@@ -394,6 +394,7 @@ describe("a paste meeting a day the workbook both re-dated and reordered (lg-59)
       rowsAdded: 1,
       rowsAlreadyPresent: 3,
       tailBalanceCents: 106_089,
+      rowsInInbox: 1,
     });
     const after = storedRows(db);
     expect(after.slice(0, 3)).toEqual(before);
@@ -502,7 +503,12 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
     const result = outcome(() => paste(db, rows, 99_000));
 
     if ("rowsAdded" in (result as object)) {
-      expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 3, tailBalanceCents: 101_000 });
+      expect(result).toEqual({
+        rowsAdded: 1,
+        rowsAlreadyPresent: 3,
+        tailBalanceCents: 101_000,
+        rowsInInbox: 1,
+      });
       expect(storedRows(db).slice(0, 4)).toEqual(before);
     } else {
       expect(result).toMatchObject({ code: "STATEMENT_ROW_CONFLICT" });
@@ -534,6 +540,7 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
       rowsAdded: 1,
       rowsAlreadyPresent: 3,
       tailBalanceCents: 116_477,
+      rowsInInbox: 1,
     });
     expect(storedRows(db).slice(0, 5)).toEqual(before);
   });
@@ -556,6 +563,7 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
       rowsAdded: 0,
       rowsAlreadyPresent: 2,
       tailBalanceCents: 103_589,
+      rowsInInbox: 0,
     });
   });
 
@@ -575,6 +583,7 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
       rowsAdded: 1,
       rowsAlreadyPresent: 1,
       tailBalanceCents: 106_866,
+      rowsInInbox: 1,
     });
   });
 
@@ -593,6 +602,7 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
       rowsAdded: 0,
       rowsAlreadyPresent: 1,
       tailBalanceCents: 104_666,
+      rowsInInbox: 0,
     });
   });
 });
