@@ -64,6 +64,8 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   // person of the household holds, which is a conflict with what is stored.
   PERSON_NOT_FOUND: 404,
   PERSON_NAME_TAKEN: 409,
+  // lg-35: a ratio naming a person the books have retired, a conflict with what is stored.
+  PERSON_RETIRED: 409,
   // lg-8: an upload that is not an image is a media type refused; a receipt
   // filed once is a conflict with what is stored; no model configured is the
   // service unable to do this one thing, which retrying will not change until

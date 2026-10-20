@@ -99,6 +99,9 @@ export function directorySnapshot(directory: Directory): string {
     directory.households().map((household) => ({
       ...household,
       history: directory.history(household.id),
+      // lg-35: retirements are no line of the history, so they are read here too.
+      retirements: directory.retirements(household.id),
+      standings: [...directory.standings(household.id)],
     })),
   );
 }

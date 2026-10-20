@@ -27,6 +27,7 @@ import {
   matchDeposits,
   ratioInEffect,
   recurringDates,
+  retiredOn,
 } from "@ledger/books";
 import type {
   CandidateRow,
@@ -56,6 +57,7 @@ import type {
   SettlementTransfer,
 } from "@ledger/contract";
 import type { Database } from "better-sqlite3";
+import { retirementsOf } from "./people.ts";
 import { requireKnownPerson } from "./rules.ts";
 import type { RuleContext } from "./rules.ts";
 import { currentRatios } from "./salaries.ts";
@@ -721,14 +723,87 @@ function insertPeriod(
   return periodId;
 }
 
+/** A request from the household directory to retire a person or bring them back (lg-35). */
+export interface PendingRetirement {
+  /** The directory's record id. */
+  id: number;
+  person: string;
+  action: "retire" | "return";
+  /** ISO instant it was recorded. */
+  at: string;
+}
+
+/**
+ * Copies into the books every request recorded before the close that they do
+ * not hold yet, each from the day after the period it closed (lg-35). Inside
+ * the close's transaction, so a refused close applies nothing. A person the
+ * books have never enrolled — added and removed without a request between —
+ * is enrolled first, so the record has someone to name.
+ */
+function applyRetirements(
+  context: PeriodContext,
+  periodId: number,
+  end: string,
+  pending: readonly PendingRetirement[],
+): void {
+  const held = new Set(
+    (
+      context.db.prepare("SELECT directory_id FROM people_retirements").all() as {
+        directory_id: number;
+      }[]
+    ).map((row) => row.directory_id),
+  );
+  const closedAt = context.now().toISOString();
+  const enrol = context.db.prepare("INSERT OR IGNORE INTO people (id, added_at) VALUES (?, ?)");
+  const insert = context.db.prepare(
+    `INSERT INTO people_retirements (person_id, action, from_date, period_id, directory_id)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  const from = dayAfter(end);
+  for (const request of pending.toSorted((a, b) => a.id - b.id)) {
+    if (held.has(request.id) || request.at > closedAt) continue;
+    enrol.run(request.person, closedAt);
+    insert.run(request.person, request.action, from, periodId, request.id);
+  }
+}
+
+/** Every request the books have applied and the day it holds from, for the directory's echo (lg-35). */
+export function appliedRetirements(db: Database): { id: number; fromDate: string }[] {
+  return (
+    db.prepare("SELECT directory_id, from_date FROM people_retirements ORDER BY id").all() as {
+      directory_id: number;
+      from_date: string;
+    }[]
+  ).map((row) => ({ id: row.directory_id, fromDate: row.from_date }));
+}
+
+/**
+ * A period weighed at a ratio that names a person retired from it is not
+ * closed (lg-35): a ratio without them is confirmed first. A retirement takes
+ * effect the day after a close, so one retired from the open period is retired
+ * on its first day.
+ */
+function requireNobodyRetired(db: Database, start: string | null, computed: Computed): void {
+  if (start === null) return;
+  const retired = retiredOn(retirementsOf(db), start);
+  if (computed.figures.shares.some((share) => retired.has(share.personId))) {
+    throw new AppError("PERSON_RETIRED");
+  }
+}
+
 /**
  * Closes the open period on `request.end` and records the settlement it
  * computes. `request.start` is the open period's start as the closer saw it: a
  * period the other person closed meanwhile is `PERIOD_NOT_OPEN`, never closed
  * twice. For the first period it is the closer's choice of where the two were
- * last even.
+ * last even. `pending` is the household directory's retirement requests
+ * (lg-35): those the books do not hold yet are applied, from the day after.
  */
-export function closePeriod(context: PeriodContext, request: ClosePeriodRequest): ClosedPeriod {
+export function closePeriod(
+  context: PeriodContext,
+  request: ClosePeriodRequest,
+  pending: readonly PendingRetirement[] = [],
+): ClosedPeriod {
   if (request.end > todayOf(context)) {
     throw new AppError("BAD_REQUEST", "A period cannot end after today.");
   }
@@ -742,7 +817,10 @@ export function closePeriod(context: PeriodContext, request: ClosePeriodRequest)
       }
       const computed = settlementFor(context.db, closed, start, request.end);
       if (computed === null) throw new AppError("RATIO_NOT_IN_EFFECT");
-      return insertPeriod(context, { start, end: request.end }, computed);
+      requireNobodyRetired(context.db, start, computed);
+      const periodId = insertPeriod(context, { start, end: request.end }, computed);
+      applyRetirements(context, periodId, request.end, pending);
+      return periodId;
     })
     .immediate();
   const stored = closedPeriods(context.db).find((period) => period.id === id);

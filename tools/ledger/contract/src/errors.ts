@@ -22,8 +22,8 @@
  * inbox's (lg-4), the next is the salaries' (lg-5), the next four are the
  * periods' (lg-6), the next is the spending categories' (lg-15), the next
  * four are the household directory's (lg-22), the next two are its people's
- * shown names (lg-33), the next six are the receipts' (lg-8), and the last is
- * their items' (lg-10).
+ * shown names (lg-33), the next is a person retired from the books (lg-35), the
+ * next six are the receipts' (lg-8), and the last is their items' (lg-10).
  */
 
 import {
@@ -170,6 +170,14 @@ export const LEDGER_ERROR_CODES = [
    * id: two people shown alike could not be told apart on any screen.
    */
   "PERSON_NAME_TAKEN",
+  // lg-35: a person retired from the books at a close, until a return.
+  /**
+   * A ratio names a person retired from the books on the day it would take
+   * effect, or the period being closed is weighed at one that does. The ratio is
+   * never changed for the household: a new one without them is confirmed on the
+   * salaries screen.
+   */
+  "PERSON_RETIRED",
   // --- Receipts (lg-8) ---
   /**
    * The upload's first bytes are not a JPEG, a PNG or a WebP image, whatever it
@@ -252,6 +260,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   MEMBER_NOT_FOUND: "That address is not a member of this household.",
   PERSON_NOT_FOUND: "That person is not one this household's members have been added as.",
   PERSON_NAME_TAKEN: "Another person in this household is already shown under that name.",
+  PERSON_RETIRED:
+    "That ratio names a person retired from the books. Confirm a ratio without them on the salaries screen.",
   RECEIPT_NOT_AN_IMAGE: "That is not a photo. Take one, or choose a JPEG, PNG or WebP image.",
   RECEIPT_NOT_FOUND: "There is no such receipt.",
   RECEIPT_ALREADY_FILED:

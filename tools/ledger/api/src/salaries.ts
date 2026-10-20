@@ -14,7 +14,7 @@
  * effect, and until then the ratio in effect is the one confirmed before.
  */
 
-import { dayAfter, ratioFromSalaries, ratioInEffect } from "@ledger/books";
+import { dayAfter, ratioFromSalaries, ratioInEffect, retiredOn } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type {
   ConfirmRatioRequest,
@@ -26,6 +26,7 @@ import type {
   SalaryEntryResponse,
 } from "@ledger/contract";
 import type { Database } from "better-sqlite3";
+import { retirementsOf } from "./people.ts";
 import { requireKnownPerson } from "./rules.ts";
 import type { RuleContext } from "./rules.ts";
 
@@ -240,7 +241,8 @@ function requireSamePeopleInOpenPeriod(db: Database, confirmed: Ratio): void {
  * `SALARY_NOT_FOUND` — and be one year's, one for each of two people or more.
  * The ratio is derived again here from the records, never taken from the
  * caller. A ratio that changes who is in it waits for a close
- * (`requireSamePeopleInOpenPeriod`).
+ * (`requireSamePeopleInOpenPeriod`), and one naming a person retired from the
+ * books on `effectiveFrom` is `PERSON_RETIRED` (lg-35).
  */
 export function confirmRatio(context: SalaryContext, request: ConfirmRatioRequest): Ratio {
   return context.db
@@ -254,6 +256,11 @@ export function confirmRatio(context: SalaryContext, request: ConfirmRatioReques
       });
       if (new Set(salaries.map((salary) => salary.year)).size !== 1) {
         throw new AppError("BAD_REQUEST", "A ratio comes from one year's salaries.");
+      }
+      // lg-35: nobody retired from the books on the day it takes effect.
+      const retired = retiredOn(retirementsOf(context.db), request.effectiveFrom);
+      if (salaries.some((salary) => retired.has(salary.personId))) {
+        throw new AppError("PERSON_RETIRED");
       }
       const byPerson = new Map(salaries.map((salary) => [salary.personId, salary.id]));
       const shares = ratioFromSalaries(salaries).map((share): RatioShare => ({

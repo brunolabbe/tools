@@ -33,7 +33,8 @@ import type {
   SpendingPeriod,
   StatsRange,
 } from "@ledger/contract";
-import { splitCents } from "./buckets.ts";
+import { JointTotals } from "./buckets.ts";
+import type { RetirementInput } from "./people.ts";
 import { periodIndexOf, recurringDates } from "./periods.ts";
 import type { PeriodSpan, RecurringInput } from "./periods.ts";
 import { ratioInEffect } from "./ratio.ts";
@@ -204,17 +205,19 @@ export function contributionSeries(
  * Each person's own money in the mortgage bucket at the end of each day it
  * moved: their deposits, and half of every joint row, with the odd cent split
  * once on the cumulative joint total — `mortgageAsOf`'s rule, kept running so a
- * long history is one pass instead of one pass per day.
+ * long history is one pass instead of one pass per day. A joint row gives no
+ * share to a person retired on its date (lg-35), as there.
  */
 export function mortgageOwnSeries(
   rows: readonly StatRow[],
   people: readonly string[],
   range: StatsRange,
+  retirements: readonly RetirementInput[] = [],
 ): MortgageOwnPoint[] {
   const filed = byDate(rows.filter((row) => row.bucket === "mortgage"));
   const known = new Set(people);
   const own = new Map<string, number>();
-  let joint = 0;
+  const joint = new JointTotals(retirements);
   let balance = 0;
   const points: MortgageOwnPoint[] = [];
   for (let index = 0; index < filed.length;) {
@@ -224,7 +227,7 @@ export function mortgageOwnSeries(
       if (row === undefined) continue;
       balance += row.amountCents;
       if (row.personId === null) {
-        joint += row.amountCents;
+        joint.add(row.date, row.amountCents);
       } else {
         known.add(row.personId);
         own.set(row.personId, (own.get(row.personId) ?? 0) + row.amountCents);
@@ -232,7 +235,7 @@ export function mortgageOwnSeries(
     }
     if (!inRange(date, range)) continue;
     const ids = [...known].toSorted();
-    const halves = splitCents(joint, ids.length);
+    const halves = joint.sharesOf(ids);
     points.push({
       date,
       balanceCents: balance,

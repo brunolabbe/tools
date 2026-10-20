@@ -597,3 +597,32 @@ test("a charge to a renamed person is confirmed under their shown name, and send
   );
   expect(await screen.findByText("Charged to Alex.")).toBeTruthy();
 });
+
+// lg-35: casey, retired at the last close, is not offered, and their line entered
+// late into a period they were in is still listed under them.
+test("lists a retired person's late line under them, and offers only the people in", async () => {
+  vi.mocked(fetchOpenPeriod).mockResolvedValue({
+    ...OPEN,
+    lines: [
+      ...OPEN.lines,
+      {
+        date: "2026-06-20",
+        personId: "casey",
+        amountCents: 3_000,
+        chargedTo: null,
+        category: null,
+        spendingCategoryId: null,
+        note: null,
+        lineId: 11,
+        recurringItemId: null,
+        late: true,
+      },
+    ],
+  });
+  render(<Periods />);
+
+  expect(await screen.findByText("Paid by casey")).toBeTruthy();
+  expect(screen.getByText("Paid by alex")).toBeTruthy();
+  const form = screen.getByRole("form", { name: "Add a line" });
+  expect(within(form).queryByLabelText("This was casey's")).toBeNull();
+});

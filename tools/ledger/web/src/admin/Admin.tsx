@@ -1,7 +1,8 @@
 /**
  * The admin's screen (lg-22): every household and its members, with adding and
  * removing any member, changing a member's address (lg-34), renaming a person
- * (lg-33), and creating a household. Only an admin is answered (`LEDGER_ADMINS`),
+ * (lg-33), retiring a person from the books at the next close or bringing them
+ * back (lg-35), and creating a household. Only an admin is answered (`LEDGER_ADMINS`),
  * whether or not they are in a household, and being one shows no household's books.
  *
  * It lists every household's addresses in one place as well, because each must
@@ -12,12 +13,19 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { AppError } from "@ledger/contract";
-import type { AddMemberRequest, AdminHousehold, CreateHouseholdRequest } from "@ledger/contract";
+import type {
+  AddMemberRequest,
+  AdminHousehold,
+  CreateHouseholdRequest,
+  PersonStanding,
+  RetirePersonRequest,
+} from "@ledger/contract";
 import {
   adminAddMember,
   adminChangeAddress,
   adminRemoveMember,
   adminRenamePerson,
+  adminRetirePerson,
   createHousehold,
   fetchAdminHouseholds,
 } from "../api/households.ts";
@@ -103,11 +111,14 @@ function HouseholdCard(props: {
   const [editing, setEditing] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Who an address can be added for: the people who have one now.
   const people = [...new Set(household.members.map((member) => member.person))].toSorted();
   // The listing's own names: an admin may be in no household, so has no other map.
-  const names: ShownNames = Object.fromEntries(
-    household.members.map((member) => [member.person, member.name]),
-  );
+  // Everyone the household has named is in `people` (lg-35), a member who has left included.
+  const names: ShownNames = Object.fromEntries([
+    ...household.people.map((one) => [one.person, one.name]),
+    ...household.members.map((member) => [member.person, member.name]),
+  ]);
 
   const add = async (member: AddMemberRequest) => {
     const added = await adminAddMember(household.id, member);
@@ -215,16 +226,17 @@ function HouseholdCard(props: {
           {problem}
         </p>
       )}
-      {people.length > 0 && (
+      {household.people.length > 0 && (
         <>
           <h4>People</h4>
           <ul className="members" aria-label={`People in ${household.name}`}>
-            {people.map((person) => (
+            {household.people.map((one) => (
               <RenamePerson
-                key={person}
+                key={one.person}
                 household={household.id}
-                person={person}
-                name={shownName(names, person)}
+                person={one.person}
+                name={shownName(names, one.person)}
+                standing={one.standing}
                 onChange={onChange}
               />
             ))}
@@ -232,6 +244,11 @@ function HouseholdCard(props: {
           <p className="muted hint">
             A rename changes how a person is shown on every screen. Their records keep the id they
             were added under.
+          </p>
+          <p className="muted hint">
+            Retiring a person takes effect at the household&rsquo;s next close: they settle the open
+            period, and every period after leaves them out. Remove their addresses first. Bringing
+            them back works the same way.
           </p>
         </>
       )}
@@ -308,19 +325,60 @@ function ChangeAddress(props: {
   );
 }
 
-/** One person, shown by name, with a Rename beside them (lg-33). */
+/** Where a person stands in the books, as the admin's list says it (lg-35). */
+const STANDING_LABELS: Record<PersonStanding, string> = {
+  in: "in the books",
+  retiring: "retiring at the next close",
+  retired: "retired",
+  returning: "returning at the next close",
+};
+
+/**
+ * The one request each standing offers (lg-35): retire someone in, undo a
+ * retirement or a return no close has applied yet, or bring a retired one back.
+ */
+const STANDING_ACTIONS: Record<
+  PersonStanding,
+  { action: RetirePersonRequest["action"]; label: string; named: (name: string) => string }
+> = {
+  in: { action: "retire", label: "Retire", named: (name) => `Retire ${name}` },
+  retiring: { action: "return", label: "Keep in", named: (name) => `Keep ${name} in` },
+  retired: { action: "return", label: "Bring back", named: (name) => `Bring ${name} back` },
+  returning: {
+    action: "retire",
+    label: "Keep retired",
+    named: (name) => `Keep ${name} retired`,
+  },
+};
+
+/** One person, shown by name, with a Rename beside them (lg-33) and their standing (lg-35). */
 function RenamePerson(props: {
   household: string;
   person: string;
   name: string;
+  standing: PersonStanding;
   onChange: () => Promise<void>;
 }): React.ReactElement {
-  const { household, person, name, onChange } = props;
+  const { household, person, name, standing, onChange } = props;
   const id = useId();
   const [editing, setEditing] = useState(false);
   const [typed, setTyped] = useState(name);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const next = STANDING_ACTIONS[standing];
+
+  const retire = async (): Promise<void> => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await adminRetirePerson(household, { person, action: next.action });
+      await onChange();
+    } catch (error: unknown) {
+      setProblem(AppError.from(error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const save = async (): Promise<void> => {
     setBusy(true);
@@ -348,19 +406,38 @@ function RenamePerson(props: {
   if (!editing) {
     return (
       <li>
-        <strong>{name}</strong>
-        <button
-          type="button"
-          className="small secondary"
-          aria-label={`Rename ${name}`}
-          onClick={() => {
-            setTyped(name);
-            setProblem(null);
-            setEditing(true);
-          }}
-        >
-          Rename
-        </button>
+        <span>
+          <strong>{name}</strong> <span className="muted">{STANDING_LABELS[standing]}</span>
+        </span>
+        <span className="actions">
+          <button
+            type="button"
+            className="small secondary"
+            aria-label={`Rename ${name}`}
+            disabled={busy}
+            onClick={() => {
+              setTyped(name);
+              setProblem(null);
+              setEditing(true);
+            }}
+          >
+            Rename
+          </button>
+          <button
+            type="button"
+            className="small secondary"
+            aria-label={next.named(name)}
+            disabled={busy}
+            onClick={() => void retire()}
+          >
+            {next.label}
+          </button>
+        </span>
+        {problem !== null && (
+          <p className="bad" role="alert">
+            {problem}
+          </p>
+        )}
       </li>
     );
   }

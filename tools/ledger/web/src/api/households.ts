@@ -9,6 +9,7 @@ import type {
   AddMemberRequest,
   AdminHousehold,
   AdminHouseholdsResponse,
+  AdminPerson,
   ChangeAddressRequest,
   CreateHouseholdRequest,
   HouseholdMember,
@@ -16,6 +17,7 @@ import type {
   HouseholdSummary,
   PersonName,
   RenamePersonRequest,
+  RetirePersonRequest,
 } from "@ledger/contract";
 import { requestJson } from "./client.ts";
 
@@ -82,6 +84,20 @@ export async function adminChangeAddress(
   return await requestJson<HouseholdMember>(at(ROUTES.adminMemberAddress, household), {
     method: "POST",
     body: change,
+  });
+}
+
+/**
+ * A person retired from the books at the next close, or brought back at the next
+ * close after it (lg-35). The answer is where they stand afterwards.
+ */
+export async function adminRetirePerson(
+  household: string,
+  request: RetirePersonRequest,
+): Promise<AdminPerson> {
+  return await requestJson<AdminPerson>(at(ROUTES.adminPersonRetire, household), {
+    method: "POST",
+    body: request,
   });
 }
 

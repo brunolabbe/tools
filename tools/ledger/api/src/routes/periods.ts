@@ -28,10 +28,11 @@ import type {
 } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
-import { booksOf } from "../identity.ts";
+import { booksOf, personOf } from "../identity.ts";
 import {
   addLine,
   addRecurring,
+  appliedRetirements,
   changeRecurring,
   closePeriod,
   closedPeriods,
@@ -91,11 +92,25 @@ export function registerPeriodRoutes(app: FastifyInstance, context: AppContext):
     return body;
   });
 
+  // lg-35: the close applies the directory's retirement requests to the books,
+  // then echoes back to the directory which it applied, so the admin screen can
+  // say "retired" without reading any books. The books are the record; an echo
+  // that fails is written by the next close, and the close still stands.
   app.post(ROUTES.periodClose, { onRequest: write }, async (request) => {
+    const household = personOf(request).household;
     const closed: ClosedPeriod = closePeriod(
       ruleContext(context, request),
       bodyOf(closePeriodRequestSchema, request, "close"),
+      context.directory.retirements(household),
     );
+    try {
+      context.directory.markApplied(appliedRetirements(booksOf(request)), context.now());
+    } catch (error: unknown) {
+      context.logger.warn(
+        "a close could not record in the directory which retirements it applied; the next close will",
+        { code: AppError.from(error).code },
+      );
+    }
     return closed;
   });
 

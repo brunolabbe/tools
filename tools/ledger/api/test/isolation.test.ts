@@ -889,6 +889,7 @@ describe("the isolation sweep", () => {
         `POST ${ROUTES.adminMemberRemove}`,
         `POST ${ROUTES.adminMemberAddress}`,
         `POST ${ROUTES.adminPersonRename}`,
+        `POST ${ROUTES.adminPersonRetire}`,
       ];
 
       expect(swept.toSorted()).toEqual(answered);

@@ -74,7 +74,9 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
         const [rows, autoFiled, people, categories] = await Promise.all([
           fetchInbox(signal),
           fetchAutoFiled(signal),
-          fetchPeople(signal),
+          // A row may predate a retirement, so it can be filed to anyone the books
+          // hold (lg-35); the API takes any of them.
+          fetchPeople(signal, "everyone"),
           fetchSpendingCategories(signal),
         ]);
         setLoad({ state: "ready", rows, autoFiled, people, categories });

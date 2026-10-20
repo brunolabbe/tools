@@ -75,6 +75,7 @@ describe("the people table", () => {
     const response = await app.server.inject({ method: "GET", url: ROUTES.people });
     expect(response.json<PeopleResponse>()).toEqual({
       people: ["alex", "casey", "sam"],
+      retired: [],
       names: { alex: "alex", casey: "casey", sam: "sam" },
     });
   });

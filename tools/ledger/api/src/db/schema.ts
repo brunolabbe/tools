@@ -655,6 +655,27 @@ const MIGRATIONS: readonly string[] = [
       WHERE held.retired = 0 AND lower(held.name) = lower(wanted.name))
     ORDER BY position;
   `,
+
+  // 13 — a person retired from the books at a close, or back (lg-35).
+  `
+  -- Who is in each period: an admin's request, recorded in the household
+  -- directory, copied here by the close that applies it, so the books say who
+  -- was in each period without the directory — a backup of the data directory
+  -- restores it whole. A person is in until a retire takes effect and again from
+  -- a return; the latest record from on or before a date stands, by id.
+  CREATE TABLE people_retirements (
+    id INTEGER PRIMARY KEY,
+    person_id TEXT NOT NULL REFERENCES people (id),
+    action TEXT NOT NULL CHECK (action IN ('retire', 'return')),
+    -- yyyy-mm-dd: the day after the closed period's end_date, the first day it holds.
+    from_date TEXT NOT NULL,
+    -- The close that applied it.
+    period_id INTEGER NOT NULL REFERENCES periods (id),
+    -- The directory's record it copies (retirements.id), so each is applied once.
+    -- Not an address: the admin who asked is in the directory's record only.
+    directory_id INTEGER NOT NULL UNIQUE
+  );
+  `,
 ];
 
 /**

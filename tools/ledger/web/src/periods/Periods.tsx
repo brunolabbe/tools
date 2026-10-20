@@ -195,6 +195,9 @@ export function Periods(): React.ReactElement {
   }
 
   const { people, categories, me, open, closed, recurring } = load;
+  // Who the open period lists: who is in, and anyone retired at a close who
+  // has a line in it, one entered late into a period they were in (lg-35).
+  const shownPeople = [...new Set([...people, ...open.lines.map((line) => line.personId)])];
   const names = spendingNames(categories);
   const range = (): { start?: string | null; end?: string } => ({
     ...(open.first && since !== "" ? { start: since } : {}),
@@ -270,7 +273,7 @@ export function Periods(): React.ReactElement {
         <h2 id={`${id}-open`}>
           {open.start === null ? "Open period" : `Open period, since ${open.start}`}
         </h2>
-        {people.map((personId) => {
+        {shownPeople.map((personId) => {
           const lines = open.lines.filter((line) => line.personId === personId);
           const shared = lines
             .filter((line) => line.chargedTo === null)
