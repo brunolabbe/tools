@@ -229,3 +229,17 @@ member: 400 }`; "retiring: expected [Function add] to throw an error") and
     return reads as a cancel (and, from this round, lets an address be added);
     and `retirements_applied` is not tied to the books, so only hand-written
     SQL could write a wrong echo. Neither fix is fully stated.
+- 2026-10-20 — Renumbered at landing, owner-ordered maintenance after both
+  gates (merge order: #581 first, then lg-35). `main` at `5c6077f3` carried
+  lg-55's books migration 13 ("what the household says about its mortgage"),
+  so `git merge origin/main` (`c554ebbd`) conflicted in
+  `tools/ledger/api/src/db/schema.ts` and nowhere else: lg-55's stays 13, this
+  ticket's `people_retirements` is now books migration 14 (the comment is its
+  only mention of a number; no `user_version` is set by hand). Nine
+  `user_version` asserts moved from 13 to 14: `schema.test.ts` 5,
+  `auto-file.test.ts` 2, `spending-backfill.test.ts` 2; `00-ANALYSIS.md` §7's
+  "books migration 13" is 14. The directory's migration 6 is untouched. The
+  Build and Round 1 entries above say "13" as written before the merge.
+  `npx vitest run` over `schema.test.ts`, `retire-person.test.ts`,
+  `mortgage.test.ts`, `auto-file.test.ts` and `spending-backfill.test.ts` →
+  `Test Files 5 passed (5)`, `Tests 71 passed (71)`.
