@@ -38,6 +38,16 @@ check. **Chosen: this ticket, with a check.**
 **Phone width.** Options were 360px · 375px · 320px. **Chosen: 360px.** A
 screen that works there also works on a standard iPhone (375–393px).
 
+## Decision — answered 2026-10-20 by the owner, at intake
+
+**What "every screen" means.** None of the tools has a router; screens are view
+states. Options were: (1) the builder's enumerated list — the builder lists each
+tool's top-level views in the Log with how each is reached, the gate grades
+coverage against that list and may challenge the list itself as a finding, but
+cannot fail the line for a sub-state (error banner, empty variant) the list does
+not name · (2) every view state, including error, empty and loading variants ·
+(3) not in this batch. **Chosen: (1).**
+
 ## Build
 
 1. **The rule.** Write `.claude/rules/responsive-layout.md`, path-scoped to
@@ -96,8 +106,10 @@ screen that works there also works on a standard iPhone (375–393px).
 
 1. `.claude/rules/responsive-layout.md` exists with the three points in step 1,
    and the root `CLAUDE.md` points to it.
-2. Each tool has `e2e/layout.spec.ts` covering every screen in its `web/src`,
-   at both widths, with data on the page. The Log lists the screens per tool.
+2. Each tool has `e2e/layout.spec.ts` covering every screen on the builder's
+   enumerated list (the Log names each tool's top-level views and how each is
+   reached; owner, 2026-10-20), at both widths, with data on the page. A
+   sub-state the list does not name is not a failure of this line.
 3. The check can fail: the Log shows it red at 360px with a planted
    `width: 400px` on one container, in one tool.
 4. Ledger's `e2e` job runs in `ledger.yml`, and its README describes the specs
