@@ -319,3 +319,32 @@ omission the Trap describes. Shown failing: with `COPY packages/ui/...`removed f
   folded in: dark-theme values for planner's `--ok` and `--warn` (above).
   Neither can be filed in this branch: a ticket for another tool is its own
   `docs` pull request.
+
+- 2026-10-20 — Round 1, after gate 1 (FAIL at `2b07c8df`, one high).
+  - **F1, fixed (`200eb345`).** The guard asserted only that its role list
+    sat inside `tokens.css`'s header, so a role added to the header alone read
+    as enforced and was enforced by nothing. `tokens.test.ts` now asserts the
+    header's role list (`headerRoles`, lines shaped ` *     --name   text`) and
+    `COLOUR_ROLES` are equal in both directions. The gate's plant, an `--info`
+    line added to the header's role list: before the fix `14 passed (14)`;
+    after, `1 failed | 13 passed (14)` with
+    `"listedButNotEnforced": ["--info"]`; removed, `14 passed (14)`. The
+    converse, `--warn` dropped from the header: `1 failed | 13 passed (14)`
+    with `"enforcedButNotListed": ["--warn"]`; restored, `14 passed (14)`. Each
+    plant was undone with `git checkout 200eb345 -- packages/ui/src/tokens.css`.
+  - **F3, fixed (`905c68fe`).** The stale-line check now allows a web-only
+    workspace in the build stage only; the runtime stage allows the API's
+    closure and `tools/<tool>/web`. The gate's plant: the line
+    `packages/ui/package.json` copied from the build stage into
+    `tools/planner/Dockerfile`'s runtime stage. `Tests  1 failed | 7 passed (8)`
+    with a `tools/planner/Dockerfile (runtime): packages/ui` entry; restored,
+    `8 passed (8)`.
+  - **F2, left.** Ledger's `.sr-only` had no `padding: 0` and the shared one
+    does, so the Stats "Range" `legend.sr-only` loses the UA's 2px
+    inline padding (the gate measured `width: 4px` to `1px`). It is clipped to
+    nothing by `clip-path: inset(50%)`, the screenshots are byte-identical, and
+    I did not re-measure it. The finding names no fix and the one available,
+    a ledger-local override, would put back a near-duplicate of the rule this
+    ticket lifted, to preserve a padding nothing can see. The Build's "only
+    where identical in effect" was read as "in what renders"; the Log's earlier
+    claim that ledger's rule was identical was too strong.
