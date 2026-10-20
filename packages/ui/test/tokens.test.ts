@@ -200,3 +200,42 @@ ${rest}`;
     ]);
   });
 });
+
+describe("the header reader", () => {
+  const header = (...lines: string[]): string =>
+    ["/*", " * COLOUR ROLES:", " *", ...lines, " *", " * prose.", " */", ":root {}"].join("\n");
+
+  // Each is a way an editor adds a role to the list that the guard must still see.
+  test.each([
+    ["aligned", " *     --info          informational"],
+    ["a 15-character name that leaves one space", " *     --text-inverted informational"],
+    ["a 16-character name", " *     --surface-raised raised panels"],
+    ["one column short", " *    --info          informational"],
+    ["one column long", " *      --info          informational"],
+    ["one space of indent", " * --info          informational"],
+    ["tabs around the name", " *\t--info\tinformational"],
+    ["a tab after the name", " *     --info\tinformational"],
+    ["no description", " *     --info"],
+  ])("reads a role added %s", (_shape, line) => {
+    expect(headerRoles(header(line))).toHaveLength(1);
+  });
+
+  test("reads a role after a blank comment line, and with CRLF line endings", () => {
+    expect(headerRoles(header(" *", " *     --info          informational"))).toEqual(["--info"]);
+    const crlf = header(" *     --info          informational").replaceAll("\n", "\r\n");
+    expect(headerRoles(crlf)).toEqual(["--info"]);
+  });
+
+  test("reads every role on a line that starts with one", () => {
+    expect(headerRoles(header(" *     --info, --note  informational and notes"))).toEqual([
+      "--info",
+      "--note",
+    ]);
+    const aligned = " *     --info          informational   --note          notes";
+    expect(headerRoles(header(aligned))).toEqual(["--info", "--note"]);
+  });
+
+  test("does not read a name that is only mentioned in a sentence", () => {
+    expect(headerRoles(header(" * Every tool also sets --info for notices."))).toEqual([]);
+  });
+});

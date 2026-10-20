@@ -31,16 +31,23 @@ export const COLOUR_ROLES = [
 export const RETIRED_NAMES = ["--muted", "--bad"] as const;
 
 /**
- * The role names `tokens.css`'s header lists: lines of its first comment shaped
- * ` *     --name   description`, the name indented past the comment margin and
- * followed by two or more spaces. Prose that merely mentions a name
- * ("an --accent background") does not start a line that way.
+ * The role names `tokens.css`'s header lists. A line is a role entry when its
+ * first token after the comment margin starts with `--`, whatever the
+ * whitespace around it (any indent, tabs, a long name that leaves one space, no
+ * description, CRLF), and every `--name` on an entry line counts as listed, so
+ * a second role squeezed onto one line is read rather than skipped. Reading
+ * generously is the point: a layout this does not recognise would be listed for
+ * a human and enforced by nothing. A role named inside a prose sentence is not
+ * an entry, by design: only a line that starts with the name is.
  */
 export function headerRoles(tokensCss: string): string[] {
   const header = tokensCss.slice(0, tokensCss.indexOf("*/"));
-  return [...header.matchAll(/^ \* {5}(--[\w-]+) {2,}\S/gmu)].flatMap((match) =>
-    match[1] === undefined ? [] : [match[1]],
-  );
+  const roles = new Set<string>();
+  for (const line of header.split(/\r?\n/u)) {
+    if (!/^\s*\*[ \t]+--/u.test(line)) continue;
+    for (const match of line.matchAll(/--[\w-]+/gu)) roles.add(match[0]);
+  }
+  return [...roles];
 }
 
 export function stripComments(css: string): string {
