@@ -554,6 +554,17 @@ export class Directory {
             );
           }
         }
+        // lg-35's gate 1, F1: nobody signs in under a person whose retirement
+        // waits or holds, until a close has applied their return.
+        const retirement = this.standings(member.household).get(person) ?? "in";
+        if (retirement !== "in") {
+          const shown = shownName(this.names(member.household), person);
+          refuse(
+            retirement === "retiring"
+              ? `${shown} is retiring at the next close. Keep them in first, then add the address.`
+              : `${shown} is retired from the books. Bring them back, and add the address once the next close has applied the return.`,
+          );
+        }
         this.#record({ address, household: member.household, person }, "add", member);
         return { address, household: member.household, person };
       })

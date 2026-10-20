@@ -531,8 +531,13 @@ entirely.
 - **A person is retired from the books at the next close.** _Decided by the
   owner on 2026-10-17, in lg-35; built in lg-35._ An admin records "retire at
   the next close" in the directory (`retirements`, directory migration 6),
-  refused while any address stands under the person, so nobody who can still
-  sign in is retired by mistake. The person takes part in the open period and it
+  refused while any address stands under the person; and no address is added
+  under them while the retirement waits for its close or holds, until a close
+  has applied a return (_the owner, 2026-10-20, lg-35's gate 1_). So nobody who
+  can sign in is retired, with one gap: when a close's echo to the directory
+  (below) fails, a return recorded before the next close reads as cancelling a
+  retirement the books have applied, and an address can then be added. The
+  person takes part in the open period and it
   settles with them in it; the close copies the request into the books
   (`people_retirements`, books migration 13) from the day after its `end_date`,
   and every period after leaves them out — so people still change only at a

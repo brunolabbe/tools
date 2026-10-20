@@ -248,7 +248,11 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
     )
     BEGIN SELECT RAISE(ABORT, 'a retirement is for a person the household has held'); END;
 
-  -- Nobody who can still sign in is retired: every address under the person goes first.
+  -- Nobody who can still sign in is retired: every address under the person goes
+  -- first, and memberships_not_under_retired below keeps a new one from coming
+  -- back while the retirement waits or holds. The one gap is a close whose echo
+  -- (retirements_applied) failed to be written: until the next close writes it,
+  -- a return can read as cancelling a retirement the books have applied.
   CREATE TRIGGER retirements_no_address BEFORE INSERT ON retirements
     WHEN NEW.action = 'retire'
       AND EXISTS (
@@ -295,6 +299,24 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
   CREATE TRIGGER retirements_applied_never_replaced BEFORE INSERT ON retirements_applied
     WHEN EXISTS (SELECT 1 FROM retirements_applied WHERE retirement_id = NEW.retirement_id)
     BEGIN SELECT RAISE(ABORT, 'an applied retirement is appended, never replaced'); END;
+
+  -- No address is added under a person whose retirement waits for a close or
+  -- has been applied, until a return is applied (lg-35's gate 1, F1; the
+  -- owner, 2026-10-20): their latest request is a retire (retiring, retired),
+  -- or the latest a close applied is (returning). A retire and a return both
+  -- waiting for one close leave neither, and the person is in.
+  CREATE TRIGGER memberships_not_under_retired BEFORE INSERT ON memberships
+    WHEN NEW.action = 'add'
+      AND (
+        (SELECT action FROM retirements
+          WHERE household_id = NEW.household_id AND person = NEW.person
+          ORDER BY id DESC LIMIT 1) = 'retire'
+        OR (SELECT retirements.action FROM retirements
+          JOIN retirements_applied ON retirements_applied.retirement_id = retirements.id
+          WHERE retirements.household_id = NEW.household_id AND retirements.person = NEW.person
+          ORDER BY retirements.id DESC LIMIT 1) = 'retire'
+      )
+    BEGIN SELECT RAISE(ABORT, 'an address is added under a retired person only once their return is applied'); END;
   `,
 ];
 

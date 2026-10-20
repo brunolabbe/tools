@@ -438,3 +438,91 @@ describe("the directory's echo of a close", () => {
     expect((await standing(app, "casey"))?.standing).toBe("retired");
   });
 });
+
+// lg-35's gate 1, F1, the owner's answer (2026-10-20): no address under a person
+// whose retirement is waiting or applied, until a return is applied.
+describe("an address under a retired person", () => {
+  const MEMBERS = ROUTES.adminMembers.replace(":id", HOUSEHOLD);
+  const OWN = ROUTES.householdMembers.replace(":id", HOUSEHOLD);
+  const PHONE = "casey.phone@example.test";
+
+  async function addFor(app: App): Promise<{ admin: number; member: number }> {
+    const admin = await send(app, ADMIN, "POST", MEMBERS, { address: PHONE, person: "casey" });
+    const member = await send(app, ALEX, "POST", OWN, { address: PHONE, person: "casey" });
+    return { admin: admin.statusCode, member: member.statusCode };
+  }
+
+  test("is refused while they are retiring, retired or returning, and taken once the return is applied", async () => {
+    const { app, directory } = await start();
+    await retiredDuringTheFirstPeriod(app);
+
+    // Retiring: the request waits for the close.
+    expect(await addFor(app)).toEqual({ admin: 400, member: 400 });
+    const refused = await send(app, ADMIN, "POST", MEMBERS, { address: PHONE, person: "casey" });
+    expect(refused.json<ErrorResponse>().error.message).toContain("casey");
+    expect((await close(app, null, "2026-03-31")).statusCode).toBe(200);
+    // Retired.
+    expect(await addFor(app)).toEqual({ admin: 400, member: 400 });
+    expect((await confirm(app, "2026-04-01", { alex: 5_000_000, sam: 5_000_000 })).statusCode).toBe(
+      200,
+    );
+    await send(app, ADMIN, "POST", RETIRE, { person: "casey", action: "return" });
+    // Returning: the books still retire them until the next close.
+    expect((await standing(app, "casey"))?.standing).toBe("returning");
+    expect(await addFor(app)).toEqual({ admin: 400, member: 400 });
+    expect(directory.members(HOUSEHOLD).map((member) => member.person)).toEqual(["alex", "sam"]);
+
+    expect((await close(app, "2026-04-01", "2026-04-30")).statusCode).toBe(200);
+
+    // Returned: an address can be added again.
+    const back = await send(app, ADMIN, "POST", MEMBERS, { address: PHONE, person: "casey" });
+    expect(back.statusCode, back.body).toBe(200);
+  });
+
+  test("is refused by the schema too, in each of those states, and taken after a return is applied", () => {
+    const db = new Database(":memory:");
+    try {
+      migrateDirectory(db);
+      db.exec(`
+        INSERT INTO households (id, name, created_at, created_by) VALUES ('home', 'Home', 'x', 'operator');
+        INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
+          VALUES ('casey@example.test', 'home', 'casey', 'add', 'x', 'operator');
+        INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
+          VALUES ('casey@example.test', 'home', 'casey', 'remove', 'x', 'operator');
+      `);
+      const add = (): unknown =>
+        db
+          .prepare(
+            "INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by) VALUES ('casey.phone@example.test', 'home', 'casey', 'add', 'x', 'raw')",
+          )
+          .run();
+      const record = (action: string): number =>
+        Number(
+          db
+            .prepare(
+              "INSERT INTO retirements (household_id, person, action, recorded_at, recorded_by) VALUES ('home', 'casey', ?, 'x', 'raw')",
+            )
+            .run(action).lastInsertRowid,
+        );
+      const apply = (id: number): unknown =>
+        db
+          .prepare(
+            "INSERT INTO retirements_applied (retirement_id, from_date, applied_at) VALUES (?, '2026-04-01', 'x')",
+          )
+          .run(id);
+      const refusal = /only once their return is applied/u;
+
+      const retire = record("retire");
+      expect(add, "retiring").toThrow(refusal);
+      apply(retire);
+      expect(add, "retired").toThrow(refusal);
+      const comeBack = record("return");
+      expect(add, "returning").toThrow(refusal);
+      apply(comeBack);
+
+      expect(add).not.toThrow();
+    } finally {
+      db.close();
+    }
+  });
+});

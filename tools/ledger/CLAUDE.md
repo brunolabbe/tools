@@ -210,7 +210,11 @@ to each: appended, never edited, with the schema refusing an `UPDATE` or a
 `DELETE`. An address is in at most one household, and **a household holds any
 number of person names** (lg-23; lg-20's cap of two, `HOUSEHOLD_FULL`, is gone):
 the books settle between everyone in them, and a name stays in them once there.
-Removing an address never removes a name. **People change only at a close**: a
+Removing an address never removes a name. **A person is retired from the books
+only at a close** (lg-35), only once no address stands under them, and no
+address is added under them again until a close has applied their return:
+`people_retirements` says from which day, `peopleOn` in `books` answers who is
+in, and the history keeps everyone. **People change only at a close**: a
 ratio whose people differ from the open period's is refused if it would take
 effect inside it (`confirmRatio` in `api/src/salaries.ts`), so every period is
 weighed with the same people. A settlement between two is recorded in its
