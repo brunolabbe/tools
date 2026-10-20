@@ -195,6 +195,32 @@ The two schedules differ on purpose: one person transfers every two weeks and
 the other monthly. So the gap moves within a year by design, and the view shows
 it as a running line, not a verdict.
 
+### A mortgage that ends, or never was (lg-55)
+
+A household can pay its mortgage off, or never have had one. The tool does not
+guess it from a stretch without payments, which a late payment would look like.
+The household **says** it, in a record of its own (`mortgage_records`, appended
+and never edited, a later one superseding the earlier, exactly one standing): the
+mortgage is _live_, _ended on a day_, or _none_. No record reads as live, so a
+household that never says anything sees what it always saw. An end date after
+today is refused.
+
+The **close** is the later of the end date and the last joint payment out of the
+bucket. A payment dated after the record still counts and moves the close with
+it, so the record can never hide a payment. Nothing in the arithmetic above
+changes: the record decides which views are shown, never what is counted.
+
+**What is left in the bucket after the final payment goes back to each person as
+their own money.** The model already attributes every dollar in the bucket to one
+person (`own = deposits − share of payments`), so there is nothing to recompute
+and no row is invented to move it. What each person holds on the close is
+theirs, and a later row filed to them that takes it out of the bucket brings
+their part down to zero. "Nothing left" means the bucket's balance is zero: a
+person's part can be negative at a zero balance (one person's deposits exceed their half of
+the payments and the other's fall short), and no screen shows that imbalance between people after the close (a cost the owner
+accepted), while the mortgage views close all the same. It is not moved into current expenses as shared money
+(the owner chose this on 2026-10-19). Which views follow the close is in §9.
+
 ## 5. The settlement formula
 
 This is the part the workbook had wrong twice, in two different ways.
@@ -671,6 +697,15 @@ dated rows and nothing is kept as a running total:
 - **Each settlement**: its date, its amount and the formula version that
   produced it. The imported history carries two different formulas, and the
   chart should show that.
+
+**The mortgage views close from the close** (§4, lg-55). The payment chart of a
+household whose mortgage has ended stops at the final payment, with a dot of
+its own as a renewal has one; a range wholly after the close does not draw it.
+The own-money chart stays while anything is left in the bucket, and says the
+money is each person's own, with their parts; once the bucket is at zero, a range
+wholly after the close does not draw it. A household recorded as having no
+mortgage draws neither, and the home screen's mortgage section follows the same
+rule. History before the close still charts.
 
 **The one rule that makes this possible is never to overwrite.** A corrected
 salary, a reclassified row and a re-read receipt are each a new record that

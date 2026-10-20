@@ -11,8 +11,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { AppError } from "@ledger/contract";
 import type { HouseholdResponse } from "@ledger/contract";
 import { addHouseholdMember, fetchHousehold } from "../src/api/households.ts";
+import { fetchMortgage } from "../src/api/mortgage.ts";
 import { Household } from "../src/household/Household.tsx";
+import { LIVE } from "./mortgage-fixtures.ts";
 
+vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
 vi.mock("../src/api/households.ts", () => ({
   fetchHousehold: vi.fn(),
   addHouseholdMember: vi.fn(),
@@ -45,6 +48,7 @@ const HOME: HouseholdResponse = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchHousehold).mockResolvedValue(HOME);
+  vi.mocked(fetchMortgage).mockResolvedValue(LIVE);
 });
 
 afterEach(cleanup);
@@ -110,9 +114,14 @@ test("puts the server's one sentence in front of a refused address", async () =>
 test("offers no way to remove anyone", async () => {
   render(<Household id="home" />);
   await screen.findByRole("heading", { name: "Household" });
+  await screen.findByRole("heading", { name: "Mortgage" });
 
   expect(screen.queryByRole("button", { name: /remove/iu })).toBeNull();
-  expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Add member"]);
+  // The second is the mortgage setting (lg-55); neither removes anyone.
+  expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual([
+    "Add member",
+    "Save",
+  ]);
 });
 
 // lg-33: a person is shown by name, and a rename is its own line in the history.

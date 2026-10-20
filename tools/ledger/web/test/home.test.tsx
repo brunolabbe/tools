@@ -11,14 +11,18 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { BucketsResponse } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
+import { fetchMortgage } from "../src/api/mortgage.ts";
 import { Home } from "../src/home/Home.tsx";
+import { LIVE } from "./mortgage-fixtures.ts";
 
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
+vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
 
 const buckets = vi.mocked(fetchBuckets);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(fetchMortgage).mockResolvedValue(LIVE);
 });
 
 afterEach(cleanup);

@@ -15,14 +15,17 @@ import { fetchHealth } from "../src/api/health.ts";
 import { fetchAdminHouseholds, fetchHousehold } from "../src/api/households.ts";
 import { fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
 import { fetchMe } from "../src/api/me.ts";
+import { fetchMortgage } from "../src/api/mortgage.ts";
 import { fetchPeopleNames } from "../src/api/people.ts";
 import { importStatement } from "../src/api/statements.ts";
 import { fetchPeople, fetchRules } from "../src/api/rules.ts";
 import { fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
 import { App } from "../src/App.tsx";
+import { LIVE } from "./mortgage-fixtures.ts";
 
 vi.mock("../src/api/health.ts", () => ({ fetchHealth: vi.fn() }));
 vi.mock("../src/api/me.ts", () => ({ fetchMe: vi.fn() }));
+vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
 vi.mock("../src/api/people.ts", () => ({ fetchPeopleNames: vi.fn() }));
 vi.mock("../src/api/statements.ts", () => ({ importStatement: vi.fn() }));
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
@@ -59,6 +62,7 @@ beforeEach(() => {
     person: { id: "alex", email: "alex@example.test", household: "home" },
     admin: false,
   });
+  vi.mocked(fetchMortgage).mockResolvedValue(LIVE);
   vi.mocked(fetchRules).mockResolvedValue([]);
   vi.mocked(fetchAutoFiled).mockResolvedValue([]);
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);

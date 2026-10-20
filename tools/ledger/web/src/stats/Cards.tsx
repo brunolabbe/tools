@@ -17,6 +17,7 @@ import type {
   BufferStatsResponse,
   ClosedPeriod,
   FixedItemsResponse,
+  MortgageResponse,
   SalaryYear,
   SpendingPeriod,
   SpendingStatsResponse,
@@ -33,6 +34,7 @@ import {
   fetchSpendingStats,
 } from "../api/stats.ts";
 import { formatShare, personLabel } from "../labels.ts";
+import { endedSentence, reachesClose, spansClose } from "../mortgage.ts";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 import { ChartCard, ColumnChart, LineChart } from "./Chart.tsx";
@@ -96,31 +98,56 @@ function legendOf(items: readonly { key: string; label: string; color: string }[
 
 // --- The mortgage ---
 
-export function MortgagePaymentCard({ range }: { range: StatsRange }): React.ReactElement {
+/**
+ * `mortgage` is what the household says of its mortgage (lg-55). While it is
+ * live, or unread, the card is what it always was. Once ended, a range that holds
+ * the close ends the line on the last payment with a dot of its own, as a
+ * renewal has one; a range before the close is drawn as ever.
+ */
+export function MortgagePaymentCard({
+  range,
+  mortgage,
+}: {
+  range: StatsRange;
+  mortgage: MortgageResponse | null;
+}): React.ReactElement {
   const series = useSeries(fetchMortgagePayments, range);
+  const closedOn = mortgage?.state === "ended" ? mortgage.closedOn : null;
+  const ended = closedOn !== null && spansClose(range, closedOn);
   return (
     <Loaded title="Mortgage payment" series={series}>
       {({ payments }, stale) => {
+        // The last payment in the books, if this range reaches it.
+        const lastIndex = ended
+          ? payments.findLastIndex((payment) => payment.date === mortgage?.lastPaymentOn)
+          : -1;
         const table: TableData = {
           head: ["Date", "Payment", "Change"],
-          rows: payments.map((payment) => [
-            payment.date,
-            formatCents(payment.cents),
-            payment.changed && payment.previousCents !== null
-              ? signed(payment.cents - payment.previousCents)
-              : "",
-          ]),
+          rows: payments.map((payment, index) => {
+            const change =
+              payment.changed && payment.previousCents !== null
+                ? signed(payment.cents - payment.previousCents)
+                : "";
+            if (index !== lastIndex) return [payment.date, formatCents(payment.cents), change];
+            return [
+              payment.date,
+              formatCents(payment.cents),
+              change === "" ? "Last payment" : `${change}, last payment`,
+            ];
+          }),
         };
         return (
           <ChartCard
             title="Mortgage payment"
-            caption="Each payment out of the mortgage bucket. A larger dot is a change: a renewal, or a payment that was not the usual one."
+            caption={`Each payment out of the mortgage bucket. A larger dot is a change: a renewal, or a payment that was not the usual one.${lastIndex === -1 ? "" : " The last dot is the final payment."}`}
             legend={[]}
             table={table}
             empty={
-              payments.length === 0
-                ? "No payment came out of the mortgage bucket in this range."
-                : null
+              payments.length > 0
+                ? null
+                : closedOn === null
+                  ? "No payment came out of the mortgage bucket in this range."
+                  : `No payment is in this range; the mortgage ended on ${closedOn}.`
             }
             stale={stale}
           >
@@ -140,17 +167,24 @@ export function MortgagePaymentCard({ range }: { range: StatsRange }): React.Rea
               minStep={5000}
               zero={false}
               markers={payments.flatMap((payment, index) =>
-                payment.changed ? [{ index, seriesKey: "payment" }] : [],
+                payment.changed || index === lastIndex ? [{ index, seriesKey: "payment" }] : [],
               )}
               notes={(index) => {
                 const payment = payments[index];
                 if (payment === undefined) return [];
-                if (payment.previousCents === null) return ["The first payment in the books."];
+                const ending =
+                  index === lastIndex
+                    ? [`Last payment on ${payment.date}; the mortgage ended.`]
+                    : [];
+                if (payment.previousCents === null) {
+                  return ["The first payment in the books.", ...ending];
+                }
                 return payment.changed
                   ? [
                       `Changed from ${formatCents(payment.previousCents)} to ${formatCents(payment.cents)}.`,
+                      ...ending,
                     ]
-                  : [];
+                  : ending;
               }}
             />
           </ChartCard>
@@ -160,9 +194,24 @@ export function MortgagePaymentCard({ range }: { range: StatsRange }): React.Rea
   );
 }
 
-export function MortgageOwnCard({ range }: { range: StatsRange }): React.ReactElement {
+/**
+ * `mortgage` is what the household says of its mortgage (lg-55). Once it has
+ * ended, a range that reaches the close says what is left in the bucket is each
+ * person's own, theirs to take back, with each person's part: the model has held
+ * it as theirs all along, and no row is made to move it.
+ */
+export function MortgageOwnCard({
+  range,
+  mortgage,
+}: {
+  range: StatsRange;
+  mortgage: MortgageResponse | null;
+}): React.ReactElement {
   const series = useSeries(fetchMortgageOwn, range);
   const names = usePeopleNames();
+  const closed = mortgage !== null && mortgage.state === "ended" ? mortgage : null;
+  const left = closed !== null && closed.left && reachesClose(closed, range) ? closed : null;
+  const note = left === null ? null : endedSentence(left, names);
   return (
     <Loaded title="Own money in the mortgage" series={series}>
       {({ points, people }, stale) => {
@@ -190,7 +239,14 @@ export function MortgageOwnCard({ range }: { range: StatsRange }): React.ReactEl
                 formatCents(point.balanceCents),
               ]),
             }}
-            empty={points.length === 0 ? "The mortgage bucket did not move in this range." : null}
+            empty={
+              points.length > 0
+                ? null
+                : closed === null
+                  ? "The mortgage bucket did not move in this range."
+                  : "Nothing moved in the bucket in this range."
+            }
+            note={note}
             stale={stale}
           >
             <LineChart
