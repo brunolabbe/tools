@@ -15,6 +15,7 @@ import path from "node:path";
 import { describe, expect, test } from "vitest";
 import {
   COLOUR_ROLES,
+  headerRoles,
   RETIRED_NAMES,
   stripComments,
   vocabularyProblems,
@@ -113,12 +114,19 @@ describe("tokens.css", () => {
     expect(body.match(/#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\(/giu)).toBeNull();
   });
 
-  test("names every canonical colour role in its header, so the doc and the guard agree", () => {
-    const header = css.slice(0, css.indexOf("*/"));
-    const missing = COLOUR_ROLES.filter(
-      (role) => !new RegExp(`${role}(?![\\w-])`, "u").test(header),
-    );
-    expect(missing).toEqual([]);
+  test("its header lists exactly the roles the guard enforces, so the doc and the guard agree", () => {
+    // Both directions: a role added to the header alone would otherwise read as
+    // enforced and be enforced by nothing, and a role dropped from the header
+    // would be enforced by a list nobody can see.
+    const listed = headerRoles(css);
+    const enforced: readonly string[] = COLOUR_ROLES;
+    expect(
+      {
+        enforcedButNotListed: enforced.filter((role) => !listed.includes(role)),
+        listedButNotEnforced: listed.filter((role) => !enforced.includes(role)),
+      },
+      "the header's role list in tokens.css and COLOUR_ROLES in test/support/stylesheet.ts",
+    ).toEqual({ enforcedButNotListed: [], listedButNotEnforced: [] });
   });
 
   test("declares the non-colour names the tools read", () => {

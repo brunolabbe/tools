@@ -9,9 +9,9 @@
 
 /**
  * The colour roles every tool sets, in its light `:root` and again in its dark
- * override. Keep in step with the header of `src/tokens.css`, which the guard
- * also reads, so the list a human sees and the list the test enforces cannot
- * part.
+ * override. The header of `src/tokens.css` lists the same set for a human, and
+ * `tokens.test.ts` asserts the two are equal in both directions, so a role added
+ * to one and not the other fails there.
  */
 export const COLOUR_ROLES = [
   "--bg",
@@ -29,6 +29,19 @@ export const COLOUR_ROLES = [
 
 /** Names that were retired for the canonical ones: `--muted` is `--text-muted`, `--bad` is `--danger`. */
 export const RETIRED_NAMES = ["--muted", "--bad"] as const;
+
+/**
+ * The role names `tokens.css`'s header lists: lines of its first comment shaped
+ * ` *     --name   description`, the name indented past the comment margin and
+ * followed by two or more spaces. Prose that merely mentions a name
+ * ("an --accent background") does not start a line that way.
+ */
+export function headerRoles(tokensCss: string): string[] {
+  const header = tokensCss.slice(0, tokensCss.indexOf("*/"));
+  return [...header.matchAll(/^ \* {5}(--[\w-]+) {2,}\S/gmu)].flatMap((match) =>
+    match[1] === undefined ? [] : [match[1]],
+  );
+}
 
 export function stripComments(css: string): string {
   return css.replaceAll(/\/\*[\s\S]*?\*\//gu, "");
