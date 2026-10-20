@@ -12,6 +12,9 @@ import { migrate } from "../src/db/schema.ts";
 import { importStatement } from "../src/statements.ts";
 import {
   LONGEST_SEARCHED_DAY,
+  RIVAL_DAYS_OFF,
+  RIVAL_TOLERANCE,
+  STORED_TOLERANCE,
   WIDEST_BLOCK_DAYS,
   alignDays,
   dayBefore,
@@ -604,5 +607,131 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
       tailBalanceCents: 104_666,
       rowsInInbox: 0,
     });
+  });
+});
+
+// lg-61: a workbook row dated two or three days off the bank's puts the true
+// reading outside the tolerance, and a false reading must not be stored in its place.
+
+/**
+ * A paste's outcome is its true reading, or a refusal that stores nothing:
+ * never a wrong split. Either way the workbook's rows are as they were.
+ */
+function expectTrueOrRefused(
+  db: Database.Database,
+  before: unknown[],
+  result: unknown,
+  truth: ImportStatementReport,
+): void {
+  if ("rowsAdded" in (result as object)) {
+    expect(result).toEqual(truth);
+    expect(storedRows(db).slice(0, before.length)).toEqual(before);
+    return;
+  }
+  const { code, message } = result as { code: string; message: string };
+  if (code === "STATEMENT_ROW_CONFLICT") expect(message).toContain("two ways");
+  else expect(code).toBe("STATEMENT_CHAIN_BROKEN");
+  expect(storedRows(db)).toEqual(before);
+}
+
+describe("a paste meeting a workbook row dated two or three days off (lg-61)", () => {
+  test("R1: a row three days early is not read as a shorter overlap that stores rows twice", () => {
+    // The bank: 20th −5.00, −5.00; 21st +5.00, +10.00. The workbook holds the
+    // first three in the bank's order, the first dated the 17th. Pasting all
+    // four is three already stored and one new; read as one stored and three
+    // new, the block of the 20th and 21st takes the pasted −5.00 as its last.
+    const db = workbookDb([
+      ["2026-02-17", -500],
+      ["2026-02-20", -500],
+      ["2026-02-21", 500],
+    ]);
+    const before = storedRows(db);
+    const rows = bankRows([
+      ["2026-02-20", -500],
+      ["2026-02-20", -500],
+      ["2026-02-21", 500],
+      ["2026-02-21", 1_000],
+    ]);
+
+    const result = outcome(() => paste(db, rows, 100_000));
+
+    expectTrueOrRefused(db, before, result, {
+      rowsAdded: 1,
+      rowsAlreadyPresent: 3,
+      tailBalanceCents: 100_500,
+      rowsInInbox: 1,
+    });
+    // As built, the false reading's rival is the true one, three days off.
+    expect(result).toMatchObject({
+      code: "STATEMENT_ROW_CONFLICT",
+      details: {
+        readings: [
+          { rowsAdded: 1, rowsAlreadyPresent: 3 },
+          { rowsAdded: 3, rowsAlreadyPresent: 1 },
+        ],
+      },
+    });
+    expect((result as { message: string }).message).toContain("up to 3 days");
+  });
+
+  test("R8: a block spanning a row two days off does not swallow a new bank row", () => {
+    // The bank: 20th +10.00, −10.00; 22nd −10.00; 23rd +10.00 (new). The
+    // workbook holds the first three, listed +10.00 on the 22nd, −10.00 on the
+    // 20th, −10.00 on the 24th. The paste is the bank's last two rows from
+    // 1 000.00: one already stored, one new. Read as wholly inside the history,
+    // the 23rd's +10.00 would never be stored.
+    const db = workbookDb([
+      ["2026-02-22", 1_000],
+      ["2026-02-20", -1_000],
+      ["2026-02-24", -1_000],
+    ]);
+    const before = storedRows(db);
+    const rows = bankRows([
+      ["2026-02-22", -1_000],
+      ["2026-02-23", 1_000],
+    ]);
+
+    const result = outcome(() => paste(db, rows, 100_000));
+
+    expectTrueOrRefused(db, before, result, {
+      rowsAdded: 1,
+      rowsAlreadyPresent: 1,
+      tailBalanceCents: 100_000,
+      rowsInInbox: 1,
+    });
+    expect(result).toMatchObject({ code: "STATEMENT_ROW_CONFLICT" });
+  });
+
+  test("a rival reading is weighed with rows three days off and no further", () => {
+    const block = dated(100_000, [["2026-02-20", -500]]);
+    const threeOff = dated(100_000, [["2026-02-23", -500]]);
+    const fourOff = dated(100_000, [["2026-02-24", -500]]);
+
+    expect(matchBlock(block, 0, threeOff)).toBe(false);
+    expect(matchBlock(block, 0, threeOff, RIVAL_TOLERANCE)).toBe(true);
+    expect(matchBlock(block, 0, fourOff, RIVAL_TOLERANCE)).toBe(false);
+    expect(RIVAL_TOLERANCE).toEqual({
+      widestBlockDays: STORED_TOLERANCE.widestBlockDays,
+      daysOff: RIVAL_DAYS_OFF,
+    });
+    expect(RIVAL_DAYS_OFF).toBe(3);
+  });
+
+  test("a paste starting on the first row the workbook does not hold is stored, past the rival check", () => {
+    // R1's workbook, and the bank's one new row alone: the advice the refusal gives.
+    const db = workbookDb([
+      ["2026-02-17", -500],
+      ["2026-02-20", -500],
+      ["2026-02-21", 500],
+    ]);
+    const before = storedRows(db);
+
+    expect(paste(db, bankRows([["2026-02-21", 1_000]]), 99_500)).toEqual({
+      rowsAdded: 1,
+      rowsAlreadyPresent: 0,
+      tailBalanceCents: 100_500,
+      rowsInInbox: 1,
+    });
+    expect(storedRows(db).slice(0, 3)).toEqual(before);
   });
 });
