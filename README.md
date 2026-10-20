@@ -110,6 +110,7 @@ first guess.
 
 ```
 packages/core          error machinery, job transitions, redaction — no domain
+packages/ui            the web UIs' shared look: design tokens, then components as a second tool needs them
 tools/downloader/
   contract             types, error taxonomy, job FSM, zod API schemas
   resolvers            URL → ProbeResult

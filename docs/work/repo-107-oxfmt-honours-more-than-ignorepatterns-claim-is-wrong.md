@@ -3,7 +3,7 @@ id: repo-107
 tool: repo
 title: CLAUDE.md and the toolchain rule say oxfmt honours only ignorePatterns, and a parent config wraps markdown at 0.62.0
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -104,6 +104,56 @@ file inside the repo is not tested here.
    step 1 measured, with the version. `npm run check` passes after the edit.
 4. The edit is in a batch the owner selected, and the Log names that batch.
 
+## Review
+
+**Gate: PASS** — 2026-10-19 · `6dd274bd..296ddd35` (merge base `6dd274bd`) · Opus 5.5, depth narrow
+
+| Done when                                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The Log holds the command and output for each step-1 key, the control, and the exit code and line count of each | **verified**: the Log's step-1 table has nine rows, each with an exit code and `a.md`/`a.ts` line counts, and names `measure.mjs` and the command. The gate re-ran `measure.mjs` into a fresh directory and got the same exit code, line counts and quote/indent effect on all nine rows. Positive control: `singleQuote` (listed as honoured) turned `"hello"` into `'hello'`, and `quoteStyle` (listed as ignored) left it as `"hello"` |
+| 2. The Log holds the step-2 result for the `ignorePatterns` exit 2, with command and output                        | **verified**: the Log reports it reproduced. The gate's own run matched: `["*.md"]` with one target and with two targets both exit 2 with `Expected at least one target file. All matched files may have been excluded by ignore rules.`, and `["a.md"]` with two targets exits 0 with only `a.md` left alone                                                                                                                             |
+| 3. Both pages drop "only `ignorePatterns`", name the measured keys with the version, and `npm run check` passes    | **verified** by reading: both pages name `0.62.0`, the five honoured keys and the two ignored ones. `npm run check` is ci.yml's `check` job, which passed on `296ddd35` (47 s). `oxfmt --check CLAUDE.md <ticket>` exits 0. See the **low** on how complete the list is                                                                                                                                                                   |
+| 4. The edit is in a batch the owner selected, and the Log names that batch                                         | **verified**: settled by the dispatch. The Log names "tools-13, 2026-10-19: repo-108, repo-107, repo-106"                                                                                                                                                                                                                                                                                                                                 |
+
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · Both pages
+  list five keys as the ones oxfmt honours, and the list reads as complete. It is
+  not. At 0.62.0, in the same parent-config fixture shape, `{"useTabs": true}`
+  changed indentation to a tab and `{"semi": false}` removed the semicolons, both
+  exit 0. The `configuration_schema.json` that ships with 0.62.0 has 26
+  top-level keys, and neither `lineWidth` nor `quoteStyle` is one of them. The
+  error is in the safe direction: a reader would believe fewer keys work, and the
+  repo tells them not to add style keys anyway. Fix direction, not tested as
+  wording: say the five are the ones measured "among others", or name the schema
+  as the full list.
+- **low** · Log only · The Log's step 1 says a config named with `-c` is how
+  "the repo's root file is" given. It is not: `package.json` runs bare `oxfmt` and
+  `oxfmt --check`, so the root file is found by discovery from the working
+  directory. The conclusion still holds, because the gate's attack 1 (below) shows
+  that a key in a discovered copy of the repo's own config is honoured.
+- **dropped** · the new paragraph on the rules page is hand-wrapped to uneven
+  widths. Not a defect: `.oxfmtrc.json` ignores `.claude/`, which is settled.
+- **findings** · the hunt returned 3; 2 carried, 1 dropped.
+- Attack 1, the repo's own config on a markdown file inside the repo (the case
+  the Log calls unmeasured). Setup: the repo's `.oxfmtrc.json` plus
+  `docs/01-TICKETS.md` (572 lines, longest 127 characters) in a scratch tree with
+  the same relative layout, oxfmt by absolute path from that root:
+  - control: `--check` exit 0, 572 lines after the write;
+  - `proseWrap: "always"` + `printWidth: 40`: `--check` exit 1, 971 lines after;
+  - `lineWidth: 40` alone: `--check` exit 0, 572 lines after.
+
+  The same two configs passed with `-c` against the in-tree file gave `--check`
+  exit 1 and exit 0. The pages' claim holds.
+
+- Attack 3: a config three directories above the file was picked up both with
+  the working directory at the repo root, where the repo's own config is nearer
+  the working directory, and with it at the file's directory. Both wrapped the
+  bullet to 24 lines, against 1 with no config. The exit 2 holds as stated.
+- Attack 4: `docs` is `"hidden": true` in `release-please-config.json`, and
+  `scripts/commit-message.mjs --text` accepts the title (exit 0). This releases
+  nothing.
+- Invariants: docs-only diff. Every code invariant was skipped as unreachable.
+- NFR: security n/a · performance n/a · reliability n/a · maintainability — the low above.
+
 ## Log
 
 - **2026-10-18** — Filed by a maintenance dispatch on `origin/main` `140bd78a`
@@ -115,3 +165,104 @@ file inside the repo is not tested here.
   isolate the key. The `ignorePatterns` exit 2 (step 2) was not run by the filer.
   Step 1 is the Build's, not the filing's: the key set beyond these four runs is
   unmeasured.
+
+- **2026-10-19** — Built on `origin/main` `f7436872`, oxfmt `0.62.0`
+  (`npx oxfmt --version` printed `Version: 0.62.0`). **Owner selection (Done when
+  4):** the owner selected this ticket on 2026-10-19 in the batch "tools-13,
+  2026-10-19: repo-108, repo-107, repo-106", chosen from four batch options; that
+  selection names the edits to `CLAUDE.md` and `.claude/rules/toolchain-config.md`,
+  so step 3 is done here.
+
+  **Step 1, the key set.** Fixture per row, built by
+  `scratchpad/repo-107/build/measure.mjs` (spawn with an argument array, no shell):
+  `<fixture>/.oxfmtrc.json` above `<fixture>/sub/`, which holds `a.md` (one
+  172-character bullet) and `a.ts` (a double-quoted string, an array of objects, a
+  five-parameter function indented with a tab). `npx oxfmt <abs>/sub/a.md <abs>/sub/a.ts`
+  run from the worktree root, so the repo's `.oxfmtrc.json` was **not** in the
+  fixtures' path (the scratch directory is outside the repository). The `.ts` column
+  is what changes for the keys that are not about prose. Lines are those after the
+  run; `a.ts` is 5 lines in the control after formatting.
+
+  | Parent `.oxfmtrc.json`                   | Exit | `a.md` lines | `a.ts` lines | Other effect on `a.ts`  | Verdict                     |
+  | ---------------------------------------- | ---- | ------------ | ------------ | ----------------------- | --------------------------- |
+  | none (control)                           | 0    | 1            | 5            | double quotes, indent 2 | defaults                    |
+  | `{"printWidth":10}`                      | 0    | 1            | 33           |                         | honoured (code), md still 1 |
+  | `{"proseWrap":"always"}`                 | 0    | 2            | 5            |                         | honoured (wraps at 100)     |
+  | `{"printWidth":10,"proseWrap":"always"}` | 0    | 24           | 33           |                         | both honoured               |
+  | `{"lineWidth":10}`                       | 0    | 1            | 5            |                         | **ignored**                 |
+  | `{"lineWidth":10,"proseWrap":"always"}`  | 0    | 2            | 5            |                         | `lineWidth` ignored         |
+  | `{"quoteStyle":"single"}`                | 0    | 1            | 5            | still double quotes     | **ignored**                 |
+  | `{"singleQuote":true}`                   | 0    | 1            | 5            | `'hello'`               | honoured                    |
+  | `{"tabWidth":8}`                         | 0    | 1            | 5            | indent 8                | honoured                    |
+
+  The combined row is 24 lines here, not the filing's 19, because this bullet is
+  longer than the filing's; the 1, 2 and 1 of the single-key rows match it. Two
+  unknown keys, `lineWidth` and `quoteStyle`, exit 0 with no warning, which is the
+  "parse without error" half of the old sentence and is still true. The same keys
+  given through `-c <path>` to a config outside the parent chain
+  (`scratchpad/repo-107/build/measure2.mjs`) gave the same `a.md` line counts: 1
+  for `printWidth` alone, 2 for `proseWrap` alone, 24 for both. So a config named
+  with `-c` honours them as a discovered parent does; the repo's root file is found
+  by discovery from the working directory (`package.json` runs bare `oxfmt` and
+  `oxfmt --check`), not given with `-c`.
+  **Unmeasured:** whether a key set in the repo's own `.oxfmtrc.json` changes a file
+  inside the repo (no key but `ignorePatterns` was put in that file, and the
+  branch does not change it), `useTabs`, and the other oxfmt keys beyond the nine
+  rows above.
+
+  **Step 2, `ignorePatterns` exit 2: reproduced**, and it is not a fault. Same
+  fixture shape, one target file `sub/a.md`, parent config as shown, discovered:
+
+  | Parent `.oxfmtrc.json`            | Exit | Last line of output                                                                            |
+  | --------------------------------- | ---- | ---------------------------------------------------------------------------------------------- |
+  | `{"ignorePatterns":["a.md"]}`     | 2    | `Expected at least one target file. All matched files may have been excluded by ignore rules.` |
+  | `{"ignorePatterns":["*.md"]}`     | 2    | same                                                                                           |
+  | `{"ignorePatterns":["sub/"]}`     | 2    | same                                                                                           |
+  | `{"ignorePatterns":["nomatch/"]}` | 0    | `Finished in 211ms on 1 files using 12 threads.`                                               |
+  | `{"ignorePatterns":[".claude/"]}` | 0    | `Finished in 184ms on 1 files using 12 threads.`                                               |
+  | `-c` file, `["sub/"]`             | 2    | same                                                                                           |
+
+  The exit is 2 whenever the patterns exclude every target; with a second target
+  that survives (the first pass, `a.md` ignored but `a.ts` given) it is 0. That
+  is the gate's exit 2: a parent config whose `ignorePatterns` matched the one file
+  it was handed. The same message is what the dispatch measured for
+  `npx oxfmt --check .claude/rules/toolchain-config.md` on `f7436872`, because the
+  repo's own `.oxfmtrc.json` ignores `.claude/`.
+
+  **Step 3, the pages.** `CLAUDE.md` (the Commands/Tooling sentence only, which
+  keeps clear of repo-108's Layout hunk) and `.claude/rules/toolchain-config.md`
+  now name the five honoured keys and the two ignored ones, with `0.62.0`. The rules
+  page also gains a short paragraph on the parent-config discovery and the exit 2,
+  which the reproduction made free to state. **Step 4:** `npx oxfmt CLAUDE.md`
+  printed `Finished in 359ms on 1 files` and left the diff as written. For the rules
+  page, `npx oxfmt --check .claude/rules/toolchain-config.md` exits 2 with
+  `Expected at least one target file. All matched files may have been excluded by
+ignore rules.`, as the dispatch measured, so it cannot be formatted by the tool
+  and its wrapping was kept by hand to the width of the lines around it.
+
+  **Fold-in.** None other. `docs/work/repo-55-...md` line 83 says oxfmt "reflows no
+  prose at all" for the repo's config; that is a closed ticket's record and true
+  for that config, so it is left (a done ticket is not edited).
+
+  **The brief had wrong:** step 4 asks for `npx oxfmt` on the rules page, which
+  `.oxfmtrc.json` ignores (`.claude/`); and the filing's "`printWidth` alone
+  changes nothing" holds only for markdown — `printWidth` changes code at once
+  (`a.ts` 5 to 33 lines), so the pages' list needed it as a code key too.
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, the first low
+  (`nfr:maintainability`) — "Both pages list five keys as the ones oxfmt honours, and
+  the list reads as complete. It is not." The owner chose "fix both at landing" on
+  2026-10-19; both pages now say the five are the measured ones, "among others", and
+  name the `configuration_schema.json` shipped with oxfmt as the full list.
+  `ls node_modules/oxfmt/configuration_schema.json` → the file exists, and
+  `Object.keys(schema.properties).length` → `26`, with `lineWidth` and `quoteStyle`
+  absent. `grep -c "configuration_schema.json" CLAUDE.md .claude/rules/toolchain-config.md`
+  → `CLAUDE.md:1`, `.claude/rules/toolchain-config.md:1`.
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, the second low (Log only) —
+  "The Log's step 1 says a config named with `-c` is how the repo's root file is
+  given. It is not." The Log's step-1 sentence now says the root file is found by
+  discovery from the working directory. `grep -n "runs ba[r]e" <ticket>`
+  prints only the step-1 line, 156 (the bracket keeps this entry from matching).
+  `grep -n '"oxfmt' package.json` shows `54:    "format:check": "oxfmt --check",`,
+  bare, with no `-c`.
