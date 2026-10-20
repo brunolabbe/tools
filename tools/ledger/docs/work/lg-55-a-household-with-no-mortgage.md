@@ -257,3 +257,22 @@ ledger`, 1594 of 1594 in 73 files, exit 0; `npm run check` exit 0. The
     marker is told from a renewal's" (payments 700.00, 712.34, 712.34 $; the last a
     payment dated after `endedOn`): two dots, and only the last point carries
     "Last payment on …".
+- 2026-10-20 — Fixed at landing by owner choice: gate 2, med 1 — "When any part is
+  below zero, `endedSentence` tells people they can take back more than the bucket
+  holds." `endedSentence` now reads "<Name> is owed <x> $" for a positive part and
+  "<Name> owes <y> $" for a negative one whenever any part is below zero, and keeps
+  "theirs to take back" only when none is. At 900.00 $ left it reads "… 900.00 $ is
+  left in the bucket. Alex is owed 1100.00 $, Kim is owed 300.00 $, Sam owes 500.00
+  $." The two tests that pinned the old strings are updated and "with a part below
+  zero the parts above it are owed, so three people do not each take back more than
+  the bucket holds" is new. `npx vitest run tools/ledger/web/test/mortgage.test.tsx`
+  → 3 failed of 21 against the previous `mortgage.ts`, 21 passed of 21 against this
+  one.
+- 2026-10-20 — Fixed at landing by owner choice: gate 2, low 2 — "At a zero balance,
+  `endedSentence` returns "The mortgage ended on 2026-03-31. It is each person's
+  own, …". The "It" there has nothing to refer to except the mortgage." At a balance
+  of 0 with a part below zero the sentence drops "It is each person's own" and names
+  the parts with the owed/owes wording above; the same commit. The test "the
+  sentence drops the balance when it is zero, and says a short bucket is short" now
+  pins "The mortgage ended on 2026-03-31. alex is owed 500.00 $, sam owes 500.00 $."
+  Same command, same count as the entry above.

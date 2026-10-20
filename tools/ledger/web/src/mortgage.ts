@@ -85,10 +85,12 @@ export function showsHomeSection(mortgage: MortgageResponse | null): boolean {
 
 /**
  * What an ended mortgage leaves, in words, for the home screen and the own-money
- * card (lg-55). The balance is said only when it is not zero; a person whose part
- * is above zero is told it is theirs to take back, and one whose part is below
- * zero is told what they owe, since a bucket one person paid more than half of
- * leaves the other's part negative. A part of exactly zero is not mentioned.
+ * card (lg-55). The balance is said only when it is not zero. While every part
+ * is above zero (or zero) each is told it is theirs to take back. Once any part
+ * is below zero — a bucket one person paid more than half of leaves the other's
+ * part negative — the positive parts add up to more than the bucket holds, so
+ * nobody is told they can take it back: those people are owed, and the one
+ * below zero owes. A part of exactly zero is not mentioned.
  */
 export function endedSentence(mortgage: MortgageResponse, names: ShownNames): string {
   const day = mortgage.closedOn ?? mortgage.endedOn ?? "a day the books do not name";
@@ -98,16 +100,20 @@ export function endedSentence(mortgage: MortgageResponse, names: ShownNames): st
       : mortgage.balanceCents < 0
         ? ` The bucket is ${formatCents(-mortgage.balanceCents)} short.`
         : "";
-  const take = mortgage.own
-    .filter((person) => person.ownCents > 0)
-    .map((person) => `${shownName(names, person.personId)} ${formatCents(person.ownCents)}`);
-  const owe = mortgage.own
-    .filter((person) => person.ownCents < 0)
-    .map((person) => `${shownName(names, person.personId)} owes ${formatCents(-person.ownCents)}`);
-  const own =
-    take.length === 0 ? "" : ` It is each person's own, theirs to take back: ${take.join(", ")}.`;
-  const owed = owe.length === 0 ? "" : ` ${owe.join(", ")}.`;
-  return `The mortgage ended on ${day}.${balance}${own}${owed}`;
+  const positive = mortgage.own.filter((person) => person.ownCents > 0);
+  const negative = mortgage.own.filter((person) => person.ownCents < 0);
+  const nameOf = (person: { personId: string }): string => shownName(names, person.personId);
+  if (negative.length === 0) {
+    const take = positive.map((person) => `${nameOf(person)} ${formatCents(person.ownCents)}`);
+    const own =
+      take.length === 0 ? "" : ` It is each person's own, theirs to take back: ${take.join(", ")}.`;
+    return `The mortgage ended on ${day}.${balance}${own}`;
+  }
+  const parts = [
+    ...positive.map((person) => `${nameOf(person)} is owed ${formatCents(person.ownCents)}`),
+    ...negative.map((person) => `${nameOf(person)} owes ${formatCents(-person.ownCents)}`),
+  ];
+  return `The mortgage ended on ${day}.${balance} ${parts.join(", ")}.`;
 }
 
 /** Whether the close, and so what is left, is something the range reaches. */

@@ -366,9 +366,10 @@ test("books ended with the bucket at zero but parts that are not, draw no Own ca
   expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
 });
 
-test("a part above zero is theirs to take back and a part below zero is owed, on Home and on the Own card", async () => {
+test("a part above zero is owed, not theirs to take back, once a part is below zero, on Home and on the Own card", async () => {
   vi.mocked(fetchMortgage).mockResolvedValue(ENDED_OWES);
-  const expected = `The mortgage ended on 2026-03-31. ${formatCents(60000)} is left in the bucket. It is each person's own, theirs to take back: alex ${formatCents(110000)}. sam owes ${formatCents(50000)}.`;
+  const expected = `The mortgage ended on 2026-03-31. ${formatCents(60000)} is left in the bucket. alex is owed ${formatCents(110000)}, sam owes ${formatCents(50000)}.`;
+  expect(expected).not.toMatch(/take back/u);
   vi.mocked(fetchBuckets).mockResolvedValue({
     ...BUCKETS,
     mortgage: { balanceCents: 60000, own: ENDED_OWES.own, lead: null },
@@ -391,7 +392,7 @@ test("a part above zero is theirs to take back and a part below zero is owed, on
 
 test("the sentence drops the balance when it is zero, and says a short bucket is short", () => {
   expect(endedSentence(ENDED_UNEVEN, {})).toBe(
-    `The mortgage ended on 2026-03-31. It is each person's own, theirs to take back: alex ${formatCents(50000)}. sam owes ${formatCents(50000)}.`,
+    `The mortgage ended on 2026-03-31. alex is owed ${formatCents(50000)}, sam owes ${formatCents(50000)}.`,
   );
   expect(
     endedSentence(
@@ -400,6 +401,41 @@ test("the sentence drops the balance when it is zero, and says a short bucket is
     ),
   ).toBe(
     `The mortgage ended on 2026-03-31. The bucket is ${formatCents(10000)} short. Sam owes ${formatCents(10000)}.`,
+  );
+});
+
+test("with a part below zero the parts above it are owed, so three people do not each take back more than the bucket holds", () => {
+  const names = { alex: "Alex", kim: "Kim", sam: "Sam" };
+  expect(
+    endedSentence(
+      {
+        ...ENDED_OWES,
+        balanceCents: 90000,
+        own: [
+          { personId: "alex", ownCents: 110000 },
+          { personId: "kim", ownCents: 30000 },
+          { personId: "sam", ownCents: -50000 },
+        ],
+      },
+      names,
+    ),
+  ).toBe(
+    `The mortgage ended on 2026-03-31. ${formatCents(90000)} is left in the bucket. Alex is owed ${formatCents(110000)}, Kim is owed ${formatCents(30000)}, Sam owes ${formatCents(50000)}.`,
+  );
+  expect(
+    endedSentence(
+      {
+        ...ENDED_OWES,
+        balanceCents: -40000,
+        own: [
+          { personId: "alex", ownCents: 10000 },
+          { personId: "sam", ownCents: -50000 },
+        ],
+      },
+      names,
+    ),
+  ).toBe(
+    `The mortgage ended on 2026-03-31. The bucket is ${formatCents(40000)} short. Alex is owed ${formatCents(10000)}, Sam owes ${formatCents(50000)}.`,
   );
 });
 
