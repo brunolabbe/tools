@@ -15,11 +15,23 @@ the oxc binaries read them, and oxfmt preserves the comments when it formats the
 `.oxlintrc.json` has been commented since `b876906`. Editor JSON validators will
 squiggle both unless `files.associations` maps them to `jsonc`.
 
-`oxfmt` is opinionated in the gofmt sense — **at the pinned version the only
-setting it honours is `ignorePatterns`.** Style keys like `quoteStyle` and
-`lineWidth` parse without error but are silently ignored, so do not add them and
-do not argue with its output (it uses double quotes). Run `npm run format` and
-move on. Lint rules, by contrast, are fully configurable in `.oxlintrc.json`.
+`oxfmt` is opinionated in the gofmt sense, but it is not a one-key formatter:
+**at 0.62.0, the pinned version, it honours `ignorePatterns`, `printWidth`,
+`proseWrap`, `singleQuote` and `tabWidth`, among others** (those five are the ones
+measured; the `configuration_schema.json` shipped with oxfmt is the full list).
+`proseWrap: "always"` is what switches markdown wrapping on, and `printWidth` is the
+width it wraps to (default 100; `printWidth` alone leaves markdown untouched). Keys that are not oxfmt's, like
+`quoteStyle` and `lineWidth`, parse without error and are silently ignored, so do
+not add them. This repo's `.oxfmtrc.json` sets only `ignorePatterns`, so the output
+is oxfmt's defaults (double quotes, 100 columns, prose never reflowed): do not argue
+with it, run `npm run format` and move on. Lint rules, by contrast, are fully
+configurable in `.oxlintrc.json`.
+
+A config is also picked up from a directory above the file being formatted, not
+only from the working directory: a stray `.oxfmtrc.json` in a parent
+of a scratch fixture changes what `oxfmt` does to it, and an `ignorePatterns` entry
+that matches every target makes `oxfmt` exit 2 ("Expected at least one target
+file").
 
 `ignorePatterns` entries are gitignore-shaped: an entry with an internal slash is
 anchored to the config's directory, so a bare `test/fixtures/` matches nothing and
