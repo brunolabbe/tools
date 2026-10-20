@@ -154,3 +154,168 @@ packages/ui/` beside the `packages/core` manifest line, before `npm ci`.
   decisions above were put as options and answered there. The measurements in
   **Why** were taken on `main@140bd78a`. `--page-width` was added at the
   owner's prompt: the container widths read 62rem / 62rem / 40rem there.
+- 2026-10-19 — Built on branch `repo-108-share-design-tokens` from
+  `origin/main` at `f7436872`. The owner selected this ticket on 2026-10-19 in
+  the batch "tools-13, 2026-10-19: repo-108, repo-107, repo-106", so this
+  Build's edits to the root `CLAUDE.md` Layout block and its new
+  `.claude/rules/ui-package.md` are the owner's. The commit type is
+  `refactor`, per Build step 8.
+
+  **What changed.** `packages/ui` (`@webtools/ui`) holds `src/tokens.css`:
+  `color-scheme`, `--radius`, `--gap`, `--space-1..6`, `--page-width: 62rem`,
+  `--font-sans`, `--font-mono`, `--font-size-sm/base/lg/xl`, `* { box-sizing }`,
+  `body { margin; background; color }` and `.sr-only`, with the colour-role
+  list in its header and no colour value. Each web `main.tsx` imports it before
+  `./styles.css`; each `web/package.json` lists it in `dependencies`; each
+  `Dockerfile` has `COPY packages/ui/package.json packages/ui/` before `npm ci`;
+  `package-lock.json` has the new workspace (hand-edited, `node
+scripts/check-lockfile-sync.mjs` prints `up to date`, exit 0: no
+  `npm install` was run). Planner and ledger renamed `--muted` to `--text-muted`
+  and `--bad` to `--danger` at every use and set the roles they lacked.
+  Downloader and planner set `--font-size-base` and `--font-sans` in their
+  `:root` and read them in `body { font }`; ledger sets `--page-width: 40rem`
+  and reads `--font-sans`. `tools/downloader/web/public/terms.css` is a static
+  page outside the bundle with its own `--muted`; it is not one of the three
+  stylesheets and was left alone.
+
+  **Done when 2, the guard failing first.** The checker is
+  `packages/ui/test/support/stylesheet.ts`, run by
+  `packages/ui/test/tokens.test.ts`. Two mutations on the real files, each
+  undone from the commit with `git checkout e8c54770 -- <path>`:
+  - `--muted` planted in `tools/planner/web/src/styles.css` (`.lede` read
+    `var(--muted)`), `npx vitest run packages/ui/test/tokens.test.ts`:
+    `Tests  2 failed | 12 passed (14)`, with
+    `+   "tools/planner/web/src/styles.css: uses the retired name --muted"` and
+    `+   "tools/planner/web/src/styles.css uses --muted"`.
+  - `--ok` deleted from the dark override of `tools/ledger/web/src/styles.css`:
+    `Tests  1 failed | 13 passed (14)`, with
+    `+   "tools/ledger/web/src/styles.css: dark `:root` override does not set --ok"`.
+  - Restored, `npx vitest run packages/ui packages/core/test/image-closure.test.ts`:
+    `Test Files  2 passed (2)`, `Tests  22 passed (22)`.
+    The suite also pins the checker on synthetic sheets (a role missing from
+    dark only, from light only, a retired name, `--text-muted` not mistaken for
+    `--muted`, a role named only in a comment, no dark block), so a regex that
+    matched nothing could not pass the real files.
+
+  **Done when 3, nothing rendered differently.** One Playwright session
+  (Chromium, `colorScheme` light then dark, 1400x900) per tool against the
+  built `web/dist/app`, the API stubbed to 503, run on the base tree
+  (`f7436872`, a second worktree) and on this branch. `getComputedStyle` of
+  `:root` for every canonical role (the old spelling read for `--muted` and
+  `--bad` before), and of `.app` (downloader) or `.shell` (planner, ledger) for
+  `max-width`:
+  - Every value that existed before is identical after. The only differences
+    are roles that did not exist and now do, marked `(new)` below, and
+    downloader's `--gap`, which the shared file now declares (`1rem`, read by
+    nothing there). `node compare.mts`: `mismatches: 16 of 156`, and all 16 are
+    that set (roles `unset` before).
+  - Stronger than the roles: every element's full computed style, custom
+    properties aside, `0 differences across 176 elements, 83600 properties`
+    (35, 24 and 29 elements, light and dark), and the six full-page screenshots
+    are byte-identical. A first "before" screenshot of downloader light differed
+    in 6 pixels by 1 on one channel at a corner of the URL field; the second
+    base build and both branch builds agree with each other, and the computed
+    style dump is zero, so that capture was a raster fluke, not a change.
+
+  | tool       | role                           | light before | light after   | dark before | dark after    |
+  | ---------- | ------------------------------ | ------------ | ------------- | ----------- | ------------- |
+  | downloader | `--bg`                         | #f6f7f9      | #f6f7f9       | #101317     | #101317       |
+  | downloader | `--surface`                    | #ffffff      | #ffffff       | #181c22     | #181c22       |
+  | downloader | `--surface-2`                  | #f0f2f5      | #f0f2f5       | #1f242b     | #1f242b       |
+  | downloader | `--border`                     | #d8dce3      | #d8dce3       | #2c333c     | #2c333c       |
+  | downloader | `--text`                       | #16191f      | #16191f       | #e8ebf0     | #e8ebf0       |
+  | downloader | `--text-muted`                 | #5c6472      | #5c6472       | #98a2b3     | #98a2b3       |
+  | downloader | `--accent`                     | #2f5fe0      | #2f5fe0       | #7aa2ff     | #7aa2ff       |
+  | downloader | `--accent-text`                | #ffffff      | #ffffff       | #0b0e12     | #0b0e12       |
+  | downloader | `--ok`                         | #157a4a      | #157a4a       | #5fd39b     | #5fd39b       |
+  | downloader | `--warn`                       | #9a6400      | #9a6400       | #e5b567     | #e5b567       |
+  | downloader | `--danger`                     | #b3261e      | #b3261e       | #ff8a80     | #ff8a80       |
+  | downloader | `.app` max-width               | 992px        | 992px         | 992px       | 992px         |
+  | planner    | `--bg`                         | #fbfaf8      | #fbfaf8       | #17150f     | #17150f       |
+  | planner    | `--surface`                    | #ffffff      | #ffffff       | #201d16     | #201d16       |
+  | planner    | `--surface-2`                  | unset        | #f4f1ec (new) | unset       | #2a261c (new) |
+  | planner    | `--border`                     | #e3ddd4      | #e3ddd4       | #35301f     | #35301f       |
+  | planner    | `--text`                       | #201d19      | #201d19       | #f0ece4     | #f0ece4       |
+  | planner    | `--text-muted` (was `--muted`) | #6b6459      | #6b6459       | #a49b8a     | #a49b8a       |
+  | planner    | `--accent`                     | #2f5d50      | #2f5d50       | #7fbfa8     | #7fbfa8       |
+  | planner    | `--accent-text`                | #ffffff      | #ffffff       | #14170f     | #14170f       |
+  | planner    | `--ok`                         | unset        | #2f6f4f (new) | unset       | #2f6f4f (new) |
+  | planner    | `--warn`                       | unset        | #8a6d1f (new) | unset       | #8a6d1f (new) |
+  | planner    | `--danger` (was `--bad`)       | #a3341f      | #a3341f       | #e8836a     | #e8836a       |
+  | planner    | `.shell` max-width             | 992px        | 992px         | 992px       | 992px         |
+  | ledger     | `--bg`                         | #f8f9fa      | #f8f9fa       | #111418     | #111418       |
+  | ledger     | `--surface`                    | #ffffff      | #ffffff       | #1a1e23     | #1a1e23       |
+  | ledger     | `--surface-2`                  | unset        | #f0f2f4 (new) | unset       | #21262c (new) |
+  | ledger     | `--border`                     | #dde1e6      | #dde1e6       | #2c323a     | #2c323a       |
+  | ledger     | `--text`                       | #1b1f24      | #1b1f24       | #eceff2     | #eceff2       |
+  | ledger     | `--text-muted` (was `--muted`) | #5d6670      | #5d6670       | #9aa4ae     | #9aa4ae       |
+  | ledger     | `--accent`                     | #1f5f8b      | #1f5f8b       | #7db4dc     | #7db4dc       |
+  | ledger     | `--accent-text`                | unset        | #ffffff (new) | unset       | #0b0e12 (new) |
+  | ledger     | `--ok`                         | unset        | #1d7a4d (new) | unset       | #5fd39b (new) |
+  | ledger     | `--warn`                       | unset        | #9a6400 (new) | unset       | #e5b567 (new) |
+  | ledger     | `--danger` (was `--bad`)       | #a3341f      | #a3341f       | #e8836a     | #e8836a       |
+  | ledger     | `.shell` max-width             | 640px        | 640px         | 640px       | 640px         |
+
+  The new values are unused: nothing reads them yet, and they are the tool's
+  palette choices, free to change in the ticket that first uses one. Two were
+  not free. Planner's `.provenance .mark` read `var(--ok, #2f6f4f)` and
+  `var(--warn, #8a6d1f)` with those fallbacks, so defining the roles with any
+  other value would have changed a colour (and, in dark, the fallback is the
+  rendered colour today). Planner therefore sets `--ok` and `--warn` to the
+  fallback values in both themes, and says why in its stylesheet. Those two
+  are poor on the dark surface; fixing that is a visible change and not this
+  ticket's.
+
+  **Each tool's e2e suite.**
+  - planner, `npm run e2e:planner`: `5 passed (15.0s)`.
+  - downloader, `npm run e2e:downloader`: `9 passed (1.4m)`, `1 failed`:
+    `download.spec.ts:33 › paste a URL, pick a quality, and download the file`
+    on `expect(job).toBeInViewport()` (`viewport ratio 0`, the dl-109
+    assertion). **The same spec fails identically on the base tree**
+    (`f7436872`, second worktree, `npx playwright test -c
+tools/downloader/playwright.config.ts download.spec.ts`: `1 failed`,
+    `3 passed (1.3m)`, the same line 82 and the same message), so it is not
+    this change; the draft's CI is the reading of whether it is this
+    environment.
+  - ledger, `npm run e2e:ledger`: `Error: No tests found`, exit 1. The ledger
+    has no spec (`tools/ledger/e2e/README.md` says so), so there is no suite
+    to pass (not run on the base: no spec exists there either).
+
+  **Done when 4 and the image-closure scan.** The ticket's Trap said
+  `packages/core/test/image-closure.test.ts` "will not catch this omission",
+  and that was half wrong in a way that mattered: the scan's `neither list
+ships a workspace the API does not resolve` test treats a `COPY
+packages/ui/...` line as stale, because `@webtools/ui` is in no API's
+  closure, so the Dockerfile edit this ticket asks for failed
+  `packages/core` until the scan was taught. It now computes each tool's web
+  closure (`closureFrom("@<tool>/web")`), treats what the web needs beyond the
+  API's closure as bundled-only, and has a new test, `every workspace the UI
+build resolves has its manifest copied before \`npm ci\``, which catches the
+omission the Trap describes. Shown failing: with `COPY packages/ui/...`removed from`tools/planner/Dockerfile`, `npx vitest run
+  packages/core/test/image-closure.test.ts`gives`Tests 1 failed | 7 passed
+  (8)`, `+ "tools/planner/Dockerfile: COPY packages/ui/package.json
+  packages/ui/"`; restored, `Tests 8 passed (8)`. A scan over text still
+  cannot prove an image builds; the three image workflows are the reading of
+  Done when 4, on the draft pull request.
+
+  **What the brief had wrong.**
+  - `tools/ledger/web/src/styles.css` was 765 lines, not 741 (settled at
+    intake, not re-run).
+  - Build step 6 says a new package costs one tsconfig reference line. Here it
+    costs none: `packages/ui` has no `tsconfig.json` and no TypeScript source to
+    reference, and `tsconfig.tests.json`'s glob already includes
+    `packages/*/test/**`. `npm run check` passes with the new test in it.
+  - Build step 3 names only what the shared file provides; the planner
+    `--ok`/`--warn` fallbacks above were not in the brief and bound two values.
+  - Build step 5 said only the image build catches a missing manifest line.
+    The scan now does too (above).
+
+  **Not folded in, and one folded in.** Folded in: the `packages/ui` line in
+  the root `README.md` Layout block, the twin of the `CLAUDE.md` one the Build
+  names. Not folded in: planner's `.plans li` reads `var(--line)`, which no
+  stylesheet defines, so its `border-bottom` is invalid at computed-value time
+  and draws no rule; `var(--border)` is the obvious intent and drawing it is a
+  visible change, so it is a decision for the planner, not a rename. Also not
+  folded in: dark-theme values for planner's `--ok` and `--warn` (above).
+  Neither can be filed in this branch: a ticket for another tool is its own
+  `docs` pull request.
