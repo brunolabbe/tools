@@ -3,7 +3,7 @@ id: pl-59
 tool: planner
 title: Draw the plans-list border that names a colour nobody defines, and make the provenance marks readable in dark
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -78,10 +78,11 @@ neither defect is repo-108's to fix.
 
 ## Build
 
-Decide item 1 first (_Decision — open_ below), then:
-
-1. **The border.** Apply the answer to the `.plans li` rule. Whichever option is
-   chosen, no `var(--line)` may remain.
+1. **The border.** In the `.plans li` rule, replace `var(--line)` with
+   `var(--border)`: `border-bottom: 1px solid var(--border);`. No `var(--line)` may
+   remain. The `:last-child` exclusion was named as a separate choice and the owner
+   did not take it, so every row, the last included, keeps the hairline; do not add
+   one.
 2. **The marks in dark.** Give `--ok` and `--warn` their own dark values, so the
    dark theme stops reusing a light-page colour. Pick colours that clear 4.5:1
    against `--surface` and `--bg` in dark (`--warn-bg` is not a background any mark
@@ -117,12 +118,20 @@ Decide item 1 first (_Decision — open_ below), then:
 4. Append the Log, with the three numbers that matter: the chosen border option,
    the chosen dark values, and the ratios they measure.
 
-## Decision — open
+## Decision — answered 2026-10-20 by the owner
+
+**The owner chose option 1, draw it with `--border`**, which was this ticket's own
+recommendation; no recommendation was overridden. The answer was given in the
+orchestrator's session (tools-13), asked as: "pl-59 (#582) … The open question is
+the plans-list border, which reads an undefined var(--line) and has never drawn …
+Which fix?", with the options _Draw it with --border (Recommended)_, _Delete the
+declaration_, _Define a new --line token_ and _Leave it open_. The options as the
+filing posed them:
 
 **The border (item 1).** The fix is a visible change to the plans list, so which
-fix is not the builder's to choose. Options:
+fix was not the builder's to choose. Options:
 
-1. **Draw it with `--border`** (recommended). `--border` is the role every other
+1. **Draw it with `--border`** (recommended, and chosen). `--border` is the role every other
    rule in this file uses for a rule or a box edge, defined in both themes
    (`#e3ddd4` light, `#35301f` dark). The declaration shows the author wanted a
    row separator; this gives them one, with no new name. Costs: the list changes
@@ -136,14 +145,13 @@ fix is not the builder's to choose. Options:
    Costs: a second role next to `--border` that no other rule uses yet, for a
    difference nobody has asked for.
 
-Item 2 (the dark marks) is not part of this question: it is a defect with a
-measured bar, and the Build above fixes it whichever way item 1 is answered.
+Item 2 (the dark marks) was not part of this question: it is a defect with a
+measured bar, and the Build above fixes it.
 
 ## Done when
 
-1. `.plans li` no longer reads `var(--line)`: the ticket's chosen option is applied.
-   `grep -rn "var(--line" tools/planner/web/src` prints nothing, or `--line` is
-   defined (option 3 only).
+1. `.plans li` reads `var(--border)` and no `var(--line)` remains:
+   `grep -rn "var(--line" tools/planner/web/src` prints nothing.
 2. In dark, `.provenance.grounded .mark` and `.provenance.asserted .mark` each
    measure at least 4.5:1 against `--surface` and against `--bg`; in light they
    still do. Proven by the spec in Build step 3, naming the ratios.
@@ -203,3 +211,11 @@ tools/planner/web/src/styles.css` prints only `6291ee58`, and the same for the
   from the stylesheet's hex values with the WCAG 2.x formula, not read off a
   screenshot), and whether any browser's forced-colors or high-contrast mode
   overrides the marks.
+- **2026-10-20 — decision answered, `status` set to `ready`.** The owner chose
+  **draw the plans-list border with `--border`** (option 1, the ticket's own
+  recommendation) over deleting the declaration, defining a new `--line` token, or
+  leaving it open. Asked in the orchestrator's session (tools-13); the question and
+  options are under _Decision — answered_. The Build now says to write
+  `border-bottom: 1px solid var(--border);` and leaves out the `:last-child`
+  exclusion, which was named as a separate choice and not taken. Recorded in this
+  commit, which changes no source.
