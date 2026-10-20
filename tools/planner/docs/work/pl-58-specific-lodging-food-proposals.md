@@ -23,9 +23,9 @@ scoped lookup.
 ## Why
 
 pl-57 measured how specific the places a specialist proposes are, and found that
-`lodging` and `food` almost never name a premises. Its Log is on branch
-`origin/pl-57-measure-invention`, PR #522, at head `0aa80d6a`, which had not merged
-when this ticket was filed, so it is cited here in prose and not by link. Its
+`lodging` and `food` almost never name a premises. Its Log is in
+[pl-57](pl-57-measure-invention.md), merged as PR #522 (it had not merged when this
+ticket was filed, and was cited then in prose from its branch at `0aa80d6a`). Its
 figures, as its Log gives them:
 
 - 207 of 1,019 places are `named-premises`.
@@ -144,7 +144,7 @@ That file is not changed.
    `run.ts` writes with no existence check, so an existing name is overwritten.
 
 4. **Re-measure with pl-57's harness,** `tools/planner/api/test/live/invention.ts`,
-   once pl-57 has merged so that the harness is on `main`. Classify the new run's
+   which is on `main` since pl-57 merged. Classify the new run's
    places by pl-57's committed rubric, unchanged, by hand, and write the new run's own
    `classification.json`, as pl-57 did. Report `lodging`'s and `food`'s named-premises
    share before and after, on that rubric, on mentions (the headline, Why item 7) and
@@ -362,3 +362,35 @@ round is ticket text only.
 - **Gate records.** This is a filing, and the ticket stays `ready`, so a `## Review`
   section would be refused (`reviewed-but-ready`). Both gates' full reports are
   comments on PR #531.
+
+**2026-10-20 — Build begins (builder-standard, Sonnet 5.5), a slice: Build 1 to 4.**
+The orchestrator split the ticket on the owner's choice (2026-10-20, from three options:
+one general-purpose agent with `model: sonnet`; one general-purpose agent with no model;
+or this split, which was the recommendation). This builder does Build 1, 2, 3 and 4:
+the two `role` strings, the prompt tests, the live run, the population argument and
+manifest in `invention.ts`, and the hand classification with the before-and-after
+share. Build 5 to 7 (the WebSearch existence check, the rate, the closing open
+decision) go to a separate general-purpose agent afterwards, on this branch. No
+WebSearch is needed here.
+
+**The owner's answers at intake, 2026-10-20, recorded before any source changes:**
+
+1. **The live run's shape (Why item 5, reserved).** Question: "Which families/efforts,
+   runs and --max-usd?". Options: (a) mirror pl-57, the same five pairs as the before
+   population (Haiku 5.5 `low`, `medium` and `high`; Sonnet 5.5 `low`; Opus 5.5 `low`),
+   about 111 records, `--max-usd 10`; (b) drop Opus, `--max-usd` 5; (c) Sonnet and Opus
+   only, `--max-usd` 10. **The owner chose (a), the recommendation.** The orchestrator
+   priced it from pl-57's 111 records' `observedUsd` sum: $6.92 (Opus `low` $4.25, Sonnet
+   `low` $2.12, Haiku three efforts $0.55). `--max-usd` is per `run.ts` session, so the
+   five pairs are five sessions; the bound on the total and each session's measured cost
+   are logged with the run.
+2. **Authorisation for the paid run.** Question: "Are you available to authorise the
+   paid run and open the firewall?". Options: authorised now and ping for the firewall;
+   run authorised but firewall not this session; not this session. **The owner chose
+   "authorised now, ping me for firewall", dated 2026-10-20.** That is the authorisation
+   Build 3 requires in the Log before the run. The firewall is Build 5's, not this
+   slice's.
+
+**Stale prose folded in.** Why said pl-57's Log was on a branch that "had not merged",
+and Build 4 said "once pl-57 has merged". pl-57 is `done` on `main` (PR #522), so both
+sentences now say so; the filing-time entries below are left as written.
