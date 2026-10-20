@@ -125,3 +125,197 @@ rowsAlreadyPresent=1`, `R8 … accepted rowsAdded=0 rowsAlreadyPresent=2`.
   its full report `gate-1@5349ba45.full.md` in the directory named above; they
   were not re-derived in this filing. R1 and R8 were re-run on lg-59's gate-1
   round as quoted under Reproductions.
+
+- 2026-10-20 — builder (Opus 5.5), **stopped at Build step 3's stop condition;
+  no source changed on this branch.** Neither direction the Build names removes
+  the residual: each one doubles it or worse. The one direction that removes it
+  is not in the Build, and it costs ambiguity and time. The choice is the
+  owner's, as options below.
+
+  **Harnesses.** Gate 1's were still on disk and were used as they were, from
+  `/tmp/claude-1000/-workspaces-tools/196311b6-27e1-4ec1-a958-40fd27d0130d/scratchpad/lg-59/gate-1/`.
+  `gate-lg59-exh.test.ts` was copied with one change: the base's outcomes are
+  cached per shard, so an experiment re-runs the head only. `gate-lg59-repro.test.ts`
+  and `gate-lg59-time.test.ts` were copied unchanged. Probes c and c2 are lg-59's
+  (sha256 `e461a876…d26de3` and `2c8fc618…577ebc`, matching lg-59's Log), run at
+  `GATE_SEED=11`. The base is `335efcd4` in a second worktree. Each probe's vitest
+  run exits 1 on the 20 s timeout after every cell line is written, as lg-59
+  recorded; every enumeration shard exits 0. The copies and every output are in
+  this session's scratch directory, which is not durable:
+  `/tmp/claude-1000/-workspaces-tools/6f7039e2-424c-4a51-93b9-04dd90792f37/scratchpad/lg-61/build/`.
+
+  **Step 1, at `00977771` (`main`, lg-59 merged), against `335efcd4`.** Each
+  enumeration has one workbook row moved −3, −2, +2 or +3 days. A cell reads
+  `correct / wrongAccept / ambiguous / refused`. "Drop" counts the wrong accepts
+  that store fewer rows than the bank adds, and "head only" counts the wrong
+  accepts the base refuses.
+
+  | space          | variants | `main`                            | head only (drop) | drop | base                             | base drop |
+  | -------------- | -------- | --------------------------------- | ---------------- | ---- | -------------------------------- | --------- |
+  | 4 rows, ±5/±10 | 163,840  | 106,716 / 5,280 / 16,164 / 35,680 | 224 (32)         | 96   | 78,182 / 11,776 / 3,738 / 70,144 | 128       |
+  | 5 rows, ±10    | 81,920   | 39,802 / 4,912 / 24,678 / 12,528  | 626 (194)        | 400  | 33,744 / 11,424 / 7,940 / 28,812 | 420       |
+
+  The 4-row space matches gate 1's at `5349ba45` in every count. In the 5-row
+  space, 6 correct readings became ambiguous with lg-59's gate-1 round, and the
+  wrong-accept counts did not change. Probes c and c2 at seed 11 match
+  `69d2470c`'s column in lg-59's Log, cell for cell: `wrongAccept` 0 and
+  `refusedOther` 0 everywhere. R1 and R8 reproduce at `00977771` as the ticket
+  quotes them (`R1 … accepted rowsAdded=3 rowsAlreadyPresent=1`,
+  `R8 … accepted rowsAdded=0 rowsAlreadyPresent=2`). Both are refused
+  `STATEMENT_CHAIN_BROKEN` at `335efcd4`.
+
+  **Step 2, the shapes.**
+  - **R8 is let in by the window around the block's dates.** The false reading
+    takes the workbook's first two rows, +10.00 dated 22 Feb (1,010.00) and
+    −10.00 dated 20 Feb (1,000.00), as one block. The block spans two days, so
+    each pasted row may be dated from the 19th to the 23rd. The pasted −10.00 on
+    the 22nd and +10.00 on the 23rd hold the block's amounts and open from its
+    opening, 1,000.00, so the paste reads as wholly inside the history. Row for
+    row, the only pairing puts the bank's −10.00 on the 22nd against the
+    workbook's on the 20th, two days apart. No reading within the tolerance
+    gives this outcome: a row is dated against the block's whole span, not
+    against the row it is.
+  - **R1 is let in by the partial-block reading at the stretch's start,
+    through a block spanning two dates.** The false reading has `k = 1`. Its
+    stretch is the workbook's +5.00 on the 21st (995.00), and `nearby` adds the
+    −5.00 on the 20th (990.00) before it. Together they are one block, one day
+    wide. The pasted −5.00 on the 20th (995.00) is read as the block's last row
+    in the bank's order (`before = 1`), which only has to close on 995.00. Every
+    pairing is within a day: the pasted −5.00 is the workbook's −5.00 on the
+    20th. The window is not what lets R1 in. **This input is also a correct
+    paste within the tolerance.** Take the bank 17 Feb −5.00, 20 Feb +5.00,
+    −5.00, −5.00, 21 Feb +5.00, +10.00. The workbook holds the first three,
+    with the 20th reordered and its +5.00 dated a day late. That gives the same
+    three stored rows, and the paste from the bank's third row is R1's paste
+    exactly. There the true answer is 1 present and 3 new, which is what `main`
+    stores. No rule that is right on every in-tolerance paste can refuse R1 as a
+    whole: a rule that refuses it refuses that paste too. It can only refuse
+    both as ambiguous. The head-only drop
+    `{"truth":[[0,1000],[1,-1000],[1,-1000],[1,1000]],"wb":[[0,1000],[1,-1000],[-2,-1000]],"j":3,"i":2}`
+    from the 4-row space has the same shape: the true reading is outside the
+    tolerance and the false one is inside it.
+
+  **Step 3, the directions**, each tried uncommitted in a third worktree behind
+  an environment switch. Its two source files are in the scratch directory, at
+  `build/exp/`.
+  - **narrow**: a pasted row must be within a day of some row of its block with
+    its amount.
+  - **pair**: the block's rows and the pasted rows must pair one for one, amount
+    for amount, each pair dated within a day.
+  - **wide S/W**, not in the Build: once the rule finds exactly one reading,
+    the readings are searched again with blocks up to S days wide and each
+    pasted row allowed W days from its block's dates. Any other reading found
+    makes the paste ambiguous. A wider reading is never stored, so this can only
+    turn an accepted paste into an ambiguous one. `workbookStarts` and `nearby`
+    widen to match.
+  - **pairwide S/W**: pair, with the wide pass under pair too.
+  - **leave**: `main` as it is.
+
+  The enumerations, then probes c and c2 summed. "No such day" means probe c's
+  plain, reorder and shift cells plus probe c2: 18,000 trials, none with a day
+  re-dated two days off. `both` is probe c's four `both` cells, 6,000 trials.
+  "Distinct" is the `distinct` cells of both probes, 7,500 trials.
+
+  | direction    | 4 rows: c / W / a / r             | head only (drop) | 5 rows: c / W / a / r             | head only (drop) | ambiguous, no such day | `both` | distinct |
+  | ------------ | --------------------------------- | ---------------- | --------------------------------- | ---------------- | ---------------------- | ------ | -------- |
+  | leave        | 106,716 / 5,280 / 16,164 / 35,680 | 224 (32)         | 39,802 / 4,912 / 24,678 / 12,528  | 626 (194)        | 3,781                  | 951    | 9        |
+  | narrow       | 86,864 / 11,380 / 7,984 / 57,612  | 1,100 (12)       | 38,948 / 9,412 / 17,298 / 16,262  | 1,154 (66)       | 3,225                  | 808    | 5        |
+  | pair         | 81,712 / 12,340 / 6,928 / 62,860  | 1,388 (12)       | 35,142 / 10,916 / 15,180 / 20,682 | 1,754 (74)       | 3,139                  | 786    | 5        |
+  | wide 2/2     | 105,470 / 4,176 / 18,514 / 35,680 | 152 (24)         | 37,136 / 3,960 / 28,296 / 12,528  | 480 (152)        | 4,201                  | 1,065  | 9        |
+  | wide 3/1     | 102,778 / 1,104 / 24,278 / 35,680 | 72 (8)           | 34,816 / 880 / 33,696 / 12,528    | 142 (38)         | 4,137                  | 1,059  | 10       |
+  | **wide 2/3** | 105,180 / 0 / 22,980 / 35,680     | 0                | 36,380 / 0 / 33,012 / 12,528      | 0                | 4,255 (+474)           | 1,085  | 9        |
+  | wide 3/3     | 101,784 / 0 / 26,376 / 35,680     | 0                | 32,478 / 0 / 36,914 / 12,528      | 0                | 4,511 (+730)           | 1,158  | 10       |
+  | pairwide 2/3 | 79,352 / 0 / 21,628 / 62,860      | 0                | 29,982 / 0 / 31,256 / 20,682      | 0                | 4,164 (+383)           | 1,052  | 9        |
+  | pairwide 3/3 | 76,970 / 0 / 24,010 / 62,860      | 0                | 27,002 / 0 / 34,236 / 20,682      | 0                | 4,353 (+572)           | 1,108  | 10       |
+
+  Under every direction, every cell of both probes has `wrongAccept` 0 and
+  `refusedOther` 0. Cell by cell, each as `correct / wrongAccept / ambiguous /
+refusedOther`:
+
+  | cell                  | leave (`main`)     | narrow             | pair               | wide 2/3           | pairwide 2/3       |
+  | --------------------- | ------------------ | ------------------ | ------------------ | ------------------ | ------------------ |
+  | c distinct/plain      | 1498 / 0 / 2 / 0   | 1500 / 0 / 0 / 0   | 1500 / 0 / 0 / 0   | 1498 / 0 / 2 / 0   | 1498 / 0 / 2 / 0   |
+  | c distinct/reorder    | 1499 / 0 / 1 / 0   | 1500 / 0 / 0 / 0   | 1500 / 0 / 0 / 0   | 1499 / 0 / 1 / 0   | 1499 / 0 / 1 / 0   |
+  | c distinct/shift      | 1498 / 0 / 2 / 0   | 1499 / 0 / 1 / 0   | 1499 / 0 / 1 / 0   | 1498 / 0 / 2 / 0   | 1498 / 0 / 2 / 0   |
+  | c distinct/both       | 1499 / 0 / 1 / 0   | 1499 / 0 / 1 / 0   | 1499 / 0 / 1 / 0   | 1499 / 0 / 1 / 0   | 1499 / 0 / 1 / 0   |
+  | c repeating/plain     | 1154 / 0 / 346 / 0 | 1200 / 0 / 300 / 0 | 1206 / 0 / 294 / 0 | 1118 / 0 / 382 / 0 | 1131 / 0 / 369 / 0 |
+  | c repeating/reorder   | 1156 / 0 / 344 / 0 | 1206 / 0 / 294 / 0 | 1210 / 0 / 290 / 0 | 1121 / 0 / 379 / 0 | 1131 / 0 / 369 / 0 |
+  | c repeating/shift     | 1164 / 0 / 336 / 0 | 1227 / 0 / 273 / 0 | 1233 / 0 / 267 / 0 | 1133 / 0 / 367 / 0 | 1137 / 0 / 363 / 0 |
+  | c repeating/both      | 1172 / 0 / 328 / 0 | 1214 / 0 / 286 / 0 | 1216 / 0 / 284 / 0 | 1133 / 0 / 367 / 0 | 1151 / 0 / 349 / 0 |
+  | c tiny/plain          | 899 / 0 / 601 / 0  | 975 / 0 / 525 / 0  | 990 / 0 / 510 / 0  | 826 / 0 / 674 / 0  | 838 / 0 / 662 / 0  |
+  | c tiny/reorder        | 858 / 0 / 642 / 0  | 947 / 0 / 553 / 0  | 968 / 0 / 532 / 0  | 777 / 0 / 723 / 0  | 792 / 0 / 708 / 0  |
+  | c tiny/shift          | 923 / 0 / 577 / 0  | 1015 / 0 / 485 / 0 | 1023 / 0 / 477 / 0 | 833 / 0 / 667 / 0  | 846 / 0 / 654 / 0  |
+  | c tiny/both           | 878 / 0 / 622 / 0  | 979 / 0 / 521 / 0  | 999 / 0 / 501 / 0  | 783 / 0 / 717 / 0  | 798 / 0 / 702 / 0  |
+  | c2 distinct/disjoint  | 1497 / 0 / 3 / 0   | 1497 / 0 / 3 / 0   | 1497 / 0 / 3 / 0   | 1497 / 0 / 3 / 0   | 1497 / 0 / 3 / 0   |
+  | c2 repeating/disjoint | 1196 / 0 / 304 / 0 | 1236 / 0 / 264 / 0 | 1238 / 0 / 262 / 0 | 1154 / 0 / 346 / 0 | 1165 / 0 / 335 / 0 |
+  | c2 tiny/disjoint      | 877 / 0 / 623 / 0  | 973 / 0 / 527 / 0  | 997 / 0 / 503 / 0  | 791 / 0 / 709 / 0  | 804 / 0 / 696 / 0  |
+
+  **What the table says.**
+  - **narrow** and **pair** lower ambiguity within the tolerance: 3,781 →
+    3,225 and → 3,139 in the cells with no such day. Out of it, they make the
+    residual worse: head-only wrong accepts go 224 → 1,100 and → 1,388 with 4
+    rows, and 626 → 1,154 and → 1,754 with 5. Narrowing removes false readings
+    that had been making other false readings ambiguous, so more false readings
+    are left alone and get stored. Both fix R8 and neither fixes R1, as step 2
+    predicts.
+  - **wide 2/3** is the narrowest wide pass that leaves no wrong accept in
+    either space. Widening by 2 days, or by 3 days of span alone, leaves some.
+    It refuses R1, R6 (lg-59's Log observation) and R8 as "two ways" and changes
+    no other repro. Its cost within the tolerance is +474 ambiguous in the
+    18,000 trials with no such day (+12.5 %) and +134 in `both`. With distinct
+    amounts the cost is 0.
+  - **lg-59's in-tolerance enumeration** (gate 1's `tolerance` mode, head only)
+    under wide 2/3: with 4 rows over ±10.00 and −5.00, 123,876 / 39,420 → 122,191
+    / 41,105 (`correct / ambiguous`; wrong and refused 0 both times). With 4 rows
+    over ±10.00, 13,106 / 14,446 → 12,192 / 15,360. The 5-row space was not run.
+  - **Time.** Gate 1's timing harness, 54 cases from 200 to 8,000 pasted rows at
+    40 and 200 rows a date. `main`, wide 2/3 and pairwide 2/3 ran side by side
+    on a machine at load 15, so the absolute figures run above lg-59's. The
+    totals are 735,857 ms, 1,367,069 ms (×1.86) and 1,652,049 ms (×2.24). Wide
+    2/3's worst ratios are on alternating amounts with the paste inside the
+    history: 4,236 → 21,763 ms at 1,000 rows (×5.1), and 58,530 → 184,958 ms at
+    2,000 rows and 200 a date (×3.2). The cost is a second search whenever the
+    first finds exactly one reading, which is the case for every paste that is
+    stored. Wide 2/3 changes 2 of the 54 outcomes, both from a correct accept to
+    "two ways": 200 rows of alternating amounts at 40 a date, inside the history
+    and missing it.
+  - **What wide 2/3 does not cover.** A workbook row dated four or more days
+    off still has the residual. Neither enumeration moves a row that far, so it
+    was not measured.
+
+  **Open decision, for the owner.**
+  - **A. Wide 2/3** (recommended). Store a paste only when no reading with
+    dates up to three days off disagrees with the one found. It meets Done when
+    1–3: 0 wrong accepts in both spaces, and probes c and c2 at 0 `wrongAccept`
+    and 0 `refusedOther`. It costs +474 ambiguous in 18,000 adversarial
+    in-tolerance trials and none with distinct amounts. It runs about twice as
+    long overall, and up to ×5 on large pastes of alternating amounts. A paste
+    it refuses stores nothing; one it leaves out stores rows twice or drops a
+    new row and says nothing. The refusal is the "two ways" one, so its message
+    should say that one reading pairs rows up to three days apart: as it stands
+    it says "the same rows come round again".
+  - **B. Pairwide 2/3.** Also meets Done when 1–3, with +383 ambiguous in place
+    of +474. It stores 25,828 fewer of the 4-row one-off pastes correctly than A
+    does (79,352 against 105,180), and refuses 27,180 more as
+    `STATEMENT_CHAIN_BROKEN`. It runs about ×2.2 overall.
+  - **C. Leave the rule and record the residual** (Done when 2's escape): 850
+    head-only wrong accepts in 245,760 one-off variants, 226 of them dropping a
+    new row. No cost.
+  - **D. Pair alone**, a Build direction. 642 fewer ambiguous in tolerance, but
+    the residual grows: 3,142 head-only wrong accepts in place of 850. R1 is
+    still stored wrongly, so Done when 1 has to be rewritten.
+
+  Narrow alone falls between leave and pair on both measures (556 fewer
+  ambiguous in tolerance, 2,254 head-only wrong accepts). Like pair it still
+  stores R1 wrongly, so it is not offered separately.
+
+  With wide 2/3 switched on, the existing ledger `api` suite passes in the
+  experiment tree: 934 of 934, `npx vitest run tools/ledger/api/test/`.
+
+  **The seam lg-58 builds on.** Under A, the reading stored is the one the
+  rule finds now. The wider search only adds refusals, so the pairing
+  `matchStretch` accepts stays where it is, in `matchBlock`'s call to
+  `matchPart`. B moves it into the pairing function, which computes it
+  explicitly.
+
+  **Fold-in:** none. No source changed, so nothing was made free.
