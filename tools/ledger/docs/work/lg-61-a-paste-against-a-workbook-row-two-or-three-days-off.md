@@ -471,3 +471,34 @@ tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
   `sed -n 220p` on this ticket → "re-dated two days off. `both` is probe c's
   three `both` cells, 4,500 trials." (the gated head's line 220 had "four" and
   "6,000").
+
+- 2026-10-20 — Fixed at landing by owner choice: gate 1, third low (no `Done
+when` line depends on it) — "the Log's "Outcomes changed: 2 of 54" and its
+  time figures are not reproduced." The builder's figures above stay as
+  written. Gate 1's, at `32c20df2` against `main`, from its full report
+  ("Attack 4: timing" and "Attack 2"), are beside them. The builder's 54-case
+  grid's row counts are not recorded in this ticket, so which of gate 1's cases
+  are among the 54 cannot be told.
+  - Outcomes changed: 4 of 36, on the grid of 200 and 1,000 rows × 40 and 200 a
+    date. All four go from accepted to "two ways": 200 alternating rows at 40 a
+    date, inside the history and missing it (the 2 the builder names), and
+    1,000 alternating rows at 200 a date, inside the history and missing it.
+  - Time, the 36-case grid, `main` and the head side by side at a load average
+    of 9.6 to 9.8: 179,009 ms on `main` and 293,421 ms at the head (×1.64).
+    Worst ratio ×3.58, 1,000 rows of constant amounts at 40 a date, inside the
+    history: 1,444 → 5,176 ms.
+  - The three cases the builder names, run singly at a load average of 5.8 to
+    9.3: 1,000 alternating rows at 40 a date inside, 3,416 → 9,497 ms (×2.78);
+    2,000 alternating rows at 200 a date inside, 31,599 → 97,300 ms (×3.08);
+    1,000 constant rows at 40 a date onto the tail, 1,372 → 2,861 ms (×2.09).
+    Also 1,000 alternating rows at 200 a date inside: 19,782 → 39,287 ms
+    (×1.99), where `main` accepts and the head refuses "two ways".
+  - The builder's ×1.43 for 1,000 alternating rows inside is not reproduced:
+    ×2.78 at 40 a date, ×1.99 at 200, and ×2.99 at 40 in the 36-case sweep.
+  - Absolute cost: 2,000 alternating rows at 200 a date, inside, is 31.6 s on
+    `main` and 97.3 s at the head, synchronously, inside one write transaction.
+
+  `grep -c "Outcomes changed: 4 o[f] 36"` on this ticket → 1 (0 at the
+  previous commit). The
+  tables these figures come from are under "Attack 4: timing" in gate 1's
+  full report, posted to the pull request thread.
