@@ -5938,3 +5938,34 @@ The owner's paid lg-38 run (60 model calls, $0.5349 by the records' `costUsd`) i
 - Handing each later gate the earlier gate's plant scripts by path: gate 2's `header-shapes.sh` became the table the builder's round 2 and gate 3 both re-ran, 15 shapes each, with no re-derivation.
 - A probe pull request confined to two new files outside the `repo` vitest glob: siblings' preflight merges never ran it, and it was closed with its branch deleted (verified `0`) as the next action.
 - Asking the owner a fresh filing's open decision before its gate, so the ticket landed `ready` instead of `needs-decision`, with one extra message to a live builder.
+
+### Batch 2026-10-20 (tools-11, dl-129, dl-130 filed) — base 00977771
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a1be9f69381945f05 | seam-mapper, dl-129 pl-58 repo-109 lg-58 lg-63 | 1m02s / 1m02s | 0 | $0.2470 |
+| #585 | open, ready | Sonnet 5.5 / high | afccb1f0638c342f1 | builder-standard, dl-129 | 57m07s / 1h11m11s | 0 | $6.2977 |
+| #585 | open, ready | Haiku 5.5 / high | a9ed8917e9194acda | builder-mechanical, dl-129 maintenance (Decision note D) | 2m09s / 2m09s | 0 | $0.0242 |
+| #585 | open, ready | Opus 5.5 / high | a71283962d06903da | ticket-reviewer-opus, dl-129 gate 1 | 23m29s / 23m22s | 0 | $6.1865 |
+| #585 | open, ready | Sonnet 5.5 / high | a519d403815348ce5 | fixer, dl-129 landing + one low at landing | 4m15s / 4m12s | 0 | $0.4299 |
+| #587 | open, ready | Haiku 5.5 / high | a6ab2c30aac668b5d | builder-mechanical, file dl-130 | 7m36s / 7m00s | 0 | $0.4085 |
+| — | — | Opus 5.5 / high | orchestrator 0e6c9858 | orchestrator (floor) | 40m32s / 1h59m50s | 1 | $4.0938 |
+| | | | | **total** (rates read 2026-10-10) | 2h16m10s | 1 | **$17.6874** |
+
+**Tickets:**
+
+- dl-129 → #585: the builder measured Decision A's scope at 8.2 % local and 90.2 % of 318 s on CI (bar 85 %), so Done when 8 was reworded to report-only by owner choice (Decision note D, the orchestrator's recommendation over the builder's widening). Gate 1 CONCERNS: two meds answered by the owner (E: Done when 6 reworded to the split's count; F: the relocated CodeQL alert excused, dl-98's `awaiting:` line repointed), one low fixed at landing by owner choice, two lows recorded. Landed 1d23851a. `CodeQL` red at the landing head on the same alert (line 511 under the moved excusal), cleared after merge by `security.yml`.
+- dl-130 → #587: filed from gate 1's out-of-range flake (`tiers-on-the-terminating-proxy` › "still refuses a certificate the proxy could not verify", 1 of 10), by owner choice; filer rated `hard`.
+
+**Defects in the skill:**
+
+1. `roles/common.md` › "Your worktree" — the hand-link rule covers "A workspace your branch adds" only, not one `main` added after the shared checkout's install. Four agents this batch (maintenance, gate, lander, filer) hit `Rollup failed to resolve import "@webtools/ui/tokens.css"` on `npm run build` after a clean farm, and each linked `packages/ui` by hand. Reproduction: `grep -c 'your branch adds' .claude/skills/orchestrate-tickets/roles/common.md` → `1`; `grep -c -i 'main added\|since the shared install' .claude/skills/orchestrate-tickets/roles/common.md` → `0`; `ls node_modules/@webtools/` in the shared checkout at 00977771 → `core`.
+2. `.claude/scripts/check-farm-freshness.mjs` (a script, recorded here, not fixed) — it reads the shared checkout's own lockfile, so a shared checkout behind `origin/main` passes while a worktree on `main` misses a workspace. Reproduction: `node .claude/scripts/check-farm-freshness.mjs /workspaces/tools >/dev/null 2>&1; echo $?` → `0`; `git show origin/main:package-lock.json | grep -c '"packages/ui"'` → `2`; `grep -c '"packages/ui"' package-lock.json` → `0`.
+3. `reference/records.md` › "Fixed at landing" — the entry template names a finding as "gate 2, N1", but a gate section may carry its findings as id-less severity bullets, and the lander had to invent "gate 1, the first low". Reproduction: `grep -c -E '^- \*\*(med|low)\*\*' <scratch>/dl-129/gate-1/gate-1@0bda7625.md` → `5`, with no finding id in the section; `grep -c 'N1' .claude/skills/orchestrate-tickets/reference/records.md` → `1`.
+4. `roles/common.md` › "Your scratch directory" — silent that `gh` needs a cwd inside the repo, and a scratch script calling `gh` fails from the scratch directory. Reproduction: `cd <scratchpad> && gh pr checks 585; echo $?` → `failed to run git: fatal: not a git repository (or any of the parent directories): .git`, `1`.
+
+**Worked, and worth keeping:**
+
+- Reading the peer sessions' `board.md` files before offering a batch: it showed that tools-dd had queued lg-58 and lg-63 and tools-13 held repo-109, which `git worktree list` did not.
+- Recomputing the builder's projection before asking: its "18.7 % lower, about 81 % on CI" compared seven-file runs with whole-project runs. On matching runs the gain was nearer 9 % (projected about 82 %), and the owner chose on that figure.
+- The gate's positive control on the F9 poll refuted the ticket's own premise: the base's `sleep(4_000)` passed a pause that never engages, 3 of 3 times.
