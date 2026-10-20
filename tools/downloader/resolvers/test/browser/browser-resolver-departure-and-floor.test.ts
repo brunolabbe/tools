@@ -2,12 +2,21 @@
  * When the probe stops: the departure guard, the surface click's choice, the cross-origin chooser, the empty media floor, and the quiet wait's minimum (split from browser-resolver.test.ts, dl-117).
  */
 
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { AppError } from "@downloader/contract";
+import type * as abort from "../../src/browser/abort.ts";
 import type * as provoke from "../../src/browser/provoke.ts";
+import { PROVOKE_PASS_PAUSE_MS } from "../../src/browser/provoke.ts";
 import type { BrowserPool } from "../../src/browser/pool.ts";
-import { BrowserResolver, MIN_WAIT_MS } from "../../src/resolvers/browser.ts";
-import type { BrowserResolverLogger } from "../../src/resolvers/browser.ts";
+import {
+  BrowserResolver,
+  LANDING_URL_SETTLE_MS,
+  MIN_WAIT_MS,
+} from "../../src/resolvers/browser.ts";
+import type { BrowserResolverLogger, BrowserResolverOptions } from "../../src/resolvers/browser.ts";
 import { recordingHlsParser } from "./helpers/fake-parsers.ts";
 import type { FixtureServer } from "./helpers/fixture-server.ts";
 import {
@@ -19,7 +28,7 @@ import {
   probes,
   startBrowserHarness,
 } from "./helpers/browser-harness.ts";
-import { STREAM_WAITS } from "./helpers/stream-waits.ts";
+import { AT_ONCE_WAITS, STREAM_WAITS } from "./helpers/stream-waits.ts";
 
 let server: FixtureServer;
 let pool: BrowserPool;
@@ -62,6 +71,21 @@ vi.mock("../../src/browser/provoke.ts", async (importOriginal) => {
       call.reachedQuiet = await actual.waitForQuiet(...args);
       call.wallWaitedMs = Date.now() - wallStart;
       return call.reachedQuiet;
+    },
+  };
+});
+
+// Records every duration `sleep` is handed (dl-129), and changes nothing: the two
+// fixed sleeps of a probe can only be read where they are made, and a timing
+// bound cannot tell 500 from a default that merely lands near it.
+const sleepCalls = vi.hoisted(() => [] as number[]);
+vi.mock("../../src/browser/abort.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof abort>();
+  return {
+    ...actual,
+    sleep: async (ms: number, signal?: AbortSignal) => {
+      sleepCalls.push(ms);
+      await actual.sleep(ms, signal);
     },
   };
 });
@@ -171,7 +195,7 @@ describe("BrowserResolver", () => {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
         const result = await probe("/guard-fragment.html", resolver);
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
       },
@@ -212,7 +236,7 @@ describe("BrowserResolver", () => {
         // alone cannot tell the two apart, since nothing navigates again
         // after it (see the Log).
         const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
         const result = await probe("/guard-redirect-then-fragment", resolver);
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
       },
@@ -225,7 +249,7 @@ describe("BrowserResolver", () => {
     // One row stays as the proof the guard is wired to it.
     test("adding ?t= on play is not a departure", { timeout: TEST_TIMEOUT_MS }, async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...STREAM_WAITS });
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, ...AT_ONCE_WAITS });
       const result = await probe("/guard-query.html?rewrite=t", resolver);
       expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
     });
@@ -418,7 +442,10 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
    * and provocation are outside it. `quietMs` is small so that only the minimum
    * can hold the wait: the page's last request is a second old by then.
    */
-  async function quietWait(minWaitMs: number | undefined): Promise<{
+  async function quietWait(
+    minWaitMs: number | undefined,
+    sleeps: Pick<BrowserResolverOptions, "landingSettleMs" | "passPauseMs"> = {},
+  ): Promise<{
     waitedMs: number;
     handedMs: number | undefined;
     reachedQuiet: boolean | undefined;
@@ -429,6 +456,7 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
       hlsParser: recordingHlsParser().parser,
       quietMs: 200,
       ...(minWaitMs === undefined ? {} : { minWaitMs }),
+      ...sleeps,
     });
     let stopwatch: (() => number) | undefined;
     let waitedMs: number | undefined;
@@ -488,11 +516,89 @@ describe("the quiet wait's minimum can be set, and defaults to 1200 ms (dl-115)"
     "a minWaitMs below it is the one the wait is handed",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const { handedMs } = await quietWait(STREAM_WAITS.minWaitMs);
+      // Only the handed value is read, and `/mse.html` mounts its player at once.
+      const { handedMs } = await quietWait(STREAM_WAITS.minWaitMs, {
+        landingSettleMs: AT_ONCE_WAITS.landingSettleMs,
+        passPauseMs: AT_ONCE_WAITS.passPauseMs,
+      });
 
       expect(handedMs).toBe(STREAM_WAITS.minWaitMs);
     },
   );
+});
+
+describe("the two fixed sleeps every probe pays keep their production values (dl-129)", () => {
+  /**
+   * What `sleep` was handed by a probe of `/mse.html`, in order. The 200 ms ticks
+   * of the quiet wait are in it too; the two sleeps under test are the ones that
+   * are not ticks. `resolver.resolve` runs one probe at a time, so nothing else
+   * in this file writes to the list while it does.
+   */
+  async function sleepsOf(overrides: BrowserResolverOptions): Promise<number[]> {
+    const resolver = new BrowserResolver({
+      pool,
+      hlsParser: recordingHlsParser().parser,
+      ...STREAM_WAITS,
+      ...overrides,
+    });
+    sleepCalls.length = 0;
+    await probe("/mse.html", resolver);
+    return [...sleepCalls];
+  }
+
+  test("the defaults are 500 ms after load and 900 ms between the passes", () => {
+    expect(LANDING_URL_SETTLE_MS).toBe(500);
+    expect(PROVOKE_PASS_PAUSE_MS).toBe(900);
+  });
+
+  test(
+    "a resolver given neither option sleeps 500 ms after load and 900 ms between the passes",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const sleeps = await sleepsOf({});
+
+      // The literals, not the constants: a default changed in the source moves
+      // the constants with it and the sleeps with them, and must still fail here.
+      expect(sleeps.filter((ms) => ms === 500)).toHaveLength(1);
+      expect(sleeps.filter((ms) => ms === 900)).toHaveLength(1);
+    },
+  );
+
+  test(
+    "landingSettleMs and passPauseMs replace those two sleeps and nothing else",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const sleeps = await sleepsOf({ landingSettleMs: 250, passPauseMs: 350 });
+
+      expect(sleeps.filter((ms) => ms === 250)).toHaveLength(1);
+      expect(sleeps.filter((ms) => ms === 350)).toHaveLength(1);
+      expect(sleeps).not.toContain(500);
+      expect(sleeps).not.toContain(900);
+    },
+  );
+
+  test("no production source passes either option", () => {
+    const downloaderRoot = fileURLToPath(new URL("../../../", import.meta.url));
+    const owners = new Set([
+      path.join(downloaderRoot, "resolvers", "src", "resolvers", "browser.ts"),
+      path.join(downloaderRoot, "resolvers", "src", "browser", "provoke.ts"),
+    ]);
+    const offenders: string[] = [];
+    for (const workspace of readdirSync(downloaderRoot, { withFileTypes: true })) {
+      if (!workspace.isDirectory()) continue;
+      const srcDir = path.join(downloaderRoot, workspace.name, "src");
+      if (!existsSync(srcDir)) continue;
+      for (const entry of readdirSync(srcDir, { recursive: true, withFileTypes: true })) {
+        if (!entry.isFile() || !/\.(ts|tsx)$/.test(entry.name)) continue;
+        const file = path.join(entry.parentPath, entry.name);
+        if (owners.has(file)) continue;
+        if (/\b(landingSettleMs|passPauseMs)\b/.test(readFileSync(file, "utf8"))) {
+          offenders.push(path.relative(downloaderRoot, file));
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 /** Elapsed milliseconds since the call, off a clock that follows no one's `date`. */

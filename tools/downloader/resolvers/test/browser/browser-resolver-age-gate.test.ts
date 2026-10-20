@@ -17,7 +17,7 @@ import {
   startBrowserHarness,
 } from "./helpers/browser-harness.ts";
 import type { Waits } from "./helpers/browser-harness.ts";
-import { STREAM_WAITS } from "./helpers/stream-waits.ts";
+import { AT_ONCE_WAITS, STREAM_WAITS } from "./helpers/stream-waits.ts";
 
 let server: FixtureServer;
 let pool: BrowserPool;
@@ -213,7 +213,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async () => {
           server.requests.length = 0;
-          const result = await probe(GATE, confirming(STREAM_WAITS));
+          const result = await probe(GATE, confirming(AT_ONCE_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain("/beacon/age-confirmed");
@@ -277,7 +277,7 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async () => {
           server.requests.length = 0;
-          const result = await probe(`${GATE}?shadow`, confirming(STREAM_WAITS));
+          const result = await probe(`${GATE}?shadow`, confirming(AT_ONCE_WAITS));
 
           expect(result.variants[0]?.url).toBe(server.url(MASTER));
           expect(server.requests).toContain("/beacon/age-confirmed");

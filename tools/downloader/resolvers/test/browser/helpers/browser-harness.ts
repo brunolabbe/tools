@@ -33,7 +33,10 @@ export const NO_EMPTY_FLOOR_MS = 1200;
  * take it: the presses happen during provocation, before the quiet wait, and
  * every request these fixtures make on a press is made on the click itself.
  */
-export type Waits = Pick<BrowserResolverOptions, "quietMs" | "minWaitMs">;
+export type Waits = Pick<
+  BrowserResolverOptions,
+  "quietMs" | "minWaitMs" | "landingSettleMs" | "passPauseMs"
+>;
 export const BASE_WAITS: Waits = { quietMs: 1200 };
 
 export interface BrowserHarness {

@@ -36,6 +36,7 @@ import { BrowserPool } from "../browser/pool.ts";
 import type { BrowserPoolStats } from "../browser/pool.ts";
 import {
   PLAY_TIME_QUERY_KEYS,
+  PROVOKE_PASS_PAUSE_MS,
   provokePlayback,
   readMetadata,
   readSignals,
@@ -112,7 +113,7 @@ const LANDING_URL_LOAD_BUDGET_MS = 1500;
  * that catches a page's own lifecycle churn instead of a click that opened
  * something else, which is the regression this decision exists to close.
  */
-const LANDING_URL_SETTLE_MS = 500;
+export const LANDING_URL_SETTLE_MS = 500;
 
 /**
  * The one line this resolver ever needs to write: a departure from the
@@ -164,6 +165,21 @@ export interface BrowserResolverOptions {
    */
   clickTimeoutMs?: number;
   /**
+   * dl-129: the grace period after `load` before the landing URL is read.
+   * Defaults to `LANDING_URL_SETTLE_MS`. Only a test that expects a stream
+   * whose player mounts at once may shorten it; dl-55's tests prove the
+   * default, and a test that expects no media, an error, or something left
+   * unpressed must leave it alone.
+   */
+  landingSettleMs?: number;
+  /**
+   * dl-129: the sleep between `provokePlayback`'s two passes. Defaults to
+   * `PROVOKE_PASS_PAUSE_MS`. The same rule as `landingSettleMs`: it covers
+   * players that mount late, so only a test whose player is on the page at once
+   * may shorten it.
+   */
+  passPauseMs?: number;
+  /**
    * Passed to the pool this resolver builds for itself — see
    * `BrowserPoolOptions.proxyRootSpkiSha256`, which carries the reasoning.
    *
@@ -211,6 +227,8 @@ export class BrowserResolver implements Resolver {
   readonly #minWaitMs: number;
   readonly #emptyMinWaitMs: number;
   readonly #clickTimeoutMs: number | undefined;
+  readonly #landingSettleMs: number;
+  readonly #passPauseMs: number;
   readonly #confirmAge: boolean;
   readonly #logger: BrowserResolverLogger;
   readonly #proxyRootCaPem: string | undefined;
@@ -234,6 +252,8 @@ export class BrowserResolver implements Resolver {
     this.#minWaitMs = options.minWaitMs ?? MIN_WAIT_MS;
     this.#emptyMinWaitMs = options.emptyMinWaitMs ?? EMPTY_MIN_WAIT_MS;
     this.#clickTimeoutMs = options.clickTimeoutMs;
+    this.#landingSettleMs = options.landingSettleMs ?? LANDING_URL_SETTLE_MS;
+    this.#passPauseMs = options.passPauseMs ?? PROVOKE_PASS_PAUSE_MS;
     this.#confirmAge = options.confirmAge ?? false;
     this.#logger = options.logger ?? NOOP_LOGGER;
     this.#proxyRootCaPem = options.proxyRootCaPem;
@@ -372,7 +392,7 @@ export class BrowserResolver implements Resolver {
     // landing URL" is whatever the page had already decided it was before
     // this tier touched anything, which is what the guard is supposed to
     // measure departures *from*.
-    await waitForPageLoad(page, deadline, options.signal);
+    await waitForPageLoad(page, deadline, options.signal, this.#landingSettleMs);
 
     // The landing URL, recorded once navigation, `load` and the grace period
     // above have all settled. A redirect during load is legitimate and never
@@ -389,6 +409,7 @@ export class BrowserResolver implements Resolver {
       signal: options.signal,
       confirmAge: this.#confirmAge,
       clickTimeoutMs: this.#clickTimeoutMs,
+      passPauseMs: this.#passPauseMs,
       // dl-81: what could replace a stream with a worse one waits on this.
       hasPlayable: () => collector.hasPlayableHit(),
     });
@@ -725,7 +746,12 @@ async function navigate(
  * still runs; an abort during either propagates, same as any other wait in
  * this file.
  */
-async function waitForPageLoad(page: Page, deadline: number, signal: AbortSignal): Promise<void> {
+async function waitForPageLoad(
+  page: Page,
+  deadline: number,
+  signal: AbortSignal,
+  settleMs: number,
+): Promise<void> {
   const loadTimeout = budget(deadline, LANDING_URL_LOAD_BUDGET_MS);
   if (loadTimeout > 0) {
     try {
@@ -734,7 +760,7 @@ async function waitForPageLoad(page: Page, deadline: number, signal: AbortSignal
       // Never settled inside the budget.
     }
   }
-  await sleep(budget(deadline, LANDING_URL_SETTLE_MS), signal);
+  await sleep(budget(deadline, settleMs), signal);
 }
 
 /**
