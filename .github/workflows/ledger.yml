@@ -11,9 +11,9 @@ name: ledger
 # included deliberately: this image is built on `@webtools/core`, so a change
 # there can break it without touching a ledger file.
 #
-# **No e2e job yet**, because there is no spec to run: a job that launches a
-# browser to find nothing is a green check proving nothing. It arrives with the
-# first spec, in the planner's shape — see `tools/ledger/e2e/README.md`.
+# The `e2e` job arrived with the first spec (repo-109), in the planner's shape:
+# every screen at a phone's width and a desktop's — see
+# `tools/ledger/e2e/README.md`.
 #
 # `push` is `main` only. See the note in `ci.yml`: a branch with an open pull
 # request fires both events into separate concurrency groups, so it used to pay
@@ -51,6 +51,47 @@ permissions:
   contents: read
 
 jobs:
+  # The layout spec, through a browser, against the bundle the API serves, over
+  # household books it fills through the API. See `tools/ledger/e2e/README.md`.
+  # Not in `ci.yml`, for the planner's reason: it costs a browser download and a
+  # Vite build, and this file is path-filtered so other tools' work does not pay.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The API under test is started with tsx, which runs its own sources but
+      # still resolves `@ledger/contract`, `@ledger/books` and `@ledger/receipts`
+      # through their `dist`. The serve script builds `web` and the household
+      # command builds the API, which does not reach all of them.
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
+      # No key and no network: the receipt reader is unset, so a receipt is
+      # typed in, and nothing here reaches a model.
+      - run: npm run e2e:ledger
+      # Traces and video, kept only when something failed.
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: ledger-e2e-artifacts
+          path: tools/ledger/e2e/.artifacts/results
+          retention-days: 7
+      # The layout spec's screenshots, kept on a pass too: a green width
+      # assertion over a page nobody has looked at proves little, so the gate
+      # opens these.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ledger-layout-shots
+          path: tools/ledger/e2e/.artifacts/layout
+          retention-days: 7
+
   docker:
     runs-on: ubuntu-latest
     steps:

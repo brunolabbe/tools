@@ -124,3 +124,95 @@ not name · (2) every view state, including error, empty and loading variants ·
   in the same pull request. The two are independent: the check needs no tokens,
   and repo-108's no-visual-change acceptance holds whether this lands first or
   second. Measurements on `main@140bd78a`.
+
+- 2026-10-20 — Built (model: Sonnet 5.5). Owner's answer at intake recorded above
+  (option 1, the builder's enumerated list); Done-when 2 reworded to match.
+
+  **The screens, per tool, and how each is reached** (the list the gate grades
+  coverage against; none of the three has a router, so each is a view state). Every
+  case reaches its screen once, then measures it at 360×740 and 1280×800 on the same
+  page, and writes a full-page screenshot of each to `e2e/.artifacts/layout/`.
+  - **downloader** (`tools/downloader/e2e/layout.spec.ts`, 5 cases): the address
+    form, with a 192-character address typed into it; the analysing panel, with the
+    probe request held so it stays up, over the same long address; the renditions
+    table (the fixture master playlist, two renditions) and probe panel; a finished
+    download's card (a real download through ffmpeg, "Saved by your browser") with
+    the table above it; `terms.html`, the page beside the bundle. Not listed: the
+    error panel and the job card's other states (sub-states).
+  - **planner** (`tools/planner/e2e/layout.spec.ts`, 5 cases): the trips and plans
+    list with a trip and a drafted plan in it; a question; the checkpoint, with
+    "The trip so far" and "Your answers" beside it; a finished run ("Done", the
+    unchecked list); a plan (six days, items, the re-plan and dates forms). Reached
+    with `intake-walk.ts` and `plan-walk.ts`, naming no question and no plan. Not
+    listed: the discard warning and a running run (sub-states).
+  - **ledger** (`tools/ledger/e2e/layout.spec.ts`, 12 cases): the twelve tabs of
+    `App.tsx` — Home, Stats, Period, History, Receipt, Paste, Inbox, Rules,
+    Categories, Salaries, Household, Admin — each opened onto a household seeded
+    through the API (three rules, the three-month paste, 2026 salaries and their
+    ratio, a closed period with three lines and an open one with one, a recurring
+    item). Paste is measured twice (previewed, then stored) and Receipt with a photo
+    kept, "Type it in" pressed, and a long merchant and item typed. Not listed: the
+    history's open filter panel, the auto-filed list (empty here), the receipt's
+    read-by-model path (no model is configured in e2e).
+
+  **Result: no screen overflows at 360 px.** Every case is green at both widths, so
+  there is no `test.fixme`, no per-tool ticket was filed and no step-4 fix was
+  folded in (Done-when 5 holds with both lists empty). Every one of the 46
+  screenshots was opened by hand; none is an empty page. Two things looked wrong in
+  them and are not overflow, so they are not this ticket's: the household screen's
+  mortgage radio group (`Household-360.png`) lays its three radios out centred, away
+  from their labels, and the receipt form's item text field (`Receipt-360.png`,
+  `Receipt-1280.png`) is about 8 characters wide, so the entry is clipped in it. Both
+  are in the report as open decisions rather than filed here.
+
+  **The check can fail (Done-when 3).** A planted `.panel { width: 400px; }` in
+  `tools/planner/web/src/styles.css`, reverted after (`git status` shows the file
+  clean), run as `npx playwright test -c tools/planner/playwright.config.ts
+layout.spec.ts`: `5 failed`, each of the form `Error: Trips and plans is 420 px
+wide in a 360 px window` (likewise Question, Checkpoint, Run, Plan). The 1280 px
+  measurement of each passed, so it is the width that fails, not the page.
+
+  **What the brief had wrong or left out.**
+  - Ledger's server could not serve the spec as it stood: every route but health
+    answers 403 until the caller is a member, `DEV_IDENTITY` is refused unless the
+    directory already holds that address, and the e2e config set neither. The
+    `e2e:ledger:serve` script now adds the household and two members through the
+    household command before the API boots, and the config sets `DEV_IDENTITY` and
+    `LEDGER_ADMINS` so the household and admin tabs exist. The config also cleared
+    its storage directory in every worker (Playwright imports the config again in
+    each), which would delete the household under a running server; it now clears it
+    only where `TEST_WORKER_INDEX` is unset.
+  - The planner's API refuses a sixth run in a minute (`RATE_LIMIT_RUNS_PER_MINUTE`
+    is 5): with this spec drafting two plans, `revise.spec.ts` failed on "Too many
+    requests" mid-run. Reproduced by running the suite (9 passed, 1 failed, 1.4
+    minutes) and fixed by setting the limit to `0` in `playwright.config.ts`, as the
+    downloader's config already does. The limiter has its own API tests.
+  - Ledger's Playwright project is a Pixel 7 (mobile emulation), so the spec turns
+    `isMobile`, `hasTouch` and `deviceScaleFactor` off: one device model at both
+    widths and only the width differs. The project itself is untouched.
+  - A passing test's attachments are deleted with its output directory, so the
+    screenshots are also written to `e2e/.artifacts/layout/` (already ignored) and
+    each tool's e2e job uploads them (`if: always()`, 7 days), or a gate has nothing
+    to open.
+  - The farm links no `@webtools/ui` (the shared checkout has none), so `npm run
+build` failed on `@webtools/ui/tokens.css`; linked by hand with
+    `ln -s ../../packages/ui node_modules/@webtools/ui` and built clean.
+
+  **Locally, `download.spec.ts` fails on a line this branch does not touch**:
+  `expect(job).toBeInViewport()` (dl-109), "viewport ratio 0", in `npx playwright
+test -c tools/downloader/playwright.config.ts download.spec.ts` (3 passed, 1
+  failed), and the same in the full run. `main`'s own downloader run is green at
+  `6b4c85cc` (run 39362113102), and no downloader source changed here, so it reads as
+  this sandbox's rendering; unproven against `main` in a second tree, and CI on this
+  branch is the reading.
+
+  **Folded in, and not.** Folded: the ledger README rewrite and the stale comment in
+  `tools/ledger/e2e/tsconfig.json` that said the suite had no spec. Not folded, each
+  for the stated reason: `tools/ledger/CLAUDE.md` lines 27 and 57 ("none yet", "No
+  tests found until the first spec") are now stale, and a tool's `CLAUDE.md` is
+  edited only when the Build names it, so they are proposed lines in the report; the
+  planner-e2e rule's "five specs over three paths" was already not a count of the
+  three specs there and is left for whoever owns that page.
+
+  **Not a fix to any screen, so no changelog line**: this branch touches no
+  `web/src` file.

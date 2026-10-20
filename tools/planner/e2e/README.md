@@ -25,6 +25,13 @@ launch.
   edit: the reload is what separates a revision that reached SQLite from one
   that only reached React state.
 
+- `layout.spec.ts` — the one spec that is not a path (repo-109): the trips and
+  plans list, a question, the checkpoint, a finished run and a plan, each at 360×740
+  and at 1280×800, asserting the page never scrolls sideways and keeping a
+  full-page screenshot of each in `.artifacts/layout/`. It drafts its plan with
+  `plan-walk.ts`, names no question, and does the walk at one size and the
+  measuring at two. The rule is `.claude/rules/responsive-layout.md`.
+
 ```bash
 npm run e2e:install     # once, for the browser
 npm run e2e:planner
