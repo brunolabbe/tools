@@ -261,3 +261,39 @@ tools/ledger/api/src tools/ledger/web/src tools/ledger/contract/src | grep
   **Fold-in:** none. The other open ledger tickets are lg-38 and lg-56
   (measurements) and lg-63 (another builder's, in flight). Nothing this
   change touched made one of them free.
+
+- 2026-10-21 — owner answers to gate 1, given 2026-10-21, recorded by the
+  lander. **F1's open decision** (A: make the leftover pairing in
+  `pairAmounts` optimal; B: narrow the three texts to "a nearby date"): the
+  owner chose B, the gate's recommendation. **F2** (the plural branch of the
+  screen line has no test): the owner chose to have the lander add the test.
+  **F3**: left recorded and unfixed. **The gate's observation** that lg-59's
+  block search takes 25–43 s on a 3-row paste into a 300-row workbook re-dated
+  by alternating days, over 60 s on base: the owner chose to file it as its own
+  ticket, lg-65, in a separate docs PR, filed by another agent and not here.
+
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, F1 — "the 'fewest days
+  apart' that the headers of `workbook-days.ts` and `matchStretch`, and the doc
+  of `readings` in `statements.ts`, state does not hold within a block"; remedy
+  B, the three texts narrowed to say a nearby date, comments only.
+  `grep -c "each beside the nearest workbook date that cutting allows"
+tools/ledger/api/src/workbook-days.ts` → 0 (1 before), and the ticket above
+  `## Log` holds none of the old phrases (`awk '/^## Log/{exit} {print}'
+<ticket> | grep -c "nearest workbook date that cutting allows"` → 0). The
+  `matchStretch` and `readings` docs now read "by the pairing `pairAmounts`
+  finds", and the header reads "beside a nearby workbook date". No code
+  changed.
+
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, F2 — "the plural
+  branch of the screen line ("N rows already stored are dated differently…")
+  has no test on the branch; the web tests cover one row and none". One test
+  appended to `tools/ledger/web/test/statement-paste.test.tsx`: two rows dated
+  differently, asserting the line "2 rows already stored are dated differently
+  by the bank and by the workbook." and 2 items in the list named "Dates that
+  differ". `npx vitest run tools/ledger/web/test/statement-paste.test.tsx` →
+  18 of 18 pass. With the branch in `StatementPaste.tsx` planted singular-only
+  (the line always "One row already stored is"), the same command → 1 failed
+  | 17 passed, the new test, Expected "2 rows already stored are dated
+  differently by the bank and by the workbook.", Received "…One row already
+  stored is dated differently…". The plant was reverted by hand before the
+  commit (`git status` showed only the three intended files).

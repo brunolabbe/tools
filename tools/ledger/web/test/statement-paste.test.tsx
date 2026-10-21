@@ -15,7 +15,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { ImportStatementReport } from "@ledger/contract";
 import { importStatement } from "../src/api/statements.ts";
@@ -279,4 +279,24 @@ test("a stored paste the workbook agrees with on every date names no date as dif
   expect(screen.queryByText(/dated differently/u)).toBeNull();
   const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
   expect(card?.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/u);
+});
+
+test("a stored paste with two rows the workbook dates otherwise says how many, and lists each (lg-58)", async () => {
+  await store({
+    rowsAdded: 0,
+    rowsAlreadyPresent: 2,
+    tailBalanceCents: 210_000,
+    rowsInInbox: 0,
+    datesDiffering: [
+      { bankDate: "2026-09-11", workbookDate: "2026-09-10", amountCents: 40_000 },
+      { bankDate: "2026-09-13", workbookDate: "2026-09-12", amountCents: 40_001 },
+    ],
+  });
+
+  const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
+  expect(card?.textContent).toContain(
+    "2 rows already stored are dated differently by the bank and by the workbook.",
+  );
+  const listed = screen.getByRole("list", { name: "Dates that differ" });
+  expect(within(listed).getAllByRole("listitem")).toHaveLength(2);
 });

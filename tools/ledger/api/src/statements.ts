@@ -414,7 +414,8 @@ function apart(differing: readonly DateDiffering[]): number {
  * Each reading comes with the pasted rows it pairs with a stored row of another
  * date (lg-58). Where it fits more than one way — a paste wholly inside the
  * history may start on more than one stored row — it keeps the way with the
- * fewest, then the fewest days apart in all, then the first found, as
+ * fewest, then the fewest days apart in all by the pairing `pairAmounts`
+ * finds (a nearby date, not always the nearest), then the first found, as
  * `matchStretch` does among cuttings.
  */
 function readings(

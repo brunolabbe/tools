@@ -60,7 +60,7 @@
  * amount is chosen that agrees on dates wherever it can (`pairAmounts`), and
  * among the cuttings that match, the one with the fewest rows dated otherwise,
  * then the fewest days apart. So a paste names as few rows as any matching
- * cutting would, each beside the nearest workbook date that cutting allows.
+ * cutting would, each beside a nearby workbook date.
  *
  * **A paste may start or end partway through one of those blocks**
  * (`matchPart`): its rows there are some of the block's, as the bank lists them
@@ -480,9 +480,9 @@ interface Reach {
  * It answers the pairing: for each pasted row, the position in `rows` of the
  * stored row it is, or `null` when no cutting matches (lg-58). Where several
  * cuttings match, the pairing is the one with the fewest pasted rows paired with
- * a stored row of another date, then the fewest days apart in all, then the
- * first found: a paste reports as few dates as a matching cutting allows, each
- * as near the bank's as that allows.
+ * a stored row of another date, then the fewest days apart in all by the
+ * pairing `pairAmounts` finds, then the first found: a paste reports as few
+ * dates as a matching cutting allows, each beside a nearby date.
  */
 export function matchStretch(
   rows: readonly StretchRow[],
