@@ -6073,3 +6073,46 @@ The owner's paid lg-38 run (60 model calls, $0.5349 by the records' `costUsd`) i
 **Worked, and worth keeping:**
 - A builder's open decisions were put to the owner before the gate, not after. Both hard tickets then went builder → one gate → lander, with every low the owner chose fixed at landing: no round and no gate 2. lg-63 cost $14.06 and lg-58 $17.01, against $20.01 for lg-35 and $17.40 for lg-40 the same way with a round.
 - Sizing a gate's population from its own positive control: the rival-pass plant was caught in about 1 paste in 500, so lg-58's gate 1 ran 20,000 seeds rather than 1,000, and found F1 at 5 in 11,542.
+
+### Batch 2026-10-20 (tools-49, pl-59 pl-58, pl-60 and repo-114 filed) — base 93bfa1f1
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / high | a2deb3542d4f55ad2 | seam-mapper, pl-58 pl-59 | 1m09s / 1m09s | 0 | $0.2303 |
+| #591 | open, ready, green at c6b5e417 | Sonnet 5.5 / high | a4dac81bb41b5c141 | builder-standard, pl-59 + owner's fallback answer | 8m34s / 1h01m05s | 0 | $1.0105 |
+| #591 | open, ready, green at c6b5e417 | Opus 5.5 / high | a8185c19f21365134 | ticket-reviewer-opus, pl-59 gate 1 | 8m23s / 7m48s | 0 | $1.5766 |
+| #591 | open, ready, green at c6b5e417 | Sonnet 5.5 / high | a328885f3054f6c25 | fixer, pl-59 2 lows fixed at landing + landing | 9m08s / 9m03s | 0 | $0.6204 |
+| #593 | open, ready, green at fce56408 | Sonnet 5.5 / high | a518cb1b963e02775 | builder-standard, pl-58 Build 1–4 + paid live run + hand classification | 24m25s / 1h45m34s | 0 | $4.0823 |
+| #593 | open, ready, green at fce56408 | Opus 5.5 / high | ad2caa3047687ce50 | general-purpose (no `model` passed), pl-58 Build 5–7 web check | 17m27s / 17m14s | 0 | $4.6982 |
+| #593 | open, ready, green at fce56408 | Opus 5.5 / high | acf05e01510ae77cf | ticket-reviewer-opus, pl-58 gate 1 | 13m27s / 12m30s | 0 | $3.3177 |
+| #593 | open, ready, green at fce56408 | Sonnet 5.5 / high | ab693d2dd12180481 | fixer, pl-58 low 1 fixed at landing + merge main + landing | 4m39s / 4m34s | 0 | $0.5924 |
+| #600 | open, ready, green at 56737a7f | Sonnet 5.5 / high | a97a659458db9b091 | builder-standard, pl-60 filing + round 1 (F1–F7, owner's 4 answers) | 14m26s / 30m28s | 0 | $2.4918 |
+| #600 | open, ready, green at 56737a7f | Opus 5.5 / high | a3a686045a0b8918d | ticket-reviewer-opus, pl-60 gate 1 (narrow) | 10m14s / 10m10s | 0 | $2.9917 |
+| #600 | open, ready, green at 56737a7f | Opus 5.5 / high | a5d9b1227234e2401 | ticket-reviewer-opus, pl-60 gate 2 (narrow, owner asked) | 7m17s / 7m12s | 0 | $2.0408 |
+| #600 | open, ready, green at 56737a7f | Sonnet 5.5 / high | a56254a799c71c21b | fixer, pl-60 4 lows fixed at landing + landing (no `--land`) | 4m20s / 4m14s | 0 | $0.5650 |
+| #601 | open, draft at c3219a3d | Haiku 5.5 / high | a21f4219c57d3779b | builder-mechanical, repo-114 maintenance filing + 2 owner answers | 8m01s / 7m55s | 0 | $0.1243 |
+| #601 | open, draft at c3219a3d | Sonnet 5.5 / xhigh | a677132dffd083e2e | ticket-reviewer-sonnet, repo-114 gate 1 (narrow) | 7m41s / 7m32s | 0 | $1.2476 |
+| — | — | Opus 5.5 / high | orchestrator 7ae7465e | orchestrator (floor) | 1h52m21s / 3h37m35s | 0 | $8.1224 |
+| | | | | **total** (rates read 2026-10-10) | 4h11m32s | 0 | **$33.7121** |
+
+Beside the agents: pl-58's paid live run, five `run.ts` sessions, 112 records, $7.0800 `observedUsd` against a $10 total bound.
+
+**Tickets:**
+- pl-59 → #591: owner answered the builder's open decision (drop the two `.provenance` fallbacks) before gate 1; gate 1 PASS (4 low: 2 fixed at landing by owner choice, 2 recorded unfixed). Ready, green at c6b5e417.
+- pl-58 → #593: owner set the live-run shape, authorised it, and chose a split build (builder-standard Build 1–4, general-purpose Build 5–7 for WebSearch). The headline did not rise (lodging mentions 47/402 → 33/418, food 36/322 → 43/407); the owner, re-asked on that measurement, ran Build 5–7 anyway: 5 of 40 objects not confirmed, 12.5% (5.5–26.1). Gate 1 PASS (2 low: 1 fixed at landing, 1 recorded unfixed). Closing decision: the owner chose the discovery route, overriding option 3 (the web-check agent's and the orchestrator's recommendation). Ready, green at fce56408.
+- pl-60 → #600, filed `needs-decision` from that answer; gate 1 narrow CONCERNS (1 med, 6 low); owner answered all four questions and chose fix-then-gate-2; round 1; gate 2 narrow PASS (5 low: 4 fixed at landing, N3 recorded unfixed). Ticket `ready`, PR ready, green at 56737a7f.
+- repo-114 → #601, filed from the intake defect below (owner: file now); owner kept the default view's site and folded the `waits on` label into the Build; gate 1 narrow PASS (4 low, F1–F4), held as a draft for the owner's choice on them (owner away; F1–F3 reword `Done when` lines, so the away rule does not cover them).
+
+**Defects in the skill:**
+
+1. `SKILL.md` › _The loop_ step 1, which reads intake off `npm run status -- --ready` — with `--tool`, a ticket whose dependency is another tool's `done` ticket is withheld, so the planner batch was offered one ticket where two were ready. Filed as repo-114. Reproduction at 93bfa1f1 and aaccab20: `npm run -s status -- --ready --tool planner` → stderr `tools/planner/docs/work/pl-59-list-border-and-dark-provenance-marks.md: withheld from --ready — waits on repo-108`, while `npm run -s status -- --ready` lists `pl-59	planner	…`.
+2. `SKILL.md` › _Which model built it, and which gated it_ — still no row for a ticket that needs WebSearch (tools-f6 item 1). This batch split pl-58 by owner choice, and the general-purpose half, dispatched with no `model`, ran on Opus. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/SKILL.md | grep -c -i websearch` → `0`; `node scripts/agent-cost.mjs --agent ad2caa3047687ce50` → `claude-opus-5-5  effort=high … $4.6982`.
+3. `roles/builder.md` › _Set up_ and _Before you report_ — nothing covers a dispatch that continues another builder's branch, which is still checked out in that builder's worktree; pl-58's web-check agent and both landers had to work detached and push by refspec, from the dispatch alone. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -c -i "detached\|HEAD:"` → `0`; `git worktree add <scratch>/wt-probe repo-114-status-tool-cross-tool-deps` → `fatal: 'repo-114-status-tool-cross-tool-deps' is already used by worktree at '/workspaces/tools/.claude/worktrees/agent-a21f4219c57d3779b'`.
+4. `roles/reviewer.md` › _Get the branch under review before you measure anything_, step 3 — "Farm, then build" has no exemption for a filing gate whose diff is one ticket `.md`; three gates this batch (pl-60 ×2, repo-114) were told to skip it by the dispatch and ran `npm run status` without a build. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n -i farm` → `18:3. Farm, then build — per \`common.md\`, **after** the checkout.`; the same file `| grep -c -i "filing\|docs-only"` → `0`.
+5. `reference/dispatching.md` › _A gate prompt carries_ — a status command prescribed as `npm run status -- --json > <file>` writes npm's banner ahead of the JSON, so a gate's `require()` of the file failed (pl-60 gate 2); `npm run --silent` does not. Reproduction: `npm run status -- --json 2>/dev/null | head -2` → a blank line, then `> webtools@0.1.0 status`.
+6. `roles/common.md` › _Your worktree_, the farm (tools-dd item 2) — recurred for every building agent this batch: `ls /workspaces/tools/node_modules/@webtools/` → `core` at intake, and each agent ran `ln -s ../../packages/ui node_modules/@webtools/ui` by hand, while `node .claude/scripts/check-farm-freshness.mjs /workspaces/tools` → exit 0. The reading has expired: a `ui -> ../../packages/ui` link appeared in the shared checkout at 2026-10-21 02:21 (`ls -la` → `ui -> ../../packages/ui`), made by no dispatch of this batch's that I can name.
+
+**Worked, and worth keeping:**
+- Splitting a WebSearch ticket at the step that needs the tool: builder-standard did the code, the paid run and the classification at high effort; a general-purpose agent did only the web check (pl-58).
+- Pre-registering a web check by committing its budget and its ordered first queries before the first search; gate 1 confirmed all 51 first queries matched (pl-58, d3ca4190).
+- Putting a negative headline back to the owner before spending the step it was meant to justify (pl-58's Build 5–7); the owner re-chose with the measurement in hand.
