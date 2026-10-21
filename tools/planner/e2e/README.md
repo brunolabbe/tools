@@ -2,7 +2,7 @@ Playwright specs for the planner: the intake (pl-13), pinning (pl-19) and
 revision (pl-46), driven in Chromium against the bundle the API serves — which
 is how the container runs it, and what `WEB_DIR` points at.
 
-Five specs over three paths. They exist to prove the seams the unit suites
+Three paths, in three spec files, and a layout check. They exist to prove the seams the unit suites
 cannot reach, and nothing else: the API suite proves the server through
 `inject()` and the web suite proves the browser against a faked client, so what
 is left over is whether the two are wired to each other. Branch coverage

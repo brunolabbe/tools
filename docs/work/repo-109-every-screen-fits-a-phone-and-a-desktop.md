@@ -216,3 +216,22 @@ test -c tools/downloader/playwright.config.ts download.spec.ts` (3 passed, 1
 
   **Not a fix to any screen, so no changelog line**: this branch touches no
   `web/src` file.
+
+- 2026-10-21 — Two fold-ins, on the owner's answers of 2026-10-21 (each asked as
+  "fold into repo-109 now (recommended)" or "leave for the review session";
+  **chosen: fold in**, both). This reverses the "Not folded" paragraph of the
+  entry above.
+  - `tools/ledger/CLAUDE.md`, the two lines the branch made false: the layout line
+    now reads `Playwright specs — the layout spec; e2e/README.md says what earns the
+next`, and the command line `# the layout spec: every screen at 360px and
+1280px`. A tool's `CLAUDE.md` is otherwise edited only when the Build names it;
+    this edit is the owner's.
+  - `.claude/rules/planner-e2e.md`, "five specs over three paths": recounted from
+    the tree, it is four spec files (`intake` 2 tests, `pin` 2, `revise` 1, and
+    `layout` 5), three of them paths, so the old "five" was a count of tests. The
+    lead sentence now says four files and which three are paths, and a paragraph
+    says what `layout.spec.ts` is; the rule's intent is untouched. The planner
+    e2e README's "Five specs over three paths" is reworded the same way.
+  - The household radio group and the receipt item field (the defects in the entry
+    above) are not touched on this branch: the owner chose to file one `lg-` ticket,
+    which is dispatched separately.
