@@ -298,3 +298,27 @@ tools/planner/web/src/styles.css` prints only `6291ee58`, and the same for the
   `#6fc77a` and `#d4b155` look distinguishable to a reader with colour-vision
   deficiency; the hue figures above are HSV degrees computed from the hex values,
   not a perceptual metric.
+- **2026-10-21 — the fallbacks dropped, on the owner's answer.** The builder's
+  open decision was whether to drop `var(--ok, #2f6f4f)` and
+  `var(--warn, #8a6d1f)` on the `.provenance` marks (dead since repo-108, and
+  skipped by build step 3(a)). Options as asked: (1) drop both in this PR
+  (recommended); (2) keep them and widen the spec so a name used with a fallback
+  must be defined; (3) leave both. **The owner chose (1)**, on 2026-10-21,
+  relayed by the orchestrator. This supersedes the "Not folded in" entry above.
+  Commit `f94a64ef`: the two rules read `var(--ok)` and `var(--warn)`, and the
+  comment above the light `:root` no longer says the fallbacks are in use.
+  - **Check (a) now reaches those two uses.** Renaming `--ok`'s definition to
+    `--okx` in both the light and the dark block and running
+    `npx vitest run tools/planner/web/test/stylesheet.test.ts`: at `f94a64ef`,
+    **6 of 16 fail**, among them `a var() with no fallback names a custom property
+someone declares` (`expected [ '--ok' ] to deeply equal []`). The same rename on
+    the previous commit's stylesheet (`4c27d4db`, fallbacks present) fails **5 of
+    16** and that check is **not** among them: it was blind to the fallback use,
+    the contrast checks alone caught it. Both mutations were restored with
+    `git checkout f94a64ef -- tools/planner/web/src/styles.css`; the spec is 16 of
+    16 again and the tree clean.
+  - **A limit of check (a), not fixed here:** it asks that a name be defined
+    _somewhere_, so renaming only the dark `--ok` (light still defined) does not
+    fail (a); the dark contrast checks fail instead (3 of 16, `dark --ok is
+undefined, not a #rrggbb colour`). A missing dark definition is therefore
+    held by the contrast tests, for `--ok` and `--warn` only.
