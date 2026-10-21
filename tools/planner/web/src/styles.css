@@ -15,8 +15,9 @@
   --accent-text: #ffffff;
   /*
    * `--ok` and `--warn` were never defined here: `.provenance` read them with
-   * the fallbacks below, which are the light values. repo-108 named them, in
-   * both themes, so that naming them changed no pixel; pl-59 then gave the dark
+   * fallbacks, which were the light values. repo-108 named them, in
+   * both themes, so that naming them changed no pixel; pl-59 then dropped the
+   * fallbacks (a fallback hides a missing definition from the spec) and gave the dark
    * theme values of its own, because the light pair measured 2.81 and 3.43 on
    * the dark `--surface`, under the 4.5:1 a small label needs.
    * `test/stylesheet.test.ts` holds both pairs to that bar.
@@ -461,11 +462,11 @@ ul.answers li + li {
 }
 
 .provenance.grounded .mark {
-  color: var(--ok, #2f6f4f);
+  color: var(--ok);
 }
 
 .provenance.asserted .mark {
-  color: var(--warn, #8a6d1f);
+  color: var(--warn);
 }
 
 /*
