@@ -44,6 +44,7 @@ import type { ShownNames } from "./people.tsx";
 import { Periods } from "./periods/Periods.tsx";
 import { Receipts } from "./receipts/Receipts.tsx";
 import { Rules } from "./rules/Rules.tsx";
+import { MortgageSplitCard } from "./salaries/MortgageSplit.tsx";
 import { Salaries } from "./salaries/Salaries.tsx";
 import { Spending } from "./spending/Spending.tsx";
 import { Stats } from "./stats/Stats.tsx";
@@ -213,7 +214,12 @@ export function App(): React.ReactElement {
           {tab === "inbox" && <Inbox onCount={setWaiting} />}
           {tab === "rules" && <Rules />}
           {tab === "spending" && <Spending />}
-          {tab === "salaries" && <Salaries />}
+          {tab === "salaries" && (
+            <>
+              <Salaries />
+              <MortgageSplitCard />
+            </>
+          )}
           {tab === "household" && me !== null && <Household id={me.person.household} />}
           {tab === "admin" && me?.admin === true && <Admin />}
         </PeopleNamesProvider>

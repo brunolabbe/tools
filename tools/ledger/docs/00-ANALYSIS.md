@@ -167,7 +167,8 @@ change around it.
 
 ## 4. The mortgage bucket
 
-The mortgage is split 50/50. The workbook compares **cumulative deposits since
+The workbook splits the mortgage 50/50 (the ledger lets a household choose,
+below). The workbook compares **cumulative deposits since
 2022**, person against person. It shows the difference between the two totals,
 and calls whatever the bucket holds beyond that difference common surplus.
 
@@ -186,6 +187,44 @@ The workbook's gap is `own_A − own_B`, and it falls out of the model. On the
 real file, all three rows of that model held exactly since 2022, and the bucket
 held no row that was neither a deposit nor a payment. The model has no "common"
 part.
+
+### How each payment splits (lg-63)
+
+The half above is the workbook's 50/50, and only one of three ways a household
+can split its payments. Each person's own money is
+
+```
+own_P = deposits_P − Σ share_P(date) × payment
+Σ own_P = the bucket's balance
+```
+
+where each payment — any joint row, a rebate included — is split by the
+**split record in effect on its date**. From a date, the household files one of
+three modes, appended and never edited, a record filed for a day that has one
+superseding it (`mortgage_splits`):
+
+- **By shares**: the parts it names, in parts per million summing to 1 000 000,
+  for exactly the people the books hold on the record's date.
+- **Equally**: one part each for the people the books hold on the payment's
+  date. People change only at a close (lg-23), so a ratio in effect on the date
+  names them; before the first ratio, the first ratio's people, or with no ratio
+  at all everyone the books list, and anyone a row of the bucket has named by
+  that date.
+- **At the ratio**: the ratio in effect on the payment's date, its shares as
+  confirmed, so a corrected salary never moves the mortgage. A payment before
+  any ratio splits equally, and the own-money card's table says so on its row.
+
+No record is equal, from the first row. Because each payment is split by the
+record on _its_ date, **a later record never moves an earlier payment**, and a
+person added at a close takes no share of a payment made before it. For a
+household whose people never changed, every figure reads as it did.
+
+A person retired at a close (lg-35) takes no share of a payment on or after the
+retirement's date; their part goes to the people who remain in proportion to
+their own parts, until a new record is filed (owner, 2026-10-20). The rows split
+alike are summed and each sum is split once, the odd cents to the largest
+remainders, so a run of odd payments never drifts a cent each time towards one
+person.
 
 The mortgage view leads with **each person's own money in the bucket** and who
 is ahead by how much. It is recomputed from rows on every read and never
@@ -216,7 +255,7 @@ person (`own = deposits − share of payments`), so there is nothing to recomput
 and no row is invented to move it. What each person holds on the close is
 theirs, and a later row filed to them that takes it out of the bucket brings
 their part down to zero. "Nothing left" means the bucket's balance is zero: a
-person's part can be negative at a zero balance (one person's deposits exceed their half of
+person's part can be negative at a zero balance (one person's deposits exceed their share of
 the payments and the other's fall short), and no screen shows that imbalance between people after the close (a cost the owner
 accepted), while the mortgage views close all the same. It is not moved into current expenses as shared money
 (the owner chose this on 2026-10-19). Which views follow the close is in §9.

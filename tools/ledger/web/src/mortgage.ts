@@ -87,7 +87,7 @@ export function showsHomeSection(mortgage: MortgageResponse | null): boolean {
  * What an ended mortgage leaves, in words, for the home screen and the own-money
  * card (lg-55). The balance is said only when it is not zero. While every part
  * is above zero (or zero) each is told it is theirs to take back. Once any part
- * is below zero — a bucket one person paid more than half of leaves the other's
+ * is below zero — a bucket one person paid more than their share of leaves the other's
  * part negative — the positive parts add up to more than the bucket holds, so
  * nobody is told they can take it back: those people are owed, and the one
  * below zero owes. A part of exactly zero is not mentioned.

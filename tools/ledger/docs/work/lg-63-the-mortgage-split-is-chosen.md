@@ -158,3 +158,96 @@ nothing else in `@ledger/contract`.
   hard-coded 50/50. It is not a constant: it is equal among everyone the books
   have held, re-split over every past payment, which lg-23's table measured. The
   owner chose a dated record with three modes, `ready`, independent of lg-55.
+- 2026-10-21 — Built on `lg-63-mortgage-split-modes` from `main` at `2d1b22bb`.
+  The owner's answer of 2026-10-20 (a retirement under `shares`) is recorded
+  above, in the branch's first commit.
+  - **What was built.** Migration 15, `mortgage_splits` with
+    `mortgage_split_shares` and the `current_mortgage_splits` view (one record
+    per day; filing for a day supersedes it, the same split again files nothing).
+    `GET`/`POST /api/mortgage-splits`, any member, `read`/`write` limits, a date
+    after today refused by `mortgageSplitRequestSchemaOn`, shares that do not
+    sum or name a person twice refused by the schema (400), shares naming other
+    people than the books hold on their day `MORTGAGE_SHARES_WRONG_PEOPLE`
+    (409). In `books`, `split.ts`: `MortgageSplitter` answers each date's
+    split, `JointSplit` sums joint rows per split and splits each sum once
+    (`apportion`, largest remainders, a tie to the earlier id). `mortgageAsOf`
+    and `mortgageOwnSeries` take the ratios and records as a fifth parameter,
+    `NO_SPLIT_HISTORY` by default, so `workbook.ts` and `workbook-import.ts`
+    pass nothing and read as before. The stats series' points carry the split
+    on their day and `splitChanged`; the response carries the split at the
+    range's end. A form beside the salaries (`web/src/salaries/MortgageSplit.tsx`);
+    the Own money card's caption, markers, notes and a `Split` table column.
+  - **What the brief had wrong.**
+    - Build 5's odd cent "split once, on the cumulative total" and Build 2's
+      "everyone ever" were stale since lg-35 (#583): `mortgageAsOf` already
+      took retirements and split through `JointTotals`, one part per set of
+      retired people. `JointSplit` replaces it, keyed on the split's weights
+      reduced by their divisor, so lg-35's rule is the `equal` case and its four
+      tests in `books/test/people.test.ts` pass unchanged — the left-and-came-back
+      case included, since a split that returns sums into the same total. That is
+      how the remainder is "carried": per split, not per row.
+    - Build 2's "with no ratio in effect, the people the bucket's rows have named
+      by that date" would leave a joint row before anyone's first deposit with
+      nobody to split it (`books/test/stats.test.ts` › "gives the odd cent of a
+      joint total to the person who sorts first" is exactly that row), and would
+      move the figures of a household of two whose first payment came before the
+      second person's first deposit, against Build 4. Built instead: before the
+      first ratio, the first ratio's people — the first period's, as
+      `requireSamePeopleInOpenPeriod` reads them — or, in books with no ratio at
+      all, everyone listed; in both, anyone a row has named by the date. A ratio
+      in effect names the people alone.
+    - Build 1's migration number: 13 is lg-55's and 14 lg-35's; this is 15, and
+      nine `user_version` assertions moved from 14 to 15 (`schema.test.ts`,
+      `auto-file.test.ts`, `spending-backfill.test.ts`).
+    - Build 5's "add the same assertion to a test of the series": the series
+      test already summed its parts (`books/test/stats.test.ts` › "agrees with
+      mortgageAsOf …"); `split.test.ts` adds it under every mode.
+    - Build 6's sweeps "pick the route up by themselves" by failing until told:
+      `route-limits.test.ts` › "every route in the contract is accounted for"
+      and `isolation.test.ts` › "covers every route the app answers" both failed
+      on the new route, and now walk it (`helpers/routes.ts`, the two-verb list,
+      `WRITES` and `READS`).
+    - Build 7's card needs the split per day, which the record alone does not
+      give: `MortgageOwnPoint` gained `split` and `splitChanged`, and
+      `MortgageOwnResponse` `split`, beside the record's own types. A reading of
+      the licence "this record and nothing else", put to the orchestrator.
+    - Two tests asserted the defect and now assert the fix:
+      `books/test/buckets.test.ts` › "a person a row names who was not listed
+      still gets their money" (casey −45 433 → 1 234, sam's lead 80 000 → 80 001)
+      and `api/test/more-than-two.test.ts` › lg-23's reproduction (alex 26 666,
+      casey −23 334, sam 16 667 → 14 999, 0, 5 000).
+    - lg-55's `Cards.tsx` collision is gone: it merged first (#581).
+  - **Done when**, each with its test:
+    1. `books/test/split.test.ts` › "one history under each mode" (four tests).
+       The history: `alex`, `casey`, `sam`, every day 2026-01-02 → 2026-08-15;
+       deposits on 2026-01-02, 2026-04-01 and 2026-07-02; joint rows of −700.01,
+       −700.03, +0.01, −700.01, −700.01, −700.03, −700.01, −700.02 on the 15th
+       of January to August; ratios 60 / 15 / 25 % from 2026-01-01 and 70 / 30 %
+       from 2026-07-01; casey retired from 2026-07-01; shares 50 / 20 / 30 %. Each
+       mode's own money is worked by hand in the test's comments, casey retiring
+       under each, and a fourth history changes mode twice (equal, shares from
+       2026-04-01, ratio from 2026-08-01). The parts sum to the balance on all
+       226 days, as of each day and in the series.
+    2. `split.test.ts` › "a record from a later date leaves every day before it
+       exactly as it was": 89 days, 2026-01-02 → 2026-03-31.
+    3. `split.test.ts` › "a third person added at a close leaves the first two's
+       own money before it unchanged", every day 2026-01-02 → 2026-06-30; and
+       `api/test/more-than-two.test.ts` through the build.
+    4. `split.test.ts` › "with no record, a household of two reads what one split
+       of the cumulative total always gave", 200 days, with and without a ratio;
+       `api/test/workbook-import.test.ts` and `books/test/workbook.test.ts`
+       unchanged and passing.
+    5. `split.test.ts` › "many odd-cent payments split equally leave the parts
+       within a cent of each other": 500 payments, three people; per-row
+       rounding drifts by more than 100 cents on the same rows.
+    6. `api/test/mortgage-splits.test.ts` (seven tests).
+    7. `web/test/mortgage-split.test.tsx` › "over a range that crosses a change,
+       the own-money card marks it and names the new split".
+    8. `npm run check` exit 0; `npm test -- --project ledger` 1 658 of 1 658
+       in 78 files, exit 0.
+  - **Not done, and why.** Under `shares`, a person added at a later close is
+    named by no part and takes none until a new record: the parts are the
+    household's, and the owner's answer covered a retirement, not an arrival.
+    Raised with the orchestrator rather than settled here. Nothing else already
+    specified was made free by this work: the other open ledger tickets (lg-38,
+    lg-56, lg-58) touch neither the split nor the card.
