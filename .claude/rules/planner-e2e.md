@@ -17,8 +17,9 @@ does. The walk is shared rather than copied for exactly that reason: two copies
 of the rule is one copy nobody reads before editing the tree. Read a plan's title
 and an item's heading off the page for the same reason, never write them down.
 
-**It is five specs over three paths on purpose** — the intake (pl-13), pinning
-(pl-19) and revision (pl-46), which crosses the seam a re-plan's run and an
+**It is four spec files, over three paths on purpose, and one of the four is
+not a path** — the intake (`intake.spec.ts`, pl-13, two tests), pinning
+(`pin.spec.ts`, pl-19, two) and revision (`revise.spec.ts`, pl-46, one), which crosses the seam a re-plan's run and an
 edit's synchronous write each open: a re-plan answers 202 and continues over
 SSE, `RunView` hands back to the plan page, and every change appends a
 revision that has to be read back with its diff derived on the server. The
@@ -29,3 +30,9 @@ is usually that seam**: `e2e/pin.spec.ts` and `e2e/revise.spec.ts` pass every
 pre-reload assertion against a client that never calls the server, because the
 web suite's fake _is_ the client module. Never read the database from a spec —
 one that queries SQLite is an integration test wearing a browser.
+
+The fourth file, `layout.spec.ts` (repo-109), is the exception that proves the
+rule: it crosses no seam, and earns its place by measuring every screen at 360 px
+and at 1280 px, which no unit test can do without a browser. It reaches its
+screens with the shared walks and names no question, like the rest; the rule it
+keeps is `responsive-layout.md`.

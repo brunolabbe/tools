@@ -120,6 +120,15 @@ jobs:
           name: e2e-artifacts-${{ matrix.suite }}
           path: ${{ matrix.artifacts }}
           retention-days: 7
+      # The layout spec's screenshots (repo-109), kept on a pass too: a green
+      # width assertion over a page nobody has looked at proves little, so the
+      # gate opens these. Only the direct leg runs that spec.
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.suite == 'direct'
+        with:
+          name: downloader-layout-shots
+          path: tools/downloader/e2e/.artifacts/layout
+          retention-days: 7
 
   # `docker compose up` from a clean machine is the M4 acceptance criterion, so
   # it is checked rather than assumed. Builds the image and waits for the

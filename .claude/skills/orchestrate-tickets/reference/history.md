@@ -6008,6 +6008,40 @@ The owner's paid lg-38 run (60 model calls, $0.5349 by the records' `costUsd`) i
 - A gate attack that imports `main` and the head in one process over the ticket's whole enumeration, with six named violation kinds (lg-61 gate 1: 245,760 variants, 0 violations).
 - A builder stopped on a measured stop condition and pushed a Log-only commit with no PR; the owner chose from its measured options and the same agent resumed with its harness intact (lg-61).
 
+### Batch 2026-10-20 (tools-8e, repo-113 repo-109, lg-64 filed) — base 93bfa1f1
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / high | a23c6b6583eeb58f2 | seam-mapper, 7 candidates + #586 | 1m16s / 1m15s | 0 | $0.3033 |
+| #590 | open, ready, green at a1ca2182 | Sonnet 5.5 / high | ae2b4208c46c1bb09 | builder-standard, repo-113 (steps 2 and 3) | 12m06s / 18m32s | 0 | $1.2063 |
+| #590 | open, ready, green at a1ca2182 | Opus 5.5 / high | ae82c6ae8e7f10e68 | ticket-reviewer-opus, repo-113 gate 1 | 19m24s / 19m22s | 0 | $2.0698 |
+| #590 | open, ready, green at a1ca2182 | Sonnet 5.5 / high | a684fa1e6ce82b586 | fixer, repo-113 landing + 2 lows at landing | 5m29s / 5m25s | 0 | $0.4971 |
+| #592 | open, ready, green at 5a358174 | Sonnet 5.5 / high | ab15ab34b25948ad2 | builder-standard, repo-109 + 2 owner fold-ins + round 1 | 35m26s / 1h59m11s | 0 | $5.4513 |
+| #592 | open, ready, green at 5a358174 | Opus 5.5 / high | a3c46824770e34623 | ticket-reviewer-opus, repo-109 gate 1 | 14m17s / 13m38s | 0 | $4.1121 |
+| #592 | open, ready, green at 5a358174 | Opus 5.5 / high | acc9a651d2d4b3888 | ticket-reviewer-opus, repo-109 gate 2 | 12m39s / 12m32s | 0 | $2.5061 |
+| #592 | open, ready, green at 5a358174 | Sonnet 5.5 / high | a6d30ea2765bf4d01 | fixer, repo-109 landing + F7/F8 at landing | 9m29s / 9m24s | 0 | $0.4852 |
+| #595 | open, ready, green at 5ee6e463 | Haiku 5.5 / high | a3139e31bf4ced3c6 | builder-mechanical, file lg-64 (maintenance) | 5m57s / 5m50s | 0 | $0.1563 |
+| #595 | open, ready, green at 5ee6e463 | Sonnet 5.5 / xhigh | a8cff87709d991295 | ticket-reviewer-sonnet, lg-64 filing gate (narrow) | 12m41s / 12m11s | 0 | $1.9913 |
+| #595 | open, ready, green at 5ee6e463 | Sonnet 5.5 / high | adb47e3559d8422d0 | fixer, lg-64 landing + 7 lows + withdrawal at landing | 7m37s / 7m35s | 0 | $0.8504 |
+| — | — | Opus 5.5 / high | orchestrator dd17fbaf | orchestrator (floor) | 1h24m16s / 2h29m11s | 0 | $5.0341 |
+| | | | | **total** (rates read 2026-10-10) | 3h40m37s | 0 | **$24.6631** |
+
+**Tickets:**
+- repo-113 → #590: the builder built Build step 3 past its stop condition without the Windows copy timing; the owner kept it as built (over keep-and-measure and revert). Gate 1 PASS (839 → 691 spawns reproduced; 2 lows, both fixed at landing by owner choice). Ready, every check passes at a1ca2182, CodeQL included.
+- repo-109 → #592: the owner chose at intake that "every screen" is graded against the builder's enumerated list, and later folded in `tools/ledger/CLAUDE.md` (2 lines) and the `.claude/rules/planner-e2e.md` count. Gate 1 FAIL (F1 high: Stats, Categories and Admin waited on headings, and Stats passed with `/api/stats/**` aborted; F2 med: a clipped page passes, so the owner chose a rule sentence; F5 low fixed; F3, F4 and F6 low recorded unfixed). Round 1, then gate 2 CONCERNS (F7 med: the F2 sentence named only html/body, while `main` or `.shell` clipping also passes, so it was reworded at landing; F8 low comment fixed at landing). Ready, all 16 checks pass at 5a358174, CodeQL and four e2e jobs included.
+- lg-64 → #595 (filing, `ready`, record on the thread): a narrow gate PASS (selectors measured in a browser; 7 lows, all applied at landing by owner choice); the "blank Items region at 360 px" paragraph was withdrawn (one local screenshot, sha 0deb86dc; CI's artifact and two gates' runs show every control). Ready, docs-only checks pass at 5ee6e463.
+
+**Defects in the skill:**
+
+1. `.claude/scripts/check-farm-freshness.mjs` (script; `SKILL.md` step 1 relies on it). It passes while the shared checkout lacks a workspace link the lockfile declares, so every agent this batch (repo-113 builder, repo-109 builder, both lg-64 agents, all three landers, all four gates) linked `@webtools/ui` by hand. Reproduction: at the shared checkout on `2d1b22bb`, `node .claude/scripts/check-farm-freshness.mjs /workspaces/tools; echo exit=$?` → no output, `exit=0`; `ls node_modules/@webtools/` → `core`; `grep -n '"node_modules/@webtools/ui"' package-lock.json` → `3090:    "node_modules/@webtools/ui": {`. This is the checker, not the farm script logged in the tools-dd entry's item 2.
+2. `SKILL.md` › _Which model built it, and which gated it_. The maintenance row gives the gate as "none, or `ticket-reviewer-sonnet` where one runs", and the bullet below says "A Haiku build is always gated", so a Haiku filing is both optional to gate and always gated. lg-64's filing gate ($1.9913) found 7 lows, one a false fact ("draft pull request #594"). Reproduction: `grep -n "maintenance — a rebase\|A Haiku build is always gated" .claude/skills/orchestrate-tickets/SKILL.md` → lines `221` (`… | none, or \`ticket-reviewer-sonnet\` where one runs |`) and `231`.
+3. `roles/common.md` and `roles/reviewer.md` say nothing about an e2e server port shared between sessions. Ledger's Playwright config defaults to one fixed port, and lg-64's gate collided with a peer's run on it. Reproduction: `grep -n "E2E_PORT" tools/ledger/playwright.config.ts` → `34:const PORT = Number(process.env["E2E_PORT"] ?? 8108);`; `grep -rn "E2E_PORT" .claude/skills/orchestrate-tickets/roles/ | wc -l` → `0`; the gate's first run printed `Error: http://127.0.0.1:8108/api/health is already used, make sure that nothing is running on the port/url or set reuseExistingServer:true in config.webServer.`
+
+**Worked, and worth keeping:**
+- A builder that went past a stop condition put the extra step in its own commit (repo-113 `b7d392a0`), so the owner's keep-or-revert was one answer and no round.
+- A gate 2 attack that aborted one API route at a time over an enumerated population (8 of 8 Stats series, plus Categories' and Admin's routes) proved that each asserted figure belongs to its own card.
+- Settling a disputed screenshot by hash (local `0deb86dc` against CI `855fe801` and the gate's `4afc5a4a`) before re-asking the owner. The premise change only removed a paragraph, so the answer stood.
+
 ### Batch 2026-10-21 (tools-cc, lg-63 lg-58, lg-65 filed) — base 2d1b22bb
 
 | PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |

@@ -2,7 +2,7 @@ Playwright specs for the planner: the intake (pl-13), pinning (pl-19) and
 revision (pl-46), driven in Chromium against the bundle the API serves — which
 is how the container runs it, and what `WEB_DIR` points at.
 
-Five specs over three paths. They exist to prove the seams the unit suites
+Three paths, in three spec files, and a layout check. They exist to prove the seams the unit suites
 cannot reach, and nothing else: the API suite proves the server through
 `inject()` and the web suite proves the browser against a faked client, so what
 is left over is whether the two are wired to each other. Branch coverage
@@ -24,6 +24,13 @@ launch.
   argument as `pin.spec.ts`'s, extended to a run over SSE and a synchronous
   edit: the reload is what separates a revision that reached SQLite from one
   that only reached React state.
+
+- `layout.spec.ts` — the one spec that is not a path (repo-109): the trips and
+  plans list, a question, the checkpoint, a finished run and a plan, each at 360×740
+  and at 1280×800, asserting the page never scrolls sideways and keeping a
+  full-page screenshot of each in `.artifacts/layout/`. It drafts its plan with
+  `plan-walk.ts`, names no question, and does the walk at one size and the
+  measuring at two. The rule is `.claude/rules/responsive-layout.md`.
 
 ```bash
 npm run e2e:install     # once, for the browser
