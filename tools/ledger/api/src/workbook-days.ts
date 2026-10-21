@@ -232,6 +232,19 @@ function someAddUpTo(amounts: readonly number[], count: number, sum: number): bo
   return reachable[count]?.has(sum) ?? false;
 }
 
+/** Some of a run's rows of one amount and one date, and how many are taken. */
+interface FreeRows {
+  readonly rows: number[];
+  next: number;
+}
+
+/** The first of `free`'s rows not yet taken, now taken; none when all are. */
+function take(free: FreeRows | undefined): number | undefined {
+  if (free === undefined || free.next >= free.rows.length) return undefined;
+  free.next += 1;
+  return free.rows[free.next - 1];
+}
+
 /**
  * Which of `run`'s rows each of `part`'s is, amount for amount, or `null` when
  * `run` does not hold `part`'s amounts, counted with their repeats (lg-58).
@@ -262,7 +275,7 @@ function pairAmounts(
   // The run's rows by amount, then by date, each list in the run's order with a
   // cursor at its first row not yet taken. A search weighs this many times over
   // on days of hundreds of rows, so nothing here scans the run once per row.
-  const byAmount = new Map<number, Map<string, { rows: number[]; next: number }>>();
+  const byAmount = new Map<number, Map<string, FreeRows>>();
   for (const [index, row] of run.entries()) {
     let dates = byAmount.get(row.amountCents);
     if (dates === undefined) {
@@ -273,11 +286,6 @@ function pairAmounts(
     if (free === undefined) dates.set(row.date, { rows: [index], next: 0 });
     else free.rows.push(index);
   }
-  const take = (free: { rows: number[]; next: number } | undefined): number | undefined => {
-    if (free === undefined || free.next >= free.rows.length) return undefined;
-    free.next += 1;
-    return free.rows[free.next - 1];
-  };
   const pairing: number[] = Array.from({ length: part.length }, () => -1);
   const left: number[] = [];
   for (const [offset, row] of part.entries()) {
@@ -287,7 +295,7 @@ function pairAmounts(
   }
   for (const offset of left) {
     const row = part[offset] as DayEntry;
-    let nearest: { rows: number[]; next: number } | undefined;
+    let nearest: FreeRows | undefined;
     let distance = Number.POSITIVE_INFINITY;
     for (const [date, free] of byAmount.get(row.amountCents) ?? []) {
       const apart = free.next < free.rows.length ? daysApart(date, row.date) : distance;

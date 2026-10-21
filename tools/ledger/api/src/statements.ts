@@ -393,6 +393,11 @@ function from(db: Database, position: number, limit: number): StoredRow[] {
   ).map(toRow);
 }
 
+/** How many days apart the dates a reading names are, summed (lg-58). */
+function apart(differing: readonly DateDiffering[]): number {
+  return differing.reduce((sum, entry) => sum + daysApart(entry.bankDate, entry.workbookDate), 0);
+}
+
 /**
  * Every way this paste can sit against the stored history, as the number of its
  * oldest rows that are already stored. More than one is an ambiguity; none means
@@ -421,8 +426,6 @@ function readings(
   tolerance: DateTolerance,
 ): Map<number, DateDiffering[]> {
   const found = new Map<number, DateDiffering[]>();
-  const apart = (differing: readonly DateDiffering[]): number =>
-    differing.reduce((sum, entry) => sum + daysApart(entry.bankDate, entry.workbookDate), 0);
   const keep = (present: number, differing: DateDiffering[] | null): void => {
     if (differing === null) return;
     const kept = found.get(present);
