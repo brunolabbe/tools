@@ -287,10 +287,18 @@ let ticketRepoTemplate: string | undefined;
 
 function ticketRepoTemplateDir(): string {
   if (ticketRepoTemplate === undefined) {
-    ticketRepoTemplate = fs.realpathSync(
+    const built = fs.realpathSync(
       fs.mkdtempSync(path.join(os.tmpdir(), "review-record-template-")),
     );
-    buildTicketRepo(ticketRepoTemplate, DEFAULT_WHY);
+    // Assigned only once the build has returned: a build that throws partway
+    // would otherwise leave a half-built template for every later test to copy.
+    try {
+      buildTicketRepo(built, DEFAULT_WHY);
+    } catch (error) {
+      fs.rmSync(built, { recursive: true, force: true });
+      throw error;
+    }
+    ticketRepoTemplate = built;
   }
   return ticketRepoTemplate;
 }

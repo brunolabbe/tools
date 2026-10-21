@@ -211,3 +211,20 @@ Stop after step 2 if step 1 prices step 3 at less than it costs to review.
   unmeasured; the total did not rise. Whether the saving shortens the leg's wall
   time is still the open question the ticket named: the `Duration` fell, but one
   run does not say by how much of that this file is.
+
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, first low (`nfr:reliability`)
+  — "`ticketRepoTemplateDir` in `scripts/test/review-record.test.ts` assigns
+  `ticketRepoTemplate` before `buildTicketRepo` runs. A build that throws partway
+  therefore leaves a half-built template, and every later test copies it without
+  rebuilding." The template now builds into a local directory and is assigned
+  only after `buildTicketRepo` returns (a throwing build removes its directory
+  and rethrows). The gate's probe, every `git commit` refused by a failing
+  `pre-commit` hook, run on the spec at `09ded818` and on the fixed spec: before,
+  `failed 28 of 64`, 2 naming `git commit -qm the ticket, before any review /
+refused-by-gate-probe`, 17 `git rev-parse HEAD … unknown revision`, 9 other
+  messages; after, `failed 29 of 64`, `29 x Error: git commit -qm the ticket,
+before any review / refused-by-gate-probe` and no other message (the 29th is
+  the no-`HEAD` test that used to pass). With the real config,
+  `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 npx vitest run
+scripts/test/review-record.test.ts` → `Tests  64 passed (64)`, the test names
+  unchanged (the diff touches no `test(`/`it(`/`describe(` line).
