@@ -5,7 +5,7 @@
  * Pure like the rest of `books`: rows, salaries, ratios and periods in, points
  * out, no clock (a caller that wants "today" passes it) and no database. Money
  * is integer cents. The arithmetic that already exists is reused rather than
- * repeated — the mortgage bucket's own-money split is `splitCents`, the ratio in
+ * repeated — the mortgage bucket's own-money split is `MortgageSplitter`, the ratio in
  * effect is `ratioInEffect`, the fixed items' dates are `recurringDates`, the
  * period a date falls in is `periodIndexOf` — so a chart cannot disagree with
  * the home screen or with a settlement about the same figure.
@@ -33,11 +33,12 @@ import type {
   SpendingPeriod,
   StatsRange,
 } from "@ledger/contract";
-import { JointTotals } from "./buckets.ts";
 import type { RetirementInput } from "./people.ts";
 import { periodIndexOf, recurringDates } from "./periods.ts";
 import type { PeriodSpan, RecurringInput } from "./periods.ts";
 import { ratioInEffect } from "./ratio.ts";
+import { JointSplit, MortgageSplitter, NO_SPLIT_HISTORY } from "./split.ts";
+import type { SplitHistory } from "./split.ts";
 
 /** A stored row as the series see it: filed under a bucket, and to a person or to nobody. */
 export interface StatRow {
@@ -203,22 +204,27 @@ export function contributionSeries(
 
 /**
  * Each person's own money in the mortgage bucket at the end of each day it
- * moved: their deposits, and half of every joint row, with the odd cent split
- * once on the cumulative joint total — `mortgageAsOf`'s rule, kept running so a
- * long history is one pass instead of one pass per day. A joint row gives no
- * share to a person retired on its date (lg-35), as there.
+ * moved: their deposits, and their share of every joint row by the split in
+ * effect on its date (lg-63), each split's sum split once — `mortgageAsOf`'s
+ * rule, kept running so a long history is one pass instead of one pass per day.
+ * A joint row gives no share to a person retired on its date (lg-35), as there.
+ * Each point carries the split on its day, and whether it differs from the one
+ * on the point before, wherever that was.
  */
 export function mortgageOwnSeries(
   rows: readonly StatRow[],
   people: readonly string[],
   range: StatsRange,
   retirements: readonly RetirementInput[] = [],
+  history: SplitHistory = NO_SPLIT_HISTORY,
 ): MortgageOwnPoint[] {
   const filed = byDate(rows.filter((row) => row.bucket === "mortgage"));
+  const splitter = new MortgageSplitter(people, filed, retirements, history);
   const known = new Set(people);
   const own = new Map<string, number>();
-  const joint = new JointTotals(retirements);
+  const joint = new JointSplit();
   let balance = 0;
+  let previous: string | null = null;
   const points: MortgageOwnPoint[] = [];
   for (let index = 0; index < filed.length;) {
     const date = filed[index]?.date ?? "";
@@ -227,22 +233,27 @@ export function mortgageOwnSeries(
       if (row === undefined) continue;
       balance += row.amountCents;
       if (row.personId === null) {
-        joint.add(row.date, row.amountCents);
+        joint.add(splitter.on(row.date), row.amountCents);
       } else {
         known.add(row.personId);
         own.set(row.personId, (own.get(row.personId) ?? 0) + row.amountCents);
       }
     }
+    const splitChanged = previous !== null && splitter.changedBetween(previous, date);
+    previous = date;
     if (!inRange(date, range)) continue;
+    for (const personId of joint.people()) known.add(personId);
     const ids = [...known].toSorted();
-    const halves = joint.sharesOf(ids);
+    const shares = joint.sharesOf(ids);
     points.push({
       date,
       balanceCents: balance,
       own: ids.map((personId, position) => ({
         personId,
-        ownCents: (own.get(personId) ?? 0) + (halves[position] ?? 0),
+        ownCents: (own.get(personId) ?? 0) + (shares[position] ?? 0),
       })),
+      split: splitter.on(date).split,
+      splitChanged,
     });
   }
   return points;

@@ -34,7 +34,15 @@ import { Household } from "../src/household/Household.tsx";
 import { mortgageStanding } from "../src/household/MortgageSetting.tsx";
 import { endedSentence } from "../src/mortgage.ts";
 import { Stats } from "../src/stats/Stats.tsx";
-import { ENDED, ENDED_EMPTY, ENDED_OWES, ENDED_UNEVEN, LIVE, NONE } from "./mortgage-fixtures.ts";
+import {
+  ENDED,
+  ENDED_EMPTY,
+  ENDED_OWES,
+  ENDED_UNEVEN,
+  EQUAL_SPLIT,
+  LIVE,
+  NONE,
+} from "./mortgage-fixtures.ts";
 
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
@@ -76,8 +84,11 @@ const OWN: MortgageOwnResponse = {
         { personId: "alex", ownCents: 14999 },
         { personId: "sam", ownCents: 5000 },
       ],
+      split: EQUAL_SPLIT,
+      splitChanged: false,
     },
   ],
+  split: EQUAL_SPLIT,
 };
 
 const BUCKETS: BucketsResponse = {
@@ -166,7 +177,12 @@ function card(title: string): ReturnType<typeof within> {
 test("stats of books ended, over a range wholly after the close, draw no payment card and neither empty message", async () => {
   vi.mocked(fetchMortgage).mockResolvedValue(ENDED_EMPTY);
   vi.mocked(fetchMortgagePayments).mockResolvedValue({ range: NO_RANGE, payments: [] });
-  vi.mocked(fetchMortgageOwn).mockResolvedValue({ range: NO_RANGE, people: [], points: [] });
+  vi.mocked(fetchMortgageOwn).mockResolvedValue({
+    range: NO_RANGE,
+    people: [],
+    points: [],
+    split: EQUAL_SPLIT,
+  });
   await stats();
 
   pickFrom("2026-05-01");
@@ -185,7 +201,12 @@ test("stats of books ended, over a range wholly after the close, draw no payment
 test("stats of books ended with money left name each person's part as their own, in a range after the close", async () => {
   vi.mocked(fetchMortgage).mockResolvedValue(ENDED);
   vi.mocked(fetchMortgagePayments).mockResolvedValue({ range: NO_RANGE, payments: [] });
-  vi.mocked(fetchMortgageOwn).mockResolvedValue({ range: NO_RANGE, people: [], points: [] });
+  vi.mocked(fetchMortgageOwn).mockResolvedValue({
+    range: NO_RANGE,
+    people: [],
+    points: [],
+    split: EQUAL_SPLIT,
+  });
   await stats();
 
   pickFrom("2026-05-01");
@@ -313,7 +334,12 @@ test("home of a household recorded as none has no mortgage section", async () =>
 
 test("with no record the stats and home are what they were", async () => {
   vi.mocked(fetchMortgagePayments).mockResolvedValue({ range: NO_RANGE, payments: [] });
-  vi.mocked(fetchMortgageOwn).mockResolvedValue({ range: NO_RANGE, people: [], points: [] });
+  vi.mocked(fetchMortgageOwn).mockResolvedValue({
+    range: NO_RANGE,
+    people: [],
+    points: [],
+    split: EQUAL_SPLIT,
+  });
   await stats();
 
   pickFrom("2030-01-01");
@@ -351,7 +377,12 @@ test("books ended with the bucket at zero but parts that are not, draw no Own ca
     },
   });
   vi.mocked(fetchMortgagePayments).mockResolvedValue({ range: NO_RANGE, payments: [] });
-  vi.mocked(fetchMortgageOwn).mockResolvedValue({ range: NO_RANGE, people: [], points: [] });
+  vi.mocked(fetchMortgageOwn).mockResolvedValue({
+    range: NO_RANGE,
+    people: [],
+    points: [],
+    split: EQUAL_SPLIT,
+  });
   await stats();
 
   pickFrom("2026-05-01");
@@ -385,7 +416,12 @@ test("a part above zero is owed, not theirs to take back, once a part is below z
   cleanup();
 
   vi.mocked(fetchMortgagePayments).mockResolvedValue({ range: NO_RANGE, payments: [] });
-  vi.mocked(fetchMortgageOwn).mockResolvedValue({ range: NO_RANGE, people: [], points: [] });
+  vi.mocked(fetchMortgageOwn).mockResolvedValue({
+    range: NO_RANGE,
+    people: [],
+    points: [],
+    split: EQUAL_SPLIT,
+  });
   await stats();
   pickFrom("2026-05-01");
   expect(await card("Own money in the mortgage").findByText(expected)).toBeTruthy();

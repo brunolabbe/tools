@@ -189,7 +189,13 @@ vi.mock("../src/api/stats.ts", () => {
   const none = { from: null, to: null };
   return {
     fetchMortgagePayments: vi.fn().mockResolvedValue({ range: none, payments: [] }),
-    fetchMortgageOwn: vi.fn().mockResolvedValue({ range: none, people: [], points: [] }),
+    // lg-63: the split a payment takes with no record, between nobody here.
+    fetchMortgageOwn: vi.fn().mockResolvedValue({
+      range: none,
+      people: [],
+      points: [],
+      split: { mode: "equal", effectiveFrom: null, noRatio: false, parts: [] },
+    }),
     fetchContributions: vi.fn().mockResolvedValue({ range: none, people: [], series: [] }),
     fetchBufferStats: vi
       .fn()

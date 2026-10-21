@@ -702,6 +702,42 @@ const MIGRATIONS: readonly string[] = [
     directory_id INTEGER NOT NULL UNIQUE
   );
   `,
+
+  // 15 — how the mortgage's joint rows split, from a date (lg-63): by shares,
+  // equally, or at the ratio. No row means equal from the first row, so a
+  // household whose people never changed reads exactly as before. Filing another
+  // for the same day supersedes it, as a ratio does; none is edited.
+  `
+  CREATE TABLE mortgage_splits (
+    id INTEGER PRIMARY KEY,
+    -- yyyy-mm-dd: the first day it holds.
+    effective_from TEXT NOT NULL,
+    mode TEXT NOT NULL CHECK (mode IN ('shares', 'equal', 'ratio')),
+    supersedes INTEGER REFERENCES mortgage_splits (id),
+    entered_at TEXT NOT NULL,
+    -- The Access identity's configured name (Person.id), never an address.
+    entered_by TEXT NOT NULL
+  );
+
+  -- Each record is superseded at most once, and a day has one first record:
+  -- one chain per day, so exactly one record stands for it.
+  CREATE UNIQUE INDEX mortgage_splits_supersedes ON mortgage_splits (supersedes) WHERE supersedes IS NOT NULL;
+  CREATE UNIQUE INDEX mortgage_splits_first ON mortgage_splits (effective_from) WHERE supersedes IS NULL;
+
+  CREATE VIEW current_mortgage_splits AS
+    SELECT * FROM mortgage_splits
+    WHERE NOT EXISTS (SELECT 1 FROM mortgage_splits newer WHERE newer.supersedes = mortgage_splits.id);
+
+  -- Each person's part of a split by shares, in parts per million; none for the
+  -- other modes. The parts of one split sum to 1 000 000: nothing derives them,
+  -- so the API refuses a set that does not, and a test holds it to that.
+  CREATE TABLE mortgage_split_shares (
+    split_id INTEGER NOT NULL REFERENCES mortgage_splits (id),
+    person_id TEXT NOT NULL REFERENCES people (id),
+    parts_per_million INTEGER NOT NULL CHECK (parts_per_million BETWEEN 0 AND 1000000),
+    PRIMARY KEY (split_id, person_id)
+  );
+  `,
 ];
 
 /**

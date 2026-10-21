@@ -8,13 +8,17 @@
  * before, offered (lg-16) or filed on (lg-17); and the history's series (lg-9);
  * and whether a receipt adds up, and which rows it may document (lg-8);
  * and a row's amount divided among its receipt's item categories (lg-27);
- * and who is in the books on a date, once a person can be retired (lg-35).
+ * and who is in the books on a date, once a person can be retired (lg-35);
+ * and how the mortgage's joint rows split, by the record in effect on each
+ * row's date (lg-63).
  */
 
 export { formatCents, parseAmountCents, parseTypedAmountCents } from "./amount.ts";
 export { bufferAsOf, mortgageAsOf, splitCents } from "./buckets.ts";
 export type { BufferPosition, Contribution, FiledRow, Lead, MortgagePosition } from "./buckets.ts";
 export { peopleOn, retiredOn } from "./people.ts";
+export { JointSplit, MortgageSplitter, NO_SPLIT_HISTORY, apportion } from "./split.ts";
+export type { MortgageSplitInput, RatioInput, SplitHistory, SplitRule } from "./split.ts";
 export type { RetirementInput } from "./people.ts";
 export { PARTS_PER_MILLION, ratioFromSalaries, ratioInEffect } from "./ratio.ts";
 export type { SalaryInput, Share } from "./ratio.ts";

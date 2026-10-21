@@ -128,7 +128,7 @@ describe("migration 12 seeds the service categories (lg-53)", () => {
     const db = new Database(":memory:");
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(14);
+    expect(db.pragma("user_version", { simple: true })).toBe(15);
     expect(names(db)).toEqual(SEEDED);
   });
 
@@ -352,7 +352,7 @@ describe("npm run backfill-spending:ledger (lg-53)", () => {
       dry.out.replace("Dry run: nothing is written.\n", ""),
     );
     expect(overrides()).toEqual({ n: 4 });
-    expect(version()).toBe(14);
+    expect(version()).toBe(15);
     const migrated = new Database(householdBooksPath(dataDir, "home"), { readonly: true });
     try {
       expect(names(migrated)).toEqual(SEEDED);

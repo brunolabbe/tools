@@ -34,6 +34,8 @@ export const VERBS = {
   salaries: ["POST", ROUTES.salaries],
   ratios: ["POST", ROUTES.ratios],
   mortgage: ["POST", ROUTES.mortgage],
+  // lg-63: how the mortgage splits, from a date; its GET is in route-limits' two-verb list.
+  mortgageSplits: ["POST", ROUTES.mortgageSplits],
   periods: ["GET", ROUTES.periods],
   periodOpen: ["GET", ROUTES.periodOpen],
   periodClose: ["POST", ROUTES.periodClose],

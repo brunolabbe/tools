@@ -7,24 +7,24 @@
  * **The mortgage bucket is not shared money** (§4). Every cent in it is one
  * person's deposit that no payment has used yet, so its whole balance is
  * attributed: a row filed to a person is that person's, and a joint row — the
- * payment itself, or a rebate — is split evenly between everyone, in half
- * between two. With deposits filed to people and payments joint, that is exactly
- * `own = deposits − ½ × payments` for two, and the own amounts sum to the
- * balance with nothing left over as "common".
+ * payment itself, or a rebate — is split between the people as the household's
+ * split records say on the row's own date (lg-63, `split.ts`): by shares,
+ * equally, or at the ratio, and equally when there is no record. With deposits
+ * filed to people and payments joint, that is
+ * `own_P = deposits_P − Σ share_P(date) × payment`, and the own amounts sum to
+ * the balance with nothing left over as "common".
  *
- * **The odd cent.** Half of an odd number of cents is not a number of cents. The
- * split is done **once, on the cumulative joint total**, never per payment, so a
- * run of odd payments cannot drift a cent each time towards one person; and the
- * cent that does not divide goes, by a fixed rule, to **the person whose id sorts
- * first** — they bear the extra cent of a payment, or take the extra cent of a
- * rebate. Any rule would do; this one needs no state and gives the same answer
- * to every reader.
+ * **The odd cent** is split once per split, on the cumulative total of the rows
+ * that split alike, never per payment, so a run of odd payments cannot drift a
+ * cent each time towards one person (`apportion` in `split.ts`). For an equal
+ * split the cent that does not divide goes, by a fixed rule, to **the person
+ * whose id sorts first** — they bear the extra cent of a payment, or take the
+ * extra cent of a rebate (`splitCents`). Any rule would do; this one needs no
+ * state and gives the same answer to every reader.
  *
  * **A person retired from the books** (lg-35) has no share of a joint row dated
  * on or after the day their retirement takes effect, and keeps their share of
- * every row before it. So the joint total is kept in parts, one for each set of
- * people who were in when its rows were dated, and each part is split once, on
- * its own cumulative total, between them (`JointTotals`).
+ * every row before it; their part goes to the people who remain, pro rata.
  *
  * **The buffer** (the current-expenses bucket) is shared money, owned at the
  * ratio, and lg-6 settles it. What it needs from here is the balance and each
@@ -36,8 +36,9 @@
 
 import { AppError } from "@ledger/contract";
 import type { Bucket, OwnMoney } from "@ledger/contract";
-import { retiredOn } from "./people.ts";
 import type { RetirementInput } from "./people.ts";
+import { JointSplit, MortgageSplitter, NO_SPLIT_HISTORY } from "./split.ts";
+import type { SplitHistory } from "./split.ts";
 
 /** A stored row as the books see it: when, how much, and how it is classified. */
 export interface FiledRow {
@@ -111,75 +112,33 @@ export function splitCents(total: number, count: number): number[] {
 }
 
 /**
- * A bucket's joint total, kept apart for each set of people retired when its
- * rows were dated (lg-35), so that each part is split only between the people
- * who were in then. With no retirement there is one part, split between
- * everyone, which is the rule as it always was.
- */
-export class JointTotals {
-  readonly #parts = new Map<string, { retired: ReadonlySet<string>; cents: number }>();
-  readonly #retirements: readonly RetirementInput[];
-
-  constructor(retirements: readonly RetirementInput[]) {
-    this.#retirements = retirements;
-  }
-
-  add(date: string, cents: number): void {
-    const retired = retiredOn(this.#retirements, date);
-    const key = [...retired].toSorted().join("\n");
-    const part = this.#parts.get(key) ?? { retired, cents: 0 };
-    part.cents += cents;
-    this.#parts.set(key, part);
-  }
-
-  /**
-   * Each of `ids`' share, `ids` sorted. The parts with the same people in are
-   * summed first, so a person who left and came back splits one total and not
-   * two, and each sum is split once between those people, so the odd cent goes
-   * to the first of them by id and never drifts. A part nobody was in, which no
-   * household reaches, is split between everyone rather than left unattributed.
-   */
-  sharesOf(ids: readonly string[]): number[] {
-    const byPeople = new Map<string, { people: string[]; cents: number }>();
-    for (const part of this.#parts.values()) {
-      const inThen = ids.filter((id) => !part.retired.has(id));
-      const people = inThen.length === 0 ? [...ids] : inThen;
-      const key = people.join("\n");
-      const held = byPeople.get(key) ?? { people, cents: 0 };
-      held.cents += part.cents;
-      byPeople.set(key, held);
-    }
-    const position = new Map(ids.map((id, index) => [id, index]));
-    const shares = ids.map(() => 0);
-    for (const { people, cents } of byPeople.values()) {
-      for (const [index, share] of splitCents(cents, people.length).entries()) {
-        const at = position.get(people[index] ?? "");
-        if (at !== undefined) shares[at] = (shares[at] ?? 0) + share;
-      }
-    }
-    return shares;
-  }
-}
-
-/**
  * Each person's own money in the mortgage bucket as of `asOf`, and who is ahead.
- * `retirements` are the books' (lg-35), oldest first; a joint row gives no
- * share to a person retired on its date.
+ * `retirements` are the books' (lg-35), oldest first, and `history` the ratios
+ * and split records that stand (lg-63): each joint row is split by the record in
+ * effect on its own date (`MortgageSplitter`), and gives no share to a person
+ * retired on it. With neither, every joint row is split equally between everyone
+ * listed or named by its date — the rule a household that never changed has
+ * always read, and what the workbook import's check, against a 50/50 workbook,
+ * is held to.
  */
 export function mortgageAsOf(
   rows: readonly FiledRow[],
   people: readonly string[],
   asOf: string,
   retirements: readonly RetirementInput[] = [],
+  history: SplitHistory = NO_SPLIT_HISTORY,
 ): MortgagePosition {
   const filed = inBucket(rows, "mortgage", asOf);
-  const ids = everyone(people, filed);
-  const joint = new JointTotals(retirements);
-  for (const row of filed) if (row.personId === null) joint.add(row.date, row.amountCents);
-  const halves = joint.sharesOf(ids);
+  const splitter = new MortgageSplitter(people, filed, retirements, history);
+  const joint = new JointSplit();
+  for (const row of filed) {
+    if (row.personId === null) joint.add(splitter.on(row.date), row.amountCents);
+  }
+  const ids = everyone([...people, ...joint.people()], filed);
+  const shares = joint.sharesOf(ids);
   const own = ids.map((personId, index) => ({
     personId,
-    ownCents: sumOf(filed.filter((row) => row.personId === personId)) + (halves[index] ?? 0),
+    ownCents: sumOf(filed.filter((row) => row.personId === personId)) + (shares[index] ?? 0),
   }));
   const balanceCents = sumOf(filed);
 

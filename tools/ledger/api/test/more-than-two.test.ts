@@ -195,12 +195,15 @@ describe("lg-23's reproduction, run against the build", () => {
     const buckets = await send(target, "GET", `${ROUTES.buckets}?asOf=2027-01-31`);
     expect(buckets.statusCode, buckets.body).toBe(200);
     const { mortgage } = buckets.json<BucketsResponse>();
-    // 90 000 in, 70 001 out, split three ways: −23 334, −23 334 and −23 333.
+    // 90 000 in, 70 001 out. lg-23 measured it split three ways, −23 334, −23 334
+    // and −23 333, casey taking a share of a payment made before they were in.
+    // Since lg-63 it is split between the people the ratio in effect on its date
+    // names, alex and sam: −35 001 and −35 000.
     expect(mortgage.balanceCents).toBe(19_999);
     expect(mortgage.own).toEqual([
-      { personId: "alex", ownCents: 26_666 },
-      { personId: "casey", ownCents: -23_334 },
-      { personId: "sam", ownCents: 16_667 },
+      { personId: "alex", ownCents: 14_999 },
+      { personId: "casey", ownCents: 0 },
+      { personId: "sam", ownCents: 5_000 },
     ]);
     expect(mortgage.lead).toEqual({ personId: "alex", byCents: 9_999 });
 

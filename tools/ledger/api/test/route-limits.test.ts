@@ -200,6 +200,7 @@ describe("the routes that answer two verbs", () => {
     ["salaries", ROUTES.salaries],
     ["ratios", ROUTES.ratios],
     ["mortgage", ROUTES.mortgage],
+    ["mortgageSplits", ROUTES.mortgageSplits],
     ["recurring", ROUTES.recurring],
     ["periodLines", ROUTES.periodLines],
   ])("GET %s refuses the second request in a minute too", async (_name, url) => {
