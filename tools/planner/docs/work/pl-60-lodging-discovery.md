@@ -356,5 +356,13 @@ free: pl-60`. Docs only; no source changed.
   so the comment predates the records. It is source, so this filing leaves it; Build
   6 uses the fact, and whoever builds this ticket may correct the comment in the
   same change.
+- **Checks at filing**, in the worktree after the farm, a hand link of
+  `node_modules/@webtools/ui` and `npm run build`: `npm run status -- --show pl-60`
+  prints `needs-decision`, `difficulty hard`, `blocked by pl-58 (ready)`.
+  `npm run status -- --json` exits 0. `npm run check` exits 0.
+  `npx vitest run scripts/test/status.test.ts`: 139 passed (139).
+  `node scripts/commit-message.mjs --text` on the title: exit 0.
+  `node scripts/preflight.mjs --only mergeTree,ciCommands,review,title --base
+origin/main`: exit 0, with `main` merged in at `aaccab20` first.
 - **No `## Review` section.** A filing has no work to review, and a gate on the
   filing is recorded outside `## Review` (`docs/01-TICKETS.md`, _The review gate_).
