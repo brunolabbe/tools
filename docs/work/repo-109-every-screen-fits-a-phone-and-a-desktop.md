@@ -148,6 +148,43 @@ not name · (2) every view state, including error, empty and loading variants ·
 - **findings** · the hunt returned 8: 6 carried, 2 dropped.
 - NFR: security ✓ (nothing sensitive uploaded, `DEV_IDENTITY` confined) · performance n/a · reliability: F3 · maintainability: F1, F5.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-21 · `b78867d2..45af85bd` (round 1: `c5baea2e`, `45af85bd`) · Opus 5.5, depth standard
+
+| Done when                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2. A `layout.spec.ts` per tool covers every listed screen, at both widths, with data on the page | **proven** for the clause F1 left open. `tools/ledger/e2e/layout.spec.ts` › `"<tab> fits a phone and a desktop"` now asserts each `TABS` pattern in turn, and every pattern is seeded data or directory data, not a heading. I aborted each API route the Stats, Categories and Admin tabs request, one per run. Each data route turned the case red. Stats: 8 of 8 series, each losing its own card's figure. Categories: 3 of 3 (`/api/rows`, `/api/spending-categories`, `/api/spending-category-map`). Admin: 1 of 1 (`/api/admin/households`). Empty books turn Stats and Categories red. CI ledger `e2e` passed on `45af85bd` (run 39526876908). Planner and downloader are unchanged this round, and their `e2e` legs passed on `45af85bd` |
+| 1, 3, 4, 5, 6                                                                                    | Not touched by this round's code. For 4, the README count is now right (F5). For 6, all 15 checks pass on `45af85bd`, `check` included                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+Gate 1's findings:
+
+- **F1 · high: fixed.** This is gate 1's reproduction, re-run on `45af85bd`. With every `**/api/stats/**` request aborted, all 9 Stats patterns are missing and the case fails. Over empty books, Stats fails (9 of 9 missing) and Categories fails (2 of 2 missing). The figures are not tied to the time zone or the locale. The whole ledger spec gave `12 passed` under `TZ=Pacific/Kiritimati` and again under `TZ=America/Adak`, and the browser reported each zone. Money and ratio text is built by integer arithmetic (`formatCents`, `formatShare`), with no `Intl`.
+- **F2 · med: fixed, as the owner chose (option A).** `responsive-layout.md` now carries the sentence. The new finding F7 is about how far that sentence reaches.
+- **F5 · low: fixed.** The README now says "three rules", and `seed` posts three.
+- F3, F4 and F6 stay recorded and unfixed, under the owner's severity floor, and are not regraded here.
+
+New findings in the lines this round touched:
+
+- **F7 · med** · no `Done when` line depends on it · **open decision** · the new sentence in `.claude/rules/responsive-layout.md` names `html` or `body`. The hazard it describes is wider than that, and narrower in one way:
+  - Ledger with `.card { width: 400px; } main { overflow-x: hidden; }` gave `2 passed` with the content clipped. So did `.card { width: 400px; } .shell { overflow-x: hidden; }`.
+  - `html { overflow-x: hidden; }` on its own gave `2 failed` ("416 px wide in a 360 px window"). Gate 1 measured `body` on its own as red too.
+
+  So the check goes blind when any wrapper below the viewport clips. `html` and `body` together are one case of that. Either one alone is not a case.
+
+  Direction: a reader who trusts the sentence believes clipping `main` or the app shell is still caught, and it is not. That is the unsafe direction, on the same mechanism as F2. The options and their costs are in the full report.
+
+- **F8 · low** · the new comment on `TABS` in `tools/ledger/e2e/layout.spec.ts` is false in two places. The comment's stated guarantee, that a series that did not arrive fails the case, holds for 8 of 8 series. So the falsehood runs in the safe direction:
+  - It says every entry is "a figure the seed put there", and excepts only Admin. Household's `sam@example.test added as sam` also comes from the serve script's directory. Run over empty books, the Household case passed. The Log says so too.
+  - It says "Stats has one figure per card". Stats renders 10 cards, and the patterns cover 9 of them. "Put into the mortgage" shows "Nothing was filed to a person in this range." over the seed. Its series is `contributions`, which "Put into the buffer"'s `750.50 $` already covers.
+- **dropped** · Admin's patterns also match over empty books. That is not a defect: Admin's data is the directory, and aborting `/api/admin/households` loses both patterns.
+- **dropped** · no dependence on the time zone or the locale (measured above). No dependence on the run date was found by reading: every seeded date is fixed, and the range is "All of it". Running on another date was not measured.
+- **dropped** · `openTab`'s `waitForLoadState("networkidle")` returns at once when the page has already reached that state. It is in lines the round did not touch, and it is harmless now that each pattern waits up to 15 s.
+- **findings** · the hunt returned 5: 2 carried, 3 dropped.
+- NFR: security n/a · performance n/a (the ledger spec still takes 22 s) · reliability ✓ (F1's route-by-route aborts) · maintainability: F7, F8.
+
+Nothing here is `high`. F7 is a `med` that no `Done when` line depends on, so it does not open a round. It goes to the owner as an open decision.
+
 ## Log
 
 - 2026-10-18 — Filed from the owner's request, beside repo-108 (design tokens),
