@@ -3,7 +3,7 @@ id: repo-109
 tool: repo
 title: Every screen of every tool fits a 360px phone and a desktop, and a check says so
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -117,6 +117,36 @@ not name · (2) every view state, including error, empty and loading variants ·
 5. Every overflowing screen is either fixed here under step 4's exception or
    carries a `test.fixme` naming a filed per-tool ticket. The Log lists both.
 6. `npm run check` passes, and each tool's e2e suite passes in CI.
+
+## Review
+
+**Gate: FAIL** — 2026-10-21 · `2d1b22bb..b78867d2` · Opus 5.5, depth standard
+
+| Done when                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. `responsive-layout.md` has the three points, and the root `CLAUDE.md` points to it            | **verified** by reading: the 360 px / no page scroll point, the `overflow-x: auto` point and the new-screen point are all there, `paths: tools/*/web/src/**`, and the pointer is in the Rules section. `.tablewrap` and `ui-package.md`'s "Breakpoints are not tokens" exist as cited                                                                                                            |
+| 2. A `layout.spec.ts` per tool covers every listed screen, at both widths, with data on the page | **unproven**: every listed screen has a case at 360×740 and 1280×800. CI's `e2e` legs are green on `b78867d2` (ledger, planner, `e2e (direct)`), and locally 12/12 ledger, 5/5 planner and 5/5 downloader passed. But the "with data on the page" clause has no assertion for ledger's Stats and Categories cases (F1). The CI screenshots show data today, and nothing fails when it is missing |
+| 3. The check can fail with a planted `width: 400px`                                              | **verified**: the Log shows the planner run red. Reproduced on ledger: `.card { width: 400px; }` gave `12 failed`, each "… is 416 px wide in a 360 px window". `.panel { width: 400px; }` is inert in ledger because no element there has that class (`12 passed`)                                                                                                                               |
+| 4. Ledger's `e2e` job runs in `ledger.yml`, and its README describes the spec                    | `ledger.yml` › `e2e` ✓ on `b78867d2` (job 118972171633). README ✓, apart from one false count (F5)                                                                                                                                                                                                                                                                                               |
+| 5. Every overflowing screen is fixed or carries `test.fixme` and a ticket                        | **proven**: no screen overflows. All 22 cases are green, locally and in CI on `b78867d2`, so both lists are empty                                                                                                                                                                                                                                                                                |
+| 6. `npm run check` passes, and each tool's e2e passes in CI                                      | `npm run check` exited 0 locally. CI's `check`, ledger `e2e`, planner `e2e`, downloader `e2e (direct)` and `e2e (sniffer)` are all ✓ on `b78867d2`                                                                                                                                                                                                                                               |
+
+- **F1 · high** · Done when 2 depends on it · `tools/ledger/e2e/layout.spec.ts` › `TABS`. Its comment says each regex "is a row or a figure from the seed, so a screen is not measured while it is still asking for its books". That is false for three entries, which match headings:
+  - Stats `/Settlements/` matches the `Loaded` card's `<h2>`, which also renders while loading and on failure. With every `**/api/stats/**` request aborted, the assertion passes and the screen measured is a column of "The ledger API is not answering." It also passes over empty books.
+  - Categories `/Rows with no spending category/` matches a static `<h2>`, and passes over empty books.
+  - Admin `/Addresses to admit/` matches an `<h3>`. It does prove the screen loaded, and the serve script always puts alex and sam in the directory.
+
+  The falsehood runs in the unsafe direction: a reader trusts the screen was measured with its books in it. Direction for the fix (not run): assert a seeded figure or row on each, as Home's `1550.50` does.
+
+- **F2 · med** · no `Done when` line depends on it · the check cannot see a page that clips instead of scrolling. Ledger with `.card { width: 400px; } html, body { overflow-x: hidden; }` gave `12 passed`, with content cut off at the right edge. With `body` alone hidden it stayed red (416 px). The rule page presents the spec as "the check that keeps it true". This is an open decision, in the full report.
+- **F3 · low** · `nfr:reliability` · `tools/ledger/playwright.config.ts`: the `TEST_WORKER_INDEX` guard protects workers (measured `TEST_WORKER_INDEX=0` in the worker). Any other process that loads the config still deletes a running server's storage: a `playwright test --list` mid-run left `storage exists=false`. No live call site in CI.
+- **F4 · low** · `e2e:ledger:serve` takes `DATABASE_PATH` from the Playwright config. Run by hand, it would add household `home` and two `example.test` members to the developer's default directory. Read from `household:ledger`'s description and not run, so **unverified**. No live call site: only the Playwright config runs it.
+- **F5 · low** · `tools/ledger/e2e/README.md` says the seed adds "two rules". `seed` posts three, and the Log says three. The error is in the safe direction.
+- **F6 · low** · the ledger's enumerated list leaves out two top-level views that `App.tsx` renders outside the tabs: `NoHousehold` (lg-20) and the admin-only shell (lg-22). Neither can be reached under this harness, because the API refuses a `DEV_IDENTITY` the directory does not hold.
+- **dropped** · lead 1, the blank region in `Receipt-360.png`: not reproduced. At 360 px every named control is visible and opaque, has its own box, and `elementFromPoint` hits it (self). The full-page shots from the spec's run, from a run with Pixel 7 emulation left on, and from CI's `ledger-layout-shots` artifact on `b78867d2` all show every control.
+- **dropped** · planner `RATE_LIMIT_RUNS_PER_MINUTE=0` loses no coverage: no planner e2e spec at `2d1b22bb` asserts a limit. `DEV_IDENTITY` and `LEDGER_ADMINS` appear only in `tools/ledger/playwright.config.ts`. The three `if: always()` uploads carry only `.artifacts/layout` screenshots of synthetic data (seeded books, `example.test` addresses, a local fixture origin).
+- **findings** · the hunt returned 8: 6 carried, 2 dropped.
+- NFR: security ✓ (nothing sensitive uploaded, `DEV_IDENTITY` confined) · performance n/a · reliability: F3 · maintainability: F1, F5.
 
 ## Log
 
