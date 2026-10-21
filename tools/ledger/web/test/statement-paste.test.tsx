@@ -253,3 +253,30 @@ test("every one of several rows added waiting says all of them wait (lg-54)", as
   expect(card?.textContent).toContain("All 5 rows added wait in the inbox");
   expect(card?.textContent).not.toContain("5 of the 5");
 });
+
+test("a stored paste with a row the workbook dates a day off names both dates, and the workbook's kept (lg-58)", async () => {
+  await store({
+    rowsAdded: 1,
+    rowsAlreadyPresent: 1,
+    tailBalanceCents: 210_000,
+    rowsInInbox: 1,
+    datesDiffering: [{ bankDate: "2026-09-11", workbookDate: "2026-09-10", amountCents: 40_000 }],
+  });
+
+  const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
+  expect(card?.textContent).toContain(
+    "One row already stored is dated differently by the bank and by the workbook. The workbook's date was kept.",
+  );
+  const listed = screen.getByRole("list", { name: "Dates that differ" });
+  expect(listed.textContent).toContain("the bank says 2026-09-11, the workbook 2026-09-10");
+  expect(screen.getAllByRole("listitem")).toHaveLength(1);
+});
+
+test("a stored paste the workbook agrees with on every date names no date as differing (lg-58)", async () => {
+  await store({ rowsAdded: 1, rowsAlreadyPresent: 1, tailBalanceCents: 210_000, rowsInInbox: 1 });
+
+  expect(screen.queryByRole("list", { name: "Dates that differ" })).toBeNull();
+  expect(screen.queryByText(/dated differently/u)).toBeNull();
+  const card = screen.getByRole("heading", { name: "Statement stored" }).parentElement;
+  expect(card?.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/u);
+});

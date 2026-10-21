@@ -907,6 +907,9 @@ describe("a paste that meets the workbook's rows", () => {
       rowsAlreadyPresent: 4,
       tailBalanceCents: 63_000,
       rowsInInbox: 1,
+      datesDiffering: [
+        { bankDate: "2026-03-09", workbookDate: "2026-03-10", amountCents: -30_000 },
+      ],
     });
     const after = stored(target);
     expect(after.slice(0, 5)).toEqual(before);
@@ -921,13 +924,18 @@ describe("a paste that meets the workbook's rows", () => {
   });
 
   test.each([
-    ["its wording alone", [BANK.deposit, BANK.transfer, BANK.taxes, BANK.payment]],
+    ["its wording alone", [BANK.deposit, BANK.transfer, BANK.taxes, BANK.payment], {}],
     [
       "a date a day off alone",
       [OWN.deposit, OWN.transfer, OWN.taxes, { ...OWN.payment, date: "2026-03-11" }],
+      {
+        datesDiffering: [
+          { bankDate: "2026-03-11", workbookDate: "2026-03-10", amountCents: -30_000 },
+        ],
+      },
     ],
-    ["the order of one day's rows alone", [OWN.taxes, OWN.deposit, OWN.transfer, OWN.payment]],
-  ])("a paste that differs from the workbook in %s is accepted", async (_, overlap) => {
+    ["the order of one day's rows alone", [OWN.taxes, OWN.deposit, OWN.transfer, OWN.payment], {}],
+  ])("a paste that differs from the workbook in %s is accepted", async (_, overlap, dates) => {
     const target = await startApp();
     const before = await workbookInto(target);
 
@@ -938,6 +946,7 @@ describe("a paste that meets the workbook's rows", () => {
       rowsAlreadyPresent: 4,
       tailBalanceCents: 63_000,
       rowsInInbox: 1,
+      ...dates,
     });
     expect(stored(target).slice(0, 5)).toEqual(before);
   });
@@ -1300,6 +1309,11 @@ describe("a paste partway through one of the workbook's days", () => {
         rowsAlreadyPresent: 3,
         tailBalanceCents: 65_000,
         rowsInInbox: 0,
+        datesDiffering: [-20_000, 10_000, 5_000].map((amountCents) => ({
+          bankDate: date,
+          workbookDate: "2026-03-01",
+          amountCents,
+        })),
       });
       expect(stored(target)).toEqual(before);
     },
@@ -1435,4 +1449,99 @@ describe("a paste wholly inside a reordered day the workbook lists between two o
       expect(stored(target)).toEqual(before);
     },
   );
+});
+
+// lg-58: a stored paste names each row it matched with a workbook row the
+// workbook dates otherwise. The workbook's date is the one kept.
+describe("a paste that meets a workbook row dated otherwise says so (lg-58)", () => {
+  // The workbook's 4 to 6 March, from 1 000.00; the bank dates the −12.34 the 6th.
+  const WORKBOOK: Movement[] = [
+    { date: "2026-03-04", amountCents: 900 },
+    { date: "2026-03-05", amountCents: -1_234 },
+    { date: "2026-03-06", amountCents: 5_600 },
+  ];
+  const NEW: Movement = { date: "2026-03-07", amountCents: -250 };
+
+  /** The workbook's last two rows as the bank lists them, `taxDate` for the −12.34, then the new row. */
+  function bankPaste(taxDate: string): string {
+    return of(
+      [{ ...(WORKBOOK[1] as Movement), date: taxDate }, WORKBOOK[2] as Movement, NEW].map(bankRow),
+      100_900,
+    );
+  }
+
+  const COUNTS = {
+    rowsAdded: 1,
+    rowsAlreadyPresent: 2,
+    tailBalanceCents: 100_000 + 900 - 1_234 + 5_600 - 250,
+    rowsInInbox: 1,
+  };
+
+  test("a pasted row a day off a workbook row is accepted, the workbook's date kept and the row named", async () => {
+    const target = await startApp();
+    workbookRows(target, WORKBOOK, 100_000);
+
+    const result = await report(target, bankPaste("2026-03-06"));
+
+    expect(result).toEqual({
+      ...COUNTS,
+      datesDiffering: [{ bankDate: "2026-03-06", workbookDate: "2026-03-05", amountCents: -1_234 }],
+    });
+    expect(stored(target)[1]).toMatchObject({ date: "2026-03-05", amount_cents: -1_234 });
+  });
+
+  test("rows that all match the workbook on date name no date", async () => {
+    const target = await startApp();
+    workbookRows(target, WORKBOOK, 100_000);
+
+    const result = await report(target, bankPaste("2026-03-05"));
+
+    expect(result).toEqual(COUNTS);
+    expect(result).not.toHaveProperty("datesDiffering");
+  });
+
+  test("the workbook's stored rows are the same before and after a paste with a row a day off", async () => {
+    const target = await startApp();
+    workbookRows(target, WORKBOOK, 100_000);
+    const before = stored(target);
+
+    await report(target, bankPaste("2026-03-04"));
+
+    const after = stored(target);
+    expect(after.slice(0, WORKBOOK.length)).toEqual(before);
+    expect(after).toHaveLength(WORKBOOK.length + 1);
+  });
+
+  test("no log line carries a date the report names as differing", async () => {
+    const lines: string[] = [];
+    app = await createApp({
+      directory: memberDirectory(),
+      config: {
+        dataDir: ":memory:",
+        access: accessConfig({ devIdentity: ALEX }),
+      },
+      logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
+    });
+    workbookRows(app, WORKBOOK, 100_000);
+
+    const response = await post(app, bankPaste("2026-03-06"));
+    // A refusal after it, so the log is shown to carry what this route logs.
+    const gap = await post(
+      app,
+      of([bankRow({ date: "2026-03-09", amountCents: -100 }, 9)], 100_000),
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(gap.statusCode).toBe(422);
+    const named = response.json<ImportStatementReport>().datesDiffering ?? [];
+    expect(named).toHaveLength(1);
+    // The log's own timestamps are today's, never a March 2026 date.
+    const logged = lines.join("\n");
+    expect(logged).toContain("STATEMENT_CHAIN_BROKEN");
+    for (const entry of named) {
+      expect(response.body).toContain(entry.bankDate);
+      expect(logged).not.toContain(entry.bankDate);
+      expect(logged).not.toContain(entry.workbookDate);
+    }
+  });
 });

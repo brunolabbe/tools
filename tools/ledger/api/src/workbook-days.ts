@@ -53,6 +53,14 @@
  * refuses the paste as ambiguous. Nothing is ever stored on the wider reading,
  * so it can only refuse a paste, never store one differently.
  *
+ * **A stored paste says which of its rows the workbook dates otherwise**
+ * (lg-58). The match answers a pairing, each pasted row with the workbook row it
+ * is (`matchStretch`), and the paste names every pasted row paired with a row of
+ * another date. Within a block only amounts are weighed, so a pairing amount for
+ * amount is chosen that agrees on dates wherever it can (`pairAmounts`), and
+ * among the cuttings that match, the one with the fewest rows dated otherwise.
+ * A row is named only when no matching reading pairs it alike.
+ *
  * **A paste may start or end partway through one of those blocks**
  * (`matchPart`): its rows there are some of the block's, as the bank lists them
  * from a position the paste's place gives. They must be among the block's
@@ -209,6 +217,55 @@ function someAddUpTo(amounts: readonly number[], count: number, sum: number): bo
 }
 
 /**
+ * Which of `run`'s rows each of `part`'s is, amount for amount, or `null` when
+ * `run` does not hold `part`'s amounts, counted with their repeats (lg-58).
+ *
+ * The amounts are all the rule weighs, so to it any pairing amount for amount is
+ * as good as another. This one agrees on dates wherever it can: as many rows as
+ * possible are paired with one of the same amount and the same date, and each
+ * row left is paired with the nearest-dated row of its amount still free. So as
+ * few rows are paired with another date as any pairing of the block allows, and
+ * the bank's dates among them are the same whichever pairing it was.
+ */
+function pairAmounts(run: readonly DayEntry[], part: readonly DayEntry[]): number[] | null {
+  const taken = new Set<number>();
+  const pairing: (number | undefined)[] = part.map((row) => {
+    const at = run.findIndex(
+      (candidate, index) =>
+        !taken.has(index) &&
+        candidate.amountCents === row.amountCents &&
+        candidate.date === row.date,
+    );
+    if (at === -1) return undefined;
+    taken.add(at);
+    return at;
+  });
+  const result: number[] = [];
+  for (const [offset, row] of part.entries()) {
+    const sameDate = pairing[offset];
+    if (sameDate !== undefined) {
+      result.push(sameDate);
+      continue;
+    }
+    const day = dayNumber(row.date);
+    let nearest = -1;
+    let distance = Number.POSITIVE_INFINITY;
+    for (const [index, candidate] of run.entries()) {
+      if (taken.has(index) || candidate.amountCents !== row.amountCents) continue;
+      const apart = Math.abs(dayNumber(candidate.date) - day);
+      if (apart < distance) {
+        nearest = index;
+        distance = apart;
+      }
+    }
+    if (nearest === -1) return null;
+    taken.add(nearest);
+    result.push(nearest);
+  }
+  return result;
+}
+
+/**
  * Some of the bank's rows of one of the workbook's days, `part`, in the bank's
  * order, as the bank's rows `before` to `before + part.length` of that day.
  * `run` is the whole day as the workbook holds it.
@@ -218,35 +275,39 @@ function someAddUpTo(amounts: readonly number[], count: number, sum: number): bo
  * `before` of the day's other amounts: the day's opening when `before` is 0, and
  * when the part runs to the day's end, simply the day's closing balance after its
  * last row. A part that is the whole day is `matchDay`'s comparison.
+ *
+ * It answers which of `run`'s rows each of `part`'s is, an index into `run` for
+ * each (`pairAmounts`), or `null` when the part does not fit (lg-58).
  */
 export function matchPart(
   run: readonly DayEntry[],
   before: number,
   part: readonly DayEntry[],
   window: DateWindow,
-): boolean {
+): number[] | null {
   const first = run[0];
   const last = run.at(-1);
   const opens = part[0];
   const ends = part.at(-1);
   if (first === undefined || last === undefined || opens === undefined || ends === undefined) {
-    return false;
+    return null;
   }
   const after = run.length - before - part.length;
-  if (before < 0 || after < 0) return false;
-  if (!part.every((row) => withinWindow(last.date, row.date, window))) return false;
-  const rest = run.map((row) => row.amountCents);
-  for (const row of part) {
-    const at = rest.indexOf(row.amountCents);
-    if (at === -1) return false;
-    rest.splice(at, 1);
-  }
+  if (before < 0 || after < 0) return null;
+  if (!part.every((row) => withinWindow(last.date, row.date, window))) return null;
+  const pairing = pairAmounts(run, part);
+  if (pairing === null) return null;
+  // Which row of an amount the part takes leaves the same amounts over.
+  const paired = new Set(pairing);
+  const rest = run.filter((_, index) => !paired.has(index)).map((row) => row.amountCents);
   const dayOpening = first.balanceCents - first.amountCents;
   const partOpening = opens.balanceCents - opens.amountCents;
-  if (before === 0) return partOpening === dayOpening;
-  if (after === 0) return ends.balanceCents === last.balanceCents;
-  if (run.length > LONGEST_SEARCHED_DAY) return false;
-  return someAddUpTo(rest, before, partOpening - dayOpening);
+  let fits: boolean;
+  if (before === 0) fits = partOpening === dayOpening;
+  else if (after === 0) fits = ends.balanceCents === last.balanceCents;
+  else if (run.length > LONGEST_SEARCHED_DAY) fits = false;
+  else fits = someAddUpTo(rest, before, partOpening - dayOpening);
+  return fits ? pairing : null;
 }
 
 /** The workbook's rows cut into runs of one date, as `[start, end)` positions. */
@@ -291,29 +352,29 @@ export function alignDays(
  * amounts and balances as `matchPart` weighs them.
  *
  * This is the one place a pasted row meets the workbook's rows of its day, and
- * the pairing a stored paste rests on is decided here, in `matchPart`'s call.
- * It is not returned: `matchPart` answers a boolean and `matchStretch` keeps
- * only which cuts are reachable, so no pairing exists to read yet. lg-58 must
- * make both return it. It must record only from the stored pass: the rival pass
- * (`RIVAL_TOLERANCE`) runs through this same code, with its 3-day readings and
- * the cuttings that did not win.
+ * the pairing a stored paste rests on is decided here, in `matchPart`'s call: it
+ * answers which of `block`'s rows each of `part`'s is, or `null` when the part
+ * does not fit. `matchStretch` gathers those into the stretch's pairing, and a
+ * paste reports the dates that pairing shows differing (lg-58). Only the stored
+ * pass's pairing is ever reported: the rival pass (`RIVAL_TOLERANCE`) runs
+ * through this same code, with its 3-day readings, and only refuses.
  */
 export function matchBlock(
   block: readonly DayEntry[],
   before: number,
   part: readonly DayEntry[],
   tolerance: DateTolerance = STORED_TOLERANCE,
-): boolean {
-  if (block.length === 0) return false;
+): number[] | null {
+  if (block.length === 0) return null;
   const days = block.map((row) => dayNumber(row.date));
   const earliest = Math.min(...days);
   const latest = Math.max(...days);
-  if (latest - earliest > tolerance.widestBlockDays) return false;
+  if (latest - earliest > tolerance.widestBlockDays) return null;
   const dated = part.every((row) => {
     const day = dayNumber(row.date);
     return day >= earliest - tolerance.daysOff && day <= latest + tolerance.daysOff;
   });
-  return dated && matchPart(block, before, part, "any");
+  return dated ? matchPart(block, before, part, "any") : null;
 }
 
 /**
@@ -340,6 +401,18 @@ export interface StretchRow extends DayEntry {
   readonly fromWorkbook: boolean;
 }
 
+/** How the best cutting reaching a cut got there, for `matchStretch`. */
+interface Reach {
+  /** How many pasted rows the cutting pairs with a stored row of another date. */
+  readonly differing: number;
+  /** The cut its last block begins on, or `-1` at the first cut. */
+  readonly from: number;
+  /** The last block's first pasted row, as a position in `rows`. */
+  readonly inside: number;
+  /** For each of the last block's pasted rows, the position in `rows` of its row. */
+  readonly pairs: readonly number[];
+}
+
 /**
  * Whether stored rows are the pasted rows in their places, as a paste reads them
  * (lg-59). `rows` holds the stretch from position `start`, as many rows as
@@ -355,6 +428,12 @@ export interface StretchRow extends DayEntry {
  * they hold are not the paste's. The cuttings are searched from the oldest row
  * up, as the set of cuts some matching cutting reaches, so no cutting is weighed
  * twice. `tolerance` is how far the blocks' dates may stray (`matchBlock`).
+ *
+ * It answers the pairing: for each pasted row, the position in `rows` of the
+ * stored row it is, or `null` when no cutting matches (lg-58). Where several
+ * cuttings match, the pairing is the one with the fewest pasted rows paired with
+ * a stored row of another date, the first found among equals, so a paste
+ * reports only dates that no matching cutting pairs alike.
  */
 export function matchStretch(
   rows: readonly StretchRow[],
@@ -362,9 +441,9 @@ export function matchStretch(
   pasted: readonly DayEntry[],
   same: (offset: number) => boolean,
   tolerance: DateTolerance = STORED_TOLERANCE,
-): boolean {
+): number[] | null {
   const end = start + pasted.length;
-  if (start < 0 || end > rows.length) return false;
+  if (start < 0 || end > rows.length) return null;
   // Where a block may begin or end: wherever the workbook's date changes or a
   // row is a paste's, and between two rows the workbook dates alike where the
   // bank's day ends (`dayEnds`).
@@ -382,36 +461,61 @@ export function matchStretch(
     }
   }
   cuts.push(rows.length);
-  const reached = cuts.map((_, index) => index === 0);
+  // The best cutting reaching each cut. A block ending on a cut begins on an
+  // earlier one, so a cut's best is settled before any block begins on it.
+  const reached: (Reach | undefined)[] = cuts.map((_, index) =>
+    index === 0 ? { differing: 0, from: -1, inside: start, pairs: [] } : undefined,
+  );
   for (const [from, opens] of cuts.entries()) {
-    if (reached[from] !== true) continue;
+    const origin = reached[from];
+    if (origin === undefined) continue;
     for (let to = from + 1; to < cuts.length; to++) {
       const closes = cuts[to] as number;
       const first = rows[opens] as StretchRow;
       const inside = Math.max(opens, start);
       const outside = Math.min(closes, end);
-      let fits: boolean;
+      let pairs: readonly number[] | null;
       if (!first.fromWorkbook) {
         // A row a paste stored is a block of its own, compared field for field.
         if (to !== from + 1) break;
-        fits = inside >= outside || same(inside - start);
+        pairs = inside >= outside ? [] : same(inside - start) ? [opens] : null;
       } else {
         const block = rows.slice(opens, closes);
         // A longer block holds this one's rows too, so it cannot fit either.
         if (block.some((row) => !row.fromWorkbook)) break;
         const days = block.map((row) => dayNumber(row.date));
         if (Math.max(...days) - Math.min(...days) > tolerance.widestBlockDays) break;
-        fits =
-          inside >= outside ||
-          matchBlock(
-            block,
-            inside - opens,
-            pasted.slice(inside - start, outside - start),
-            tolerance,
-          );
+        pairs =
+          inside >= outside
+            ? []
+            : (matchBlock(
+                block,
+                inside - opens,
+                pasted.slice(inside - start, outside - start),
+                tolerance,
+              )?.map((index) => opens + index) ?? null);
       }
-      if (fits) reached[to] = true;
+      if (pairs === null) continue;
+      const differing =
+        origin.differing +
+        pairs.filter(
+          (position, offset) => rows[position]?.date !== pasted[inside - start + offset]?.date,
+        ).length;
+      const best = reached[to];
+      if (best === undefined || differing < best.differing) {
+        reached[to] = { differing, from, inside, pairs };
+      }
     }
   }
-  return reached.at(-1) === true;
+  // Walked back from the last cut, each block's pairs put in their places.
+  let at = reached.at(-1);
+  if (at === undefined) return null;
+  const pairing: number[] = Array.from({ length: pasted.length }, () => -1);
+  while (at !== undefined && at.from !== -1) {
+    for (const [offset, position] of at.pairs.entries()) {
+      pairing[at.inside - start + offset] = position;
+    }
+    at = reached[at.from];
+  }
+  return pairing;
 }

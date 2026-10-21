@@ -291,12 +291,29 @@ export interface ImportStatementRequest {
  * `rowsInInbox` is how many of the `rowsAdded` no rule and no history filed, so
  * they wait in the inbox (lg-54): never more than `rowsAdded`, and `0` when none
  * was added. It counts this paste's own rows; the inbox may hold earlier ones.
+ *
+ * `datesDiffering` names each already-stored row the paste matched with a row
+ * the workbook import stored under another date (lg-58), oldest first. The
+ * stored row keeps the workbook's date. It is absent when there is none.
  */
 export interface ImportStatementReport {
   rowsAdded: number;
   rowsAlreadyPresent: number;
   tailBalanceCents: number;
   rowsInInbox: number;
+  datesDiffering?: DateDiffering[];
+}
+
+/**
+ * A pasted row the books already held, as the workbook imported it under
+ * another date: the bank's date, the date kept, and the amount, which both
+ * sides agree on. The bank's wording is left out: the household finds the row
+ * on its statement by date and amount.
+ */
+export interface DateDiffering {
+  bankDate: string;
+  workbookDate: string;
+  amountCents: number;
 }
 
 /**

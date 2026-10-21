@@ -55,7 +55,9 @@
  *   reading out of reach, and the one left can be false, so a rival there
  *   refuses the paste as ambiguous too. Nothing is ever stored on the wider
  *   reading. The workbook's rows keep their wording and dates; only the rows
- *   past the tail are stored. When nothing fits and the
+ *   past the tail are stored, and the report names each pasted row the stored
+ *   reading pairs with a workbook row of another date (`datesDiffering`,
+ *   lg-58), never one the rival pass pairs. When nothing fits and the
  *   stored row the paste had to meet is the workbook's, the refusal names that
  *   row and the pasted row that opens from its balance, and does not ask for a
  *   longer stretch: that is the advice for a paste that falls short of the
@@ -67,7 +69,7 @@
  */
 
 import { AppError } from "@ledger/contract";
-import type { ImportStatementReport } from "@ledger/contract";
+import type { DateDiffering, ImportStatementReport } from "@ledger/contract";
 import { formatCents, parseStatement } from "@ledger/books";
 import type { StatementRow } from "@ledger/books";
 import type { Database } from "better-sqlite3";
@@ -211,18 +213,22 @@ function store(
   const tail = latest(db, "DESC", 1)[0];
 
   let alreadyPresent = 0;
+  let datesDiffering: DateDiffering[] = [];
   if (tail !== undefined) {
-    const found = readings(db, rows, oldest, count, tail, STORED_TOLERANCE);
+    const storedPass = readings(db, rows, oldest, count, tail, STORED_TOLERANCE);
+    const found = [...storedPass.keys()];
     if (found.length === 0) fail(db, rows, oldest, newest, tail);
     const [first] = found;
     if (found.length > 1 || first === undefined) throw ambiguous(oldest, rows.length, found);
     // The one reading must have no rival with the workbook's dates further off
     // (lg-61): where the true reading is out of reach, it would be a false one.
-    const rivals = readings(db, rows, oldest, count, tail, RIVAL_TOLERANCE).filter(
+    // The rival pass only refuses: what it pairs is never reported (lg-58).
+    const rivals = [...readings(db, rows, oldest, count, tail, RIVAL_TOLERANCE).keys()].filter(
       (present) => present !== first,
     );
     if (rivals.length > 0) throw ambiguousAcrossDays(oldest, rows.length, first, rivals);
     alreadyPresent = first;
+    datesDiffering = storedPass.get(first) ?? [];
   }
 
   const added = rows.slice(alreadyPresent);
@@ -261,6 +267,8 @@ function store(
     rowsAdded: added.length,
     rowsAlreadyPresent: alreadyPresent,
     tailBalanceCents: last?.balanceCents ?? 0,
+    // Absent when none, so a paste the workbook agrees with reads as it always did.
+    ...(datesDiffering.length > 0 ? { datesDiffering } : {}),
   };
 }
 
@@ -333,27 +341,46 @@ function nearby(
  * (`matchStretch`, lg-59). A block at either end is weighed whole, the rows the
  * stretch leaves out included, since a paste may start or end partway through a
  * day whose order the workbook does not keep.
+ *
+ * It answers the pasted rows the match pairs with a stored row of another date,
+ * oldest first, or `null` when they are not the same rows (lg-58). Only a
+ * workbook row can be one: a row a paste stored is compared date and all.
  */
 function overlaps(
   db: Database,
   stored: readonly StoredRow[],
   pasted: readonly StatementRow[],
   tolerance: DateTolerance,
-): boolean {
+): DateDiffering[] | null {
   const oldest = stored[0];
   const newest = stored.at(-1);
   if (stored.length !== pasted.length || oldest === undefined || newest === undefined) {
-    return stored.length === pasted.length;
+    return stored.length === pasted.length ? [] : null;
   }
   const earlier = oldest.fromWorkbook ? nearby(db, oldest, "before", tolerance) : [];
   const later = newest.fromWorkbook ? nearby(db, newest, "after", tolerance) : [];
-  return matchStretch(
-    [...earlier, ...stored, ...later],
+  const rows = [...earlier, ...stored, ...later];
+  const pairing = matchStretch(
+    rows,
     earlier.length,
     pasted,
     (offset) => sameRow(stored[offset] as StoredRow, pasted[offset] as StatementRow),
     tolerance,
   );
+  if (pairing === null) return null;
+  const differing: DateDiffering[] = [];
+  for (const [offset, position] of pairing.entries()) {
+    const bank = pasted[offset] as StatementRow;
+    const kept = rows[position] as StoredRow;
+    if (kept.date !== bank.date) {
+      differing.push({
+        bankDate: bank.date,
+        workbookDate: kept.date,
+        amountCents: bank.amountCents,
+      });
+    }
+  }
+  return differing;
 }
 
 /** Up to `limit` stored rows from position `from` on, oldest first. */
@@ -377,6 +404,11 @@ function from(db: Database, position: number, limit: number): StoredRow[] {
  * Either way the stored rows are compared by `overlaps`: the workbook's day by
  * day, a paste's field for field (lg-40), the workbook's dates allowed as far
  * off as `tolerance`.
+ *
+ * Each reading comes with the pasted rows it pairs with a stored row of another
+ * date (lg-58). Where it fits more than one way — a paste wholly inside the
+ * history may start on more than one stored row — it keeps the way with the
+ * fewest, the first found among equals.
  */
 function readings(
   db: Database,
@@ -385,26 +417,30 @@ function readings(
   count: number,
   tail: StoredRow,
   tolerance: DateTolerance,
-): number[] {
-  const found = new Set<number>();
+): Map<number, DateDiffering[]> {
+  const found = new Map<number, DateDiffering[]>();
+  const keep = (present: number, differing: DateDiffering[] | null): void => {
+    const kept = found.get(present);
+    if (differing !== null && (kept === undefined || differing.length < kept.length)) {
+      found.set(present, differing);
+    }
+  };
   const window = latest(db, "DESC", rows.length).toReversed();
   for (let k = 0; k <= Math.min(rows.length, window.length); k++) {
-    const fits =
-      k === 0
-        ? oldest.balanceCents - oldest.amountCents === tail.balanceCents
-        : overlaps(db, window.slice(window.length - k), rows.slice(0, k), tolerance);
-    if (fits) found.add(k);
+    if (k === 0) {
+      keep(0, oldest.balanceCents - oldest.amountCents === tail.balanceCents ? [] : null);
+    } else {
+      keep(k, overlaps(db, window.slice(window.length - k), rows.slice(0, k), tolerance));
+    }
   }
   if (rows.length <= count) {
     const starts = [...candidates(db, oldest), ...workbookStarts(db, oldest, tolerance)];
     for (const candidate of starts) {
-      if (overlaps(db, from(db, candidate.seq, rows.length), rows, tolerance)) {
-        found.add(rows.length);
-      }
+      keep(rows.length, overlaps(db, from(db, candidate.seq, rows.length), rows, tolerance));
     }
   }
   // Most already-stored first, so the readings list reads from "nothing new" up.
-  return [...found].toSorted((a, b) => b - a);
+  return new Map([...found].toSorted(([a], [b]) => b - a));
 }
 
 /** Nothing fits: say why, as precisely as the history allows. Never returns. */
