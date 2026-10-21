@@ -82,6 +82,7 @@ import {
   WIDEST_BLOCK_DAYS,
   dayBefore,
   daysAfter,
+  daysApart,
   matchStretch,
 } from "./workbook-days.ts";
 import type { DateTolerance } from "./workbook-days.ts";
@@ -408,7 +409,8 @@ function from(db: Database, position: number, limit: number): StoredRow[] {
  * Each reading comes with the pasted rows it pairs with a stored row of another
  * date (lg-58). Where it fits more than one way — a paste wholly inside the
  * history may start on more than one stored row — it keeps the way with the
- * fewest, the first found among equals.
+ * fewest, then the fewest days apart in all, then the first found, as
+ * `matchStretch` does among cuttings.
  */
 function readings(
   db: Database,
@@ -419,9 +421,16 @@ function readings(
   tolerance: DateTolerance,
 ): Map<number, DateDiffering[]> {
   const found = new Map<number, DateDiffering[]>();
+  const apart = (differing: readonly DateDiffering[]): number =>
+    differing.reduce((sum, entry) => sum + daysApart(entry.bankDate, entry.workbookDate), 0);
   const keep = (present: number, differing: DateDiffering[] | null): void => {
+    if (differing === null) return;
     const kept = found.get(present);
-    if (differing !== null && (kept === undefined || differing.length < kept.length)) {
+    if (
+      kept === undefined ||
+      differing.length < kept.length ||
+      (differing.length === kept.length && apart(differing) < apart(kept))
+    ) {
       found.set(present, differing);
     }
   };

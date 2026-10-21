@@ -776,6 +776,21 @@ describe("the pairing a paste reports its differing dates from (lg-58)", () => {
     expect(matchPart(run, 0, dated(100_000, [["2026-02-18", 300]]), "any")).toEqual([0]);
   });
 
+  test("matchPart leaves a row of a date to the pasted row of that date, though another is nearer it", () => {
+    // +3.00 on the 20th and the 21st; the bank's +3.00 on the 22nd comes first
+    // and is nearer the 21st, but the bank's other +3.00 is the 21st's.
+    const run = dated(100_000, [
+      ["2026-02-20", 300],
+      ["2026-02-21", 300],
+    ]);
+    const bank = dated(100_000, [
+      ["2026-02-22", 300],
+      ["2026-02-21", 300],
+    ]);
+
+    expect(matchPart(run, 0, bank, "any")).toEqual([0, 1]);
+  });
+
   test("matchStretch answers the cutting that pairs the most rows alike, not the first found", () => {
     // +10.00 on the 20th, 21st and 23rd. The three are never one block, so the
     // stretch is cut {20th}{21st, 23rd} or {20th, 21st}{23rd}, or row by row.
@@ -827,5 +842,57 @@ describe("the pairing a paste reports its differing dates from (lg-58)", () => {
       tailBalanceCents: 101_500,
       rowsInInbox: 0,
     });
+  });
+
+  test("the dates named are the stored pass's, never the rival pass's, which reads rows three days off", () => {
+    // Found by a random search (lg-58's Log). Both passes read the paste as 4
+    // already stored, so it is stored. The rival pass pairs its −5.00 of the
+    // 22nd with the workbook's of the 25th, three days off, and names two rows;
+    // the stored pass allows no such pair, and names three.
+    const db = workbookDb([
+      ["2026-02-21", 500],
+      ["2026-02-18", -300],
+      ["2026-02-24", -500],
+      ["2026-02-23", -300],
+      ["2026-02-25", -500],
+      ["2026-02-27", 500],
+    ]);
+    const rows = bankRows([
+      ["2026-02-22", -500],
+      ["2026-02-23", -300],
+      ["2026-02-24", -500],
+      ["2026-02-24", 500],
+    ]);
+
+    expect(paste(db, rows, 100_200)).toEqual({
+      rowsAdded: 0,
+      rowsAlreadyPresent: 4,
+      tailBalanceCents: 99_400,
+      rowsInInbox: 0,
+      datesDiffering: [
+        { bankDate: "2026-02-22", workbookDate: "2026-02-24", amountCents: -500 },
+        { bankDate: "2026-02-24", workbookDate: "2026-02-25", amountCents: -500 },
+        { bankDate: "2026-02-24", workbookDate: "2026-02-27", amountCents: 500 },
+      ],
+    });
+  });
+
+  test("among cuttings naming as many rows, matchStretch answers the one whose dates are nearest", () => {
+    // +5.00 on the 21st, the 23rd and the 21st; the bank dates them the 21st,
+    // the 22nd and the 20th. Every matching cutting names two rows. The block of
+    // all three, found first, pairs the bank's 22nd with the last 21st and leaves
+    // the 20th the 23rd, three days off; cut after the first row, each is a day off.
+    const rows: StretchRow[] = dated(100_000, [
+      ["2026-02-21", 500],
+      ["2026-02-23", 500],
+      ["2026-02-21", 500],
+    ]).map((row) => ({ ...row, fromWorkbook: true }));
+    const bank = dated(100_000, [
+      ["2026-02-21", 500],
+      ["2026-02-22", 500],
+      ["2026-02-20", 500],
+    ]);
+
+    expect(matchStretch(rows, 0, bank, () => true)).toEqual([0, 1, 2]);
   });
 });
