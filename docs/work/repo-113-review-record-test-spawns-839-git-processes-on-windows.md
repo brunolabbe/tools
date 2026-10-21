@@ -228,3 +228,12 @@ before any review / refused-by-gate-probe` and no other message (the 29th is
   `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 npx vitest run
 scripts/test/review-record.test.ts` → `Tests  64 passed (64)`, the test names
   unchanged (the diff touches no `test(`/`it(`/`describe(` line).
+
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, second low
+  (`nfr:maintainability`) — "The `withTicketRepo` docblock still says the fixture
+  is "the same shape `citations-gate.test.ts` builds", and no
+  `scripts/test/citations-gate.test.ts` exists." The clause is dropped from the
+  docblock (nothing exists to point it at). `ls scripts/test | grep -i citation`
+  → no output; `grep -c citations-gate scripts/test/review-record.test.ts` → `0`;
+  `awk '/^## Log/{exit} {print}' <this ticket> | grep -c citations-gate` → `0`
+  (scoped above `## Log`, because this entry quotes the phrase).

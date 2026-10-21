@@ -311,8 +311,7 @@ afterAll(() => {
 
 /**
  * A throwaway repository with `src/tls.ts` (for anchored citations to point
- * at) and one ticket, committed — the same shape `citations-gate.test.ts`
- * builds, so a passing citation here means the same thing it means there.
+ * at) and one ticket, committed.
  */
 function withTicketRepo(whyProse = DEFAULT_WHY): {
   dir: string;
