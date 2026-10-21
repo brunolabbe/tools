@@ -20,8 +20,11 @@ is `done`. The ticket is withheld, and the reader is told it waits on work that
 has already landed.
 
 Reproduced on `origin/main` at `aaccab20` (2026-10-21). The same defect was seen
-at intake on `93bfa1f1` (2026-10-20), and the output below is unchanged. The live
-case is pl-59, which depends on `repo-108`:
+at intake on `93bfa1f1` (2026-10-20), and the `--tool planner` pair below is
+unchanged. The unscoped `--ready` listing is not: at `93bfa1f1` it had eight rows
+(`dl-130`, `lg-58`, `lg-61`, `lg-63`, `pl-58`, `pl-59`, `repo-109`, `repo-113`;
+no `lg-64` yet), where the one below is `aaccab20`'s. The live case is pl-59,
+which depends on `repo-108`:
 
 ```
 $ npm run -s status -- --ready --tool planner
@@ -75,16 +78,35 @@ the one rule below.
 4. **The regression tests go at the end of `scripts/test/status.test.ts`**, using
    `repoWith` from the top of the file, so no test line moves. The fixture is a
    planner ticket with `depends_on: [repo-9]` and a `repo-9` ticket with
-   `status: done`, in a tree of its own. Three cases:
+   `status: done`, in a tree of its own. Six cases, the first three on that fixture:
    - `run(["--tool", "planner", "--ready"], root)` lists the planner ticket on
      stdout and writes nothing about it to stderr. On `origin/main` it prints
      `nothing is ready and unblocked` and withholds the ticket, so this test fails
      before the fix.
-   - `run(["--tool", "planner"], root)` marks the planner ticket `•` with no
-     `(waits on …)` label.
+   - `run(["--tool", "planner"], root)` and `run([], root)` both mark the planner
+     ticket `•` with no `(waits on …)` label. The second call is the default view
+     with no flag: the per-tool grouping (`mine`) is the cause there, so it fires
+     without `--tool`.
    - The same fixture with `repo-9` at `status: ready` still withholds the planner
      ticket, with `waits on repo-9`. This pins that the fix did not make an
      unstartable ticket look startable.
+   - The fourth case, the one Build 6 grades: a planner ticket with
+     `depends_on: [repo-9, repo-10]`, `repo-9` at `status: done` and `repo-10` at
+     `status: ready`. `run(["--tool", "planner"], root)` prints the label
+     `(waits on repo-10)` and not `(waits on repo-9, repo-10)`, which is what it
+     prints before the fix.
+   - The fifth case, on the fourth case's fixture: the `--ready` stderr of
+     `run(["--tool", "planner", "--ready"], root)` is `waits on repo-10` and not
+     `repo-9`. This pins `withheldFromReady`'s own message, which Build 1 changes and
+     no other case reaches. Measured on the base, on a partial fix (the whole graph
+     into `readyTickets` and the default view, `withheldFromReady`'s message left on
+     its argument) and on a full fix, the stderr is `waits on repo-9, repo-10`,
+     `waits on repo-9, repo-10` and `waits on repo-10`. With
+     `depends_on: [repo-9, repo-404]`, a full fix prints `waits on repo-404`.
+   - The sixth case: the first fixture with `repo-9` at `status: needs-decision`
+     still withholds the planner ticket under `--tool planner --ready`. This pins
+     Build 3's cross-tool `needs-decision` clause, which no existing test reaches (a
+     dangling id is pinned by `WITHHELD_REPO9`).
 5. Do not edit `CLAUDE.md`, `docs/01-TICKETS.md` or any ticket's frontmatter.
 6. **The `(waits on …)` label lists only dependencies that are not `done`.** The
    default view's label is `ticket.depends_on.join(", ")` (`scripts/status.mjs:1005`),
@@ -99,15 +121,26 @@ the one rule below.
   lists a planner ticket whose dependency is a done repo ticket, and stderr has no
   line for it. The test fails on `origin/main` at `aaccab20`, with stdout
   `nothing is ready and unblocked`, before the fix.
-- `scripts/test/status.test.ts`, the second case of Build 4: the default view marks
-  that ticket `•` and shows no `(waits on` label. Fails before the fix.
+- `scripts/test/status.test.ts`, the second case of Build 4: the default view, under
+  `--tool planner` and with no flag, marks that ticket `•` and shows no `(waits on`
+  label. Fails before the fix.
+- Plain `npm run -s status`, read on the builder's head with `pl-59` and `lg-64`
+  still `ready`, marks both with `•` and no `(waits on` label. At the base it prints
+  `· pl-59 … (waits on repo-108)` and `· lg-64 … (waits on repo-109)`, both
+  dependencies `done`, with no flag at all.
 - `scripts/test/status.test.ts`, the third case of Build 4: with the dependency
   `ready`, the planner ticket is still withheld with `waits on repo-9`. Passes before
   and after the fix.
-- `scripts/test/status.test.ts`, the test Build 6 names: a planner ticket with one
-  `done` and one open cross-tool dependency, under `--tool planner`, has the label
+- `scripts/test/status.test.ts`, the fourth case of Build 4: a planner ticket with
+  one `done` and one open cross-tool dependency, under `--tool planner`, has the label
   `(waits on <open id>)` only, with no done id in it. Fails before the fix, which
   prints both ids.
+- `scripts/test/status.test.ts`, the fifth case of Build 4: the `--ready` stderr for
+  that ticket is `waits on repo-10`, with no `repo-9`. Fails before the fix, and on a
+  fix that leaves `withheldFromReady`'s message on its argument.
+- `scripts/test/status.test.ts`, the sixth case of Build 4: with the dependency at
+  `needs-decision`, the planner ticket is still withheld under `--tool planner` with
+  `--ready`. Passes before and after the fix.
 - `npm run -s status -- --ready` still lists `pl-58` and `pl-59` on stdout, and its
   stderr still names `lg-65` and `repo-98` as withheld. Read on the builder's head,
   with pl-59 still `ready` (PR #591 open at intake).
@@ -185,3 +218,36 @@ repo-114` outside `docs/work` printed nothing, and no branch or open pull reques
     -- stderr
     ```
     The label names `repo-9`, which is `done`. The fix must name `repo-10` only.
+- 2026-10-21 — Gate record. Gate 1 (ticket-reviewer-sonnet) passed this filing with
+  four lows at `c3219a3d`. A filing carries no `--land` record, so the gate's full
+  report is on pull request #601's thread, not in this file.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, F1 — "`Done when` 4
+  points at a test that is not named. It reads 'the test Build 6 names', Build 6
+  states a rule and no test, and Build 4 says 'Three cases'." Build 4 now has the
+  `repo-9` done / `repo-10` ready fixture as its fourth case and `Done when` 4 reads
+  "the fourth case of Build 4". The phrase "Three cases" and the phrase naming
+  Build 6's test, each counted above `## Log` by `awk '/^## Log/{exit} {print}'
+<ticket> | grep -c`, → 0 and 0.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, F2 — "The ticket frames the
+  default-view defect as `--tool`'s ... it also fires with no flag." Build 4's
+  second case now calls `run([], root)` as well, and `Done when` carries a live line
+  that plain `npm run -s status` marks `pl-59` and `lg-64` with `•` and no label.
+  Confirmed on the base, by `npm run -s status` filtered to the two ids: lg-64 is
+  `· lg-64 … (waits on repo-109)` and pl-59 is `· pl-59 … (waits on repo-108)`. The Why paragraph's
+  framing ("the same narrowing reaches the default view") was not reworded, since
+  the finding's fix does not name it.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, F3 — "Build 1 changes the
+  `done` set that `withheldFromReady` uses for its own message, and no `Done when`
+  line fails if that half is skipped." Build 4 now has a fifth case (the `--ready`
+  stderr is `waits on repo-10` and not `repo-9`; `waits on repo-404` for
+  `[repo-9, repo-404]` on a full fix) and a sixth (a `needs-decision` `repo-9` still
+  withholds), each with its `Done when` line. The base's `waits on repo-9, repo-10`
+  is the output of `withheldFromReady`'s `depends_on.filter` over the selected rows'
+  `done` set, `scripts/status.mjs:596-598`. The partial-fix and full-fix outputs are
+  the gate's measurements, not re-run here.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, F4 — "'The same defect was
+  seen at intake on `93bfa1f1`, and the output below is unchanged' holds for the
+  `--tool planner` pair and not for the unscoped `--ready` listing, which at
+  `93bfa1f1` had eight rows." The Why now says so. Extracted `93bfa1f1` and ran
+  `node scripts/status.mjs --root <tree> --ready` → `dl-130`, `lg-58`, `lg-61`,
+  `lg-63`, `pl-58`, `pl-59`, `repo-109`, `repo-113` (eight rows).
