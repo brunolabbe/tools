@@ -32,7 +32,7 @@ needs a real premises behind it, because it is the one a traveller books.
 **The evidence is in pl-58**, whose branch is `pl-58-name-a-premises` (PR #593).
 It had not merged when this ticket was filed, so everything below is cited from
 its ticket's Log in prose and not by link, and `depends_on` waits for it. The Log
-was read as the branch stood at `fce56408` (2026-10-21, 02:14Z); that sha lives
+was read as the branch stood at `6fc01891` (2026-10-21, 01:53Z); that sha lives
 only on the branch and stops resolving once #593 squash-merges, so every figure
 used is also written out here. Three facts, each re-read from that Log:
 
@@ -136,7 +136,14 @@ Overpass, `lodging` only, a fallback to a kind of place, no `Place` field.
    (Petit-Gaspé, Des-Rosiers, Cap-Bon-Ami) are among the finds for Gaspé, and as
    which element type. The adapter's reply parser reads `element.lat` and
    `element.lon`, which a way does not carry (it carries `center`), so a build that
-   keeps the area form changes the parser too. The capture needs outbound access to
+   keeps the area form changes the parser too. `findFrom` also builds the find's
+   source URL as `https://www.openstreetmap.org/node/<id>`, hard-coded, and OSM ids
+   are unique only within a type, so a way or relation must take its URL from the
+   element's `type` (`/way/<id>`, `/relation/<id>`) beside its `center`, or it
+   links to an unrelated node. The payload `Done when` 3 checks in is re-captured
+   through the built `overpassQuery`, which that function's doc-comment exports so
+   a capture builds "the _exact_ query this adapter sends", and not through the
+   scratch script's hand-written query. The capture needs outbound access to
    an Overpass instance, which the sandbox firewall may block, so ask the owner to
    open it. **The owner set no zero-find threshold, so stop after this step**,
    commit the Log, and report the counts as an open decision: a source that
@@ -154,16 +161,29 @@ Overpass, `lodging` only, a fallback to a kind of place, no `Place` field.
 
    **Stop condition: how a town goes through the seam is not settled, and the
    builder does not choose.** `NearbyRequest.corridor` is a `Corridor`, "at least
-   two points", in `agent/src/grounding.ts`, and a town is one point. Report both
-   options with the cost found in the code, and wait for the owner:
+   two points", in `agent/src/grounding.ts`, and a town is one point. Report the
+   three options with the cost found in the code, and wait for the owner:
    - **(a) A degenerate corridor: the town's point twice**, or two points a few
-     metres apart. No seam change. The cost is a corridor that is not one:
-     `distanceToCorridorMetres` and the `around:` polyline then measure a segment
-     of zero length, and the type's doc-comment stops being true.
+     metres apart. No seam change, and the geometry already copes:
+     `distanceToCorridorMetres` in `api/src/grounding/geometry.ts` handles a
+     one-point corridor (`api/test/geometry.test.ts`, "a one-point corridor is the
+     distance to that point"), `distanceToSegmentMetres` handles "a corridor whose
+     two ends coincide" on purpose, and `overpassQuery` takes any number of points.
+     The costs are the `Corridor` doc-comment ("at least two points"), which stops
+     being true, and `Find.detourMinutes` ("on the way from one end of the corridor
+     to the other"), which `detourCosts(origin, destination, …)` in
+     `api/src/runs/discovery.ts` prices and which then means nothing for a town.
    - **(b) A sibling seam method**, a `nearby`-for-a-point on `GroundingProvider`
-     with its own request type. Every adapter implements it (the fixture provider,
-     the Overpass adapter, the cache), the seam gets wider, and the Log's call
-     accounting gets a second shape. The gain is a request type that says what a town is.
+     with its own request type. Every implementer takes it: the fixture provider,
+     the Overpass adapter and the cache, `RunGrounding` in `cache.ts` (the
+     outcome-wrapped surface `discovery.ts` calls, which `test/live/run.ts` and
+     three specs implement: `travel-measure`, `discovery-pass`,
+     `discovery-prompt-bound`), and the six `GroundingProvider` doubles in
+     `revisions`, `brief-edits`, `travel-pass` (2) and `grounding-cache` (2). The
+     seam gets wider and the Log's call accounting gets a second shape. The gain is
+     a request type that says what a town is, and it has a precedent:
+     `articlesNear(NotabilityRequest)` is already a seam method that is "deliberately
+     one point, not a corridor".
    - **(c) Widen `NearbyRequest` to accept either a corridor or a point.** One
      method, but every caller and adapter branches on a union.
 
@@ -352,10 +372,11 @@ as it moves.
   one fixed brief and one fixed `Find[]`, are byte-identical to the same three
   prompts built at the build's base commit (the Log names its sha). A test pins
   them as a snapshot taken at that commit.
-- Against a checked-in Overpass payload captured for the towns Build 1 names, the
-  lodging query returns the finds inside each town's radius and none outside it,
-  offline, and returns a way or relation as a find with a coordinate from its
-  `center`. The Log gives the count of finds per town, including the zero towns,
+- Against a checked-in Overpass payload captured through the built `overpassQuery`
+  for the towns Build 1 names, the lodging query returns the finds inside each
+  town's radius and none outside it, offline, and returns a way or relation as a
+  find with a coordinate from its `center` and a source URL of its own element
+  type (`/way/<id>` or `/relation/<id>`, not `/node/<id>`). The Log gives the count of finds per town, including the zero towns,
   split by element type, and says whether the three Forillon campgrounds are among
   Gaspé's finds and as which element type.
 - Build 2's stop condition is answered by the owner on this ticket, the Log
@@ -491,3 +512,49 @@ RUN_PATTERN` prints `121: export const RUN_PATTERN = /^pl58-\d{4}-\d{2}-\d{2}$/;
   four combinations) is recorded in the answered section as relayed by the
   orchestrator, and the options listed under each are the builder's own, not a
   transcript of what the owner saw.
+
+**2026-10-21 — Landing (fixer, Sonnet 5.5).** Gate 2 (narrow, `a5338498`) returned
+PASS with five new lows. The owner chose, the same day, to fix the four fully
+stated ones at the landing without a re-gate, and N3 stays as recorded. Both gates'
+full reports are comments on PR #600, which is where the records live: this filing
+has no `## Review` section and no `--land`.
+
+- 2026-10-21 — Fixed at landing by owner choice: gate 2, N1 — "A way's find would
+  link to a node. `findFrom` in `api/src/grounding/valhalla.ts` builds the source as
+  `https://www.openstreetmap.org/node/${String(id)}`." Build 1 now names the source
+  URL taken from the element's `type` beside `center`, and `Done when` 3's way clause
+  asks for `/way/<id>` or `/relation/<id>`, not `/node/<id>`.
+  `awk '/^## Log/{exit} {print}' <ticket> | grep -c "/way/<id>"` → 2 (0 at the gate's
+  head); `grep -n 'openstreetmap.org/node' tools/planner/api/src/grounding/valhalla.ts`
+  prints line 1469, the hard-coded `node`, as the gate states.
+- 2026-10-21 — Fixed at landing by owner choice: gate 2, N2 — "The brief never says
+  that `Done when` 3's checked-in payload must be re-captured through the built
+  `overpassQuery`." Build 1 and `Done when` 3 now say it.
+  `awk '/^## Log/{exit} {print}' <ticket> | grep -c "through the built \`overpassQuery\`"`→ 2 (0 at the gate's head);`overpassQuery`'s doc-comment, `valhalla.ts` lines
+  1197–1198, says it is exported so a capture builds "the _exact_ query this adapter
+  sends".
+- 2026-10-21 — Fixed at landing by owner choice: gate 2, N4 — "Build 2's option
+  costs are uneven against the code … The step says 'Report both options' and then
+  lists three." Option (a) now states that `distanceToCorridorMetres` and
+  `distanceToSegmentMetres` already cope (`api/test/geometry.test.ts`, "a one-point
+  corridor is the distance to that point") and names the real costs, the `Corridor`
+  doc-comment and `Find.detourMinutes` via `detourCosts`. Option (b) now names
+  `RunGrounding`, its four implementers, the six `GroundingProvider` doubles and the
+  `articlesNear` precedent. The step says "the three options".
+  `awk '/^## Log/{exit} {print}' <ticket> | grep -c "Report both"` → 0 (1 at the
+  gate's head). Checked against the code: `grep -n "implements GroundingProvider"`
+  on `revisions`, `brief-edits`, `travel-pass` and `grounding-cache` under
+  `tools/planner/api/test/` prints 1, 1, 2 and 2 classes (6); `RunGrounding` is
+  typed in `test/live/run.ts`, `discovery-pass`, `discovery-prompt-bound` and
+  `travel-measure`.
+- 2026-10-21 — Fixed at landing by owner choice: gate 2, N5 — "_Why_ says pl-58's Log
+  'was read as the branch stood at `fce56408`'. The Log's 'Re-read, not relayed' says
+  it was read 'at `6fc01891`, the branch head when it was read'." _Why_ now cites
+  `6fc01891` and its commit time, `git show -s --format='%h %cI' 6fc01891` → `6fc01891
+2026-10-21T01:53:14+00:00` (it was `fce56408`, 02:14Z). The filing Log's "Re-read,
+  not relayed" entry and round 1's F5 entry are history and stay as written: they
+  say `fce56408` was the head at filing time, which is the gate's reading, and the
+  figures are the same at both (gate 1's diff of the two moves only `withoutParks`,
+  which this ticket does not cite).
+- **Not fixed, as the owner chose:** N3, the area form conditional in Build 1 and
+  unconditional in `Done when` 3, stays recorded in gate 2's report.
