@@ -266,3 +266,9 @@ nothing else in `@ledger/contract`.
   - **Gate 1, finding 3's open decision: a book with no ratio.** Options: (a)
     document it in `00-ANALYSIS.md` §4; (b) pass `people.added_at` to `books`;
     (c) file a ticket. Chosen: (a), the gate's recommendation.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, the roadmap finding —
+  "`tools/ledger/docs/02-ROADMAP.md` still says "The mortgage bucket is split
+  50/50" and "Each person's own part is their deposits minus half of every
+  payment"", the roadmap's convention being an "_Amended later on …_" line
+  beneath it. `grep -c "Amended later on 2026-10-21 (lg-63)"
+tools/ledger/docs/02-ROADMAP.md` → 2, one beneath each bullet.
