@@ -43,6 +43,16 @@
  * fit, through whichever cuttings, is refused as ambiguous. Rows dated more than two days apart are never one block, and a
  * bank row two days from every date of its block does not match it.
  *
+ * **A reading is stored only when no rival reading fits with dates up to
+ * `RIVAL_DAYS_OFF` (3) days off** (lg-61, `RIVAL_TOLERANCE`). Where the
+ * workbook dated a row two or three days off the bank's, the true reading is
+ * outside the tolerance above, and a false one, with rows that cancel, can be
+ * the only reading left: a row stored twice, or a new bank row never stored.
+ * So once one reading is found, the paste is read again with each bank row
+ * allowed three days from its block's dates, and any other reading found there
+ * refuses the paste as ambiguous. Nothing is ever stored on the wider reading,
+ * so it can only refuse a paste, never store one differently.
+ *
  * **A paste may start or end partway through one of those blocks**
  * (`matchPart`): its rows there are some of the block's, as the bank lists them
  * from a position the paste's place gives. They must be among the block's
@@ -94,6 +104,41 @@ export const LONGEST_SEARCHED_DAY = 20;
  * one it dated a day after.
  */
 export const WIDEST_BLOCK_DAYS = 2;
+
+/**
+ * How far from the dates of its block a paste reads a pasted row as dated: the
+ * block's span, `widestBlockDays`, and how many days before its earliest date or
+ * after its latest a row of the bank's may be, `daysOff`.
+ */
+export interface DateTolerance {
+  readonly widestBlockDays: number;
+  readonly daysOff: number;
+}
+
+/** The tolerance a paste is stored on (lg-59): a block two days wide, a row a day off it. */
+export const STORED_TOLERANCE: DateTolerance = { widestBlockDays: WIDEST_BLOCK_DAYS, daysOff: 1 };
+
+/**
+ * The days off the wider tolerance allows (lg-61): a workbook row dated as far as
+ * this from the bank's still makes a rival reading.
+ *
+ * A workbook row dated 4 or more days off is not weighed. A paste like R1 (the
+ * true reading never fits, so a false split is the only one left) against such a
+ * row is still stored with the wrong split, as it is on `main`.
+ */
+export const RIVAL_DAYS_OFF = 3;
+
+/**
+ * The tolerance a stored reading must have no rival under (lg-61). A workbook row
+ * dated two or three days off makes the true reading unreadable on
+ * `STORED_TOLERANCE`, and then a false one could be the only reading left, so the
+ * paste is read again on this one and any other reading found refuses it. No
+ * paste is ever stored on it.
+ */
+export const RIVAL_TOLERANCE: DateTolerance = {
+  widestBlockDays: WIDEST_BLOCK_DAYS,
+  daysOff: RIVAL_DAYS_OFF,
+};
 
 /** The calendar day before a `yyyy-mm-dd` date. */
 export function dayBefore(date: string): string {
@@ -241,22 +286,32 @@ export function alignDays(
 /**
  * Some of the bank's rows, `part`, as rows `before` to `before + part.length` of
  * one block of the workbook's rows a paste reads as one day (lg-59): the
- * block's dates no more than `WIDEST_BLOCK_DAYS` apart, each of `part`'s within
- * a day of them, and the amounts and balances as `matchPart` weighs them.
+ * block's dates no more than `tolerance.widestBlockDays` apart, each of `part`'s
+ * within `tolerance.daysOff` of them (a day, on `STORED_TOLERANCE`), and the
+ * amounts and balances as `matchPart` weighs them.
+ *
+ * This is the one place a pasted row meets the workbook's rows of its day, and
+ * the pairing a stored paste rests on is decided here, in `matchPart`'s call.
+ * It is not returned: `matchPart` answers a boolean and `matchStretch` keeps
+ * only which cuts are reachable, so no pairing exists to read yet. lg-58 must
+ * make both return it. It must record only from the stored pass: the rival pass
+ * (`RIVAL_TOLERANCE`) runs through this same code, with its 3-day readings and
+ * the cuttings that did not win.
  */
 export function matchBlock(
   block: readonly DayEntry[],
   before: number,
   part: readonly DayEntry[],
+  tolerance: DateTolerance = STORED_TOLERANCE,
 ): boolean {
   if (block.length === 0) return false;
   const days = block.map((row) => dayNumber(row.date));
   const earliest = Math.min(...days);
   const latest = Math.max(...days);
-  if (latest - earliest > WIDEST_BLOCK_DAYS) return false;
+  if (latest - earliest > tolerance.widestBlockDays) return false;
   const dated = part.every((row) => {
     const day = dayNumber(row.date);
-    return day >= earliest - 1 && day <= latest + 1;
+    return day >= earliest - tolerance.daysOff && day <= latest + tolerance.daysOff;
   });
   return dated && matchPart(block, before, part, "any");
 }
@@ -299,13 +354,14 @@ export interface StretchRow extends DayEntry {
  * (`matchBlock`). Blocks wholly outside the stretch are not compared: the rows
  * they hold are not the paste's. The cuttings are searched from the oldest row
  * up, as the set of cuts some matching cutting reaches, so no cutting is weighed
- * twice.
+ * twice. `tolerance` is how far the blocks' dates may stray (`matchBlock`).
  */
 export function matchStretch(
   rows: readonly StretchRow[],
   start: number,
   pasted: readonly DayEntry[],
   same: (offset: number) => boolean,
+  tolerance: DateTolerance = STORED_TOLERANCE,
 ): boolean {
   const end = start + pasted.length;
   if (start < 0 || end > rows.length) return false;
@@ -344,10 +400,15 @@ export function matchStretch(
         // A longer block holds this one's rows too, so it cannot fit either.
         if (block.some((row) => !row.fromWorkbook)) break;
         const days = block.map((row) => dayNumber(row.date));
-        if (Math.max(...days) - Math.min(...days) > WIDEST_BLOCK_DAYS) break;
+        if (Math.max(...days) - Math.min(...days) > tolerance.widestBlockDays) break;
         fits =
           inside >= outside ||
-          matchBlock(block, inside - opens, pasted.slice(inside - start, outside - start));
+          matchBlock(
+            block,
+            inside - opens,
+            pasted.slice(inside - start, outside - start),
+            tolerance,
+          );
       }
       if (fits) reached[to] = true;
     }
