@@ -235,3 +235,47 @@ next`, and the command line `# the layout spec: every screen at 360px and
   - The household radio group and the receipt item field (the defects in the entry
     above) are not touched on this branch: the owner chose to file one `lg-` ticket,
     which is dispatched separately.
+
+- 2026-10-21 — Gate 1 round (graded FAIL at `b78867d2`; model: Sonnet 5.5).
+  - **F1 (high), fixed.** The ledger spec's `arrived` list matched a heading for
+    Stats, Categories and Admin, which renders while loading, on a failed request
+    and over empty books. Every tab now waits for rows or figures the seed put there
+    (`TABS` is a list of patterns per tab), and Stats for one figure per card
+    (`700.00 $`, `-1050.00 $`, `750.50 $`, `1550.50 $`, `72000.00 $`, `57.1429 %`,
+    `-60.25 $`, `89.99 $`, `29.27 $`), so one series that did not arrive fails the
+    case. Categories waits for `12 rows, newest first` and a row, Admin for
+    `Test household` and `sam@example.test`. **Admin has no seed of the spec's own**:
+    what it lists is the household directory, which the `e2e:ledger:serve` script
+    fills before the API boots, so those two entries are the script's. Checked every
+    other pattern in all three specs against the same standard: ledger Home,
+    Period, History, Inbox, Rules, Salaries and Household already match a seeded row
+    or figure; the planner waits on a seeded plan title, a plan's items, and the
+    states themselves (a question, the checkpoint, "Done"); the downloader waits on
+    the two-rendition table, "Saved by your browser" and "Stop waiting". Nothing else
+    matched a heading over data.
+  - Proved the way the gate proved the defect, each at `c5baea2e`, with the
+    mutation reverted from that commit afterwards (the working tree was clean):
+    - **`**/api/stats/**` aborted** (`await page.route("**/api/stats/**", (route) =>
+route.abort())` at the top of `openTab`), `npm run e2e:ledger`: `1 failed, 11
+passed`; Stats red with `Expected pattern: /700\.00 \$/u` against `Mortgage
+paymentThe ledger API is not answering.Own money in the mortgage…`.
+    - **Empty books** (the seed's guard flipped so it returns before posting):
+      `8 failed, 4 passed`. Home, Stats, Period, History, Inbox, Rules, Categories and
+      Salaries red, each `toContainText` against `getByRole('main')`. Household and
+      Admin passed: their rows come from the directory the serve script fills, not
+      from the seed. Paste and Receipt are forms and pass over empty books too.
+    - Unmutated: `12 passed (22.0s)`.
+  - **F2 (med), owner's answer 2026-10-21: option A of three** (A: one rule
+    sentence; B: make `fitsBothWidths` fail on an element past the right edge with no
+    sideways-scrolling ancestor; C: record only). `.claude/rules/responsive-layout.md`
+    now says never to put `overflow-x: hidden` on `html` or `body`, because the check
+    cannot see content clipped that way (the gate measured `.card { width: 400px; }
+html, body { overflow-x: hidden; }` giving `12 passed`). The specs are not changed
+    for it.
+  - **F5 (low), fixed.** The ledger README said "two rules"; the seed posts three.
+  - **Left recorded and not fixed, as the coordinator directed:** F3 (any process
+    that loads the ledger config deletes its storage directory), F4 (running
+    `e2e:ledger:serve` by hand seeds the dev directory; unverified) and F6
+    (`NoHousehold` and the admin-only shell are not on the enumerated list and are
+    unreachable under this harness, which signs in as a member who is also an admin).
+    No disagreement with any of the three.
