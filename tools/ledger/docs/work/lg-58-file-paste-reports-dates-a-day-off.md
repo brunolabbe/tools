@@ -3,7 +3,7 @@ id: lg-58
 tool: ledger
 title: A paste reports the dates it names a day off from the workbook's
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [lg-40]
 difficulty: hard
@@ -83,6 +83,35 @@ did about each, or stops and reports if one needs the owner.
 - A web test stores a paste with no row a day off and finds no date named on the
   stored step as differing.
 - `npm run check` and `npm test -- --project ledger` pass.
+
+## Review
+
+**Gate: PASS** — 2026-10-21 · `2d1b22bb..add2fb9f` · Sonnet 5.5, depth full
+
+| Done when                                                                               | Proof                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A day-off row is accepted, the workbook's date kept, `datesDiffering` names it       | `api/test/statements.test.ts` › "a paste that meets a workbook row dated otherwise says so (lg-58)" › "a pasted row a day off a workbook row is accepted, the workbook's date kept and the row named" ✓ (`toEqual` with the entry, and the stored row's date) |
+| 2. Rows that all match on date name no date                                             | same describe › "rows that all match the workbook on date name no date" ✓ (`toEqual` the counts, `not.toHaveProperty("datesDiffering")`; the counts fail on empty output)                                                                                     |
+| 3. The workbook's stored rows are the same before and after                             | same describe › "the workbook's stored rows are the same before and after a paste with a row a day off" ✓ (prefix `toEqual` before, and the length is the workbook's plus the one new row)                                                                    |
+| 4. No log line carries a date from `datesDiffering`                                     | same describe › "no log line carries a date the report names as differing" ✓ (the log is shown non-empty by `STATEMENT_CHAIN_BROKEN`). I also ran the rival-pass refusal through a debug logger: 0 dates in the log, see the full report                      |
+| 5. A web test stores a paste with one row a day off and finds the stored step naming it | `web/test/statement-paste.test.tsx` › "a stored paste with a row the workbook dates a day off names both dates, and the workbook's kept (lg-58)" ✓                                                                                                            |
+| 6. A web test with no row a day off finds no date named as differing                    | same file › "a stored paste the workbook agrees with on every date names no date as differing (lg-58)" ✓ (the heading is found, so it does not pass on an empty screen)                                                                                       |
+| 7. `npm run check` and `npm test -- --project ledger` pass                              | `npm run check` exit 0 at the head, run by me. The ledger project is proven by CI: `test (ubuntu-latest)` pass on `add2fb9f`. I ran 3 spec files locally, 143 of 143                                                                                          |
+
+CI on `add2fb9f`, one read at the end: 9 of 9 pass (`CodeQL`, `changes`, `check` ×2, `codeql`, `dependency-review`, `docker`, `test (ubuntu-latest)`, `test (windows-latest, informational)`). Nothing pending.
+
+- **low** · no `Done when` line depends on it · `nfr:maintainability` · **open decision, two remedies.** `pairAmounts` in `api/src/workbook-days.ts` pairs the rows left over greedily, in pasted order, so the workbook date a report names is not always the nearest one, and the "fewest days apart" that the headers of `workbook-days.ts` and `matchStretch`, and the doc of `readings` in `statements.ts`, state does not hold within a block. Text false in the safe direction: the number of rows named is always the minimum, and each pair is a real one. Reproduction: a workbook of two +3.00 rows listed 12 Feb then 10 Feb, from 1 000.00, and a paste of +3.00 on the 11th, +3.00 on the 13th, then a new −2.50 on the 14th, gives `datesDiffering` 11th↔12th and 13th↔10th (4 days apart in all); 11th↔10th and 13th↔12th names the same two rows 2 days apart. The brute-force oracle found it in 5 of 11,542 accepted pastes (seeds 1001–20000) and 0 of 600 in seeds 1–1000. (A) make the leftover pairing optimal; (B) narrow the three texts to "a nearby date". **Recommend B**: the rule treats every amount-equal pairing alike, and this hot path took two performance commits to get where it is.
+- **low** · no `Done when` line depends on it · `nfr:maintainability` · the plural branch of the screen line ("N rows already stored are dated differently…") has no test on the branch; the web tests cover one row and none. I rendered 2 and 12 rows: the line is right, and the list ("Dates that differ") has 2 and 12 items.
+- **low** · no live call site · `nfr:reliability` · `DAY_NUMBERS` in `workbook-days.ts` is a module-level map with no eviction. Its comment bounds it by "a few thousand" stored dates, but the pasted rows' dates enter it too (`matchBlock` parses every part row before the date check can refuse it). Bounded by paste size times the write rate limit, so not a live problem.
+- **dropped** · "the report can name the rival pass's pairing": refuted. A planted version (A) is caught by the oracle (7 of 3,637 accepted in seeds 1–6000, seeds 179, 423 and 900 among them inside 1–1000); the branch gives 0 such cases in 20,000 seeds.
+- **dropped** · "acceptance changed by reordering `matchPart`'s checks": refuted. 9,000 of 9,000 seeded pastes give the same outcome, error text and stored rows on base and head.
+- **dropped** · "the `<p>` line has no accessible name": a paragraph needs none; the list is found by role and name and counts its items.
+- **dropped** · "Done when 3's test never asserts `datesDiffering`": its fixture is Done when 1's with another date, and the length companion fails if the row were stored instead.
+- **dropped** · "a 3-row paste into a 300-row workbook re-dated by alternating days takes 25 to 43 s at the head": the base takes over 60 s on the same input. Not this branch's, and not in its range.
+- **findings** · the hunt returned 8; 3 carried, 5 dropped.
+- NFR: security ✓ (no new input, no log line added) · performance ✓ (re-timed in the full report: head faster than base in every shape run) · reliability — above · maintainability — above.
+- Nine existing api tests gained `datesDiffering`: each diffed against its own comment, and each matches. Sibling PR #594 (lg-63): `git merge-tree` against its head merges cleanly.
+- Not measured: histories holding rows a previous paste stored (the generators build workbook-only histories); days over `LONGEST_SEARCHED_DAY`; the builder's 16-case grid in full (4 of its cases re-timed, plus 24 re-dated shapes and 3 tiny-paste shapes).
 
 ## Log
 
