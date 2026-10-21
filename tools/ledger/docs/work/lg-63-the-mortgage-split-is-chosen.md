@@ -251,3 +251,18 @@ nothing else in `@ledger/contract`.
     Raised with the orchestrator rather than settled here. Nothing else already
     specified was made free by this work: the other open ledger tickets (lg-38,
     lg-56, lg-58) touch neither the split nor the card.
+- 2026-10-21 — Owner answers given in the landing session, each to a question
+  the builder or gate 1 raised.
+  - **Builder, open decision 1: a person added at a later close while a `shares`
+    record is in effect.** Options: (a) keep — the newcomer takes no share until
+    a new record is filed (the builder's recommendation); (b) the record lapses
+    to `equal` on the arrival date; (c) refuse a ratio that adds a person while a
+    shares record is in effect. Chosen: (a).
+  - **Builder, open decision 2: the contract licence.** `split` and
+    `splitChanged` added to `MortgageOwnPoint`, and `split` to
+    `MortgageOwnResponse`, beyond the brief. Options: (a) keep (the builder's
+    recommendation); (b) the web computes the markers from `/api/mortgage-splits`
+    and `/api/ratios`. Chosen: (a).
+  - **Gate 1, finding 3's open decision: a book with no ratio.** Options: (a)
+    document it in `00-ANALYSIS.md` §4; (b) pass `people.added_at` to `books`;
+    (c) file a ticket. Chosen: (a), the gate's recommendation.
