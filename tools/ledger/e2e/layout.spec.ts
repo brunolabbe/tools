@@ -226,13 +226,17 @@ async function openTab(page: Page, name: string): Promise<void> {
  * screen before it is measured. Receipt and Paste are below: they are forms, and
  * a form with nothing in it is the state that proves least.
  *
- * **Every entry is a row or a figure the seed put there, never a heading.** A
- * heading is rendered while the screen is still loading, when its request has
- * failed, and over empty books, and a screen measured in any of those states is
- * not the screen this spec is about. Stats has one figure per card, so a series
- * that did not arrive fails the case rather than going unmeasured. Admin has no
- * seed of the spec's own: what it shows is the household directory, which the
- * `e2e:ledger:serve` script fills before the API boots, so its entries are those.
+ * **Every entry is a row or a figure, never a heading.** A heading is rendered
+ * while the screen is still loading, when its request has failed, and over empty
+ * books, and a screen measured in any of those states is not the screen this spec
+ * is about. Admin and Household have no seed of the spec's own: what they show is
+ * the household directory, which the `e2e:ledger:serve` script fills before the
+ * API boots, so their entries are those, and Household passes over empty books.
+ * Stats renders 10 cards and the patterns cover 9 of them: "Put into the
+ * mortgage" shows "Nothing was filed to a person in this range." over the seed,
+ * and its series, `contributions`, is already covered by "Put into the buffer".
+ * Each of the 8 series that Stats draws is asserted, so one that did not arrive
+ * fails the case rather than going unmeasured.
  */
 const TABS: readonly (readonly [tab: string, arrived: readonly RegExp[]])[] = [
   ["Home", [/1550\.50/u]],

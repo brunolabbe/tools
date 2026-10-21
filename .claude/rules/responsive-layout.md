@@ -20,8 +20,10 @@ A statement table, a long URL, a row of figures: wrap it in a box with
 `overflow-x: auto` (the downloader's `.tablewrap` is the shape), or let it break
 (`overflow-wrap: anywhere`) — whichever the content can bear. A fixed `width` or
 `min-width` on a container is how a column ends up wider than the window. **Never
-put `overflow-x: hidden` on `html` or `body`**: it hides the sideways scroll the
-layout check measures, so content cut off at the right edge passes it.
+put `overflow-x: hidden` (or `clip`) on any element that wraps the page** —
+`html` and `body` together, `main`, the app shell: the layout check cannot see
+content clipped that way, so content cut off at the right edge passes it. Wide
+content scrolls in its own container instead.
 
 **A new screen gets a case in its tool's `layout.spec.ts`, in the same pull
 request.** There is no router in any tool, so a "screen" is a view state: a tab,

@@ -279,3 +279,22 @@ html, body { overflow-x: hidden; }` giving `12 passed`). The specs are not chang
     (`NoHousehold` and the admin-only shell are not on the enumerated list and are
     unreachable under this harness, which signs in as a member who is also an admin).
     No disagreement with any of the three.
+- 2026-10-21 — Fixed at landing by owner choice: gate 2, F7 — "the new sentence in
+  `.claude/rules/responsive-layout.md` names `html` or `body`. The hazard it
+  describes is wider than that". Owner's choice A′ of three (A′: reword the rule
+  sentence at landing; B: detect clipping in the spec; C: keep the sentence and
+  record F7). The sentence now says never to put `overflow-x: hidden` (or `clip`) on
+  any element that wraps the page — `html` and `body` together, `main`, the app
+  shell — because the layout check cannot see content clipped that way, and that wide
+  content scrolls in its own container instead. No spec is changed.
+  `grep -c "on any element that wraps the page" .claude/rules/responsive-layout.md`
+  → `1`; `grep -c "hidden. on .html" .claude/rules/responsive-layout.md` → `0`.
+- 2026-10-21 — Fixed at landing by owner choice: gate 2, F8 — "the new comment on
+  `TABS` in `tools/ledger/e2e/layout.spec.ts` is false in two places". The comment
+  now says what the gate measured: Admin and Household both take their entries from
+  the directory the serve script fills (Household passes over empty books), Stats
+  renders 10 cards and the patterns cover 9, "Put into the mortgage" shows "Nothing
+  was filed to a person in this range." and its series `contributions` is covered by
+  "Put into the buffer", and each of the 8 series is asserted.
+  `grep -c "the seed put there\|one figure per card" tools/ledger/e2e/layout.spec.ts`
+  → `0`.
