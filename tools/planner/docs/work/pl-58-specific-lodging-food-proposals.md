@@ -911,3 +911,35 @@ every reading except the Pit Caribou sensitivity, and the defects it finds are t
 lookup catches. Measured per plan, it is cheap. The reasons to choose option 4 instead are
 just as measured: the margin is 0.5 points on 40 objects, the margin rests on one judgement
 call, and the lookup's reach is 9% of these two specialists' mentions.
+
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, low 1 — "in
+  `invention/pl58-2026-10-21/classification.json`, `parc national de la gaspésie,
+mont-albert sector|sainte-anne-des-monts` is `named-premises` with no `park-visit`
+  tag." The tag is added to that key. Regenerated with `PLANNER_INVENTION_OFFLINE=1
+node --import tsx tools/planner/api/test/live/invention.ts --after pl58-2026-10-21` →
+  exit 0, `stratum draw (pl58-2026-10-21, seed 20261020): 51 lodging-or-food
+named-premises keys; 51 keys taken for 40 of 40 objects (target); without the
+park-visit objects: 37 objects, not confirmed 5 of 37, 13.5% (5.9%–28.0%)`. The same
+  command with `PLANNER_INVENTION_CHECK=1` added → exit 0, "the committed record equals
+  its regeneration" (taken from a file, no pipe). The default check
+  (`PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts`, no `--after`) → exit 0, `111 live records, 2594
+place mentions, 1019 distinct places`. `cmp` of `invention/2026-10-17.json` against the shared checkout's copy → exit 0, and
+  `git diff --stat 2d1b22bb HEAD`
+  on that path is empty. The run's record changed in three places only: the Gaspésie
+  row gained the tag, `edgeTags` `named-premises: park-visit` went 35 → 36, and
+  `withoutParks` went from 38 objects (`5 of 38, 13.2% (5.8%–27.3%)`) to 37 objects
+  (`5 of 37, 13.5% (5.9%–28.0%)`).
+- 2026-10-21 — Correction to the Build 6 figures (landing, Sonnet 5.5). The Build 6 entry
+  above states the without-parks row as **38 objects, 5 not confirmed, 13.2% (5.8–27.3)**,
+  and says that setting aside the tagged rows "gives the same 38, because key 49 keeps the
+  object", and that Build 6's definition of parks "give[s] 38 here". Those three
+  statements were true of the classification as built and are not true of the one that
+  landed. With key 49 (`parc national de la gaspésie, mont-albert sector|sainte-anne-des-monts`)
+  tagged `park-visit`, every key of the Gaspésie object is tagged, and the harness sets the
+  object aside with the other parks. **The without-parks row is 37 objects, 5 not
+  confirmed, 13.5% (5.9–28.0).** That is the figure the Build 6 table already gave as its
+  "also without the Gaspésie park object" sensitivity row, so it is now the harness's
+  own row and not a sensitivity. It still clears the bar (lower bound 5.9, above 5). The
+  with-parks headline (40 objects, 5 not confirmed, 12.5%, 5.5–26.1) and every other row
+  are unchanged. The Build 6 entry is not edited.

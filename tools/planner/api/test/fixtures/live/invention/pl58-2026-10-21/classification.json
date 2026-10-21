@@ -2599,7 +2599,9 @@
     },
     "parc national de la gaspésie, mont-albert sector|sainte-anne-des-monts": {
       "class": "named-premises",
-      "edge": []
+      "edge": [
+        "park-visit"
+      ]
     },
     "parc national de la gaspésie, mont-albert sector|sainte-anne-des-monts, québec": {
       "class": "settlement-or-area",

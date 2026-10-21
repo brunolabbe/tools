@@ -196,7 +196,7 @@
     "edgeTags": {
       "route-or-transit: transit-node": 44,
       "kind-of-place: placeholder": 20,
-      "named-premises: park-visit": 35,
+      "named-premises: park-visit": 36,
       "named-premises: established-descriptive-name": 15,
       "named-premises: natural-feature": 20,
       "kind-of-place: locality-plus-category": 18,
@@ -515,8 +515,8 @@
       "campo de' fiori market|rome": "Campo de' Fiori Rome piazza market"
     },
     "withoutParks": {
-      "objects": 38,
-      "notConfirmed": "5 of 38, 13.2% (5.8%–27.3%)"
+      "objects": 37,
+      "notConfirmed": "5 of 37, 13.5% (5.9%–28.0%)"
     }
   },
   "rows": [
@@ -14084,7 +14084,9 @@
       "name": "Parc national de la Gaspésie, Mont-Albert sector",
       "locality": "Sainte-Anne-des-Monts",
       "class": "named-premises",
-      "edge": [],
+      "edge": [
+        "park-visit"
+      ],
       "families": {
         "haiku": 1,
         "opus": 1
