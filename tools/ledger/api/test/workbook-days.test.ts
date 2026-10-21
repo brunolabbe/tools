@@ -895,4 +895,25 @@ describe("the pairing a paste reports its differing dates from (lg-58)", () => {
 
     expect(matchStretch(rows, 0, bank, () => true)).toEqual([0, 1, 2]);
   });
+
+  test("among starts naming as many rows, a paste wholly inside the history names the nearest dates", () => {
+    // The bank's −5.00 on the 22nd fits from the workbook's −5.00 of the 23rd,
+    // a day off, and from its −5.00 of the 20th, in a block with the +3.00 of
+    // the 21st, two days off. The later row is weighed first.
+    const db = workbookDb([
+      ["2026-02-23", -500],
+      ["2026-02-26", 500],
+      ["2026-02-20", -500],
+      ["2026-02-21", 300],
+      ["2026-03-04", 2_000],
+    ]);
+
+    expect(paste(db, bankRows([["2026-02-22", -500]]), 100_000)).toEqual({
+      rowsAdded: 0,
+      rowsAlreadyPresent: 1,
+      tailBalanceCents: 101_800,
+      rowsInInbox: 0,
+      datesDiffering: [{ bankDate: "2026-02-22", workbookDate: "2026-02-23", amountCents: -500 }],
+    });
+  });
 });

@@ -159,9 +159,19 @@ export function daysAfter(date: string, days: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+// A search weighs the same few dates hundreds of thousands of times, and parsing
+// one is most of what weighing a pair costs (lg-58). A ledger holds a few
+// thousand dates in all, so the cache stays small.
+const DAY_NUMBERS = new Map<string, number>();
+
 /** A `yyyy-mm-dd` date as a count of days, for distances between dates. */
 function dayNumber(date: string): number {
-  return Math.round(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
+  let day = DAY_NUMBERS.get(date);
+  if (day === undefined) {
+    day = Math.round(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
+    DAY_NUMBERS.set(date, day);
+  }
+  return day;
 }
 
 /** How many calendar days apart two `yyyy-mm-dd` dates are, either way round. */
