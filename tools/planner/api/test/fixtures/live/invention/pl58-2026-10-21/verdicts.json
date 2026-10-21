@@ -10,5 +10,905 @@
   ],
   "osm": "Copied by the harness from pl-56's hours-coverage record for a checked key it has a row for; null for the keys pl-56 never read. A place pl-56 located is not thereby real."
  },
- "checks": {}
+ "checks": {
+  "parc national de la gaspésie|sainte-anne-des-monts": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-21",
+     "note": "Gaspésie National Park, a Sépaq park in the interior of the Gaspé peninsula, south of Sainte-Anne-des-Monts; its Mont-Albert sector is open year-round. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-21",
+     "note": "Regional tourism listing for Parc national de la Gaspésie. Seen in the search result."
+    }
+   ],
+   "note": "A park-visit key: the evidence confirms the park, not a premises."
+  },
+  "camping des-rosiers|forillon national park": {
+   "verdict": "exists",
+   "queries": [
+    "Camping Des-Rosiers Forillon National Park"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.tourisme-gaspesie.com/en/visiter/camping-des-rosiers/3685505B.html",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Camping Des-Rosiers – Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/camping/avant-front",
+     "readOn": "2026-10-21",
+     "note": "Parks Canada frontcountry camping page: Des-Rosiers is one of three frontcountry campgrounds, in the North Area. Seen in the search result."
+    }
+   ]
+  },
+  "camping cap-bon-ami|forillon national park": {
+   "verdict": "exists",
+   "queries": [
+    "Camping Cap-Bon-Ami Parc national Forillon"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-cap-bon-ami/3685505A.html",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Camping Cap-Bon-Ami, Forillon National Park, in the park's northern sector. Seen in the search result."
+    }
+   ]
+  },
+  "pizzarium|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Pizzarium Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.turismoroma.it/fr/node/130654",
+     "readOn": "2026-10-21",
+     "note": "Turismo Roma (the city's tourism office) listing for Pizzarium. Seen in the search result."
+    },
+    {
+     "url": "https://www.afar.com/places/pizzarium-rome",
+     "readOn": "2026-10-21",
+     "note": "Afar guide entry: Gabriele Bonci's pizza al taglio shop at Via della Meloria 43, near the Vatican. Seen in the search result."
+    }
+   ]
+  },
+  "atkins et frères|mont-louis": {
+   "verdict": "exists",
+   "queries": [
+    "Atkins et Frères Mont-Louis"
+   ],
+   "evidence": [
+    {
+     "url": "https://artisansaloeuvre.com/en/artisans/economusee-meat-dresser-of-the-sea/",
+     "readOn": "2026-10-21",
+     "note": "Économusée network page: Atkins & Frères, seafood smokehouse at 1 rue du Chanoine-Richard, Mont-Louis, QC, since 1993, with an interpretive trail and tastings. Seen in the search result."
+    }
+   ]
+  },
+  "mercato trionfale|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Mercato Trionfale Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://turismoroma.it/it/luoghi/mercato-rionale-trionfale",
+     "readOn": "2026-10-21",
+     "note": "Turismo Roma: Mercato rionale Trionfale, over 270 stalls, Via Andrea Doria. Seen in the search result."
+    }
+   ]
+  },
+  "memories varadero beach resort|varadero": {
+   "verdict": "exists",
+   "queries": [
+    "Memories Varadero Beach Resort Varadero"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.sunwing.ca/hoteldesc/En/VRAMVB",
+     "readOn": "2026-10-21",
+     "note": "Sunwing (tour operator) hotel description: Memories Varadero Beach Resort, on Varadero Beach. Seen in the search result."
+    },
+    {
+     "url": "https://vacations.aircanada.com/en/accommodation-details/HID-822272/memories-varadero-beach-resort",
+     "readOn": "2026-10-21",
+     "note": "Air Canada Vacations listing, on the beach about 42 km from Varadero airport; renovations dated 2024. Seen in the search result."
+    }
+   ]
+  },
+  "hotel slon|ljubljana": {
+   "verdict": "exists",
+   "queries": [
+    "Hotel Slon Ljubljana"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.bestwestern.at/en/hotels/Ljubljana/Best-Western-Premier-Hotel-Slon",
+     "readOn": "2026-10-21",
+     "note": "Best Western Premier Hotel Slon, central Ljubljana. Seen in the search result."
+    },
+    {
+     "url": "https://www.rtvslo.si/news-in-english/slovenia-revealed/a-hotel-in-ljubljana-is-named-after-an-archduke-s-elephant/328973",
+     "readOn": "2026-10-21",
+     "note": "RTV Slovenia feature on the Ljubljana hotel named after an archduke's elephant (slon). Seen in the search result."
+    }
+   ]
+  },
+  "forillon national park|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Forillon National Park Gaspé Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/forillon-national-park/activities",
+     "readOn": "2026-10-21",
+     "note": "Regional tourism listing for Forillon National Park; the search summary says the entire park lies within the municipality of Gaspé. Seen in the search result."
+    },
+    {
+     "url": "https://www.canada.ca/en/parks-canada/news/2022/12/forillon-national-park-management-plan-tabled-in-parliament.html",
+     "readOn": "2026-10-21",
+     "note": "Parks Canada news release on Forillon National Park's management plan, December 2022. Seen in the search result."
+    }
+   ],
+   "note": "A park-visit key: the evidence confirms the park, not a premises."
+  },
+  "antico forno roscioli|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Antico Forno Roscioli Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.turismoroma.it/it/accoglienza/antico-forno-roscioli",
+     "readOn": "2026-10-21",
+     "note": "Turismo Roma listing: Antico Forno Roscioli, Via dei Chiavari 34. Seen in the search result."
+    },
+    {
+     "url": "https://www.gamberorosso.it/notizie/ristoranti/riapre-lantico-forno-roscioli-di-roma-new-look-e-una-nuova-passione-per-il-girarrosto/",
+     "readOn": "2026-10-21",
+     "note": "Gambero Rosso: the bakery reopened with a new look and a rotisserie. Seen in the search result."
+    }
+   ]
+  },
+  "cap-bon-ami campground (forillon national park)|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Camping Cap-Bon-Ami Parc national Forillon"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-cap-bon-ami/3685505A.html",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Camping Cap-Bon-Ami, Forillon National Park, in the park's northern sector. Seen in the search result."
+    }
+   ],
+   "note": "Forillon National Park lies within the municipality of Gaspé, so the key's locality holds."
+  },
+  "cap-bon-ami campground|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Camping Cap-Bon-Ami Parc national Forillon"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-cap-bon-ami/3685505A.html",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Camping Cap-Bon-Ami, Forillon National Park, in the park's northern sector. Seen in the search result."
+    }
+   ],
+   "note": "Forillon National Park lies within the municipality of Gaspé, so the key's locality holds."
+  },
+  "fumoir d'antan|gaspé": {
+   "verdict": "exists-elsewhere",
+   "queries": [
+    "Fumoir d'Antan Gaspé",
+    "\"Fumoir d'Antan\" Gaspésie fumoir Rivière-au-Renard"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourismeilesdelamadeleine.com/en/le-fumoir-d-antan-economusee-de-la-boucanerie/smokehouse",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Îles de la Madeleine: Le Fumoir d'Antan, herring smokehouse and Économusée, 27 chemin du Quai, Havre-aux-Maisons, operating since 1942. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/le-fumoir-d-antan",
+     "readOn": "2026-10-21",
+     "note": "Regional tourism listing for Le Fumoir d'Antan. Seen in the search result."
+    }
+   ],
+   "actualLocality": "Havre-aux-Maisons, Îles-de-la-Madeleine, QC",
+   "note": "Every listing places it on the Magdalen Islands, not on the Gaspé peninsula; the second query found no Fumoir d'Antan in Gaspé or Rivière-au-Renard."
+  },
+  "ljubljana central market|ljubljana": {
+   "verdict": "exists",
+   "queries": [
+    "Ljubljana Central Market Osrednja tržnica Plečnik"
+   ],
+   "evidence": [
+    {
+     "url": "https://visitljubljana.com/en/poi/central-market",
+     "readOn": "2026-10-21",
+     "note": "Visit Ljubljana (city tourism) entry: Central Market, with opening hours. Seen in the search result."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Ljubljana_Central_Market",
+     "readOn": "2026-10-21",
+     "note": "Ljubljana Central Market, Plečnik's market on the Ljubljanica. Seen in the search result."
+    }
+   ]
+  },
+  "hotel raphael|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Hotel Raphael Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.greatsmallhotels.com/rome-boutique-hotels/hotel-raphael-relais-%26-chateaux",
+     "readOn": "2026-10-21",
+     "note": "Great Small Hotels entry: Hotel Raphael, Relais & Châteaux, Rome. Seen in the search result."
+    },
+    {
+     "url": "https://www.thehotelguru.com/hotel/hotel-raphael-rome",
+     "readOn": "2026-10-21",
+     "note": "The Hotel Guru review: Hotel Raphael, Largo Febo 2, near Piazza Navona. Seen in the search result."
+    }
+   ]
+  },
+  "caffè san marco|trieste": {
+   "verdict": "exists",
+   "queries": [
+    "Caffè San Marco Trieste"
+   ],
+   "evidence": [
+    {
+     "url": "https://en.wikipedia.org/wiki/Caff%C3%A8_San_Marco",
+     "readOn": "2026-10-21",
+     "note": "Caffè San Marco (Antico Caffè San Marco), Via Cesare Battisti 18, Trieste, opened 1914. Seen in the search result."
+    },
+    {
+     "url": "https://www.turismofvg.it/en/food-and-wine/antico-caffe-san-marco",
+     "readOn": "2026-10-21",
+     "note": "Friuli Venezia Giulia tourism listing for Antico Caffè San Marco, with opening hours. Seen in the search result."
+    }
+   ]
+  },
+  "hotel sacher wien|vienna": {
+   "verdict": "exists",
+   "queries": [
+    "Hotel Sacher Wien Vienna"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.theworlds50best.com/hotels/best-in-the-world/the-list/hotel-sacher-vienna.html",
+     "readOn": "2026-10-21",
+     "note": "The World's 50 Best Hotels: Hotel Sacher Vienna, opposite the State Opera, No. 49 in 2025. Seen in the search result."
+    },
+    {
+     "url": "https://www.lhw.com/Hotel/Hotel-Sacher-Wien-Vienna-Austria",
+     "readOn": "2026-10-21",
+     "note": "Leading Hotels of the World listing for Hotel Sacher Wien. Seen in the search result."
+    }
+   ]
+  },
+  "figlmüller|vienna": {
+   "verdict": "exists",
+   "queries": [
+    "Figlmüller Vienna"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.cremeguides.com/en/vienna/figlmueller-a-schnitzel-with-a-long-tradition/",
+     "readOn": "2026-10-21",
+     "note": "Crème Guides: Figlmüller, Wollzeile 5 and Bäckerstraße 6, Vienna's 1st district. Seen in the search result."
+    },
+    {
+     "url": "https://www.afar.com/places/figlmuller-vienna-wien",
+     "readOn": "2026-10-21",
+     "note": "Afar guide entry for Figlmüller, Vienna. Seen in the search result."
+    }
+   ]
+  },
+  "mercato di testaccio|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Mercato di Testaccio Rome market"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.wantedinrome.com/yellowpage/testaccio-market-in-rome.html",
+     "readOn": "2026-10-21",
+     "note": "Wanted in Rome directory: Testaccio Market, in its covered building since 2012, Monday to Saturday. Seen in the search result."
+    },
+    {
+     "url": "https://timeout.com/rome/shopping/mercato-testaccio",
+     "readOn": "2026-10-21",
+     "note": "Time Out Rome entry for Mercato Testaccio. Seen in the search result."
+    }
+   ]
+  },
+  "savoia excelsior palace|trieste": {
+   "verdict": "exists",
+   "queries": [
+    "Savoia Excelsior Palace Trieste"
+   ],
+   "evidence": [
+    {
+     "url": "https://guide.michelin.com/ca/fr/hotels-stays/trieste/savoia-excelsior-palace-trieste-starhotels-collezione-4751",
+     "readOn": "2026-10-21",
+     "note": "Michelin Guide hotel entry: Savoia Excelsior Palace Trieste – Starhotels Collezione. Seen in the search result."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Savoia_Excelsior_Palace",
+     "readOn": "2026-10-21",
+     "note": "Savoia Excelsior Palace, Trieste seafront hotel, opened 1911. Seen in the search result."
+    }
+   ]
+  },
+  "brasserie auval|val-d'espoir": {
+   "verdict": "exists",
+   "queries": [
+    "Brasserie Auval Val-d'Espoir"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.themain.com/val-despoir/brewery/brasserie-auval",
+     "readOn": "2026-10-21",
+     "note": "The Main: Brasserie Auval, 397 route des Pères, Val-d'Espoir, QC, founded 2015. Seen in the search result."
+    },
+    {
+     "url": "https://www.tasteatlas.com/brasserie-auval",
+     "readOn": "2026-10-21",
+     "note": "TasteAtlas entry for Brasserie Auval. Seen in the search result."
+    }
+   ],
+   "note": "The pages show the brewery and its beers; current opening hours were not in the results, so operation today is not otherwise established."
+  },
+  "petit-gaspé campground, forillon national park|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Petit-Gaspé campground Forillon National Park Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Camping Petit-Gaspé, Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/camping/avant-front",
+     "readOn": "2026-10-21",
+     "note": "Parks Canada frontcountry camping page: Petit-Gaspé (South Area), Des-Rosiers and Cap-Bon-Ami (North Area). Seen in the search result."
+    }
+   ],
+   "note": "Forillon National Park lies within the municipality of Gaspé, so the key's locality holds."
+  },
+  "fumoir monsieur émile|rivière-au-renard": {
+   "verdict": "exists-elsewhere",
+   "queries": [
+    "Fumoir Monsieur Émile Gaspé",
+    "\"Fumoir Monsieur Émile\"",
+    "fumoir Monsieur Émile poisson fumé Gaspésie Anse-au-Griffon Rivière-au-Renard"
+   ],
+   "evidence": [
+    {
+     "url": "https://gentologie.com/en/?p=60611",
+     "readOn": "2026-10-21",
+     "note": "Fetched. 'Monsieur Émile Smokehouse — Art of smoking salmon', 574 route d'Irlande, Percé, QC G0C 2L0; the page links to fumoir-monsieur-emile.com. Published 2025-08-28, updated 2026-07-24."
+    }
+   ],
+   "actualLocality": "Percé, QC (574 route d'Irlande)",
+   "note": "Query 1 and query 2 found nothing; query 3 (French) found the Gentologie page, as in pl-57. Rivière-au-Renard is a sector of the town of Gaspé; Percé is a different municipality. Whether the smokehouse operates today is not otherwise established."
+  },
+  "iberostar paraíso del mar|playa paraíso, riviera maya": {
+   "verdict": "exists",
+   "queries": [
+    "Iberostar Paraíso del Mar Playa Paraíso Riviera Maya"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.resortpass.com/es-MX/hotels/iberostar-paraiso-del-mar",
+     "readOn": "2026-10-21",
+     "note": "ResortPass listing: Iberostar Waves Paraíso del Mar, all-inclusive, in the Iberostar Paraíso complex. Seen in the search result."
+    },
+    {
+     "url": "https://www.oyster.com/es/playa-del-carmen/hotels/iberostar-paraiso-del-mar/",
+     "readOn": "2026-10-21",
+     "note": "Oyster review: a 388-room all-inclusive resort beside Iberostar Paraíso Beach. Seen in the search result."
+    }
+   ],
+   "note": "Now trading as Iberostar Waves Paraíso del Mar; the candidate's name is the older one."
+  },
+  "iberostar selection bávaro|punta cana": {
+   "verdict": "exists",
+   "queries": [
+    "Iberostar Selection Bávaro Punta Cana"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.golfbreaks.com/en-gb/holidays/dominican-republic/iberostar-bavaro/",
+     "readOn": "2026-10-21",
+     "note": "Golfbreaks listing: Iberostar Selection Bávaro Suites, Bávaro Beach (Arena Gorda), about 20 minutes from Punta Cana airport. Seen in the search result."
+    },
+    {
+     "url": "https://vacations.aircanada.com/en/accommodation-details/PUJBRO/iberostar-selection-bavaro-suites",
+     "readOn": "2026-10-21",
+     "note": "Air Canada Vacations listing, about 24 km from Punta Cana International Airport. Seen in the search result."
+    }
+   ],
+   "note": "The official name carries 'Suites'. Bávaro lies in the Punta Cana resort area the key names."
+  },
+  "fumoir monsieur émile|gaspé (anse-au-griffon)": {
+   "verdict": "exists-elsewhere",
+   "queries": [
+    "Fumoir Monsieur Émile Gaspé",
+    "\"Fumoir Monsieur Émile\"",
+    "fumoir Monsieur Émile poisson fumé Gaspésie Anse-au-Griffon Rivière-au-Renard"
+   ],
+   "evidence": [
+    {
+     "url": "https://gentologie.com/en/?p=60611",
+     "readOn": "2026-10-21",
+     "note": "Fetched. 'Monsieur Émile Smokehouse — Art of smoking salmon', 574 route d'Irlande, Percé, QC G0C 2L0; the page links to fumoir-monsieur-emile.com. Published 2025-08-28, updated 2026-07-24."
+    }
+   ],
+   "actualLocality": "Percé, QC (574 route d'Irlande)",
+   "note": "Query 1 and query 2 found nothing; query 3 (French) found the Gentologie page, as in pl-57. L'Anse-au-Griffon is a sector of the town of Gaspé; Percé is a different municipality. Whether the smokehouse operates today is not otherwise established."
+  },
+  "microbrasserie le naufrageur|carleton-sur-mer": {
+   "verdict": "exists",
+   "queries": [
+    "Microbrasserie Le Naufrageur Carleton-sur-Mer"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/microbrasserie-le-naufrageur/3645440.html",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Microbrasserie Le Naufrageur, 586 boulevard Perron, Carleton-sur-Mer, open year-round. Seen in the search result."
+    }
+   ]
+  },
+  "odprta kuhna|ljubljana": {
+   "verdict": "exists",
+   "queries": [
+    "Odprta Kuhna Ljubljana"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.slovenia.info/en/press-centre/news-of-the-tourism-press-agency/32294-the-13th-season-of-odprta-kuhna-kicks-off-at-pogacarjev-trg",
+     "readOn": "2026-10-21",
+     "note": "Slovenian Tourist Board release: a season of Odprta kuhna opens at Pogačarjev trg, Ljubljana. Seen in the search result."
+    },
+    {
+     "url": "https://www.inyourpocket.com/slovenia/ljubljana/events/odprta-kuhna",
+     "readOn": "2026-10-21",
+     "note": "In Your Pocket: Odprta Kuhna, Friday food market, 2026 season 7 March to 31 October. Seen in the search result."
+    }
+   ],
+   "note": "A seasonal Friday food market on Pogačarjev trg, not a fixed restaurant."
+  },
+  "camping des rivières|forillon national park": {
+   "verdict": "not-found",
+   "queries": [
+    "Camping des Rivières Forillon National Park",
+    "\"Camping des Rivières\"",
+    "Camping des Rivières parc national de Forillon terrain de camping Gaspé"
+   ],
+   "evidence": [
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/camping/avant-front",
+     "readOn": "2026-10-21",
+     "note": "Parks Canada frontcountry camping page names three campgrounds: Petit-Gaspé, Des-Rosiers and Cap-Bon-Ami; none is Des Rivières. Seen in the search result."
+    },
+    {
+     "url": "https://www.mayenne-tourisme.com/en/offer/camping-des-rivieres-daon-en-554866",
+     "readOn": "2026-10-21",
+     "note": "Query 2's top result: a Camping des Rivières at Daon, Mayenne, France, unrelated. Seen in the search result."
+    }
+   ],
+   "note": "Every query in the budget was run; pl-56 has no OSM row for this key. We did not find it."
+  },
+  "pit caribou|gaspé": {
+   "verdict": "exists-elsewhere",
+   "queries": [
+    "Brasserie Pit Caribou L'Anse-à-Beaufils",
+    "Pit Caribou Gaspé pub brasserie ville de Gaspé"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.tourisme-gaspesie.com/en/local-flavours/microbrasserie-pit-caribou/",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Microbrasserie Pit Caribou, 27 rue de l'Anse, L'Anse-à-Beaufils (Percé), summer and winter hours. Seen in the search result."
+    },
+    {
+     "url": "https://www.canada.ca/fr/developpement-economique-regions-quebec/blogue/histoires-de-reussite/pit-caribou-brasser-des-affaires-pres-du-rocher-perce.html",
+     "readOn": "2026-10-21",
+     "note": "Canada Economic Development for Quebec Regions success story on Pit Caribou, near the Percé Rock. Seen in the search result."
+    }
+   ],
+   "actualLocality": "L'Anse-à-Beaufils, Percé, QC (brewery); a pub in Percé",
+   "note": "The brewery is at L'Anse-à-Beaufils in the municipality of Percé, and its pubs are in Percé and Montréal; the second query found no Pit Caribou in the town of Gaspé. Judged as pl-57 judged Fumoir Monsieur Émile: Percé is not Gaspé."
+  },
+  "gîte du mont-albert|sainte-anne-des-monts": {
+   "verdict": "exists",
+   "queries": [
+    "Gîte du Mont-Albert Parc national de la Gaspésie"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/gite-du-mont-albert",
+     "readOn": "2026-10-21",
+     "note": "Regional tourism listing: Gîte du Mont-Albert, 2001 route du Parc, Sainte-Anne-des-Monts, inside Parc national de la Gaspésie. Seen in the search result."
+    },
+    {
+     "url": "https://www.sepaq.com/pq/gma/",
+     "readOn": "2026-10-21",
+     "note": "Sépaq's page for the Gîte du Mont-Albert. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie (sepaq)|sainte-anne-des-monts": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-21",
+     "note": "Gaspésie National Park, a Sépaq park in the interior of the Gaspé peninsula, south of Sainte-Anne-des-Monts; its Mont-Albert sector is open year-round. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-21",
+     "note": "Regional tourism listing for Parc national de la Gaspésie. Seen in the search result."
+    }
+   ],
+   "note": "A park-visit key: the evidence confirms the park, not a premises."
+  },
+  "café central|vienna": {
+   "verdict": "exists",
+   "queries": [
+    "Café Central Vienna"
+   ],
+   "evidence": [
+    {
+     "url": "https://en.wikipedia.org/wiki/Caf%C3%A9_Central",
+     "readOn": "2026-10-21",
+     "note": "Café Central, Herrengasse 14, Palais Ferstel, Vienna, opened 1876. Seen in the search result."
+    },
+    {
+     "url": "https://www.inyourpocket.com/vienna/cafe-central_63924v",
+     "readOn": "2026-10-21",
+     "note": "In Your Pocket Vienna entry for Café Central. Seen in the search result."
+    }
+   ],
+   "note": "One result (vol.at) reports a closure for renovation until an autumn reopening; the article's date is not shown, and a renovation is not a permanent closure."
+  },
+  "antico caffè san marco|trieste": {
+   "verdict": "exists",
+   "queries": [
+    "Caffè San Marco Trieste"
+   ],
+   "evidence": [
+    {
+     "url": "https://en.wikipedia.org/wiki/Caff%C3%A8_San_Marco",
+     "readOn": "2026-10-21",
+     "note": "Caffè San Marco (Antico Caffè San Marco), Via Cesare Battisti 18, Trieste, opened 1914. Seen in the search result."
+    },
+    {
+     "url": "https://www.turismofvg.it/en/food-and-wine/antico-caffe-san-marco",
+     "readOn": "2026-10-21",
+     "note": "Friuli Venezia Giulia tourism listing for Antico Caffè San Marco, with opening hours. Seen in the search result."
+    }
+   ]
+  },
+  "parc national du bic|rimouski": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national du Bic Rimouski Sépaq"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.bonjourquebec.com/en/listing/to-see-and-do/parc-national-du-bic/0o4e",
+     "readOn": "2026-10-21",
+     "note": "Bonjour Québec (provincial tourism) listing: Parc national du Bic, visitor centre at 3382 route 132 Ouest, Rimouski. Seen in the search result."
+    }
+   ],
+   "note": "A park-visit key: the evidence confirms the park, not a premises."
+  },
+  "mont-albert campground, parc national de la gaspésie|sainte-anne-des-monts": {
+   "verdict": "exists",
+   "queries": [
+    "Camping du Mont-Albert Parc national de la Gaspésie Sépaq"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.sepaq.com/en/reservation/camping/parc-national-de-la-gaspesie/camping-mont-albert",
+     "readOn": "2026-10-21",
+     "note": "Sépaq reservation page: Camping du Mont-Albert, Parc national de la Gaspésie, 2026 season late April to late November. Seen in the search result."
+    }
+   ]
+  },
+  "brasserie pit caribou|l'anse-à-beaufils": {
+   "verdict": "exists",
+   "queries": [
+    "Brasserie Pit Caribou L'Anse-à-Beaufils"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.tourisme-gaspesie.com/en/local-flavours/microbrasserie-pit-caribou/",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Microbrasserie Pit Caribou, 27 rue de l'Anse, L'Anse-à-Beaufils (Percé), summer and winter hours. Seen in the search result."
+    },
+    {
+     "url": "https://www.canada.ca/fr/developpement-economique-regions-quebec/blogue/histoires-de-reussite/pit-caribou-brasser-des-affaires-pres-du-rocher-perce.html",
+     "readOn": "2026-10-21",
+     "note": "Canada Economic Development for Quebec Regions success story on Pit Caribou, near the Percé Rock. Seen in the search result."
+    }
+   ]
+  },
+  "camping petit-gaspé|forillon national park": {
+   "verdict": "exists",
+   "queries": [
+    "Petit-Gaspé campground Forillon National Park Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Camping Petit-Gaspé, Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/camping/avant-front",
+     "readOn": "2026-10-21",
+     "note": "Parks Canada frontcountry camping page: Petit-Gaspé (South Area), Des-Rosiers and Cap-Bon-Ami (North Area). Seen in the search result."
+    }
+   ]
+  },
+  "pit caribou|l'anse-à-beaufils": {
+   "verdict": "exists",
+   "queries": [
+    "Brasserie Pit Caribou L'Anse-à-Beaufils"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.tourisme-gaspesie.com/en/local-flavours/microbrasserie-pit-caribou/",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Microbrasserie Pit Caribou, 27 rue de l'Anse, L'Anse-à-Beaufils (Percé), summer and winter hours. Seen in the search result."
+    },
+    {
+     "url": "https://www.canada.ca/fr/developpement-economique-regions-quebec/blogue/histoires-de-reussite/pit-caribou-brasser-des-affaires-pres-du-rocher-perce.html",
+     "readOn": "2026-10-21",
+     "note": "Canada Economic Development for Quebec Regions success story on Pit Caribou, near the Percé Rock. Seen in the search result."
+    }
+   ]
+  },
+  "nuovo mercato esquilino|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Nuovo Mercato Esquilino Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.wantedinrome.com/yellowpage/nuovo-mercato-esquilino.html",
+     "readOn": "2026-10-21",
+     "note": "Wanted in Rome directory: Nuovo Mercato Esquilino, Via Principe Amedeo 184, Monday to Saturday. Seen in the search result."
+    },
+    {
+     "url": "https://www.timeout.com/rome/shopping/nuovo-mercato-esquilino",
+     "readOn": "2026-10-21",
+     "note": "Time Out Rome entry for Mercato Esquilino. Seen in the search result."
+    }
+   ],
+   "note": "A Wanted in Rome news item reports a health-authority closure on 2 November of an unstated year; nothing shows it permanent."
+  },
+  "mercato centrale roma|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Mercato Centrale Roma"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.turismoroma.it/it/accoglienza/mercato-centrale-roma",
+     "readOn": "2026-10-21",
+     "note": "Turismo Roma listing: Mercato Centrale Roma, Termini station. Seen in the search result."
+    },
+    {
+     "url": "https://www.frommers.com/destinations/rome/restaurants/mercato-centrale-roma",
+     "readOn": "2026-10-21",
+     "note": "Frommer's entry for Mercato Centrale Roma. Seen in the search result."
+    }
+   ]
+  },
+  "naschmarkt|vienna": {
+   "verdict": "exists",
+   "queries": [
+    "Naschmarkt Vienna market"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.austria.info/en-us/locations/naschmarkt/",
+     "readOn": "2026-10-21",
+     "note": "Austrian National Tourist Office: Naschmarkt, Vienna, with opening hours. Seen in the search result."
+    },
+    {
+     "url": "https://wien.gv.at/english/fima/h-naschmarkt.htm",
+     "readOn": "2026-10-21",
+     "note": "City of Vienna market authority's history of the Naschmarkt. Seen in the search result."
+    }
+   ]
+  },
+  "armando al pantheon|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Armando al Pantheon Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://turismoroma.it/it/accoglienza/armando-al-pantheon",
+     "readOn": "2026-10-21",
+     "note": "Turismo Roma listing: Armando al Pantheon, Salita de' Crescenzi 31, since 1961. Seen in the search result."
+    },
+    {
+     "url": "https://www.frommers.com/destinations/rome/restaurants/armando-al-pantheon",
+     "readOn": "2026-10-21",
+     "note": "Frommer's entry for Armando al Pantheon. Seen in the search result."
+    }
+   ]
+  },
+  "sant'eustachio il caffè|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Sant'Eustachio il Caffè Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://www.italia.it/it/lazio/roma/caffe-sant-eustachio",
+     "readOn": "2026-10-21",
+     "note": "Italia.it (national tourism portal): Caffè Sant'Eustachio, roastery since 1938. Seen in the search result."
+    },
+    {
+     "url": "https://www.theinfatuation.com/rome/reviews/sant-eustachio-il-caffe",
+     "readOn": "2026-10-21",
+     "note": "The Infatuation review of Sant'Eustachio Il Caffè. Seen in the search result."
+    }
+   ]
+  },
+  "des-a-gauche campground, forillon national park|gaspé": {
+   "verdict": "not-found",
+   "queries": [
+    "Des-a-Gauche campground Forillon National Park Gaspé",
+    "\"Des-a-Gauche\" campground",
+    "camping Des-à-Gauche parc national de Forillon Gaspé"
+   ],
+   "evidence": [
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/camping/avant-front",
+     "readOn": "2026-10-21",
+     "note": "Parks Canada frontcountry camping page names Petit-Gaspé, Des-Rosiers and Cap-Bon-Ami; no Des-a-Gauche. Seen in the search result."
+    }
+   ],
+   "note": "Every query in the budget was run; pl-56 has no OSM row for this key. We did not find it."
+  },
+  "hotel duca d'alba|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Hotel Duca d'Alba Rome",
+    "Hotel Duca d'Alba Via Leonina Monti Roma albergo"
+   ],
+   "evidence": [
+    {
+     "url": "https://turismoroma.it/it/accoglienza/duca-dalba-0",
+     "readOn": "2026-10-21",
+     "note": "Turismo Roma listing: Duca d'Alba, a four-star hotel in Rione Monti, phone 06484471. Seen in the search result."
+    },
+    {
+     "url": "https://hotels.com/ho122008/hotel-duca-d-alba-rome-italy",
+     "readOn": "2026-10-21",
+     "note": "Hotels.com listing: Via Leonina 14, near Cavour metro. Seen in the search result."
+    }
+   ],
+   "note": "The first query returned booking sites only; a second query found the city tourism office's listing."
+  },
+  "fumoir monsieur émile|gaspé": {
+   "verdict": "exists-elsewhere",
+   "queries": [
+    "Fumoir Monsieur Émile Gaspé",
+    "\"Fumoir Monsieur Émile\"",
+    "fumoir Monsieur Émile poisson fumé Gaspésie Anse-au-Griffon Rivière-au-Renard"
+   ],
+   "evidence": [
+    {
+     "url": "https://gentologie.com/en/?p=60611",
+     "readOn": "2026-10-21",
+     "note": "Fetched. 'Monsieur Émile Smokehouse — Art of smoking salmon', 574 route d'Irlande, Percé, QC G0C 2L0; the page links to fumoir-monsieur-emile.com. Published 2025-08-28, updated 2026-07-24."
+    }
+   ],
+   "actualLocality": "Percé, QC (574 route d'Irlande)",
+   "note": "Query 1 and query 2 found nothing; query 3 (French) found the Gentologie page, as in pl-57. Percé is a different municipality from Gaspé. Whether the smokehouse operates today is not otherwise established."
+  },
+  "hotel campo de' fiori|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Hotel Campo de' Fiori Rome"
+   ],
+   "evidence": [
+    {
+     "url": "https://turismoroma.it/it/accoglienza/hotel-campo-de-fiori-0",
+     "readOn": "2026-10-21",
+     "note": "Turismo Roma listing: Hotel Campo de' Fiori, Via del Biscione 6, four stars. Seen in the search result."
+    },
+    {
+     "url": "https://www.greatsmallhotels.com/rome-boutique-hotels/hotel-campo-de-fiori",
+     "readOn": "2026-10-21",
+     "note": "Great Small Hotels entry for Hotel Campo de' Fiori. Seen in the search result."
+    }
+   ]
+  },
+  "parc national de la gaspésie, mont-albert sector|sainte-anne-des-monts": {
+   "verdict": "exists",
+   "queries": [
+    "Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs"
+   ],
+   "evidence": [
+    {
+     "url": "https://en.wikipedia.org/wiki/Gasp%C3%A9sie_National_Park",
+     "readOn": "2026-10-21",
+     "note": "Gaspésie National Park, a Sépaq park in the interior of the Gaspé peninsula, south of Sainte-Anne-des-Monts; its Mont-Albert sector is open year-round. Seen in the search result."
+    },
+    {
+     "url": "https://www.quebecmaritime.ca/en/company/parc-national-de-la-gaspesie/activities",
+     "readOn": "2026-10-21",
+     "note": "Regional tourism listing for Parc national de la Gaspésie. Seen in the search result."
+    }
+   ],
+   "note": "The Mont-Albert sector is the park's year-round sector, as pl-57 found; its first query is the park's, as in pl-57."
+  },
+  "camping petit-gaspé, forillon national park|gaspé": {
+   "verdict": "exists",
+   "queries": [
+    "Petit-Gaspé campground Forillon National Park Parks Canada"
+   ],
+   "evidence": [
+    {
+     "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+     "readOn": "2026-10-21",
+     "note": "Tourisme Gaspésie listing: Camping Petit-Gaspé, Forillon National Park. Seen in the search result."
+    },
+    {
+     "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/camping/avant-front",
+     "readOn": "2026-10-21",
+     "note": "Parks Canada frontcountry camping page: Petit-Gaspé (South Area), Des-Rosiers and Cap-Bon-Ami (North Area). Seen in the search result."
+    }
+   ],
+   "note": "Forillon National Park lies within the municipality of Gaspé, so the key's locality holds."
+  },
+  "campo de' fiori market|rome": {
+   "verdict": "exists",
+   "queries": [
+    "Campo de' Fiori Rome piazza market"
+   ],
+   "evidence": [
+    {
+     "url": "https://livetheworld.com/activities/italy/mercato-di-campo-de-fiori",
+     "readOn": "2026-10-21",
+     "note": "Live the World entry: Mercato di Campo de' Fiori, the square's morning market. Seen in the search result."
+    },
+    {
+     "url": "https://civitavecchia.portmobility.it/en/market-campo-dei-fiori",
+     "readOn": "2026-10-21",
+     "note": "Port of Civitavecchia visitor page: Campo dei Fiori market, Monday to Saturday mornings. Seen in the search result."
+    }
+   ]
+  }
+ }
 }

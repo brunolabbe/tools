@@ -751,3 +751,155 @@ the planned first query (so its object does not move) and carries the extra quer
 | 49  | `parc national de la gaspésie, mont-albert sector\|sainte-anne-des-monts`     | Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs | object 1 (repeat)  |
 | 50  | `camping petit-gaspé, forillon national park\|gaspé`                          | Petit-Gaspé campground Forillon National Park Parks Canada    | object 20 (repeat) |
 | 51  | `campo de' fiori market\|rome`                                                | Campo de' Fiori Rome piazza market                            | object 40          |
+
+**2026-10-21 — Build 5, 6 and 7: the web check, the rate, and the open decision
+(general-purpose agent, Opus 5.5).** WebSearch ran in a **general-purpose agent**, as in
+pl-57. The pre-registration above was committed at `d3ca4190` (01:42:04Z) and pushed before
+the first query; the searches ran after it and ended before 01:50Z.
+
+**Firewall: not observed by the builder.** The owner gave no open or close time. The
+orchestrator's own probe at 01:36Z read outbound open (tripadvisor 403, wikipedia 301,
+openstreetmap 200, sepaq 403: server responses, not timeouts). WebSearch runs on the
+vendor's side; the one WebFetch (gentologie.com) returned the page. No host timed out.
+
+**Spend against the budget.** **49 queries and 1 page fetch**, against a cap of 90 and 20.
+That is 40 first queries, one per object, as planned; 2 extra for each of the two keys
+taken to `not-found`; one each where an object's result left a key's own locality open
+(`fumoir d'antan|gaspé`, `pit caribou|gaspé`) or found only booking sites
+(`hotel duca d'alba|rome`); and 2 for Fumoir Monsieur Émile, whose first query found
+nothing. That is 1.23 queries per object, against pl-57's 1.07. Each check's `queries`
+holds every query run for it, and the record's 49 distinct queries equal the count run.
+No first query departed from the plan. Every `exists` rests on a page **seen in the search
+result**, not fetched, as in pl-57; each evidence note says so, and whether a place operates
+today is established only as far as that page says.
+
+**The record.** `PLANNER_INVENTION_OFFLINE=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl58-2026-10-21` wrote
+`invention/pl58-2026-10-21/2026-10-21.json`, and only that file. Its `stratumDraw`: seed
+20261020, the 51 ordered keys, **51 keys taken for 40 of 40 objects, stop `target`**, each
+key's object (`objectOf`), and `withoutParks`. The check,
+`PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl58-2026-10-21 > out 2>&1; echo exit=$?`,
+gave **`exit=0`**, `112 live records, 2704 place mentions, 847 distinct places`, and `check:
+the committed record equals its regeneration; every sampled place has a verdict`. It can
+fail: with `camping des rivières|forillon national park` flipped to `exists` in
+`verdicts.json` it gave `exit=1`, `the committed record is not what the inputs
+regenerate`. The verdicts were then regenerated from the scratch generator that wrote
+them, and the check gave `exit=0` again. **The default is unchanged:** the same check with
+no argument gave `exit=0`, `111 live records, 2594 place mentions, 1019 distinct places`.
+`git diff --name-status origin/main` on `invention/2026-10-17.json`, `invention/verdicts.json`
+and `invention/classification.json` prints nothing.
+
+**The verdicts, 51 keys:** 44 `exists`, 5 `exists-elsewhere`, 0 `closed`, 2 `not-found`.
+Every key that is not `exists`:
+
+1. `fumoir d'antan|gaspé`: **exists-elsewhere**, Havre-aux-Maisons, Îles-de-la-Madeleine.
+   Le Fumoir d'Antan is a herring smokehouse and Économusée at 27 chemin du Quai,
+   Havre-aux-Maisons, open since 1942 (Tourisme Îles de la Madeleine; Québec maritime).
+   That is on the Magdalen Islands, not the Gaspé peninsula. A second query found no Fumoir
+   d'Antan in Gaspé or Rivière-au-Renard.
+2. to 4. `fumoir monsieur émile|rivière-au-renard`, `fumoir monsieur émile|gaspé
+(anse-au-griffon)` and `fumoir monsieur émile|gaspé`: **exists-elsewhere**, Percé. These
+   are one object. Gentologie, fetched 2026-10-21, places "Monsieur Émile Smokehouse" at 574
+   route d'Irlande, Percé, QC G0C 2L0 (published 2025-08-28, updated 2026-07-24). Queries 1
+   and 2 found nothing; query 3, in French, found the page. This repeats pl-57's verdict on
+   the third key. Rivière-au-Renard and L'Anse-au-Griffon are sectors of the town of
+   Gaspé, and Percé is another municipality.
+3. `pit caribou|gaspé`: **exists-elsewhere**, L'Anse-à-Beaufils (Percé). The brewery is at
+   27 rue de l'Anse, L'Anse-à-Beaufils, in the municipality of Percé, and its pubs are in
+   Percé and Montréal (Tourisme Gaspésie; Canada Economic Development). A second query found
+   no Pit Caribou in Gaspé. The same object's two keys at `l'anse-à-beaufils` are `exists`.
+   **This verdict is a judgement call**, and the bar turns on it (Build 6, below). It reads
+   "gaspé" as the town, as pl-57 read Fumoir Monsieur Émile's. Read as the Gaspé peninsula,
+   it would be `exists`.
+4. `camping des rivières|forillon national park`: **not-found**. The queries were "Camping
+   des Rivières Forillon National Park", `"Camping des Rivières"` (a campsite at Daon,
+   Mayenne, France) and "Camping des Rivières parc national de Forillon terrain de camping
+   Gaspé". pl-56 has no OSM row for this key. Parks Canada's frontcountry page names the
+   park's three campgrounds: Petit-Gaspé, Des-Rosiers and Cap-Bon-Ami. **We did not find
+   it.**
+5. `des-a-gauche campground, forillon national park|gaspé`: **not-found**. The queries were
+   "Des-a-Gauche campground Forillon National Park Gaspé", `"Des-a-Gauche" campground` and
+   "camping Des-à-Gauche parc national de Forillon Gaspé". pl-56 has no OSM row. **We did
+   not find it.** Unlike pl-57's Grande-Grève, no real campground of a near name surfaced.
+
+Also recorded in a row note, not as a verdict: Iberostar Paraíso del Mar now trades as
+Iberostar Waves Paraíso del Mar. Odprta kuhna is a seasonal Friday food market, not a fixed
+restaurant. Café Central and Nuovo Mercato Esquilino each have an undated report of a
+temporary closure (a renovation; a health inspection), and neither is shown to be
+permanent. Brasserie Auval's current hours were not in the results.
+
+**Build 6, the rate per object.** An object is not confirmed if any of its keys is
+(`buildObjects`). Five objects are not confirmed: Fumoir d'Antan, Fumoir Monsieur Émile,
+Pit Caribou, Camping des Rivières and Des-a-Gauche. Three are in the wrong town and two were
+not found. Read from the harness's `render` line and recomputed with a scratch Wilson
+script:
+
+| stratum                                                           | objects | not confirmed | rate  | 95% Wilson | clears the bar    |
+| ----------------------------------------------------------------- | ------- | ------------- | ----- | ---------- | ----------------- |
+| pl-57, before (its Log)                                           | 19      | 3             | 15.8% | 5.5–37.6   | yes               |
+| pl-57, without parks                                              | 16      | 3             | 18.8% | 6.6–43.0   | yes               |
+| **pl-58, after, all**                                             | **40**  | **5**         | 12.5% | 5.5–26.1   | **yes, narrowly** |
+| pl-58, without the `park-visit` objects (Forillon, Parc du Bic)   | 38      | 5             | 13.2% | 5.8–27.3   | yes               |
+| pl-58, also without the Gaspésie park object (sensitivity, below) | 37      | 5             | 13.5% | 5.9–28.0   | yes               |
+| pl-58, `pit caribou\|gaspé` read as the peninsula (sensitivity)   | 40      | 4             | 10.0% | 4.0–23.1   | **no**            |
+
+**The parks.** Four keys are tagged `park-visit`: keys 1 and 32 (Parc national de la
+Gaspésie), 9 (Forillon) and 35 (Parc du Bic). The harness counts an object as a park only
+when every one of its keys is tagged. The Gaspésie object also holds key 49 (`… mont-albert
+sector`), which this run's classification left untagged, so that object stays in. Setting
+aside the tagged rows instead gives the same 38, because key 49 keeps the object. pl-57
+counted its Mont-Albert-sector keys among its parks, so the 37 row drops that object too.
+Every park object is `exists`, so setting parks aside can only raise the rate.
+
+**Against the bar** (above about 10%, lower bound above 5%): 12.5% (5.5–26.1) on 40 objects
+**clears it, by 0.5 points on the lower bound**, and so do the without-parks readings. That
+rests on **5 events in 40 objects**, which is a small count. One fewer event (4 of 40, 10.0%,
+4.0–23.1) fails. The one verdict that could move it is `pit caribou|gaspé`, a judgement
+about what "gaspé" means. The rate is below pl-57's 15.8%, and the two intervals overlap
+almost entirely, so this sample cannot say the rate moved. The 6 events Why item 4 projected
+from pl-57's rate came in at 5.
+
+**What the brief had wrong, or left open.**
+
+- Build 5's "write a key's first query into `verdicts.json` before searching it" cannot be
+  done: `Check` requires a verdict. The owner chose to commit the plan first (above).
+- An object is "its first query". So the object count, and with it the key at which the walk
+  stops, follows from how keys are grouped under shared first queries. The grouping was fixed
+  in the pre-registration. Keyed one object per key, the walk would have stopped at key 40
+  and left 11 keys unchecked.
+- Build 6 defines parks as the rows tagged `park-visit`, and the harness sets aside objects
+  whose keys are all tagged. Both give 38 here (above).
+- The handover's "40 objects may not be reachable" did not hold under this grouping: the
+  51 keys gave exactly 40 objects.
+- pl-56's OSM record covers only pl-57's places, so 42 of the 51 keys have no OSM result. The
+  budget says so, and the two `not-found` keys rest on the three queries alone.
+
+**Open decision, for the owner (Build 7). The builder does not choose.** The question is
+whether to build a lookup scoped to `lodging` and `food` (pl-57's option 3), or to close
+analysis §5 item 3 (pl-57's option 4). Two facts frame both options. **The prompt change
+did not raise the named-premises share on mentions**: `lodging` went from 47 of 402
+(11.7%) to 33 of 418 (7.9%), and `food` from 36 of 322 (11.2%) to 43 of 407 (10.6%). And the
+not-confirmed rate on what they do name clears the bar only narrowly.
+
+- **Option 3, a lookup scoped to `lodging` and `food`.** What it reaches: the named premises
+  only, which is 76 of these two specialists' 825 mentions (9.2%), or 51 distinct places in
+  112 records, about 0.68 mentions per record. The other 749 mentions (90.8%) name a kind of
+  place, which a lookup cannot check. What it would catch: about 1 object in 8 (5 of 40,
+  12.5%, 5.5–26.1), all wrong-town or not-found, no closures. What it costs: at this ticket's
+  1.23 searches per object, under one metered search per plan on average. OSM is no
+  substitute: pl-56 read 9 of these 51 keys and located 3. It would also need a specificity
+  field on `Place`, a contract change the owner deferred until a re-measure justified it.
+  Without that field, the lookup has to tell a premises from a kind of place by itself, and
+  the prompt alone did not make proposals more specific.
+- **Option 4, close §5 item 3.** It costs nothing to build. It leaves the measured defects in
+  place: 3 of 40 objects (7.5%) in the wrong town, which the packer charges distance for,
+  and 2 of 40 not found. Both of those were Forillon campgrounds under names Parks Canada
+  does not use. It also accepts that about 91% of these specialists' mentions stay kinds of
+  place, unchecked by construction.
+
+**Recommendation: option 3**, because the rate clears the bar the owner set beforehand, in
+every reading except the Pit Caribou sensitivity, and the defects it finds are the kind a
+lookup catches. Measured per plan, it is cheap. The reasons to choose option 4 instead are
+just as measured: the margin is 0.5 points on 40 objects, the margin rests on one judgement
+call, and the lookup's reach is 9% of these two specialists' mentions.
