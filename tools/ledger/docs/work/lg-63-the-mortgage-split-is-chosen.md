@@ -270,5 +270,22 @@ nothing else in `@ledger/contract`.
   "`tools/ledger/docs/02-ROADMAP.md` still says "The mortgage bucket is split
   50/50" and "Each person's own part is their deposits minus half of every
   payment"", the roadmap's convention being an "_Amended later on …_" line
-  beneath it. `grep -c "Amended later on 2026-10-21 (lg-63)"
-tools/ledger/docs/02-ROADMAP.md` → 2, one beneath each bullet.
+  beneath it. Run on `02-ROADMAP.md`, `grep -c "Amended later on 2026-10-21
+(lg-63)"` → 2, one beneath each bullet.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, the "never changed"
+  finding — "Build 4's "a household whose people never changed reads exactly as
+  it does now" holds when every listed person is named by every ratio, or there
+  is no ratio […]. It does not hold for a listed person that no confirmed ratio
+  names […]. That is Build 2's rule (a ratio in effect names the people), so it
+  is the design and not a regression; the Log and `00-ANALYSIS.md` §4 say "never
+  changed" without this edge." The builder's Log claim above is not edited. The
+  edge, added here beside this entry: a listed person that no confirmed ratio
+  names reads 0 from every joint row while a ratio is in effect and the others'
+  shares grow (gate 1: 8,823 of 14,905 `mortgageAsOf` comparisons differ, 296 of
+  500 seeds); no live household is known to be in it (unmeasured). §4 now names
+  it. Run on `00-ANALYSIS.md` above `## Log`, `grep -c "does not hold for a
+listed person that no confirmed ratio names"` → 1.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, the no-ratio finding,
+  open decision (a) — "leave it and say in `00-ANALYSIS.md` §4 that a book with
+  no ratio has no add date to read". Run on `00-ANALYSIS.md` above `## Log`,
+  `grep -c "has no add date to read"` → 1.

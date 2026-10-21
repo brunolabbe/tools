@@ -219,6 +219,21 @@ record on _its_ date, **a later record never moves an earlier payment**, and a
 person added at a close takes no share of a payment made before it. For a
 household whose people never changed, every figure reads as it did.
 
+That holds when every listed person is named by every ratio, or when there is no
+ratio. It does not hold for a listed person that no confirmed ratio names: a
+ratio in effect names the people, so that person takes no share of any payment
+while one is, and the others' shares grow to fill it (gate 1 measured 8 823 of
+14 905 `mortgageAsOf` comparisons differing on 500 random households, the
+person reading 0 from every joint row). That is the design, not a regression; no
+live household is known to be in it.
+
+A book with no ratio at all has no add date to read: the books record when a
+ratio names a person, not when the person was enrolled (`people.added_at` is
+not passed to `books`). So a person listed later still takes a share of every
+earlier payment there, and "adding a person re-splits the past" is fixed only
+where a ratio names the newcomer at a close. Gate 1 measured 0 of 15 131
+`mortgageAsOf` comparisons differing from the old figures for such a household.
+
 A person retired at a close (lg-35) takes no share of a payment on or after the
 retirement's date; their part goes to the people who remain in proportion to
 their own parts, until a new record is filed (owner, 2026-10-20). The rows split
