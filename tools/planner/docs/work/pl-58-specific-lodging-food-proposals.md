@@ -875,6 +875,14 @@ from pl-57's rate came in at 5.
 - pl-56's OSM record covers only pl-57's places, so 42 of the 51 keys have no OSM result. The
   budget says so, and the two `not-found` keys rest on the three queries alone.
 
+**Checks at `9bfcca6e`.** `npm run check`: exit 0. `npm test -- --project planner`, through
+the gate: **78 files, 1579 tests passed**, exit 0. `npx vitest run
+tools/planner/api/test/live-records.test.ts --reporter=verbose`: 249 passed (249), 115 of them
+naming `pl58-2026-10-21` (the 112 records and the run's `classification.json`,
+`verdicts.json` and `2026-10-21.json`), so it walks the new records. `node
+scripts/preflight.mjs --only mergeTree,ciCommands,review,title --base origin/main --title
+"<the pull request's title>"`: exit 0.
+
 **Open decision, for the owner (Build 7). The builder does not choose.** The question is
 whether to build a lookup scoped to `lodging` and `food` (pl-57's option 3), or to close
 analysis §5 item 3 (pl-57's option 4). Two facts frame both options. **The prompt change
