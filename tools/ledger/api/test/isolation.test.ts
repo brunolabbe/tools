@@ -550,6 +550,26 @@ const WRITES: Write[] = [
     },
   },
   {
+    // lg-63: by shares between the two the ratio above names.
+    route: "mortgageSplits",
+    async run(app, h) {
+      await post(
+        app,
+        h,
+        ROUTES.mortgageSplits,
+        {
+          effectiveFrom: "2026-02-01",
+          mode: "shares",
+          shares: [
+            { personId: "alex", partsPerMillion: 550_000 },
+            { personId: h.other, partsPerMillion: 450_000 },
+          ],
+        },
+        this.route,
+      );
+    },
+  },
+  {
     route: "recurring",
     async run(app, h, written) {
       const item = await post<RecurringItem>(
@@ -733,6 +753,7 @@ const READS: {
   { route: "salaries", method: "GET", url: ROUTES.salaries },
   { route: "ratios", method: "GET", url: `${ROUTES.ratios}?asOf=2026-09-30` },
   { route: "mortgage", method: "GET", url: ROUTES.mortgage },
+  { route: "mortgageSplits", method: "GET", url: `${ROUTES.mortgageSplits}?asOf=2026-09-30` },
   { route: "periods", method: "GET", url: ROUTES.periods },
   { route: "periodOpen", method: "GET", url: `${ROUTES.periodOpen}?end=2026-09-30` },
   // Closed periods' lines as well as the open one's (lg-19), so no span is

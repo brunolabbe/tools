@@ -11,6 +11,7 @@
  */
 
 import {
+  MortgageSplitter,
   bufferSeries,
   contributionSeries,
   dayAfter,
@@ -36,6 +37,7 @@ import type {
   StatsRange,
 } from "@ledger/contract";
 import type { Database } from "better-sqlite3";
+import { splitHistoryOf } from "./mortgage-splits.ts";
 import { closedPeriods, currentLines, currentRecurring } from "./periods.ts";
 import { knownPeople, retirementsOf } from "./people.ts";
 import { listRows } from "./rows.ts";
@@ -98,15 +100,29 @@ export function contributionsStats(db: Database, range: StatsRange): Contributio
   })();
 }
 
-export function mortgageOwnStats(db: Database, range: StatsRange): MortgageOwnResponse {
+/**
+ * `today` is the API's: the split the caption names is the one on the range's
+ * last day, or today's for a range with no end.
+ */
+export function mortgageOwnStats(
+  db: Database,
+  range: StatsRange,
+  today: string,
+): MortgageOwnResponse {
   return db.transaction(() => {
     const rows = filedRows(db);
     const people = knownPeople(db);
+    const retirements = retirementsOf(db);
+    const history = splitHistoryOf(db);
+    const mortgage = rows.filter((row) => row.bucket === "mortgage");
     return {
       range,
       people: everyone(people, rows),
-      // The home screen's split (lg-35): no share of a joint row for a person retired on its date.
-      points: mortgageOwnSeries(rows, people, range, retirementsOf(db)),
+      // The home screen's split: no share of a joint row for a person retired on
+      // its date (lg-35), and each row by the split record in effect on it (lg-63).
+      points: mortgageOwnSeries(rows, people, range, retirements, history),
+      split: new MortgageSplitter(people, mortgage, retirements, history).on(range.to ?? today)
+        .split,
     };
   })();
 }

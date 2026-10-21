@@ -13,6 +13,7 @@ import { bufferAsOf, mortgageAsOf } from "@ledger/books";
 import type { FiledRow } from "@ledger/books";
 import type { Bucket, BucketsResponse } from "@ledger/contract";
 import type { Database } from "better-sqlite3";
+import { splitHistoryOf } from "./mortgage-splits.ts";
 import { knownPeople, retirementsOf } from "./people.ts";
 
 interface FiledColumns {
@@ -59,9 +60,10 @@ export function bucketsAsOf(db: Database, asOf: string): BucketsResponse {
   return db.transaction(() => {
     const rows = filedRows(db, asOf);
     // Everyone the books hold, since a retired person's deposits are still
-    // theirs; a joint row gives no share to one retired on its date (lg-35).
+    // theirs; a joint row gives no share to one retired on its date (lg-35),
+    // and is split by the split record in effect on its date (lg-63).
     const people = knownPeople(db);
-    const mortgage = mortgageAsOf(rows, people, asOf, retirementsOf(db));
+    const mortgage = mortgageAsOf(rows, people, asOf, retirementsOf(db), splitHistoryOf(db));
     const buffer = bufferAsOf(rows, people, asOf);
     return {
       asOf,

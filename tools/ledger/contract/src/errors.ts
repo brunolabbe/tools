@@ -23,7 +23,8 @@
  * periods' (lg-6), the next is the spending categories' (lg-15), the next
  * four are the household directory's (lg-22), the next two are its people's
  * shown names (lg-33), the next is a person retired from the books (lg-35), the
- * next six are the receipts' (lg-8), and the last is their items' (lg-10).
+ * next six are the receipts' (lg-8), the next is their items' (lg-10), and the
+ * last is the mortgage split's (lg-63).
  */
 
 import {
@@ -219,6 +220,14 @@ export const LEDGER_ERROR_CODES = [
    * on the model's word (`docs/00-ANALYSIS.md` §6).
    */
   "RECEIPT_DOES_NOT_ADD_UP",
+  // --- The mortgage split (lg-63) ---
+  /**
+   * A split by shares does not name exactly the people the books hold on the
+   * day it takes effect: it leaves one out, names one retired then, or names
+   * someone the books do not hold. Parts that do not sum to 1 000 000 are a bad
+   * request instead, refused by the schema.
+   */
+  "MORTGAGE_SHARES_WRONG_PEOPLE",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -273,6 +282,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
     "That row already has a receipt. It may have been attached since it was offered.",
   RECEIPT_DOES_NOT_ADD_UP:
     "The items, deposits and taxes do not add up to the total. Correct the receipt before filing it.",
+  MORTGAGE_SHARES_WRONG_PEOPLE:
+    "Those parts do not name exactly the people in the books on that day. Give each of them a part, and nobody else.",
 };
 
 /**
