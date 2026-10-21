@@ -7,7 +7,9 @@
  * planner's config is where the reasoning for each choice below was worked out,
  * and this is its twin.
  *
- * There is no spec yet — see `e2e/README.md` for what earns the first one.
+ * The household the specs sign in as is seeded by the server's own command
+ * (`e2e:ledger:serve` in the root `package.json`) before the API boots, because
+ * `DEV_IDENTITY` is refused unless the directory already holds that address.
  *
  * Run: `npm run e2e:ledger` (add `npm run e2e:install` once, for the browser).
  */
@@ -41,7 +43,12 @@ const isCI = process.env["CI"] !== undefined;
  * `storage/ledger`, which a suite would write into and inherit from.
  * Removed rather than given a unique name so nothing accumulates across runs.
  */
-fs.rmSync(storage, { recursive: true, force: true });
+// Only in the process that starts the server. Playwright imports this file again
+// in each worker, and by then the server is up and holds its directory open: a
+// second removal would delete the household out from under it.
+if (process.env["TEST_WORKER_INDEX"] === undefined) {
+  fs.rmSync(storage, { recursive: true, force: true });
+}
 
 export default defineConfig({
   testDir: path.join(root, "e2e"),
@@ -93,6 +100,11 @@ export default defineConfig({
       WEB_DIR: path.join(root, "web/dist/app"),
       // The data directory: each household's books are a file in it (lg-21).
       DATABASE_PATH: storage,
+      // Every request is alex, who `e2e:ledger:serve` has made a member of the
+      // household `home`. He is an admin too, so the household and admin screens
+      // exist to be looked at.
+      DEV_IDENTITY: "alex@example.test",
+      LEDGER_ADMINS: "alex@example.test",
       LOG_LEVEL: "warn",
     },
   },

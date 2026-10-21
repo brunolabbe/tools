@@ -17,7 +17,7 @@ import type * as ChildProcess from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { expect, test, vi } from "vitest";
+import { afterAll, expect, test, vi } from "vitest";
 
 // A pass-through spy on `spawnSync`, so the formatMarkdown test (repo-100) can
 // count `oxfmt` spawns while every other test here still spawns for real.
@@ -194,6 +194,21 @@ function gitIn(dir: string, ...args: string[]): string {
   return result.stdout.trim();
 }
 
+/**
+ * What `git config user.email` and `user.name` write, written to `.git/config`
+ * directly: two spawns saved per repository, and 40 ms each on Windows (repo-113).
+ * It is the repository's own config rather than `GIT_AUTHOR_*` in the environment
+ * because `--land` commits in the fixture repository through the repository's
+ * config, and a scratch clone does not inherit that config — an environment
+ * identity would hide a `--land` that stopped setting its clone's own.
+ */
+function setIdentity(dir: string, email: string, name: string): void {
+  fs.appendFileSync(
+    path.join(dir, ".git", "config"),
+    `[user]\n\temail = ${email}\n\tname = ${name}\n`,
+  );
+}
+
 const TICKET_PATH = "docs/work/zz-1-test-ticket.md";
 
 /** A minimal but real ticket, with a real cited file beside it. */
@@ -230,20 +245,16 @@ function baseTicket(whyProse: string): string {
   ].join("\n");
 }
 
+const DEFAULT_WHY = "Reasons.";
+
 /**
- * A throwaway repository with `src/tls.ts` (for anchored citations to point
- * at) and one ticket, committed — the same shape `citations-gate.test.ts`
- * builds, so a passing citation here means the same thing it means there.
+ * `git init`, an identity, `src/tls.ts` and one ticket, committed. This is the
+ * whole of a fixture repository that has no remote; `withTicketRepo` builds it
+ * once and copies it (below), and builds it directly when a test needs other prose.
  */
-function withTicketRepo(whyProse = "Reasons."): {
-  dir: string;
-  ticketAbs: string;
-  cleanup: () => void;
-} {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-")));
+function buildTicketRepo(dir: string, whyProse: string): void {
   gitIn(dir, "init", "-q", "-b", "main");
-  gitIn(dir, "config", "user.email", "review-record@example.test");
-  gitIn(dir, "config", "user.name", "review-record test");
+  setIdentity(dir, "review-record@example.test", "review-record test");
 
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(
@@ -263,8 +274,62 @@ function withTicketRepo(whyProse = "Reasons."): {
 
   gitIn(dir, "add", "-A");
   gitIn(dir, "commit", "-qm", "the ticket, before any review");
+}
 
-  return { dir, ticketAbs, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+/**
+ * The committed fixture, built once per file (repo-113): `init`, `add` and
+ * `commit` are 270 ms on the Windows leg and ran for each of about 30 tests.
+ * A non-bare repository with no remote holds no absolute path, so a copy of its
+ * directory is a repository of its own. Anything with a remote or a clone is
+ * still built per test on top of the copy — those spawns are what the tests are about.
+ */
+let ticketRepoTemplate: string | undefined;
+
+function ticketRepoTemplateDir(): string {
+  if (ticketRepoTemplate === undefined) {
+    const built = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "review-record-template-")),
+    );
+    // Assigned only once the build has returned: a build that throws partway
+    // would otherwise leave a half-built template for every later test to copy.
+    try {
+      buildTicketRepo(built, DEFAULT_WHY);
+    } catch (error) {
+      fs.rmSync(built, { recursive: true, force: true });
+      throw error;
+    }
+    ticketRepoTemplate = built;
+  }
+  return ticketRepoTemplate;
+}
+
+afterAll(() => {
+  if (ticketRepoTemplate !== undefined) {
+    fs.rmSync(ticketRepoTemplate, { recursive: true, force: true });
+  }
+});
+
+/**
+ * A throwaway repository with `src/tls.ts` (for anchored citations to point
+ * at) and one ticket, committed.
+ */
+function withTicketRepo(whyProse = DEFAULT_WHY): {
+  dir: string;
+  ticketAbs: string;
+  cleanup: () => void;
+} {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-")));
+  if (whyProse === DEFAULT_WHY) {
+    fs.cpSync(ticketRepoTemplateDir(), dir, { recursive: true });
+  } else {
+    buildTicketRepo(dir, whyProse);
+  }
+
+  return {
+    dir,
+    ticketAbs: path.join(dir, TICKET_PATH),
+    cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 function writeSectionFile(dir: string, name: string, body: string): string {
@@ -1316,8 +1381,7 @@ test('land() names "push" when the remote already holds a commit this branch has
       shell: false,
     });
     expect(clone.status).toBe(0);
-    gitIn(otherDir, "config", "user.email", "other@example.test");
-    gitIn(otherDir, "config", "user.name", "other");
+    setIdentity(otherDir, "other@example.test", "other");
     gitIn(otherDir, "checkout", "-q", "feature");
     fs.writeFileSync(path.join(otherDir, "elsewhere.txt"), "elsewhere\n");
     gitIn(otherDir, "add", "-A");
@@ -1692,8 +1756,7 @@ test("land() prints the reset command on a push failure too, not only on preflig
       shell: false,
     });
     expect(clone.status).toBe(0);
-    gitIn(otherDir, "config", "user.email", "other@example.test");
-    gitIn(otherDir, "config", "user.name", "other");
+    setIdentity(otherDir, "other@example.test", "other");
     gitIn(otherDir, "checkout", "-q", "feature");
     fs.writeFileSync(path.join(otherDir, "elsewhere.txt"), "elsewhere\n");
     gitIn(otherDir, "add", "-A");

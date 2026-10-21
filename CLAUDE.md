@@ -135,6 +135,12 @@ Why each `Dockerfile` keeps that list by hand twice and how the two halves fail
 differently is in [`.claude/rules/image-closure.md`](./.claude/rules/image-closure.md),
 which loads itself when you open one.
 
+**Every screen fits a 360 px phone and a desktop, with no horizontal scroll of the
+page**, and each tool's `e2e/layout.spec.ts` checks it. A new screen gets a case
+there in the same pull request; the rule is in
+[`.claude/rules/responsive-layout.md`](./.claude/rules/responsive-layout.md),
+which loads itself when you open a `web/src` file.
+
 ## Testing
 
 **vitest**, one project per tool plus `core` for `packages/` and `repo` for

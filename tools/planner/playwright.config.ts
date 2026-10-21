@@ -127,6 +127,12 @@ export default defineConfig({
       // it talks to no model. A real provider here would make it slow, billed
       // and non-deterministic in one step.
       MODEL_PROVIDER: "scripted",
+      // Five runs a minute is the production cap, and the suite starts one per
+      // spec that drafts a plan: with `layout.spec.ts` that is six in under a
+      // minute, and the sixth is refused ("Too many requests") mid-walk. The
+      // limiter has its own API tests; here it only makes the suite's length
+      // matter. The downloader's config does the same, for the same reason.
+      RATE_LIMIT_RUNS_PER_MINUTE: "0",
       LOG_LEVEL: "warn",
     },
   },
