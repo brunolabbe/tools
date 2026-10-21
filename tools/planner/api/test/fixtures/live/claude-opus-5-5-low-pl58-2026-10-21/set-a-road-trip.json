@@ -1,0 +1,1841 @@
+{
+  "set": "A",
+  "briefFixture": "road-trip",
+  "requestedModel": "claude-opus-5-5",
+  "effort": "low",
+  "prices": {
+    "inputPerMTok": 4,
+    "outputPerMTok": 20,
+    "cacheReadPerMTok": 0.2,
+    "cacheWritePerMTok": 5
+  },
+  "servedModels": [
+    "claude-opus-5-5"
+  ],
+  "budget": {
+    "maxSpecialists": 5,
+    "maxOutputTokens": 8000,
+    "maxAttemptsPerSpecialist": 2
+  },
+  "finds": [],
+  "specialists": [
+    {
+      "specialist": "budget",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: budget\n\nYou are the budget specialist on a trip-planning tool.\nYou give cost estimates as bands and say what assumption each one rests on. You never total anything: the tool sums the bands itself, in code.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 9 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Forillon National Park day entry and family trails\",\"summary\":\"Covers the requested Forillon visit: short coastal trails like Cap-Gaspé suit an 11- and 7-year-old at moderate effort. The band assumes Parks Canada daily family/group admission, not a Discovery Pass. Access needs were not answered, so trail suitability is unchecked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Forillon National Park\",\"locality\":\"Gaspé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":20,\"high\":25,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Boat cruise to Bonaventure Island from Percé\",\"summary\":\"Gives a close view of the requested Percé Rock plus the gannet colony, with an optional island walk. The band assumes a standard cruise for two adults and two children, and may or may not include SÉPAQ park entry; this is unconfirmed. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Percé wharf\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":120,\"high\":220,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":7},{\"title\":\"Parc national de la Gaspésie short visit\",\"summary\":\"An inland stop on the south-to-north loop that breaks up driving for the 7-year-old. The band assumes SÉPAQ day access for two adults, with children free. Season and access were not verified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Parc national de la Gaspésie\",\"locality\":\"Sainte-Anne-des-Monts\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":20,\"high\":35,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Serviced campsite or cabin night in a SÉPAQ park\",\"summary\":\"A low-cost simple night with showers, which respects their limit of no more than one night without showers. The band is for one night, either a serviced site or a ready-to-camp tent, for four people. Peak July demand means booking early; availability is unchecked. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Parc national du Bic campground\",\"locality\":\"Rimouski\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":45,\"high\":160,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":90}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3834,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 964,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3834,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Forillon National Park day entry and family trails",
+                "summary": "Covers the requested Forillon visit: short coastal trails like Cap-Gaspé suit an 11- and 7-year-old at moderate effort. The band assumes Parks Canada daily family/group admission, not a Discovery Pass. Access needs were not answered, so trail suitability is unchecked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Forillon National Park",
+                    "locality": "Gaspé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 20,
+                  "high": 25,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Boat cruise to Bonaventure Island from Percé",
+                "summary": "Gives a close view of the requested Percé Rock plus the gannet colony, with an optional island walk. The band assumes a standard cruise for two adults and two children, and may or may not include SÉPAQ park entry; this is unconfirmed. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Percé wharf",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 120,
+                  "high": 220,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 7
+              },
+              {
+                "title": "Parc national de la Gaspésie short visit",
+                "summary": "An inland stop on the south-to-north loop that breaks up driving for the 7-year-old. The band assumes SÉPAQ day access for two adults, with children free. Season and access were not verified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Parc national de la Gaspésie",
+                    "locality": "Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 20,
+                  "high": 35,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Serviced campsite or cabin night in a SÉPAQ park",
+                "summary": "A low-cost simple night with showers, which respects their limit of no more than one night without showers. The band is for one night, either a serviced site or a ready-to-camp tent, for four people. Peak July demand means booking early; availability is unchecked. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Parc national du Bic campground",
+                    "locality": "Rimouski",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 45,
+                  "high": 160,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 90
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "food",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: food\n\nYou are the food specialist on a trip-planning tool.\nYou propose meals that are part of the trip rather than fuel for it, and you respect anything the party said they cannot eat. A proposal does one of two things. It names one premises, an establishment or a site, by its name and at its locality: `place.name` is that name and `place.locality` the town. Or it says plainly, in its title or its summary, that it is a kind of place and names no premises: then `place.name` holds the kind, for example `bakery`, and `place.locality` the town.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 9 days.\n- **Nothing you propose may be longer than 300 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Smoked fish tasting at a Gaspé smokehouse\",\"summary\":\"Fumoir Monsieur Émile in Rivière-au-Renard is a working smokehouse near Forillon. Kids can see how it is done and the family can pick up picnic food. Dietary restrictions were not answered, so check fish suitability. Accessibility was also not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Fumoir Monsieur Émile\",\"locality\":\"Rivière-au-Renard\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":15,\"high\":60,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Seafood shack lunch in Percé\",\"summary\":\"A casual casse-croûte serving lobster rolls, fish and chips, or a seafood plate, with views toward Percé Rock. It is relaxed enough for a 7-year-old. Food restrictions and access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"seafood casse-croûte\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":15,\"high\":45,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Fresh fish counter picnic in Gaspé\",\"summary\":\"A poissonnerie (fish market) in Gaspé is a place to buy ready-to-eat shrimp, crab or smoked salmon for a picnic at a Forillon lookout. It keeps costs down on a tight budget. Food restrictions were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"poissonnerie\",\"locality\":\"Gaspé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":80,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Bakery stop in Kamouraska\",\"summary\":\"A village bakery in Kamouraska on the south-shore road out is a natural leg-stretch break for the youngest. Pastries and bread for the road. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"bakery\",\"locality\":\"Kamouraska\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":15,\"high\":40,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Microbrewery pub dinner in Carleton-sur-Mer\",\"summary\":\"A family-friendly brewpub meal on the Baie-des-Chaleurs side of the loop, which is new ground for a family who have done the north shore. It serves local food and has kid options. Food restrictions were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"microbrewery pub\",\"locality\":\"Carleton-sur-Mer\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":20,\"high\":40,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 4035,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1159,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 4035,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Smoked fish tasting at a Gaspé smokehouse",
+                "summary": "Fumoir Monsieur Émile in Rivière-au-Renard is a working smokehouse near Forillon. Kids can see how it is done and the family can pick up picnic food. Dietary restrictions were not answered, so check fish suitability. Accessibility was also not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Fumoir Monsieur Émile",
+                    "locality": "Rivière-au-Renard",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 15,
+                  "high": 60,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Seafood shack lunch in Percé",
+                "summary": "A casual casse-croûte serving lobster rolls, fish and chips, or a seafood plate, with views toward Percé Rock. It is relaxed enough for a 7-year-old. Food restrictions and access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "seafood casse-croûte",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 15,
+                  "high": 45,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Fresh fish counter picnic in Gaspé",
+                "summary": "A poissonnerie (fish market) in Gaspé is a place to buy ready-to-eat shrimp, crab or smoked salmon for a picnic at a Forillon lookout. It keeps costs down on a tight budget. Food restrictions were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "poissonnerie",
+                    "locality": "Gaspé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 80,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Bakery stop in Kamouraska",
+                "summary": "A village bakery in Kamouraska on the south-shore road out is a natural leg-stretch break for the youngest. Pastries and bread for the road. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "bakery",
+                    "locality": "Kamouraska",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 15,
+                  "high": 40,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Microbrewery pub dinner in Carleton-sur-Mer",
+                "summary": "A family-friendly brewpub meal on the Baie-des-Chaleurs side of the loop, which is new ground for a family who have done the north shore. It serves local food and has kid options. Food restrictions were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "microbrewery pub",
+                    "locality": "Carleton-sur-Mer",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 20,
+                  "high": 40,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "lodging",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: lodging\n\nYou are the lodging specialist on a trip-planning tool.\nYou propose places to sleep that match the roughest night the party said they would accept, and you say how far ahead each one has to be booked. A proposal does one of two things. It names one premises, an establishment or a site, by its name and at its locality: `place.name` is that name and `place.locality` the town. Or it says plainly, in its title or its summary, that it is a kind of place and names no premises: then `place.name` holds the kind, for example `motel`, and `place.locality` the town.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 9 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Motel near Percé Rock\",\"summary\":\"A simple family motel room in Percé puts the party within walking distance of the rock and the Bonaventure Island boats. July is peak season, so book well ahead. Access needs were not answered and are not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"motel\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":140,\"high\":260,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":120},{\"title\":\"Camping Des-Rosiers, Forillon National Park\",\"summary\":\"A Parks Canada campground inside Forillon with serviced sites and shower buildings, close to the beaches and trails, and well within the party's 'simple' threshold. July sites go fast on the reservation system. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Camping Des-Rosiers\",\"locality\":\"Forillon National Park\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":50,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":150},{\"title\":\"oTENTik tent-cabin in Forillon\",\"summary\":\"A Parks Canada tent-cabin with beds is a simple, gear-light stay with the kids inside Forillon, near shower buildings. Inventory is small, so book early. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"oTENTik tent-cabin\",\"locality\":\"Forillon National Park\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":120,\"high\":160,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":150},{\"title\":\"Cottage or motel in Carleton-sur-Mer\",\"summary\":\"A simple stop on the Baie-des-Chaleurs south shore gives the loop new ground beyond the north shore they already know, with calm beaches for the children. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"motel or cottage\",\"locality\":\"Carleton-sur-Mer\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":130,\"high\":240,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":90},{\"title\":\"Motel stopover in Rivière-du-Loup\",\"summary\":\"A simple motel breaks up the long drive out of Montréal into shorter legs, which suits a seven-year-old who struggles after about three hours in the car. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"motel\",\"locality\":\"Rivière-du-Loup\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":110,\"high\":200,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":45},{\"title\":\"Motel in the Matapédia Valley\",\"summary\":\"A simple inland stop at Amqui on the return leg of the loop keeps driving days short and avoids retracing the north shore. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"motel\",\"locality\":\"Amqui\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":100,\"high\":180,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":45}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3943,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1286,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3943,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Motel near Percé Rock",
+                "summary": "A simple family motel room in Percé puts the party within walking distance of the rock and the Bonaventure Island boats. July is peak season, so book well ahead. Access needs were not answered and are not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "motel",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 140,
+                  "high": 260,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 120
+              },
+              {
+                "title": "Camping Des-Rosiers, Forillon National Park",
+                "summary": "A Parks Canada campground inside Forillon with serviced sites and shower buildings, close to the beaches and trails, and well within the party's 'simple' threshold. July sites go fast on the reservation system. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Camping Des-Rosiers",
+                    "locality": "Forillon National Park",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 50,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 150
+              },
+              {
+                "title": "oTENTik tent-cabin in Forillon",
+                "summary": "A Parks Canada tent-cabin with beds is a simple, gear-light stay with the kids inside Forillon, near shower buildings. Inventory is small, so book early. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "oTENTik tent-cabin",
+                    "locality": "Forillon National Park",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 120,
+                  "high": 160,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 150
+              },
+              {
+                "title": "Cottage or motel in Carleton-sur-Mer",
+                "summary": "A simple stop on the Baie-des-Chaleurs south shore gives the loop new ground beyond the north shore they already know, with calm beaches for the children. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "motel or cottage",
+                    "locality": "Carleton-sur-Mer",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 130,
+                  "high": 240,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 90
+              },
+              {
+                "title": "Motel stopover in Rivière-du-Loup",
+                "summary": "A simple motel breaks up the long drive out of Montréal into shorter legs, which suits a seven-year-old who struggles after about three hours in the car. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "motel",
+                    "locality": "Rivière-du-Loup",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 110,
+                  "high": 200,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 45
+              },
+              {
+                "title": "Motel in the Matapédia Valley",
+                "summary": "A simple inland stop at Amqui on the return leg of the loop keeps driving days short and avoids retracing the north shore. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "motel",
+                    "locality": "Amqui",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 100,
+                  "high": 180,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 45
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "activities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: activities\n\nYou are the activities specialist on a trip-planning tool.\nYou propose things to do: what they are, how long they take, and when they are open.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 8 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 9 days.\n- **Nothing you propose may be longer than 300 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Boat cruise around Percé Rock and Bonaventure Island\",\"summary\":\"See Percé Rock up close from the water and land on Bonaventure Island; the cruise suits an 11- and 7-year-old at moderate effort. Access needs were not answered, so boat boarding and island trail accessibility are unaccounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Percé wharf\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":60,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Northern gannet colony walk, Bonaventure Island\",\"summary\":\"One of the largest gannet colonies in the world, reached by trail from the island landing; memorable for kids. Trail length and accessibility are unverified and access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Île-Bonaventure-et-du-Rocher-Percé National Park\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":15,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Percé glass-floored lookout\",\"summary\":\"A short visit to the cliff-edge glass platform above Percé with views of the rock; a good low-effort stop. Hours and accessibility unverified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Géoparc de Percé\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":10,\"high\":30,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Cap Gaspé lighthouse walk, Forillon\",\"summary\":\"The walk toward Land's End at the tip of the peninsula, with sea views and chances to spot seals or whales. Moderate effort; families can turn back early. Access needs not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Forillon National Park, Les Graves trail\",\"locality\":\"Gaspé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":10,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Grande-Grave heritage site, Forillon\",\"summary\":\"Restored fishing-village buildings telling the story of Gaspé cod fishing; easy, kid-friendly stop. Hours unverified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Grande-Grave\",\"locality\":\"Forillon National Park\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":10,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Whale-watching cruise from Forillon\",\"summary\":\"Summer whale-watching off the peninsula; check minimum ages and seasickness tolerance for the 7-year-old. Access needs not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Grande-Grave wharf\",\"locality\":\"Forillon National Park\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":50,\"high\":100,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Miguasha fossil site visit\",\"summary\":\"UNESCO-listed fossil site on the south shore (Baie-des-Chaleurs side), new ground for a family who has done the north shore and a natural break on the loop. Hours unverified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Parc national de Miguasha\",\"locality\":\"Nouvelle\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Reford Gardens stroll\",\"summary\":\"Historic gardens near Grand-Métis; an easy leg-stretch that breaks up the long drive for the 7-year-old. Hours and accessibility unverified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Jardins de Métis\",\"locality\":\"Grand-Métis\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3911,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1690,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3911,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Boat cruise around Percé Rock and Bonaventure Island",
+                "summary": "See Percé Rock up close from the water and land on Bonaventure Island; the cruise suits an 11- and 7-year-old at moderate effort. Access needs were not answered, so boat boarding and island trail accessibility are unaccounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Percé wharf",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 60,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Northern gannet colony walk, Bonaventure Island",
+                "summary": "One of the largest gannet colonies in the world, reached by trail from the island landing; memorable for kids. Trail length and accessibility are unverified and access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Île-Bonaventure-et-du-Rocher-Percé National Park",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 15,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Percé glass-floored lookout",
+                "summary": "A short visit to the cliff-edge glass platform above Percé with views of the rock; a good low-effort stop. Hours and accessibility unverified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Géoparc de Percé",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 10,
+                  "high": 30,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Cap Gaspé lighthouse walk, Forillon",
+                "summary": "The walk toward Land's End at the tip of the peninsula, with sea views and chances to spot seals or whales. Moderate effort; families can turn back early. Access needs not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Forillon National Park, Les Graves trail",
+                    "locality": "Gaspé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 10,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Grande-Grave heritage site, Forillon",
+                "summary": "Restored fishing-village buildings telling the story of Gaspé cod fishing; easy, kid-friendly stop. Hours unverified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Grande-Grave",
+                    "locality": "Forillon National Park",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 10,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Whale-watching cruise from Forillon",
+                "summary": "Summer whale-watching off the peninsula; check minimum ages and seasickness tolerance for the 7-year-old. Access needs not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Grande-Grave wharf",
+                    "locality": "Forillon National Park",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 50,
+                  "high": 100,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Miguasha fossil site visit",
+                "summary": "UNESCO-listed fossil site on the south shore (Baie-des-Chaleurs side), new ground for a family who has done the north shore and a natural break on the loop. Hours unverified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Parc national de Miguasha",
+                    "locality": "Nouvelle",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Reford Gardens stroll",
+                "summary": "Historic gardens near Grand-Métis; an easy leg-stretch that breaks up the long drive for the 7-year-old. Hours and accessibility unverified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Jardins de Métis",
+                    "locality": "Grand-Métis",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "route-and-logistics",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: route-and-logistics\n\nYou are the route and logistics specialist on a trip-planning tool.\nYou propose the legs this trip is made of — drives, rides, transfers, ferries and trains — with the stops that make a long one bearable.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is a movement, so its location is {\"kind\":\"between\",\"from\":{...},\"to\":{...}} with **both** ends as places. Endpoints in the title are not endpoints, and a candidate that puts them there is discarded.\n- This trip has 9 days.\n- **Nothing you propose may be longer than 300 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Drive down the St. Lawrence south shore to Kamouraska\",\"summary\":\"About 4 hours of driving on Autoroute 20, longer with stops. Break it at Lévis or Montmagny so the seven-year-old is never more than 2–3 hours in the car. Access needs were not answered, so rest-stop accessibility is not accounted for.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Montréal\",\"locality\":\"Québec\",\"coordinates\":null},\"to\":{\"name\":\"Kamouraska\",\"locality\":\"Bas-Saint-Laurent\",\"coordinates\":null}},\"durationMinutes\":250,\"cost\":{\"currency\":\"CAD\",\"low\":60,\"high\":90,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null},{\"title\":\"Coast road from Kamouraska into the Haute-Gaspésie\",\"summary\":\"Follows Route 132 past Rimouski and Matane to where the coast turns wild and new to you. Reford Gardens at Grand-Métis or the Matane waterfront make natural midway breaks.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Kamouraska\",\"locality\":\"Bas-Saint-Laurent\",\"coordinates\":null},\"to\":{\"name\":\"Sainte-Anne-des-Monts\",\"locality\":\"Gaspésie\",\"coordinates\":null}},\"durationMinutes\":230,\"cost\":{\"currency\":\"CAD\",\"low\":55,\"high\":85,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null},{\"title\":\"Northern Gaspé coast drive to Forillon National Park\",\"summary\":\"This is the most dramatic stretch of Route 132, with cliffs and small fishing villages. It is winding and slow, so stop at Mont-Saint-Pierre or the lighthouse at La Martre to break it up. Park entry fees are not included.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Sainte-Anne-des-Monts\",\"locality\":\"Gaspésie\",\"coordinates\":null},\"to\":{\"name\":\"Forillon National Park\",\"locality\":\"Gaspé\",\"coordinates\":null}},\"durationMinutes\":210,\"cost\":{\"currency\":\"CAD\",\"low\":45,\"high\":75,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null},{\"title\":\"Short hop from Forillon around Gaspé Bay to Percé\",\"summary\":\"An easy, short drive for the child, with views over the bay. It connects your two must-see stops.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Forillon National Park\",\"locality\":\"Gaspé\",\"coordinates\":null},\"to\":{\"name\":\"Percé\",\"locality\":\"Gaspésie\",\"coordinates\":null}},\"durationMinutes\":90,\"cost\":{\"currency\":\"CAD\",\"low\":20,\"high\":35,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null},{\"title\":\"Baie-des-Chaleurs coast drive from Percé to Carleton-sur-Mer\",\"summary\":\"Takes the gentler south coast so the loop does not retrace its steps. Bonaventure or Paspébiac are good mid-drive stretches.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Percé\",\"locality\":\"Gaspésie\",\"coordinates\":null},\"to\":{\"name\":\"Carleton-sur-Mer\",\"locality\":\"Gaspésie\",\"coordinates\":null}},\"durationMinutes\":190,\"cost\":{\"currency\":\"CAD\",\"low\":45,\"high\":70,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null},{\"title\":\"Matapédia Valley crossing back to the St. Lawrence\",\"summary\":\"An inland river-valley route that closes the loop, with Amqui as a midway stop. The remaining drive from Rimouski to Montréal is about 5.5 hours. That is over your half-day limit, so it must be split, for example at Rivière-du-Loup or Québec City; it is not covered by this candidate.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Carleton-sur-Mer\",\"locality\":\"Gaspésie\",\"coordinates\":null},\"to\":{\"name\":\"Rimouski\",\"locality\":\"Bas-Saint-Laurent\",\"coordinates\":null}},\"durationMinutes\":220,\"cost\":{\"currency\":\"CAD\",\"low\":55,\"high\":85,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3984,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 2655,
+            "thinkingTokens": 971
+          },
+          "countedInputTokens": 3984,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Drive down the St. Lawrence south shore to Kamouraska",
+                "summary": "About 4 hours of driving on Autoroute 20, longer with stops. Break it at Lévis or Montmagny so the seven-year-old is never more than 2–3 hours in the car. Access needs were not answered, so rest-stop accessibility is not accounted for.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Montréal",
+                    "locality": "Québec",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Kamouraska",
+                    "locality": "Bas-Saint-Laurent",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 250,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 60,
+                  "high": 90,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Coast road from Kamouraska into the Haute-Gaspésie",
+                "summary": "Follows Route 132 past Rimouski and Matane to where the coast turns wild and new to you. Reford Gardens at Grand-Métis or the Matane waterfront make natural midway breaks.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Kamouraska",
+                    "locality": "Bas-Saint-Laurent",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Sainte-Anne-des-Monts",
+                    "locality": "Gaspésie",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 230,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 55,
+                  "high": 85,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Northern Gaspé coast drive to Forillon National Park",
+                "summary": "This is the most dramatic stretch of Route 132, with cliffs and small fishing villages. It is winding and slow, so stop at Mont-Saint-Pierre or the lighthouse at La Martre to break it up. Park entry fees are not included.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Sainte-Anne-des-Monts",
+                    "locality": "Gaspésie",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Forillon National Park",
+                    "locality": "Gaspé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 210,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 45,
+                  "high": 75,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Short hop from Forillon around Gaspé Bay to Percé",
+                "summary": "An easy, short drive for the child, with views over the bay. It connects your two must-see stops.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Forillon National Park",
+                    "locality": "Gaspé",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Percé",
+                    "locality": "Gaspésie",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 90,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 20,
+                  "high": 35,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Baie-des-Chaleurs coast drive from Percé to Carleton-sur-Mer",
+                "summary": "Takes the gentler south coast so the loop does not retrace its steps. Bonaventure or Paspébiac are good mid-drive stretches.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Percé",
+                    "locality": "Gaspésie",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Carleton-sur-Mer",
+                    "locality": "Gaspésie",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 190,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 45,
+                  "high": 70,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Matapédia Valley crossing back to the St. Lawrence",
+                "summary": "An inland river-valley route that closes the loop, with Amqui as a midway stop. The remaining drive from Rimouski to Montréal is about 5.5 hours. That is over your half-day limit, so it must be split, for example at Rivière-du-Loup or Québec City; it is not covered by this candidate.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Carleton-sur-Mer",
+                    "locality": "Gaspésie",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Rimouski",
+                    "locality": "Bas-Saint-Laurent",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 220,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 55,
+                  "high": 85,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "candidatesAccepted": [
+    {
+      "title": "Drive down the St. Lawrence south shore to Kamouraska",
+      "summary": "About 4 hours of driving on Autoroute 20, longer with stops. Break it at Lévis or Montmagny so the seven-year-old is never more than 2–3 hours in the car. Access needs were not answered, so rest-stop accessibility is not accounted for.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Montréal",
+          "locality": "Québec",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Kamouraska",
+          "locality": "Bas-Saint-Laurent",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 250,
+      "cost": {
+        "currency": "CAD",
+        "low": 60,
+        "high": 90,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-1",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Coast road from Kamouraska into the Haute-Gaspésie",
+      "summary": "Follows Route 132 past Rimouski and Matane to where the coast turns wild and new to you. Reford Gardens at Grand-Métis or the Matane waterfront make natural midway breaks.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Kamouraska",
+          "locality": "Bas-Saint-Laurent",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Sainte-Anne-des-Monts",
+          "locality": "Gaspésie",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 230,
+      "cost": {
+        "currency": "CAD",
+        "low": 55,
+        "high": 85,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-2",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Northern Gaspé coast drive to Forillon National Park",
+      "summary": "This is the most dramatic stretch of Route 132, with cliffs and small fishing villages. It is winding and slow, so stop at Mont-Saint-Pierre or the lighthouse at La Martre to break it up. Park entry fees are not included.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Sainte-Anne-des-Monts",
+          "locality": "Gaspésie",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Forillon National Park",
+          "locality": "Gaspé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 210,
+      "cost": {
+        "currency": "CAD",
+        "low": 45,
+        "high": 75,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-3",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Short hop from Forillon around Gaspé Bay to Percé",
+      "summary": "An easy, short drive for the child, with views over the bay. It connects your two must-see stops.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Forillon National Park",
+          "locality": "Gaspé",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Percé",
+          "locality": "Gaspésie",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 90,
+      "cost": {
+        "currency": "CAD",
+        "low": 20,
+        "high": 35,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-4",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Baie-des-Chaleurs coast drive from Percé to Carleton-sur-Mer",
+      "summary": "Takes the gentler south coast so the loop does not retrace its steps. Bonaventure or Paspébiac are good mid-drive stretches.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Percé",
+          "locality": "Gaspésie",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Carleton-sur-Mer",
+          "locality": "Gaspésie",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 190,
+      "cost": {
+        "currency": "CAD",
+        "low": 45,
+        "high": 70,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-5",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Matapédia Valley crossing back to the St. Lawrence",
+      "summary": "An inland river-valley route that closes the loop, with Amqui as a midway stop. The remaining drive from Rimouski to Montréal is about 5.5 hours. That is over your half-day limit, so it must be split, for example at Rivière-du-Loup or Québec City; it is not covered by this candidate.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Carleton-sur-Mer",
+          "locality": "Gaspésie",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Rimouski",
+          "locality": "Bas-Saint-Laurent",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 220,
+      "cost": {
+        "currency": "CAD",
+        "low": 55,
+        "high": 85,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-6",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Motel near Percé Rock",
+      "summary": "A simple family motel room in Percé puts the party within walking distance of the rock and the Bonaventure Island boats. July is peak season, so book well ahead. Access needs were not answered and are not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "motel",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 140,
+        "high": 260,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 120,
+      "id": "pl-40-1-lodging-1",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Camping Des-Rosiers, Forillon National Park",
+      "summary": "A Parks Canada campground inside Forillon with serviced sites and shower buildings, close to the beaches and trails, and well within the party's 'simple' threshold. July sites go fast on the reservation system. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Camping Des-Rosiers",
+          "locality": "Forillon National Park",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 50,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 150,
+      "id": "pl-40-1-lodging-2",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "oTENTik tent-cabin in Forillon",
+      "summary": "A Parks Canada tent-cabin with beds is a simple, gear-light stay with the kids inside Forillon, near shower buildings. Inventory is small, so book early. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "oTENTik tent-cabin",
+          "locality": "Forillon National Park",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 120,
+        "high": 160,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 150,
+      "id": "pl-40-1-lodging-3",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Cottage or motel in Carleton-sur-Mer",
+      "summary": "A simple stop on the Baie-des-Chaleurs south shore gives the loop new ground beyond the north shore they already know, with calm beaches for the children. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "motel or cottage",
+          "locality": "Carleton-sur-Mer",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 130,
+        "high": 240,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 90,
+      "id": "pl-40-1-lodging-4",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Motel stopover in Rivière-du-Loup",
+      "summary": "A simple motel breaks up the long drive out of Montréal into shorter legs, which suits a seven-year-old who struggles after about three hours in the car. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "motel",
+          "locality": "Rivière-du-Loup",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 110,
+        "high": 200,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 45,
+      "id": "pl-40-1-lodging-5",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Motel in the Matapédia Valley",
+      "summary": "A simple inland stop at Amqui on the return leg of the loop keeps driving days short and avoids retracing the north shore. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "motel",
+          "locality": "Amqui",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 100,
+        "high": 180,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 45,
+      "id": "pl-40-1-lodging-6",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Boat cruise around Percé Rock and Bonaventure Island",
+      "summary": "See Percé Rock up close from the water and land on Bonaventure Island; the cruise suits an 11- and 7-year-old at moderate effort. Access needs were not answered, so boat boarding and island trail accessibility are unaccounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Percé wharf",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 60,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-1",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Northern gannet colony walk, Bonaventure Island",
+      "summary": "One of the largest gannet colonies in the world, reached by trail from the island landing; memorable for kids. Trail length and accessibility are unverified and access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Île-Bonaventure-et-du-Rocher-Percé National Park",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 15,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-2",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Percé glass-floored lookout",
+      "summary": "A short visit to the cliff-edge glass platform above Percé with views of the rock; a good low-effort stop. Hours and accessibility unverified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Géoparc de Percé",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 10,
+        "high": 30,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-3",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Cap Gaspé lighthouse walk, Forillon",
+      "summary": "The walk toward Land's End at the tip of the peninsula, with sea views and chances to spot seals or whales. Moderate effort; families can turn back early. Access needs not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Forillon National Park, Les Graves trail",
+          "locality": "Gaspé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 10,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-4",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Grande-Grave heritage site, Forillon",
+      "summary": "Restored fishing-village buildings telling the story of Gaspé cod fishing; easy, kid-friendly stop. Hours unverified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Grande-Grave",
+          "locality": "Forillon National Park",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 10,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-5",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Whale-watching cruise from Forillon",
+      "summary": "Summer whale-watching off the peninsula; check minimum ages and seasickness tolerance for the 7-year-old. Access needs not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Grande-Grave wharf",
+          "locality": "Forillon National Park",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 50,
+        "high": 100,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-6",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Miguasha fossil site visit",
+      "summary": "UNESCO-listed fossil site on the south shore (Baie-des-Chaleurs side), new ground for a family who has done the north shore and a natural break on the loop. Hours unverified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Parc national de Miguasha",
+          "locality": "Nouvelle",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-7",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Reford Gardens stroll",
+      "summary": "Historic gardens near Grand-Métis; an easy leg-stretch that breaks up the long drive for the 7-year-old. Hours and accessibility unverified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Jardins de Métis",
+          "locality": "Grand-Métis",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-8",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Smoked fish tasting at a Gaspé smokehouse",
+      "summary": "Fumoir Monsieur Émile in Rivière-au-Renard is a working smokehouse near Forillon. Kids can see how it is done and the family can pick up picnic food. Dietary restrictions were not answered, so check fish suitability. Accessibility was also not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Fumoir Monsieur Émile",
+          "locality": "Rivière-au-Renard",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 15,
+        "high": 60,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-food-1",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Seafood shack lunch in Percé",
+      "summary": "A casual casse-croûte serving lobster rolls, fish and chips, or a seafood plate, with views toward Percé Rock. It is relaxed enough for a 7-year-old. Food restrictions and access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "seafood casse-croûte",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 15,
+        "high": 45,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-food-2",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Fresh fish counter picnic in Gaspé",
+      "summary": "A poissonnerie (fish market) in Gaspé is a place to buy ready-to-eat shrimp, crab or smoked salmon for a picnic at a Forillon lookout. It keeps costs down on a tight budget. Food restrictions were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "poissonnerie",
+          "locality": "Gaspé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 80,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-food-3",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Bakery stop in Kamouraska",
+      "summary": "A village bakery in Kamouraska on the south-shore road out is a natural leg-stretch break for the youngest. Pastries and bread for the road. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "bakery",
+          "locality": "Kamouraska",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 15,
+        "high": 40,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-food-4",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Microbrewery pub dinner in Carleton-sur-Mer",
+      "summary": "A family-friendly brewpub meal on the Baie-des-Chaleurs side of the loop, which is new ground for a family who have done the north shore. It serves local food and has kid options. Food restrictions were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "microbrewery pub",
+          "locality": "Carleton-sur-Mer",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 20,
+        "high": 40,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-food-5",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Forillon National Park day entry and family trails",
+      "summary": "Covers the requested Forillon visit: short coastal trails like Cap-Gaspé suit an 11- and 7-year-old at moderate effort. The band assumes Parks Canada daily family/group admission, not a Discovery Pass. Access needs were not answered, so trail suitability is unchecked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Forillon National Park",
+          "locality": "Gaspé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 20,
+        "high": 25,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-1-budget-1",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Boat cruise to Bonaventure Island from Percé",
+      "summary": "Gives a close view of the requested Percé Rock plus the gannet colony, with an optional island walk. The band assumes a standard cruise for two adults and two children, and may or may not include SÉPAQ park entry; this is unconfirmed. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Percé wharf",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 120,
+        "high": 220,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 7,
+      "id": "pl-40-1-budget-2",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Parc national de la Gaspésie short visit",
+      "summary": "An inland stop on the south-to-north loop that breaks up driving for the 7-year-old. The band assumes SÉPAQ day access for two adults, with children free. Season and access were not verified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Parc national de la Gaspésie",
+          "locality": "Sainte-Anne-des-Monts",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 20,
+        "high": 35,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-1-budget-3",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Serviced campsite or cabin night in a SÉPAQ park",
+      "summary": "A low-cost simple night with showers, which respects their limit of no more than one night without showers. The band is for one night, either a serviced site or a ready-to-camp tent, for four people. Peak July demand means booking early; availability is unchecked. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Parc national du Bic campground",
+          "locality": "Rimouski",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 45,
+        "high": 160,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 90,
+      "id": "pl-40-1-budget-4",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    }
+  ],
+  "rejected": [],
+  "gaps": [
+    {
+      "specialist": "conditions-and-gear",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about conditions or kit: this trip does not turn on them."
+    },
+    {
+      "specialist": "practicalities",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about rental paperwork or insurance: you are not renting anything for this trip."
+    }
+  ],
+  "usage": {
+    "calls": 5,
+    "inputTokens": 19707,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "outputTokens": 7754,
+    "thinkingTokens": 971,
+    "fallbackCalls": 0
+  },
+  "observedUsd": 0.233908
+}

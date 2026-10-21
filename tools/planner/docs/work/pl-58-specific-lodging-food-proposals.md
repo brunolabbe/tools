@@ -521,3 +521,131 @@ folded in above. Build 3 and Why item 5 say the owner sets `--max-usd` for "the 
 `run.ts` is one session per model and effort, so the five pairs need the bound above.
 `run.ts` produces 25 records for Haiku (set B hits its 15-run cap) and 18 for Sonnet and
 Opus in pl-57's data; the new run's counts may differ.
+
+**2026-10-21 — Build 3 and the rest of Build 4: the live run, the hand classification
+and the re-measure (builder-standard, Sonnet 5.5). Stops before Build 5.**
+
+**The owner's answers, 2026-10-21, recorded before the run.** (1) The key was placed by
+the owner at `/home/pwuser/.planner-live-key` (mode 600; the orchestrator had set it from
+644 and had not read it). The path replaces the one this builder asked for. (2) The label
+question "`pl58-2026-10-21` (the run's real date) or `pl58-2026-10-20` (the authorisation
+date)?" was answered **`pl58-2026-10-21`**, the recommendation. The authorisation itself is
+dated **2026-10-20** (the entry above) and is separate from the run's date.
+
+**The run.** `run-pl58.mjs 2026-10-21 /home/pwuser/.planner-live-key <live dir> <log dir> 10`,
+a scratch wrapper (not committed) started with `setsid nohup`, five `run.ts` sessions in
+series, `PLANNER_LIVE_RUN=1 MODEL_PROVIDER=anthropic`, the `MODEL`, `MODEL_EFFORT` and
+`MODEL_PRICE_*` of the table in the entry above. Each session's `--max-usd` was
+min(its cap, $10 minus the earlier sessions' measured `observedUsd`). No session failed and
+the spend stop never tripped. All exit codes 0. Measured:
+
+| Session (`--out` directory under `fixtures/live/`) | `--max-usd` | Records | Set A | Set B                                         | Set C | Set D | Observed |
+| -------------------------------------------------- | ----------- | ------- | ----- | --------------------------------------------- | ----- | ----- | -------- |
+| `claude-haiku-5-5-low-pl58-2026-10-21`             | 1.00        | 25      | 6     | 15 (stopped at the 15-run cap, 79 candidates) | 3     | 1     | $0.1491  |
+| `claude-haiku-5-5-medium-pl58-2026-10-21`          | 1.00        | 25      | 6     | 15 (cap, 82 candidates)                       | 3     | 1     | $0.1763  |
+| `claude-haiku-5-5-high-pl58-2026-10-21`            | 1.00        | 25      | 6     | 15 (108 candidates)                           | 3     | 1     | $0.2387  |
+| `claude-sonnet-5-5-low-pl58-2026-10-21`            | 5.00        | 19      | 6     | 9 (105 candidates)                            | 3     | 1     | $2.1993  |
+| `claude-opus-5-5-low-pl58-2026-10-21`              | 7.24        | 18      | 6     | 8 (106 candidates)                            | 3     | 1     | $4.3166  |
+
+**Total: 112 records, $7.0800 observed against the $10 bound** (pl-57's before run was 111
+records and $6.92). The briefs covered: set A is the six shapes once each (`backcountry`,
+`city-and-culture`, `motorised-touring`, `multi-city`, `resort`, `road-trip`) with no
+finds; sets B, C and D are `road-trip`, as Why item 5 says. Records are in `fixtures/live/`
+as `claude-<family>-5-5-<effort>-pl58-2026-10-21/`. **The `--out` non-existence check:**
+before the run `ls tools/planner/api/test/fixtures/live | grep -c pl58` printed `0`, and
+the wrapper throws if a session's directory exists (shown in the dry run). In each directory's first record `servedModels` equals the requested model. Rates
+were the pricing page's of 2026-10-20 (entry above). **The key file is deleted:**
+`ls -la /home/pwuser/.planner-live-key` prints `No such file or directory`. The key was
+never printed, committed or logged; `grep -rl sk-ant` over `fixtures/live/` finds nothing.
+
+**Records only added.** `git diff --name-status origin/main --
+tools/planner/api/test/fixtures/live` is 114 lines, all `A`: 112 records under the five new
+directories, `invention/population-pl57.json` and
+`invention/pl58-2026-10-21/classification.json`. No pl-57 record file and not
+`invention/2026-10-17.json` appear (that path's name-status is empty).
+`npx vitest run tools/planner/api/test/live-records.test.ts
+tools/planner/api/test/invention-population.test.ts`: 2 files, **266 passed (266)**;
+`live-records.test.ts` has 114 cases naming `pl58-2026-10-21` (the 112 records and two
+files under `invention/`), so it walks the new records. A first offline `--after` run wrote
+`invention/pl58-2026-10-21/2026-10-21.json` from an empty verdicts file; it was not
+committed and is deleted. **Build 5 writes the record once the verdicts exist.**
+
+**The control, redone with the new run's records on disk.**
+`PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts` (no argument) gave `exit=0` and
+`111 live records, 2594 place mentions, 1019 distinct places`, with the five pl58
+directories present. Then the planted record (a copy of `claude-haiku-5-5-low/set-a-resort.json`
+with its first place renamed, written to `claude-haiku-5-5-low/planted-record.json`, 26
+files in that directory) gave `exit=0` and the same `111 live records, 2594 place
+mentions, 1019 distinct places`; the plant was removed (25 files).
+
+**The hand classification.** `invention/pl58-2026-10-21/classification.json`: pl-57's
+rubric byte for byte (its `rubric` object copied), 847 places. **216** are strings pl-57
+had already classified, copied with their class and tags; **631** are new strings,
+classified by hand by reading `name|locality` and how it is used (`at` or a `between`
+endpoint), only the string and general knowledge, with no web lookup, following pl-57's
+tagged cases (a locality plus a category is `kind-of-place` with `locality-plus-category`;
+a named campground, trail, restaurant, hotel or sector is `named-premises`; a boat
+departure, terminal or trailhead is `transit-node`; a national park is `park-visit` when
+any use is an `at`). Two carried park keys changed use in this run and were re-judged by the
+rubric's park rules: `forillon national park|gaspé peninsula, québec` is now also an `at`,
+so `named-premises` with `park-visit`, and `parc national de la gaspésie, mont-albert
+sector|sainte-anne-des-monts, québec` is now a `between` endpoint only, so
+`settlement-or-area` with `park-area`. Totals: 221 `named-premises`, 447
+`kind-of-place`, 134 `settlement-or-area`, 45 `route-or-transit`. Judgement cases a
+reader may reverse: `central market|ljubljana` as `kind-of-place` (pl-57 took the longer
+`ljubljana central market` as an established name), `gîte du mont-albert` and its `area` as
+`named-premises`, and unnamed-destination strings such as `halifax (departure)` as
+`settlement-or-area`. The check mode of the harness validates the file against the records
+(every place has one class, no class names a stranger); `assertClassified` passed on the regeneration.
+
+**The re-measure (`invention.ts --after pl58-2026-10-21`).** After population: the new run's
+112 records alone, 847 places, 2,704 mentions, classified by pl-57's rubric above. Before
+population: the default, `population-pl57.json`'s 111 records, 1,019 places, 2,594
+mentions, `invention/classification.json`, the same rubric. Both read from the harness's
+own `render` line:
+
+|                          | Before (pl-57, mentions) | After (mentions)      | Before (places)  | After (places)    |
+| ------------------------ | ------------------------ | --------------------- | ---------------- | ----------------- |
+| `lodging` named-premises | 47 of 402 (11.7%)        | **33 of 418 (7.9%)**  | 28 of 320 (8.8%) | 25 of 162 (15.4%) |
+| `food` named-premises    | 36 of 322 (11.2%)        | **43 of 407 (10.6%)** | 25 of 259 (9.7%) | 26 of 186 (14.0%) |
+
+Why item 7 sets the headline as the share on mentions, so that a collapse of keys cannot
+move it: **on mentions `lodging` fell from 11.7% to 7.9% and `food` from 11.2% to 10.6%;
+neither rose.** The share on places rose, which is the artefact item 7 predicted: the
+kind keys collapsed (`lodging` 162 distinct places for 418 mentions, against 320 for 402
+before; `food` 186 for 407 against 259 for 322) and the premises keys did not. The
+sensitivity line: four of `lodging`'s 25 named-premises places after are parks
+(`parc national de la gaspésie|sainte-anne-des-monts`, `forillon national park|gaspé`,
+`parc national du bic|rimouski`, `parc national de la gaspésie (sepaq)|sainte-anne-des-monts`),
+so without them 21 of 162 (13.0%); `food` has no park. Not claimed: that the prompt
+caused the fall. The two populations differ in model draw (the briefs are the same,
+and the families and efforts are the same five, but the generations are different
+samples), and no interval was computed on the mentions.
+
+**What Build 5 needs.** The stratum (the new run's `lodging`-or-`food` `named-premises`
+keys) is **51 keys**, four of them `park-visit`, so the keys will probably run out before
+40 objects are reached: the record's `stratumDraw.stop` will say `exhausted` if they do.
+Commands, from the worktree:
+
+1. The worksheet, in the seeded order (seed 20261020; no request):
+   `PLANNER_LIVE_RUN=1 node --import tsx tools/planner/api/test/live/invention.ts --after pl58-2026-10-21`
+2. Write `tools/planner/api/test/fixtures/live/invention/pl58-2026-10-21/verdicts.json`
+   in `invention.ts`'s `VerdictsFile` shape: `{runDate, budget: {written,
+queriesBeforeNotFound[], osm}, checks: {<key>: {verdict, queries[], evidence[{url,
+readOn, note}], actualLocality?, closedYear?, note?}}}`, the keys in the worksheet's
+   order, each key's first query written before its search. The harness takes keys in
+   that order and stops at the first key with no verdict, at 40 distinct first queries or
+   when the 51 run out; a verdict for a key past the stop is refused.
+3. Write the record:
+   `PLANNER_INVENTION_OFFLINE=1 node --import tsx tools/planner/api/test/live/invention.ts --after pl58-2026-10-21`
+   (it writes only `invention/pl58-2026-10-21/2026-10-21.json`).
+4. The check, whose exit code is taken without a pipe:
+   `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx tools/planner/api/test/live/invention.ts --after pl58-2026-10-21`
+   exits 0 only when the committed record equals the regeneration and every key through
+   the stopping point has a verdict. Not run here: it cannot pass before step 2.
+5. The default's check (above) must still exit 0 at 111 and 1,019 afterwards.
+
+**Not done by this slice, as instructed:** Build 5 (the web check and `verdicts.json`), 6
+(the per-object rate), 7 (the closing decision), the firewall times, and the `--after`
+check's exit code.
