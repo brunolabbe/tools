@@ -32,7 +32,7 @@ import {
 } from "../src/api/stats.ts";
 import { fetchMortgage } from "../src/api/mortgage.ts";
 import { Stats } from "../src/stats/Stats.tsx";
-import { LIVE } from "./mortgage-fixtures.ts";
+import { EQUAL_SPLIT, LIVE } from "./mortgage-fixtures.ts";
 
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
 vi.mock("../src/api/stats.ts", () => ({
@@ -68,6 +68,8 @@ const OWN: MortgageOwnResponse = {
         { personId: "alex", ownCents: 50000 },
         { personId: "sam", ownCents: 0 },
       ],
+      split: EQUAL_SPLIT,
+      splitChanged: false,
     },
     {
       date: "2026-03-15",
@@ -76,8 +78,11 @@ const OWN: MortgageOwnResponse = {
         { personId: "alex", ownCents: 9000 },
         { personId: "sam", ownCents: 38999 },
       ],
+      split: EQUAL_SPLIT,
+      splitChanged: false,
     },
   ],
+  split: EQUAL_SPLIT,
 };
 
 const CONTRIBUTIONS: ContributionsResponse = {

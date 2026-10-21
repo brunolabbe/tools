@@ -35,6 +35,7 @@ import type { PhotoStore } from "./receipt-photos.ts";
 import { registerReceiptRoutes } from "./routes/receipts.ts";
 import { registerRuleRoutes } from "./routes/rules.ts";
 import { registerMortgageRoutes } from "./routes/mortgage.ts";
+import { registerMortgageSplitRoutes } from "./routes/mortgage-splits.ts";
 import { registerSalaryRoutes } from "./routes/salaries.ts";
 import { registerSpendingCategoryRoutes } from "./routes/spending-categories.ts";
 import { registerStatsRoutes } from "./routes/stats.ts";
@@ -177,6 +178,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerBucketRoutes(server, context);
   registerSalaryRoutes(server, context);
   registerMortgageRoutes(server, context);
+  registerMortgageSplitRoutes(server, context);
   registerPeriodRoutes(server, context);
   registerSpendingCategoryRoutes(server, context);
   registerStatsRoutes(server, context);

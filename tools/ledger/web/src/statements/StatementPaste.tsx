@@ -16,7 +16,10 @@
  * After a store the screen says how many of the rows it just added wait in the
  * inbox (lg-54), in the words that matter: such a row counts in neither bucket
  * until it is answered, and nothing is filed to Joint by default. The count is
- * the report's own, so it describes this paste and not the whole inbox.
+ * the report's own, so it describes this paste and not the whole inbox. Above
+ * it, the screen names each row already stored that the bank dates otherwise
+ * than the workbook did, with both dates, and says the workbook's was kept
+ * (lg-58).
  *
  * Built for a phone: one column, a text size that does not make iOS zoom the
  * page, and buttons a thumb can hit.
@@ -93,6 +96,7 @@ export function StatementPaste({ onStored, onOpenInbox }: StatementPasteProps): 
           {report.rowsAlreadyPresent} already stored. The account now stands at{" "}
           <strong>{formatCents(report.tailBalanceCents)}</strong>.
         </output>
+        <DatesDiffering report={report} />
         <Filing report={report} onOpenInbox={onOpenInbox} />
         <button type="button" onClick={startOver}>
           Paste another
@@ -155,6 +159,39 @@ export function StatementPaste({ onStored, onOpenInbox }: StatementPasteProps): 
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * The rows already stored that the bank dates otherwise than the workbook did
+ * (lg-58): each by its amount and both dates, since the bank's is how the row is
+ * found on the statement and the workbook's is the one the books kept. Nothing
+ * is said when the two agree.
+ */
+function DatesDiffering({ report }: { report: ImportStatementReport }): React.ReactElement | null {
+  const differing = report.datesDiffering ?? [];
+  if (differing.length === 0) return null;
+  return (
+    <>
+      <p>
+        {differing.length === 1 ? (
+          "One row already stored is"
+        ) : (
+          <>
+            <strong>{differing.length}</strong> rows already stored are
+          </>
+        )}{" "}
+        dated differently by the bank and by the workbook. The workbook&apos;s date was kept.
+      </p>
+      <ul aria-label="Dates that differ">
+        {differing.map((entry, index) => (
+          <li key={`${String(index)}:${entry.bankDate}:${entry.workbookDate}`}>
+            {formatCents(entry.amountCents)}: the bank says {entry.bankDate}, the workbook{" "}
+            {entry.workbookDate}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

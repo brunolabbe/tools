@@ -33,7 +33,7 @@ import {
   fetchSettlementsStats,
   fetchSpendingStats,
 } from "../api/stats.ts";
-import { formatShare, personLabel } from "../labels.ts";
+import { formatShare, personLabel, splitLabel, splitShortLabel } from "../labels.ts";
 import { endedSentence, reachesClose, spansClose } from "../mortgage.ts";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
@@ -199,6 +199,12 @@ export function MortgagePaymentCard({
  * ended, a range that reaches the close says what is left in the bucket is each
  * person's own, theirs to take back, with each person's part: the model has held
  * it as theirs all along, and no row is made to move it.
+ *
+ * Each payment is split as the record in effect on its date says (lg-63). The
+ * caption names the split standing at the range's end; a day the split changed
+ * — a new record, a new ratio under `ratio`, a retirement — is marked as a
+ * renewal is on the payment card, with the new split in its note; and the
+ * table says on each row how a payment that day splits.
  */
 export function MortgageOwnCard({
   range,
@@ -214,7 +220,7 @@ export function MortgageOwnCard({
   const note = left === null ? null : endedSentence(left, names);
   return (
     <Loaded title="Own money in the mortgage" series={series}>
-      {({ points, people }, stale) => {
+      {({ points, people, split }, stale) => {
         const colors = personColors(people);
         const lines: LineSeries[] = people.map((person) => ({
           key: person,
@@ -224,19 +230,28 @@ export function MortgageOwnCard({
             (point) => point.own.find((own) => own.personId === person)?.ownCents ?? 0,
           ),
         }));
+        const when = range.to === null ? "Now" : `On ${range.to}`;
         return (
           <ChartCard
             title="Own money in the mortgage"
-            caption="Each person's own money in the bucket: their deposits less half of every payment. It is not shared money."
+            caption={`Each person's own money in the bucket: their deposits less their share of every payment, as the split on the payment's date sets it. ${when} a payment splits ${splitLabel(split, names)}. A larger dot is a change of split. It is not shared money.`}
             legend={legendOf(lines)}
             table={{
-              head: ["Date", ...people.map((person) => shownName(names, person)), "In the bucket"],
+              head: [
+                "Date",
+                ...people.map((person) => shownName(names, person)),
+                "In the bucket",
+                "Split",
+              ],
               rows: points.map((point) => [
                 point.date,
                 ...people.map((person) =>
                   formatCents(point.own.find((own) => own.personId === person)?.ownCents ?? 0),
                 ),
                 formatCents(point.balanceCents),
+                point.splitChanged
+                  ? `Changed: ${splitShortLabel(point.split)}`
+                  : splitShortLabel(point.split),
               ]),
             }}
             empty={
@@ -256,7 +271,18 @@ export function MortgageOwnCard({
               formatValue={formatCents}
               formatAxis={formatAxisCents}
               minStep={10000}
-              notes={(index) => [`In the bucket: ${formatCents(points[index]?.balanceCents ?? 0)}`]}
+              markers={points.flatMap((point, index) =>
+                point.splitChanged ? lines.map((line) => ({ index, seriesKey: line.key })) : [],
+              )}
+              notes={(index) => {
+                const point = points[index];
+                const inBucket = `In the bucket: ${formatCents(point?.balanceCents ?? 0)}`;
+                if (point?.splitChanged !== true) return [inBucket];
+                return [
+                  inBucket,
+                  `The split changed: a payment now splits ${splitLabel(point.split, names)}`,
+                ];
+              }}
             />
           </ChartCard>
         );

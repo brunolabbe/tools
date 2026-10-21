@@ -81,6 +81,9 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   // lg-10: items that do not make the total are the receipt as sent, which the
   // person corrects, like an unreadable one.
   RECEIPT_DOES_NOT_ADD_UP: 422,
+  // lg-63: shares naming other people than the books hold on their day, a
+  // conflict with what is stored, as a ratio naming a retired person is.
+  MORTGAGE_SHARES_WRONG_PEOPLE: 409,
 };
 
 /**

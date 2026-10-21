@@ -24,6 +24,11 @@ detail and the numbers behind each.
   - The earlier answer had been to store the percentage only.
   - The ratio is still stored alongside the salaries, with its effective date,
     so a past settlement stays recomputable.
+  - _Amended later on 2026-10-21 (lg-63):_ the mortgage bucket's split is
+    chosen, no longer fixed at 50/50. From a date the household files one of
+    three modes — by shares, equally, or at the ratio — and each payment is
+    split by the record in effect on its date; with no record it is equal.
+    `00-ANALYSIS.md` §4 has the detail.
 - **Each deposit is one transfer to one bucket.** So a rule classifies a whole
   row, from its description and its amount; a deposit is never split across
   buckets.
@@ -37,6 +42,10 @@ detail and the numbers behind each.
 - **The mortgage bucket is not shared money.** Each person's own part is their
   deposits minus half of every payment, and the two parts are the whole
   balance. Who has paid extra, and how much, is the view's headline.
+  - _Amended later on 2026-10-21 (lg-63):_ the half is the equal split of two
+    people. Each person's own part is their deposits minus their share of every
+    payment, the share being the one the split record in effect on that payment's
+    date gives (`00-ANALYSIS.md` §4).
 - **Settlements go into the buffer, sized by the matching rule.** Whoever is
   short tops up until the two contributions stand at the ratio. It is computed
   cumulatively, since the last point where the two were even.

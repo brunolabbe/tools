@@ -5,7 +5,18 @@
  * something: the screens then read as they did before it could.
  */
 
-import type { MortgageResponse } from "@ledger/contract";
+import type { MortgageResponse, MortgageSplitOn } from "@ledger/contract";
+
+/** How a payment splits with no split record, between alex and sam (lg-63). */
+export const EQUAL_SPLIT: MortgageSplitOn = {
+  mode: "equal",
+  effectiveFrom: null,
+  noRatio: false,
+  parts: [
+    { personId: "alex", partsPerMillion: 500_000 },
+    { personId: "sam", partsPerMillion: 500_000 },
+  ],
+};
 
 export const LIVE: MortgageResponse = {
   asOf: "2026-10-03",

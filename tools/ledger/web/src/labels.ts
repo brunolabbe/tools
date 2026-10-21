@@ -4,6 +4,9 @@ import type {
   Bucket,
   InboxHistory,
   InboxReason,
+  MortgageSplitMode,
+  MortgageSplitOn,
+  MortgageSplitPart,
   Rule,
   SpendingCategorySource,
 } from "@ledger/contract";
@@ -68,4 +71,58 @@ export function formatShare(partsPerMillion: number): string {
   const whole = Math.floor(partsPerMillion / 10_000);
   const fraction = String(partsPerMillion % 10_000).padStart(4, "0");
   return `${String(whole)}.${fraction} %`;
+}
+
+/**
+ * A percent as a person types it, `62.5` or `62.5 %`, to parts per million;
+ * `null` for anything that is not one, or has more decimals than a share holds.
+ * Read as text, so no float decides a digit.
+ */
+export function parseShare(text: string): number | null {
+  const match = /^\s*(\d{1,3})(?:[.,](\d{1,4}))?\s*%?\s*$/u.exec(text);
+  if (match === null) return null;
+  const parts = Number(match[1]) * 10_000 + Number((match[2] ?? "").padEnd(4, "0"));
+  return parts <= 1_000_000 ? parts : null;
+}
+
+/** `alex`, `alex and sam`, `alex, casey and sam`. */
+function listOf(items: readonly string[]): string {
+  if (items.length < 2) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1) ?? ""}`;
+}
+
+/** Each person's part, as the salaries screen shows a ratio's: `alex 60.0000 % · sam 40.0000 %`. */
+export function partsLabel(parts: readonly MortgageSplitPart[], names: ShownNames): string {
+  return parts
+    .map((part) => `${shownName(names, part.personId)} ${formatShare(part.partsPerMillion)}`)
+    .join(" · ");
+}
+
+/** What each mode is called on the form. */
+export const SPLIT_MODE_LABELS: Record<MortgageSplitMode, string> = {
+  shares: "By shares",
+  equal: "Equally",
+  ratio: "At the ratio",
+};
+
+/**
+ * How a payment on one day splits (lg-63), in a sentence's middle: "by shares:
+ * alex 60.0000 % · sam 40.0000 %", "equally between alex and sam", "at the ratio:
+ * …", or, at the ratio before any ratio, "equally between …, no ratio being in
+ * effect yet".
+ */
+export function splitLabel(split: MortgageSplitOn, names: ShownNames): string {
+  if (split.mode === "shares") return `by shares: ${partsLabel(split.parts, names)}`;
+  if (split.mode === "ratio" && !split.noRatio) {
+    return `at the ratio: ${partsLabel(split.parts, names)}`;
+  }
+  const people = split.parts.map((part) => shownName(names, part.personId));
+  const equally =
+    people.length === 1 ? `all to ${listOf(people)}` : `equally between ${listOf(people)}`;
+  return split.noRatio ? `${equally}, no ratio being in effect yet` : equally;
+}
+
+/** The same, in a table's cell: the mode alone. */
+export function splitShortLabel(split: MortgageSplitOn): string {
+  return split.noRatio ? "Equally: no ratio yet" : SPLIT_MODE_LABELS[split.mode];
 }

@@ -104,10 +104,12 @@ describe("the mortgage bucket", () => {
 
     expect(position.own.map((person) => person.personId)).toEqual(["alex", "casey", "sam"]);
     expect(sumOwn(position)).toBe(position.balanceCents);
-    // Three people (lg-23, Question 2 A): the one with most, by their margin
-    // over the next — sam's 113 333 over alex's 33 333, not over casey's −45 433.
-    expect(position.own.map((person) => person.ownCents)).toEqual([33333, -45433, 113333]);
-    expect(position.lead).toEqual({ personId: "sam", byCents: 80000 });
+    // casey is named from 2026-02-20, after every payment, so takes no share of
+    // one (lg-63: before, the payments were split three ways and casey read
+    // −45 433). Three people (lg-23, Question 2 A): the one with most, by their
+    // margin over the next — sam's 90 000 over alex's 9 999, not over casey's 1 234.
+    expect(position.own.map((person) => person.ownCents)).toEqual([9999, 1234, 90000]);
+    expect(position.lead).toEqual({ personId: "sam", byCents: 80001 });
   });
 
   // A uniform history would hold this by accident: here every payment is a

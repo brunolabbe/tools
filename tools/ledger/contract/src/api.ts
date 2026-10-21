@@ -51,6 +51,8 @@ export const ROUTES = {
   ratios: `${API_PREFIX}/ratios`,
   // lg-55: what the household says about its mortgage — live, ended on a day, or none.
   mortgage: `${API_PREFIX}/mortgage`,
+  // lg-63: how the mortgage's joint rows split — by shares, equally, or at the ratio — from a date.
+  mortgageSplits: `${API_PREFIX}/mortgage-splits`,
   // lg-6: periods of personal-card spending, their lines, the recurring items,
   // and closing a period with the settlement it computes.
   periods: `${API_PREFIX}/periods`,
@@ -291,12 +293,29 @@ export interface ImportStatementRequest {
  * `rowsInInbox` is how many of the `rowsAdded` no rule and no history filed, so
  * they wait in the inbox (lg-54): never more than `rowsAdded`, and `0` when none
  * was added. It counts this paste's own rows; the inbox may hold earlier ones.
+ *
+ * `datesDiffering` names each already-stored row the paste matched with a row
+ * the workbook import stored under another date (lg-58), oldest first. The
+ * stored row keeps the workbook's date. It is absent when there is none.
  */
 export interface ImportStatementReport {
   rowsAdded: number;
   rowsAlreadyPresent: number;
   tailBalanceCents: number;
   rowsInInbox: number;
+  datesDiffering?: DateDiffering[];
+}
+
+/**
+ * A pasted row the books already held, as the workbook imported it under
+ * another date: the bank's date, the date kept, and the amount, which both
+ * sides agree on. The bank's wording is left out: the household finds the row
+ * on its statement by date and amount.
+ */
+export interface DateDiffering {
+  bankDate: string;
+  workbookDate: string;
+  amountCents: number;
 }
 
 /**
@@ -330,8 +349,9 @@ export interface ErrorResponse {
 
 /**
  * The two buckets every row belongs to one of (`docs/00-ANALYSIS.md` §1). The
- * mortgage is split 50/50 and current expenses by the salary ratio, which is
- * lg-5's arithmetic; here a bucket is only a label a row is filed under.
+ * mortgage's payments are split as the household's split records say (lg-63;
+ * equally with none) and current expenses by the salary ratio, which is `books`'
+ * arithmetic; here a bucket is only a label a row is filed under.
  */
 export const BUCKETS = ["mortgage", "current-expenses"] as const;
 export type Bucket = (typeof BUCKETS)[number];
@@ -574,7 +594,7 @@ export const isoDateSchema = z.iso.date();
  */
 export const asOfQuerySchema = z.strictObject({ asOf: isoDateSchema.optional() });
 
-/** One person's own money in the mortgage bucket: their deposits less half of every payment. */
+/** One person's own money in the mortgage bucket: their deposits less their share of every payment (lg-63). */
 export interface OwnMoney {
   personId: string;
   ownCents: number;
@@ -772,6 +792,107 @@ export interface MortgageResponse {
   /** What the bucket holds, and whose each part is: theirs to take back. */
   balanceCents: number;
   own: OwnMoney[];
+}
+
+/**
+ * How the mortgage's joint rows split from a date (lg-63): **by shares** the
+ * household names, **equally** between the people the books hold on each row's
+ * date, or **at the ratio** in effect on each row's date. Each row is split by
+ * the record in effect on its own date, so a later record never moves an earlier
+ * payment; with no record, the split is `equal`.
+ */
+export const MORTGAGE_SPLIT_MODES = ["shares", "equal", "ratio"] as const;
+export type MortgageSplitMode = (typeof MORTGAGE_SPLIT_MODES)[number];
+
+/** One person's part of a split, in parts per million, as a ratio's share is. */
+export interface MortgageSplitPart {
+  personId: string;
+  partsPerMillion: number;
+}
+
+/**
+ * One split record. Never edited: filing another for the same day supersedes it,
+ * as a ratio confirmed again for its day does, and both are kept.
+ */
+export interface MortgageSplit {
+  id: number;
+  /** `yyyy-mm-dd`: the first day it holds. */
+  effectiveFrom: string;
+  mode: MortgageSplitMode;
+  /** For `shares`, each person's part in id order, summing to 1 000 000; empty otherwise. */
+  shares: MortgageSplitPart[];
+  supersedes: number | null;
+  enteredAt: string;
+  enteredBy: string;
+}
+
+/**
+ * `POST /api/mortgage-splits`: a split from `effectiveFrom`. `shares` is for the
+ * `shares` mode only, and names exactly the people the books hold on that day
+ * (`MORTGAGE_SHARES_WRONG_PEOPLE` otherwise).
+ */
+export type MortgageSplitRequest =
+  | { effectiveFrom: string; mode: "equal" | "ratio" }
+  | { effectiveFrom: string; mode: "shares"; shares: MortgageSplitPart[] };
+
+const splitPartSchema = z.strictObject({
+  personId: z.string().min(1).max(100),
+  partsPerMillion: z.number().int().min(0).max(1_000_000),
+});
+
+/**
+ * The request's shape, for a caller that has no clock: parts that name a person
+ * twice, or do not sum to exactly 1 000 000, are refused here, since nothing
+ * derives them. A route reads a body with `mortgageSplitRequestSchemaOn`, which
+ * also refuses a date after today.
+ */
+export const mortgageSplitRequestSchema = z
+  .discriminatedUnion("mode", [
+    z.strictObject({ effectiveFrom: isoDateSchema, mode: z.literal("equal") }),
+    z.strictObject({ effectiveFrom: isoDateSchema, mode: z.literal("ratio") }),
+    z.strictObject({
+      effectiveFrom: isoDateSchema,
+      mode: z.literal("shares"),
+      shares: z.array(splitPartSchema).min(1).max(10),
+    }),
+  ])
+  .refine(
+    (request) =>
+      request.mode !== "shares" ||
+      (new Set(request.shares.map((part) => part.personId)).size === request.shares.length &&
+        request.shares.reduce((sum, part) => sum + part.partsPerMillion, 0) === 1_000_000),
+    { message: "The parts name each person once and sum to 1 000 000.", path: ["shares"] },
+  ) satisfies z.ZodType<MortgageSplitRequest>;
+
+/** The schema a route reads a body with: a split from a day after `today` (`yyyy-mm-dd`) is refused. */
+export function mortgageSplitRequestSchemaOn(today: string): z.ZodType<MortgageSplitRequest> {
+  return mortgageSplitRequestSchema.refine((request) => request.effectiveFrom <= today, {
+    message: "A split cannot take effect on a day that has not come.",
+    path: ["effectiveFrom"],
+  });
+}
+
+/** `GET /api/mortgage-splits`: every split record that stands, oldest first, and the one in effect on `asOf`. */
+export interface MortgageSplitsResponse {
+  asOf: string;
+  splits: MortgageSplit[];
+  inEffect: MortgageSplit | null;
+}
+
+/**
+ * How a joint row of the mortgage bucket dated on one day is split (lg-63): the
+ * mode of the record in effect, and the part each person takes, after a
+ * retirement (lg-35) has handed a retired person's part to the rest pro rata.
+ */
+export interface MortgageSplitOn {
+  /** The record's mode; `equal` when no record is in effect. */
+  mode: MortgageSplitMode;
+  /** The day the record in effect took effect; `null` when none has. */
+  effectiveFrom: string | null;
+  /** `ratio` with no ratio in effect on the day: the row is split equally instead. */
+  noRatio: boolean;
+  /** Each person who takes a part, in id order, in parts per million summing to 1 000 000. */
+  parts: MortgageSplitPart[];
 }
 
 /**
@@ -1433,6 +1554,13 @@ export interface MortgageOwnPoint {
   date: string;
   balanceCents: number;
   own: OwnMoney[];
+  /** How a joint row dated on this day is split (lg-63). */
+  split: MortgageSplitOn;
+  /**
+   * Whether that split differs from the one on the point before, over the whole
+   * history, so the first point of a range is compared with the last before it.
+   */
+  splitChanged: boolean;
 }
 
 /** `GET /api/stats/mortgage-own`: each person's own money in the mortgage bucket over time. */
@@ -1440,6 +1568,8 @@ export interface MortgageOwnResponse {
   range: StatsRange;
   people: string[];
   points: MortgageOwnPoint[];
+  /** The split on the range's last day, or today's for a range with no end (lg-63). */
+  split: MortgageSplitOn;
 }
 
 export interface BufferPoint {

@@ -57,7 +57,10 @@ export function registerStatsRoutes(app: FastifyInstance, context: AppContext): 
       ROUTES.statsContributions,
       (request) => contributionsStats(booksOf(request), rangeOf(request)),
     ],
-    [ROUTES.statsMortgageOwn, (request) => mortgageOwnStats(booksOf(request), rangeOf(request))],
+    [
+      ROUTES.statsMortgageOwn,
+      (request) => mortgageOwnStats(booksOf(request), rangeOf(request), todayOf(context)),
+    ],
     [
       ROUTES.statsBuffer,
       (request) => {

@@ -3,7 +3,7 @@ id: lg-63
 tool: ledger
 title: A household chooses how the mortgage splits — shares, equally, or at the ratio — from a date
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [lg-23]
 difficulty: hard
@@ -49,6 +49,24 @@ in effect on each payment's date. Each payment is split by the record in effect
 on _its_ date, so a later record never moves an earlier payment. Filed `ready`
 and independent of [lg-55](./lg-55-a-household-with-no-mortgage.md); the two
 touch the same card and the seam-mapper orders them at intake.
+
+## Decision — answered 2026-10-20 by the owner, asked at intake
+
+When a person retires at a close (lg-35) while a dated `shares` record is in
+effect, how are later joint mortgage payments split?
+
+1. **Redistribute pro rata** (recommended): from the retirement date, the
+   retired person's part goes to the remaining people in proportion to their
+   own parts, until a new record is filed. The sum always holds, nobody has to
+   act, and the Own money card marks the change as it does for a new record.
+2. **Fall back to equal**: the shares record lapses on the retirement date.
+3. **Refuse the retirement** while a shares record names that person.
+
+**Answer: 1, redistribute pro rata.** For `equal`, lg-35's rule already holds:
+the retired person is out from the retirement's date, and Build 2's "people
+the books hold on the payment's date" adds that a person is out before they
+are first named. For `ratio`, the ratio confirmed at the close names only the
+people who remain. A test covers a retirement under each of the three modes.
 
 ## Build
 
@@ -134,9 +152,167 @@ nothing else in `@ledger/contract`.
    finds the marker and the new caption.
 8. `npm run check` and `npm test -- --project ledger` pass.
 
+## Review
+
+**Gate: PASS** — 2026-10-21 · `2d1b22bb..a318d52e` · Sonnet 5.5, depth full
+
+CI on `a318d52e`, read once with `gh pr checks 594` after the sweeps: 9 of 9 checks `pass` (CodeQL, changes, both `check` jobs, codeql, dependency-review, docker, `test (ubuntu-latest)`, `test (windows-latest, informational)`). Nothing pending.
+
+| Done when                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. One history under each mode; parts sum to the balance on every day                 | `books/test/split.test.ts` › "one history under each mode" (four tests: "by shares: …", "equally: …", "at the ratio: …", "a mode changed twice: …"); the sum is asserted by `expectSumsOnEveryDay` as of each of 226 days and in the series, with `series.length` pinned at 11 so it cannot pass empty. Independently re-run: 81,175 `mortgageAsOf` days over 3,000 seeded histories, 0 sum violations ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 2. A later record leaves every earlier payment as it was                              | `split.test.ts` › "a record from a later date leaves every day before it exactly as it was" (89 days). Re-run: dropping each record in turn moves no earlier day, 0 violations over 3,000 histories (days checked not counted) ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 3. A third person added at a close leaves the first two unchanged                     | `split.test.ts` › "a third person added at a close leaves the first two's own money before it unchanged" (every day 2026-01-02 to 2026-06-30, casey pinned at 0); `api/test/more-than-two.test.ts` › "lg-23's reproduction, run against the build" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 4. No record reads as today for a household of two; workbook import tests unchanged   | `split.test.ts` › "with no record, a household of two reads what one split of the cumulative total always gave" (200 days, with and without a ratio). `books/test/workbook.test.ts`, `api/test/workbook-import.test.ts`, `books/test/people.test.ts`, `books/test/stats.test.ts` have an empty diff against the base and pass. Differential against the base: 0 of 59,343 `mortgageAsOf` comparisons and 0 of 2,000 series differ ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 5. Many odd-cent payments split equally within one cent                               | `split.test.ts` › "many odd-cent payments split equally leave the parts within a cent of each other" (500 payments; a companion assertion shows per-row rounding drifts by more than 100 cents on the same rows). Re-run: worst distance from the exact share over 500 prefixes is 0.6667 cent equal, 0.5000 shares, 0.6662 ratio ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 6. API files each mode, refuses wrong shares and a future date, supersedes            | `api/test/mortgage-splits.test.ts`, seven tests: "each mode is filed and read back, and the buckets split each payment by the one on its date"; "the series marks each change and names the split standing at the range's end"; "a split filed for a day that has one supersedes it, and the same one again files nothing"; "shares that do not sum to 1 000 000, or name a person twice, are a bad request"; "shares that leave out a person the books hold on the day, or name another, are refused"; "a split from a day after today is refused, and today is not after it"; "a mode that is not one of the three, or shares given to another mode, are a bad request". Rate limits on both verbs: `api/test/route-limits.test.ts` › "mortgageSplits refuses the second request in a minute, as RATE_LIMITED" and › "GET mortgageSplits refuses the second request in a minute too" each go red when its verb's `onRequest` is removed ✓ |
+| 7. Own money card over a range that crosses a change shows the marker and new caption | `web/test/mortgage-split.test.tsx` › "over a range that crosses a change, the own-money card marks it and names the new split" (asserts the caption text, two `circle.marker`, the note and the table cell) ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 8. `npm run check` and `npm test -- --project ledger` pass                            | Re-run at `a318d52e`: `npm run check` exit 0; `npm test -- --project ledger` 78 files, 1658 of 1658, exit 0 (needed `@webtools/ui` linked by hand, see the full report). CI above ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+
+- **low** · no `Done when` line depends on it · `tools/ledger/docs/02-ROADMAP.md` still says "The mortgage bucket is split 50/50" and "Each person's own part is their deposits minus half of every payment". Build 8 lists `00-ANALYSIS.md` §4 and the code comments, not the roadmap; the roadmap's own convention for a changed decision is an "_Amended later on …_" line beneath it (the salaries bullet has one). False text in the safe direction: nothing relies on it.
+- **low** · no `Done when` line depends on it · Build 4's "a household whose people never changed reads exactly as it does now" holds when every listed person is named by every ratio, or there is no ratio (differential above, retirements on and off). It does not hold for a listed person that no confirmed ratio names: 8,823 of 14,905 `mortgageAsOf` comparisons differ (296 of 500 seeds), that person reads 0 from every joint row and the others' shares grow. Seed 1, as of 2026-01-11, three listed and a ratio naming two: base `alex −30741, blake −30741, casey −30741`; branch `alex −46112, blake −46111, casey 0`. That is Build 2's rule (a ratio in effect names the people), so it is the design and not a regression; the Log and `00-ANALYSIS.md` §4 say "never changed" without this edge. No live household is known to be in it (unmeasured).
+- **low** · open decision · no `Done when` line depends on it · in books with **no ratio at all**, a person listed later still takes a share of every earlier payment: 0 of 15,131 `mortgageAsOf` comparisons and 0 of 500 series differ from the base for a household that gains a person with no ratio. The Why's defect ("adding a person re-splits the past") is fixed only where a ratio names the newcomer at a close. The branch's reading ("everyone listed", `MortgageSplitter.heldOn`) is the one the other lines require: Build 2's literal reading ("the people the bucket's rows have named by that date") planted in place makes `mortgageAsOf` throw on 7,926 of 14,293 no-ratio comparisons and fails five tests, three of them older than the branch (`books/test/buckets.test.ts` › "the parts sum to the balance on every date of a long, varied history, and never drift"; `books/test/people.test.ts` › "a person who left and came back splits one total with the same people, not two"; `books/test/stats.test.ts` › "gives the odd cent of a joint total to the person who sorts first"). Options: (a) leave it and say in `00-ANALYSIS.md` §4 that a book with no ratio has no add date to read; (b) pass each person's `people.added_at` (the API has it, `books` does not) so a person is held from the day enrolled. Recommended: (a); take (b) only if a no-ratio household with three people exists.
+- **dropped** · "the future-date check reads the UTC day": the same `now().toISOString().slice(0, 10)` is how `routes/mortgage.ts`, `salaries.ts`, `routes/stats.ts` and `routes/buckets.ts` read today. Consistent, not a defect.
+- **dropped** · "a `shares` record with a person at 0 parts is accepted (100 % / 0 %)": the schema allows 0 to 1 000 000 by design and `reduced` drops zero weights. Not a defect.
+- **dropped** · "`heldOn`'s 'anyone a row has named' clause is dead through the API, since `knownPeople` already lists every named person": no wrong answer and the books-level tests use it; no live call site.
+- **dropped** · "the two changed existing tests": `books/test/buckets.test.ts` › "a person a row names who was not listed still gets their money" and `api/test/more-than-two.test.ts` are both the named defect (a person who arrives stops taking a share of earlier payments); the nine `user_version` 14 to 15 moves are the migration. No other assertion on an existing test changed.
+- **findings** · the hunt returned 7; 3 carried, 4 dropped.
+- NFR: security ✓ (a stranger and an admin in no household get 403 on both verbs, a request with no token gets 403 on POST (GET without a token not run); one household's record never reaches another's GET; the body is a strict schema, 13 hostile bodies refused 400) · performance ✓ (20,000 rows, 30 ratios and 30 records: series 98 ms against 122 ms for the base, measured while `npm run check` ran) · reliability ✓ (migration 15 applied to a version-14 database holding people, a ratio, rows and classifications leaves every earlier table identical, `integrity_check` ok, applied twice is idempotent; `fileSplit` runs in `.immediate()`) · maintainability — above.
+
 ## Log
 
 - 2026-10-19: filed from the owner's question whether the mortgage split is a
   hard-coded 50/50. It is not a constant: it is equal among everyone the books
   have held, re-split over every past payment, which lg-23's table measured. The
   owner chose a dated record with three modes, `ready`, independent of lg-55.
+- 2026-10-21 — Built on `lg-63-mortgage-split-modes` from `main` at `2d1b22bb`.
+  The owner's answer of 2026-10-20 (a retirement under `shares`) is recorded
+  above, in the branch's first commit.
+  - **What was built.** Migration 15, `mortgage_splits` with
+    `mortgage_split_shares` and the `current_mortgage_splits` view (one record
+    per day; filing for a day supersedes it, the same split again files nothing).
+    `GET`/`POST /api/mortgage-splits`, any member, `read`/`write` limits, a date
+    after today refused by `mortgageSplitRequestSchemaOn`, shares that do not
+    sum or name a person twice refused by the schema (400), shares naming other
+    people than the books hold on their day `MORTGAGE_SHARES_WRONG_PEOPLE`
+    (409). In `books`, `split.ts`: `MortgageSplitter` answers each date's
+    split, `JointSplit` sums joint rows per split and splits each sum once
+    (`apportion`, largest remainders, a tie to the earlier id). `mortgageAsOf`
+    and `mortgageOwnSeries` take the ratios and records as a fifth parameter,
+    `NO_SPLIT_HISTORY` by default, so `workbook.ts` and `workbook-import.ts`
+    pass nothing and read as before. The stats series' points carry the split
+    on their day and `splitChanged`; the response carries the split at the
+    range's end. A form beside the salaries (`web/src/salaries/MortgageSplit.tsx`);
+    the Own money card's caption, markers, notes and a `Split` table column.
+  - **What the brief had wrong.**
+    - Build 5's odd cent "split once, on the cumulative total" and Build 2's
+      "everyone ever" were stale since lg-35 (#583): `mortgageAsOf` already
+      took retirements and split through `JointTotals`, one part per set of
+      retired people. `JointSplit` replaces it, keyed on the split's weights
+      reduced by their divisor, so lg-35's rule is the `equal` case and its four
+      tests in `books/test/people.test.ts` pass unchanged — the left-and-came-back
+      case included, since a split that returns sums into the same total. That is
+      how the remainder is "carried": per split, not per row.
+    - Build 2's "with no ratio in effect, the people the bucket's rows have named
+      by that date" would leave a joint row before anyone's first deposit with
+      nobody to split it (`books/test/stats.test.ts` › "gives the odd cent of a
+      joint total to the person who sorts first" is exactly that row), and would
+      move the figures of a household of two whose first payment came before the
+      second person's first deposit, against Build 4. Built instead: before the
+      first ratio, the first ratio's people — the first period's, as
+      `requireSamePeopleInOpenPeriod` reads them — or, in books with no ratio at
+      all, everyone listed; in both, anyone a row has named by the date. A ratio
+      in effect names the people alone.
+    - Build 1's migration number: 13 is lg-55's and 14 lg-35's; this is 15, and
+      nine `user_version` assertions moved from 14 to 15 (`schema.test.ts`,
+      `auto-file.test.ts`, `spending-backfill.test.ts`).
+    - Build 5's "add the same assertion to a test of the series": the series
+      test already summed its parts (`books/test/stats.test.ts` › "agrees with
+      mortgageAsOf …"); `split.test.ts` adds it under every mode.
+    - Build 6's sweeps "pick the route up by themselves" by failing until told:
+      `route-limits.test.ts` › "every route in the contract is accounted for"
+      and `isolation.test.ts` › "covers every route the app answers" both failed
+      on the new route, and now walk it (`helpers/routes.ts`, the two-verb list,
+      `WRITES` and `READS`).
+    - Build 7's card needs the split per day, which the record alone does not
+      give: `MortgageOwnPoint` gained `split` and `splitChanged`, and
+      `MortgageOwnResponse` `split`, beside the record's own types. A reading of
+      the licence "this record and nothing else", put to the orchestrator.
+    - Two tests asserted the defect and now assert the fix:
+      `books/test/buckets.test.ts` › "a person a row names who was not listed
+      still gets their money" (casey −45 433 → 1 234, sam's lead 80 000 → 80 001)
+      and `api/test/more-than-two.test.ts` › lg-23's reproduction (alex 26 666,
+      casey −23 334, sam 16 667 → 14 999, 0, 5 000).
+    - lg-55's `Cards.tsx` collision is gone: it merged first (#581).
+  - **Done when**, each with its test:
+    1. `books/test/split.test.ts` › "one history under each mode" (four tests).
+       The history: `alex`, `casey`, `sam`, every day 2026-01-02 → 2026-08-15;
+       deposits on 2026-01-02, 2026-04-01 and 2026-07-02; joint rows of −700.01,
+       −700.03, +0.01, −700.01, −700.01, −700.03, −700.01, −700.02 on the 15th
+       of January to August; ratios 60 / 15 / 25 % from 2026-01-01 and 70 / 30 %
+       from 2026-07-01; casey retired from 2026-07-01; shares 50 / 20 / 30 %. Each
+       mode's own money is worked by hand in the test's comments, casey retiring
+       under each, and a fourth history changes mode twice (equal, shares from
+       2026-04-01, ratio from 2026-08-01). The parts sum to the balance on all
+       226 days, as of each day and in the series.
+    2. `split.test.ts` › "a record from a later date leaves every day before it
+       exactly as it was": 89 days, 2026-01-02 → 2026-03-31.
+    3. `split.test.ts` › "a third person added at a close leaves the first two's
+       own money before it unchanged", every day 2026-01-02 → 2026-06-30; and
+       `api/test/more-than-two.test.ts` through the build.
+    4. `split.test.ts` › "with no record, a household of two reads what one split
+       of the cumulative total always gave", 200 days, with and without a ratio;
+       `api/test/workbook-import.test.ts` and `books/test/workbook.test.ts`
+       unchanged and passing.
+    5. `split.test.ts` › "many odd-cent payments split equally leave the parts
+       within a cent of each other": 500 payments, three people; per-row
+       rounding drifts by more than 100 cents on the same rows.
+    6. `api/test/mortgage-splits.test.ts` (seven tests).
+    7. `web/test/mortgage-split.test.tsx` › "over a range that crosses a change,
+       the own-money card marks it and names the new split".
+    8. `npm run check` exit 0; `npm test -- --project ledger` 1 658 of 1 658
+       in 78 files, exit 0.
+  - **Not done, and why.** Under `shares`, a person added at a later close is
+    named by no part and takes none until a new record: the parts are the
+    household's, and the owner's answer covered a retirement, not an arrival.
+    Raised with the orchestrator rather than settled here. Nothing else already
+    specified was made free by this work: the other open ledger tickets (lg-38,
+    lg-56, lg-58) touch neither the split nor the card.
+- 2026-10-21 — Owner answers given in the landing session, each to a question
+  the builder or gate 1 raised.
+  - **Builder, open decision 1: a person added at a later close while a `shares`
+    record is in effect.** Options: (a) keep — the newcomer takes no share until
+    a new record is filed (the builder's recommendation); (b) the record lapses
+    to `equal` on the arrival date; (c) refuse a ratio that adds a person while a
+    shares record is in effect. Chosen: (a).
+  - **Builder, open decision 2: the contract licence.** `split` and
+    `splitChanged` added to `MortgageOwnPoint`, and `split` to
+    `MortgageOwnResponse`, beyond the brief. Options: (a) keep (the builder's
+    recommendation); (b) the web computes the markers from `/api/mortgage-splits`
+    and `/api/ratios`. Chosen: (a).
+  - **Gate 1, finding 3's open decision: a book with no ratio.** Options: (a)
+    document it in `00-ANALYSIS.md` §4; (b) pass `people.added_at` to `books`;
+    (c) file a ticket. Chosen: (a), the gate's recommendation.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, the roadmap finding —
+  "`tools/ledger/docs/02-ROADMAP.md` still says "The mortgage bucket is split
+  50/50" and "Each person's own part is their deposits minus half of every
+  payment"", the roadmap's convention being an "_Amended later on …_" line
+  beneath it. Run on `02-ROADMAP.md`, `grep -c "Amended later on 2026-10-21
+(lg-63)"` → 2, one beneath each bullet.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, the "never changed"
+  finding — "Build 4's "a household whose people never changed reads exactly as
+  it does now" holds when every listed person is named by every ratio, or there
+  is no ratio […]. It does not hold for a listed person that no confirmed ratio
+  names […]. That is Build 2's rule (a ratio in effect names the people), so it
+  is the design and not a regression; the Log and `00-ANALYSIS.md` §4 say "never
+  changed" without this edge." The builder's Log claim above is not edited. The
+  edge, added here beside this entry: a listed person that no confirmed ratio
+  names reads 0 from every joint row while a ratio is in effect and the others'
+  shares grow (gate 1: 8,823 of 14,905 `mortgageAsOf` comparisons differ, 296 of
+  500 seeds); no live household is known to be in it (unmeasured). §4 now names
+  it. Run on `00-ANALYSIS.md` above `## Log`, `grep -c "does not hold for a
+listed person that no confirmed ratio names"` → 1.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, the no-ratio finding,
+  open decision (a) — "leave it and say in `00-ANALYSIS.md` §4 that a book with
+  no ratio has no add date to read". Run on `00-ANALYSIS.md` above `## Log`,
+  `grep -c "has no add date to read"` → 1.

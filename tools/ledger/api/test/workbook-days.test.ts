@@ -100,37 +100,37 @@ describe("matchPart: some of a day's rows, as the bank lists them, against the w
   const bank = day("2026-03-05", 100_000, [-300, 1_000, 70, 50]);
 
   test("the bank's first rows open from the day's opening balance", () => {
-    expect(matchPart(run, 0, bank.slice(0, 2), "a day either side")).toBe(true);
-    expect(matchPart(run, 0, bank.slice(1, 3), "a day either side")).toBe(false);
+    expect(matchPart(run, 0, bank.slice(0, 2), "a day either side")).not.toBeNull();
+    expect(matchPart(run, 0, bank.slice(1, 3), "a day either side")).toBeNull();
   });
 
   test("the bank's last rows close on the day's closing balance", () => {
-    expect(matchPart(run, 2, bank.slice(2), "a day either side")).toBe(true);
-    expect(matchPart(run, 1, bank.slice(1), "a day either side")).toBe(true);
+    expect(matchPart(run, 2, bank.slice(2), "a day either side")).not.toBeNull();
+    expect(matchPart(run, 1, bank.slice(1), "a day either side")).not.toBeNull();
     // Taken as the last two when they are the middle two: they close elsewhere.
-    expect(matchPart(run, 2, bank.slice(1, 3), "a day either side")).toBe(false);
+    expect(matchPart(run, 2, bank.slice(1, 3), "a day either side")).toBeNull();
   });
 
   test("rows from the middle open where some of the day's other amounts, as many as came before, reach", () => {
     // One row came first, and 997.00, where these open, is 1 000.00 and −3.00.
-    expect(matchPart(run, 1, bank.slice(1, 3), "a day either side")).toBe(true);
+    expect(matchPart(run, 1, bank.slice(1, 3), "a day either side")).not.toBeNull();
     // The same rows said to come after two others: no two of the rest reach 997.00.
-    expect(matchPart(run, 2, bank.slice(1, 2), "a day either side")).toBe(false);
+    expect(matchPart(run, 2, bank.slice(1, 2), "a day either side")).toBeNull();
   });
 
   test("a pasted amount the day does not hold is refused wherever it is placed", () => {
     const stranger = day("2026-03-05", 99_700, [999]);
 
     for (const before of [0, 1, 2, 3]) {
-      expect(matchPart(run, before, stranger, "any")).toBe(false);
+      expect(matchPart(run, before, stranger, "any")).toBeNull();
     }
   });
 
   test("the part must fit inside the day, and is dated within the window", () => {
-    expect(matchPart(run, 3, bank.slice(2), "any")).toBe(false);
+    expect(matchPart(run, 3, bank.slice(2), "any")).toBeNull();
     const late = bank.slice(2).map((row) => ({ ...row, date: "2026-03-07" }));
-    expect(matchPart(run, 2, late, "a day either side")).toBe(false);
-    expect(matchPart(run, 2, late, "any")).toBe(true);
+    expect(matchPart(run, 2, late, "a day either side")).toBeNull();
+    expect(matchPart(run, 2, late, "any")).not.toBeNull();
   });
 
   test("a day longer than the search allows admits no part that starts and ends inside it", () => {
@@ -138,10 +138,10 @@ describe("matchPart: some of a day's rows, as the bank lists them, against the w
     const long = day("2026-03-05", 100_000, amounts);
     const middle = long.slice(1, 2);
 
-    expect(matchPart(long, 1, middle, "any")).toBe(false);
+    expect(matchPart(long, 1, middle, "any")).toBeNull();
     // Its first and last rows are still weighed, since they need no search.
-    expect(matchPart(long, 0, long.slice(0, 1), "any")).toBe(true);
-    expect(matchPart(long, amounts.length - 1, long.slice(-1), "any")).toBe(true);
+    expect(matchPart(long, 0, long.slice(0, 1), "any")).not.toBeNull();
+    expect(matchPart(long, amounts.length - 1, long.slice(-1), "any")).not.toBeNull();
   });
 });
 
@@ -167,8 +167,8 @@ describe("matchPart: the longest day that is searched (F7)", () => {
     const exact = day("2026-03-05", 100_000, amounts);
 
     // The same part as the one a day a row longer refuses, above.
-    expect(matchPart(exact, 1, exact.slice(1, 2), "any")).toBe(true);
-    expect(matchPart(exact, 5, exact.slice(5, 9), "any")).toBe(true);
+    expect(matchPart(exact, 1, exact.slice(1, 2), "any")).not.toBeNull();
+    expect(matchPart(exact, 5, exact.slice(5, 9), "any")).not.toBeNull();
   });
 });
 
@@ -208,8 +208,8 @@ describe("matchBlock: a block of the workbook's rows a paste reads as one day (l
       [1, 2],
       [2, 3],
     ]);
-    expect(matchBlock(block, 0, bank)).toBe(true);
-    expect(matchBlock(block, 1, bank.slice(1))).toBe(true);
+    expect(matchBlock(block, 0, bank)).not.toBeNull();
+    expect(matchBlock(block, 1, bank.slice(1))).not.toBeNull();
   });
 
   test("each bank row is dated within a day of the block's dates, and no further", () => {
@@ -217,9 +217,9 @@ describe("matchBlock: a block of the workbook's rows a paste reads as one day (l
     const late = bank.map((row) => ({ ...row, date: "2026-02-22" }));
     const twoDaysLate = bank.map((row) => ({ ...row, date: "2026-02-23" }));
 
-    expect(matchBlock(block, 0, early)).toBe(true);
-    expect(matchBlock(block, 0, late)).toBe(true);
-    expect(matchBlock(block, 0, twoDaysLate)).toBe(false);
+    expect(matchBlock(block, 0, early)).not.toBeNull();
+    expect(matchBlock(block, 0, late)).not.toBeNull();
+    expect(matchBlock(block, 0, twoDaysLate)).toBeNull();
   });
 
   test(`a block's dates are at most ${String(WIDEST_BLOCK_DAYS)} days apart`, () => {
@@ -235,8 +235,8 @@ describe("matchBlock: a block of the workbook's rows a paste reads as one day (l
     ]);
     const anyDay = bank.map((row) => ({ ...row, date: "2026-02-21" }));
 
-    expect(matchBlock(widest, 0, anyDay)).toBe(true);
-    expect(matchBlock(wider, 0, anyDay)).toBe(false);
+    expect(matchBlock(widest, 0, anyDay)).not.toBeNull();
+    expect(matchBlock(wider, 0, anyDay)).toBeNull();
   });
 });
 
@@ -248,12 +248,12 @@ describe("matchStretch: stored rows against pasted rows, a block at a time (lg-5
   const bank = dated(100_000, BANKS_DAY);
 
   test("a stretch starting partway through the block is weighed against the whole block", () => {
-    expect(matchStretch(workbook, 1, bank.slice(1), () => true)).toBe(true);
-    expect(matchStretch(workbook, 0, bank, () => true)).toBe(true);
+    expect(matchStretch(workbook, 1, bank.slice(1), () => true)).not.toBeNull();
+    expect(matchStretch(workbook, 0, bank, () => true)).not.toBeNull();
     // The same rows said to be the stretch's first two: they open elsewhere.
-    expect(matchStretch(workbook, 0, bank.slice(1).concat(bank[0] as DayEntry), () => true)).toBe(
-      false,
-    );
+    expect(
+      matchStretch(workbook, 0, bank.slice(1).concat(bank[0] as DayEntry), () => true),
+    ).toBeNull();
   });
 
   test("a row a paste stored is its own block, compared by the caller", () => {
@@ -269,8 +269,8 @@ describe("matchStretch: stored rows against pasted rows, a block at a time (lg-5
       { date: "2026-02-22", amountCents: -500, balanceCents: 99_000 },
     ];
 
-    expect(matchStretch(rows, 1, pasted, (offset) => offset === 2)).toBe(true);
-    expect(matchStretch(rows, 1, pasted, () => false)).toBe(false);
+    expect(matchStretch(rows, 1, pasted, (offset) => offset === 2)).not.toBeNull();
+    expect(matchStretch(rows, 1, pasted, () => false)).toBeNull();
   });
 });
 
@@ -398,6 +398,7 @@ describe("a paste meeting a day the workbook both re-dated and reordered (lg-59)
       rowsAlreadyPresent: 3,
       tailBalanceCents: 106_089,
       rowsInInbox: 1,
+      datesDiffering: [{ bankDate: "2026-02-21", workbookDate: "2026-02-20", amountCents: -1_234 }],
     });
     const after = storedRows(db);
     expect(after.slice(0, 3)).toEqual(before);
@@ -459,12 +460,12 @@ describe("matchStretch: a cut where the bank's day ends (lg-59, gate 1 F1)", () 
     ]);
 
   test("between two rows of one date, a block may end where the bank's date changes", () => {
-    expect(matchStretch(workbook, 0, bank("2026-02-21", "2026-02-23"), () => true)).toBe(true);
+    expect(matchStretch(workbook, 0, bank("2026-02-21", "2026-02-23"), () => true)).not.toBeNull();
   });
 
   test("and nowhere else inside a run of one date", () => {
     // The bank's rows all on the 22nd: none of its days ends between them.
-    expect(matchStretch(workbook, 0, bank("2026-02-22", "2026-02-22"), () => true)).toBe(false);
+    expect(matchStretch(workbook, 0, bank("2026-02-22", "2026-02-22"), () => true)).toBeNull();
   });
 });
 
@@ -479,7 +480,7 @@ describe("matchStretch: blocks wholly outside the stretch are not weighed (lg-59
     ]);
     const pasted = dated(100_300, [["2026-02-21", 300]]);
 
-    expect(matchStretch(rows, 2, pasted, () => true)).toBe(true);
+    expect(matchStretch(rows, 2, pasted, () => true)).not.toBeNull();
   });
 });
 
@@ -544,6 +545,11 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
       rowsAlreadyPresent: 3,
       tailBalanceCents: 116_477,
       rowsInInbox: 1,
+      // The bank's 21st −7.77 is the workbook's on the 22nd, so its 22nd's is the 23rd's.
+      datesDiffering: [
+        { bankDate: "2026-02-21", workbookDate: "2026-02-22", amountCents: 31 },
+        { bankDate: "2026-02-22", workbookDate: "2026-02-23", amountCents: -777 },
+      ],
     });
     expect(storedRows(db).slice(0, 5)).toEqual(before);
   });
@@ -567,6 +573,10 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
       rowsAlreadyPresent: 2,
       tailBalanceCents: 103_589,
       rowsInInbox: 0,
+      datesDiffering: [
+        { bankDate: "2026-02-23", workbookDate: "2026-02-20", amountCents: -1_234 },
+        { bankDate: "2026-02-23", workbookDate: "2026-02-22", amountCents: 5_600 },
+      ],
     });
   });
 
@@ -587,6 +597,7 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
       rowsAlreadyPresent: 1,
       tailBalanceCents: 106_866,
       rowsInInbox: 1,
+      datesDiffering: [{ bankDate: "2026-02-21", workbookDate: "2026-02-20", amountCents: -1_234 }],
     });
   });
 
@@ -606,6 +617,7 @@ describe("a paste meeting the workbook's days, at the edges of the rule (lg-59, 
       rowsAlreadyPresent: 1,
       tailBalanceCents: 104_666,
       rowsInInbox: 0,
+      datesDiffering: [{ bankDate: "2026-02-21", workbookDate: "2026-02-22", amountCents: 5_600 }],
     });
   });
 });
@@ -707,9 +719,9 @@ describe("a paste meeting a workbook row dated two or three days off (lg-61)", (
     const threeOff = dated(100_000, [["2026-02-23", -500]]);
     const fourOff = dated(100_000, [["2026-02-24", -500]]);
 
-    expect(matchBlock(block, 0, threeOff)).toBe(false);
-    expect(matchBlock(block, 0, threeOff, RIVAL_TOLERANCE)).toBe(true);
-    expect(matchBlock(block, 0, fourOff, RIVAL_TOLERANCE)).toBe(false);
+    expect(matchBlock(block, 0, threeOff)).toBeNull();
+    expect(matchBlock(block, 0, threeOff, RIVAL_TOLERANCE)).not.toBeNull();
+    expect(matchBlock(block, 0, fourOff, RIVAL_TOLERANCE)).toBeNull();
     expect(RIVAL_TOLERANCE).toEqual({
       widestBlockDays: STORED_TOLERANCE.widestBlockDays,
       daysOff: RIVAL_DAYS_OFF,
@@ -733,5 +745,175 @@ describe("a paste meeting a workbook row dated two or three days off (lg-61)", (
       rowsInInbox: 1,
     });
     expect(storedRows(db).slice(0, 3)).toEqual(before);
+  });
+});
+
+// lg-58: the match answers its pairing, and the pairing agrees on dates wherever
+// the amounts let it, so a paste names only the rows no reading pairs alike.
+
+describe("the pairing a paste reports its differing dates from (lg-58)", () => {
+  test("matchPart pairs a row with one of its amount and its date, where the day holds one", () => {
+    // Two −5.00 in the workbook's block, on the 20th and the 21st; the bank's
+    // first row of the day is −5.00 on the 21st.
+    const run = dated(100_000, [
+      ["2026-02-20", -500],
+      ["2026-02-21", -500],
+    ]);
+    const part = dated(100_000, [["2026-02-21", -500]]);
+
+    expect(matchPart(run, 0, part, "any")).toEqual([1]);
+    expect(matchPart(run, 0, dated(100_000, [["2026-02-20", -500]]), "any")).toEqual([0]);
+  });
+
+  test("matchPart pairs a row no date matches with the nearest-dated row of its amount", () => {
+    const run = dated(100_000, [
+      ["2026-02-19", 300],
+      ["2026-02-21", 300],
+      ["2026-02-20", -100],
+    ]);
+
+    expect(matchPart(run, 0, dated(100_000, [["2026-02-22", 300]]), "any")).toEqual([1]);
+    expect(matchPart(run, 0, dated(100_000, [["2026-02-18", 300]]), "any")).toEqual([0]);
+  });
+
+  test("matchPart leaves a row of a date to the pasted row of that date, though another is nearer it", () => {
+    // +3.00 on the 20th and the 21st; the bank's +3.00 on the 22nd comes first
+    // and is nearer the 21st, but the bank's other +3.00 is the 21st's.
+    const run = dated(100_000, [
+      ["2026-02-20", 300],
+      ["2026-02-21", 300],
+    ]);
+    const bank = dated(100_000, [
+      ["2026-02-22", 300],
+      ["2026-02-21", 300],
+    ]);
+
+    expect(matchPart(run, 0, bank, "any")).toEqual([0, 1]);
+  });
+
+  test("matchStretch answers the cutting that pairs the most rows alike, not the first found", () => {
+    // +10.00 on the 20th, 21st and 23rd. The three are never one block, so the
+    // stretch is cut {20th}{21st, 23rd} or {20th, 21st}{23rd}, or row by row.
+    // The bank dates its first two the 21st and the 20th: only the block of the
+    // 20th and the 21st pairs them alike, and it reaches the end second.
+    const rows: StretchRow[] = dated(100_000, [
+      ["2026-02-20", 1_000],
+      ["2026-02-21", 1_000],
+      ["2026-02-23", 1_000],
+    ]).map((row) => ({ ...row, fromWorkbook: true }));
+    const bank = dated(100_000, [
+      ["2026-02-21", 1_000],
+      ["2026-02-20", 1_000],
+      ["2026-02-23", 1_000],
+    ]);
+
+    expect(matchStretch(rows, 0, bank, () => true)).toEqual([1, 0, 2]);
+  });
+
+  test("a row a paste stored is paired with itself, and a stretch that does not match answers null", () => {
+    const rows: StretchRow[] = [
+      { date: "2026-02-20", amountCents: 500, balanceCents: 100_500, fromWorkbook: false },
+      { date: "2026-02-21", amountCents: -200, balanceCents: 100_300, fromWorkbook: true },
+    ];
+    const bank = [
+      { date: "2026-02-20", amountCents: 500, balanceCents: 100_500 },
+      { date: "2026-02-22", amountCents: -200, balanceCents: 100_300 },
+    ];
+
+    expect(matchStretch(rows, 0, bank, () => true)).toEqual([0, 1]);
+    expect(matchStretch(rows, 0, bank, () => false)).toBeNull();
+  });
+
+  test("a paste wholly inside the history names the rows of the way it fits with the fewest dated otherwise", () => {
+    // −5.00 on the 21st, +5.00 on the 24th, −5.00 on the 22nd, so the account is
+    // at 995.00 after each −5.00, and the three are never one block. The bank's
+    // −5.00 on the 21st fits from either: from the 22nd's, found first, a day off;
+    // from the 21st's, dated alike.
+    const db = workbookDb([
+      ["2026-02-21", -500],
+      ["2026-02-24", 500],
+      ["2026-02-22", -500],
+      ["2026-02-26", 2_000],
+    ]);
+
+    expect(paste(db, bankRows([["2026-02-21", -500]]), 100_000)).toEqual({
+      rowsAdded: 0,
+      rowsAlreadyPresent: 1,
+      tailBalanceCents: 101_500,
+      rowsInInbox: 0,
+    });
+  });
+
+  test("the dates named are the stored pass's, never the rival pass's, which reads rows three days off", () => {
+    // Found by a random search (lg-58's Log). Both passes read the paste as 4
+    // already stored, so it is stored. The rival pass pairs its −5.00 of the
+    // 22nd with the workbook's of the 25th, three days off, and names two rows;
+    // the stored pass allows no such pair, and names three.
+    const db = workbookDb([
+      ["2026-02-21", 500],
+      ["2026-02-18", -300],
+      ["2026-02-24", -500],
+      ["2026-02-23", -300],
+      ["2026-02-25", -500],
+      ["2026-02-27", 500],
+    ]);
+    const rows = bankRows([
+      ["2026-02-22", -500],
+      ["2026-02-23", -300],
+      ["2026-02-24", -500],
+      ["2026-02-24", 500],
+    ]);
+
+    expect(paste(db, rows, 100_200)).toEqual({
+      rowsAdded: 0,
+      rowsAlreadyPresent: 4,
+      tailBalanceCents: 99_400,
+      rowsInInbox: 0,
+      datesDiffering: [
+        { bankDate: "2026-02-22", workbookDate: "2026-02-24", amountCents: -500 },
+        { bankDate: "2026-02-24", workbookDate: "2026-02-25", amountCents: -500 },
+        { bankDate: "2026-02-24", workbookDate: "2026-02-27", amountCents: 500 },
+      ],
+    });
+  });
+
+  test("among cuttings naming as many rows, matchStretch answers the one whose dates are nearest", () => {
+    // +5.00 on the 21st, the 23rd and the 21st; the bank dates them the 21st,
+    // the 22nd and the 20th. Every matching cutting names two rows. The block of
+    // all three, found first, pairs the bank's 22nd with the last 21st and leaves
+    // the 20th the 23rd, three days off; cut after the first row, each is a day off.
+    const rows: StretchRow[] = dated(100_000, [
+      ["2026-02-21", 500],
+      ["2026-02-23", 500],
+      ["2026-02-21", 500],
+    ]).map((row) => ({ ...row, fromWorkbook: true }));
+    const bank = dated(100_000, [
+      ["2026-02-21", 500],
+      ["2026-02-22", 500],
+      ["2026-02-20", 500],
+    ]);
+
+    expect(matchStretch(rows, 0, bank, () => true)).toEqual([0, 1, 2]);
+  });
+
+  test("among starts naming as many rows, a paste wholly inside the history names the nearest dates", () => {
+    // The bank's −5.00 on the 22nd fits from the workbook's −5.00 of the 23rd,
+    // a day off, and from its −5.00 of the 20th, in a block with the +3.00 of
+    // the 21st, two days off. The later row is weighed first.
+    const db = workbookDb([
+      ["2026-02-23", -500],
+      ["2026-02-26", 500],
+      ["2026-02-20", -500],
+      ["2026-02-21", 300],
+      ["2026-03-04", 2_000],
+    ]);
+
+    expect(paste(db, bankRows([["2026-02-22", -500]]), 100_000)).toEqual({
+      rowsAdded: 0,
+      rowsAlreadyPresent: 1,
+      tailBalanceCents: 101_800,
+      rowsInInbox: 0,
+      datesDiffering: [{ bankDate: "2026-02-22", workbookDate: "2026-02-23", amountCents: -500 }],
+    });
   });
 });
