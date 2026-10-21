@@ -222,29 +222,50 @@ async function openTab(page: Page, name: string): Promise<void> {
 }
 
 /**
- * The tabs that need nothing beyond being opened, each with the text that says
- * its books arrived. Receipt and Paste are below: they are forms, and a form
- * with nothing in it is the state that proves least.
+ * The tabs that need nothing beyond being opened, each with what must be on the
+ * screen before it is measured. Receipt and Paste are below: they are forms, and
+ * a form with nothing in it is the state that proves least.
+ *
+ * **Every entry is a row or a figure the seed put there, never a heading.** A
+ * heading is rendered while the screen is still loading, when its request has
+ * failed, and over empty books, and a screen measured in any of those states is
+ * not the screen this spec is about. Stats has one figure per card, so a series
+ * that did not arrive fails the case rather than going unmeasured. Admin has no
+ * seed of the spec's own: what it shows is the household directory, which the
+ * `e2e:ledger:serve` script fills before the API boots, so its entries are those.
  */
-const TABS: readonly (readonly [tab: string, arrived: RegExp])[] = [
-  // What each says is a row or a figure from the seed, so a screen is not
-  // measured while it is still asking for its books.
-  ["Home", /1550\.50/u],
-  ["Stats", /Settlements/u],
-  ["Period", /Groceries since the close/u],
-  ["History", /12 rows match/u],
-  ["Inbox", /Frais mensuels/u],
-  ["Rules", /Hypothèque \/Prêteur Exemple/u],
-  ["Categories", /Rows with no spending category/u],
-  ["Salaries", /Ratio in effect: alex 57\.1429/u],
-  ["Household", /sam@example\.test added as sam/u],
-  ["Admin", /Addresses to admit/u],
+const TABS: readonly (readonly [tab: string, arrived: readonly RegExp[]])[] = [
+  ["Home", [/1550\.50/u]],
+  [
+    "Stats",
+    [
+      /700\.00 \$/u, // mortgage payment
+      /-1050\.00 \$/u, // own money in the mortgage
+      /750\.50 \$/u, // put into the buffer
+      /1550\.50 \$/u, // buffer balance
+      /72000\.00 \$/u, // salaries
+      /57\.1429 %/u, // ratio
+      /-60\.25 \$/u, // spending, the open period
+      /89\.99 \$/u, // fixed items
+      /29\.27 \$/u, // settlements
+    ],
+  ],
+  ["Period", [/Groceries since the close/u]],
+  ["History", [/12 rows match/u]],
+  ["Inbox", [/Frais mensuels/u]],
+  ["Rules", [/Hypothèque \/Prêteur Exemple/u]],
+  ["Categories", [/12 rows, newest first/u, /Frais mensuels/u]],
+  ["Salaries", [/Ratio in effect: alex 57\.1429/u]],
+  ["Household", [/sam@example\.test added as sam/u]],
+  ["Admin", [/Test household/u, /sam@example\.test/u]],
 ];
 
 for (const [tab, arrived] of TABS) {
   test(`${tab} fits a phone and a desktop`, async ({ page }, testInfo) => {
     await openTab(page, tab);
-    await expect(page.getByRole("main")).toContainText(arrived);
+    for (const text of arrived) {
+      await expect(page.getByRole("main")).toContainText(text);
+    }
     await fitsBothWidths(page, testInfo, tab);
   });
 }

@@ -14,7 +14,7 @@ There is one spec, and it is the layout check (repo-109):
   the same pull request.
 
   Each screen is opened onto rows. The spec fills the household's books through
-  the API before it starts — two rules, a pasted statement, salaries and their
+  the API before it starts — three rules, a pasted statement, salaries and their
   ratio, a closed period and an open one with lines and a recurring item — because
   an empty screen does not prove a full one fits. Open the screenshots: a width
   assertion over a page that rendered nothing passes.
