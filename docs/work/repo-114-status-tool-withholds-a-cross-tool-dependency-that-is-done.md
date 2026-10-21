@@ -86,6 +86,12 @@ the one rule below.
      ticket, with `waits on repo-9`. This pins that the fix did not make an
      unstartable ticket look startable.
 5. Do not edit `CLAUDE.md`, `docs/01-TICKETS.md` or any ticket's frontmatter.
+6. **The `(waits on …)` label lists only dependencies that are not `done`.** The
+   default view's label is `ticket.depends_on.join(", ")` (`scripts/status.mjs:1005`),
+   so a done dependency is named beside the open one. The label filters on the same
+   whole-graph done set as Build 1, so `--tool` narrows the rows and never the
+   dependencies the label names. Read from the code, not reproduced on the live
+   board.
 
 ## Done when
 
@@ -98,6 +104,10 @@ the one rule below.
 - `scripts/test/status.test.ts`, the third case of Build 4: with the dependency
   `ready`, the planner ticket is still withheld with `waits on repo-9`. Passes before
   and after the fix.
+- `scripts/test/status.test.ts`, the test Build 6 names: a planner ticket with one
+  `done` and one open cross-tool dependency, under `--tool planner`, has the label
+  `(waits on <open id>)` only, with no done id in it. Fails before the fix, which
+  prints both ids.
 - `npm run -s status -- --ready` still lists `pl-58` and `pl-59` on stdout, and its
   stderr still names `lg-65` and `repo-98` as withheld. Read on the builder's head,
   with pl-59 still `ready` (PR #591 open at intake).
@@ -145,3 +155,33 @@ repo-114` outside `docs/work` printed nothing, and no branch or open pull reques
     ```
     Without `--tool` the ticket is ready. With `--tool` it is withheld, and the default
     view says it waits on a dependency that is `done`.
+- 2026-10-21 — The coordinator relayed the owner's answers to the two open
+  decisions the builder raised at filing. Both matched the builder's recommendation.
+  - **Decision 1: the default view's `unblocked` set.** It is `readyTickets(mine)`,
+    which reads only the rows of one tool. Options: keep it in this ticket's Build
+    (the recommendation); cut it and file it separately. **Chosen: keep it.** It is
+    Build 2 and its Done-when line already names it.
+  - **Decision 2: the `(waits on …)` label lists done dependencies too.** Options:
+    fold the filter into this ticket's Build (the recommendation); file a separate
+    ticket; leave it. **Chosen: fold it in.** It is Build 6, with a Done-when line
+    naming the test that grades it.
+  - **Reading.** Build 6 is read from the code: the label is `depends_on.join` at
+    `scripts/status.mjs:1005`. It is not reproduced on the live board, because no
+    live planner ticket has two dependencies with one `done`.
+  - **Fixture reproduction, 2026-10-21 on `9ce3c210`.** A planner ticket `pl-2` with
+    `depends_on: [repo-9, repo-10]`, `repo-9` at `status: done` and `repo-10` at
+    `status: ready`, run with `node scripts/status.mjs --root <tree> --tool planner`.
+    The script is `fixture-label.mts` in the builder's scratch directory. Output:
+    ```
+    == status --tool planner  (exit 0)
+    -- stdout
+
+    planner — 1 open of 1
+
+      —    not started  0 done, 1 open
+
+      · pl-2   the pl-2 thing (waits on repo-9, repo-10)
+
+    -- stderr
+    ```
+    The label names `repo-9`, which is `done`. The fix must name `repo-10` only.
