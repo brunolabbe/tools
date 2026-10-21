@@ -4,8 +4,7 @@
   // after a browser launch rather than at the terminal. The twin of
   // `tools/planner/e2e/tsconfig.json`, whose note says why it is a file per tool.
   //
-  // `playwright.config.ts` is pulled in from a directory up, and today it is the
-  // only file here: the suite has no spec yet (see README.md). Without this
+  // `playwright.config.ts` is pulled in from a directory up. Without this
   // project that config — which decides `WEB_DIR`, the port and the database —
   // would be in no project at all, and nothing would say so.
   "extends": "../../../tsconfig.tests.json",

@@ -24,7 +24,7 @@ books        pure: the statement parser, its proofs and the rule matching; no mo
 receipts     the receipt reader: a photo in, proposals out; the only package that talks to a model
 api          Fastify, persistence, HTTP — the only place that reads process.env
 web          React + Vite UI, mobile-first
-e2e          Playwright specs — none yet; e2e/README.md says what earns the first
+e2e          Playwright specs — the layout spec; e2e/README.md says what earns the next
 ```
 
 `books` holds the statement-paste parser and its running-balance proof (lg-1) and
@@ -54,7 +54,7 @@ npm run dev:ledger          # API (8100) + web (5193) together, both in watch mo
 npm run dev:ledger:api      # just the API
 npm run dev:ledger:web      # just the UI
 npm test -- --project ledger
-npm run e2e:ledger          # "No tests found" until the first spec
+npm run e2e:ledger          # the layout spec: every screen at 360px and 1280px
 npm run import:ledger -- <workbook.xlsx> --household <id> --as <person>   # the one-off import; a dry run without --write
 npm run household:ledger -- <add | member | remove | list>  # the household directory, from the host
 npm run backfill-spending:ledger -- --household <id> --as <person>   # lg-53's one-off: categories from text; a dry run without --write
