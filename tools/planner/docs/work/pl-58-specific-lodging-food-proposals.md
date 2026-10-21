@@ -943,3 +943,27 @@ place mentions, 1019 distinct places`. `cmp` of `invention/2026-10-17.json` agai
   own row and not a sensitivity. It still clears the bar (lower bound 5.9, above 5). The
   with-parks headline (40 objects, 5 not confirmed, 12.5%, 5.5–26.1) and every other row
   are unchanged. The Build 6 entry is not edited.
+
+**2026-10-21 — The owner's answers (landing, Sonnet 5.5).** Relayed by the orchestrator.
+The open-decision section above stays as the gate graded it.
+
+1. **Build 7's open decision: the owner chose (b), a discovery route.** The question was
+   which way after pl-58, given 5 of 40 named lodging or food objects not confirmed
+   (12.5%, 5.5–26.1), clearing the bar by 0.5 points, and a prompt change that did not
+   raise the named-premises share on mentions. The options put to the owner were (a)
+   option 3, a lookup scoped to `lodging` and `food` that checks named places after the
+   specialists run, which the Build 5–7 agent and the orchestrator recommended; (b) a
+   discovery route, added by the orchestrator from the code: before the lodging specialist
+   runs, real establishments in each town are fetched and the specialist chooses from them,
+   as pl-29's discovery pass does for activities, food and conditions-and-gear; (c) option
+   4, close analysis §5 item 3; (d) decide later. **The owner chose (b), overriding the
+   recommendation of option 3.** It is being filed as pl-60 on branch
+   `pl-60-file-lodging-discovery`, a separate docs pull request not yet merged when this
+   was written. This ticket builds nothing on it.
+2. **The firewall.** The owner gave no open or close times. Opened: not observed by the
+   builder; the orchestrator's probe found outbound open at 01:36Z on 2026-10-21. Closed:
+   not closed at landing, by the owner's choice after the web check.
+3. **Gate 1's lows.** The owner chose to fix low 1 at landing (the recommendation), over
+   landing as is with both recorded. Low 1 is the entry "Fixed at landing" above. Low 2
+   (the dead first evidence URL for `fumoir d'antan|gaspé`, whose `exists-elsewhere`
+   verdict holds on the second URL) stays recorded in gate 1's section and is not fixed.
