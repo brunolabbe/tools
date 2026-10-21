@@ -322,3 +322,28 @@ someone declares` (`expected [ '--ok' ] to deeply equal []`). The same rename on
     fail (a); the dark contrast checks fail instead (3 of 16, `dark --ok is
 undefined, not a #rrggbb colour`). A missing dark definition is therefore
     held by the contrast tests, for `--ok` and `--warn` only.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, low "no `Done when` line
+  depends on it" — "the contrast tests read the `--ok` / `--warn` tokens, not the
+  mark rules. [...] Direction: one assertion that each mark rule's `color` is that
+  token." `stylesheet.test.ts` gains "each mark rule is coloured by the token the
+  contrast tests measure". Planted `.provenance.grounded .mark { color: #2f6f4f; }`
+  → 1 failed | 19 passed, `expected '#2f6f4f' to be 'var(--ok)'`; planted
+  `.provenance.asserted .mark { color: var(--accent); }` → 1 failed | 19 passed,
+  `expected 'var(--accent)' to be 'var(--warn)'`; both restored with
+  `git checkout 1d4f1537 -- tools/planner/web/src/styles.css` → 20 passed (20).
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, low "check (a) is
+  narrower than CSS", the first and third mechanisms only — "an upper-case
+  `VAR(--nonexistent)` (CSS function names are case-insensitive, the regex is
+  not)" and "`packages/ui/src/tokens.css`'s own two no-fallback uses (`var(--bg)`,
+  `var(--text)`) are never scanned". `varsWithoutFallback` now matches `var(`
+  with the `i` flag, and a new test scans `undefinedVars(tokens, styles)`. Planted
+  `.zz { color: VAR(--nonexistent); }` in `styles.css` → 1 failed | 19 passed
+  (`expected [ '--nonexistent' ] to deeply equal []`); the same plant with the `i`
+  flag removed leaves the real-stylesheet test green (only the synthetic case
+  fails), which is the gap. Planted `.zz { color: var(--zz-nope); }` in
+  `packages/ui/src/tokens.css` → 1 failed | 19 passed (`expected [ '--zz-nope' ]
+to deeply equal []`); restored with `git checkout 1d4f1537 -- <path>`. The
+  second mechanism (a name defined only in a rule that never reaches the
+  consumer) is not fully stated and stays recorded as the gate wrote it.
+  `npx vitest run tools/planner/web/test/stylesheet.test.ts` → 20 passed (20);
+  `npx vitest run tools/planner/web/test` → 7 files, 131 passed (131).

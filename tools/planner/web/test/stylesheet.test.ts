@@ -38,10 +38,20 @@ function definedNames(css: string): Set<string> {
 
 /**
  * Every `var(--name)` with no fallback. One with a fallback survives an
- * undefined name by design, so it is not this check's business.
+ * undefined name by design, so it is not this check's business. The `i` flag is
+ * because CSS function names are case-insensitive: `VAR(--x)` is a read.
  */
 function varsWithoutFallback(css: string): string[] {
-  return [...stripComments(css).matchAll(/var\(\s*(--[\w-]+)\s*\)/gu)].map((m) => m[1] ?? "");
+  return [...stripComments(css).matchAll(/var\(\s*(--[\w-]+)\s*\)/giu)].map((m) => m[1] ?? "");
+}
+
+/** The `color` a rule with exactly this selector declares, or undefined. */
+function ruleColour(css: string, selector: string): string | undefined {
+  const escaped = selector.replaceAll(/[.\\^$*+?()[\]{}|]/gu, String.raw`\$&`);
+  const rule = new RegExp(String.raw`(?<![\w.#-])${escaped}\s*\{([^}]*)\}`, "u").exec(
+    stripComments(css),
+  );
+  return /(?<![\w-])color\s*:\s*([^;]+);/u.exec(rule?.[1] ?? "")?.[1]?.trim();
 }
 
 /** The names a stylesheet reads with no fallback and that nothing in `files` defines. */
@@ -103,6 +113,13 @@ describe("every name the stylesheet reads is defined", () => {
     expect(undefinedVars(styles, tokens)).toEqual([]);
   });
 
+  test("the shared tokens file's own no-fallback reads are defined too", () => {
+    // `tokens.css` reads `--bg` and `--text` on `body`; the tool's stylesheet
+    // defines them, so it is passed as a place a name may be defined.
+    expect(varsWithoutFallback(tokens)).toEqual(expect.arrayContaining(["--bg", "--text"]));
+    expect(undefinedVars(tokens, styles)).toEqual([]);
+  });
+
   test("the scan found the names it is meant to read", () => {
     // A regex that matched nothing would pass the test above.
     const read = varsWithoutFallback(styles);
@@ -134,6 +151,13 @@ describe("the provenance marks are readable on the surface they sit on", () => {
     }
   }
 
+  test("each mark rule is coloured by the token the contrast tests measure", () => {
+    // The tests above read the tokens, so a mark recoloured with a literal or
+    // another token would leave them green with the marks unmeasured.
+    expect(ruleColour(styles, ".provenance.grounded .mark")).toBe("var(--ok)");
+    expect(ruleColour(styles, ".provenance.asserted .mark")).toBe("var(--warn)");
+  });
+
   test("the two marks stay apart from each other and from the accent and the danger colour", () => {
     // Telling a sourced line from an unverified one is the marks' only job.
     for (const theme of ["light", "dark"] as const) {
@@ -149,6 +173,16 @@ describe("the checkers fail on a bad stylesheet", () => {
   test("an undefined var() with no fallback is named", () => {
     const css = ".a { border: 1px solid var(--line); color: var(--text); } :root { --text: #000; }";
     expect(undefinedVars(css)).toEqual(["--line"]);
+  });
+
+  test("an upper-case VAR() is still a read", () => {
+    expect(undefinedVars(".a { color: VAR(--nonexistent); }")).toEqual(["--nonexistent"]);
+  });
+
+  test("a rule's colour is read by its exact selector", () => {
+    const css = ".a .mark { color: red; } .a.b .mark { color: var(--ok); }";
+    expect(ruleColour(css, ".a.b .mark")).toBe("var(--ok)");
+    expect(ruleColour(css, ".b .mark")).toBeUndefined();
   });
 
   test("a name defined only in a comment is not defined", () => {
