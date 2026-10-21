@@ -394,3 +394,130 @@ WebSearch is needed here.
 **Stale prose folded in.** Why said pl-57's Log was on a branch that "had not merged",
 and Build 4 said "once pl-57 has merged". pl-57 is `done` on `main` (PR #522), so both
 sentences now say so; the filing-time entries below are left as written.
+
+**2026-10-20 — Build 1, 2 and the harness (builder-standard, Sonnet 5.5). Stopped before
+the live run, on the orchestrator's instruction: no `ANTHROPIC_API_KEY` is set here.**
+
+**Build 1, the two `role` strings.** `lodging` and `food` each gain the same two-way
+sentence (a proposal names one premises at its locality, or says plainly it is a kind of
+place and names none, then `place.name` holds the kind, `motel` for `lodging` and
+`bakery` for `food`, and `place.locality` the town). `REPLY_SHAPE`, the shared rules and
+the other five `role` strings are untouched. The diff against `93bfa1f1`, whose base is
+`origin/main` at the build:
+
+```
+git diff 93bfa1f1 -- tools/planner/agent/src
+diff --git a/tools/planner/agent/src/specialists.ts b/tools/planner/agent/src/specialists.ts
+@@ -130,7 +130,7 @@ export const SPECIALIST_DEFINITIONS: Record<Specialist, SpecialistDefinition> =
+@@ -148,7 +148,7 @@ export const SPECIALIST_DEFINITIONS: Record<Specialist, SpecialistDefinition> =
+```
+
+**Build 2, the prompt tests.** Three cases appended at the end of
+`tools/planner/agent/test/prompt.test.ts` (the `lodging` and the `food` system prompts
+carry the instruction, before "Rules, and they are not negotiable"; `activities` does
+not, and across the seven specialists exactly `food` and `lodging` carry it).
+`npx vitest run tools/planner/agent/test/prompt.test.ts`: **22 passed (22)**, exit 0.
+With `specialists.ts` restored to `93bfa1f1` the same file gives `3 failed | 19 passed
+(22)`, the three new cases, so they test the change.
+
+**Build 4, the population argument: `invention.ts --after pl58-<date>`.** The Log names
+how each of the four things was done:
+
+- **Population.** No argument: the harness reads only the 111 files listed in
+  `tools/planner/api/test/fixtures/live/invention/population-pl57.json`, the manifest
+  (paths relative to `live/`, written by walking `live/` under pl-57's own rule, which
+  found 111), and never walks `live/`. A manifest line with no file on disk is an error.
+  With `--after pl58-<date>`: every `.json` under the `claude-<family>-…-pl58-<date>`
+  directories, and nothing in the manifest. The label must match
+  `^pl58-\d{4}-\d{2}-\d{2}$`, so a directory without the marker is never the new run's.
+- **Files.** No argument: pl-57's `invention/classification.json`, `verdicts.json` and
+  `2026-10-17.json`, unchanged. With the argument: `invention/pl58-<date>/` holding
+  `classification.json`, `verdicts.json` and `<date>.json`, and the record says
+  `ticket: "pl-58"`. `RECORD_FILE`, `CLASSIFICATION_FILE` and `VERDICTS_FILE` became
+  `layoutFor(liveDir, run)`; nothing else imported them.
+- **Draw.** No argument: pl-57's 50 per family, with its three seeds. With the argument:
+  one `stratum` entry. The stratum keys (the new run's `named-premises` keys that
+  `lodging` or `food` proposed) are put in one seeded order, `STRATUM_SEED` 20261020 by
+  the same mulberry32 shuffle (`seededOrder`; pl-57's `draw` is now a prefix of it and
+  gives the same output). `walkStratum` takes them in that order until 40 distinct first
+  queries have a verdict (`STRATUM_TARGET_OBJECTS`), or the keys run out, or the next key
+  has none yet. The record's `stratumDraw` holds the seed, the whole order, the keys
+  taken, the object count, why it stopped, and each taken key's object; it is absent from
+  pl-57's record. `park-visit` objects are set aside in `withoutParks`: an object counts
+  as a park only when every one of its keys is tagged `park-visit`.
+- **Write mode** writes only `layout.recordFile`, the file the argument selected, creating
+  `invention/pl58-<date>/` if needed. It cannot reach `2026-10-17.json` with `--after`.
+  Reconciliation with pl-56 runs under `--after` over the places pl-56 also read, since
+  `reconcile` rejects a pl-56 row its classification lacks.
+
+`render` also prints each of `lodging`'s and `food`'s named-premises share on mentions
+and on places. On pl-57's data that line gives the before figures the ticket quotes:
+`lodging … mentions 47 of 402 (11.7%); places 28 of 320 (8.8%)`, `food … mentions 36
+of 322 (11.2%); places 25 of 259 (9.7%)`.
+
+**The default is unchanged.**
+`PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts > out 2>&1; echo exit=$?` gave `exit=0`,
+`111 live records, 2594 place mentions, 1019 distinct places`, and `check: the committed
+record equals its regeneration; every sampled place has a verdict`. Exit code taken
+without a pipe. `git diff --name-status 93bfa1f1 --
+tools/planner/api/test/fixtures/live/invention/2026-10-17.json` prints nothing.
+
+**The planted-record control.** With the new run's records not yet on disk, a copy of
+`claude-haiku-5-5-low/set-a-resort.json` with its first place renamed to `planted
+premises hotel` was written to `claude-haiku-5-5-low/planted-record.json` (26 files in
+that directory, 25 without it). The same check gave `exit=0` and `111 live records,
+2594 place mentions, 1019 distinct places`. The plant was then removed (25 files). The
+new run's records are still to land, so **"111 record files, 1,019 places with the new
+run's records on disk" is re-run after the live run**; the manifest, not the directory,
+is what the count follows, and `invention-population.test.ts` pins both cases (below).
+
+**Tests for the harness.** `tools/planner/api/test/invention-population.test.ts`: 18
+passed (18), covering the command line, the file layout, the default being the manifest
+alone against a planted record and a new run's directory, `--after` reading the run's
+directories only, the real tree counting 111 files and 1,019 places, the ordered walk (stops at the
+target counting objects and not keys, runs out, stops at the first key with no verdict),
+and the record under `--after` (`pl-58`, `samplePerFamily` null, `stratumDraw`, parks
+apart, a verdict past the stopping point refused, pl-57's record shape without it). Not
+covered, and not claimed: the check mode in `--after` (it needs the hand classification
+and the verdicts, which do not exist yet).
+
+**Checks so far.** `npm run check` exit 0 (0 errors; warnings in other files). `npm test --
+--project planner`: **78 files, 1464 tests passed**, exit 0. `node
+tools/planner/api/test/live/run.ts` under the scripted provider, to
+`/tmp/…/build/dry/`, wrote 25 records (6 + 15 + 3 + 1) with exit 0, which is the harness
+and the new prompts running without a key; no cost.
+
+**The live run: not started.** Build 3 is waiting for a key. The authorisation is above
+(2026-10-20). Five sessions, one per pair, in series, written to a scratch wrapper that
+reads the key from a file into the child's environment only and never prints it:
+
+| Pair               | `MODEL`             | `MODEL_EFFORT` | input / output / cache read / 5-minute cache write, per MTok | cap |
+| ------------------ | ------------------- | -------------- | ------------------------------------------------------------ | --- |
+| Haiku 5.5 `low`    | `claude-haiku-5-5`  | `low`          | $0.10 / $0.50 / $0.01 / $0.125                               | $1  |
+| Haiku 5.5 `medium` | `claude-haiku-5-5`  | `medium`       | the same                                                     | $1  |
+| Haiku 5.5 `high`   | `claude-haiku-5-5`  | `high`         | the same                                                     | $1  |
+| Sonnet 5.5 `low`   | `claude-sonnet-5-5` | `low`          | $2 / $10 / $0.10 / $2.50                                     | $5  |
+| Opus 5.5 `low`     | `claude-opus-5-5`   | `low`          | $4 / $20 / $0.20 / $5                                        | $10 |
+
+The rates were read from the pricing page on 2026-10-20
+(`https://platform.claude.com/docs/en/docs/about-claude/pricing`: Opus 5.5 $4 / $5 /
+$0.20 / $20, Sonnet 5.5 $2 / $2.50 / $0.10 / $10, Haiku 5.5 up to 100,000 tokens $0.10 /
+$0.125 / $0.01 / $0.50, as input / 5-minute cache write / cache read / output). They equal the
+`prices` in the first record of each of pl-57's five directories. The caps are pl-40's
+(its Log, 2026-10-12). **The total is bounded at $10 by the wrapper:** each session's
+`--max-usd` is the smaller of its cap and $10 minus what the earlier sessions' records
+measured (`observedUsd` summed), so the five together are allowed at most $10, apart from
+`run.ts`'s own documented one-run fallback excess; it refuses to start a session with
+under $0.25 left, and stops at the first session that exits non-zero. Each `--out` is
+`tools/planner/api/test/fixtures/live/claude-<family>-5-5-<effort>-pl58-<run date>/`,
+the wrapper refusing to start a session whose directory exists (checked in a dry run into
+scratch: the second invocation printed `… exists already; run.ts would overwrite it`).
+The run date is the date the wrapper is given, so all five share one `pl58-<date>` label,
+which is the argument `--after` takes.
+
+**What the brief had wrong.** Nothing material beyond the two stale pl-57 sentences
+folded in above. Build 3 and Why item 5 say the owner sets `--max-usd` for "the run";
+`run.ts` is one session per model and effort, so the five pairs need the bound above.
+`run.ts` produces 25 records for Haiku (set B hits its 15-run cap) and 18 for Sonnet and
+Opus in pl-57's data; the new run's counts may differ.
