@@ -1,0 +1,14 @@
+{
+ "runDate": "2026-10-21",
+ "budget": {
+  "written": "Written and committed before the first query (pl-58 Build 5, 2026-10-21), with the ordered list of each key's planned first query in the ticket's Log; that commit is the pre-registration (owner, 2026-10-21: commit the planned queries first, no harness change). The rubric is pl-57's: a place that came back under the first query it was given is `exists`, `exists-elsewhere` or `closed` on that evidence, each key judged from its own locality; `not-found` only after every query below. `not-found` means the search did not find it, never that it does not exist. Keys that name one real-world entity share one first query, and so one object; where pl-57 searched the same entity its first query is reused verbatim. Spend: one first query per object (40 planned), up to two further queries for a key whose own locality the object's results do not settle, and the three queries below for any key heading to `not-found`; a cap of 90 queries and 20 page fetches in all, and the checks stop and are reported if the cap is reached. Search tool: WebSearch, with WebFetch only to read a result page; both from a general-purpose agent.",
+  "queriesBeforeNotFound": [
+   "1. the name with its locality, as the candidate wrote them",
+   "2. the name alone, in quotation marks",
+   "3. the name in the local language (French for Québec, Italian for Rome and Trieste, German for Vienna, Slovene for Ljubljana, Spanish for Cuba, Mexico and the Dominican Republic)",
+   "plus: the OSM result recorded for this place in pl-56 (tools/planner/api/test/fixtures/live/hours-coverage/2026-10-17.json), where pl-56 read the place; pl-56 read only pl-57's 1,019 places, so 9 of this stratum's 51 keys have a row and the rest have none"
+  ],
+  "osm": "Copied by the harness from pl-56's hours-coverage record for a checked key it has a row for; null for the keys pl-56 never read. A place pl-56 located is not thereby real."
+ },
+ "checks": {}
+}

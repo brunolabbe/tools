@@ -649,3 +649,105 @@ readOn, note}], actualLocality?, closedYear?, note?}}}`, the keys in the workshe
 **Not done by this slice, as instructed:** Build 5 (the web check and `verdicts.json`), 6
 (the per-object rate), 7 (the closing decision), the firewall times, and the `--after`
 check's exit code.
+
+**2026-10-21 — Build 5 begins: the owner's answers and the pre-registration (general-purpose
+agent, Opus 5.5, a slice: Build 5 to 7).** WebSearch runs in a **general-purpose agent**,
+because the `builder-*` agents have no WebSearch; the agent works detached at
+`origin/pl-58-name-a-premises` (`d05840d2`), whose base `origin/main` (`2d1b22bb`) had not
+moved. This entry is committed and pushed **before the first WebSearch**; that commit is the
+pre-registration.
+
+**The owner's answers, 2026-10-21, relayed by the orchestrator:**
+
+1. **Do Build 5 to 7 still run?** The prompt change did not raise the named-premises share on
+   mentions (`lodging` 47 of 402, 11.7%, to 33 of 418, 7.9%; `food` 36 of 322, 11.2%, to 43 of
+   407, 10.6%; on places 8.8% to 15.4% and 9.7% to 14.0%). Options: run Build 5 to 7 as
+   briefed; stop and land the measurement as in-flight; stop and re-plan. **The owner chose:
+   run as briefed** (the orchestrator's recommendation).
+2. **Does the `role`-string change ship in this pull request?** Options: keep it; revert the
+   two `role` strings. **The owner chose: keep it** (the recommendation). `specialists.ts` is
+   not touched by this slice.
+3. **How is "write a key's first query into `verdicts.json` before searching it" done?** The
+   harness's `Check` type requires a verdict, so a pre-search entry is invalid. Options:
+   commit the planned first queries (in the budget block or the Log) before any search, then
+   fill the verdicts in order, with no harness change; or add a `pending` verdict state to the
+   harness. **The owner chose: commit the planned queries first** (builder-standard's
+   recommendation). `invention.ts` is not changed.
+
+**The search budget** is in `invention/pl58-2026-10-21/verdicts.json` (`budget`), committed
+here with no checks: pl-57's rubric and its three queries before `not-found` (with Spanish
+added as the local language for the three Caribbean and Mexican resorts), one first query
+per object, up to two more for a key whose own locality the object's result leaves open,
+and a cap of **90 queries and 20 page fetches**, at which the checks stop and are reported.
+pl-56's OSM record has a row for 9 of the 51 keys only (it read pl-57's places), so the
+`osm` field is null for the other 42.
+
+**The planned first queries, in the worksheet's seeded order** (seed 20261020, from
+`PLANNER_LIVE_RUN=1 node --import tsx tools/planner/api/test/live/invention.ts --after
+pl58-2026-10-21`, which makes no request). A key that names the same real-world entity as an
+earlier key is given the same first query, and so adds a key and no object; where pl-57
+searched that entity, its first query is reused verbatim (the two Gaspésie park keys, the
+Mont-Albert sector, which pl-57 also folded into the park, Forillon, Petit-Gaspé,
+Cap-Bon-Ami, Caffè San Marco, Mercato di Testaccio, the Ljubljana market, Naschmarkt,
+Sant'Eustachio, Parc du Bic, the Mont-Albert campground and gîte, Campo de' Fiori, and
+Fumoir Monsieur Émile). Otherwise it is query 1 of the budget, the name with its locality
+as written. The plan was checked against the worksheet's order by a scratch script that
+walks it as `walkStratum` does: **51 keys, 40 objects, the 40th at key 51**, so the walk is
+planned to take every key and stop on `target`. That outcome follows from the grouping, which
+is fixed here and not after the searches: keyed one object per key, the 40th object would
+have come at key 40. A key whose search shows it is not the entity its group assumed keeps
+the planned first query (so its object does not move) and carries the extra queries.
+
+| #   | key                                                                           | planned first query                                           | object             |
+| --- | ----------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------ |
+| 1   | `parc national de la gaspésie\|sainte-anne-des-monts`                         | Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs | object 1           |
+| 2   | `camping des-rosiers\|forillon national park`                                 | Camping Des-Rosiers Forillon National Park                    | object 2           |
+| 3   | `camping cap-bon-ami\|forillon national park`                                 | Camping Cap-Bon-Ami Parc national Forillon                    | object 3           |
+| 4   | `pizzarium\|rome`                                                             | Pizzarium Rome                                                | object 4           |
+| 5   | `atkins et frères\|mont-louis`                                                | Atkins et Frères Mont-Louis                                   | object 5           |
+| 6   | `mercato trionfale\|rome`                                                     | Mercato Trionfale Rome                                        | object 6           |
+| 7   | `memories varadero beach resort\|varadero`                                    | Memories Varadero Beach Resort Varadero                       | object 7           |
+| 8   | `hotel slon\|ljubljana`                                                       | Hotel Slon Ljubljana                                          | object 8           |
+| 9   | `forillon national park\|gaspé`                                               | Forillon National Park Gaspé Parks Canada                     | object 9           |
+| 10  | `antico forno roscioli\|rome`                                                 | Antico Forno Roscioli Rome                                    | object 10          |
+| 11  | `cap-bon-ami campground (forillon national park)\|gaspé`                      | Camping Cap-Bon-Ami Parc national Forillon                    | object 3 (repeat)  |
+| 12  | `cap-bon-ami campground\|gaspé`                                               | Camping Cap-Bon-Ami Parc national Forillon                    | object 3 (repeat)  |
+| 13  | `fumoir d'antan\|gaspé`                                                       | Fumoir d'Antan Gaspé                                          | object 11          |
+| 14  | `ljubljana central market\|ljubljana`                                         | Ljubljana Central Market Osrednja tržnica Plečnik             | object 12          |
+| 15  | `hotel raphael\|rome`                                                         | Hotel Raphael Rome                                            | object 13          |
+| 16  | `caffè san marco\|trieste`                                                    | Caffè San Marco Trieste                                       | object 14          |
+| 17  | `hotel sacher wien\|vienna`                                                   | Hotel Sacher Wien Vienna                                      | object 15          |
+| 18  | `figlmüller\|vienna`                                                          | Figlmüller Vienna                                             | object 16          |
+| 19  | `mercato di testaccio\|rome`                                                  | Mercato di Testaccio Rome market                              | object 17          |
+| 20  | `savoia excelsior palace\|trieste`                                            | Savoia Excelsior Palace Trieste                               | object 18          |
+| 21  | `brasserie auval\|val-d'espoir`                                               | Brasserie Auval Val-d'Espoir                                  | object 19          |
+| 22  | `petit-gaspé campground, forillon national park\|gaspé`                       | Petit-Gaspé campground Forillon National Park Parks Canada    | object 20          |
+| 23  | `fumoir monsieur émile\|rivière-au-renard`                                    | Fumoir Monsieur Émile Gaspé                                   | object 21          |
+| 24  | `iberostar paraíso del mar\|playa paraíso, riviera maya`                      | Iberostar Paraíso del Mar Playa Paraíso Riviera Maya          | object 22          |
+| 25  | `iberostar selection bávaro\|punta cana`                                      | Iberostar Selection Bávaro Punta Cana                         | object 23          |
+| 26  | `fumoir monsieur émile\|gaspé (anse-au-griffon)`                              | Fumoir Monsieur Émile Gaspé                                   | object 21 (repeat) |
+| 27  | `microbrasserie le naufrageur\|carleton-sur-mer`                              | Microbrasserie Le Naufrageur Carleton-sur-Mer                 | object 24          |
+| 28  | `odprta kuhna\|ljubljana`                                                     | Odprta Kuhna Ljubljana                                        | object 25          |
+| 29  | `camping des rivières\|forillon national park`                                | Camping des Rivières Forillon National Park                   | object 26          |
+| 30  | `pit caribou\|gaspé`                                                          | Brasserie Pit Caribou L'Anse-à-Beaufils                       | object 27          |
+| 31  | `gîte du mont-albert\|sainte-anne-des-monts`                                  | Gîte du Mont-Albert Parc national de la Gaspésie              | object 28          |
+| 32  | `parc national de la gaspésie (sepaq)\|sainte-anne-des-monts`                 | Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs | object 1 (repeat)  |
+| 33  | `café central\|vienna`                                                        | Café Central Vienna                                           | object 29          |
+| 34  | `antico caffè san marco\|trieste`                                             | Caffè San Marco Trieste                                       | object 14 (repeat) |
+| 35  | `parc national du bic\|rimouski`                                              | Parc national du Bic Rimouski Sépaq                           | object 30          |
+| 36  | `mont-albert campground, parc national de la gaspésie\|sainte-anne-des-monts` | Camping du Mont-Albert Parc national de la Gaspésie Sépaq     | object 31          |
+| 37  | `brasserie pit caribou\|l'anse-à-beaufils`                                    | Brasserie Pit Caribou L'Anse-à-Beaufils                       | object 27 (repeat) |
+| 38  | `camping petit-gaspé\|forillon national park`                                 | Petit-Gaspé campground Forillon National Park Parks Canada    | object 20 (repeat) |
+| 39  | `pit caribou\|l'anse-à-beaufils`                                              | Brasserie Pit Caribou L'Anse-à-Beaufils                       | object 27 (repeat) |
+| 40  | `nuovo mercato esquilino\|rome`                                               | Nuovo Mercato Esquilino Rome                                  | object 32          |
+| 41  | `mercato centrale roma\|rome`                                                 | Mercato Centrale Roma                                         | object 33          |
+| 42  | `naschmarkt\|vienna`                                                          | Naschmarkt Vienna market                                      | object 34          |
+| 43  | `armando al pantheon\|rome`                                                   | Armando al Pantheon Rome                                      | object 35          |
+| 44  | `sant'eustachio il caffè\|rome`                                               | Sant'Eustachio il Caffè Rome                                  | object 36          |
+| 45  | `des-a-gauche campground, forillon national park\|gaspé`                      | Des-a-Gauche campground Forillon National Park Gaspé          | object 37          |
+| 46  | `hotel duca d'alba\|rome`                                                     | Hotel Duca d'Alba Rome                                        | object 38          |
+| 47  | `fumoir monsieur émile\|gaspé`                                                | Fumoir Monsieur Émile Gaspé                                   | object 21 (repeat) |
+| 48  | `hotel campo de' fiori\|rome`                                                 | Hotel Campo de' Fiori Rome                                    | object 39          |
+| 49  | `parc national de la gaspésie, mont-albert sector\|sainte-anne-des-monts`     | Parc national de la Gaspésie Sainte-Anne-des-Monts Chic-Chocs | object 1 (repeat)  |
+| 50  | `camping petit-gaspé, forillon national park\|gaspé`                          | Petit-Gaspé campground Forillon National Park Parks Canada    | object 20 (repeat) |
+| 51  | `campo de' fiori market\|rome`                                                | Campo de' Fiori Rome piazza market                            | object 40          |
