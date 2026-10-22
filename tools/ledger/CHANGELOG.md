@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0](https://github.com/brunolabbe/tools/compare/ledger-v0.3.0...ledger-v0.4.0) (2026-10-22)
+
+
+### Features
+
+* **ledger:** a mortgage that ended or never was reads as such on Stats and Home (lg-55) ([#581](https://github.com/brunolabbe/tools/issues/581)) ([5c6077f](https://github.com/brunolabbe/tools/commit/5c6077f3ace6115d4b583d0bbb607fa038956fea))
+* **ledger:** an admin retires a person from the books at the next close (lg-35) ([#583](https://github.com/brunolabbe/tools/issues/583)) ([e155da2](https://github.com/brunolabbe/tools/commit/e155da25e9eef070d3eb12e06f490493eabb51c0))
+* **ledger:** choose how the mortgage splits — by shares, equally or at the ratio (lg-63) ([#594](https://github.com/brunolabbe/tools/issues/594)) ([19b01f7](https://github.com/brunolabbe/tools/commit/19b01f74c505086d123390e424a8a4154bdcf69d))
+* **ledger:** list every bank row, searched, filtered and sorted (lg-41) ([#563](https://github.com/brunolabbe/tools/issues/563)) ([370f744](https://github.com/brunolabbe/tools/commit/370f74486f9950cee0c784a9b8c4a0b924c9b54c))
+* **ledger:** report the dates a paste names otherwise than the workbook (lg-58) ([#596](https://github.com/brunolabbe/tools/issues/596)) ([aaccab2](https://github.com/brunolabbe/tools/commit/aaccab20e1a46c3e17681c8a1ee7878d03ca9de3))
+
+
+### Fixes
+
+* **ledger:** a stored paste says how many of its rows wait in the inbox (lg-54) ([#574](https://github.com/brunolabbe/tools/issues/574)) ([0097777](https://github.com/brunolabbe/tools/commit/00977771155eab9b60c2227e78028139e87be384))
+* **ledger:** refuse a paste whose reading has a rival three days off (lg-61) ([#586](https://github.com/brunolabbe/tools/issues/586)) ([2d1b22b](https://github.com/brunolabbe/tools/commit/2d1b22bb474e3822e4fda0dacb3eeb3c416e26fa))
+* **ledger:** refuse C1 controls and zero-width characters in a member's address (lg-57) ([#573](https://github.com/brunolabbe/tools/issues/573)) ([59629ae](https://github.com/brunolabbe/tools/commit/59629aec46ba13c76989293dc16e53745b7f920c))
+* **ledger:** refuse control characters in a member's address (lg-52) ([#560](https://github.com/brunolabbe/tools/issues/560)) ([d84c885](https://github.com/brunolabbe/tools/commit/d84c885247071fb07d9e98924534a00931ff0aff))
+* **ledger:** stop a paste double-storing a day the workbook re-dated and reordered (lg-59) ([#564](https://github.com/brunolabbe/tools/issues/564)) ([a3fe637](https://github.com/brunolabbe/tools/commit/a3fe637bcd827440d7e3514edb747c9d2109081d))
+
 ## [0.3.0](https://github.com/brunolabbe/tools/compare/ledger-v0.2.0...ledger-v0.3.0) (2026-10-18)
 
 
