@@ -3,7 +3,7 @@ id: pl-59
 tool: planner
 title: Draw the plans-list border that names a colour nobody defines, and make the provenance marks readable in dark
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [repo-108]
 difficulty: standard
@@ -158,6 +158,26 @@ measured bar, and the Build above fixes it.
    dark `--ok` and `--warn` fallbacks: a red/green, both states recorded.
 4. `npm run check` and `npx vitest run tools/planner/web/test` pass.
 
+## Review
+
+**Gate: PASS** — 2026-10-21 · `2d1b22bb..1d4f1537` · Opus 5.5, depth standard
+
+| Done when                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `.plans li` reads `var(--border)`, no `var(--line)` remains                                 | **verified** — `grep -rn "var(--line" tools/planner/web/src` printed nothing, exit 1; the `.plans li` rule in `web/src/styles.css` reads `border-bottom: 1px solid var(--border);`. A returning undefined `var(--line)` also fails `web/test/stylesheet.test.ts` › "a var() with no fallback names a custom property someone declares" (red on the base, row 3)                                                                                                                                                                                                                                            |
+| 2. Both marks ≥ 4.5:1 on `--surface` and `--bg`, dark and light, ratios named                  | **proven** — `web/test/stylesheet.test.ts` › "dark --ok on --surface clears 4.5:1" and the seven siblings (`{light,dark} × {--ok,--warn} × {--surface,--bg}`), each `toBeGreaterThanOrEqual(4.5)` on colours read out of the stylesheet. Ratios named in the Log; recomputed by a second script (WCAG 0.03928 threshold): dark `--ok` `#6fc77a` 8.11 / 8.80, dark `--warn` `#d4b155` 8.18 / 8.88, light `--ok` 5.99 / 5.74, light `--warn` 4.90 / 4.69, all equal to the Log. That `.provenance.grounded .mark` / `.asserted .mark` read `--ok` / `--warn` is checked by reading, not asserted (low below) |
+| 3. Spec red on `origin/main`'s stylesheet for `--line` and dark contrast; both states recorded | **verified** — reproduced: the head's spec over `2d1b22bb`'s `styles.css` fails 5 of 16: `expected [ '--line' ] to deeply equal []` and the four dark checks at 2.81, 3.05, 3.43, 3.73; restored to the head, 16 of 16. Both states are in the Log                                                                                                                                                                                                                                                                                                                                                         |
+| 4. `npm run check` and `npx vitest run tools/planner/web/test` pass                            | **verified** — `npm run check` exit 0; `npx vitest run tools/planner/web/test` 127 of 127, 7 files. PR #591's CI is green on `1d4f1537`, every check, `e2e`, `docker` and the Windows leg included                                                                                                                                                                                                                                                                                                                                                                                                         |
+
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · `web/test/stylesheet.test.ts` › "the two marks stay apart from each other and from the accent and the danger colour" asserts only that the four hex strings are unequal (`new Set(colours).size`). Its title claims distinguishability, and the falsehood runs in the unsafe direction: `--ok: #7fbfa9` beside `--accent: #7fbfa8` passes. No live case: the head's dark `--ok` sits 30.6 ΔE76 and 31° of hue from the accent. Direction, not a remedy: a minimum colour distance in the assertion.
+- **low** · no `Done when` line depends on it · the contrast tests read the `--ok` / `--warn` tokens, not the mark rules. If `.provenance.grounded .mark` were recoloured with a literal or with another token, Done when 2's subject would break with the spec still green. At the head both rules read `var(--ok)` / `var(--warn)` (read, above). Direction: one assertion that each mark rule's `color` is that token.
+- **low** · check (a) is narrower than CSS, one bullet for three mechanisms, each planted and green at 16 of 16: an upper-case `VAR(--nonexistent)` (CSS function names are case-insensitive, the regex is not); a name defined only in a rule that never reaches the consumer (`.nothing-matches-this { --only-here: red; }`) counts as defined; and `packages/ui/src/tokens.css`'s own two no-fallback uses (`var(--bg)`, `var(--text)`) are never scanned, since `undefinedVars` scans only `styles.css`, against Build step 3(a)'s "in those files". No live case for any of them: neither file uses upper case, and both tokens uses are planner roles that `packages/ui/test/tokens.test.ts` requires in both themes.
+- **low** · `themeValues` reads the first bare `:root` block and the first `@media (prefers-color-scheme: dark) { :root` block only. A later `:root { --ok: #9fd0b0; }` that wins the cascade passes 16 of 16, and so does a `[data-theme="dark"]` block. No live case: planner has one block per theme and no `data-theme` anywhere in `web/src` or `index.html`.
+- **dropped** · the stated gap that check (a) misses a dark-only missing definition. It is not a defect. A name missing only in dark is not undefined in CSS (the light `:root` value cascades), so check (a) is right to pass it. A missing dark canonical role fails `packages/ui/test/tokens.test.ts` › "every stylesheet sets every canonical colour role, in light and in dark": I removed the dark `--ok` (4 of 42 fail, that test included) and the dark `--border` (1 of 42, that test). No `Done when` line depends on it.
+- **dropped** · `--ok` is not one of the brief's candidates. Build step 2 offers the candidates "so the choice starts from a number" and does not bind the builder to them. It does say "distinguishable … from `--accent`": the candidates `#6fbf94` and `#5fae85` sit 12.6 and 14.0 ΔE76 (11° and 10°) from dark `--accent` `#7fbfa8`, and `#6fc77a` sits 30.6 (31°). The choice follows the brief's words more closely than either candidate does.
+- **findings** · the hunt returned 6; 4 carried (all low), 2 dropped.
+- NFR: security n/a (stylesheet and a text-reading spec) · performance n/a (the spec runs in about 13 ms) · reliability ✓ (positive controls fail as they should) · maintainability, the lows above.
+
 ## Log
 
 - **2026-10-20 — filed.** Two defects found by the repo-108 builder (branch
@@ -247,3 +267,103 @@ tools/planner/web/src/styles.css` prints only `6291ee58`, and the same for the
   after repo-108 and carries no "if built before" branch. repo-108 is cited as
   prose: PR #578, branch `repo-108-share-design-tokens`. No re-gate. The gate's
   section is untouched.
+- **2026-10-20 — built** (branch `pl-59-list-border-dark-marks`, from `93bfa1f1`,
+  which carries repo-108). Three numbers:
+  - **Border: option 1.** `.plans li` now reads `border-bottom: 1px solid var(--border);`,
+    every row including the last. `grep -rn "var(--line" tools/planner/web/src`
+    prints nothing (exit 1).
+  - **Dark values:** `--ok: #6fc77a`, `--warn: #d4b155`, only the two dark lines
+    in `tools/planner/web/src/styles.css`; `packages/ui/src/tokens.css` is not
+    edited. `--ok` is **not** one of the brief's candidates: `#6fbf94` and
+    `#5fae85` sit 11 and 10 degrees of hue from the dark `--accent` (`#7fbfa8`),
+    which is close enough that a "Sourced" mark and a link read as one colour,
+    and the brief asks that they stay apart. `#6fc77a` is 31 degrees away. `--warn`
+    is the brief's `#d4b155` (115 degrees from the accent, 32 from `--danger`).
+  - **Ratios** (WCAG 2.x, the spec's own formula; `--surface` / `--bg` /
+    `--warn-bg`): dark `--ok` 8.11 / 8.80 / 7.44, dark `--warn` 8.18 / 8.88 / 7.51.
+    Light, unchanged and still passing: `--ok` 5.99 / 5.74, `--warn` 4.90 / 4.69
+    (on `--surface` / `--bg`).
+- **Red/green, both states recorded.** The new spec is
+  `tools/planner/web/test/stylesheet.test.ts`. Against the stylesheet as it stood
+  at `93bfa1f1` (spec added, source untouched),
+  `npx vitest run tools/planner/web/test/stylesheet.test.ts` failed **6 of 16**:
+  five on the stylesheet and a sixth that was a bug in the spec's own synthetic
+  fixture (a `#fff` the colour parser refuses), fixed before the green. The five:
+  - `a var() with no fallback names a custom property someone declares`:
+    `expected [ '--line' ] to deeply equal []`;
+  - dark `--ok` on `--surface` 2.81, on `--bg` 3.05; dark `--warn` on `--surface`
+    3.43, on `--bg` 3.73 (each `expected … to be greater than or equal to 4.5`),
+    which are the filing's four dark numbers to the second decimal.
+
+  After the edit, `npx vitest run tools/planner/web/test/stylesheet.test.ts packages/ui`:
+  2 files, 42 of 42 passed (the second is repo-108's `tokens.test.ts`, run to
+  prove the new dark values break none of its checks).
+
+- **Folded in:** the comment above planner's light `:root` said dark values "are
+  a visible change and a ticket of their own"; this is that ticket, so the
+  sentence now says what happened and points at the spec.
+- **Not folded in: the `var(--ok, #2f6f4f)` / `var(--warn, #8a6d1f)` fallbacks** on
+  the `.provenance` rules. Both names are defined in both themes now, so the
+  fallbacks are dead code, and build step 3(a) skips a `var()` that carries a
+  fallback, so they would hide a future missing definition from the spec. Dropping
+  them is a choice the brief does not make; it is stated as an open decision in
+  the report, not settled here.
+- **What the brief had wrong.** Its line number for `var(--line)` is 387 at
+  `93bfa1f1`, not 386 (the earlier base). And the worktree farm does not link
+  `packages/ui`, so `npm run build` failed on
+  `Rollup failed to resolve import "@webtools/ui/tokens.css"` until
+  `ln -s ../../packages/ui node_modules/@webtools/ui` was done by hand (the farm
+  links only what the shared checkout has).
+- **Not measured.** Rendered pixels (no browser), forced-colors mode, and whether
+  `#6fc77a` and `#d4b155` look distinguishable to a reader with colour-vision
+  deficiency; the hue figures above are HSV degrees computed from the hex values,
+  not a perceptual metric.
+- **2026-10-21 — the fallbacks dropped, on the owner's answer.** The builder's
+  open decision was whether to drop `var(--ok, #2f6f4f)` and
+  `var(--warn, #8a6d1f)` on the `.provenance` marks (dead since repo-108, and
+  skipped by build step 3(a)). Options as asked: (1) drop both in this PR
+  (recommended); (2) keep them and widen the spec so a name used with a fallback
+  must be defined; (3) leave both. **The owner chose (1)**, on 2026-10-21,
+  relayed by the orchestrator. This supersedes the "Not folded in" entry above.
+  Commit `f94a64ef`: the two rules read `var(--ok)` and `var(--warn)`, and the
+  comment above the light `:root` no longer says the fallbacks are in use.
+  - **Check (a) now reaches those two uses.** Renaming `--ok`'s definition to
+    `--okx` in both the light and the dark block and running
+    `npx vitest run tools/planner/web/test/stylesheet.test.ts`: at `f94a64ef`,
+    **6 of 16 fail**, among them `a var() with no fallback names a custom property
+someone declares` (`expected [ '--ok' ] to deeply equal []`). The same rename on
+    the previous commit's stylesheet (`4c27d4db`, fallbacks present) fails **5 of
+    16** and that check is **not** among them: it was blind to the fallback use,
+    the contrast checks alone caught it. Both mutations were restored with
+    `git checkout f94a64ef -- tools/planner/web/src/styles.css`; the spec is 16 of
+    16 again and the tree clean.
+  - **A limit of check (a), not fixed here:** it asks that a name be defined
+    _somewhere_, so renaming only the dark `--ok` (light still defined) does not
+    fail (a); the dark contrast checks fail instead (3 of 16, `dark --ok is
+undefined, not a #rrggbb colour`). A missing dark definition is therefore
+    held by the contrast tests, for `--ok` and `--warn` only.
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, low "no `Done when` line
+  depends on it" — "the contrast tests read the `--ok` / `--warn` tokens, not the
+  mark rules. [...] Direction: one assertion that each mark rule's `color` is that
+  token." `stylesheet.test.ts` gains "each mark rule is coloured by the token the
+  contrast tests measure". Planted `.provenance.grounded .mark { color: #2f6f4f; }`
+  → 1 failed | 19 passed, `expected '#2f6f4f' to be 'var(--ok)'`; planted
+  `.provenance.asserted .mark { color: var(--accent); }` → 1 failed | 19 passed,
+  `expected 'var(--accent)' to be 'var(--warn)'`; both restored with
+  `git checkout 1d4f1537 -- tools/planner/web/src/styles.css` → 20 passed (20).
+- 2026-10-21 — Fixed at landing by owner choice: gate 1, low "check (a) is
+  narrower than CSS", the first and third mechanisms only — "an upper-case
+  `VAR(--nonexistent)` (CSS function names are case-insensitive, the regex is
+  not)" and "`packages/ui/src/tokens.css`'s own two no-fallback uses (`var(--bg)`,
+  `var(--text)`) are never scanned". `varsWithoutFallback` now matches `var(`
+  with the `i` flag, and a new test scans `undefinedVars(tokens, styles)`. Planted
+  `.zz { color: VAR(--nonexistent); }` in `styles.css` → 1 failed | 19 passed
+  (`expected [ '--nonexistent' ] to deeply equal []`); the same plant with the `i`
+  flag removed leaves the real-stylesheet test green (only the synthetic case
+  fails), which is the gap. Planted `.zz { color: var(--zz-nope); }` in
+  `packages/ui/src/tokens.css` → 1 failed | 19 passed (`expected [ '--zz-nope' ]
+to deeply equal []`); restored with `git checkout 1d4f1537 -- <path>`. The
+  second mechanism (a name defined only in a rule that never reaches the
+  consumer) is not fully stated and stays recorded as the gate wrote it.
+  `npx vitest run tools/planner/web/test/stylesheet.test.ts` → 20 passed (20);
+  `npx vitest run tools/planner/web/test` → 7 files, 131 passed (131).
