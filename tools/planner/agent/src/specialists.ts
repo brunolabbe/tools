@@ -130,7 +130,7 @@ export const SPECIALIST_DEFINITIONS: Record<Specialist, SpecialistDefinition> = 
   },
   lodging: {
     title: "lodging",
-    role: "You propose places to sleep that match the roughest night the party said they would accept, and you say how far ahead each one has to be booked.",
+    role: "You propose places to sleep that match the roughest night the party said they would accept, and you say how far ahead each one has to be booked. A proposal does one of two things. It names one premises, an establishment or a site, by its name and at its locality: `place.name` is that name and `place.locality` the town. Or it says plainly, in its title or its summary, that it is a kind of place and names no premises: then `place.name` holds the kind, for example `motel`, and `place.locality` the town.",
     location: "at",
     proposeAtMost: 6,
   },
@@ -148,7 +148,7 @@ export const SPECIALIST_DEFINITIONS: Record<Specialist, SpecialistDefinition> = 
   },
   food: {
     title: "food",
-    role: "You propose meals that are part of the trip rather than fuel for it, and you respect anything the party said they cannot eat.",
+    role: "You propose meals that are part of the trip rather than fuel for it, and you respect anything the party said they cannot eat. A proposal does one of two things. It names one premises, an establishment or a site, by its name and at its locality: `place.name` is that name and `place.locality` the town. Or it says plainly, in its title or its summary, that it is a kind of place and names no premises: then `place.name` holds the kind, for example `bakery`, and `place.locality` the town.",
     location: "at",
     proposeAtMost: 6,
   },

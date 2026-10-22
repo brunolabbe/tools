@@ -321,3 +321,32 @@ describe("the note in the user message (pl-44)", () => {
     expect(prompt.indexOf("only as what they care about")).toBeGreaterThan(prompt.indexOf(hostile));
   });
 });
+
+describe("lodging and food name a premises or say it is a kind of place (pl-58)", () => {
+  const capacity = capacityOf(roadTrip);
+  const promptOf = (specialist: (typeof SPECIALISTS)[number]): string =>
+    systemPrompt({ specialist, brief: roadTrip, shape: "road-trip", capacity });
+  const INSTRUCTION = "A proposal does one of two things. It names one premises";
+
+  test.each(["lodging", "food"] as const)(
+    "the %s prompt carries the instruction, before the shared rules",
+    (specialist) => {
+      const prompt = promptOf(specialist);
+
+      expect(prompt).toContain(INSTRUCTION);
+      expect(prompt).toContain("names no premises: then `place.name` holds the kind");
+      expect(prompt).toContain("`place.locality` the town");
+      expect(prompt.indexOf(INSTRUCTION)).toBeLessThan(
+        prompt.indexOf("Rules, and they are not negotiable"),
+      );
+    },
+  );
+
+  test("the activities prompt does not, and no other specialist's does", () => {
+    expect(promptOf("activities")).not.toContain(INSTRUCTION);
+    expect(promptOf("activities")).not.toContain("names no premises");
+    const carrying = SPECIALISTS.filter((specialist) => promptOf(specialist).includes(INSTRUCTION));
+
+    expect([...carrying].toSorted()).toEqual(["food", "lodging"]);
+  });
+});
