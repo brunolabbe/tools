@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/brunolabbe/tools/compare/planner-v0.8.1...planner-v0.9.0) (2026-10-22)
+
+
+### Features
+
+* **planner:** default the model to Sonnet 5.5, on pl-40's measurement (pl-40) ([#464](https://github.com/brunolabbe/tools/issues/464)) ([34c2cba](https://github.com/brunolabbe/tools/commit/34c2cba41a56262b985d38ca3e5c58239b9ed527))
+* **planner:** give the run-cost report a thinking-token row, priced never (pl-52) ([#467](https://github.com/brunolabbe/tools/issues/467)) ([6d879b2](https://github.com/brunolabbe/tools/commit/6d879b2682e7e7cef34479cb944ce5e3413a0d69))
+* **planner:** lodging and food proposals name a premises or say they are a kind of place (pl-58) ([#593](https://github.com/brunolabbe/tools/issues/593)) ([3799fb2](https://github.com/brunolabbe/tools/commit/3799fb237b89a1ef3b0e37e6eaf1c7a563dc5228))
+
+
+### Fixes
+
+* **planner:** draw the plans-list border and lift the dark provenance marks (pl-59) ([#591](https://github.com/brunolabbe/tools/issues/591)) ([905fe87](https://github.com/brunolabbe/tools/commit/905fe87c7bd5d8c15d2e9ad671672faf447b2532))
+
 ## [0.8.1](https://github.com/brunolabbe/tools/compare/planner-v0.8.0...planner-v0.8.1) (2026-10-07)
 
 
