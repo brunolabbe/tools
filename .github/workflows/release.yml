@@ -43,6 +43,10 @@ jobs:
       pull-requests: write
     outputs:
       paths_released: ${{ steps.release.outputs.paths_released }}
+      # Every output, so `publish` can read its own path's `<path>--sha`: a job
+      # output has to be named up front, and the per-path names are not known
+      # until a tool is released.
+      all: ${{ toJSON(steps.release.outputs) }}
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
@@ -73,21 +77,37 @@ jobs:
       matrix:
         path: ${{ fromJSON(needs.release-please.outputs.paths_released) }}
     steps:
+      # The commit release-please tagged, not the one that triggered this run.
+      # They differ when two release PRs merge close together: release-please
+      # reads `main` as it is when it starts, so an earlier merge's run can
+      # release a later one too, and a checkout of `github.sha` then builds the
+      # older tree under the older `version.txt`. That is how downloader 0.10.0
+      # went out as `:0.9.0` (repo-115).
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(needs.release-please.outputs.all)[format('{0}--sha', matrix.path)] }}
 
-      # The version comes off disk rather than out of an action output. The
-      # release commit bumped `version.txt` and this checkout contains it, and
-      # release-please's per-path outputs are keyed dynamically in a way a
-      # matrix cannot index. The owner is lowercased because GHCR rejects
-      # anything else and GitHub logins are not.
+      # The version comes off disk, from the released commit checked out above,
+      # whose release commit bumped `version.txt`. The owner is lowercased
+      # because GHCR rejects anything else and GitHub logins are not.
       - name: Resolve the image and its version
         id: image
         env:
           TOOL_PATH: ${{ matrix.path }}
+          RELEASED_SHA: ${{ fromJSON(needs.release-please.outputs.all)[format('{0}--sha', matrix.path)] }}
+          RELEASED_VERSION: ${{ fromJSON(needs.release-please.outputs.all)[format('{0}--version', matrix.path)] }}
         run: |
           set -euo pipefail
           tool="$(basename "$TOOL_PATH")"
           version="$(tr -d '[:space:]' < "$TOOL_PATH/version.txt")"
+          # An empty `ref` makes checkout fall back to `github.sha` without a
+          # word, which is the bug this job used to have; refuse rather than
+          # push an image under a version it does not carry.
+          head="$(git rev-parse HEAD)"
+          if [ -z "$RELEASED_SHA" ] || [ "$head" != "$RELEASED_SHA" ] || [ "$version" != "$RELEASED_VERSION" ]; then
+            echo "::error::checked out $head at $version; release-please released ${RELEASED_SHA:-<no sha>} at ${RELEASED_VERSION:-<no version>}"
+            exit 1
+          fi
           owner="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
           {
             echo "tool=$tool"
@@ -111,6 +131,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
+          # `git` reads the sha for `sha-` and the revision label off the
+          # checkout; the default reads `github.sha`, the triggering commit.
+          context: git
           images: ${{ steps.image.outputs.repository }}
           tags: |
             type=semver,pattern={{version}},value=${{ steps.image.outputs.version }}
