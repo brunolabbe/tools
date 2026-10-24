@@ -6237,3 +6237,39 @@ Beside the agents: pl-60's paid live run, five `run.ts` sessions, 110 records, $
 - Exporting `origin/main` to a scratch snapshot and running `node scripts/status.mjs --root <snap>` at intake while a peer held the shared checkout: the ready list came from main without resetting anyone's tree.
 - A dispatch that relays a seam-mapper's quote with "verify against the file yourself": the pl-61 recorder found the mapper had misquoted `lodging.ts:203`'s warn, and wrote the real text.
 - Gating a flake fix with an independent reproduction against a source-built git matching the runner's: repo-116's gate 1 measured 14/8000 → 0/8000 itself, so the cause was proven on two separate probes.
+
+### Batch 2026-10-24 (tools-7e, pl-61 pl-62) — base 89a38d30
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / high | a92db07800dac73a3 | seam-mapper, pl-61 pl-62 | 2m03s / 2m02s | 0 | $0.2831 |
+| #618 | open, ready, green at 7c379fbf | Haiku 5.5 / high | acfda7e82c4437399 | builder-mechanical, pl-61 build + owner's two answers + gate-1 round + landing | 27m25s / 56m07s | 0 | $1.5997 |
+| #618 | open, ready, green at 7c379fbf | Sonnet 5.5 / xhigh | a5b8fb3656f2bac44 | ticket-reviewer-sonnet, pl-61 gate 1 (narrow) | 9m12s / 9m11s | 0 | $1.1248 |
+| #618 | open, ready, green at 7c379fbf | Sonnet 5.5 / xhigh | af1da3e8eed177a66 | ticket-reviewer-sonnet, pl-61 gate 2 (narrow) | 8m43s / 8m13s | 0 | $1.0337 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Opus 5.5 / high | a98aba036686371c5 | builder-hard, pl-62 Build 1 capture, Builds 2–5 + 7–8 to the contract stop, Build 9 (two resumes) | 40m46s / 1h15m01s | 0 | $12.0086 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Sonnet 5.5 / xhigh | af13358aaeb7ebee6 | ticket-reviewer-sonnet, pl-62 gate 1 (slice) | 22m36s / 22m20s | 0 | $4.5548 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Opus 5.5 / high | aa050a51ab40902ef | builder-hard (fresh), pl-62 gate-1 lows 1–3 + Build 6 paid run, join, re-measure | 29m13s / 44m54s | 0 | $7.5762 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Opus 5.5 / high | ac2f50aac45777dd5 | general-purpose (no `model` passed), pl-62 web check + gate-2 round | 18m33s / 37m18s | 1 | $6.2808 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Sonnet 5.5 / xhigh | a2b4614e6f64f4e8c | ticket-reviewer-sonnet, pl-62 gate 2 | 17m29s / 17m24s | 0 | $3.3875 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Sonnet 5.5 / high | a847da0778d2348a8 | fixer, pl-62 owner answer recorded + landing | 3m42s / 3m40s | 0 | $0.4279 |
+| — | — | Opus 5.5 / high | orchestrator e1a41c54 | orchestrator (floor) | 1h23m46s / 3h15m17s | 0 | $5.7515 |
+| | | | | **total** (rates read 2026-10-10) | 4h23m28s | 1 | **$44.0287** |
+
+Beside the agents: pl-62's paid live run, five `run.ts` sessions, 111 records, $7.4018 `observedUsd` against a $10 total bound.
+
+**Tickets:**
+- pl-61 → #618: owner named planner and chose both tickets side by side; peer tools-a3 held repo-114/116 and lg-56. Owner folded four more `discovery.ts` warns in (overriding the builder's "file it") and reworded Done-when 3 to the two-stub form before the gate. Gate 1 narrow PASS (3 low); owner folded the two `travel.ts` warns in (gate's recommendation) and the `USER_AGENT` comment, L3 recorded unfixed. Gate 2 narrow PASS (0 new). Landed `done`, green at 7c379fbf.
+- pl-62 → #619: Decision 6 (a) 10 km and ten from Build 1's capture (117 named at 10 km, 65 shown); Build 8 contract comment-only edit (a); gate 1 PASS for the slice (4 low, 1–3 folded into Build 6 by owner choice, 4 recorded unfixed); Decision 5 (a), run $7.4018 / 111 records, food join 302/335 against pl-60's 0/322, food named premises 303/406 (band 71.2–74.6%); set A food naming no premises accepted as designed, held draft behind #618; web check 3 of 10 not confirmed (30.0%, 10.8–60.3) against pl-58's 3 of 21. Gate 2 CONCERNS (1 med behind Done-when 10: Le Surcouf's cited pages named another restaurant; 2 low), all three fixed by the web-check agent (Le Surcouf re-settled `exists` on a fetched page naming Percé, rate unchanged). Landed `done`; still owes a merge of `main` and a one-line `queried` 1 → 2 change in `lodging-pass.test.ts` once #618 merges.
+
+**Defects in the skill:**
+
+1. `agents/seam-mapper.md` and `SKILL.md` › _The loop_ step 2, "each `## Decision — open` question" — a ticket can hold open decisions under a `## Decision — answered` heading, so a search for the open heading misses them; pl-62's Decisions 5 and 6 were open at intake. Reproduction: `git show 89a38d30:tools/planner/docs/work/pl-62-food-discovery-around-the-trips-towns.md | grep -n '^## Decision'` → `266:## Decision — answered 2026-10-24 by the owner`, the only Decision heading.
+2. `SKILL.md` › _Which model built it, and which gated it_ — still no row for a WebSearch step (tools-f6 item 1, tools-49 item 2, tools-38 item 2). pl-62's web check ran general-purpose with no `model`, on Opus. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/SKILL.md | grep -c -i websearch` → `0`; `node scripts/agent-cost.mjs --agent ac2f50aac45777dd5` → `claude-opus-5-5 effort=high … $6.2808`.
+3. `roles/builder.md` › _Before you report_ — a dispatch that stops before any code (pl-62's Build 1 capture) cannot open its draft PR under the ticket's eventual `feat` title, and the page gives no rule for a `docs` title retitled later. Reproduction: a detached worktree at `83d7c748`, then `node scripts/preflight.mjs --only title --base 89a38d30 --title "feat(planner): food chooses among places to eat found around the trip's towns (pl-62)"` → exit 8, `FAIL … is type "feat", which reaches a changelog, but every tools/ path in the diff is markdown`.
+4. `roles/builder.md` › _Before you report_, "`npx oxfmt <the files you touched>`" — exits 2 when every named file is under an ignore pattern (`**/test/fixtures/`), and in a chained command that skipped the next step; pl-62's builder committed under the previous commit message and had to amend. Reproduction: `npx oxfmt --check tools/planner/api/test/fixtures/overpass-lodging-towns.json; echo exit=$?` → `Expected at least one target file. All matched files may have been excluded by ignore rules.`, `exit=2`.
+5. `roles/common.md` › _Preflight runs longer than a foreground call allows_ — prescribes waiting with `until [ -s <exit file> ]; do sleep 3; done`, a foreground `sleep` loop the Bash tool now blocks; pl-62's gate 2 ran the script with `run_in_background: true` instead, which re-invokes the agent on exit. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -n 'sleep 3'` → `113:directory, then wait with \`until [ -s <exit file> ]; do sleep 3; done\`. The wait`.
+
+**Worked, and worth keeping:**
+- A re-gate that WebFetched every page the web check cited (13 of 17 read) found the one verdict resting on another establishment's page; the fix kept the rate and replaced the citation with a page naming the town.
+- Retiring the first pl-62 builder at $12.01 for a fresh Build 6 builder ($7.58) and a fresh web-check agent: pl-62's build, gates, web check and landing cost $34.24 in agents against pl-60's $47.50 for the same shape (tools-38 rows, seam-mapper excluded from both).
+- Gating the built slice before the paid run again, and having the Build 6 builder commit gate 1's folded lows before launching, so the $7.40 run measured the code gate 2 saw.

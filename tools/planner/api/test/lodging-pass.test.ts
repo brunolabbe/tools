@@ -4,6 +4,11 @@
  * `lodging-run.test.ts` runs it inside a real run for the six set A briefs;
  * this file drives `discoverLodging` and `discover` directly against a
  * `RunGrounding` double, for the branches a fixture gazetteer cannot reach.
+ *
+ * Since pl-62 the pass asks each located town a second time, for places to
+ * eat. The double answers that query from `food`, and with nothing by default,
+ * so the cases here stay about places to sleep and say what the food query
+ * added to them; `food-pass.test.ts` has the food query's own cases.
  */
 
 import { describe, expect, test } from "vitest";
@@ -16,7 +21,7 @@ import {
 } from "@planner/contract";
 import { AppError } from "@planner/contract";
 import Database from "better-sqlite3";
-import { groundingBudget, LODGING_KINDS } from "@planner/agent";
+import { FOOD_KINDS, groundingBudget, LODGING_KINDS } from "@planner/agent";
 import type { Find, GroundingProvider, NearbyPointRequest } from "@planner/agent";
 import { loadFixture } from "../../contract/test/fixtures.ts";
 import {
@@ -35,6 +40,7 @@ import type { AppLogger } from "../src/logger.ts";
 import { discover } from "../src/runs/discovery.ts";
 import {
   discoverLodging,
+  FOOD_RADIUS_METRES,
   LODGING_RADIUS_METRES,
   lodgingTowns,
   MAX_LODGING_FINDS_PER_TOWN,
@@ -73,10 +79,15 @@ function sleepFind(name: string, at: Coordinates, id: number): Find {
   };
 }
 
-/** A grounding double: towns by name, finds by town point, and what was asked. */
+/**
+ * A grounding double: towns by name, finds by town point, and what was asked.
+ * `finds` answers the lodging query and `food` the food query (pl-62), which
+ * finds nothing unless a case says otherwise.
+ */
 function grounding(options: {
   towns?: Record<string, Coordinates | "refused" | "throws">;
   finds?: (request: NearbyPointRequest) => Promise<GroundingOutcome<Find[]>>;
+  food?: (request: NearbyPointRequest) => Promise<GroundingOutcome<Find[]>>;
 }): RunGrounding & { asked: NearbyPointRequest[]; located: string[] } {
   const asked: NearbyPointRequest[] = [];
   const located: string[] = [];
@@ -104,7 +115,8 @@ function grounding(options: {
     nearby: async () => answered([]),
     nearbyPoint: async (request) => {
       asked.push(request);
-      return options.finds === undefined ? answered([]) : await options.finds(request);
+      const answer = request.kinds === FOOD_KINDS ? options.food : options.finds;
+      return answer === undefined ? answered([]) : await answer(request);
     },
     articlesNear: async () => answered([]),
   };
@@ -120,6 +132,10 @@ function lodgingFor(brief: TripBrief, provider: RunGrounding): ReturnType<typeof
     onStep: () => {},
   });
 }
+
+/** The food query's note for towns with nowhere to eat on the map (pl-62). */
+const NO_FOOD = (towns: string): string =>
+  `No places to eat around ${towns} are on the map. Somewhere to eat there may exist without this plan having found it.`;
 
 /** `road-trip.json` with its stops and destination replaced. */
 function roadTrip(mustSee: string[], destination: string | null): TripBrief {
@@ -174,6 +190,7 @@ describe("what the pass finds and says", () => {
 
     const result = await lodgingFor(roadTrip(["Gaspé"], null), provider);
 
+    // The lodging query, then the food query beside it (pl-62).
     expect(provider.asked).toEqual([
       {
         point: GASPE,
@@ -181,12 +198,18 @@ describe("what the pass finds and says", () => {
         kinds: LODGING_KINDS,
         signal: expect.any(AbortSignal),
       },
+      {
+        point: GASPE,
+        radiusMetres: FOOD_RADIUS_METRES,
+        kinds: FOOD_KINDS,
+        signal: expect.any(AbortSignal),
+      },
     ]);
     expect(LODGING_RADIUS_METRES).toBe(10_000);
     expect(result.finds.map((find) => find.name)).toEqual(
       many.slice(0, MAX_LODGING_FINDS_PER_TOWN).map((find) => find.name),
     );
-    expect(result.coverage).toEqual([]);
+    expect(result.coverage.map((entry) => entry.detail)).toEqual([NO_FOOD("Gaspé")]);
   });
 
   test("a premises two towns both reach is handed over once", async () => {
@@ -199,7 +222,8 @@ describe("what the pass finds and says", () => {
     const result = await lodgingFor(roadTrip(["Percé Rock"], "Percé"), provider);
 
     expect(result.finds).toEqual([shared]);
-    expect(provider.asked).toHaveLength(2);
+    // Two towns, each asked for places to sleep and places to eat (pl-62).
+    expect(provider.asked).toHaveLength(4);
   });
 
   test("names each town by what happened to it, one sentence per outcome", async () => {
@@ -211,10 +235,14 @@ describe("what the pass finds and says", () => {
     const result = await lodgingFor(roadTrip(["Gaspé", "Percé", "Amqui"], "Matane"), provider);
 
     expect(result.finds).toEqual([]);
+    // Percé's lodging query was refused and its food query was not; the budget
+    // refused Amqui's locate, so neither of its queries was made (pl-62).
     expect(result.coverage.map((entry) => entry.detail)).toEqual([
-      "Where Matane is could not be found on the map, so places to stay there were not checked.",
+      "Where Matane is could not be found on the map, so places to stay and places to eat there were not checked.",
       "No places to stay around Gaspé are on the map. Somewhere to stay there may exist without this plan having found it.",
       "Places to stay around Percé and Amqui were never looked up: the run had already used the number of lookups it is allowed.",
+      NO_FOOD("Gaspé and Percé"),
+      "Places to eat around Amqui were never looked up: the run had already used the number of lookups it is allowed.",
     ]);
   });
 
@@ -230,6 +258,7 @@ describe("what the pass finds and says", () => {
 
     expect(result.coverage.map((entry) => entry.detail)).toEqual([
       "No places to stay around Gaspé are on the map. Somewhere to stay there may exist without this plan having found it.",
+      NO_FOOD("Gaspé"),
     ]);
   });
 
@@ -240,7 +269,7 @@ describe("what the pass finds and says", () => {
     expect(provider.located).toEqual([]);
     expect(provider.asked).toEqual([]);
     expect(result.coverage.map((entry) => entry.detail)).toEqual([
-      "This trip names no town to stay in, so the map was not checked for places to stay.",
+      "This trip names no town to stay in, so the map was not checked for places to stay or to eat.",
     ]);
   });
 
@@ -281,16 +310,18 @@ describe("discover: both passes as one (pl-60)", () => {
     });
 
     expect(result.finds).toEqual([motel]);
-    // The corridor found nothing and says so; Gaspésie had nothing to sleep in.
+    // The corridor found nothing and says so; Gaspésie had nothing to sleep in,
+    // and neither town had anywhere to eat (pl-62).
     expect(result.coverage.map((entry) => entry.detail)).toEqual([
       "There is very little on the map along this route. Something worth stopping for may exist without this plan ever finding it.",
       "No places to stay around Gaspésie are on the map. Somewhere to stay there may exist without this plan having found it.",
+      NO_FOOD("Percé Rock and Gaspésie"),
     ]);
-    // Four corridor steps and two per town, counted once and never backwards.
+    // Four corridor steps and three per town, counted once and never backwards.
     const grounded = frames.filter((frame) => frame.type === "grounding");
-    expect(grounded.map((frame) => frame.total)).toEqual(grounded.map(() => 8));
+    expect(grounded.map((frame) => frame.total)).toEqual(grounded.map(() => 10));
     expect(grounded.map((frame) => (frame.type === "grounding" ? frame.done : -1))).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     ]);
     // The destination was located once, by the corridor pass; the town pass
     // asked the cache-less double again, which a real run's cache answers.
@@ -307,7 +338,7 @@ describe("discover: both passes as one (pl-60)", () => {
       onProgress: () => {},
     });
 
-    expect(provider.asked.map((request) => request.point)).toEqual([PERCE]);
+    expect(provider.asked.map((request) => request.point)).toEqual([PERCE, PERCE]);
     expect(result.reading).toEqual([]);
   });
 });
@@ -327,7 +358,8 @@ describe("gate 1's findings on the town pass (pl-60, round 1)", () => {
 
     expect(provider.located).toEqual(["S1", "S2", "S3", "S4"]);
     expect(result.coverage.map((entry) => entry.detail)).toEqual([
-      "Places to stay around S5, S6 and Dest were not looked up: this plan asks about at most 4 towns, the stops it names first.",
+      "Places to stay and places to eat around S5, S6 and Dest were not looked up: this plan asks about at most 4 towns, the stops it names first.",
+      NO_FOOD("S1, S2, S3 and S4"),
     ]);
   });
 
@@ -353,7 +385,10 @@ describe("gate 1's findings on the town pass (pl-60, round 1)", () => {
     const result = await lodgingFor(roadTrip(["Percé", "Percé, Québec"], null), provider);
 
     expect(result.finds).toEqual([shared]);
-    expect(result.coverage).toEqual([]);
+    // Only the food query's note: neither town had anywhere to eat (pl-62).
+    expect(result.coverage.map((entry) => entry.detail)).toEqual([
+      NO_FOOD("Percé and Percé, Québec"),
+    ]);
   });
 
   test("two finds with no element url are two finds, not one, even across towns", async () => {
@@ -382,7 +417,7 @@ describe("gate 1's findings on the town pass (pl-60, round 1)", () => {
     expect(result.finds.map((find) => find.name)).toEqual(["Motel du Havre", "Motel du Rocher"]);
   });
 
-  test("over the real cache and budget, the pass claims at most 8 calls however many towns a brief names", async () => {
+  test("over the real cache and budget, the pass claims at most 12 calls however many towns a brief names", async () => {
     const database = new Database(":memory:");
     migrate(database);
     try {
@@ -415,7 +450,8 @@ describe("gate 1's findings on the town pass (pl-60, round 1)", () => {
         groundingForRun(cache, budget),
       );
 
-      expect(40 - budget.remaining()).toBe(2 * MAX_LODGING_TOWNS);
+      // A `locate` and two town queries per town since pl-62: 12 of the run's 40.
+      expect(40 - budget.remaining()).toBe(3 * MAX_LODGING_TOWNS);
     } finally {
       database.close();
     }
@@ -477,7 +513,7 @@ describe("the town pass, when the backend refuses (pl-61)", () => {
     );
     expect(located).toHaveLength(1);
     expect(located[0]?.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
-    expect(queried).toHaveLength(1);
+    expect(queried).toHaveLength(2);
     expect(queried[0]?.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
   });
 });

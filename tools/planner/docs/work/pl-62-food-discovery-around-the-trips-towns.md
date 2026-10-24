@@ -3,7 +3,7 @@ id: pl-62
 tool: planner
 title: Food chooses among restaurants and cafés fetched from map data around the trip's towns, instead of proposing from memory
 kind: work-package
-status: ready
+status: done
 milestone: P3
 depends_on: [pl-60]
 difficulty: hard
@@ -102,7 +102,10 @@ squash merge. The order is the order the Log reports them.
 - **Restaurants outnumber places to sleep in a town** by a margin nothing here has
   measured, so the per-town cap decides which ten are shown, and "closest to the
   town's point" is a ranking that favours a town centre. Build 1 measures density
-  before the cap is chosen.
+  before the cap is chosen. **Build 1 found the premise false on the map for these
+  nine localities**: 117 food finds against 141 places to sleep at 10 km, more food in
+  three localities, less in four and the same in two (the Log's Build 1 entry). The point about the ranking
+  stands: Gaspé's and Percé's ten closest all sit within 300 m of the town's point.
 - **The role string is `food`'s and says what a meal is.** pl-58's `role` for `food`
   reads "meals that are part of the trip rather than fuel for it", and it is the
   second change to that string within a week if Build 4 appends to it, as pl-60
@@ -268,11 +271,12 @@ screen's shape depends on which tags the answer names.
 Six decisions. **Decisions 1 to 4 were asked before a builder was dispatched**, because
 each changes what is built, and the owner answered all four on 2026-10-24, each time as
 the filing builder's recommendation, through the session's question. "Leave open" was
-not offered as a listed option; a free-text answer was. **Decisions 5 and 6 are still
-open**: **Decision 6 is asked at Build 1's stop**, with the capture's counts, since
-"hold a question until you can bring a measurement", and **Decision 5 at the stop
-before the paid run**, as pl-58's and pl-60's were. Their recommendations are the
-filing builder's and are not settled.
+not offered as a listed option; a free-text answer was. **Decision 6 was answered at
+Build 1's stop** (10 km and ten; see Decision 6), and **Decision 5 at the stop before the
+paid run** (shape (a); see Decision 5). Both were held back: **Decision 6 was asked at
+Build 1's stop**, with the capture's counts, since "hold a question until you can bring a
+measurement", and **Decision 5 at the stop before the paid run**, as pl-58's and pl-60's
+were.
 
 **What was not measured when this was filed.** Overpass was unreachable from the filing
 builder's sandbox (`curl -m 25` to `https://overpass-api.de/api/status` returned
@@ -472,6 +476,12 @@ These are lodging-prompt costs, and `food`'s block carries more finds per town
 `lodging` stays a comparable control. The decision stays the owner's, as the model
 families, efforts, runs and `--max-usd` were for pl-58 and pl-60.
 
+**Chosen: (a), by the owner on 2026-10-24**, after gate 1, relayed by the orchestrator in
+the dispatch for Build 6; it was the recommendation. The options put were (a) to (d) as
+worded above. The authorisation is for (a)'s shape with **a $10 total bound**: no session
+beyond it is re-run without asking, and the run stops for a question if the projected
+total passes $10.
+
 ### 6. The food pass's radius and per-town cap (asked at Build 1's stop)
 
 pl-60's owner chose a 10 km radius for lodging from a capture of the nine towns, and
@@ -492,6 +502,55 @@ the party stays.
 **Recommendation: (c),** because restaurant density is unmeasured, so (a) and (b) are
 each a guess at a number the capture will give, and (c) costs nothing beyond the stop
 Build 1 makes anyway.
+
+**Chosen: (a), 10 km and ten, by the owner on 2026-10-24**, at Build 1's stop, relayed by
+the orchestrator. It was chosen from Build 1's table (the Log's Build 1 entry): at 10 km
+with a closest-first cap of ten, **65 of 117** food finds are shown over the nine
+localities, the cap binding in Gaspé (17), Matane (17), Percé (23) and Rivière-du-Loup
+(35). The options put were (a), (b) at 6 km (62 of 108 shown), (c) with 10 km and
+fifteen priced (85 of 117 shown), and (d); (a) was the Build 1 builder's recommendation.
+
+### Build 8's stop: the contract's `coverage` comment (answered)
+
+Not one of the six decisions above; Build 8 named it as a stop. At Build 8,
+`contract/src/unchecked.ts`'s comment on `coverage` said the town query "found nowhere
+on the map to sleep there" and named `lodging` alone, and pl-60's owner answer had
+authorised that comment edit for pl-60 only. The question, put by the builder at the
+stop with the options and a recommendation:
+
+- **(a) A comment-only edit in this branch**, adding "or to eat" and naming `food` beside
+  `lodging`. No type, schema or behaviour change.
+- **(b) Leave it and file a docs follow-up** to reword it. An intake slot and a pull
+  request, and the comment is wrong until then.
+- **(c) Leave it for good.** The plan's sentences name food; the contract's description
+  of the kind would not.
+
+**Chosen: (a), by the owner on 2026-10-24**, relayed by the orchestrator; it was the
+builder's recommendation. The edit is exactly that: the comment, and nothing else in
+the contract.
+
+### Build 6's stop: `food` names almost no premises when no town pass ran (answered)
+
+Not one of the six decisions above; the Build 6 builder put it at the paid run's report.
+With no list of places (set A: no town pass ran), `food` names almost no premises, **1 of
+71 set A mentions against pl-60's 27 of 73** (the Log's Build 6 entry). That is what Build
+4's role sentence specifies, and `lodging` did the same in pl-60. It matters more while
+pl-61 is unmerged, because every public-Overpass food query gets 406. The options, with
+the builder's recommendation first:
+
+- **(a) Accept it as designed.** Costs: until pl-61 merges, a trip with no town pass gets
+  kinds of place and no premises from `food`. Gains: no code change, and `food` and
+  `lodging` behave alike.
+- **(b) A follow-up ticket** that lets `food` name premises from memory when no town pass
+  ran. Costs: an intake slot, and a premise named from memory is the invention pl-58
+  measured. Gains: set A keeps the premises it had.
+- **(c) Hold this pull request until pl-61 merges.** Costs: the pull request waits on
+  another branch. Gains: the paid run's set A reading is not what a user meets.
+
+**Chosen: (a), by the owner on 2026-10-24**, relayed by the orchestrator; it was the
+builder's recommendation. **#619 is held as a draft until #618 (pl-61) has merged**, which
+carries (c)'s effect as merge order and not as a condition of the code. No follow-up
+ticket is filed.
 
 ## Done when
 
@@ -570,6 +629,75 @@ tools/planner/api/test/live/invention.ts` with no argument, with
 14. **Gates.** `npm run check` exits 0, and `npm test -- --project planner` passes with
     the file and test counts the Log gives. The e2e suite and the image gate do not run
     locally; the Log says so rather than reporting them green.
+
+## Review
+
+**Gate: PASS for the slice (four rows `unproven (scope)`)** — 2026-10-24 · `89a38d30..38bfd8cb` · Sonnet 5.5, depth full (Builds 1–5 and 7–9; Build 6 and the web check are not built)
+
+| Done when                                                                                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Routing: activities, conditions-and-gear, lodging byte-identical to the base with a food find added; food = base + Build 4's two sentences | `agent/test/prompt.test.ts` › "the %s prompt is byte-identical to the base commit's, with a place to eat added to the finds" (×3, assertion is `toBe` against the snapshot, with a lodging find and a food find in the list) and › "with no food find, the food prompt is the base commit's plus Build 4's two sentences, and nothing else" ✓. I regenerated all four snapshot prompts from a clean tree at the base: 4 of 4 byte-equal to `pl62-base-prompts.json`. Plant: `findsFor` back to its base rule turns 3 tests red.                                                                                                                                                                                             |
+| 2. Food query offline: finds inside the radius, none outside; way/relation by `center` and own-type url; Log tables                           | `api/test/grounding-food.test.ts` › "%s: the food finds inside the radius, by element type and by kind, and none outside it" (9 towns), › "117 food finds over the nine at 10 km, and Gaspésie, the peninsula, has none", › "a way from the capture is a find at its center, with a source url of its own type", › "a relation is a find at its center, with a relation url" (composed by hand: no food relation lies within 10 km of any point) ✓. Per-town counts at 10 km and 2 km re-derived by haversine from the raw capture: all equal. Log's tag-presence table (116 distinct named: website 31, phone 22, email 5, any 36, none 80, opening_hours 12, check_date 2; wider reading adds nothing) re-derived: equal. |
+| 3. Six decisions answered; shipped code is the chosen set                                                                                     | Decisions 1–4 and 6 recorded with option, who, date; code ships them: five food kinds without `fast_food`, `findsFor` routing, one more `nearbyPoint` per located town, 10 km and ten ✓ (verified by reading and by the tests of lines 2 and 4). **unproven (scope)** — Decision 5 is open at its stop, as dispatched.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 4. Calls per set A shape, by method, beside pl-60's; town-pass ceiling                                                                        | `api/test/lodging-run.test.ts` › "%s spends the calls pl-62's Log asserts" (×6) and `api/test/lodging-pass.test.ts` › "over the real cache and budget, the pass claims at most 12 calls however many towns a brief names" ✓. Instrumented independently (own logging copy of the doubles): totals 20 / 13 / 6 / 15 / 4 / 26 for road-trip, backcountry, motorised-touring, city-and-culture, resort, multi-city, against the base's 18 / 12 / 6 / 14 / 4 / 23; the delta is `nearbyPoint` only, split lodging/food equally. Ceiling probe over the real cache and a budget of 40, for 1–6 and 10 named towns: 3, 6, 9, 12, 12, 12, 12 of 40.                                                                                |
+| 5. Re-plans pin `nearbyCalls` and `nearbyPointCalls` for lodging-only, food-only, activities-only                                             | `api/test/revisions.test.ts` › "naming food on a corridor brief re-runs it, and the revision carries what it found", › "naming only lodging re-runs both passes (pl-60), and the revision carries what they found", › "re-runs both passes, the town pass's food query included, though activities reads neither town list" ✓. Instrumented: each of the three spends 1 corridor query and 2 town queries (one lodging, one food); the base spent 1 and 1.                                                                                                                                                                                                                                                                  |
+| 6. Hostile text: instruction-shaped name reaches food's prompt as quoted data; one request per call for a reply holding two urls              | `agent/test/prompt.test.ts` › "a food find whose name is an instruction reaches food's prompt as quoted data, after the warning"; `api/test/grounding-food.test.ts` › "nothing in a food find's tags is fetched: one request per call, to Overpass, for a reply whose tags hold two urls" ✓. End-to-end probe with `website`, `url`, `image`, `contact:website`, `wikidata`, `wikipedia` tags through the real adapter, pass and prompt builder: 2 fetches (lodging, food), both to Overpass; 0 to the tag urls; a spy on `globalThis.fetch` never called; the name appears only in food's prompt, after the warning.                                                                                                       |
+| 7. No finds: six shapes' days byte-identical to the base; coverage names each town without food finds                                         | `api/test/lodging-run.test.ts` › "%s: the days are byte-identical to the base commit's, and the plan names the towns it could not check" (×6) ✓. The snapshot `pl60-base-days.json` is pl-60's base, not this build's; I regenerated the days at the base and at the head: 6 of 6 byte-equal to the snapshot, so the line holds as written.                                                                                                                                                                                                                                                                                                                                                                                 |
+| 8. The live run                                                                                                                               | **unproven (scope)** — Build 6, the owner's paid run after Decision 5.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 9. The re-measure                                                                                                                             | **unproven (scope)** — Build 6 and the by-hand classification, after the paid run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 10. The web check                                                                                                                             | **unproven (scope)** — after the re-measure; the dispatch scopes it out.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 11. Harness: `--after pl62-<date>` accepted, stratum is food alone; three commands exit 0                                                     | `api/test/invention-population.test.ts` › "--after pl62-<date> is accepted, and its stratum is food's named premises alone" ✓. The three commands run by me, each exit taken without a pipe: no argument 0, `--after pl58-2026-10-21` 0, `--after pl60-2026-10-24` 0. Control: `--after pl62-2026-10-25` exits 1 for the missing run directory, not for an unknown label.                                                                                                                                                                                                                                                                                                                                                   |
+| 12. Documents name `food`; no rule added                                                                                                      | `grep -c '^\*\*'`: `tools/planner/CLAUDE.md` 25 before, 25 after; the rules file 5 and 5 — **verified**. The first paragraph names `food` as a reader of the town pass; the other two paragraphs and the rules clause say "to eat" and rely on "the four specialists above" (finding 4).                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 13. Offline stub routes by kinds and point; unmatched query throws, not empty                                                                 | `api/test/town-capture-stub.test.ts` › "a lodging query is answered with the lodging capture's reply for that town", › "a food query at the same point is answered with the food capture's reply", › "a query matching neither capture throws, and is recorded, rather than answering an empty reply" ✓. Plants: point-only routing turns 3 of 4 red; empty reply on no match turns 1 red; a combined query makes `townFinds` throw "had no reply for 3 town queries".                                                                                                                                                                                                                                                      |
+| 14. Gates                                                                                                                                     | `npm run check` exit 0; `npm test -- --project planner`: 84 files, 1814 tests passed (the counts the Log gives). e2e and the image gate do not run locally; `gh pr checks 619` read once at this head: CodeQL, changes, check ×2, codeql, dependency-review, docker, e2e, test (ubuntu-latest) and test (windows-latest, informational) all pass ✓                                                                                                                                                                                                                                                                                                                                                                          |
+
+- **low** · no `Done when` line depends on it · The after-pass throw in `townFinds` (`api/test/live/run.ts`), which is what makes a mis-routed town query fail loudly, has no test. Plant: delete only that guard and `town-capture-stub.test.ts` stays 4 of 4 green. The same mis-routing is still caught by the count in "road-trip's offline town finds hand food…" (without the guard the plant reads `expected [] to have a length of 12`), and the guard never fires on correct code, so there is no live call site. Direction, not a remedy I ran: give `townFinds` its captures as a defaulted parameter so a spec can hand it one capture missing a town's food reply and expect the throw.
+- **low** · no `Done when` line depends on it · Food's de-duplication being apart from lodging's is correct but unpinned. Probe: one OSM element tagged both `tourism=hotel` and `amenity=restaurant` is handed to both readers once each, today. Plant: `eat.seen = sleep.seen` in `discoverLodging` leaves 163 of 163 tests in the five town-pass specs green. The nine captures hold no such element (the capture's cross-check asserts it), so no live call site yet.
+- **low** · no `Done when` line depends on it · Comments that name `lodging` as the only consumer of the town query or leave out food: the `nearbyPoint` doc on `GroundingProvider` in `agent/src/grounding.ts` and on `ValhallaGroundingProvider` in `api/src/grounding/valhalla.ts` ("the town query `lodging`'s finds come from"), and `FixtureGroundingProvider.nearbyPoint` in `api/src/grounding/fixtures.ts` ("no town has anything to sleep in here"). Also a test comment in `lodging-pass.test.ts` › "names each town by what happened to it…" says Amqui "was never located"; the double refuses its `locate` (budget), which is the `refused` path. All are false in the safe direction (incomplete).
+- **low** · no `Done when` line depends on it · `Done when` 12 reads "name `food` as a reader of the town pass"; only the first `CLAUDE.md` paragraph does by name. The "Grounding may propose" paragraph, the `coverage` paragraph and the rules clause say "to eat" / "nowhere to eat in" and the first relies on "the four specialists above"; pl-60's own edits to the same three places did not name `lodging` there either. Graded by the ticket's Build 8 wording ("say the town pass hands finds to `lodging` and `food`"), under which it is met; recorded because the line's literal reading asks for more.
+- **dropped** · The adapter's radius re-filter passes a ±1 m change and a `<` for `<=`: no test goes red until the perturbation is about 60 m. Measured: the nearest named food element to the 2 km boundary is 51.15 m away (Matane, way 215671820) and to the 10 km boundary 156.66 m (Rivière-du-Loup, node 6165067013), and the capture holds no named food element beyond 10 km at all. That filter is pl-60's code, not in this diff, and a metre has no meaning at this precision. The pass's own constants are pinned: `FOOD_RADIUS_METRES` ±1 turns 2 tests red, `MAX_FOOD_FINDS_PER_TOWN` 11 and 9 turn 2 red each.
+- **dropped** · Food's block lists up to four towns' finds in one flat list with no town named per line, so `place.locality` is the model's inference from coordinates and `addr:*` tags (the real road-trip block puts a Gaspé restaurant after ten Percé ones). A design choice shared with lodging's block, whose join measured 92.5% in pl-60; `Done when` 10's wrong-town count is what measures it.
+- **findings** · the hunt returned 6; 4 carried, 2 dropped. No `high`, no `med`.
+- NFR: security ✓ (no tag value fetched; hostile text quoted after the warning; probe above) · performance — the pass is sequential and now asks 8 Overpass queries for a four-town brief where it asked 4, 12 of the run's 40 calls; the Log's own capture records 23.8 to 51.2 s per 10 km food query on the public instance against the adapter's 30 s deadline, and does not say how many exceed it (wall-clock not measured by me) · reliability ✓ (a failed food query keeps lodging's finds and the reverse, `api/test/food-pass.test.ts`) · maintainability — above (findings 1 to 3).
+
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-24 · `38bfd8cb..cf1ed416` (the round's five first-parent commits; base `7a2a0f61`) · Sonnet 5.5, depth full on the round. No `high`.
+
+| Done when         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Routing        | Re-run, not re-derived: the round touched neither `agent/src/prompt.ts` nor `agent/test/prompt.test.ts`; `npm test -- --project planner` at the head: 84 files, 1930 tests passed, exit 0, which runs gate 1's `prompt.test.ts` byte-identity cases ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 2. Query offline  | Re-run: `api/test/grounding-food.test.ts` unchanged by the round, in the green suite above ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 3. Six decisions  | **verified** — Decision 5 is now recorded: (a), the owner, 2026-10-24, with a $10 total bound, in a commit made 22 s before the run's start stamp (commit 18:30:27Z; the Log's launcher stamp is 18:30:49Z). Gate 1's `unproven (scope)` on this line is closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 4. Calls          | Re-run: `api/test/lodging-run.test.ts` › "%s spends the calls pl-62's Log asserts" ×6 and `api/test/lodging-pass.test.ts` › the ceiling case; the round changed one comment in the second file ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 5. Re-plans       | Re-run: `api/test/revisions.test.ts` unchanged, green ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 6. Hostile text   | Re-run: `agent/test/prompt.test.ts` › "a food find whose name is an instruction…" and `api/test/grounding-food.test.ts` › "nothing in a food find's tags is fetched…" unchanged, green ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 7. No finds       | Re-run: `api/test/lodging-run.test.ts` › "%s: the days are byte-identical to the base commit's…" ×6, green ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 8. The live run   | **verified**, by my own scripts on the committed records, not by a test (`api/test/live-records.test.ts` runs one case per JSON file and is green). 111 records in the five session directories: haiku low 25, medium 25, high 24, sonnet low 19, opus low 18; sets 30 A, 61 B, 15 C, 5 D; set A carries no finds, every B to D record carries 12 food and 20 lodging finds. Observed cost per session recomputed from each record's own usage and prices: $0.1599, $0.1875, $0.2464, $2.2884, $4.5195, total **$7.4018**, equal to the Log's table to four places and under the $10 bound; each is under the `--max-usd` the Log gives (that cap is the Log's claim: the records do not hold it). `servedModels` equals `requestedModel` in 111 of 111. Credential scan over all 122 files the round changed: no hit but the Log's own sentence naming the pattern; the planted control was caught. **Join, my own rule** (NFD diacritic strip and case fold; a candidate matches when any `place.name` of its location equals a find's `name`, same record; finds of the family's kinds): **food 302 of 335 over 81 records**, **lodging 341 of 369 over 81 records**, the Log's counts, and the per-family splits too (food: haiku 202 of 210, opus 51 of 62, sonnet 49 of 63; lodging: 231 of 234, 55 of 66, 55 of 69). Three variants of the rule (alphanumeric-only fold; against finds of every kind; the `at` place only) give the same two counts. |
+| 9. The re-measure | **verified** — `invention.ts --after pl62-2026-10-24` re-run: **food 303 of 406 mentions (74.6%), places 11 of 80 (13.8%)**; lodging 307 of 451 (68.1%), places 17 of 74; classes 199 / 264 / 128 / 49 over 640 places and 2,714 mentions; set split food A 1 of 71, B to D 302 of 335, lodging A 2 of 82, B to D 305 of 369, all as the Log. **Band 71.2 to 74.6% re-derived** from the keys (the four judgement keys moved: 289 of 406; the two bars too: 247, 60.8%). Hand classification audited: the 52 new `named-premises` keys (all) and 30 of the 158 new `kind-of-place` keys (seed 20261024): 82 of 82 in the class pl-57's rubric puts them in, none a misclass; plus all 69 keys `food` proposed that sit in `kind-of-place` (generic categories every one). Nothing moves the food share outside the band.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 10. The web check | **verified for the numbers; one verdict's citations fail on re-fetch (finding 1).** Pre-registration came first: the pre-registration section is byte-identical in the pre-registration commit and the head (`diff` empty but one trailing blank line), nothing above it changed, and that commit (19:12:47Z) precedes the verdicts commit (19:22:43Z); every recorded first query equals its pre-registered query, 11 of 11, and the grouping (11 keys, 10 objects) is the pre-registered one. **3 of 10 (30.0%, Wilson 10.8–60.3)** and every Wilson line in the Log recomputed: 3 of 21 (5.0–34.6), 3 of 11 (9.7–56.6), 2 of 10 (5.7–51.0), 4 of 10 (16.8–68.7) twice, 2 of 9 (6.3–54.7), all equal. pl-58's `food`-only **3 of 21** re-derived from pl-58's `verdicts.json` and record: equal (its `lodging` side 2 of 19; no object in both). Both budget deviations are disclosed in `verdicts.json` and the Log (Aire Salin's five queries, two over the budget's three; the two `airesalin.com` fetches), and the budget-strict reading (4 of 10, 40.0%) is a row beside the headline. All three not-confirmed objects are in the capture (Percé's reply, the way or node ids the Log gives; the 0.197 m and 8.8 km figures re-derived).                                                                                                                                                                                                            |
+| 11. The harness   | Re-run, each exit read from the process with no pipe: no argument 0, `--after pl58-2026-10-21` 0, `--after pl60-2026-10-24` 0, and `--after pl62-2026-10-24` 0 (the committed record equals its regeneration); `api/test/invention-population.test.ts` green ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 12. The documents | **verified** — `grep -c '^\*\*' tools/planner/CLAUDE.md` is 25 at the head and 25 at the base; neither it nor the rules file is in the round. Gate 1's low 4 is unchanged (below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 13. Offline stub  | `api/test/town-capture-stub.test.ts`, now 5 tests: the three routing cases and the unmatched-query throw as at gate 1, and the new › "townFinds throws after the pass when a town query had no reply, rather than handing food an empty list" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 14. Gates         | `npm run check` exit 0; `npm test -- --project planner` 84 files, 1930 tests (the Log's last stated total is 1929: finding 3); `gh pr checks 619` read once at `cf1ed416f9a229ccbb4b9c0c88b0fd9d8458b552`: CodeQL, changes, check ×2, codeql, dependency-review, docker, e2e, test (ubuntu-latest) and test (windows-latest, informational) all pass, which proves the e2e and image lines at this head ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+**Gate 1's findings.**
+
+- **Low 1 (the after-pass throw has no test): fixed.** The new test fails on the plant: deleting only the five-line guard in `townFinds` gives `Tests 1 failed | 4 passed (5)` on `town-capture-stub.test.ts`, `AssertionError: promise resolved "[ …(22) ]" instead of rejecting`, reproducing the builder's refutation; the unmutated run of the same files is 73 of 73; restored, tree clean.
+- **Low 2 (food's de-duplication unpinned): fixed.** `eat.seen = sleep.seen;` after `const eat = newCategory();` gives `Tests 1 failed | 72 passed (73)` over the five town-pass specs, the new › "one element tagged both a place to stay and a place to eat is handed to each reader once…" red, `expected [ { …(7) } ] to deeply equal [ { …(7) }, { …(7) } ]`; reproduces the builder's command and count; restored, tree clean.
+- **Low 3 (comments naming lodging alone): fixed.** The `nearbyPoint` docs in `agent/src/grounding.ts` and `api/src/grounding/valhalla.ts` now say "and since pl-62 `food`'s as well", `FixtureGroundingProvider.nearbyPoint` says nothing to sleep in "or to eat at", and the `lodging-pass.test.ts` Amqui comment says "the budget refused Amqui's locate"; a grep of `town query` and `nearbyPoint` over `agent/src`, `api/src` and `contract/src` finds no other comment that names lodging alone. All five diffs are comments plus `townFinds`'s defaulted parameter.
+- **Low 4 (Done when 12's literal "name `food`"): not fixed**, by the owner's choice of 2026-10-24; keeps its number and severity, not counted again.
+
+**New findings.**
+
+- **med** · `Done when` 10 depends on it · The `exists` verdict for `restaurant le surcouf|percé` cites two pages that do not support it when re-fetched. `WebFetch https://sortirauquebec.com/en/listing/restaurant/restaurant-le-surcouf` returns **Restaurant Le Surcouf at 51 rue Ste-Anne, Sainte-Anne-de-Bellevue, Montreal region** (dinner only, owner Serge Magnier), a different restaurant of the same name, where `verdicts.json` says the "search summary gives 168 Route 132 Ouest, Percé". `WebFetch https://www.yellowpages.ca/bus/Quebec/Perce/Restaurant-Le-Surcouf-Cafe/1330486.html` returns "no exact match for Restaurant-Le-Surcouf-Cafe in Percé" and nine nearby listings, none Le Surcouf (a page can have moved, so that one is unmeasured, not a contradiction). What is left is the OSM way itself (168 Route 132, version 2, last edited over eight years ago), which is the object under test. So one of eight `exists` verdicts, and the headline 3 of 10, rests on no source a reader can open. Premises: WebFetch returns a model's summary of a page; the Sortir au Québec result is a different establishment by address and owner, not by name alone. At 4 of 10 the rate is 40.0% (16.8–68.7), the value the Log already prints for its Village and strict-Aire-Salin rows, so no conclusion the owner chooses from moves (the intervals overlap pl-58's at every reading). Direction, not a remedy I ran: one more search for Percé's Le Surcouf read from a page that names Percé, or move the object into the Log's sensitivity table.
+- **low** · no `Done when` line depends on it · The `closed` verdict for Pub Pit Caribou is stated more firmly in the Log than its evidence in `verdicts.json` allows. Wanderlog's "Permanently Closed" entry (fetched by me: "Pub Pit Caribou Percé", **155 QC-132**) is at a different address from the one OSM, Québec Vacances ("182 Route 132 West, Ouvert à l'année", fetched by me) and Pub Aire Salin (182 QC-132 O) share; `verdicts.json` says so in its evidence note, the Log's verdict row and class table ("replaced by Pub Aire Salin") do not. The reviewer's remark that "the building used to be the Pit Caribou" is a search summary: on both pages the verdicts cite for Aire Salin (Wanderlog, Tripadvisor, whose one review is dated 23 September 2026) my fetches found no mention of Pit Caribou, so that link is unmeasured by me. The Log does print the other reading (2 of 10, 5.7–51.0), so this is false text in the safe direction.
+- **low** · no `Done when` line depends on it · The Log's last stated planner total, "`Tests 1929 passed (1929)`", is 1930 at the head: `live-records.test.ts` takes one case per JSON file under `fixtures/live/`, and the web check later added the invention record, one more file (not isolated by a run at the earlier commit; the Log's later line, 506 for `live-records.test.ts` and `invention-population.test.ts`, has 476 for the first by my run, the second's 30 unmeasured). `Done when` 14 asks for "the counts the Log gives". False in the safe direction.
+- **dropped** · `resto du capitaine|percé` (65 mentions) is not on the Log's list of judgement cases though `resto du village|percé` is, on a shape ("Resto du X") that both share. Not a misclass: "du Capitaine" tells two premises apart, nothing in the rubric's `locality-plus-category` rule reaches it, and pl-58's and pl-60's carried keys ("Motel Bellevue", "Auberge …") are classed the same way. Recorded with its arithmetic in the full report (a reader who reversed it as well reads food at 224 of 406, 55.2%, five times pl-58's 10.6%).
+- **dropped** · The Log gives each sensitivity row alone and not the joint extreme (5 of 10, 50.0%, 23.7–76.3). Arithmetic from stated rows, not a defect.
+- **findings** · the hunt returned 5; 3 carried, 2 dropped.
+- Unmeasured by me, not findings: no search tool (a DuckDuckGo bot challenge, a Google error page, and Bing results about Beaconsfield), so no `not-found` verdict (Resto du Capitaine, and the absence parts of Brasserie Gourmande and Aire Salin) was re-run; two pages answered HTTP 403 (Tourisme Gaspésie) and two were not attempted (kupi.com, slovenia.info): 13 of the 17 distinct cited URLs read. The pre-registration commit's push time (the Log says 19:12:57Z) is unmeasured: I have its commit time, not its push time. The key file's content was not searched for in the committed files (the scan is for `sk-ant`, `x-api-key`, `authorization`).
+- NFR: security ✓ (the scan above, positive control caught; no new URL fetch or error code in the round) · performance n/a · reliability ✓ (the two new tests close gate 1's unpinned guards) · maintainability — the comments now match the code; finding 3.
 
 ## Log
 
@@ -770,3 +898,920 @@ aa834403 -- tools/planner` lists only this ticket and pl-61's), so every "on pl-
   the measurements made at it. The fixtures Build 1 and 9 name are on `main`:
   `api/test/fixtures/overpass-lodging-towns.json` and
   `agent/test/fixtures/pl60-base-prompts.json`.
+
+**2026-10-24 — Build 1: the food capture, and the counts Decision 6 is asked from
+(builder, Opus 5.5).** Branched from `89a38d30` (`origin/main`) as
+`pl-62-food-town-pass`. Stopped here, as Build 1 says: **no source, test or fixture
+changed**. The scratch scripts and every raw reply are in the dispatch's scratch
+directory, `pl-62/build/` (`capture.mjs`, `retry.mjs`, `count.mjs`, `combined.mjs`) and
+`pl-62/build/raw/` (24 files, one per request, each holding the query, the user agent,
+the status, the time and the reply text verbatim). Nothing of it is checked in: the
+fixture Build 9 and `Done when` 2 name is captured at the radius Decision 6 chooses,
+through `overpassPointQuery` once Build 2 gives it the food kinds, so this capture is
+the evidence for the decision and not that fixture.
+
+- **Network.** `curl -s -m 40 -A 'webtools-planner/0.9 (pl-62 food capture)'
+https://overpass-api.de/api/status` → `http=200 t=38.472164`. The filing's
+  `http=000` was the sandbox of the day, not the instance.
+- **The query, and what the brief had wrong about it.** Build 1 says to build the text
+  "through the built `overpassPointQuery`". That cannot be done before the stop: the
+  function maps `DiscoveryKind`s through `KIND_FILTERS`, which has no food kind until
+  Build 2 adds one, and Build 1 writes no code. So `capture.mjs` builds the text with a
+  copy of the function's template that takes filters directly, and **first proves the
+  copy byte-identical to the built function**: for each of the nine towns,
+  `pointQuery(point, 10000, <the eight lodging filters>, 28)` equals both
+  `overpassPointQuery(point, 10_000, LODGING_KINDS, 28)` from `api/dist` and the
+  `query` pl-60 stored in `overpass-lodging-towns.json` (printed `template check: 9 of 9
+towns equal overpassPointQuery and the stored query`). The food query is then that
+  template with one `nwr[...]` clause each for `"amenity"="restaurant"`, `"cafe"`,
+  `"bar"`, `"pub"`, `"shop"="bakery"` and, counted apart, `"amenity"="fast_food"`,
+  `around:25000` at each town's `towns[].point`, `[timeout:80]` (pl-60's for 25 km),
+  `out center tags;`.
+- **How it was sent.** `fetch` from Node 22.23.3, `POST` to
+  `https://overpass-api.de/api/interpreter`, headers `content-type: text/plain` and
+  `user-agent: webtools-planner/0.9 (pl-62 food capture)`, not through the adapter
+  (whose `user-agent: node` is answered 406, pl-61). Serial, 5 s apart. Commands:
+  `node capture.mjs <worktree> <scratch>/pl-62/build`, then for the 502s below
+  `node retry.mjs <worktree> <scratch>/pl-62/build "food25:Forillon National Park"
+"combined10:Bonaventure" "combined10:Forillon National Park" "combined10:Gaspé"
+"combined10:Gaspésie"`, then `node count.mjs raw` and `node combined.mjs raw
+<worktree>/tools/planner/api/test/fixtures/overpass-lodging-towns.json`, each run
+  from `pl-62/build/`.
+- **Requests and timings: 24 to Overpass, 16:44:40 to 17:00:05 UTC**, plus the status
+  probe. No HTTP 429. **Six HTTP 502s**, each in 0.35 to 0.38 s, with the body "This
+  Overpass API server is currently at capacity … Retry your request using exponential
+  backoff". The brief's "one retry after an HTTP 429" did not cover them, so
+  `retry.mjs` re-asked each 502 after 30 s, then 60 s, at most three times; one (Gaspé's
+  combined query) needed two re-asks. The food queries: 9 HTTP 200 in 22.1 to 42.0 s,
+  one of them Forillon's re-ask (31.4 s), no `remark`. The combined queries: below.
+- **What a find is, here.** As `findFrom` keeps it: a coordinate (`lat`/`lon`, or
+  `center`), a non-empty trimmed `name`, and a tag among the asked ones; within a
+  radius by haversine from the town's point to that coordinate, as `nearbyPoint`
+  re-filters. Counted offline from the one 25 km reply per town. A cross-check: the
+  combined query below asks the server for 10 km directly, and its food elements per
+  town (named and unnamed) equal this count's 10 km named plus unnamed, town for town.
+
+**Food finds (Decision 1 (a)'s tags) by town and radius, by element type**
+(`n`ode, `w`ay, `r`elation):
+
+| Town                   | 2 km           | 6 km            | 10 km           | 25 km             |
+| ---------------------- | -------------- | --------------- | --------------- | ----------------- |
+| Amqui                  | 7 (n4 w3 r0)   | 7 (n4 w3 r0)    | 9 (n6 w3 r0)    | 18 (n13 w5 r0)    |
+| Bonaventure            | 7 (n4 w3 r0)   | 8 (n5 w3 r0)    | 8 (n5 w3 r0)    | 13 (n10 w3 r0)    |
+| Carleton-sur-Mer       | 6 (n6 w0 r0)   | 6 (n6 w0 r0)    | 6 (n6 w0 r0)    | 20 (n15 w4 r1)    |
+| Forillon National Park | 0              | 1 (n1 w0 r0)    | 2 (n2 w0 r0)    | 20 (n20 w0 r0)    |
+| Gaspé                  | 15 (n15 w0 r0) | 15 (n15 w0 r0)  | 17 (n17 w0 r0)  | 20 (n20 w0 r0)    |
+| Gaspésie (peninsula)   | 0              | 0               | 0               | 0                 |
+| Matane                 | 15 (n8 w7 r0)  | 17 (n9 w8 r0)   | 17 (n9 w8 r0)   | 21 (n11 w10 r0)   |
+| Percé                  | 19 (n10 w9 r0) | 21 (n11 w10 r0) | 23 (n13 w10 r0) | 29 (n16 w13 r0)   |
+| Rivière-du-Loup        | 7 (n7 w0 r0)   | 33 (n29 w4 r0)  | 35 (n31 w4 r0)  | 41 (n35 w6 r0)    |
+| **All 9, summed**      | 76 (n54 w22)   | 108 (n80 w28)   | 117 (n89 w28)   | 182 (n140 w41 r1) |
+| All 9, distinct        | 76             | 108             | 116             | 161               |
+
+- **Two zero localities at 2 km and one at 6 and 10 km**, and neither is a town: the
+  peninsula has none at any radius, and the park has 0, 1 and 2. **Forillon National
+  Park's 25 km reply holds exactly Gaspé's 27 elements** (the same `type/id` set; the
+  query texts differ), so the park's food is Gaspé's and only past 10 km. One element is
+  in both Gaspé's and Forillon's 10 km lists, which is why 117 summed is 116 distinct.
+- **Ways are 28 of 117 (23.9%) at 10 km**, against lodging's 65 of 141, and only one
+  relation exists at any radius. The area form still matters: Matane's 17 include 8
+  ways and Percé's 23 include 10.
+- **Rivière-du-Loup's finds lie mostly 2 to 6 km from its point**: 7 at 2 km, 33 at 6 km.
+
+**By tag value**, counted apart, so an element carrying two meal tags counts under each
+(two do: `Café boulangerie Toujours Dimanche`, node 14313763800, `amenity=restaurant`
+and `shop=bakery`; `Le Fournand Boulangerie`, way 598360367, `amenity=cafe` and
+`shop=bakery`). Restaurant / café / bar / pub / bakery:
+
+| Town                   | 2 km                | 6 km                  | 10 km                 | 25 km                  |
+| ---------------------- | ------------------- | --------------------- | --------------------- | ---------------------- |
+| Amqui                  | 3 / 1 / 1 / 2 / 0   | 3 / 1 / 1 / 2 / 0     | 4 / 1 / 1 / 3 / 0     | 9 / 2 / 3 / 4 / 0      |
+| Bonaventure            | 5 / 0 / 0 / 1 / 1   | 6 / 0 / 0 / 1 / 1     | 6 / 0 / 0 / 1 / 1     | 8 / 2 / 0 / 1 / 2      |
+| Carleton-sur-Mer       | 3 / 1 / 1 / 0 / 1   | 3 / 1 / 1 / 0 / 1     | 3 / 1 / 1 / 0 / 1     | 11 / 4 / 2 / 2 / 1     |
+| Forillon National Park | 0 / 0 / 0 / 0 / 0   | 1 / 0 / 0 / 0 / 0     | 2 / 0 / 0 / 0 / 0     | 10 / 5 / 3 / 1 / 1     |
+| Gaspé                  | 6 / 5 / 2 / 1 / 1   | 6 / 5 / 2 / 1 / 1     | 8 / 5 / 2 / 1 / 1     | 10 / 5 / 3 / 1 / 1     |
+| Gaspésie               | 0                   | 0                     | 0                     | 0                      |
+| Matane                 | 8 / 2 / 3 / 2 / 1   | 9 / 3 / 3 / 2 / 1     | 9 / 3 / 3 / 2 / 1     | 13 / 3 / 3 / 2 / 1     |
+| Percé                  | 15 / 1 / 0 / 2 / 2  | 16 / 2 / 0 / 2 / 2    | 17 / 2 / 0 / 3 / 2    | 20 / 4 / 1 / 3 / 2     |
+| Rivière-du-Loup        | 4 / 2 / 1 / 0 / 0   | 19 / 5 / 3 / 5 / 1    | 20 / 6 / 3 / 5 / 1    | 24 / 8 / 3 / 5 / 1     |
+| **All 9, summed**      | 44 / 12 / 8 / 8 / 6 | 63 / 17 / 10 / 13 / 7 | 69 / 18 / 10 / 15 / 7 | 105 / 33 / 18 / 19 / 9 |
+
+**What the code would drop or exclude, summed over the nine (2 / 6 / 10 / 25 km):**
+food elements with no name, which `findFrom` drops, 1 / 4 / 7 / 13 (at most 4 in one
+town, Matane at 10 km). **`amenity=fast_food`, excluded by Decision 1 (a)**, named
+18 / 24 / 26 / 42 (unnamed 1 / 1 / 2 / 7). At 10 km by town: Amqui 3, Bonaventure 1,
+Carleton-sur-Mer 1, Forillon 2, Gaspé 3, Gaspésie 0, **Matane 10**, Percé 1,
+Rivière-du-Loup 5. So the exclusion costs 26 finds against the 117 kept (22.2%), and
+in Matane 10 against 17.
+
+**Tag presence over the named food finds, de-duplicated by `type/id` across towns.**
+Beside it, the lodging capture's 140 at 10 km from Decision 4 (exact keys).
+
+| Key                       | Food, 10 km: 116, exact | Food, wider reading | Food, 25 km: 161, exact | Lodging, 10 km: 140, exact |
+| ------------------------- | ----------------------- | ------------------- | ----------------------- | -------------------------- |
+| `website`                 | 31 (26.7%)              | 31 (26.7%)          | 36 (22.4%)              | 49 (35.0%)                 |
+| `phone`                   | 22 (19.0%)              | 22 (19.0%)          | 29 (18.0%)              | 25 (17.9%)                 |
+| `email`                   | 5 (4.3%)                | 5 (4.3%)            | 6 (3.7%)                | 15 (10.7%)                 |
+| at least one of the three | 36 (31.0%)              | 36 (31.0%)          | 46 (28.6%)              | 53 (37.9%)                 |
+| none of the three         | 80 (69.0%)              | 80 (69.0%)          | 115 (71.4%)             | 87 (62.1%)                 |
+| `opening_hours`           | 12 (10.3%)              |                     | 16 (9.9%)               | 0 (0.0%)                   |
+| `check_date`              | 2 (1.7%)                |                     | 3 (1.9%)                | 3 (2.1%)                   |
+
+The wider reading (`website` ∪ `contact:website` ∪ `url`, `phone` ∪ `contact:phone`,
+`email` ∪ `contact:email`) adds nothing for food at either radius: no named food find
+carries one of the wider keys without the exact one. Lodging's wider "at least one" was
+62 of 140 (44.3%). Decision 4 is answered (a), so this is the record it asked for and
+not a reopening.
+
+**Food against lodging at 10 km, by locality** (lodging from pl-60's fixture): Amqui 9
+and 8, Bonaventure 8 and 8, Carleton-sur-Mer 6 and 8, Forillon National Park 2 and 17,
+Gaspé 17 and 24, Gaspésie 0 and 0, Matane 17 and 14, Percé 23 and 40, Rivière-du-Loup 35
+and 22; **117 against 141 in all**. _What differs from pl-60_'s "restaurants outnumber
+places to sleep in a town" is false on this map for these nine, and is corrected there
+in this commit.
+
+**What a closest-first cap shows** (finds shown of finds in the radius, summed over the
+nine; a town where the cap binds is named):
+
+| Radius | Cap 10                                                                        | Cap 15                                                    | Cap 20                                     |
+| ------ | ----------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------ |
+| 2 km   | 57 of 76; binds in Gaspé (15), Matane (15), Percé (19)                        | 72 of 76; binds in Percé                                  | 76 of 76                                   |
+| 6 km   | 62 of 108; binds in Gaspé (15), Matane (17), Percé (21), Rivière-du-Loup (33) | 82 of 108; binds in Matane, Percé, Rivière-du-Loup        | 94 of 108; binds in Percé, Rivière-du-Loup |
+| 10 km  | 65 of 117; binds in Gaspé (17), Matane (17), Percé (23), Rivière-du-Loup (35) | 85 of 117; binds in Gaspé, Matane, Percé, Rivière-du-Loup | 99 of 117; binds in Percé, Rivière-du-Loup |
+
+- **Where the cap binds, the ten closest are the centre**: the tenth-closest food find
+  is 237 m from Gaspé's point, 276 m from Percé's, 733 m from Matane's and 2,274 m from
+  Rivière-du-Loup's; the farthest inside 10 km is 8,852, 9,004, 2,577 and 9,843 m. In
+  the other five localities the cap does not bind at 10 km (9, 8, 6, 2 and 0 finds).
+- **The radius moves few finds; the cap moves many.** 6 km to 10 km adds 9 of 117
+  (Amqui 2, Forillon 1, Gaspé 2, Percé 2, Rivière-du-Loup 2), and with a cap of ten it
+  adds 3 shown finds (62 to 65). Cap 10 to cap 15 at 10 km adds 20 shown finds.
+- **The ten closest by tag** at 10 km, restaurant / café / bar / pub / bakery: Gaspé 4 /
+  4 / 1 / 0 / 1, Matane 4 / 2 / 2 / 2 / 1, Percé 8 / 0 / 0 / 2 / 0, Rivière-du-Loup 6 /
+  2 / 1 / 1 / 0. Bars and pubs together are 1 to 4 of each capped ten.
+
+**The combined query (Decision 3 (b)'s shape), sent once per town as the answer to
+Decision 3 asks**: the eight lodging clauses and the five food clauses in one
+`overpassPointQuery`-shaped text at 10 km, `[timeout:28]`, the timeout `nearbyPoint`
+derives from the default 30 s deadline. The lodging-only column is pl-60's checked-in
+reply for the same point, radius and timeout. That fixture stores each reply parsed,
+so its wire size is unknown; both sides are compared as compact JSON.
+
+| Town                   | Tries (status, s)          | Combined: wire, compact, elements (lodging / food) | Lodging only: compact, elements |
+| ---------------------- | -------------------------- | -------------------------------------------------- | ------------------------------- |
+| Amqui                  | 200 24.5                   | 6,517 B, 5,197 B, 17 (8 / 9)                       | 2,170 B, 8                      |
+| Bonaventure            | 502 0.4; 200 43.4          | 5,533 B, 4,375 B, 21 (11 / 10)                     | 2,896 B, 11                     |
+| Carleton-sur-Mer       | 200 35.6                   | 3,933 B, 3,099 B, 15 (9 / 6)                       | 1,723 B, 9                      |
+| Forillon National Park | 502 0.4; 200 37.6          | 6,008 B, 4,716 B, 22 (20 / 2)                      | 4,357 B, 20                     |
+| Gaspé                  | 502 0.4; 502 0.4; 200 38.4 | 15,390 B, 12,264 B, 43 (26 / 17)                   | 7,159 B, 26                     |
+| Gaspésie               | 502 0.4; 200 34.7          | 653 B, 512 B, 2 (1 / 1)                            | 366 B, 1                        |
+| Matane                 | 200 29.9                   | 10,252 B, 7,968 B, 35 (14 / 21)                    | 4,310 B, 14                     |
+| Percé                  | 200 29.4                   | 20,053 B, 15,765 B, 63 (40 / 23)                   | 10,609 B, 40                    |
+| Rivière-du-Loup        | 200 27.7                   | 21,083 B, 16,712 B, 64 (29 / 35)                   | 7,114 B, 29                     |
+
+- The lodging element counts equal pl-60's fixture's, town for town.
+- **7 of 9 combined queries took over 28 s and 5 of 9 over 30 s**, which `nearbyPoint`'s
+  default deadline would have abandoned. **That is the instance's load, not the query's
+  size**: Gaspésie's, with 2 elements, took 34.7 s, and the food-only 25 km queries took
+  22.1 to 42.0 s in the same quarter-hour, while pl-60's 25 km lodging queries took
+  11.3 to 30.1 s. So this run cannot separate (a)'s two queries from (b)'s one on time,
+  and it does not price the food query at the radius Decision 6 chooses: **unmeasured**,
+  and Build 9's fixture capture times it. Decision 3 stays (a).
+
+**Open decision: Decision 6, the food pass's radius and per-town cap.** Put to the
+orchestrator with the options as Decision 6 words them; not settled here.
+
+- (a) The same, 10 km and ten. The table: 65 of 117 finds shown; the cap binds in four
+  towns, whose ten are each town's centre (the tenth within 237 m to 2,274 m).
+- (b) A smaller radius, such as the corridor's 6 km, with the same cap: 62 of 108
+  shown. It loses Forillon's second find, Amqui's two outer ones, and two each in Gaspé,
+  Percé and Rivière-du-Loup.
+- (c) Choose from Build 1's table of counts at 2, 6 and 10 km: the table above.
+- (d) Leave open.
+
+**Builder's recommendation: (a), 10 km and ten.** The reason Decision 6 gave for a
+different number was density, and the capture says food is not denser than lodging
+here (117 against 141 at 10 km), so the case for two numbers is gone. The radius barely
+matters between 6 and 10 km (9 finds in 117), so the one that matches `lodging` keeps
+the two lists over the same circle. The cap of ten does cut four towns' lists to their centres,
+which suits "a meal close to where the party stays" and keeps `food`'s block no longer
+than `lodging`'s, so Decision 5's lodging-based cost floor still applies. If the owner
+wants more choice in a dense town, the next option to price is (c) with 10 km and
+fifteen: 85 of 117 shown, 20 more finds in four towns' blocks.
+
+**Where the next builder starts.** Build 2, once Decision 6 is answered. The food tags
+are Decision 1 (a)'s; the template proof above is the check that Build 2's new
+`KIND_FILTERS` entries produce the text this capture sent (the same clause strings,
+`"amenity"="restaurant"` and so on). Build 9's fixture is a fresh capture of the nine
+towns through the built `overpassPointQuery(point, <radius>, <food kinds>, 28)`, sent
+the same way (`capture.mjs`'s `send`, the same user agent or one naming the fixture),
+and should expect HTTP 502 "at capacity" from the public instance and back off rather
+than fail.
+
+**2026-10-24 — Builds 2 to 5, 7's harness label and 8, stopped at Build 8's contract
+comment (builder, Opus 5.5).** Decision 6 is recorded above (10 km and ten, the
+owner's answer relayed by the orchestrator, in `c19be984`). Base `89a38d30`; pl-61
+(PR #618) had not landed, so nothing was merged from `main`. **Stopped at Build 8**,
+as Build 8 and the dispatch say: `contract/src/unchecked.ts`'s comment on `coverage`
+says the town query "found nowhere on the map to sleep there" and names `lodging`
+alone, and it is not edited (the open decision is in the dispatch's report). **Build 9
+is not done**: the stub routing in `run.ts` and its spec (`Done when` 13) are the next
+builder's first step, then Decision 5's stop.
+
+- **The base prompts were snapshotted before any source changed**, in `0f74201d`:
+  `agent/test/fixtures/pl62-prompt-inputs.json` (pl-60's capacity and two corridor
+  finds, plus one lodging find, plus a `foodFind` the test adds) and
+  `pl62-base-prompts.json`, the four prompts `activities`, `conditions-and-gear`,
+  `lodging` and `food` that `agent/src` at `89a38d30` built from them
+  (`node --import tsx <scratch>/pl-62/build/snapshot.mts <worktree> 89a38d30`).
+- **Build 2, the query.** `FOOD_KINDS` in `agent/src/grounding.ts` (`restaurant`,
+  `cafe`, `bar`, `pub`, `bakery`), `DiscoveryKind` their union with the other two
+  lists, `isFoodKind` and `isCorridorKind` beside `isLodgingKind`; five
+  `KIND_FILTERS` clauses and `KIND_MATCHES` predicates in `valhalla.ts`, after the
+  lodging ones, so a café that is also a bakery is a café. `runs/lodging.ts` asks each
+  located town a second `nearbyPoint` for `FOOD_KINDS` after the lodging one,
+  `FOOD_RADIUS_METRES` = 10 000 and `MAX_FOOD_FINDS_PER_TOWN` = 10, closest first,
+  de-duplicated across towns apart from the lodging list. **The cap is argued in its
+  comment**: 65 of Build 1's 117 shown, binding in Gaspé, Matane, Percé and
+  Rivière-du-Loup where the ten are each town's centre, and no longer a block than
+  `lodging`'s for the same towns. `LODGING_STEPS_PER_TOWN` (2) became
+  `TOWN_STEPS_PER_TOWN` (3). Places to sleep come first in the pass's list, so
+  `lodging`'s filtered list is the one it had.
+- **`findsFor` routes each reader to its own kinds**: `lodging` the lodging kinds;
+  `food` the food kinds and the corridor's; `activities` and `conditions-and-gear` the
+  corridor's alone. **Mutation, committed first**: with `findsFor` put back to pl-60's
+  two-way rule at `91087ffe`, `npx vitest run tools/planner/agent/test/prompt.test.ts`
+  gave `3 failed | 36 passed (39)` (the two byte-identical pins for `activities` and
+  `conditions-and-gear` and "no other specialist is shown a place to eat"); restored
+  with `git checkout 91087ffe -- tools/planner/agent/src/prompt.ts`.
+- **Calls per set A shape** (`lodging-run.test.ts` › "%s spends the calls pl-62's Log
+  asserts"), total and `nearbyPoint`, beside pl-60's: `road-trip` 20 (4) against 18
+  (2); `backcountry` 13 (2) against 12 (1); `motorised-touring` 6 (0) against 6;
+  `city-and-culture` 15 (2) against 14 (1); `resort` 4 (0) against 4; `multi-city` 26
+  (6) against 23 (3). `locate`, `travel`, `nearby` and `articlesNear` are pl-60's,
+  unchanged. These are Decision 3 (a)'s predicted 20, 13, 6, 15, 4 and 26. **The
+  town pass's ceiling is 12 of `MAX_GROUNDING_CALLS` = 40** (`lodging-pass.test.ts` ›
+  "over the real cache and budget, the pass claims at most 12 calls however many
+  towns a brief names").
+- **Re-plans** (`revisions.test.ts`): a re-plan naming only `lodging`, only `food` or
+  only `activities` spends `nearbyCalls` 1 and `nearbyPointCalls` 2, on that suite's
+  one-town corridor brief. pl-60's numbers for `lodging` were 1 and 1. `activities`
+  reads neither town list and pays both town queries; `revise.ts`'s comment names the
+  cost, as pl-60's named the corridor's.
+- **Coverage.** Two new sentences, after `lodging`'s: "No places to eat around … are
+  on the map. Somewhere to eat there may exist without this plan having found it." and
+  "Places to eat around … were never looked up: the run had already used the number of
+  lookups it is allowed." **The brief did not say what to do with the sentences a town
+  shares**, so the three that cover a town checked for neither were reworded rather
+  than doubled: "… so places to stay and places to eat there were not checked.",
+  "Places to stay and places to eat around … were not looked up: …", and "This trip
+  names no town to stay in, so the map was not checked for places to stay or to eat."
+  `lodging`'s own two (empty, refused) are unchanged. pl-60's tests that pinned the
+  old wording were updated in `lodging-pass.test.ts`, `lodging-run.test.ts` and
+  `revisions.test.ts`.
+- **Build 3, the block.** `food` gets the corridor block as it was, then a second block,
+  "Places to eat around the towns this trip names, …", only when it has food finds,
+  whose close is its own: "… Nothing in a place's tags is evidence about a diet: what
+  the party said they cannot eat still decides, whatever a tag says it serves. Where one
+  of these fits the party, propose it by the name it has here; where none fits, or a
+  town has none listed, propose a kind of place instead. A meal there is a choice, not
+  a slot to fill."
+- **Build 4, the role.** Before (pl-58's): "You propose meals that are part of the trip
+  rather than fuel for it, and you respect anything the party said they cannot eat. A
+  proposal does one of two things. It names one premises, an establishment or a site,
+  by its name and at its locality: `place.name` is that name and `place.locality` the
+  town. Or it says plainly, in its title or its summary, that it is a kind of place and
+  names no premises: then `place.name` holds the kind, for example `bakery`, and
+  `place.locality` the town." After: the same, then "Where you are given places to eat
+  from map data for a town, a premises you name there is one of those, under the name
+  it is given, if any of them fits the party and what they cannot eat. A kind of place
+  is the fallback, for a town whose list is empty or where nothing in it fits."
+  **pl-60's test was changed, on purpose**: `prompt.test.ts` › "the %s prompt is
+  byte-identical to the base commit's, with and without places to sleep in the finds"
+  now runs `activities` and `conditions-and-gear` only, because the appended sentences
+  make `food`'s prompt differ from pl-60's base by design; `food` is pinned in pl-62's
+  block instead.
+- **Build 5, hostile text.** pl-29's caps unchanged; a food find whose `name`,
+  `cuisine`, `website` and `description` carry instructions reaches `food`'s prompt as
+  quoted data after the warning, and the adapter makes one request for a reply whose
+  tags hold two urls.
+- **Build 7, the harness label only.** `"pl-62": ["food"]` in `invention.ts`'s
+  `STRATUM_SPECIALISTS`. The classification, the shares and the web check need the
+  paid run.
+- **Build 8.** The three paragraphs of `tools/planner/CLAUDE.md` and the clause of
+  `.claude/rules/planner-unchecked-constraints.md` now name `food` and places to eat.
+  `grep -c '^\*\*'` gives 25 before (`git show 89a38d30:tools/planner/CLAUDE.md`) and
+  25 after, and 5 and 5 for the rules file. Then the stop.
+- **The checked-in food capture**, `api/test/fixtures/overpass-food-towns.json`: one
+  reply per town to `overpassPointQuery(point, 10_000, FOOD_KINDS, 28)` from the built
+  `api/dist`, points and `geocodedAs` copied from the lodging capture, sent from
+  `<scratch>/pl-62/build/fixture-capture.mjs` with the user agent
+  `webtools-planner/0.9 (pl-62 fixture capture)`, serial and 5 s apart, from 17:27:45
+  to 17:36:24 UTC. 13 requests: 9 HTTP 200 in 23.8 to 51.2 s, and **4 HTTP 502** ("at
+  capacity", 0.35 s each), two each for Gaspésie and Rivière-du-Loup, each answered on
+  its third try after 30 s and 60 s of back-off. No `remark`. Through `nearbyPoint`
+  offline at 10 km it gives Build 1's counts town for town (117 in all: node 89, way
+  28, relation 0; restaurant 69, café 18, bar 10, pub 15, bakery 5, the two
+  café-or-restaurant bakeries counting as their `amenity`), and at 2 km Build 1's 76.
+  **No food relation lies within 10 km of any point**, so `Done when` 2's relation case
+  is composed by hand, beside the capture's ten Percé ways.
+- **pl-61 will need one line when the second of the two merges**: pl-61 appends a test
+  to `lodging-pass.test.ts` ("a 406 from the geocoder and from Overpass reaches each
+  town-pass warn with its status") that expects one "the town pass could not query a
+  town" warn for Gaspé. With the food query that town is queried twice, so the count
+  becomes 2. Not changed here, since pl-61 has not landed.
+- **Checks.** `npm run check` exit 0. `npm test -- --project planner`: `Test Files 83
+passed (83)`, `Tests 1810 passed (1810)`. New specs: `api/test/grounding-food.test.ts`
+  (17 tests), `api/test/food-pass.test.ts` (6). The e2e suite and the image gate did not
+  run locally.
+
+**What the next builder does.** Build 9: route `run.ts` › `lodgingFinds`'s stub by the
+query's kinds and point, answering a food query from `overpass-food-towns.json` and
+throwing on a query that matches no capture, and its `Done when` 13 spec. **Until then
+the stub answers the town pass's food queries with the lodging reply**, so sets B to D
+would hand `food` no town finds without an error, the trap Build 9 describes. Then stop
+for Decision 5. Builds 6 and 7's measurements and `Done when` 8 to 10 follow the paid run.
+
+**2026-10-24 — Build 8's contract comment and Build 9, stopped before gate 1 (builder,
+Opus 5.5).** The owner answered Build 8's stop with (a), recorded above under
+_Build 8's stop_. pl-61 (#618) had not merged, so nothing was merged from `main` and
+pl-61's `queried` expectation is left for whichever of the two merges second (the
+previous entry says what changes). Stopped here, as the dispatch says: gate 1 over
+Builds 2 to 9 runs before Decision 5 is asked.
+
+- **Build 8, finished.** `contract/src/unchecked.ts`'s comment on `coverage` now says
+  the town query found "nowhere on the map to sleep there, or since pl-62 nowhere to
+  eat", and "`lodging` or `food` then proposes a kind of place there". The comment
+  only: `git diff 63b5793b -- tools/planner/contract` touches no line outside it.
+- **Build 9, the stub.** `run.ts` exports `townCaptureFetch`, `readTownCapture` and
+  `townFinds` (pl-60's `lodgingFinds`, renamed because it now returns both lists). The
+  stub answers a query whose clauses are all `"tourism"=…` from
+  `overpass-lodging-towns.json`, and one whose clauses are all `"amenity"=…` or
+  `"shop"=…` from `overpass-food-towns.json`, by the point in the query. A query
+  matching neither capture, a combined one included, throws and is recorded, and
+  `townFinds` throws after the pass if any was, because the adapter and the town pass
+  would otherwise turn the thrown fetch into "nothing on the map".
+  `api/test/town-capture-stub.test.ts` (4 tests, offline) is `Done when` 13: "a
+  lodging query is answered with the lodging capture's reply for that town", "a food
+  query at the same point is answered with the food capture's reply", "a query
+  matching neither capture throws, and is recorded, rather than answering an empty
+  reply", and "road-trip's offline town finds hand food its places to eat and lodging
+  its places to stay" (12 food finds, Percé's closest ten and Forillon's two, and
+  pl-60's 20 lodging finds). **Mutation, committed first**: with the stub put back to
+  pl-60's routing (by point alone, `{ elements: [] }` for no match) at `8d91e5cb`, the
+  spec gave `3 failed | 1 passed (4)`; restored with `git checkout 8d91e5cb --
+tools/planner/api/test/live/run.ts`.
+- **What the paid run's sets B to D now hand `food`, offline** (for Decision 5, not a
+  price): `node --import tsx <scratch>/pl-62/build/block-size.mts <worktree>` printed
+  `foodFinds 12`, `lodgingFinds 20`, food's system prompt 2,814 characters without the
+  town food finds and 6,018 with them (**+3,204**), against `lodging`'s town block of
+  4,442 characters. In tokens it is unmeasured: `count_tokens` needs the Anthropic
+  API.
+- **Checks.** `npm run check` exit 0. `npm test -- --project planner`: `Test Files 84
+passed (84)`, `Tests 1814 passed (1814)`.
+
+**2026-10-24 — Gate 1's lows 1 to 3, Decision 5 answered, and Build 6, the live run
+(builder, Opus 5.5).** A fresh builder, from the previous entry's handover at
+`38bfd8cb`. Gate 1 (Sonnet 5.5) graded that head PASS for the slice, with `Done when`
+8 to 10 `unproven (scope)`; the owner chose to fold its lows 1 to 3 into this round and
+to leave low 4 (`Done when` 12's literal "name `food`") recorded and unfixed. pl-61
+(#618) had not merged into `main` (`origin/main` still `89a38d30`), so nothing was merged
+and the `queried` expectation the earlier entry describes is still pending.
+
+- **Decision 5, answered (a)** by the owner on 2026-10-24, relayed in this dispatch,
+  and recorded under Decision 5 above in this commit, **before the run starts**. The
+  authorisation is (a)'s shape with a $10 total bound.
+- **Low 1, the after-pass throw in `townFinds`.** `townFinds` now takes its two
+  captures as a parameter defaulting to the checked-in files.
+  `town-capture-stub.test.ts` › "townFinds throws after the pass when a town query had
+  no reply, rather than handing food an empty list" hands it a food capture with
+  Percé's reply removed. **Plant**, at `0845c3a4`: the five-line guard deleted, and
+  `npx vitest run tools/planner/api/test/town-capture-stub.test.ts` gave `Tests 1 failed
+| 4 passed (5)`, `AssertionError: promise resolved "[ …(22) ]" instead of rejecting`.
+  Restored with `git checkout 0845c3a4 -- tools/planner/api/test/live/run.ts`.
+- **Low 2, food's de-duplication apart from lodging's.** `food-pass.test.ts` › "one
+  element tagged both a place to stay and a place to eat is handed to each reader once,
+  since the two lists are de-duplicated apart": `node/42` comes back as a hotel from the
+  lodging query and as a restaurant from the food query, and both finds are in the
+  pass's list. **Plant**, at `0845c3a4`: `eat.seen = sleep.seen;` after `const eat =
+newCategory();` in `discoverLodging`, and the five town-pass specs
+  (`food-pass`, `lodging-pass`, `lodging-run`, `town-capture-stub`, `revisions`) gave
+  `Tests 1 failed | 72 passed (73)`, `expected [ { …(7) } ] to deeply equal [ { …(7) },
+{ …(7) } ]`. Restored with `git checkout 0845c3a4 --
+tools/planner/api/src/runs/lodging.ts`; `73 passed (73)` after.
+- **Low 3, the comments.** `GroundingProvider.nearbyPoint` (`agent/src/grounding.ts`)
+  and `ValhallaGroundingProvider.nearbyPoint` (`api/src/grounding/valhalla.ts`) now say
+  the town query is `food`'s as well; `FixtureGroundingProvider.nearbyPoint` says no
+  town has anything to sleep in or to eat at; and the comment in `lodging-pass.test.ts`
+  › "names each town by what happened to it, one sentence per outcome" says the budget
+  refused Amqui's `locate`, which is the double's `"refused"`, not "never located".
+- **The wrapper**, `run-pl62.mjs` in the dispatch's scratch directory (`pl-62/build-6/`),
+  is pl-60's `run-pl60.mjs` with the label `pl62-<date>` and nothing else changed: the
+  five pairs, the per-session caps (1, 1, 1, 5 and 10, each also bounded by what is left
+  of the $10), and pl-58's prices, which equal the `prices` in pl-60's five directories.
+  It refuses a total above $10 and a session directory that exists.
+- **Dry run** under the scripted provider into scratch: `node run-pl62.mjs 2026-10-24 -
+<scratch>/pl-62/build-6/dry/live <scratch>/pl-62/build-6/dry/logs 10`, exit 0, five
+  sessions of 25 records each at $0.0000, "all five sessions done, observed $0.0000 of
+  $10". Every set B record carries 72 finds: the corridor's 40, `lodging`'s 20 and
+  `food`'s 12 (Percé's closest ten and Forillon's two), and its `food` prompt carries the
+  block "Places to eat around the towns this trip names"; set A records carry none
+  (`inspect.mjs`).
+- **The projection, against the bound.** pl-60's five sessions observed $7.2134. pl-62
+  adds 3,204 characters to `food`'s prompt in sets B to D only, about 800 tokens a call
+  by the usual four characters a token (not measured: `count_tokens` was not run before
+  the session). Over pl-60's 80 sets B to D records and at most three attempts in set D,
+  that is under 0.3 M input tokens, under $1.20 at Opus's $4 per MTok even if every
+  record were Opus's. **The projection is $7.2 to $8.4, under $10**, so the run went
+  ahead. The wrapper's caps bound it at $10 in any case, apart from run.ts's documented
+  one-run fallback excess.
+
+- **The run.** Started at 18:30:49Z and ended at 18:58:39Z on 2026-10-24 (the launcher's
+  own `date -u` stamps), from the worktree at `398db9bf` with `setsid nohup`, pid
+  1704412 (also its process group), through a scratch launcher (`launch-live.sh`). The
+  command was `node run-pl62.mjs 2026-10-24 /home/pwuser/.planner-live-key
+tools/planner/api/test/fixtures/live <scratch>/pl-62/build-6/live-logs 10`. The key is
+  the one the owner placed for pl-60 (`stat`: 106 bytes, mode 600, owner `pwuser`); it
+  was passed by path, read only by the wrapper and handed to each child's environment,
+  and nothing printed or logged it. The wrapper exited 0, every session exited 0, and
+  no spend stop tripped. The run date is the run's real date.
+
+  | Session (`fixtures/live/`)                | `--max-usd` | Records | A   | B                       | C   | D   | Observed | pl-60's |
+  | ----------------------------------------- | ----------- | ------- | --- | ----------------------- | --- | --- | -------- | ------- |
+  | `claude-haiku-5-5-low-pl62-2026-10-24`    | 1.00        | 25      | 6   | 15 (cap, 68 candidates) | 3   | 1   | $0.1599  | $0.1558 |
+  | `claude-haiku-5-5-medium-pl62-2026-10-24` | 1.00        | 25      | 6   | 15 (cap, 79)            | 3   | 1   | $0.1875  | $0.1836 |
+  | `claude-haiku-5-5-high-pl62-2026-10-24`   | 1.00        | 24      | 6   | 14 (107)                | 3   | 1   | $0.2464  | $0.2348 |
+  | `claude-sonnet-5-5-low-pl62-2026-10-24`   | 5.00        | 19      | 6   | 9 (108)                 | 3   | 1   | $2.2884  | $2.2501 |
+  | `claude-opus-5-5-low-pl62-2026-10-24`     | 7.12        | 18      | 6   | 8 (107)                 | 3   | 1   | $4.5195  | $4.3891 |
+
+  **Total: 111 records, $7.4018 observed against the $10 bound** (pl-60: 110 records,
+  $7.2134; pl-58: 112, $7.08). Each session cost 1.7% to 4.9% more than pl-60's, 2.6% in
+  all, inside the projection above. Set B's candidates are `activities` plus `food`, set
+  B's stopping rule. `servedModels` equals the requested model in every record
+  (`sessions.mjs` prints no mismatch).
+
+- **Credentials.** `grep -ril -E 'sk-ant|x-api-key|authorization'` over the five
+  directories (111 files) printed nothing (exit 1); the same command over a planted
+  control file (`{"headers":{"x-api-key":"planted"}}`) printed it (exit 0)
+  (`cred-grep.sh`). Over the run's logs and the wrapper's output, nothing (exit 1). The
+  planner project's `live-records.test.ts` scans every new file too (below).
+- **The join, `matched of written`** (`join62.mjs`, pl-60's `join.mjs` with the kinds
+  compared as an argument: a candidate matches when any `place.name` equals a find's
+  `name` in the same record, after NFD diacritic and case folding; sets B to D records
+  that carry finds of those kinds):
+  - **`food` against the food finds it was shown: 302 of 335 (90.1%), over 81
+    records.** By family: Haiku 202 of 210 (low 60 of 63, medium 64 of 68, high 78 of
+    79), Opus 51 of 62, Sonnet 49 of 63. Against everything `food` was shown (its food
+    finds and the corridor's), the same 302 of 335: no `food` candidate named a corridor
+    find. pl-60's `food`, shown the corridor finds alone, was 0 of 322 over 80 records.
+  - **`lodging` against the lodging finds it was shown: 341 of 369 (92.4%), over 81
+    records** (pl-60: 333 of 360, 92.5%). By family: Haiku 231 of 234, Opus 55 of 66,
+    Sonnet 55 of 69. The control did not move.
+  - `activities` against the corridor finds, the other control: 3 of 278, over 81
+    records (`Plaines d'Abraham` 2, `Observatoire de la Capitale` 1), pl-60's
+    corridor-reader names.
+  - **Which of the twelve food finds were chosen.** Nine: `La Maison du Pêcheur` 76,
+    `Peppino Pizza` 73, `RESTO du CAPITAINE` 65, `Pub Aire Salin` 35, `Restaurant Le
+Surcouf` 32, `La Cantina` 9, `Pub Pit Caribou` 7, `Resto du Village` 4, `Gaspésie
+Brasserie Gourmande` 1. Never: `Le p'tit bateau`, `Restaurant au Mille Délices`, `La
+Table a Roland`. The 33 unmatched are kinds of place: `bakery` 20 (12 at Gaspé),
+    fish markets, casse-croûtes and one grocery 12, `pub|Percé` 1.
+  - **Provenance is not changed on this count**, as Build 6 says.
+- **The hand classification.** `invention/pl62-2026-10-24/classification.json` copies
+  pl-57's rubric object byte for byte (`build.mjs`, pl-60's with the paths changed). The
+  new run has 640 places through `collectPlaces`.
+  - **365 carried** with their class and tags: 266 from pl-60's file, 73 found first in
+    pl-58's, and 26 only in pl-57's (`prep.mts`).
+  - **275 new, classified by hand**, each from its `name|locality`, its use (`at` or
+    `between`) and its specialists, with no web lookup, following pl-57's, pl-58's and
+    pl-60's cases for the same strings (`lookup.mjs`). One line per key is in the
+    scratch `classify/assign.txt`. New: 52 `named-premises`, 158 `kind-of-place`, 42
+    `settlement-or-area`, 23 `route-or-transit`.
+  - **Three carried park keys were re-judged by the park rules** for this run's use:
+    `forillon national park|gaspé peninsula, québec` and `…|gaspésie, québec` to
+    `park-visit` (an `at` here), and `…|gaspé, qc` to `park-area` (a `between` only).
+  - Totals: 199 `named-premises`, 264 `kind-of-place`, 128 `settlement-or-area`, 49
+    `route-or-transit`.
+  - **Judgement cases a reader may reverse, for `food`:** `la cantina|gaspé` (6) and
+    `la cantina|` (3), a common noun for a canteen used as a name; `resto du
+village|percé` (4), a category plus "du village"; and `gaspésie brasserie
+gourmande|percé` (1), a region plus a category, taken as named because the region is
+    not the candidate's locality, as pl-60 took `auberge internationale de forillon`.
+    Each is the name of an OSM element the run handed `food`, and each is
+    `named-premises`. Build 7's other cases: **no `Restaurant de <town>`** was written;
+    **no chain outlet** (Decision 1 (a) left `fast_food` out); and **two bars**, `pub
+aire salin|percé` (35) and `pub pit caribou|percé` (7), named premises whatever they
+    serve, so a class reversal does not reach them, and they are given as an outer
+    reading below. **For `lodging`**, pl-60's cases, on this run's counts: the three
+    `locality-plus-category` campgrounds (`camping parc nature gaspé|gaspé` 19, `camping
+de la baie de percé|percé` 11, `camping baie de gaspé|gaspé` 6), `auberge
+internationale de forillon|gaspé` (42) and `manoir de percé|percé` (40).
+- **The re-measure** (`PLANNER_LIVE_RUN=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24`, exit 0, which
+  makes no request). The after population is the new run's 111 records alone: 640
+  places and 2,714 mentions, by the same rubric. The before populations are pl-58's and
+  pl-60's, from their Logs and re-read here by set with `sens62.mts`:
+
+  |                          | pl-58 (mentions)  | pl-60 (mentions)   | **pl-62 (mentions)**   | pl-58 (places)    | pl-60 (places)    | **pl-62 (places)** |
+  | ------------------------ | ----------------- | ------------------ | ---------------------- | ----------------- | ----------------- | ------------------ |
+  | `food` named-premises    | 43 of 407 (10.6%) | 41 of 395 (10.4%)  | **303 of 406 (74.6%)** | 26 of 186 (14.0%) | 30 of 170 (17.6%) | 11 of 80 (13.8%)   |
+  | `lodging` named-premises | 33 of 418 (7.9%)  | 301 of 443 (67.9%) | 307 of 451 (68.1%)     | 25 of 162 (15.4%) | 17 of 76 (22.4%)  | 17 of 74 (23.0%)   |
+  - **Split by set** (`sens62.mts <worktree> <run> food`, the same keys and classes):
+
+    | `food`                     | pl-58            | pl-60            | **pl-62**              |
+    | -------------------------- | ---------------- | ---------------- | ---------------------- |
+    | set A (no finds), mentions | 30 of 75 (40.0%) | 27 of 73 (37.0%) | **1 of 71 (1.4%)**     |
+    | set A, places              | 17 of 56         | 18 of 53         | 1 of 52                |
+    | sets B to D, mentions      | 13 of 332 (3.9%) | 14 of 322 (4.3%) | **302 of 335 (90.1%)** |
+    | sets B to D, places        | 10 of 141        | 12 of 128        | 10 of 29               |
+
+    `lodging` in pl-62: set A 2 of 82 (2.4%), sets B to D 305 of 369 (82.7%); pl-60's
+    were 1 of 83 and 300 of 360.
+
+  - **The rise is all in sets B to D, and set A fell to almost nothing**, as `lodging`'s
+    did in pl-60 (11 of 95 to 1 of 83). In set A the run hands no finds, and Build 4's
+    role sends `food` to the kind-of-place fallback: Opus's `city-and-culture` went from
+    `Mercato di Testaccio`, `Flavio al Velavevodetto`, `Roscioli Salumeria con Cucina`,
+    `Antico Forno Roscioli` and `Mercato Trionfale` in pl-60 to `covered food market`,
+    `trattoria`, `artisan gelateria`, `wine bar (enoteca)` and `bakery (forno)`. The one
+    set A named premises left is `odprta kuhna|ljubljana`. This is the behaviour Build 4
+    specifies; the report to the orchestrator puts it as a question.
+  - **The places share barely moved (13.8%) while the mentions share rose sevenfold**,
+    because `food`'s named premises in sets B to D are ten keys naming nine of the twelve finds,
+    written again in record after record, where pl-60's were spread over more strings.
+  - **Sensitivity, `food`:** with the four keys above moved to `kind-of-place`, 289 of
+    406 (71.2%), sets B to D 288 of 335 (86.0%). No `food` key is `kind-of-place` with
+    `locality-plus-category`, so nothing moves the other way: **the band is 71.2% to
+    74.6%**. The outer reading that also leaves out the two bars as not meals: 247 of
+    406 (60.8%), sets B to D 246 of 335 (73.4%). pl-58's 10.6% and pl-60's 10.4% are far
+    below every reading.
+  - **Sensitivity, `lodging` (the control):** the campgrounds moved to
+    `named-premises`, 343 of 451 (76.1%); the Auberge internationale's key to
+    `kind-of-place`, 265 (58.8%); `manoir de percé` alone, 267 (59.2%); both, 225 of 451
+    (49.9%). **The band is 49.9% to 76.1%**, against pl-60's 49.2% to 75.4% on the same
+    keys. `lodging` did not move.
+  - Not claimed: that this is caused by more than the finds and the role together. The
+    food finds come from one checked-in capture, so sets B to D see the same twelve every
+    time, ten of them within 300 m of Percé's point.
+
+- **The checks after it, each exit code read directly, with no pipe** (`checks.sh`):
+  `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts` exit 0; the same with `--after
+pl58-2026-10-21` exit 0, and with `--after pl60-2026-10-24` exit 0 ("check: the
+  committed record equals its regeneration; every sampled place has a verdict"). So the
+  earlier records still regenerate with the new run on disk. **`--after
+pl62-2026-10-24` with the check flag is not run and no pl-62 record is written**: the
+  web check has not filled `verdicts.json`, so the check would refuse it by design.
+- **`npm test -- --project planner`: `Test Files 84 passed (84)`, `Tests 1929 passed
+(1929)`.** 1814 at the previous entry, plus the two tests of lows 1 and 2, plus 113
+  cases of `live-records.test.ts`, which takes one per JSON file under
+  `fixtures/live/`: the 111 records, `classification.json` and `verdicts.json`.
+  `npm run check` exit 0. The e2e suite and the image gate did not run locally.
+- **pl-58's `food`-only not-confirmed rate** (`pl58-food-rate.mts`, pl-60's
+  `pl58-lodging-rate.mts` with the specialist swapped, over pl-58's committed
+  `verdicts.json`: an object is `food`'s when `food` proposed any of its checked keys).
+  **3 of 21 objects (14.3%, 95% Wilson 5.0–34.6)**, all `exists-elsewhere`: `Fumoir
+Monsieur Émile`, `Brasserie Pit Caribou L'Anse-à-Beaufils` (its key `pit
+caribou|gaspé`) and `Fumoir d'Antan`. None of `food`'s 21 objects was also
+  `lodging`'s, so none is counted twice. These are the three wrong-town objects _Why_
+  item 4 names.
+
+**For the web check (Build 7, `Done when` 10), which a separate agent runs.**
+`verdicts.json` is committed with its `budget` and no `checks`; its `written` says the
+agent records each key's planned first query in this Log before it searches. The
+stratum is `food`'s named-premises keys, **11 keys**, in the harness's seeded order (seed
+20261020), as the worksheet above printed it. That is fewer than 40 objects, so the walk
+takes every key and stops `exhausted`. The objects below are this builder's reading of
+which keys name one premises, for the agent to confirm before its first query:
+
+| #   | key                                   | suggested first query              | object            | in the food capture                                 |
+| --- | ------------------------------------- | ---------------------------------- | ----------------- | --------------------------------------------------- |
+| 1   | `resto du capitaine\|percé`           | Resto du Capitaine Percé           | object 1          | way 302432445, 162 Route 132                        |
+| 2   | `peppino pizza\|gaspé`                | Peppino Pizza Gaspé                | object 2          | node 9979845990, 1986 Bd de Grande Greve            |
+| 3   | `gaspésie brasserie gourmande\|percé` | Gaspésie Brasserie Gourmande Percé | object 3          | node 12972316601                                    |
+| 4   | `restaurant le surcouf\|percé`        | Restaurant Le Surcouf Percé        | object 4          | way 598383461, 168 Route 132                        |
+| 5   | `la cantina\|`                        | La Cantina Gaspé                   | object 5          | node 6753296585 (Forillon's capture)                |
+| 6   | `pub aire salin\|percé`               | Pub Aire Salin Percé               | object 6          | way 484236636, 182 Route 132                        |
+| 7   | `la maison du pêcheur\|percé`         | La Maison du Pêcheur Percé         | object 7          | way 302432126, 155 Place du Quai                    |
+| 8   | `odprta kuhna\|ljubljana`             | Odprta Kuhna Ljubljana             | object 8          | no: set A, pl-58's query verbatim (it was `exists`) |
+| 9   | `pub pit caribou\|percé`              | Pub Pit Caribou Percé              | object 9          | node 9437751976                                     |
+| 10  | `resto du village\|percé`             | Resto du Village Percé             | object 10         | node 5739969621                                     |
+| 11  | `la cantina\|gaspé`                   | La Cantina Gaspé                   | object 5 (repeat) | node 6753296585                                     |
+
+- **Ten objects**, nine of them map entries the run handed `food`. Two things for the
+  agent to settle before it searches, not settled here: **`Pub Pit Caribou` and `Pub
+Aire Salin` sit 0.2 m apart** in the capture (node 9437751976 at 48.5207094,
+  -64.2153527; way 484236636 at 48.5207103, -64.2153504, 182 Route 132), which reads like
+  one premises mapped under two names, one of them stale; and pl-58 searched the Pit
+  Caribou brewery at L'Anse-à-Beaufils as one object (`Brasserie Pit Caribou
+L'Anse-à-Beaufils`), which may or may not be the Percé pub. Under the budget's "the
+  same real-world entity reuses its first query" rule, which object 9 is changes its
+  query.
+- The record is then `PLANNER_INVENTION_OFFLINE=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24`, and its check the
+  same with `PLANNER_INVENTION_CHECK=1`, its exit code taken without a pipe. Report the
+  not-confirmed rate per object with a 95% Wilson interval beside pl-58's 3 of 21 above,
+  and each object not confirmed by class (wrong-town, not found, closed, other) and
+  whether the capture holds it (the column above).
+- **pl-61 (#618) has still not merged**: when it does, the `queried` count in
+  `lodging-pass.test.ts` that the Build 2 entry describes goes from 1 to 2.
+
+**2026-10-24 — The web check's pre-registration (general-purpose agent, Opus 5.5).**
+Committed and pushed before any search runs. From the branch at `7fe6da26`; no
+source, test or fixture changes. It records each key's planned first query and the
+grouping of keys into objects, with the reasoning, before any search result can bear on
+either.
+
+- **The stratum and its order, re-read.** `PLANNER_LIVE_RUN=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24` (exit 0; it makes no
+  request) printed `stratum draw (pl62-2026-10-24, seed 20261020): 11 lodging-or-food
+named-premises keys` and its worksheet lists the eleven keys in the order of the
+  previous entry's table, which agrees with the Build 6 builder's handover.
+- **The capture, re-read.** `overpass-food-towns.json`, by `type/id`: `La Cantina` is
+  node 6753296585 (48.78999, −64.38081) and is in **both** Gaspé's and Forillon National
+  Park's replies (the previous entry names Forillon's only); `Pub Pit Caribou` is node
+  9437751976 and `Pub Aire Salin` way 484236636 (182 Route 132, `website`
+  airesalin.com), **0.197 m apart** by haversine, both `amenity=pub` with
+  `microbrewery=yes`, both in Percé's reply only. The same reply holds a third element,
+  **`Microbrasserie Pit Caribou`, node 6644593426 (48.47118, −64.30841), 8.79 km from the
+  Percé pub**, at L'Anse-à-Beaufils. It was not among the twelve food finds the run
+  handed `food` (Percé's closest ten and Forillon's two).
+
+**The grouping, decided here and not revisited after the searches.**
+
+1. **`la cantina|` and `la cantina|gaspé` are one object** (object 5). The run handed
+   `food` one element of that name, node 6753296585, in the town of Gaspé; the key with no
+   locality is a candidate that left the locality empty, as `le loup marin|` did in pl-60,
+   and it gets Gaspé added to its first query the same way. Each key is still judged from
+   its own locality, so `la cantina|` cannot be `exists-elsewhere`.
+2. **`pub pit caribou|percé` is not the object pl-58 searched** as `Brasserie Pit Caribou
+L'Anse-à-Beaufils`. pl-58's object is the brewery at 27 rue de l'Anse,
+   L'Anse-à-Beaufils (its `pit caribou|gaspé` note: "its pubs are in Percé and
+   Montréal"); the map holds the brewery and the Percé pub as two elements 8.8 km apart,
+   and the key names the pub, in Percé. So the budget's "where pl-57, pl-58 or pl-60
+   searched the same entity its first query is reused verbatim" does not apply, and
+   object 9 takes query 1 of the budget, `Pub Pit Caribou Percé`.
+3. **`pub pit caribou|percé` and `pub aire salin|percé` are two objects** (6 and 9),
+   though the two elements share one building. The budget joins keys that **name** one
+   real-world entity; these name two businesses, and whether one replaced the other at
+   182 Route 132 is a question the search answers, not one to assume before it. Joined,
+   they would share one first query that names only one of them, and the other name would
+   never be searched. **How the answer is read, fixed now:** each key is judged by its own
+   name at its own locality. If the web shows Pub Pit Caribou in Percé operating, it is
+   `exists`. If it shows the Percé pub now trading as Aire Salin, or Pit Caribou's Percé
+   pub closed, `pub pit caribou|percé` is `closed`, with the year where a source gives
+   one, and the Log counts it as a stale map entry. If the search finds neither, it is
+   `not-found` after the budget's three queries.
+4. **`odprta kuhna|ljubljana` is pl-58's object**, and reuses pl-58's first query
+   verbatim, `Odprta Kuhna Ljubljana` (pl-58's verdict was `exists`). It is the one set A
+   key, and not a map entry.
+5. **Every other key is its own object** under query 1 of the budget, the name with its
+   locality as the candidate wrote it.
+
+So **11 keys make 10 objects**, as the Build 6 builder read them. Fewer than 40, so the
+walk takes every key and stops `exhausted`.
+
+| #   | key                                   | planned first query                | object            | map entry the run handed `food`     |
+| --- | ------------------------------------- | ---------------------------------- | ----------------- | ----------------------------------- |
+| 1   | `resto du capitaine\|percé`           | Resto du Capitaine Percé           | object 1          | way 302432445                       |
+| 2   | `peppino pizza\|gaspé`                | Peppino Pizza Gaspé                | object 2          | node 9979845990                     |
+| 3   | `gaspésie brasserie gourmande\|percé` | Gaspésie Brasserie Gourmande Percé | object 3          | node 12972316601                    |
+| 4   | `restaurant le surcouf\|percé`        | Restaurant Le Surcouf Percé        | object 4          | way 598383461                       |
+| 5   | `la cantina\|`                        | La Cantina Gaspé                   | object 5          | node 6753296585                     |
+| 6   | `pub aire salin\|percé`               | Pub Aire Salin Percé               | object 6          | way 484236636                       |
+| 7   | `la maison du pêcheur\|percé`         | La Maison du Pêcheur Percé         | object 7          | way 302432126                       |
+| 8   | `odprta kuhna\|ljubljana`             | Odprta Kuhna Ljubljana             | object 8          | no (set A; pl-58's query, `exists`) |
+| 9   | `pub pit caribou\|percé`              | Pub Pit Caribou Percé              | object 9          | node 9437751976                     |
+| 10  | `resto du village\|percé`             | Resto du Village Percé             | object 10         | node 5739969621                     |
+| 11  | `la cantina\|gaspé`                   | La Cantina Gaspé                   | object 5 (repeat) | node 6753296585                     |
+
+- **Rules carried from pl-60's check, for cases its budget does not name:** a first
+  query that returns booking or listing aggregators only earns up to two more (pl-58's
+  Duca d'Alba, pl-60's L'Eglantier); query 3's "name in the local language" is the name
+  itself for a French name, so it adds French category words (`restaurant`, `pub`,
+  `casse-croûte`), as pl-60's did; a key in a sector of a municipality is judged by the
+  municipality, as pl-58 judged Gaspé's sectors.
+- **Firewall:** WebSearch runs on the vendor's side; WebFetch is tried before a page is
+  called unreachable.
+
+**2026-10-24 — Build 7's web check: the verdicts and the per-object rate (general-purpose
+agent, Opus 5.5).** WebSearch ran in a general-purpose agent, as in pl-57, pl-58 and pl-60,
+after the pre-registration above was pushed as `335543eb` at 19:12:57Z; the searches ran
+from then to about 19:19Z. **Every first query ran in the pre-registered wording**, one per
+object, objects 1 to 10 in key order, and the grouping was not changed. No source, test or
+code changed: `verdicts.json`'s `checks` and the record the harness writes from them.
+
+**Spend against the budget: 22 queries and 11 page fetches attempted, 6 of which returned a
+page**, against a cap of 90 and 20; 2.2 queries per object (pl-60: 1.78, pl-58: 1.23). Gate
+2's round, below, added 2 queries and 4 fetches for Restaurant Le Surcouf: 24 queries and 15
+fetches in all. The further queries:
+
+- Resto du Capitaine, 2: the budget's queries 2 and 3, because query 1 found no listing.
+- Gaspésie Brasserie Gourmande, 3: queries 2 and 3, then one further query for the
+  locality, because query 2 found the name in Montréal and none of them in Percé.
+- Pub Aire Salin, 4: queries 2 and 3 of the budget (`"Pub Aire Salin"`, and French
+  category words with the address) found nothing, nor did `"Aire Salin" Percé`, which I ran
+  as a second form of query 2. A fifth query, the same words limited to directory and
+  review sites, found it. **That is two more than the budget's three before `not-found`**,
+  and the sensitivity line below gives the budget-strict reading.
+- Pub Pit Caribou, 1: French words for a closing, because the first query's directories and
+  a Wanderlog page disagreed on whether it is open.
+- Resto du Village, 2: queries 2 and 3, because query 1 returned an aggregator only, as
+  pl-58 did for Hotel Duca d'Alba and pl-60 for Motel L'Eglantier.
+
+Fetches: `airesalin.com` (the OSM `website` of Pub Aire Salin), twice, which answered with a
+TLS certificate for another domain (`tristanetvirginie.com`); Travelocity, HTTP 429;
+Hotels.com, a 60 s timeout; Tourisme Gaspésie's Pit Caribou page, HTTP 403; and six that
+returned a page: Québec Vacances (Pub Pit Caribou), Mapstr (Pub Pit Caribou), Wanderlog
+three times (Resto du Village, Pub Pit Caribou, Pub Aire Salin), Tripadvisor (Pub Aire
+Salin). **The two `airesalin.com` fetches read a URL from an OSM tag, not a result page**,
+which the budget does not provide for; neither returned anything.
+
+**The verdicts, 11 keys and 10 objects: 8 `exists`, 1 `exists-elsewhere`, 1 `closed`, 1
+`not-found`.**
+
+| object | key(s)                                | verdict          | settled by                                                                  | source                                                                                                                                                                             |
+| ------ | ------------------------------------- | ---------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1      | `resto du capitaine\|percé`           | not-found        | all three: `Resto du Capitaine Percé`, `"Resto du Capitaine"`, French words | none; nearest results Domaine du Capitaine (lodging) and La Boîte à Fruits de Mer                                                                                                  |
+| 2      | `peppino pizza\|gaspé`                | exists           | query 1, `Peppino Pizza Gaspé`                                              | Tourisme Gaspésie, Camping Parc Nature Gaspé, 1986 boul. de Grande-Grève, Cap-aux-Os (seen in the result)                                                                          |
+| 3      | `gaspésie brasserie gourmande\|percé` | exists-elsewhere | query 2, `"Gaspésie Brasserie Gourmande"`                                   | RestoMontreal and Restoenligne, 30 rue Sainte-Catherine Ouest, Montréal (seen in the result)                                                                                       |
+| 4      | `restaurant le surcouf\|percé`        | exists           | queries 1 to 3, the page they all returned (gate 2's round)                 | Wanderlog (fetched: 168 QC-132, Percé, Google 3.9 from 677 reviews, no closed marker); the first two citations dropped                                                             |
+| 5      | `la cantina\|`, `la cantina\|gaspé`   | exists (both)    | query 1, `La Cantina Gaspé`                                                 | Restoenligne, La Cantina Latinogaspésienne, 30 rue de la Plage, plage Haldimand, Gaspé (seen in the result)                                                                        |
+| 6      | `pub aire salin\|percé`               | exists           | query 5, `Aire Salin Percé pub` on directory sites                          | Wanderlog (fetched: 182 QC-132 O, 138 reviews, no closed marker); Tripadvisor (fetched: a review of 23 September 2026)                                                             |
+| 7      | `la maison du pêcheur\|percé`         | exists           | query 1, `La Maison du Pêcheur Percé`                                       | Tourisme Gaspésie, 2026 season 29 May to 10 October (seen in the result)                                                                                                           |
+| 8      | `odprta kuhna\|ljubljana`             | exists           | query 1, pl-58's verbatim                                                   | In Your Pocket, 2026 season 7 March to 31 October (seen in the result)                                                                                                             |
+| 9      | `pub pit caribou\|percé`              | closed           | query 1, `Pub Pit Caribou Percé`, with object 6's evidence                  | Wanderlog (fetched: "Pub Pit Caribou Percé" "Permanently Closed", at 155 QC-132, not 182); Pub Aire Salin at 182 Route 132, the pub's directory address; a replacement unconfirmed |
+| 10     | `resto du village\|percé`             | exists           | query 1, `Resto du Village Percé`                                           | Wanderlog (fetched: 172 QC-132, Percé, Google 4.3 from 578 reviews, no closed marker)                                                                                              |
+
+What each verdict rests on, where it is not plain:
+
+- **Resto du Capitaine**: we did not find it. pl-56 has no OSM row for the key. The capture
+  holds it (way 302432445, 162 Route 132 unit b, `check_date` 2022-05-31, a `website` tag
+  that reads `restoducaputaine.com`).
+- **Gaspésie Brasserie Gourmande** is a Montréal restaurant (one review of January 2026 says
+  it was closed for renovation). The capture holds a node of that name in Percé village (node
+  12972316601, `name` and `amenity` only), and `food` wrote the locality the map gave it, so
+  **the wrong town is the map's, not the model's**. Judgement call: a Percé summer outlet the
+  search missed would make it `not-found`, which is also not confirmed.
+- **Pub Pit Caribou** (pre-registered rule 3): Québec Vacances ("Ouvert à l'année") and
+  Mapstr still list it at 182 route 132 Ouest, both undated and with no closed marker.
+  Wanderlog's Google data marks "Pub Pit Caribou Percé" permanently closed, **at 155
+  QC-132, not the 182 that OSM and both directories give**. Pub Aire Salin trades at 182, with
+  reviews into September 2026, and a review summary in object 6's fifth search says the
+  building used to be the Pit Caribou. **That Aire Salin replaced the pub is unconfirmed**:
+  it rests on that one summarised review and on the shared address, and the closed listing's
+  address differs. No source gives a year, so no `closedYear`. Judgement
+  call: read on the two undated directories, it would be `exists`. pl-58's brewery at
+  L'Anse-à-Beaufils is a different premises and was not re-judged.
+- **Resto du Village** and **Restaurant Le Surcouf** are the weakest `exists`. For each, all
+  three queries returned one aggregator page that names the Percé premises (Wanderlog), so
+  whether it is open today rests on that page, as L'Eglantier's did in pl-60.
+- **Restaurant Le Surcouf**, corrected in gate 2's round: this entry first cited Sortir au
+  Québec and Yellow Pages "seen in the search result". Re-fetched, the Sortir au Québec page
+  is the Restaurant Le Surcouf at 51 rue Ste-Anne, Sainte-Anne-de-Bellevue (chef and owner
+  Serge Magnier), and the Yellow Pages url answers "Sorry, we didn't find any business
+  matching “Restaurant-Le-Surcouf-Cafe” in “Percé QC”". Both are dropped; the verdict now
+  rests on Wanderlog's page alone.
+- **Peppino Pizza** is at Cap-aux-Os, judged by municipality (Gaspé), as pl-58 and pl-60
+  judged Gaspé's sectors.
+
+**The record.** `PLANNER_INVENTION_OFFLINE=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24` gave exit 0 and wrote
+`invention/pl62-2026-10-24/2026-10-24.json` only. Its `stratumDraw` reads `11 keys taken for
+10 of 40 objects (exhausted)`, as planned. `withoutParks` is the same 10 objects.
+
+**The rate per object (`Done when` 10).** This is the harness's `render` line, and a scratch
+Wilson script agrees with it:
+
+| stratum                                                   | objects | not confirmed | rate  | 95% Wilson    |
+| --------------------------------------------------------- | ------- | ------------- | ----- | ------------- |
+| pl-58, `food` only (from its `verdicts.json`, above)      | 21      | 3             | 14.3% | 5.0–34.6      |
+| pl-60, `lodging`'s named premises                         | 9       | 2             | 22.2% | 6.3–54.7      |
+| **pl-62, `food`'s named premises**                        | **10**  | **3**         | 30.0% | **10.8–60.3** |
+| pl-62, Pub Pit Caribou read as `exists`                   | 10      | 2             | 20.0% | 5.7–51.0      |
+| pl-62, Resto du Village also read as not confirmed        | 10      | 4             | 40.0% | 16.8–68.7     |
+| pl-62, Restaurant Le Surcouf also read as not confirmed   | 10      | 4             | 40.0% | 16.8–68.7     |
+| pl-62, Resto du Village and Le Surcouf both not confirmed | 10      | 5             | 50.0% | 23.7–76.3     |
+| pl-62, Pub Aire Salin on the budget's three queries alone | 10      | 4             | 40.0% | 16.8–68.7     |
+
+The intervals for pl-62 and pl-58 overlap over most of their width, so **this sample cannot
+say `food`'s rate moved**, in either direction. All ten objects are the whole stratum, not a
+draw from it: the run named 11 `food` premises keys making 10 objects, against pl-58's 21
+`food` objects. Per key the harness gives 3 of 11, 27.3% (9.7–56.6). pl-58's baseline was
+re-run here: `node --import tsx <scratch>/pl-62/build-6/pl58-food-rate.mts <worktree>`,
+from the worktree, printed `food's 21, not confirmed 3 (14.3%, 95% Wilson 5.0–34.6)`.
+
+**Each object not confirmed, by class, and whether the capture holds it:**
+
+| object                       | class                                                                                                                     | in `overpass-food-towns.json`                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Resto du Capitaine           | a premises not found                                                                                                      | yes, way 302432445 (Percé), handed to `food`    |
+| Gaspésie Brasserie Gourmande | a wrong-town premises (Montréal), the map's wrong town                                                                    | yes, node 12972316601 (Percé), handed to `food` |
+| Pub Pit Caribou              | a premises the web says closed (a Google listing at 155 Route 132; that Pub Aire Salin at 182 replaced it is unconfirmed) | yes, node 9437751976 (Percé), handed to `food`  |
+
+**All three objects not confirmed are map entries the run handed `food`**, and none is an
+invented name. pl-58's three `food` misses were all real premises in another town, from
+memory: two smokehouses and a brewery. Here, the one wrong-town object is a map entry placed
+in the wrong town. So **the defect changed kind, as it did for `lodging` in pl-60**: from a
+premises recalled in the wrong town to a map entry that is stale (Pit Caribou), misplaced
+(the Brasserie) or unverifiable (Capitaine). That is 3 events, so it is an observation and
+not a rate. Two of the three have no contact tag. Capitaine has a `website` and a
+`check_date`, but the website's spelling is not the business's name. Pub Aire Salin, the
+premises that replaced Pit Caribou, is in the same capture 0.2 m away. So the map had both
+the old name and the new one at one address, and `food` chose each (7 and 35 candidates).
+
+**Checks, each exit code read from a file and never through a pipe** (`checks.sh`):
+
+- `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts` gave exit 0, `111 live records, 2594 place
+mentions, 1019 distinct places`, "check: the committed record equals its regeneration;
+  every sampled place has a verdict".
+- The same with `--after pl58-2026-10-21`: exit 0, `112 live records … 847 distinct places`,
+  40 objects, 5 not confirmed, unchanged.
+- The same with `--after pl60-2026-10-24`: exit 0, `110 live records … 700 distinct places`,
+  2 of 9, unchanged.
+- The same with `--after pl62-2026-10-24`: exit 0, `111 live records, 2714 place mentions,
+640 distinct places`, and the same check line.
+- **The check can fail.** With `resto du capitaine|percé` flipped to `exists`, the pl-62
+  check gave exit 1, "the committed record is not what the inputs regenerate". The verdicts
+  were regenerated from the scratch generator that wrote them (`gen-verdicts.py`), and the
+  check gave exit 0 again (`mutate.sh`).
+- `npx vitest run tools/planner/api/test/live-records.test.ts
+tools/planner/api/test/invention-population.test.ts`: `Test Files 2 passed (2)`, `Tests
+506 passed (506)`, exit 0.
+
+**What the brief and the handover had wrong, or left open.**
+
+- The budget gives no rule for a first query whose results disagree on whether a place is
+  open. Pit Caribou was settled by the rule pre-registered for it, and the sensitivity line
+  gives the other reading.
+- The handover put `La Cantina` in "Forillon's capture". It is in Gaspé's reply as well as
+  Forillon National Park's. The run's sets B to D handed it to `food` from Forillon's, since
+  only Percé and Forillon are stood in for.
+- `pl58-food-rate.mts`'s usage line says `node --import tsx pl58-food-rate.mts <worktree>`.
+  Run from the scratch directory, it fails with `ERR_MODULE_NOT_FOUND`. Run from the
+  worktree, it prints the figure above.
+- The budget's sentence "WebFetch only to read a result page" leaves out a URL from the
+  capture's own tags. I fetched one such URL and say so above.
+
+**2026-10-24 — Gate 2's round on the web check (general-purpose agent, Opus 5.5).** Gate 2
+(Sonnet 5.5) graded `cf1ed416` CONCERNS, 1 med and 2 low, no high. All three are applied
+here, each reproduced first, and the previous entry is corrected in place where it was
+wrong.
+
+- **Med, Restaurant Le Surcouf's citations: reproduced, and the verdict re-settled.**
+  WebFetch of `sortirauquebec.com/en/listing/restaurant/restaurant-le-surcouf` returned
+  "Restaurant Le Surcouf", "51, rue Ste-Anne", "Sainte-Anne-de-Bellevue", chef and owner
+  "Serge Magnier". WebFetch of the Yellow Pages Percé url returned "Sorry, we didn't find any
+  business matching “Restaurant-Le-Surcouf-Cafe” in “Percé QC”". Both citations are dropped,
+  and `verdicts.json`'s note says what each re-fetch found. Within the budget, the object had
+  used 1 query. Query 2, `"Restaurant Le Surcouf"`, and query 3, `Le Surcouf restaurant fruits
+de mer guédille homard 168 route 132 Ouest Percé`, were run. Restoenligne's
+  `restaurant-le-surcouf` evaluations page, fetched, is also the Sainte-Anne-de-Bellevue
+  restaurant (51 Rue Ste Anne, H9X 1L5). **The one page read that names the Percé premises is
+  Wanderlog's**, returned by all three queries, fetched: "Restaurant Le Surcouf", "168 QC-132,
+  Percé, Quebec G0C 2L0", Google 3.9 from 677 reviews, Tripadvisor 3.6 from 268, hours 11AM–8PM
+  every day, no closed marker. **The verdict stays `exists`**, on that page, and like Resto du
+  Village it is aggregator-only. The rate is unchanged: **3 of 10, 30.0% (95% Wilson
+  10.8–60.3)**. The sensitivity table gains a row for Le Surcouf (4 of 10, 40.0%, 16.8–68.7)
+  and one for both aggregator-only objects (5 of 10, 50.0%, 23.7–76.3). Every reading still
+  overlaps pl-58's 14.3% (5.0–34.6). Spend in all: 24 queries and 15 fetches, inside 90 and 20.
+- **Low, Pit Caribou's wording: reproduced and reworded, with the verdict unchanged.**
+  Wanderlog's closed listing reads "Pub Pit Caribou Percé" at 155 QC-132, as the first
+  entry's fetch had it and `verdicts.json` says. The verdict row, the bullet and the class
+  table now say the closed listing is at 155 and not 182, and that Aire Salin replacing the
+  pub is unconfirmed. The verdict stays `closed`. It is pre-registered rule 3's case, a web
+  source that shows Pit Caribou's Percé pub closed: the listing is named for the Percé pub, and
+  its address is not the brewery's (27 rue de l'Anse). The `exists` reading is in the
+  sensitivity table already (2 of 10, 20.0%, 5.7–51.0).
+- **Low, the planner test count: reproduced.** `npm test -- --project planner` at this
+  round's tree printed `Test Files 84 passed (84)` and `Tests 1930 passed (1930)`, exit 0.
+  **1930 is the current count.** The Build 6 entry's 1929 was right at its own head. The web
+  check added one JSON file under `fixtures/live/`, the record
+  `invention/pl62-2026-10-24/2026-10-24.json`, and `live-records.test.ts` takes one case per
+  file.
+- **The record, regenerated.** `PLANNER_INVENTION_OFFLINE=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24` gave exit 0, wrote
+  the record only, and printed `10 objects, not confirmed 3 of 10, 30.0% (10.8%–60.3%)`.
+- **Checks, each exit code read from a file and never through a pipe** (`checks.sh`): the
+  four `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1` modes (no argument, `--after
+pl58-2026-10-21`, `--after pl60-2026-10-24` and `--after pl62-2026-10-24`) each gave exit
+  0 and "check: the committed record equals its regeneration; every sampled place has a
+  verdict". `npm run check` and preflight's fast checks are in the dispatch's report.
+
+**2026-10-24 — Maintenance (builder, Claude Haiku 5.5), at the orchestrator's dispatch: main
+merged after #618, and one test expectation changed.** `origin/main` was at `972ab6a0`
+(pl-61's PR #618 merged), and this branch was merged into it with a merge commit, not a
+rebase; the merge applied clean with no conflicts, in `tools/planner/api/src/grounding/valhalla.ts`,
+`runs/discovery.ts`, `runs/lodging.ts`, `runs/travel.ts` and their tests. With pl-62's food
+query, Gaspé is queried twice, once for lodging and once for food, so pl-61's case in
+`tools/planner/api/test/lodging-pass.test.ts` ("the town pass, when the backend refuses
+(pl-61)") now sees two "the town pass could not query a town" warns. **One expectation
+changed**, `expect(queried).toHaveLength(1)` to `toHaveLength(2)`; no other assertion moved.
+`npx vitest run tools/planner/api/test/lodging-pass.test.ts`, before the edit and after the
+merge:
+
+- before: `  Test Files  1 failed (1)` and `     Tests  1 failed | 15 passed (16)`, the one
+  failure `expected [ { …(2) }, { …(2) } ] to have a length of 1 but got 2` at
+  `lodging-pass.test.ts:516`, the `queried` line
+- after: `  Test Files  1 passed (1)` and `     Tests  16 passed (16)`

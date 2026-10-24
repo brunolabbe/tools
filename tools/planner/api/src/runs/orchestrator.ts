@@ -379,7 +379,7 @@ async function execute(
   // --- Discovery, before the fan-out (pl-29, §5's 2026-08-22 amendment).
   //
   // Entered only when the brief names both ends of a corridor or a town to
-  // find somewhere to sleep in (pl-60) — the same _never fake progress_
+  // find somewhere to sleep in and to eat at (pl-60, pl-62) — the same _never fake progress_
   // argument `RUN_TRANSITIONS`'s note makes about the fan-out's own
   // `grounding` edge, applied one state earlier. `discover` runs either way:
   // with nothing to ask it makes no call, and its "names no town" note still

@@ -143,8 +143,9 @@ export class FixtureGroundingProvider implements GroundingProvider {
 
   /**
    * Nothing, for `nearby`'s reason: no map is behind these fixtures, so no
-   * town has anything to sleep in here, and a run on the default says so in its
-   * `coverage` rather than inventing a hotel (pl-60).
+   * town has anything to sleep in or to eat at here, and a run on the default
+   * says so in its `coverage` rather than inventing a hotel (pl-60) or a
+   * restaurant (pl-62).
    */
   async nearbyPoint(request: NearbyPointRequest): Promise<Find[]> {
     throwIfAborted(request.signal);
