@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.1](https://github.com/brunolabbe/tools/compare/ledger-v0.4.0...ledger-v0.4.1) (2026-10-24)
+
+
+### Fixes
+
+* **ledger:** keep a number or date in a workbook's free-text cells instead of dropping it (lg-68) ([#626](https://github.com/brunolabbe/tools/issues/626)) ([940e451](https://github.com/brunolabbe/tools/commit/940e4511a3b3e084df56254cc8b3d0024b7684ca))
+* **ledger:** read a paste against alternating workbook dates in about a second, not a minute (lg-65) ([#606](https://github.com/brunolabbe/tools/issues/606)) ([a99bde4](https://github.com/brunolabbe/tools/commit/a99bde49be56d441de166a76a6602902418c6982))
+* **ledger:** size mortgage radios as radios and give an item's name a row (lg-64) ([#604](https://github.com/brunolabbe/tools/issues/604)) ([6785a64](https://github.com/brunolabbe/tools/commit/6785a64c9923c78075253b268caf548896edef38))
+
 ## [0.4.0](https://github.com/brunolabbe/tools/compare/ledger-v0.3.0...ledger-v0.4.0) (2026-10-22)
 
 
