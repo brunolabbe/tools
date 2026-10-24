@@ -23,8 +23,11 @@ Reproduced on `origin/main` at `aaccab20` (2026-10-21). The same defect was seen
 at intake on `93bfa1f1` (2026-10-20), and the `--tool planner` pair below is
 unchanged. The unscoped `--ready` listing is not: at `93bfa1f1` it had eight rows
 (`dl-130`, `lg-58`, `lg-61`, `lg-63`, `pl-58`, `pl-59`, `repo-109`, `repo-113`;
-no `lg-64` yet), where the one below is `aaccab20`'s. The live case is pl-59,
-which depends on `repo-108`:
+no `lg-64` yet), where the one below is `aaccab20`'s. The live case at `aaccab20`
+was pl-59, which depends on `repo-108`. At `8a6dcf9a` (2026-10-24) the planner pair
+no longer reproduces: pl-59 is `done` (PR #591), so it drops out of `--ready` and
+the block below is history. The pair that reproduces now is lg-64 and `repo-109`,
+shown after the second block:
 
 ```
 $ npm run -s status -- --ready --tool planner
@@ -35,7 +38,7 @@ $ grep -m1 '^status:' docs/work/repo-108-share-design-tokens-across-the-web-uis.
 status: done
 ```
 
-Without `--tool`, the same board lists pl-59 as ready:
+Without `--tool`, the same board listed pl-59 as ready at `aaccab20`:
 
 ```
 $ npm run -s status -- --ready
@@ -45,13 +48,25 @@ pl-58	planner	Make lodging and food proposals name a premises, then re-measure h
 pl-59	planner	Draw the plans-list border that names a colour nobody defines, and make the provenance marks readable in dark
 ```
 
+At `8a6dcf9a` the same narrowing withholds lg-64, which depends on `repo-109`:
+
+```
+$ npm run -s status -- --tool ledger --ready
+stdout: nothing is ready and unblocked
+stderr: tools/ledger/docs/work/lg-64-mortgage-radios-float-and-an-item-name-is-clipped.md: withheld from --ready — waits on repo-109
+
+$ grep -m1 '^status:' docs/work/repo-109-every-screen-fits-a-phone-and-a-desktop.md
+status: done
+```
+
 The cause is in `scripts/status.mjs`. `readyTickets` (line 557) and
 `withheldFromReady` (line 596) each build `done` from the tickets they are given,
 and `renderView` passes them `selected`, which `--tool` has already narrowed to one
 tool. The same narrowing reaches the default view: `renderView`'s `unblocked` set
-is `readyTickets(mine)`, so pl-59 is marked `·` and labelled `(waits on repo-108)`
-under `npm run -s status -- --tool planner`, while `npm run -s status -- --show
-pl-59` says `unblocked`. The `--show` path reads the whole graph and is correct.
+is `readyTickets(mine)`, so lg-64 is marked `·` and labelled `(waits on repo-109)`
+under `npm run -s status -- --tool ledger`, while `npm run -s status -- --show
+lg-64` says `unblocked`. At `aaccab20` the same held for pl-59 under `--tool
+planner`. The `--show` path reads the whole graph and is correct.
 
 It is not a fault in one ticket: a fixture with a planner ticket depending on a
 done `repo` ticket shows the same wrong answer in all three views. The fixture
@@ -124,10 +139,11 @@ the one rule below.
 - `scripts/test/status.test.ts`, the second case of Build 4: the default view, under
   `--tool planner` and with no flag, marks that ticket `•` and shows no `(waits on`
   label. Fails before the fix.
-- Plain `npm run -s status`, read on the builder's head with `pl-59` and `lg-64`
-  still `ready`, marks both with `•` and no `(waits on` label. At the base it prints
-  `· pl-59 … (waits on repo-108)` and `· lg-64 … (waits on repo-109)`, both
-  dependencies `done`, with no flag at all.
+- Plain `npm run -s status`, read on the builder's head with `lg-64` still `ready`,
+  marks it with `•` and no `(waits on` label. At the base it prints
+  `· lg-64 … (waits on repo-109)`, with `repo-109` `done`, and no flag at all. If
+  `lg-64` is `done` by build time, the fixture reproduction in the Log stands in for
+  this live reading.
 - `scripts/test/status.test.ts`, the third case of Build 4: with the dependency
   `ready`, the planner ticket is still withheld with `waits on repo-9`. Passes before
   and after the fix.
@@ -141,11 +157,13 @@ the one rule below.
 - `scripts/test/status.test.ts`, the sixth case of Build 4: with the dependency at
   `needs-decision`, the planner ticket is still withheld under `--tool planner` with
   `--ready`. Passes before and after the fix.
-- `npm run -s status -- --ready` still lists `pl-58` and `pl-59` on stdout, and its
-  stderr still names `lg-65` and `repo-98` as withheld. Read on the builder's head,
-  with pl-59 still `ready` (PR #591 open at intake).
-- `npm run -s status -- --show pl-59` still prints `unblocked` on the builder's head,
-  unchanged by the fix.
+- `npm run -s status -- --ready` still lists on stdout each `ready` ticket whose
+  dependencies are all `done`, and its stderr still names `lg-65` and `repo-98` as
+  withheld. Read on the builder's head, off whichever tickets are `ready` at build
+  time; while `lg-64` is `ready` it is the named example, on stdout, since `repo-109`
+  is `done`.
+- `npm run -s status -- --show lg-64` still prints `unblocked` on the builder's head,
+  with `lg-64` still `ready`, unchanged by the fix.
 - `npm run -s status -- --json > <scratch>/status.json; echo $?` prints `0`.
 - `npm run check` exits `0`.
 
@@ -251,3 +269,62 @@ repo-114` outside `docs/work` printed nothing, and no branch or open pull reques
   `93bfa1f1` had eight rows." The Why now says so. Extracted `93bfa1f1` and ran
   `node scripts/status.mjs --root <tree> --ready` → `dl-130`, `lg-58`, `lg-61`,
   `lg-63`, `pl-58`, `pl-59`, `repo-109`, `repo-113` (eight rows).
+- 2026-10-24 — Maintenance dispatch: the owner's answer to a question asked at batch
+  intake, recorded as Done-when text. One Log entry and the reworded lines; no source
+  change; `status` stays `ready`.
+  - **Question.** "repo-114: two Done-when lines check status output for pl-58 and
+    pl-59, which are now done, so they can't be met as written. How should they be
+    reworded before dispatch?"
+  - **Options.** (1) "Live pair + fixture": name lg-64 → repo-109 as the live example,
+    read at build time, with the fixture reproduction in this Log as the lasting
+    proof. The live reading goes stale once lg-64 lands; the fixture does not.
+    (2) "Fixture only": drop the live status readings and prove it with the fixture
+    tests alone.
+  - **Choice.** Option (1), "Live pair + fixture", chosen by the owner on 2026-10-24.
+    It was the orchestrator's recommendation.
+  - **Third line.** The third reworded line below was not in the question. The
+    orchestrator extended the same answer to it. It is the orchestrator's extension
+    of the owner's answer, not the owner's own words.
+  - **Reworded lines,** in `## Done when`. Old, then new:
+    1. Plain status. Old: "Plain `npm run -s status`, read on the builder's head with `pl-59` and `lg-64` still `ready`, marks both with `•` and no `(waits on` label. At the base it prints `· pl-59 … (waits on repo-108)` and `· lg-64 … (waits on repo-109)`, both dependencies `done`, with no flag at all." New: "Plain `npm run -s status`, read on the builder's head with `lg-64` still `ready`, marks it with `•` and no `(waits on` label. At the base it prints `· lg-64 … (waits on repo-109)`, with `repo-109` `done`, and no flag at all. If `lg-64` is `done` by build time, the fixture reproduction in the Log stands in for this live reading."
+    2. `--ready`. Old: "`npm run -s status -- --ready` still lists `pl-58` and `pl-59`
+       on stdout, and its stderr still names `lg-65` and `repo-98` as withheld. Read on
+       the builder's head, with pl-59 still `ready` (PR #591 open at intake)." New:
+       "`npm run -s status -- --ready` still lists on stdout each `ready` ticket whose
+       dependencies are all `done`, and its stderr still names `lg-65` and `repo-98` as
+       withheld. Read on the builder's head, off whichever tickets are `ready` at build
+       time; while `lg-64` is `ready` it is the named example, on stdout, since
+       `repo-109` is `done`."
+    3. `--show`, the orchestrator's extension. Old: "`npm run -s status -- --show pl-59`
+       still prints `unblocked` on the builder's head, unchanged by the fix." New:
+       "`npm run -s status -- --show lg-64` still prints `unblocked` on the builder's
+       head, with `lg-64` still `ready`, unchanged by the fix."
+  - **Why.** The `--tool planner` pl-59 example was written as current. At
+    `8a6dcf9a` it no longer reproduces: pl-59 is `done` (PR #591) and drops out of
+    `--ready`. The lg-64/repo-109 pair reproduces instead, under `--tool ledger`. The
+    Why's cause paragraph now names that pair, and the `aaccab20` planner blocks are
+    marked as history.
+  - **Commands, run at `8a6dcf9a` on this branch after the edits:**
+    ```
+    $ npm run -s status -- --show pl-59 | grep -i unblock
+    (no output; grep exit 1)
+    $ npm run -s status -- --show lg-64 | grep -i unblock
+      unblocked
+    $ npm run -s status | grep 'lg-64'
+      · lg-64  Two layout defects — the mortgage radios float away from their labels, and an item's name field clips its entry (waits on repo-109)
+    $ npm run -s status | grep -c 'pl-59'
+    0
+    $ npm run -s status -- --tool ledger --ready
+    stdout: nothing is ready and unblocked
+    stderr: tools/ledger/docs/work/lg-64-mortgage-radios-float-and-an-item-name-is-clipped.md: withheld from --ready — waits on repo-109
+    $ npm run -s status -- --ready
+    stdout: dl-130, lg-64, pl-60, repo-114 (one row each)
+    stderr: tools/ledger/docs/work/lg-65-….md and docs/work/repo-98-….md, both withheld as "needs-decision"
+    $ npm run -s status -- --json > <scratch>/status.json; echo $?
+    0
+    $ npx oxfmt --check docs/work/repo-114-*.md
+    All matched files use the correct format.
+    ```
+  - **Not covered by the fixture.** The fixture reproduction above shows `--tool
+planner` and `--ready`, and no `--show`. The `--show` line has no fixture stand-in:
+    if lg-64 is `done` by build time, nothing in this ticket reads that line live.
