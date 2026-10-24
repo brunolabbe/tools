@@ -1133,3 +1133,41 @@ throwing on a query that matches no capture, and its `Done when` 13 spec. **Unti
 the stub answers the town pass's food queries with the lodging reply**, so sets B to D
 would hand `food` no town finds without an error, the trap Build 9 describes. Then stop
 for Decision 5. Builds 6 and 7's measurements and `Done when` 8 to 10 follow the paid run.
+
+**2026-10-24 — Build 8's contract comment and Build 9, stopped before gate 1 (builder,
+Opus 5.5).** The owner answered Build 8's stop with (a), recorded above under
+_Build 8's stop_. pl-61 (#618) had not merged, so nothing was merged from `main` and
+pl-61's `queried` expectation is left for whichever of the two merges second (the
+previous entry says what changes). Stopped here, as the dispatch says: gate 1 over
+Builds 2 to 9 runs before Decision 5 is asked.
+
+- **Build 8, finished.** `contract/src/unchecked.ts`'s comment on `coverage` now says
+  the town query found "nowhere on the map to sleep there, or since pl-62 nowhere to
+  eat", and "`lodging` or `food` then proposes a kind of place there". The comment
+  only: `git diff 63b5793b -- tools/planner/contract` touches no line outside it.
+- **Build 9, the stub.** `run.ts` exports `townCaptureFetch`, `readTownCapture` and
+  `townFinds` (pl-60's `lodgingFinds`, renamed because it now returns both lists). The
+  stub answers a query whose clauses are all `"tourism"=…` from
+  `overpass-lodging-towns.json`, and one whose clauses are all `"amenity"=…` or
+  `"shop"=…` from `overpass-food-towns.json`, by the point in the query. A query
+  matching neither capture, a combined one included, throws and is recorded, and
+  `townFinds` throws after the pass if any was, because the adapter and the town pass
+  would otherwise turn the thrown fetch into "nothing on the map".
+  `api/test/town-capture-stub.test.ts` (4 tests, offline) is `Done when` 13: "a
+  lodging query is answered with the lodging capture's reply for that town", "a food
+  query at the same point is answered with the food capture's reply", "a query
+  matching neither capture throws, and is recorded, rather than answering an empty
+  reply", and "road-trip's offline town finds hand food its places to eat and lodging
+  its places to stay" (12 food finds, Percé's closest ten and Forillon's two, and
+  pl-60's 20 lodging finds). **Mutation, committed first**: with the stub put back to
+  pl-60's routing (by point alone, `{ elements: [] }` for no match) at `8d91e5cb`, the
+  spec gave `3 failed | 1 passed (4)`; restored with `git checkout 8d91e5cb --
+tools/planner/api/test/live/run.ts`.
+- **What the paid run's sets B to D now hand `food`, offline** (for Decision 5, not a
+  price): `node --import tsx <scratch>/pl-62/build/block-size.mts <worktree>` printed
+  `foodFinds 12`, `lodgingFinds 20`, food's system prompt 2,814 characters without the
+  town food finds and 6,018 with them (**+3,204**), against `lodging`'s town block of
+  4,442 characters. In tokens it is unmeasured: `count_tokens` needs the Anthropic
+  API.
+- **Checks.** `npm run check` exit 0. `npm test -- --project planner`: `Test Files 84
+passed (84)`, `Tests 1814 passed (1814)`.
