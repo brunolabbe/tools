@@ -1,7 +1,7 @@
 ---
 id: lg-68
 tool: ledger
-title: A detail cell holding a number is stored as an empty description by the workbook import
+title: A workbook's free-text cells drop a number or a date instead of keeping it
 kind: fix
 status: ready
 milestone: null
@@ -9,7 +9,7 @@ depends_on: []
 difficulty: standard
 ---
 
-# lg-68 — A detail cell holding a number is stored as an empty description by the workbook import
+# lg-68 — A workbook's free-text cells drop a number or a date instead of keeping it
 
 ## Why
 
@@ -19,7 +19,10 @@ The household's own `npm run import:ledger` (lg-7, lg-37) reads a year sheet's
 The command exits 0, and its report is identical, line for line, to the run
 where the cell holds text, so nothing tells the household the detail is gone.
 A detail typed `007` in Excel is saved as the number 7 and is lost the same
-way, and so is a formula whose cached result is a number.
+way, and so is a formula whose cached result is a number. The same loss
+reaches the other free-text cells the import reads, which this ticket now
+covers: a movement's note and a period line's note, a detail holding a date,
+and the person column.
 
 The cause is `textOf` in `books/src/workbook.ts`, which answers `null` for any
 cell whose `value.kind` is not `"text"`; `readYear` turns that `null` into
@@ -230,3 +233,33 @@ What round 1 built and measured:
 
 - **After round 1**, with `books` rebuilt: `npm test -- --project ledger`, 1687
   of 1687 passed in 81 files.
+
+**2026-10-24 — gate 1 and the owner's answers at landing (lg-68's lander).**
+Gate 1 returned PASS at `64c6a9f0` with four lows and one open decision. The
+owner answered on 2026-10-24:
+
+- **Time-only and early-1900 date cells** (gate 1's first low, its open
+  decision). Options: "Leave it for now" (the gate's recommendation),
+  "Time-only reads empty" and "Read it as HH:MM". The owner chose **"Leave it
+  for now"**, which took the recommendation. No code changes; a fix is filed
+  if the lg-37 dry run shows a time typed in a free-text cell.
+- **The other three lows.** Options: "Title/Why at landing" or "Record all
+  three". The owner chose **"Title/Why at landing"**; the dispatch did not
+  say which option was recommended, so whether it took the recommendation is
+  unrecorded. The title and Why low is fixed at landing, below. The
+  number-rendering low and the period-item low stay in the gate's record as
+  written.
+- **The pull request title**, already decided, retitled #626 to:
+
+  > fix(ledger): keep a number or date in a workbook's free-text cells instead
+  > of dropping it (lg-68)
+
+- 2026-10-24 — Fixed at landing by owner choice: gate 1, the fourth low —
+  "the ticket's `title:` and Why still name only the detail cell, while Build 3
+  and Done when 5 to 11 carry the notes, the date and the person column". The
+  `title:` and the H1 now name the free-text cells, and the Why gains one
+  sentence naming the notes, a date detail and the person column. No Done when
+  line, code or test changed.
+  `awk '/^## Log/{exit} {print}' tools/ledger/docs/work/lg-68-a-detail-cell-holding-a-number-is-stored-empty.md | grep -c "other free-text cells the import reads"`
+  → 1, and the same scoped count of "stored as an empty description by the
+  workbook import" → 0.
