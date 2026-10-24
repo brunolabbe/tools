@@ -973,3 +973,124 @@ round.
    The paragraph that begins "**`coverage` names a corridor the ground was thin
    along**" joins Build 8's two. Build 8's "the diff to that file adds no new rule"
    binds all three.
+
+**2026-10-24 — Round 1: gate 1's six findings, Build 7's harness label, Build 8, and
+Build 6's preparation (builder, Opus 5.5). Stopped before the paid run, which
+waits for a key.** Each finding was reproduced before it was fixed: the new test
+failed against `55fd5df8`'s code. Each mutation below was run against `2aef6e2e`
+(the fixes) or `7d64b049` (the label), one at a time, and restored with
+`git checkout <sha> -- <path>`, using a scratch script that is not committed
+(`mutations.sh`).
+
+- **F1 (med), towns past the cap.** `discoverLodging` now names every town past
+  `MAX_LODGING_TOWNS` in one sentence: "Places to stay around … were not looked up:
+  this plan asks about at most 4 towns, the stops it names first." The sentence names
+  four of them and counts the rest ("… and 13 more"), so twenty stops stay inside the
+  500-character bound. The cap and the order are unchanged (answer 1). Tests in
+  `lodging-pass.test.ts`: "towns past the cap are named, so a stop the pass never
+  asked about is not silent", and "twenty towns past the cap are counted rather than
+  listed, inside the contract's bound". Mutation: the overflow loop deleted, which
+  failed both.
+- **F2 (med), the town query's budget claim.** The code was right and nothing
+  asserted it. In `grounding-cache.test.ts`, "claims one call when asked, and is
+  refused, reaching nothing, once the budget is spent" and "is never cached: the
+  same town asked twice is two calls". In `lodging-pass.test.ts`, "over the real
+  cache and budget, the pass claims at most 8 calls however many towns a brief
+  names", which runs seven towns against `CachingGroundingProvider` and
+  `groundingBudget(40)` and finds 8 claimed.
+  - Gate 1's mutation (`if (spend !== null && !spend.budget.claim())` replaced by
+    `if (false as boolean)` in `#nearbyPoint`) failed both cache tests.
+  - Deleting the cap (`const towns = named;`) failed the 8-call test.
+- **F3 (low), a town reached through finds an earlier town claimed.** The sentence
+  now follows what the map answered, not what remained after de-duplication. Test:
+  "a town whose finds were all handed over for an earlier town is not reported as
+  having none" (`Percé` and `Percé, Québec`, one shared motel: coverage `[]`).
+  Mutation: `answer.length` put back to `kept.length`, which failed it.
+- **F4 (low), the lodging-only re-plan's coverage.** `revisions.test.ts`'s "naming
+  only lodging re-runs both passes" now pins the list exactly: the one town
+  sentence, and none of the base's. Gate 1's mutation, `revise.ts` appending the
+  base's coverage, now fails both re-plan tests; before, it failed only the `food`
+  one.
+- **F5 (low), a false test title.** It is now "lodging with no places to sleep has
+  no block: its prompt is the one it gets with no finds at all". That is a text
+  change only, with no mutation.
+- **F6 (low), the copyright fallback.**
+  - `identity()` in `lodging.ts` treats a source url as a find's identity only
+    when it names an element (`/node|way|relation/<id>`). Otherwise it uses name
+    and position.
+  - `findFrom` takes the type an element with no usable `type` must be: `"node"`
+    for the corridor query, so its urls are the base's again, and `null` for the
+    town query.
+  - Tests: `lodging-pass.test.ts`'s "two finds with no element url are two finds,
+    not one, even across towns", and `grounding-valhalla.test.ts`'s "an element
+    with no type links as a node from the corridor query, as before pl-60, and to
+    nothing from a town query".
+  - Mutations: `identity` taking any url failed the first test, and the corridor
+    passing `null` failed the second.
+- **Build 7, the harness label (`Done when` 10).** `RUN_PATTERN` in
+  `test/live/invention.ts` is generalised to `^pl([1-9]\d*)-(\d{4}-\d{2}-\d{2})$`
+  rather than widened to `pl58|pl60`. The new `runLabel` reads the ticket and the
+  date from the label, and the record's `ticket` is now the label's own
+  (`pl-${string}`) where it was a fixed `"pl-58"`.
+  - Tests in `invention-population.test.ts`: "--after pl60-<date> is accepted,
+    and its files are the run's own", "a malformed label, %s, is refused" (eight
+    labels, among them `pl-60-…`, `pl060-…`, `PL60-…` and `pl60-2026-1-24`), "the
+    record names the label's own ticket, read from its directories alone", and the
+    existing "a label without the -pl<n>- shape is refused".
+  - Mutation: the pattern put back to `pl(58)-`, which failed two of them.
+  - Run directly, never through a pipe, from a script that writes each exit code
+    to a file (`invention-check.sh`):
+    - `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts`: exit 0, "check: the committed
+      record equals its regeneration; every sampled place has a verdict".
+    - The same with `--after pl58-2026-10-21`: exit 0, the same line, so pl-58's
+      record still regenerates.
+    - With `--after pl-60-2026-10-24`: exit 1, "--after takes a label like
+      pl60-2026-10-24, got pl-60-2026-10-24".
+- **Build 8 (`Done when` 11).** Three paragraphs of `tools/planner/CLAUDE.md` now
+  name the four readers and the town pass beside the corridor pass:
+  - "A specialist reads the brief, and only the brief": `activities`, `food` and
+    `conditions-and-gear` read the corridor pass's finds; `lodging` reads the town
+    pass's.
+  - "Grounding may propose and not only check": both queries, and the four
+    specialists.
+  - "`coverage` names a corridor the ground was thin along": now "… or a town the
+    map had nowhere to sleep in".
+
+  No rule was added: `grep -c '^\*\*'` counts 25 rule paragraphs before and after,
+  and the only bold-led line the diff changes is the `coverage` one. The comment on
+  `coverage` in `contract/src/unchecked.ts` gained a paragraph on towns, and two
+  phrases now say "corridor or town". `git diff -U0` on that file changes no line
+  outside a comment.
+
+- **Build 6, preparation only.**
+  - `test/live/run.ts`'s `lodgingFinds` gives sets B to D's `lodging` the places to
+    stay from `overpass-lodging-towns.json`, offline, through
+    `ValhallaGroundingProvider.nearbyPoint` and `discoverLodging`, with its own
+    `locate`: `Percé Rock` stands in Percé, and `Forillon National Park` and
+    `Gaspésie` stand in their own captures. The corridor's finds and its stand-in
+    `locate` are untouched, so sets B to D's corridor finds are pl-58's.
+  - Set B's stopping rule still counts `activities` and `food` candidates only
+    (`FINDS_READERS` in `run.ts`), so lodging joining `readsFinds` does not change
+    when set B stops.
+  - The wrapper, `run-pl60.mjs`, is pl-58's `run-pl58.mjs` with the label
+    `pl60-<date>`. Its five pairs, per-session caps (1, 1, 1, 5 and 10) and prices
+    are pl-58's. It refuses a total above $10 and refuses a session directory that
+    exists. It is in the dispatch's scratch directory, not committed, as pl-58's was.
+  - **Dry run** under the scripted provider into scratch:
+    `node run-pl60.mjs 2026-10-24 - <scratch>/dry/live <scratch>/dry/logs 10`, exit 0.
+    Five sessions, each exit 0, 25 records and $0.0000 observed; "all five sessions
+    done, observed $0.0000 of $10". A second invocation threw "… exists already;
+    run.ts would overwrite it".
+  - In the Opus session's records, every set B, C and D record carries 20 lodging
+    finds (Percé's 10 and Forillon's 10; Gaspésie has none) beside its 40 corridor
+    finds. All 20 are in `lodging`'s prompt, under its own block, and none is in
+    `activities`'. Set A carries no finds. `lodging`'s set B prompt is 6,941
+    characters against 2,499 for set A's `road-trip`, about 1.1k tokens more, which
+    is inside the estimate behind answer 3.
+  - **Not done:** the paid run (no key on this machine), the hand classification
+    of its records, and the web check, which runs in a separate general-purpose
+    agent, as in pl-58.
+- **Checks at `e036ef77`:** `npm run check` exits 0. `npm test -- --project planner`
+  passes 81 of 81 files and 1662 of 1662 tests. The later commits are
+  `test/live/run.ts`, which `npm run check` typechecks, and this Log.
