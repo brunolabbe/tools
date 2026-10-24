@@ -880,10 +880,7 @@ describe("a free-text cell that holds a number or a date (lg-68, round 1)", () =
 
   test("a movement's note holding a number or a date is read as its text", () => {
     const reading = readWorkbook(
-      [
-        movementRows([{ note: 42 }, { note: d("2022-01-05") }, { note: "marché" }, {}]),
-        ACCUEIL,
-      ],
+      [movementRows([{ note: 42 }, { note: d("2022-01-05") }, { note: "marché" }, {}]), ACCUEIL],
       { people },
     );
 

@@ -319,15 +319,20 @@ function textOf(cell: Cell | null): string | null {
 }
 
 /**
- * A movement's detail, which the household types freely: `42`, or `007`,
- * which Excel saves as the number 7, is a detail, not an empty one (lg-68).
- * A number reads as the 15 significant digits Excel keeps of what was typed,
- * so a float's noise (`0.30000000000000004`) never reaches the books. Kept
+ * A cell the household types freely — a movement's detail and note, a period
+ * line's note — and the person column, whatever it holds (lg-68). `42`, or
+ * `007`, which Excel saves as the number 7, is text, not an empty cell; a
+ * number reads as the 15 significant digits Excel keeps of what was typed, so
+ * a float's noise (`0.30000000000000004`) never reaches the books. A date,
+ * which Excel makes of `5 janv` typed in French, reads as its ISO day. Kept
  * apart from `textOf`, which also reads the cells matched against words (a
- * bucket, a name, a sheet's labels), where a number's text would be read as one.
+ * bucket, a sheet's labels), where a number's text would be read as one; a
+ * person's name is matched too, but there a number read as nothing filed the
+ * row joint, and read as a name it is refused, naming the cell.
  */
-function detailOf(cell: Cell | null): string | null {
+function freeTextOf(cell: Cell | null): string | null {
   if (cell?.value?.kind === "number") return String(Number(cell.value.number.toPrecision(15)));
+  if (cell?.value?.kind === "date") return cell.value.date;
   return textOf(cell);
 }
 
@@ -671,7 +676,8 @@ function readYear(
       }
       balanceCents = toCents(balance);
     }
-    const name = columns.person === undefined ? null : textOf(cellAt(sheet, row, columns.person));
+    const name =
+      columns.person === undefined ? null : freeTextOf(cellAt(sheet, row, columns.person));
     let personId: string | null = null;
     if (name !== null && columns.person !== undefined) {
       const found = people.resolve(name, at(columns.person));
@@ -687,8 +693,9 @@ function readYear(
       amountCents: centsOf(read, plan),
       balanceCents,
       detail:
-        (columns.detail === undefined ? null : detailOf(cellAt(sheet, row, columns.detail))) ?? "",
-      note: columns.note === undefined ? null : textOf(cellAt(sheet, row, columns.note)),
+        (columns.detail === undefined ? null : freeTextOf(cellAt(sheet, row, columns.detail))) ??
+        "",
+      note: columns.note === undefined ? null : freeTextOf(cellAt(sheet, row, columns.note)),
     });
   }
   // The household's sheets list the newest first; the books keep the oldest first.
@@ -1046,7 +1053,7 @@ function readPeriod(
       continue;
     }
     if (ended || row < firstLine) continue;
-    const note = textOf(cellAt(sheet, row, last + 1));
+    const note = freeTextOf(cellAt(sheet, row, last + 1));
     for (const { column, personId } of columns) {
       const cell = cellAt(sheet, row, column);
       if (cell === null || cell.value === null) continue;

@@ -1177,7 +1177,12 @@ describe("a free-text cell that holds a number or a date (lg-68, round 1)", () =
       { date: "2022-01-12", description: "Versement", note: "2022-01-12" },
     ]);
     expect(
-      db.prepare("SELECT category, note FROM period_lines WHERE category = 'Épicerie'").all(),
+      // The first period's lines are dated on its last day.
+      db
+        .prepare(
+          "SELECT category, note FROM period_lines WHERE category = 'Épicerie' AND date = '2022-08-31'",
+        )
+        .all(),
     ).toEqual([{ category: "Épicerie", note: "2022-05-03" }]);
     db.close();
   });
