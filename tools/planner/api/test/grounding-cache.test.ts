@@ -176,7 +176,11 @@ class CountingProvider implements GroundingProvider {
     return [];
   }
 
+  /** pl-60's town queries, counted so a test can see which ones reached the backend. */
+  nearbyPoints = 0;
+
   async nearbyPoint(): Promise<Find[]> {
+    this.nearbyPoints += 1;
     return [];
   }
 }
@@ -1235,5 +1239,41 @@ describe("where eviction runs", () => {
     } finally {
       await harness.close();
     }
+  });
+});
+
+describe("a town query spends the run's budget (pl-60)", () => {
+  const TOWN = {
+    point: { latitude: 48.8317, longitude: -64.4838 },
+    radiusMetres: 10_000,
+    kinds: ["hotel"] as const,
+  };
+
+  test("claims one call when asked, and is refused, reaching nothing, once the budget is spent", async () => {
+    const { cache, inner } = build(new Clock("2026-08-22T09:00:00.000Z"));
+    const budget = groundingBudget(1);
+    const run = groundingForRun(cache, budget);
+
+    const first = await run.nearbyPoint(TOWN);
+    expect(first).toEqual({ kind: "answered", value: [] });
+    expect(budget.remaining()).toBe(0);
+    expect(inner.nearbyPoints).toBe(1);
+
+    const second = await run.nearbyPoint(TOWN);
+    expect(second).toEqual({ kind: "refused" });
+    expect(inner.nearbyPoints).toBe(1);
+    expect(run.refused).toBe(1);
+  });
+
+  test("is never cached: the same town asked twice is two calls", async () => {
+    const { cache, inner } = build(new Clock("2026-08-22T09:00:00.000Z"));
+    const budget = groundingBudget(5);
+    const run = groundingForRun(cache, budget);
+
+    await run.nearbyPoint(TOWN);
+    await run.nearbyPoint(TOWN);
+
+    expect(inner.nearbyPoints).toBe(2);
+    expect(budget.remaining()).toBe(3);
   });
 });

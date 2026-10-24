@@ -35,9 +35,14 @@
  * The owner chose, on 2026-10-21, that `lodging` may fall back to a kind of
  * place where its town's list is empty, and that the remedy for a thin town is
  * the coverage note. So every town that came back with nothing, could not be
- * found or was never asked about is named in one, and a trip that names no
- * town at all says so. `UncheckedConstraint.detail` is free text, so naming a
+ * found, was refused by the budget or fell past `MAX_LODGING_TOWNS` is named in
+ * one, and a trip that names no town at all says so. "Came back with nothing"
+ * is what the map answered, not what was left once an earlier town had claimed
+ * the same premises. `UncheckedConstraint.detail` is free text, so naming a
  * town needs no contract change.
+ *
+ * pl-60's `lodging-run.test.ts` asserts the calls beneath the cache, and
+ * `lodging-pass.test.ts` and `grounding-cache.test.ts` the budget they claim.
  */
 
 import { AppError, isAnswered } from "@planner/contract";
@@ -82,6 +87,15 @@ export const LODGING_STEPS_PER_TOWN = 2;
 
 /** The brief's stops and then its destination, deduplicated, at most `MAX_LODGING_TOWNS`. */
 export function lodgingTowns(brief: TripBrief): string[] {
+  return namedTowns(brief).slice(0, MAX_LODGING_TOWNS);
+}
+
+/**
+ * Every town the brief names, in `lodgingTowns`'s order and deduplicated the
+ * same way, before the cap — so the ones past it can be named rather than
+ * dropped in silence (gate 1, 2026-10-24; the owner chose the sentence).
+ */
+function namedTowns(brief: TripBrief): string[] {
   const named: string[] = [];
   const details = brief.details;
   if (details?.shape === "road-trip" && isAnswered(details.mustSee))
@@ -99,7 +113,7 @@ export function lodgingTowns(brief: TripBrief): string[] {
     seen.add(key);
     towns.push(town);
   }
-  return towns.slice(0, MAX_LODGING_TOWNS);
+  return towns;
 }
 
 export interface LodgingInput {
@@ -118,10 +132,11 @@ export interface LodgingResult {
   coverage: UncheckedConstraint[];
 }
 
-type TownOutcome = "found" | "empty" | "unlocated" | "refused";
+type TownOutcome = "found" | "empty" | "unlocated" | "refused" | "uncapped";
 
 export async function discoverLodging(input: LodgingInput): Promise<LodgingResult> {
-  const towns = lodgingTowns(input.brief);
+  const named = namedTowns(input.brief);
+  const towns = named.slice(0, MAX_LODGING_TOWNS);
   if (towns.length === 0) {
     return {
       finds: [],
@@ -163,8 +178,13 @@ export async function discoverLodging(input: LodgingInput): Promise<LodgingResul
       .slice(0, MAX_LODGING_FINDS_PER_TOWN);
     for (const find of kept) seen.add(identity(find));
     finds.push(...kept);
-    note(kept.length === 0 ? "empty" : "found", town);
+    // What the map answered decides the sentence, not what was left after an
+    // earlier town claimed the same premises: a town whose finds were all
+    // handed over already has places to stay, and `lodging` sees them (gate 1).
+    note(answer.length === 0 ? "empty" : "found", town);
   }
+
+  for (const town of named.slice(MAX_LODGING_TOWNS)) note("uncapped", town);
 
   return { finds, coverage: coverageFor(outcomes) };
 }
@@ -215,11 +235,16 @@ async function queryTown(input: LodgingInput, point: Coordinates): Promise<Find[
 
 /** A find's identity across towns: its source url, which names the OSM element. */
 function identity(find: Find): string {
-  return (
-    find.sources[0]?.url ??
-    `${find.name}\u0000${String(find.coordinates.latitude)},${String(find.coordinates.longitude)}`
-  );
+  // Only a url that names an element identifies one. `findFrom` gives an
+  // element with no usable type or id the copyright page, which every such
+  // find shares, so those fall back to name and position (gate 1).
+  const url = find.sources[0]?.url;
+  if (url !== undefined && ELEMENT_URL.test(url)) return url;
+  return `${find.name}\u0000${String(find.coordinates.latitude)},${String(find.coordinates.longitude)}`;
 }
+
+/** An OSM element's own page — the shape `findFrom` builds from a type and an id. */
+const ELEMENT_URL = /^https:\/\/www\.openstreetmap\.org\/(node|way|relation)\/-?\d/;
 
 /** Closest to the town's point first, then by name, so the cap keeps the same ten every time. */
 function compareByDistance(a: Find, b: Find, point: Coordinates): number {
@@ -263,14 +288,35 @@ function coverageFor(outcomes: ReadonlyMap<TownOutcome, string[]>): UncheckedCon
       ),
     );
   }
+  const uncapped = outcomes.get("uncapped");
+  if (uncapped !== undefined) {
+    // A brief may name twenty stops, so this list is the one that can outgrow
+    // `MAX_UNCHECKED_DETAIL_CHARS`: it names the first few and counts the rest.
+    const named = uncapped.slice(0, MAX_TOWNS_NAMED);
+    const more = uncapped.length - named.length;
+    const list =
+      more === 0 ? townList(named) : `${named.map(cut).join(", ")} and ${String(more)} more`;
+    coverage.push(
+      unchecked(
+        "coverage",
+        `Places to stay around ${list} were not looked up: this plan asks about at most ${String(MAX_LODGING_TOWNS)} towns, the stops it names first.`,
+      ),
+    );
+  }
   return coverage;
+}
+
+/** How many towns past the cap one sentence names before it counts the rest. */
+const MAX_TOWNS_NAMED = 4;
+
+/** A town's name as a sentence repeats it, cut to `MAX_TOWN_CHARS`. */
+function cut(town: string): string {
+  return town.length > MAX_TOWN_CHARS ? `${town.slice(0, MAX_TOWN_CHARS - 1)}…` : town;
 }
 
 /** "A", "A and B", "A, B and C" — each name cut to `MAX_TOWN_CHARS`. */
 function townList(towns: readonly string[]): string {
-  const names = towns.map((town) =>
-    town.length > MAX_TOWN_CHARS ? `${town.slice(0, MAX_TOWN_CHARS - 1)}…` : town,
-  );
+  const names = towns.map(cut);
   if (names.length <= 1) return names[0] ?? "";
   return `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
 }

@@ -15,16 +15,21 @@ import {
   type TripBrief,
 } from "@planner/contract";
 import { AppError } from "@planner/contract";
-import { LODGING_KINDS } from "@planner/agent";
-import type { Find, NearbyPointRequest } from "@planner/agent";
+import Database from "better-sqlite3";
+import { groundingBudget, LODGING_KINDS } from "@planner/agent";
+import type { Find, GroundingProvider, NearbyPointRequest } from "@planner/agent";
 import { loadFixture } from "../../contract/test/fixtures.ts";
 import {
   answered,
+  CachingGroundingProvider,
+  groundingForRun,
   REFUSED,
   UNKNOWN,
   type GroundingOutcome,
   type RunGrounding,
 } from "../src/grounding/cache.ts";
+import { FixtureGroundingProvider } from "../src/grounding/fixtures.ts";
+import { migrate } from "../src/db/schema.ts";
 import type { AppLogger } from "../src/logger.ts";
 import { discover } from "../src/runs/discovery.ts";
 import {
@@ -303,5 +308,115 @@ describe("discover: both passes as one (pl-60)", () => {
 
     expect(provider.asked.map((request) => request.point)).toEqual([PERCE]);
     expect(result.reading).toEqual([]);
+  });
+});
+
+describe("gate 1's findings on the town pass (pl-60, round 1)", () => {
+  test("towns past the cap are named, so a stop the pass never asked about is not silent", async () => {
+    const provider = grounding({
+      towns: { S1: GASPE, S2: PERCE, S3: GASPE, S4: PERCE },
+      finds: async (request) =>
+        answered([sleepFind(`Motel at ${String(request.point.latitude)}`, request.point, 1)]),
+    });
+
+    const result = await lodgingFor(
+      roadTrip(["S1", "S2", "S3", "S4", "S5", "S6"], "Dest"),
+      provider,
+    );
+
+    expect(provider.located).toEqual(["S1", "S2", "S3", "S4"]);
+    expect(result.coverage.map((entry) => entry.detail)).toEqual([
+      "Places to stay around S5, S6 and Dest were not looked up: this plan asks about at most 4 towns, the stops it names first.",
+    ]);
+  });
+
+  test("twenty towns past the cap are counted rather than listed, inside the contract's bound", async () => {
+    const stops = Array.from(
+      { length: 20 },
+      (_, index) => `${"Saint-".repeat(12)}${String(index)}`,
+    );
+    const result = await lodgingFor(roadTrip(stops, "Dest"), grounding({}));
+    const overflow = result.coverage.at(-1);
+
+    expect(overflow?.detail).toContain("and 13 more were not looked up");
+    expect(uncheckedConstraintSchema.safeParse(overflow).success).toBe(true);
+  });
+
+  test("a town whose finds were all handed over for an earlier town is not reported as having none", async () => {
+    const shared = sleepFind("Motel du Rocher", PERCE, 9);
+    const provider = grounding({
+      towns: { Percé: PERCE, "Percé, Québec": PERCE },
+      finds: async () => answered([shared]),
+    });
+
+    const result = await lodgingFor(roadTrip(["Percé", "Percé, Québec"], null), provider);
+
+    expect(result.finds).toEqual([shared]);
+    expect(result.coverage).toEqual([]);
+  });
+
+  test("two finds with no element url are two finds, not one, even across towns", async () => {
+    const unlinked = (name: string, at: Coordinates): Find => ({
+      ...sleepFind(name, at, 0),
+      sources: [
+        {
+          url: "https://www.openstreetmap.org/copyright",
+          title: "OpenStreetMap",
+          fetchedAt: "2027-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const provider = grounding({
+      towns: { Gaspé: GASPE, Percé: PERCE },
+      finds: async (request) =>
+        answered([
+          request.point === GASPE
+            ? unlinked("Motel du Havre", GASPE)
+            : unlinked("Motel du Rocher", PERCE),
+        ]),
+    });
+
+    const result = await lodgingFor(roadTrip(["Gaspé", "Percé"], null), provider);
+
+    expect(result.finds.map((find) => find.name)).toEqual(["Motel du Havre", "Motel du Rocher"]);
+  });
+
+  test("over the real cache and budget, the pass claims at most 8 calls however many towns a brief names", async () => {
+    const database = new Database(":memory:");
+    migrate(database);
+    try {
+      const inner = new FixtureGroundingProvider(() => new Date("2027-01-01T00:00:00.000Z"));
+      const everywhere: GroundingProvider = {
+        name: "everywhere",
+        locate: async () => ({
+          coordinates: GASPE,
+          source: {
+            url: "https://fixtures.invalid",
+            title: null,
+            fetchedAt: "2027-01-01T00:00:00.000Z",
+          },
+        }),
+        travel: async (request) => await inner.travel(request),
+        nearby: async (request) => await inner.nearby(request),
+        nearbyPoint: async (request) => await inner.nearbyPoint(request),
+        articlesNear: async (request) => await inner.articlesNear(request),
+      };
+      const cache = new CachingGroundingProvider({
+        db: database,
+        inner: everywhere,
+        ttlHours: { locate: 24, travel: 12 },
+        now: () => new Date("2027-01-01T00:00:00.000Z"),
+      });
+      const budget = groundingBudget(40);
+
+      await lodgingFor(
+        roadTrip(["S1", "S2", "S3", "S4", "S5", "S6"], "Dest"),
+        groundingForRun(cache, budget),
+      );
+
+      expect(40 - budget.remaining()).toBe(2 * MAX_LODGING_TOWNS);
+    } finally {
+      database.close();
+    }
   });
 });

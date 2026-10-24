@@ -430,7 +430,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
 
     const asked = new Set(request.kinds);
     return elementsOf(body)
-      .map((element) => findFrom(element, at, asked))
+      .map((element) => findFrom(element, at, asked, "node"))
       .filter((find): find is Find => find !== null)
       .filter(
         (find) =>
@@ -474,7 +474,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
 
     const asked = new Set(request.kinds);
     return elementsOf(body)
-      .map((element) => findFrom(element, at, asked))
+      .map((element) => findFrom(element, at, asked, null))
       .filter((find): find is Find => find !== null)
       .filter((find) => haversineMetres(find.coordinates, request.point) <= request.radiusMetres);
   }
@@ -1585,11 +1585,17 @@ function coordinatesOf(element: OverpassElement): { latitude: number; longitude:
  * area under `out center` carries its coordinate in `center` and has no `lat`
  * or `lon`, and its source url names its own type — OSM ids are unique only
  * within a type, so `/node/<a way's id>` is some unrelated node.
+ *
+ * `assumed` is the type an element with no usable `type` must be, given the
+ * query that produced it: `"node"` for the corridor query, which asks for
+ * nodes only, so its urls are what they were before pl-60; `null` for the town
+ * query, where it could be any of three and a guess would link the wrong one.
  */
 function findFrom(
   element: OverpassElement,
   at: Date,
   asked: ReadonlySet<DiscoveryKind>,
+  assumed: "node" | null,
 ): Find | null {
   const point = coordinatesOf(element);
   if (point === null) return null;
@@ -1606,7 +1612,7 @@ function findFrom(
   if (kind === null) return null;
 
   const id = typeof element.id === "number" ? element.id : null;
-  const type = OSM_ELEMENT_TYPES.has(element.type as string) ? (element.type as string) : null;
+  const type = OSM_ELEMENT_TYPES.has(element.type as string) ? (element.type as string) : assumed;
   const url =
     id === null || type === null
       ? "https://www.openstreetmap.org/copyright"

@@ -1097,7 +1097,12 @@ describe("discovery on a re-plan", () => {
       expect(f.grounding.nearbyCalls).toBe(1);
       expect(f.grounding.nearbyPointCalls).toBe(1);
       const revision = latestOf((await readView(f.harness, view.plan.id)).plan);
-      expect(revision.coverage).not.toEqual(base.coverage);
+      // Exactly what this run's two passes said, and none of the base's: the
+      // corridor had finds, and `somewhere` had nothing to sleep in (gate 1).
+      expect(revision.coverage.map((entry) => entry.detail)).toEqual([
+        "No places to stay around somewhere are on the map. Somewhere to stay there may exist without this plan having found it.",
+      ]);
+      expect(base.coverage).not.toEqual(revision.coverage);
       expect(revision.reading).toEqual([
         source("https://en.wikivoyage.org/wiki/Bas-Saint-Laurent", "Bas-Saint-Laurent"),
       ]);

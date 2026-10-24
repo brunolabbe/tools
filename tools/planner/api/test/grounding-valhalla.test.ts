@@ -2232,4 +2232,36 @@ describe("nearbyPoint — pl-60's town query, against a checked-in capture", () 
     expect(calls).toEqual([]);
     expect(logger.warnings.some((entry) => entry.message.includes("no OVERPASS_URL"))).toBe(true);
   });
+
+  test("an element with no type links as a node from the corridor query, as before pl-60, and to nothing from a town query", async () => {
+    // Gate 1: the corridor query asks for nodes only, so an element it gets
+    // back with no `type` is a node, and its url stays `/node/<id>` as it was
+    // at the base. A town query asks for all three types, so the same element
+    // could be any of them, and a guessed url would link an unrelated element.
+    const typeless = {
+      elements: [
+        { id: 77, lat: 45.6, lon: -73.4, tags: { tourism: "viewpoint", name: "Belvédère" } },
+        { id: 78, lat: 48.83, lon: -64.48, tags: { tourism: "hotel", name: "Hôtel Plante" } },
+      ],
+    };
+    const corridor = await discoveryProvider(
+      answering(typeless).fetch,
+      "http://overpass.internal:8090",
+    ).nearby({ corridor: CORRIDOR, radiusMetres: 6_000, kinds: ["viewpoint"] });
+    const town = await discoveryProvider(
+      answering(typeless).fetch,
+      "http://overpass.internal:8090",
+    ).nearbyPoint({
+      point: { latitude: 48.8317, longitude: -64.4838 },
+      radiusMetres: 10_000,
+      kinds: LODGING_KINDS,
+    });
+
+    expect(corridor.map((find) => find.sources[0]?.url)).toEqual([
+      "https://www.openstreetmap.org/node/77",
+    ]);
+    expect(town.map((find) => find.sources[0]?.url)).toEqual([
+      "https://www.openstreetmap.org/copyright",
+    ]);
+  });
 });

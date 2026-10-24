@@ -436,7 +436,7 @@ describe("lodging reads places to sleep, and the corridor readers do not (pl-60)
     expect(prompt).not.toContain("an empty list above is not a gap to fill");
   });
 
-  test("lodging with no places to sleep has no block, so its prompt is the one it had before pl-60", () => {
+  test("lodging with no places to sleep has no block: its prompt is the one it gets with no finds at all", () => {
     const withCorridorOnly = systemPrompt({
       specialist: "lodging",
       brief: roadTrip,
