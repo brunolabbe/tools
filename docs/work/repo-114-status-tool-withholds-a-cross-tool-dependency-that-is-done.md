@@ -93,7 +93,7 @@ the one rule below.
 4. **The regression tests go at the end of `scripts/test/status.test.ts`**, using
    `repoWith` from the top of the file, so no test line moves. The fixture is a
    planner ticket with `depends_on: [repo-9]` and a `repo-9` ticket with
-   `status: done`, in a tree of its own. Six cases, the first three on that fixture:
+   `status: done`, in a tree of its own. Eight cases, the first three on that fixture:
    - `run(["--tool", "planner", "--ready"], root)` lists the planner ticket on
      stdout and writes nothing about it to stderr. On `origin/main` it prints
      `nothing is ready and unblocked` and withholds the ticket, so this test fails
@@ -122,6 +122,17 @@ the one rule below.
      still withholds the planner ticket under `--tool planner --ready`. This pins
      Build 3's cross-tool `needs-decision` clause, which no existing test reaches (a
      dangling id is pinned by `WITHHELD_REPO9`).
+   - The seventh case, on the first fixture plus a `ready` planner ticket with
+     `depends_on: [repo-10]` (`repo-10` `ready`) and a `needs-decision` planner ticket:
+     unscoped `run(["--ready"], root)` lists the first ticket on stdout and names the
+     other two as withheld on stderr. The unscoped view was never wrong; this pins it.
+   - The eighth case, on the first fixture: `run(["--show", "pl-2"], root)` prints
+     `unblocked`, and with `repo-9` at `status: ready` prints
+     `blocked by  repo-9 (ready)`. `--show` already reads the whole graph; this pins it.
+
+   The seventh and eighth cases replace the live-board readings (owner's answer,
+   2026-10-24, in the Log): the proof is a fixture and names no current ticket.
+
 5. Do not edit `CLAUDE.md`, `docs/01-TICKETS.md` or any ticket's frontmatter.
 6. **The `(waits on …)` label lists only dependencies that are not `done`.** The
    default view's label is `ticket.depends_on.join(", ")` (`scripts/status.mjs:1005`),
@@ -139,11 +150,11 @@ the one rule below.
 - `scripts/test/status.test.ts`, the second case of Build 4: the default view, under
   `--tool planner` and with no flag, marks that ticket `•` and shows no `(waits on`
   label. Fails before the fix.
-- Plain `npm run -s status`, read on the builder's head with `lg-64` still `ready`,
-  marks it with `•` and no `(waits on` label. At the base it prints
-  `· lg-64 … (waits on repo-109)`, with `repo-109` `done`, and no flag at all. If
-  `lg-64` is `done` by build time, the fixture reproduction in the Log stands in for
-  this live reading.
+- `scripts/test/status.test.ts`, the no-flag call of the second case of Build 4:
+  `run([], root)`, plain status with no `--tool`, marks the planner ticket `•` with no
+  `(waits on` label, its dependency being a `done` repo ticket. Before the fix it
+  prints `· pl-2 … (waits on repo-9)` with `repo-9` `done`, and no flag at all. This
+  line names no live ticket; the fixture is the proof (owner's answer, 2026-10-24).
 - `scripts/test/status.test.ts`, the third case of Build 4: with the dependency
   `ready`, the planner ticket is still withheld with `waits on repo-9`. Passes before
   and after the fix.
@@ -157,15 +168,15 @@ the one rule below.
 - `scripts/test/status.test.ts`, the sixth case of Build 4: with the dependency at
   `needs-decision`, the planner ticket is still withheld under `--tool planner` with
   `--ready`. Passes before and after the fix.
-- `npm run -s status -- --ready` still lists on stdout each `ready` ticket whose
-  dependencies are all `done`, and its stderr still names `lg-65` and `repo-98` as
-  withheld. Read on the builder's head, off whichever tickets are `ready` at build
-  time; while `lg-64` is `ready` it is the named example, on stdout, since `repo-109`
-  is `done`.
-- `npm run -s status -- --show lg-64` still prints `unblocked` on the builder's head,
-  with `lg-64` still `ready`, unchanged by the fix. If `lg-64` is `done` by build time,
-  the `--show` fixture reproduction in the Log stands in for this live reading, as the
-  plain-status line's fixture does for its own.
+- `scripts/test/status.test.ts`, the seventh case of Build 4: unscoped
+  `run(["--ready"], root)` still lists on stdout each `ready` ticket whose
+  dependencies are all `done`, and its stderr still names, as withheld, a `ready`
+  ticket with an open dependency and a `needs-decision` ticket. Passes before and
+  after the fix.
+- `scripts/test/status.test.ts`, the eighth case of Build 4: `run(["--show", "pl-2"],
+root)` on the first fixture still prints `unblocked`, and with `repo-9` at
+  `status: ready` prints `blocked by  repo-9 (ready)`. Passes before and after the
+  fix; `--show` is unchanged by it.
 - `npm run -s status -- --json > <scratch>/status.json; echo $?` prints `0`.
 - `npm run check` exits `0`.
 
@@ -349,3 +360,8 @@ repo-114` outside `docs/work` printed nothing, and no branch or open pull reques
     ```
   - **Control.** The same tree with `repo-9` set to `status: ready` (`show-fixture-control`) gives `  blocked by  repo-9 (ready)` in place of `  unblocked` for the same command, so the line tells the two readings apart.
   - **Live state at this head.** `lg-64` is still `status: ready` on this branch, and PR #604 is open for it. The `--show` line is read live until lg-64 is `done`, then the fixture above stands in.
+- 2026-10-24 — Owner's answer at batch intake, recorded before any source change. The status is `ready` already and stays so.
+  - **Question.** "repo-114's Done-when lines name live examples that are now done (the stderr line expects lg-65 and repo-98 withheld; the 'while lg-64 is ready' readings). No ready ticket on main has a cross-tool done dependency. How should those lines read before dispatch?"
+  - **Options.** (1) "Fixture-only (Recommended)": reword the live-reading lines so the fixture reproduction is the proof, naming no current ticket; this is the second rewording after #605 and fixture-only stops a third. (2) "Live names at build time": reword to whatever tickets are live when built; goes stale again. (3) "Leave as written": the gate grades those lines unmet or by the ticket's fallback.
+  - **Choice.** (1) Fixture-only, chosen by the owner on 2026-10-24. It was the orchestrator's recommendation; nothing was overridden.
+  - **Rewording.** The plain-status, `--ready` and `--show` Done-when lines are now fixture tests in `scripts/test/status.test.ts` and name no live ticket: the plain-status line is the no-flag half of Build 4's second case, and the `--ready` and `--show` lines are new seventh and eighth cases (Build 4 now says eight). The earlier 2026-10-24 entry above, with its live-pair rewording and its lg-64 transcripts, stays as history.
