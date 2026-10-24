@@ -168,7 +168,7 @@ itself drives a real import.
   outcome the base suite pins for lg-37's "the salaries missed". So (c) turns 8
   correct imports into 8 wrong ones that the verifications let through. (The score compares the
   reader's `problems`; `importWorkbook`'s own further checks were not run on
-  these six.)
+  these eight.)
 
 ## Build
 
@@ -259,9 +259,14 @@ records the owner's answers on this page and moves `status` to `ready`, as
         bytes actually inflated, summed over the entries, are counted as they
         are produced, and the parse is refused the moment the count passes the
         bound, whatever the zip declared. The builder says how (a counting
-        wrapper in front of the inflate, or a parse that streams), states the
-        bound with the inflated size of the largest of the six workbook
-        fixtures beside it, and names the chunk by which a stop may overshoot.
+        wrapper in front of the inflate, or a parse that streams). exceljs
+        offers no hook into its own inflate, so the counted pass is one the
+        build adds, and it inflates every accepted file a second time. Two ways
+        to do it were measured to exist, a hand parse of the central directory,
+        and `node:zlib` with `maxOutputLength` or a streaming counter; both
+        avoid importing jszip, a dependency the api does not declare. The
+        builder states the bound with the inflated size of the largest of the
+        six workbook fixtures beside it, and names the chunk by which a stop may overshoot.
       - **The number of sheets, and the rows and cells read,** need the parsed
         file. Over either is a typed refusal before anything is sent.
       - **The length of a cell's text sent** is a truncation, not a refusal: the
@@ -373,14 +378,16 @@ records the owner's answers on this page and moves `status` to `ready`, as
    test where the sheet reader is a spy that is never called). Two tests bound
    the inflate. (i) A real one-sheet workbook whose sheet XML is padded with
    whitespace to more than the inflated-size bound, small enough to pass the
-   byte bound (the file `upload.mts` builds in gate 4's directory, at 40 and
-   at 200 MiB of padding), is refused from its declared sizes, with the inflate
-   spy at 0 bytes. (ii) A crafted zip holding the workbook's entries whose
-   declared sizes understate its content, which would inflate to more than the
-   bound, is refused with the inflate spy at no more than the bound plus the
-   chunk the Log names (the spy's count, not the process's memory, is what the
-   test reads). One over the sheets bound, the rows-and-cells bound or the
-   request-size estimate is refused before anything is sent (a test per
+   byte bound (the inflated-size bound is under the smaller padding; tested at
+   40 and at 200 MiB of padding), is refused from its declared sizes, with the
+   inflate spy at 0 bytes and the sheet reader not called. (ii) A crafted zip
+   holding the workbook's entries whose declared sizes understate its content,
+   which would inflate to more than the bound, is refused with the inflate spy
+   at no more than the bound plus the chunk the Log names and the sheet reader
+   not called (the spy's count, not the process's memory, is what the test
+   reads; under a streaming parse that is itself the reader, the spy wraps the
+   reader's own inflate instead). One over the sheets bound, the
+   rows-and-cells bound or the request-size estimate is refused before anything is sent (a test per
    bound; the fake uncalled). A cell whose text is longer than the cell-text
    bound is not refused: the request carries it cut at the bound (a test reads
    the request the fake was given), and the file is still read in full. The
@@ -416,7 +423,10 @@ records the owner's answers on this page and moves `status` to `ready`, as
     return the same typed error with the same plain message that only an
     `.xlsx` is read, the fake is not called, the sheet reader is not called, and
     the books are unchanged. A zip with the workbook's two entries and no sheet
-    reads as 0 sheets and is a typed refusal with the fake uncalled. An `.xlsx`
+    (its `xl/workbook.xml` a valid workbook with an empty `<sheets/>`; an empty
+    file or text there fails in the parser, not at the 0-sheet refusal) reads as
+    0 sheets and is a typed refusal with the fake uncalled, and the test asserts
+    the 0-sheet refusal's own code or message. An `.xlsx`
     that is renamed `.csv` is still read, and a CSV renamed `.xlsx` is still
     refused (the check is on the bytes).
 
@@ -665,3 +675,50 @@ one per file, with `...` for the repeated salaries text, and says so.
 **N7 (low): fixed.** Done when 8's log clause is scoped to the describe and
 confirm requests of Done when 5, 8 and 13, and graded by a test that reads every
 line the logger received.
+
+### 2026-10-24 — landing: gate 5 returned CONCERNS at `fac223c7`; P1 fixed, P2 to P5 fixed by owner choice
+
+Gate 5 (on PR #623, `b0788d12..fac223c7`) returned CONCERNS: no high, one med
+(P1), four low (P2 to P5). Its record is for lg-38's `## Review`, as `### Gate
+5`. Each fix is the gate's own wording and direction, applied above `## Log`;
+the gate's section is untouched. In the commands below `$T` is this ticket's
+path, and each is `awk '/^## Log/{exit} {print}' $T | grep -c "<phrase>"`, so
+the entries here do not count themselves. Nothing in the branch can fail on a
+wording fix: the findings' own evidence is the gate's `order.mts` (P1) and
+`inflate.mts` (P3) runs, quoted in its section.
+
+- 2026-10-24 — Fixed at landing: gate 5, P1 (med; Done when 8 depends on it,
+  so the severity floor makes the fix required) — "Done when 8's tests (i) and
+  (ii) assert a refusal and the inflate spy's count. They do not assert that the
+  sheet reader is uncalled". (i) and (ii) now say "and the sheet reader not
+  called", and the spy wraps the reader's own inflate under a streaming parse.
+  `grep -c "spy at 0 bytes. (ii) A crafted zip"` → 0 (was 1);
+  `grep -c "inflate spy at 0 bytes and the sheet reader not called"` → 1 (was
+  0); `grep -c "at no more than the bound plus the chunk the Log names and the sheet reader"`
+  → 1 (was 0).
+- 2026-10-24 — Fixed at landing by owner choice: gate 5, P2 — "Decision 3 (c)
+  says `importWorkbook`'s further checks 'were not run on these six'. The
+  round's count is 8." `grep -c "these six.)"` → 0 (was 1); `grep -c "these eight.)"` → 1
+  (was 0).
+- 2026-10-24 — Fixed at landing by owner choice: gate 5, P3 — "Done when 13 says
+  'a zip with the workbook's two entries and no sheet reads as 0 sheets'. …
+  that holds only when `xl/workbook.xml` is a valid workbook with an empty
+  `<sheets/>`." Done when 13 now names that fixture file and asserts the 0-sheet
+  refusal's own code or message. `grep -c "reads as 0 sheets and is a typed refusal with the fake uncalled. An"`
+  → 0 (was 1); `grep -c "the 0-sheet refusal's own code or message"` → 1 (was 0).
+- 2026-10-24 — Fixed at landing by owner choice: gate 5, P4 — "Done when 8 (i)
+  points at 'the file `upload.mts` builds in gate 4's directory'. That is a
+  session scratch path no later builder will have". The path is dropped and the
+  line says the inflated-size bound is under the smaller padding.
+  `grep -c "builds in gate 4's directory"` → 0 (was 1);
+  `grep -c "(the inflated-size bound is under the smaller padding; tested at"` →
+  1 (was 0).
+- 2026-10-24 — Fixed at landing by owner choice: gate 5, P5 — "Build 3.3's 'a
+  counting wrapper in front of the inflate' can be read as wrapping exceljs's
+  own inflate, which exceljs does not offer … It does not say that the counted
+  pass inflates every accepted file a second time." Build 3.3 now says so, and
+  names the two paths measured to exist, neither importing jszip.
+  `grep -c "wrapper in front of the inflate, or a parse that streams), states the"`
+  → 0 (was 1); `grep -c "inflates every accepted file a second time"` → 1 (was 0);
+  `grep -c "avoid importing jszip, a dependency the api does not declare"` → 1
+  (was 0).
