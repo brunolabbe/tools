@@ -57,6 +57,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   symlinkSync,
 } from "node:fs";
 import path from "node:path";
@@ -107,10 +108,18 @@ export function findMissingPackages(sharedRoot) {
  * decision above is to warn, not to refuse, so a stale shared checkout never
  * blocks a dispatch.
  *
+ * `options.worktree` says `sharedRoot` is a farmed worktree rather than the
+ * shared checkout (repo-117, gate 1 F4): the farm checks the worktree's own
+ * lockfile against what it just linked, so a shared checkout that is behind
+ * `main` cannot pass a worktree that declares a package it lacks. The remedy
+ * differs, because `roles/common.md` forbids an install in a worktree — the
+ * shared checkout is what is stale, and repairing it is the orchestrator's.
+ *
  * @param {string} sharedRoot
+ * @param {{ worktree?: boolean }} [options]
  * @returns {number}
  */
-export function warnIfStale(sharedRoot) {
+export function warnIfStale(sharedRoot, options = {}) {
   let missing;
   try {
     missing = findMissingPackages(sharedRoot);
@@ -126,12 +135,17 @@ export function warnIfStale(sharedRoot) {
     return 0;
   }
   if (missing === null || missing.length === 0) return 0;
+  const remedy = options.worktree
+    ? "remedy: the shared checkout this worktree was farmed from is behind its lockfile. " +
+      "Stop and report it to the orchestrator; do not install in a worktree. " +
+      "Once the shared checkout is installed, re-run the farm."
+    : `remedy: run \`npm install\` in the shared checkout (${sharedRoot}), then re-run the farm.`;
   process.stderr.write(
     [
       `warning: ${sharedRoot} is missing ${missing.length} package(s) that ` +
         `${path.join(sharedRoot, "package-lock.json")} declares:`,
       ...missing.map((name) => `  ${name}`),
-      `remedy: run \`npm install\` in the shared checkout (${sharedRoot}), then re-run the farm.`,
+      remedy,
     ].join("\n") + "\n",
   );
   return 1;
@@ -255,22 +269,50 @@ export function findMissingWorkspaceLinks(root) {
 }
 
 /**
+ * True when `dir`, resolved through its nearest existing ancestor (it may not
+ * exist yet), lands inside `rootReal`. A symlink anywhere on the way out — the
+ * scope directory, or `node_modules` itself pointing at a shared one — fails it.
+ *
+ * @param {string} rootReal
+ * @param {string} dir
+ */
+function staysInside(rootReal, dir) {
+  let existing = dir;
+  while (!existsAsEntry(existing)) {
+    const up = path.dirname(existing);
+    if (up === existing) return false;
+    existing = up;
+  }
+  let real;
+  try {
+    real = realpathSync(existing);
+  } catch {
+    return false; // a dangling link: there is nothing safe to write into
+  }
+  const rel = path.relative(rootReal, real);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+/**
  * Create the link for every workspace of `root` that has none. The farm's copy
  * loop has already recreated each scope directory (`node_modules/@webtools`) as
  * a real directory, so the link goes inside it; a scope the shared checkout had
- * no entry for at all is created. A scope that is itself a symlink is left
- * alone: writing through it would put the link in the shared checkout.
+ * no entry for at all is created. Nothing is written through a symlink that
+ * leaves `root` — a scope directory, or `node_modules` itself, linked to a
+ * shared one — because the link would land in the shared checkout; the
+ * workspace is then left for `warnIfWorkspacesUnlinked` to name.
  *
  * @param {string} root
  * @returns {{ name: string, target: string }[]} what was linked
  */
 export function linkMissingWorkspaces(root) {
   const linked = [];
+  const rootReal = realpathSync(root);
   for (const workspace of listWorkspaces(root)) {
     const { link, target } = workspaceLink(root, workspace);
     if (existsAsEntry(link)) continue;
     const parent = path.dirname(link);
-    if (existsAsEntry(parent) && lstatSync(parent).isSymbolicLink()) continue;
+    if (!staysInside(rootReal, parent)) continue;
     mkdirSync(parent, { recursive: true });
     symlinkSync(target, link, "dir");
     linked.push({ name: workspace.name, target });
@@ -314,15 +356,20 @@ export function warnIfWorkspacesUnlinked(root) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   // `<root>` alone runs both checks against it. The farm splits them: the
   // fetched-package check against the shared checkout before anything is
-  // linked, the workspace links against the worktree after.
+  // linked, the workspace links against the worktree after, and the worktree's
+  // own lockfile against what it holds (`--worktree-packages`, the same check
+  // with the remedy a worktree may follow).
   const args = process.argv.slice(2);
   const flags = args.filter((a) => a.startsWith("--"));
   const root = args.find((a) => !a.startsWith("--"));
-  if (!root || flags.some((f) => !["--packages", "--workspaces", "--link"].includes(f))) {
+  const known = ["--packages", "--worktree-packages", "--workspaces", "--link"];
+  if (!root || flags.some((f) => !known.includes(f))) {
     process.stderr.write(
-      "usage: node check-farm-freshness.mjs [--packages | --workspaces | --link] <root>\n",
+      "usage: node check-farm-freshness.mjs [--packages | --worktree-packages | --workspaces | --link] <root>\n",
     );
     process.exitCode = 1;
+  } else if (flags.includes("--worktree-packages")) {
+    process.exitCode = warnIfStale(root, { worktree: true });
   } else if (flags.includes("--link")) {
     try {
       for (const { name, target } of linkMissingWorkspaces(root)) {

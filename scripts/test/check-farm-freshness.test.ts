@@ -581,3 +581,93 @@ test("check-farm-freshness.mjs --workspaces names a missing link without running
     tree.cleanup();
   }
 });
+
+// --- round 1 of the gate: the tree's node_modules as a symlink; worktree packages
+
+test("linkMissingWorkspaces writes nothing through a node_modules that is itself a symlink to a shared one", () => {
+  // The layout worktree-farm.sh's header forbids, which the guard exists for:
+  // the link would otherwise land in the shared checkout (gate 1, F3).
+  const shared = makeSharedWithWorkspaceLinks(["@webtools/ui"]);
+  const tree = makeWorkspaceTree();
+  try {
+    fs.symlinkSync(
+      path.join(shared.dir, "node_modules"),
+      path.join(tree.dir, "node_modules"),
+      "dir",
+    );
+    const before = fs.readdirSync(path.join(shared.dir, "node_modules", "@webtools"));
+    expect(linkMissingWorkspaces(tree.dir)).toEqual([]);
+    expect(fs.readdirSync(path.join(shared.dir, "node_modules", "@webtools"))).toEqual(before);
+    expect(fs.existsSync(path.join(shared.dir, "node_modules", "@webtools", "ui"))).toBe(false);
+  } finally {
+    tree.cleanup();
+    shared.cleanup();
+  }
+});
+
+/** A worktree whose lockfile declares `@anthropic-ai/sdk`, which no node_modules holds. */
+function writeLockDeclaringSdk(dir: string) {
+  fs.writeFileSync(
+    path.join(dir, "package-lock.json"),
+    JSON.stringify({ packages: { "": {}, "node_modules/@anthropic-ai/sdk": {} } }),
+  );
+}
+
+test("worktree-farm.sh names a package the worktree's lockfile declares and a healthy shared checkout lacks, without telling the reader to install in the worktree", () => {
+  // The shared checkout's own lockfile predates the dependency, so its own
+  // check passes; the tree on main declares it (gate 1, F4).
+  const shared = makeSharedWithWorkspaceLinks([]);
+  const tree = makeWorkspaceTree();
+  writeLockDeclaringSdk(tree.dir);
+  try {
+    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+      cwd: tree.dir,
+      shell: false,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("farm built:");
+    expect(result.stderr).toContain("@anthropic-ai/sdk");
+    expect(result.stderr).toContain(path.join(tree.dir, "package-lock.json"));
+    // common.md forbids an install in a worktree: the remedy is the orchestrator's.
+    expect(result.stderr).toContain("Stop and report");
+    expect(result.stderr).not.toContain("npm install` in the shared checkout");
+    expect(result.stderr).not.toContain("npm install` in " + tree.dir);
+  } finally {
+    tree.cleanup();
+    shared.cleanup();
+  }
+});
+
+test("check-farm-freshness.mjs --worktree-packages prints nothing when the worktree's lockfile declares nothing absent", () => {
+  const tree = makeFarmedTree([]);
+  fs.mkdirSync(path.join(tree.dir, "node_modules", "left-pad"));
+  fs.writeFileSync(
+    path.join(tree.dir, "package-lock.json"),
+    JSON.stringify({ packages: { "": {}, "node_modules/left-pad": {} } }),
+  );
+  try {
+    const result = runCheck(["--worktree-packages", tree.dir]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("check-farm-freshness.mjs --packages keeps the shared-checkout remedy", () => {
+  const shared = makeSharedRoot({
+    packages: { "": {}, "node_modules/@anthropic-ai/sdk": {} },
+    present: [],
+  });
+  try {
+    const result = runCheck(["--packages", shared.dir]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      `remedy: run \`npm install\` in the shared checkout (${shared.dir}), then re-run the farm.`,
+    );
+  } finally {
+    shared.cleanup();
+  }
+});

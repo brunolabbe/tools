@@ -68,6 +68,10 @@ done
 WORKTREE="$(dirname "$DEST")"
 node "$FRESHNESS" --link "$WORKTREE" || true
 node "$FRESHNESS" --workspaces "$WORKTREE" || true
+# The worktree's own lockfile against what the loop just linked (repo-117, gate 1):
+# the pass above reads the shared checkout's lockfile, so a shared checkout that is
+# behind main passes it while this tree declares a package it lacks.
+node "$FRESHNESS" --worktree-packages "$WORKTREE" || true
 
 echo "farm built: $(ls -A "$DEST" | wc -l) top-level entries in $DEST"
 echo "now run: npm run build   (without dist, suites fail with packageEntryFailure)"
