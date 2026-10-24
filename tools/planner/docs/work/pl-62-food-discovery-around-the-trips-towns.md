@@ -1,0 +1,528 @@
+---
+id: pl-62
+tool: planner
+title: Food chooses among restaurants and cafés fetched from map data around the trip's towns, instead of proposing from memory
+kind: work-package
+status: needs-decision
+milestone: P3
+depends_on: [pl-60]
+difficulty: hard
+---
+
+# pl-62 — Food discovery: real establishments propose, the specialist chooses
+
+**Packages:** `agent` (the kinds list, `findsFor`'s routing, `food`'s discovery
+block and `role`), `api` (the town pass's food query, its fixtures, the live
+re-measure, and the `invention.ts` harness's stratum map), and `tools/planner/CLAUDE.md`
+plus one rules file (named in Build 8). **No contract change is intended.** One
+comment in `contract/src/unchecked.ts` may need a word, and Build 8 says what to do
+about it.
+
+## Why
+
+[pl-60](pl-60-lodging-discovery.md) (PR #607) gave `lodging` a list of real places to
+sleep, fetched from OpenStreetMap through Overpass around the towns a trip names,
+and its Log asked whether `food` should follow. The owner answered on 2026-10-24
+(_Decision — answered_ on pl-60, the open decision at the end of its Log): **call
+the route working and file `food`'s discovery ticket now.** This is that ticket. The
+other two options were to first file an existence check for map-sourced premises, and
+to file nothing; pl-60's question 4 had already put `food` out of its own scope, to be
+filed "as its own ticket if this one works".
+
+**Every figure below is pl-60's, restated from its Log** as the branch of PR #607
+stood on 2026-10-24. That branch had not merged when this ticket was filed, so
+nothing here links to a line of it; each number is written out so it survives the
+squash merge. The order is the order the Log reports them.
+
+1. **The share of mentions that name a premises rose where finds were given.**
+   `lodging` went from 33 of 418 (7.9%) in pl-58 to 301 of 443 (67.9%). Split by set,
+   the rise is all in the sets that carry finds: set A, which has none by design, went
+   from 11 of 95 to 1 of 83 (1.2%), and sets B to D are 300 of 360 (83.3%), against
+   pl-58's 22 of 323 (6.8%) read the same way. The classification has judgement cases
+   a reader may reverse, and pl-60's gate widened the band to **49.2% to 75.4%**
+   (PR #607's gate 2 comment; the Log carries it). Every reading in the band is six
+   to ten times pl-58's 7.9%.
+2. **`food` was the control, and stayed flat.** 41 of 395 (10.4%) against pl-58's 43
+   of 407 (10.6%); by places, 30 of 170 (17.6%) against 26 of 186 (14.0%). pl-60
+   did not touch `food`, so it moved by sampling only.
+3. **The join pl-36 said had never been scored was scored.** A candidate whose
+   `place.name` equals a find's `name` in the same record, after case and diacritic
+   folding: `lodging` reading town finds, 333 of 360 (92.5%); `activities` and `food`
+   reading corridor finds, 8 of 1,165 over the ten earlier run directories (0.7%) and
+   12 of 606 in the new run. A specialist handed a list it can use names from it.
+   `food` is handed a list it cannot use: **none of the corridor's four kinds
+   (`viewpoint`, `waterfall`, `attraction`, `historic-site`) can be a restaurant.**
+4. **The defects that remain sit on `food` in part.** In pl-58's web check, 5 of 40
+   objects were not confirmed; the three that were a real premises **in another
+   town** were all `food`'s (two smokehouses and a brewery-pub), and the two not
+   found were `lodging`'s. A town list in front of `food` reaches the first class,
+   because a premises chosen from a list is in the list's town. This ticket does not
+   claim the web check will show it, and pl-58's Log does not give a `food`-only
+   object count, so Build 7 computes one.
+5. **A find can be a stale map entry.** `lodging`'s not-confirmed rate after pl-60 is
+   2 of 9 objects, 22.2% (95% Wilson 6.3–54.7), against pl-58's `lodging`-only 2 of
+   19, 10.5% (2.9–31.4); the intervals overlap almost entirely, so the rate **cannot
+   be shown to have moved**. Both of the new misses were map entries the model chose
+   from the list: **Le Loup Marin**, closed in October 2014 on the web's evidence
+   (one forum reply, so a judgement call that reads `not-found`, also not confirmed,
+   if reversed), and **La Rêvasse**, which the web does not know. The defect changed
+   kind, from an invented name to an entry that is stale or unverifiable; with two
+   events it is an observation and not a rate. Whatever `food` is handed will carry
+   the same class, and restaurants close more often than hotels.
+6. **The town pass's shape**, which this ticket extends rather than rebuilds:
+   `GroundingProvider.nearbyPoint` (seam option (b) of pl-60's Build 2, a request of
+   a point, a radius and kinds), a **10 km** radius, **at most 4 towns** taken from
+   the brief's named stops and then its destination, **at most 10 finds per town**,
+   the closest first, one `locate` and one `nearbyPoint` per town, and a coverage
+   sentence for each town that was not found, came back empty, was refused by the
+   budget, or fell past the cap. Per-shape call counts for the six set A shapes are in
+   pl-60's Log; Build 2 reuses them as the base.
+7. **The public Overpass instance answers 406 to the adapter as it stands**, because
+   the adapter sends no user agent ([pl-61](pl-61-overpass-discovery-sends-no-user-agent.md),
+   PR #608). pl-60 captured its fixtures with a scratch script that sent an
+   identifying user agent, and this ticket's capture does the same, so **this ticket
+   does not depend on pl-61**. A deployment on the public instance gets no town finds
+   for `food` either until pl-61 lands, and the town pass reports that as "nothing
+   on the map", the way it does for `lodging`.
+
+**What differs from pl-60, so this is not read as a copy of it.**
+
+- **`food` already reads finds.** `lodging` was a new reader of a new list.
+  `food` is in the set of specialists handed finds since pl-29, and on pl-60's
+  branch `findsFor` routes by kind with one test: a find whose kind is a lodging kind
+  goes to `lodging` alone, and everything else goes to the three corridor readers.
+  **A restaurant kind added to the list with no routing change would go to
+  `activities` and `conditions-and-gear` as well**, which changes two prompts that
+  pl-60 pins byte for byte to the base. Routing is therefore part of the change, not
+  a detail of it (Build 2).
+- **A town list does not cover a meal on the road.** The corridor pass draws a line
+  from origin to destination; the town pass looks at the towns the brief names. A
+  lunch between two stops is in neither. Decision 2 is about which pass `food` reads.
+- **Restaurants outnumber places to sleep in a town** by a margin nothing here has
+  measured, so the per-town cap decides which ten are shown, and "closest to the
+  town's point" is a ranking that favours a town centre. Build 1 measures density
+  before the cap is chosen.
+- **The role string is `food`'s and says what a meal is.** pl-58's `role` for `food`
+  reads "meals that are part of the trip rather than fuel for it", and it is the
+  second change to that string within a week if Build 4 appends to it, as pl-60
+  appended to `lodging`'s.
+- **The sets that carry finds see two towns.** pl-60's `run.ts` hands sets B to D
+  lodging finds from its nine-town capture through stand-in locates: `Percé Rock`
+  stands in Percé, and `Forillon National Park` and `Gaspésie` stand in their own
+  captures. Food finds in sets B to D therefore come from Percé and Forillon only
+  (Gaspésie, the peninsula, had none for lodging either), and from one checked-in
+  capture, so the same list every time. This is the measurement's shape; the Log says
+  which shapes it leaves unmeasured.
+
+## Build
+
+Written for the recommendations below. A builder starts only on an answered Decision
+1 to 4; decisions 5 and 6 are asked at their stops (_Decision — open_ says when).
+
+1. **Capture first, and stop with the counts.** From a scratch script and not through
+   the seam, send the food query for the nine localities pl-60's Build 1 used: Amqui,
+   Bonaventure, Carleton-sur-Mer, Forillon National Park, Gaspé, Gaspésie, Matane,
+   Percé and Rivière-du-Loup. Take each point from pl-60's checked-in
+   `overpass-lodging-towns.json` (`towns[].point`), so nothing is re-geocoded. Build the
+   query text through the built `overpassPointQuery` and send it with an identifying
+   user agent, serially, 5 s apart, one retry after an HTTP 429 as pl-60 did, and record
+   each query's status and time. Count the finds by town, **by OSM element type** (node,
+   way, relation), **by tag value** (each of Decision 1's tags, counted apart), and at
+   2, 6 and 10 km from one `out center tags` reply captured at 25 km. Count what
+   `findFrom` would drop: elements with no name. Count a tag Decision 1 excluded
+   (`fast_food`, if it did) apart anyway, as pl-60 counted huts apart, so the owner
+   sees what the exclusion costs. Then report, over the named finds, **how many carry
+   each of `website`, `phone`, `email`, `opening_hours` and `check_date`**, which is
+   the table Decision 4 turns on. If Decision 3 is (b), also send each town's query
+   once with the lodging and food clauses combined, and record that query's time and
+   reply size, so the answer can be revisited with the numbers. The capture needs
+   outbound access to Overpass, which the sandbox firewall may block: ask the owner
+   to open it. **Stop here**, commit the Log, and report the counts as an open decision
+   (Decision 6).
+2. **Fetch food finds per town, in the pass that exists.** Extend pl-60's town pass
+   (`runs/lodging.ts` on that branch, and `discover` in `runs/discovery.ts`) as
+   Decision 3 says. Name the food kinds as a list beside `LODGING_KINDS`, give each its
+   `KIND_FILTERS` clause and its kind matcher, and make `DiscoveryKind` their union.
+   **Change `findsFor` so that each reader sees only its own kinds**: `lodging`, the
+   lodging kinds; `food`, the food kinds **and** the corridor kinds it is handed today
+   (a change to what `food` sees of the corridor is not this ticket's); `activities`
+   and `conditions-and-gear`, the corridor kinds alone. A test builds each of the three
+   corridor readers' prompts from one fixed `Find[]`, with a food find added, and
+   compares them with the base commit's. Keep the per-town cap, add one for food, and
+   argue it in the Log. The Log gives the number of calls a run of each of the six set
+   A shapes spends and asserts it, beside pl-60's column (18, 12, 6, 14, 4 and 23 calls
+   for `road-trip`, `backcountry`, `motorised-touring`, `city-and-culture`, `resort`
+   and `multi-city`). Re-plans: pl-60's `revise.ts` re-runs both passes when a re-plan
+   names any finds reader. Say what that costs for a re-plan naming only `lodging`,
+   only `food` and only `activities`, and pin those three numbers.
+3. **Hand the finds to `food`, in its own words.** `food` is already in
+   `READS_FINDS`. Give it a block for the town's food finds whose closing sentence is
+   its own: pl-60's `lodging` block ends "A night's sleep is not optional", which is
+   wrong for a meal, and the corridor readers' "an empty list above is not a gap to
+   fill" is wrong for a town with real restaurants in it. The block is rendered per
+   specialist, so `lodging`'s block and the three corridor readers' prompts stay
+   byte for byte what the base has (a test).
+4. **Extend `food`'s `role`.** pl-58's string stays. Append that a premises is chosen
+   from the finds given for its town when one fits the party and what they cannot eat,
+   and that a kind of place is the fallback when the list is empty or nothing in it
+   fits. The Log quotes the string before and after, as pl-60's quoted `lodging`'s.
+   `food` keeps respecting what the party said they cannot eat: nothing in a find's
+   tags is evidence about a diet, and the block says so in as many words.
+5. **Hostile text.** A restaurant's `name`, `description`, `website` and `cuisine`
+   are a stranger's words. Keep pl-29's caps (`MAX_FIND_NAME_CHARS`, `MAX_FIND_TAGS`,
+   `MAX_FIND_TAG_CHARS`), never fetch a URL from a tag, and add a fixture food find
+   whose `name` carries an instruction, asserted to reach `food`'s prompt as quoted
+   data.
+6. **Measure the join for `food`.** At no cost: over the `food` candidates of the new
+   run's sets B to D, count how many have a `place.name` equal to a find's `name` in the
+   same record, after the folding pl-60 used (`matched of written`), beside pl-60's
+   333 of 360 for `lodging` and 8 of 1,165 for the corridor readers. Do not add
+   provenance on the strength of the count: pl-36 says what must be shown first, and a
+   change is a new ticket.
+7. **Re-measure with pl-57's harness.** Add `pl-62` to `invention.ts`'s stratum map,
+   with `food` alone, since the web check follows `food`'s named premises; a label with
+   no entry is refused, as pl-60 found. The label is `pl62-<date>`, which pl-60's
+   generalised pattern already accepts. Classify the new run's places by pl-57's
+   committed rubric, by hand: copy the rubric object byte for byte, carry the
+   classifications of pl-58's and pl-60's files for a key already classified, and list
+   in the Log the judgement cases a reader may reverse, with the sensitivity band they
+   give (for `food`: a name that restates its locality plus a category, such as a
+   `Restaurant de <town>`; a chain outlet from a tag Decision 1 included; a bar that
+   serves no meals). Report `food`'s named-premises share on mentions and on places,
+   split by set A and sets B to D, beside pl-58's 43 of 407 and 26 of 186 and pl-60's 41
+   of 395 and 30 of 170, and **`lodging`'s share beside pl-60's 301 of 443 as the
+   control**, since this ticket does not change what `lodging` is handed. Then
+   web-check `food`'s named premises in pl-58's ordered-key procedure, up to 40 objects
+   or all of them, in a general-purpose agent with WebSearch, as in pl-57, pl-58 and
+   pl-60. Report the not-confirmed rate per object with a 95% Wilson interval beside
+   pl-58's `food`-only count, which the Log computes from pl-58's committed
+   `verdicts.json` (an object is `food`'s when `food` proposed any of its checked keys,
+   and one proposed by both specialists is counted in each, said so). For each object
+   not confirmed, the Log says whether it was **a wrong-town premises, a premises not
+   found, a premises the web says closed, or other**, and whether the capture holds it
+   as a map entry, so the stale-entry finding of pl-60 is counted for `food` and not
+   assumed.
+8. **Edit `tools/planner/CLAUDE.md` and one rules file, named here so the builder may.**
+   After pl-60 three paragraphs of `tools/planner/CLAUDE.md` say which specialists read
+   finds and that `lodging` reads the town pass's: the rule "A specialist reads the
+   brief, and only the brief", the paragraph headed "Grounding may propose and not only
+   check", and the paragraph "`coverage` names a corridor the ground was thin along".
+   `.claude/rules/planner-unchecked-constraints.md` carries a clause pl-60 reworded in
+   the same way. Reword each to say the town pass hands finds to `lodging` and `food`.
+   Add no new rule; pl-60 checked that by counting the bold-led lines before and after
+   (`grep -c '^\*\*'`), and this build does the same. `contract/src/unchecked.ts` has a
+   comment on `coverage` that pl-60 extended to towns "nowhere to sleep in". If it
+   names lodging alone, **stop and report**: pl-60's owner answer authorised that
+   comment edit for pl-60 only, and a contract file is not edited unilaterally.
+9. **The paid run is the owner's reserved decision**, and the build stops before it
+   (Decision 5). The Log records the authorisation's date before the run starts, and
+   a run date that is the run's real date.
+
+If the owner answers Decision 4 with option (b), the commit that records the answer
+adds a Build step and a `Done when` line for it. They are not written here, because the
+screen's shape depends on which tags the answer names.
+
+## Decision — open
+
+Six decisions. **Decisions 1 to 4 are asked before a builder is dispatched**, because
+each changes what is built. **Decision 6 is asked at Build 1's stop**, with the
+capture's counts, since "hold a question until you can bring a measurement". **Decision
+5 is asked at the stop before the paid run**, as pl-58's and pl-60's were. Each
+recommendation is the filing builder's, and none is settled.
+
+**What was not measured when this was filed.** Overpass was unreachable from the filing
+builder's sandbox (`curl -m 25` to `https://overpass-api.de/api/status` returned
+`http=000` after 25 s on 2026-10-24; an earlier try returned HTTP 502), so
+**no restaurant, café or bakery count exists** for any town. Everything below that
+mentions restaurant density is a reason to measure it in Build 1, not a number.
+
+### 1. Which OSM tags count as food?
+
+Eleven were read from iD's tagging presets on GitHub
+(`openstreetmap/id-tagging-schema`, `data/presets/<key>/<value>.json`, fetched on
+2026-10-24 because the OSM wiki is not reachable from here, as pl-60 found). Each has
+`geometry: ["point", "area"]`, so the area form is not optional here either:
+`amenity=restaurant`, `cafe`, `fast_food`, `bar`, `pub`, `ice_cream`, `food_court`,
+`biergarten`, `shop=bakery`, `shop=pastry` and `shop=deli` all return nodes, ways and
+relations, and `overpassPointQuery`'s `nwr` clause and `out center tags` already ask for
+all three.
+
+- **(a) The meal set, without `fast_food`:** `amenity=restaurant|cafe|bar|pub` and
+  `shop=bakery`. Costs: a town whose only food is a chain counter reads as thin, and
+  the model falls back to a kind of place. Gains: `food`'s `role` asks for "meals that
+  are part of the trip rather than fuel for it", and a closest-ten cap is not filled
+  with chain outlets. `fast_food` is captured and counted apart in Build 1.
+- **(b) The set the dispatch named:** (a) plus `amenity=fast_food`. Costs: chain
+  outlets crowd a closest-first cap in a town with a strip. Gains: no town is empty
+  because its only food is a counter.
+- **(c) (b) plus `ice_cream`, `food_court`, `biergarten`, `shop=pastry` and `shop=deli`.**
+  Costs: the largest replies and the most classification judgement. Gains: coverage of
+  what a traveller might eat.
+- **(d) Leave open.**
+
+**Recommendation: (a).** It matches the sentence `food` already carries, and the
+capture prices what it leaves out.
+
+### 2. Which finds does `food` read?
+
+`food` already reads the corridor pass's finds (pl-29), and none can be a restaurant.
+
+- **(a) The town pass's food finds, added to the corridor finds it already reads.**
+  Costs: a lunch on the road between two stops is in neither pass; `findsFor` grows
+  a kind-based route for three readers. Gains: the finds sit in the same towns `food`
+  writes `place.locality` for, `activities` and `conditions-and-gear` are untouched
+  (a byte-identical test), and the town pass's caps and coverage sentences extend.
+- **(b) The corridor pass's, by adding the food kinds to `DISCOVERY_KINDS`.** Costs:
+  food kinds share `MAX_DISCOVERY_FINDS` = 40 with viewpoints, waterfalls, attractions
+  and historic sites, so a corridor through towns fills the 40 with restaurants and the
+  ranking (`CLOSEST_RESERVED` and notability backing) was designed for sites;
+  `activities` and `conditions-and-gear` prompts change; the corridor pass
+  asks the map for what lies within 6 km of a straight line between the two ends. Gains: a meal on the road.
+- **(c) Both.** Costs: the sum of (a)'s and (b)'s, and two lists of restaurants that
+  can name the same premises. Gains: both cases.
+- **(d) Leave open.**
+
+**Recommendation: (a).** `food`'s measured defects are about a premises in the wrong
+town, which a town list reaches, and (b) changes two other specialists' prompts under a
+cap built for sites. The road lunch is a gap this ticket names and does not close.
+
+### 3. What does it cost in calls, and in what shape?
+
+pl-60's Log gives the town pass's own cost per set A shape. From its table, the town
+pass spends **2** queries for `road-trip`, **1** for `backcountry`, **0** for
+`motorised-touring`, **1** for `city-and-culture`, **0** for `resort` and **3** for
+`multi-city`, each with the `locate`s the pass adds (2, 0, 0, 0, 0 and 4, in the same order). The pass is
+bounded at 8 of `MAX_GROUNDING_CALLS` = 40. These are derived from pl-60's table and
+are not measured for `food`; Build 2 asserts the real numbers.
+
+- **(a) One more `nearbyPoint` per located town, for the food kinds.** Adds the same
+  number of queries again per shape (`road-trip` +2, `backcountry` +1,
+  `city-and-culture` +1, `multi-city` +3, the other two 0), so the totals become 20,
+  13, 6, 15, 4 and 26, and the pass's ceiling 12 of 40. The `locate`s are cache hits,
+  so no more are paid. Costs: more requests to an Overpass instance that answered 429
+  once in pl-60's 10 queries. Gains: `lodging`'s query text and reply are untouched,
+  so `lodging` stays a clean control for the re-measure, and a food query that times
+  out does not take the places to sleep with it.
+- **(b) The food kinds in the same query as the lodging kinds.** The call counts do
+  not change from pl-60's. Costs: the query text changes for `lodging` too, a larger
+  reply on a path with a 28 s deadline whose slowest lodging capture took 30.1 s at
+  `[timeout:80]` (pl-60's Build 1), and the per-town cap has to be per category or
+  restaurants crowd the ten places to sleep out. A failed query then loses both.
+  Gains: no extra requests.
+- **(c) A separate food pass with its own `locate`s.** The same queries as (a) plus
+  a repeat of any `locate` that missed, because a name nobody could locate is not
+  cached (`multi-city`'s `Central Europe`: +1). Costs: more than (a) for no gain over
+  it. Listed so the mapping is not hidden.
+- **(d) Leave open.**
+
+**Recommendation: (a),** for the control it keeps and the failure it isolates.
+Build 1 times (b) once per town, so the answer can be revisited with a number.
+
+### 4. Should a find be screened for staleness or existence?
+
+pl-60's Log offered this as option (b) of its open decision and the owner chose to file
+`food` first. The evidence is two events in nine objects, so it is a question to answer
+with a measurement and not a rate. **One measurement was available without any network**
+and is in the Log: pl-60's own lodging capture, 140 named distinct elements.
+
+- **Contact tags:** `website` 58 of 140 (41.4%), `phone` 26 (18.6%), `email` 16
+  (11.4%), at least one of the three 62 (44.3%), none of them 78 (55.7%).
+- **`check_date` is on 3 of 140 (2.1%)**, `opening_hours` on 0 (lodging; food may differ,
+  which Build 1 counts).
+- **The nine web-checked objects:** the two not confirmed, `Le Loup Marin` (node, tags:
+  `building`, `canvec:*`, `name`, `tourism`) and `La Rêvasse` (way, a street address and
+  `internet_access`), carry **no contact tag**. Of the seven that exist, four carry
+  `website` (Auberge internationale de Forillon, Motel et Chalets Natabel, Motel Bellevue,
+  Manoir de Percé) and three carry none (Motel L'Eglantier, Auberge La Petite École de
+  Forillon, Camping Petit-Gaspé). **A screen on "no website, phone or email" flags
+  5 of 9, catches 2 of 2 misses, and flags 3 of 7 that exist.**
+
+- **(a) No screen in this ticket.** The re-measure reports `food`'s tag presence and its
+  not-confirmed objects by tag, and the owner decides with `food`'s numbers. Costs: a
+  stale restaurant can be handed to the model with nothing to say it is unverified.
+  Gains: the sample doubles on the same rubric before a rule is built on 2 events.
+- **(b) A code-side screen on tags:** mark, or drop, a find with no `website`, `phone`
+  or `email`, or with a `check_date` older than a threshold. Costs: on lodging's numbers
+  a "drop" would halve a town's list and remove three real premises of seven;
+  `check_date` is on 2.1% so cannot carry the screen alone; and the model already sees
+  every tag in the block, so a "mark" adds a signal it can read for itself. Gains: it
+  reaches exactly the class pl-60 found.
+- **(c) A lookup after the specialists run** (pl-57's option 3): check each named
+  premises on the web. Costs: a new seam, a vendor or a search tool in the product
+  path, and its own fixtures; it is its own ticket and not a `food` detail. Gains: the
+  only option that finds a closed place that still has a website.
+- **(d) Leave open.**
+
+**Recommendation: (a),** because the measured screen is wrong about three real
+premises in seven and the class is two events. The Log's tag-presence table for `food`
+is what lets the owner answer (b) or (c) with `food`'s numbers.
+
+### 5. The paid run's shape (asked at the stop before it)
+
+pl-60's observed cost per session, from its Log: Haiku 5.5 `low` $0.1558,
+`medium` $0.1836, `high` $0.2348, Sonnet 5.5 `low` $2.2501, Opus 5.5 `low` $4.3891;
+110 records, $7.2134 in all against a $10 bound, and pl-58's was 112 records at $7.08.
+These are lodging-prompt costs, and `food`'s block carries more finds per town
+(unmeasured), so the totals below are a floor.
+
+- **(a) Mirror pl-58 and pl-60:** the five model and effort pairs over `run.ts`'s sets
+  A to D, about 110 records, about $7.2, with `--max-usd` split per session under a
+  $10 bound.
+- **(b) Drop Opus:** 92 records, about $2.8 on pl-60's costs.
+- **(c) Sonnet and Opus only:** 37 records, about $6.6.
+- **(d) Leave open.**
+
+**Recommendation: (a),** so the re-measure is the same shape as both earlier runs and
+`lodging` stays a comparable control. The decision stays the owner's, as the model
+families, efforts, runs and `--max-usd` were for pl-58 and pl-60.
+
+### 6. The food pass's radius and per-town cap (asked at Build 1's stop)
+
+pl-60's owner chose a 10 km radius for lodging from a capture of the nine towns, and
+its builder chose ten finds per town, the closest first. Restaurants are denser and a meal is eaten close to where
+the party stays.
+
+- **(a) The same, 10 km and ten.** Costs: the ten nearest the town's point, in a dense
+  town, are all in its centre, and a bakery 9 km out is not reached. Gains: one number
+  for both lists.
+- **(b) A smaller radius, such as the corridor's 6 km, with the same cap.**
+  Costs: a thinner town loses finds the capture counted at 10 km. Gains: closer meals.
+- **(c) Choose from Build 1's table of counts at 2, 6 and 10 km,** as the owner chose
+  pl-60's radius from its own.
+- **(d) Leave open.**
+
+**Recommendation: (c).**
+
+## Done when
+
+Each line is provable by the test or command it names. The towns are the nine of Build
+1; the shapes are the six of Build 2.
+
+1. **Routing.** In `tools/planner/agent/test/prompt.test.ts` (or the spec holding
+   pl-60's equivalent), the prompts of `activities`, `conditions-and-gear` and
+   `lodging`, built from one fixed brief and one fixed `Find[]` that includes a lodging
+   find and a food find, are byte-identical to the same three prompts at the build's
+   base commit (the Log names its sha; a snapshot taken at that commit), and `food`'s
+   prompt built from the same inputs with no food find equals the base's `food` prompt
+   plus the sentences Build 4 appends, and nothing else.
+2. **The query, offline.** Against a checked-in Overpass payload captured through the
+   built `overpassPointQuery` for the nine towns, at the radius Decision 6 chose, the
+   food query returns the finds
+   inside each town's radius and none outside it, and returns a way or a relation as a
+   find with a coordinate from its `center` and a source URL of its own element type.
+   The Log gives, for each of the nine towns, the count of food finds including the zero
+   towns, split by element type and by tag value, and the tag-presence table of Build 1
+   (`website`, `phone`, `email`, `opening_hours`, `check_date`) over the named finds.
+3. **The six decisions answered.** The heading above reads _Decision — answered_ once
+   Decisions 1 to 4 are, and the Log names the option chosen for each of the six, who
+   chose it and the date; Decisions 5 and 6 are recorded there at their stops. The tags
+   of Decision 1, the pass of Decision 2, the query shape of Decision 3 and the radius
+   and cap of Decision 6 are the ones the code ships.
+4. **Calls.** For each of the six set A shapes (`backcountry`, `city-and-culture`,
+   `motorised-touring`, `multi-city`, `resort`, `road-trip`), a run under the scripted
+   provider spends the number of grounding calls the Log asserts, by method, beside the
+   pl-60 column. The test is in `tools/planner/api/test/`, asserts calls and not timing,
+   and the town pass spends no more than the ceiling the Log states.
+5. **Re-plans.** `revisions.test.ts` (or its successor) pins `nearbyCalls` and
+   `nearbyPointCalls` for a re-plan naming only `lodging`, only `food` and only
+   `activities`, at the numbers the Log states.
+6. **Hostile text.** A food find whose `name` is an instruction reaches `food`'s prompt
+   as quoted data, and the adapter makes one request per call for a reply whose tags
+   hold two URLs (the equivalents of pl-60's two tests).
+7. **No finds.** With a scripted provider whose food query returns no finds, each of
+   the six set A shapes produces the same days as the build's base commit does for the
+   same brief and scripted model, byte for byte, and the plan carries a coverage
+   sentence naming each town that has no food finds.
+8. **The live run.** The Log gives the command, the families, efforts, runs and
+   `--max-usd` the owner set, the authorisation's date, the measured cost, and two join
+   counts as `matched of written`: the new run's `food` candidates in sets B to D, and
+   its `lodging` candidates in sets B to D, each with its record count.
+9. **The re-measure.** The Log gives `food`'s named-premises share on mentions and on
+   places for the new run, split into set A and sets B to D, beside pl-58's 43 of 407
+   and 26 of 186 and pl-60's 41 of 395 and 30 of 170; `lodging`'s share beside pl-60's
+   301 of 443; the sensitivity band of the judgement cases it lists; and the
+   population and files each count comes from.
+10. **The web check.** The Log gives `food`'s not-confirmed rate per object with its
+    object count and a 95% Wilson interval, beside pl-58's `food`-only figure computed
+    from pl-58's `verdicts.json`, and for each object not confirmed its class
+    (wrong-town, not found, closed or other) and whether the capture holds it as a map
+    entry.
+11. **The harness.** `invention.ts --after pl62-<date>` accepts the label and its stratum
+    is `food`'s named premises alone (`api/test/invention-population.test.ts`, a case
+    beside pl-60's); and three commands exit 0, with each exit code taken without a
+    pipe: `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts` with no argument, with
+    `--after pl58-2026-10-21`, and with `--after pl60-2026-10-24`.
+12. **The documents.** The three paragraphs of `tools/planner/CLAUDE.md` and the rules
+    file clause of Build 8 name `food` as a reader of the town pass, and the diff adds
+    no rule: `grep -c '^\*\*' tools/planner/CLAUDE.md` gives the same count before and
+    after.
+13. **Gates.** `npm run check` exits 0, and `npm test -- --project planner` passes with
+    the file and test counts the Log gives. The e2e suite and the image gate do not run
+    locally; the Log says so rather than reporting them green.
+
+## Log
+
+**2026-10-24 — Filed (builder, Sonnet 5.5), at the orchestrator's dispatch, on the
+owner's answer of the same day to pl-60's open decision.** `node scripts/next-id.mjs pl`
+printed `next free: pl-62` (it names `PR#608 pl-61` as the last id held). Docs only; no
+source changed.
+
+- **Re-read, not relayed.** The figures in _Why_ were read from pl-60's ticket as
+  `git show origin/pl-60-lodging-discovery:tools/planner/docs/work/pl-60-lodging-discovery.md`
+  printed them at head `3669c20b`, and the code facts (`findsFor`, the kinds lists, the
+  caps, the call table) from that branch's `agent/src/prompt.ts`, `agent/src/grounding.ts`,
+  `api/src/runs/lodging.ts` and `api/src/runs/discovery.ts`. Two things the dispatch
+  carried were checked: the 49.2–75.4% band is in PR #607's gate 2 comment and in pl-60's
+  Log (the Log first said 57.3–75.4%, and was corrected at landing); and pl-60's
+  Log says the owner left the firewall open after the web check.
+- **The tag set, fetched.** `restaurant`, `cafe`, `fast_food`, `bar`, `pub`, `ice_cream`,
+  `food_court`, `biergarten` under `data/presets/amenity/` and `bakery`, `pastry`,
+  `deli` under `data/presets/shop/` of `openstreetmap/id-tagging-schema`, each by
+  WebFetch of `raw.githubusercontent.com/.../main/data/presets/<key>/<value>.json` on
+  2026-10-24. All eleven report `geometry: ["point", "area"]` and a single tag; the
+  `restaurant` preset's `terms` include `bar`, `brasserie`, `cafe` and `canteen`. That
+  is the editor's own "used on", as pl-60 said of the lodging presets, and not the OSM
+  wiki's.
+- **Measured offline, on pl-60's lodging capture (the only OSM data in the repo).**
+  `git show origin/pl-60-lodging-discovery:tools/planner/api/test/fixtures/overpass-lodging-towns.json`
+  read by a scratch script that de-duplicates the nine towns' elements by `type/id` and
+  counts tag keys over the named ones: `distinct elements: 155 named: 140`;
+  `website 58 of 140 41.4%`; `phone 26 of 140 18.6%`; `email 16 of 140 11.4%`;
+  `opening_hours 0 of 140 0.0%`; `check_date 3 of 140 2.1%`; `any of website|phone|email
+62 of 140`. For the nine objects pl-60 web-checked, a second pass found `website` on
+  Auberge internationale de Forillon, Motel et Chalets Natabel, Motel Bellevue and
+  Manoir de Percé, and no contact tag on the other five (Le Loup Marin and La Rêvasse,
+  the two not confirmed; Motel L'Eglantier, Auberge La Petite École de Forillon and
+  Camping Petit-Gaspé). The scratch scripts (`tags.mjs`, `nine.mjs`) are not committed.
+  **This is lodging data.** Whether restaurants carry contact tags at a similar rate is
+  not known, and Build 1 measures it.
+- **Not measured, and why.** Restaurant, café and bakery density for any town: Overpass
+  was unreachable from this sandbox on 2026-10-24 (`curl -m 25 -A 'webtools-planner/0.9
+(pl-62 filing probe)' https://overpass-api.de/api/status` → `http=000 t=24.999957`; an
+  earlier call returned HTTP 502, body discarded). The call counts in Decision 3 are
+  derived from pl-60's table and not run. Food-only not-confirmed rate for pl-58:
+  pl-58's Log gives no `food`-only object count and its `verdicts.json` was not read
+  here; Build 7 computes it.
+- **`depends_on` is pl-60 alone.** pl-61 is not a prerequisite: pl-60's own Log
+  captured its fixtures with a user agent through a scratch script and wrote its tests
+  against the checked-in payload, and Build 1 here does the same. It is named in _Why_
+  so the builder knows a deployment on the public instance gets no `food` finds until
+  it lands.
+- **Difficulty `hard`, rated for the work once answered**, as `docs/01-TICKETS.md` asks.
+  Weighed against `standard`: the seam, the town pass, the harness label and the
+  coverage machinery already exist from pl-60, which is the case for `standard`. It is
+  `hard` because what is left is judgement and not mechanism: the routing change that
+  keeps two other specialists' prompts byte-identical, a per-category cap in a pass
+  whose lists differ in size by an amount nobody has measured, a block and a `role` for
+  a specialist whose job is not "a night is not optional", a hand classification with
+  new judgement cases (chains, bars, `Restaurant de <town>`), two stops for the owner,
+  and a paid run read for an effect `lodging`'s control must be allowed to qualify.
+  Decision 4's option (b) or (c) would raise the size and not the rating.
+- **Folded in: nothing.** The filing is the whole of this branch. pl-60's Log says
+  its landing adds no roadmap row for this ticket, and none is added here either.
+- **Checks at filing**: recorded in the dispatch's report (`npx oxfmt`, `npm run
+check`, `node scripts/status.mjs --json`, the title check and preflight's fast
+  checks).
+- **No `## Review` section.** A filing has no work to review, and a gate on the filing
+  is recorded outside it (`docs/01-TICKETS.md`, _The review gate_).
