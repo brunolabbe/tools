@@ -3,7 +3,7 @@ id: lg-38
 tool: ledger
 title: Measure whether a model can describe an unknown workbook's layout well enough to import it
 kind: work-package
-status: in-flight
+status: done
 milestone: P6
 depends_on: []
 difficulty: hard
@@ -622,3 +622,40 @@ and shown cost the same per run. That entry ends with the recommendation (correc
 after it).
 **Done when 4 stays open**: this ticket's `status` is unchanged, and building or
 dropping it is the owner's decision.
+
+### 2026-10-24 — the owner's build decision (Done when 4): build, filed as lg-66
+
+**The question, as the orchestrator put it to the owner on 2026-10-24:**
+"lg-38's last Done-when line is your decision: file the build as the next
+ticket, or close lg-38 as dropped." The options, with the recommendation
+first:
+
+1. **Build: Haiku + date on confirm.** lg-56's recommendation, and the
+   orchestrator's. Keep the owner's 2026-10-18 answers (Haiku 5.5, figures
+   shown, confirm on screen) and add the date column, with a few rows' dates,
+   to the confirmation screen.
+2. **Build: Haiku + outOfOrder.** The guard puts the reader's existing
+   `outOfOrder` list to the user, to confirm or to refuse. Unmeasured beyond
+   the one fixture (`bank-two-dates`).
+3. **Build on Sonnet 5.5.**
+4. **Drop lg-38.**
+
+**The owner chose option 1.** It was lg-56's recommendation (its entry
+"Recommendation for lg-38's Done when 4", as corrected in that ticket's round 1
+and at landing) and the orchestrator's, so it overrode no one. The three
+answers of 2026-10-18 above stand with it: Haiku 5.5 (over Sonnet 5.5 and over
+Haiku with a Sonnet retry on refusal), figures shown (over masked), confirm
+on screen (over a sign check, and over both).
+
+**Done when 4 is met**: the recommendation is above, and the build is filed as
+the next ticket, [lg-66](./lg-66-import-a-workbook-through-a-layout-a-model-describes.md).
+`status` is `done`. What lg-38 left as input for a build is carried into lg-66's
+Build and Notes: "reading zero rows must be a problem" (gate 1), the undeclared
+`@anthropic-ai/sdk` (gate 1), the `unfiled` guard that has no test (gate 1),
+the `ignored` list the reader never consults (gate 1), the bucket labels that
+collide by accent (gate 1), the shapes the CSV reader does not read, and the
+statement of what leaves the house (Notes for the builder). The harness lows
+that concern only `api/test/live/layout-run.ts` (the spend stop's bound, the
+summary lost on a stop) stay in the gate
+records: lg-66 moves the model call out of that file and leaves its guards
+alone.
