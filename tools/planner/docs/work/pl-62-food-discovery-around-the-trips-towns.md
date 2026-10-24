@@ -504,6 +504,25 @@ localities, the cap binding in Gaspé (17), Matane (17), Percé (23) and Rivièr
 (35). The options put were (a), (b) at 6 km (62 of 108 shown), (c) with 10 km and
 fifteen priced (85 of 117 shown), and (d); (a) was the Build 1 builder's recommendation.
 
+### Build 8's stop: the contract's `coverage` comment (answered)
+
+Not one of the six decisions above; Build 8 named it as a stop. At Build 8,
+`contract/src/unchecked.ts`'s comment on `coverage` said the town query "found nowhere
+on the map to sleep there" and named `lodging` alone, and pl-60's owner answer had
+authorised that comment edit for pl-60 only. The question, put by the builder at the
+stop with the options and a recommendation:
+
+- **(a) A comment-only edit in this branch**, adding "or to eat" and naming `food` beside
+  `lodging`. No type, schema or behaviour change.
+- **(b) Leave it and file a docs follow-up** to reword it. An intake slot and a pull
+  request, and the comment is wrong until then.
+- **(c) Leave it for good.** The plan's sentences name food; the contract's description
+  of the kind would not.
+
+**Chosen: (a), by the owner on 2026-10-24**, relayed by the orchestrator; it was the
+builder's recommendation. The edit is exactly that: the comment, and nothing else in
+the contract.
+
 ## Done when
 
 Each line is provable by the test or command it names. The towns are the nine of Build

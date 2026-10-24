@@ -123,11 +123,11 @@ export const UNCHECKED_CONSTRAINTS = [
    * well-mapped region — which is precisely the gap this list exists to name.
    *
    * Since pl-60 the same is said of a **town**: the brief named it, and the
-   * town query found nowhere on the map to sleep there, or could not find the
-   * town, or never asked because the budget or the town cap ran out. `detail`
-   * names the towns; the kind and its shape are unchanged. `lodging` then
-   * proposes a kind of place there, as it did before pl-60, and this entry is
-   * what tells a reader that nothing checked it.
+   * town query found nowhere on the map to sleep there, or since pl-62 nowhere
+   * to eat, or could not find the town, or never asked because the budget or
+   * the town cap ran out. `detail` names the towns; the kind and its shape are
+   * unchanged. `lodging` or `food` then proposes a kind of place there, as each
+   * did before, and this entry is what tells a reader that nothing checked it.
    *
    * **Neither existing kind fits, and both fail the root `CLAUDE.md`'s test**:
    * the copy would have to be re-worded at the raise site either way.
