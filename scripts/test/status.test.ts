@@ -1820,3 +1820,93 @@ test("the ticket format says the status check fails the open heading", () => {
   );
   expect(section).toMatch(/`npm run status` fails [^.]*`needs-decision`/);
 });
+
+// repo-114. `--tool` narrows the rows shown and must never narrow what counts as
+// done: a planner ticket whose dependency is a `done` repo ticket is startable,
+// and every view has to say so. The fixtures name no live ticket on purpose; the
+// board they stood in for changes with every merge.
+const crossTool = (repo9: string, extra: Record<string, string> = {}) =>
+  repoWith({
+    [at("pl-2")]: pl("pl-2", { depends_on: "[repo-9]" }),
+    [atRepo("repo-9")]: repoTicket("repo-9", { status: repo9 }),
+    ...extra,
+  });
+
+const PL2_ROW = /^ +[•·] pl-2 +the pl-2 thing.*$/m;
+
+test("repo-114: --tool planner --ready lists a ticket whose dependency is a done repo ticket", () => {
+  const { stdout, stderr, status } = run(["--tool", "planner", "--ready"], crossTool("done"));
+  expect(status).toBe(0);
+  expect(stdout).toBe("pl-2\tplanner\tthe pl-2 thing\n");
+  expect(stderr).toBe("");
+});
+
+test("repo-114: the default view marks that ticket startable, with and without --tool", () => {
+  const root = crossTool("done");
+  for (const args of [["--tool", "planner"], []]) {
+    const row = run(args, root).stdout.match(PL2_ROW)?.[0] ?? "";
+    expect(row).toMatch(/^ +• pl-2 /);
+    expect(row).not.toContain("(waits on");
+  }
+});
+
+test("repo-114: a dependency that is still ready keeps the ticket withheld", () => {
+  const root = crossTool("ready");
+  const ready = run(["--tool", "planner", "--ready"], root);
+  expect(ready.stdout).toBe("nothing is ready and unblocked\n");
+  expect(ready.stderr).toBe(`${at("pl-2")}: withheld from --ready — waits on repo-9\n`);
+  expect(run(["--tool", "planner"], root).stdout).toMatch(/· pl-2 .*\(waits on repo-9\)$/m);
+});
+
+test("repo-114: the waits-on label names only the dependencies that are not done", () => {
+  const root = repoWith({
+    [at("pl-2")]: pl("pl-2", { depends_on: "[repo-9, repo-10]" }),
+    [atRepo("repo-9")]: repoTicket("repo-9", { status: "done" }),
+    [atRepo("repo-10")]: repoTicket("repo-10"),
+  });
+  const view = run(["--tool", "planner"], root).stdout;
+  expect(view).toContain("(waits on repo-10)");
+  expect(view).not.toContain("repo-9");
+});
+
+test("repo-114: the --ready reason names only the open dependency", () => {
+  const body = (deps: string) => ({
+    [at("pl-2")]: pl("pl-2", { depends_on: deps }),
+    [atRepo("repo-9")]: repoTicket("repo-9", { status: "done" }),
+    [atRepo("repo-10")]: repoTicket("repo-10"),
+  });
+  const stderrOf = (deps: string) =>
+    run(["--tool", "planner", "--ready"], repoWith(body(deps))).stderr;
+  expect(stderrOf("[repo-9, repo-10]")).toBe(
+    `${at("pl-2")}: withheld from --ready — waits on repo-10\n`,
+  );
+  // A dependency that names no ticket is open, whatever else is done.
+  expect(stderrOf("[repo-9, repo-404]")).toContain("waits on repo-404\n");
+});
+
+test("repo-114: a needs-decision dependency in another tool still withholds", () => {
+  const { stdout, stderr } = run(["--tool", "planner", "--ready"], crossTool("needs-decision"));
+  expect(stdout).toBe("nothing is ready and unblocked\n");
+  expect(stderr).toBe(`${at("pl-2")}: withheld from --ready — waits on repo-9\n`);
+});
+
+test("repo-114: unscoped --ready lists the startable ticket and names the other two as withheld", () => {
+  const root = crossTool("done", {
+    [at("pl-3")]: pl("pl-3", { depends_on: "[repo-10]" }),
+    [atRepo("repo-10")]: repoTicket("repo-10"),
+    [at("pl-4")]: pl("pl-4", { status: "needs-decision" }),
+  });
+  const { stdout, stderr } = run(["--ready"], root);
+  expect(stdout.split("\n")).toContain("pl-2\tplanner\tthe pl-2 thing");
+  expect(stdout).not.toContain("pl-3");
+  expect(stderr).toContain(`${at("pl-3")}: withheld from --ready — waits on repo-10`);
+  expect(stderr).toContain(`${at("pl-4")}: withheld from --ready — status is "needs-decision"`);
+  expect(stderr).not.toContain(at("pl-2"));
+});
+
+test("repo-114: --show reads the whole graph, unblocked with the dependency done and blocked when ready", () => {
+  expect(run(["--show", "pl-2"], crossTool("done")).stdout).toMatch(/^ {2}unblocked$/m);
+  expect(run(["--show", "pl-2"], crossTool("ready")).stdout).toMatch(
+    /^ {2}blocked by {2}repo-9 \(ready\)$/m,
+  );
+});
