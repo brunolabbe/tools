@@ -1059,7 +1059,10 @@ describe("discovery on a re-plan", () => {
       });
       expect((await runToCompletion(f.harness.app, run.id)).status).toBe("done");
 
+      // pl-62's re-plan cost for `food`: the corridor query, and the town
+      // pass's two queries for `somewhere`, places to sleep and places to eat.
       expect(f.grounding.nearbyCalls).toBe(1);
+      expect(f.grounding.nearbyPointCalls).toBe(2);
       const revision = latestOf((await readView(f.harness, view.plan.id)).plan);
       // What this run's discovery found, not what the draft's did.
       expect(revision.reading).toEqual([
@@ -1067,9 +1070,10 @@ describe("discovery on a re-plan", () => {
       ]);
       // The corridor had finds, so its pass says nothing; the town pass (pl-60)
       // asked about `somewhere`, which this double locates and has nothing
-      // to sleep in.
+      // to sleep in or to eat at (pl-62).
       expect(revision.coverage.map((entry) => entry.detail)).toEqual([
         "No places to stay around somewhere are on the map. Somewhere to stay there may exist without this plan having found it.",
+        "No places to eat around somewhere are on the map. Somewhere to eat there may exist without this plan having found it.",
       ]);
       expect(base.coverage).not.toEqual(revision.coverage);
       expect(base.reading).toEqual([]);
@@ -1093,19 +1097,49 @@ describe("discovery on a re-plan", () => {
       expect((await runToCompletion(f.harness.app, run.id)).status).toBe("done");
 
       // `lodging` reads the town pass's finds; the corridor is re-asked too,
-      // which is the cost `revise.ts` names — one corridor query here.
+      // which is the cost `revise.ts` names — one corridor query here — and
+      // since pl-62 the town pass's food query as well: two town queries.
       expect(f.grounding.nearbyCalls).toBe(1);
-      expect(f.grounding.nearbyPointCalls).toBe(1);
+      expect(f.grounding.nearbyPointCalls).toBe(2);
       const revision = latestOf((await readView(f.harness, view.plan.id)).plan);
       // Exactly what this run's two passes said, and none of the base's: the
-      // corridor had finds, and `somewhere` had nothing to sleep in (gate 1).
+      // corridor had finds, and `somewhere` had nothing to sleep in (gate 1)
+      // or to eat at (pl-62).
       expect(revision.coverage.map((entry) => entry.detail)).toEqual([
         "No places to stay around somewhere are on the map. Somewhere to stay there may exist without this plan having found it.",
+        "No places to eat around somewhere are on the map. Somewhere to eat there may exist without this plan having found it.",
       ]);
       expect(base.coverage).not.toEqual(revision.coverage);
       expect(revision.reading).toEqual([
         source("https://en.wikivoyage.org/wiki/Bas-Saint-Laurent", "Bas-Saint-Laurent"),
       ]);
+    } finally {
+      await f.close();
+    }
+  });
+});
+
+describe("discovery on a re-plan naming only activities (pl-62)", () => {
+  test("re-runs both passes, the town pass's food query included, though activities reads neither town list", async () => {
+    const f = await fixture();
+    try {
+      const view = await draft(f);
+      const base = latestOf(view.plan);
+      f.grounding.corridor = true;
+
+      const run = await replanRun(f, view.plan.id, {
+        days: [0],
+        specialists: ["activities"],
+        baseRevisionId: base.id,
+      });
+      expect((await runToCompletion(f.harness.app, run.id)).status).toBe("done");
+
+      // The same three queries as a re-plan naming `food` or `lodging`: one
+      // corridor query and two town queries for `somewhere`. `activities` reads
+      // only the corridor's kinds, so the two town queries buy it nothing; the
+      // cost is named in `revise.ts`.
+      expect(f.grounding.nearbyCalls).toBe(1);
+      expect(f.grounding.nearbyPointCalls).toBe(2);
     } finally {
       await f.close();
     }

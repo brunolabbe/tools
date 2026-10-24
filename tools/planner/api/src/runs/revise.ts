@@ -576,7 +576,10 @@ async function executeReplan(
   // alone re-asks the corridor too, which buys `lodging` nothing: the cost is
   // the corridor pass's calls, up to four plus its geosearch tiles. The other
   // way would carry the base's coverage for the pass that did not run, and the
-  // stored list has nothing that says which pass wrote which entry.
+  // stored list has nothing that says which pass wrote which entry. Since
+  // pl-62 the town pass asks each located town twice, for places to sleep and
+  // places to eat, so a re-plan naming any one reader pays both town queries:
+  // `revisions.test.ts` pins the counts for `lodging`, `food` and `activities`.
   const discovering = hasDiscovery(brief) && specialists.some((each) => readsFinds(each));
   if (discovering && !moveTo(context, runId, "grounding")) return;
   const discovered = discovering

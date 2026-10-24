@@ -477,3 +477,45 @@ describe("a label for any ticket's re-measure, pl-60's included (pl-60, Build 7)
     ]);
   });
 });
+
+describe("pl-62's re-measure label and stratum (pl-62, Build 7)", () => {
+  test("--after pl62-<date> is accepted, and its stratum is food's named premises alone", () => {
+    expect(parseInventionCli(["--after", "pl62-2026-10-25"])).toEqual({ run: "pl62-2026-10-25" });
+    expect(runLabel("pl62-2026-10-25")).toEqual({ ticket: "pl-62", date: "2026-10-25" });
+    expect(stratumSpecialists("pl62-2026-10-25")).toEqual(["food"]);
+    // The earlier labels keep theirs.
+    expect(stratumSpecialists("pl60-2026-10-24")).toEqual(["lodging"]);
+    expect(stratumSpecialists("pl58-2026-10-21")).toEqual(["lodging", "food"]);
+
+    const live = liveDir();
+    writeRecord(live, "claude-opus-5-5-low-pl62-2026-10-25/set-b-run-1.json", [
+      ["lodging", "Hotel One", "Percé"],
+      ["food", "Bistro Three", "Gaspé"],
+      ["lodging", "Bistro Three", "Gaspé"],
+      ["food", "Fumoir Four", "Gaspé"],
+    ]);
+    const { places } = collectPlaces(live, populationFiles(layoutFor(live, "pl62-2026-10-25")));
+    const classification: ClassificationFile = {
+      rubric: {
+        written: "test",
+        classes: {
+          "named-premises": { definition: "d", example: "e" },
+          "kind-of-place": { definition: "d", example: "e" },
+          "settlement-or-area": { definition: "d", example: "e" },
+          "route-or-transit": { definition: "d", example: "e" },
+        },
+        edgeRules: {},
+      },
+      classes: {
+        "hotel one|percé": { class: "named-premises", edge: [] },
+        "bistro three|gaspé": { class: "named-premises", edge: [] },
+        "fumoir four|gaspé": { class: "named-premises", edge: [] },
+      },
+    };
+
+    // A key `food` proposed is in, whoever else proposed it; `lodging`'s alone is not.
+    expect(
+      stratumOrder(places, classification, 1, stratumSpecialists("pl62-2026-10-25")).toSorted(),
+    ).toEqual(["bistro three|gaspé", "fumoir four|gaspé"]);
+  });
+});

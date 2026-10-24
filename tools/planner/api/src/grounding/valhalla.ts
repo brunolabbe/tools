@@ -1208,6 +1208,12 @@ const KIND_FILTERS: Record<DiscoveryKind, string> = {
   apartment: '"tourism"="apartment"',
   "camp-site": '"tourism"="camp_site"',
   "caravan-site": '"tourism"="caravan_site"',
+  // pl-62: places to eat, asked only around a town, in a query of their own.
+  restaurant: '"amenity"="restaurant"',
+  cafe: '"amenity"="cafe"',
+  bar: '"amenity"="bar"',
+  pub: '"amenity"="pub"',
+  bakery: '"shop"="bakery"',
 };
 
 /**
@@ -1230,6 +1236,11 @@ const KIND_MATCHES: ReadonlyArray<
   ["apartment", (tags) => tags.get("tourism") === "apartment"],
   ["camp-site", (tags) => tags.get("tourism") === "camp_site"],
   ["caravan-site", (tags) => tags.get("tourism") === "caravan_site"],
+  ["restaurant", (tags) => tags.get("amenity") === "restaurant"],
+  ["cafe", (tags) => tags.get("amenity") === "cafe"],
+  ["bar", (tags) => tags.get("amenity") === "bar"],
+  ["pub", (tags) => tags.get("amenity") === "pub"],
+  ["bakery", (tags) => tags.get("shop") === "bakery"],
 ];
 
 /**
