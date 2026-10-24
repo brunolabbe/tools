@@ -150,9 +150,10 @@ Written for the recommendations below. A builder starts only on an answered Deci
    **Change `findsFor` so that each reader sees only its own kinds**: `lodging`, the
    lodging kinds; `food`, the food kinds **and** the corridor kinds it is handed today
    (a change to what `food` sees of the corridor is not this ticket's); `activities`
-   and `conditions-and-gear`, the corridor kinds alone. A test builds each of the three
-   corridor readers' prompts from one fixed `Find[]`, with a food find added, and
-   compares them with the base commit's. Keep the per-town cap, add one for food, and
+   and `conditions-and-gear`, the corridor kinds alone. A test builds the prompts of
+   `activities` and `conditions-and-gear` from one fixed `Find[]`, with a food find
+   added, and compares them with the base commit's; `food`'s prompt changes on purpose
+   (Build 4, `Done when` 1). Keep the per-town cap, add one for food, and
    argue it in the Log. The Log gives the number of calls a run of each of the six set
    A shapes spends and asserts it, beside pl-60's column (18, 12, 6, 14, 4 and 23 calls
    for `road-trip`, `backcountry`, `motorised-touring`, `city-and-culture`, `resort`
@@ -244,8 +245,8 @@ Written for the recommendations below. A builder starts only on an answered Deci
    **0 of the 140 named elements in the lodging capture carry any of Decision 1's food
    tags** (options (a), (b) and (c) each). So an unrouted stub would hand `food` an empty
    list in every set B to D record without any error, and the town pass would report
-   "no places to eat" for towns the map has plenty in. The run's `food` join would show
-   it, but only after the paid run.
+   "no places to eat" for towns the map may well have places to eat in (Build 1 counts
+   them). The run's `food` join would show it, but only after the paid run.
 
    So, before the stop: store Build 1's capture as a checked-in fixture beside
    `overpass-lodging-towns.json` and **route the stub by the query's kinds as well as its
@@ -324,13 +325,25 @@ capture prices what it leaves out.
 town, which a town list reaches, and (b) changes two other specialists' prompts under a
 cap built for sites. The road lunch is a gap this ticket names and does not close.
 
-`Done when` 1 and 7 are written for (a). If the owner answers (b) or (c), the commit
-that records the answer rewrites them: line 1 stops pinning `activities` and
-`conditions-and-gear` to the base and pins them to a named snapshot that includes the
-food kinds the corridor now hands them, and line 7's coverage sentence for a town with
-no food finds is replaced by the corridor pass's own thin-corridor sentence (the town
-pass is not used by (b)), with a case for each of the six set A shapes that has a
-corridor. Build 2 and 3 are reworded in the same commit.
+`Done when` 1, 2, 7 and 13 are written for (a). If the owner answers (b) or (c), the
+commit that records the answer rewrites them. In both, line 1 stops pinning `activities`
+and `conditions-and-gear` to the base and pins them to a named snapshot that includes
+the food kinds the corridor now hands them, and Builds 2 and 3 are reworded in the same
+commit.
+
+- **Under (b)** no town food query exists. Line 2's food query becomes the corridor
+  pass's query with the food kinds added, at the corridor's own 6 km and not at a radius
+  Decision 6 chose, and Decision 6 is moot. Line 13's "food query at the same point" is
+  replaced by the corridor query carrying the food kinds, answered with the food
+  capture's reply, and Build 9's stub is reworded to match. Line 7's coverage sentence
+  for a town with no food finds is replaced by the corridor pass's own thin-corridor
+  sentence (the town pass is not used for food), with a case for each of the six set A
+  shapes that has a corridor.
+- **Under (c)** the town pass stays, so lines 2 and 13 keep their town food query and
+  Decision 6 still applies to it; each gains a case for the corridor pass's food kinds
+  beside the town one, and line 7 keeps its town sentence and adds the corridor pass's
+  thin-corridor sentence, with a case for each of the six set A shapes that has a
+  corridor.
 
 ### 3. What does it cost in calls, and in what shape?
 
@@ -367,7 +380,9 @@ Build 1 times (b) once per town, so the answer can be revisited with a number.
 If the owner answers (b), the commit that records the answer rewords `Done when` 2 so
 that "the food query" is the combined query, with its finds split by kind afterwards,
 and `Done when` 4's numbers are pl-60's column unchanged. Build 9's stub then answers a
-combined query with both captures' elements.
+combined query with both captures' elements, and `Done when` 13 gains a case for it: a
+combined query is answered with both captures' elements, the two replies split by kind
+afterwards, and a query matching neither capture still throws.
 
 ### 4. Should a find be screened for staleness or existence?
 
@@ -475,7 +490,8 @@ Each line is provable by the test or command it names. The towns are the nine of
    base commit (the Log names its sha; a snapshot taken at that commit), and `food`'s
    prompt built from the same inputs with no food find equals the base's `food` prompt
    plus the sentences Build 4 appends, and nothing else.
-2. **The query, offline.** Against a checked-in Overpass payload captured through the
+2. **The query, offline** (for Decisions 2 (a) and 3 (a); those decisions say how it is
+   reworded otherwise). Against a checked-in Overpass payload captured through the
    built `overpassPointQuery` for the nine towns, at the radius Decision 6 chose, the
    food query returns the finds
    inside each town's radius and none outside it, and returns a way or a relation as a
@@ -529,7 +545,8 @@ tools/planner/api/test/live/invention.ts` with no argument, with
     file clause of Build 8 name `food` as a reader of the town pass, and the diff adds
     no rule: `grep -c '^\*\*' tools/planner/CLAUDE.md` gives the same count before and
     after.
-13. **The offline stub.** A spec in `tools/planner/api/test/` shows that the stubbed
+13. **The offline stub** (for Decisions 2 (a) and 3 (a); those decisions say how it is
+    reworded otherwise). A spec in `tools/planner/api/test/` shows that the stubbed
     `fetch` `run.ts` builds for the town queries answers a lodging query with the
     lodging capture's reply for that town, a food query at the same point with the food
     capture's reply, and a query matching neither capture with a thrown error and not
@@ -686,3 +703,35 @@ website|phone|email 53 of 140; none 87 (62.1%)`. `node variants.mjs data/towns.j
   of pl-60's 110 records and under $0.6 saved.
 - **Checks at this round:** recorded in the dispatch's report (`npx oxfmt`, `npm run
 check`, `node scripts/status.mjs --json`, preflight).
+
+**2026-10-24 — Round 2: gate 2's remaining clauses (fixer, Sonnet 5.5).** Gate 2 on
+`2bb857b4` returned CONCERNS (1 med, 2 low; no high), its report is on PR #612, and
+the round was applied under the severity floor with no gate 3. The text only changed;
+Decisions 1 to 6 stay open and `status` stays `needs-decision`.
+
+- **F2 (med), clause (i), Decision 2 (b) leaves lines 2 and 13 unmeetable.** Decision 2's
+  paragraph now names `Done when` 1, 2, 7 and 13, and gives (b) its own rewrite: line 2's
+  food query becomes the corridor query with the food kinds at the corridor's 6 km,
+  Decision 6 is moot, line 13's food case becomes the corridor query carrying the food
+  kinds with Build 9's stub reworded to match, and line 7 takes the corridor pass's
+  thin-corridor sentence. Lines 2 and 13 now say they are written for Decisions 2 (a)
+  and 3 (a).
+- **F2 (med), clause (ii), (c) lost its town sentence in line 7.** The paragraph is now
+  split into a (b) rule and a (c) rule. Under (c) lines 2 and 13 keep the town food
+  query and gain a corridor case, Decision 6 still applies, and line 7 keeps its town
+  sentence and adds the corridor pass's thin-corridor sentence.
+- **F2 (med), clause (iii), Decision 3 (b) left `Done when` 13 unchanged.** Decision 3's
+  paragraph now says line 13 gains a case: a combined query is answered with both
+  captures' elements, split by kind afterwards, and a query matching neither still
+  throws.
+- **F3 (low), Build 2 still compared `food` to the base.** Build 2's test now builds the
+  prompts of `activities` and `conditions-and-gear` and compares them with the base's,
+  and says `food`'s prompt changes on purpose (Build 4, `Done when` 1). `lodging`'s
+  prompt is pinned by `Done when` 1.
+- **low, Build 9's "towns the map has plenty in".** Reworded to "towns the map may well
+  have places to eat in (Build 1 counts them)", since no count exists.
+- **Dropped by gate 2, not changed:** the F4 bullet's "as the dispatch said" and Build
+  7's execution order.
+- **Checks at this round:** recorded in the dispatch's report (`npx oxfmt`, `npm run
+check`, `node scripts/status.mjs --json`, preflight).
+- **Thread:** gate 1's and gate 2's full reports are comments on PR #612.
