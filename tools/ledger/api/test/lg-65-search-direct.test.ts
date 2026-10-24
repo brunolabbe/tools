@@ -345,7 +345,7 @@ test("matchStretch answers every drawn case as main's search did (lg-65)", () =>
   // in every date shape, and the three gaps of the seeded population are drawn.
   expect(tally.foundTotal).toBeGreaterThan(0);
   expect(tally.foundTotal).toBeLessThan(total);
-  expect([...found.keys()].sort()).toEqual([...KINDS].sort());
+  expect(Array.from(found.keys()).toSorted()).toEqual(KINDS.toSorted());
   for (const stat of found.values()) {
     expect(stat.found).toBeGreaterThan(0);
     expect(stat.found).toBeLessThan(stat.calls);
