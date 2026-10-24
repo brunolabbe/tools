@@ -560,7 +560,10 @@ export class ValhallaGroundingProvider implements GroundingProvider {
     try {
       response = await this.#fetch(`${this.#overpassUrl}/interpreter`, {
         method: "POST",
-        headers: { "content-type": "text/plain" },
+        // pl-61: Node's default `user-agent` is refused with HTTP 406 by the
+        // public Overpass instance, so the Overpass POST names this client the
+        // way `locate` does.
+        headers: { "content-type": "text/plain", "user-agent": USER_AGENT },
         body: query,
         signal: combined,
       });

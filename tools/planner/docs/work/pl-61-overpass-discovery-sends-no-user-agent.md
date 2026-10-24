@@ -223,3 +223,52 @@ Nominatim stub, not only an Overpass one; if the owner reads that as more than m
 the owner's call to change the field.
 
 Ticket edited only. No source changed. `status` is still `ready`.
+
+### 2026-10-24 — built on `pl-61-overpass-user-agent` (builder, build dispatch)
+
+Base `89a38d30`. Farm, then `npm run build` in this worktree: exit 0.
+
+**Step 2, red on the base.** The three new cases were written and run before any source change:
+
+`npx vitest run tools/planner/api/test/grounding-valhalla.test.ts tools/planner/api/test/discovery-pass.test.ts tools/planner/api/test/lodging-pass.test.ts`
+
+```
+× the POST names its client, because node's default user-agent gets HTTP 406 from the public instance
+× a 406 from the geocoder and from Overpass reaches each warn with its status, and the towns are still asked about
+× a 406 reaches the corridor warn with its status, and the coverage sentence is unchanged
+Tests  3 failed | 159 passed (162)
+```
+
+The failures are the ones the ticket predicts. The header is absent: `TypeError: .toMatch() expects to receive a string, but got undefined`. The warns carry no `status`: `expected { provider: 'valhalla', …(1) } to match object { code: 'UNREACHABLE', status: 406 }`, with `- "status": 406` missing from the received fields. The lodging case's title was shortened to "a 406 from the geocoder and from Overpass reaches each town-pass warn with its status" after this run; no assertion changed.
+
+**The fix**, located by content:
+
+- `valhalla.ts`, `#overpassJson`: `headers: { "content-type": "text/plain", "user-agent": USER_AGENT }`, the existing constant.
+- `discovery.ts`, `nearby()`'s `catch`: the corridor warn adds `status` from `AppError.from(error).details?.status` when it is a number, omitted otherwise. `code`, the return value and the coverage sentence are unchanged. The URL is not logged.
+- `lodging.ts`, `locateTown`'s and `queryTown`'s `catch`: the same field, same narrow. `null` and `[]` returns unchanged.
+
+**Step 2, green.** The same command after the fix:
+
+```
+Test Files  3 passed (3)
+Tests  162 passed (162)
+```
+
+Placement: the step-2 case is the last block of `grounding-valhalla.test.ts`. The step-6 corridor case is the last block of `discovery-pass.test.ts`, which step 6 permits, and it builds its `RunGrounding` over a real `ValhallaGroundingProvider` with a helper `overValhalla`. The step-7 case is the last block of `lodging-pass.test.ts`, one stub for both refusals: Percé's geocoder query is refused (the locate warn) and Gaspé's Overpass query is refused (the query warn). Both assert `{ code: "UNREACHABLE", status: 406 }`. The new imports are `type AppLogger` in `discovery-pass.test.ts` and `ValhallaGroundingProvider` in `lodging-pass.test.ts`.
+
+**`npm run check`:** exit 0. Its oxlint output shows warnings only, all `no-await-in-loop` or `prefer-array-find` in lines this change does not touch. `npx oxfmt --check` on the six touched files: `All matched files use the correct format.`
+
+**Step 4, live, once** (2026-10-24, serial, no retries, `node live-check.mts` in the scratch `build/` directory). The adapter's `nearby` on the Gaspé point with `[point, point]`, radius 2000, kind `viewpoint`, which renders the same `around:2000,…` query the probe logged:
+
+```
+{"ok":true,"ms":41435,"finds":2,"names":["Du Sanatorium","Le Belvédère"]}
+```
+
+The base reading for this query is the 406 in the curl entry above, from the same day. This session did not re-run the base live.
+
+**Not done, and why:**
+
+- Step 5, `#json`'s `sources_to_targets` POST: not checked, so no reading exists. Unchanged.
+- Four more warns in `discovery.ts` drop the status in the same way: `a notability lookup failed, continuing with the rest`, `a corridor reading lookup failed, continuing`, `discovery could not locate a corridor endpoint` and `a detour cost could not be measured`. The Build names only the corridor warn, and the owner's answer covered the two lodging warns. Folding the four in would be the same one-line change, but it is not already specified, so it was not folded in. Nothing was filed. This is an open decision for the orchestrator: fold them into pl-61, or file a follow-up.
+
+Status stays `ready`; the lander sets it with the gate record.

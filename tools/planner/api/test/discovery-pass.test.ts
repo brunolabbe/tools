@@ -32,7 +32,7 @@ import {
   type RunGrounding,
 } from "../src/grounding/cache.ts";
 import { ValhallaGroundingProvider } from "../src/grounding/valhalla.ts";
-import { createLogger } from "../src/logger.ts";
+import { createLogger, type AppLogger } from "../src/logger.ts";
 import {
   CLOSEST_RESERVED,
   discoverAlongCorridor,
@@ -1049,3 +1049,76 @@ describe("discoverAlongCorridor, over the real Montréal→Québec City capture 
     expect(survivingUnbacked.length).toBeGreaterThan(0);
   });
 });
+
+describe("discoverAlongCorridor, when the Overpass request is refused (pl-61)", () => {
+  test("a 406 reaches the corridor warn with its status, and the coverage sentence is unchanged", async () => {
+    const warnings: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+    const spy: AppLogger = {
+      debug: () => {},
+      info: () => {},
+      warn: (message, fields) => {
+        warnings.push({ message, fields });
+      },
+      error: () => {},
+      child: () => spy,
+    };
+    const valhalla = new ValhallaGroundingProvider({
+      routingUrl: "http://valhalla.internal:8002",
+      geocoderUrl: "http://nominatim.internal:8080",
+      overpassUrl: "http://overpass.internal:8090",
+      timeoutMs: 5_000,
+      now: () => new Date("2027-01-01T00:00:00.000Z"),
+      fetch: (async (input: unknown) => {
+        const url = new URL(String(input));
+        if (url.origin === "http://overpass.internal:8090") {
+          return new Response("refused", { status: 406 });
+        }
+        const named = url.searchParams.get("q") === "Montréal";
+        const row = named
+          ? { lat: "45.5019", lon: "-73.5674", display_name: "Montréal", addresstype: "city" }
+          : { lat: "46.8139", lon: "-71.208", display_name: "Québec City", addresstype: "city" };
+        return new Response(JSON.stringify([row]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }) as unknown as typeof globalThis.fetch,
+    });
+
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: overValhalla(valhalla),
+      logger: spy,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    expect(result.finds).toEqual([]);
+    expect(result.coverage).toHaveLength(1);
+    expect(result.coverage[0]?.detail).toMatch(/very little on the map/u);
+
+    const corridor = warnings.filter(
+      (entry) => entry.message === "the corridor could not be queried",
+    );
+    expect(corridor).toHaveLength(1);
+    expect(corridor[0]?.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
+  });
+});
+
+/**
+ * A `RunGrounding` whose locate and nearby go to a real `ValhallaGroundingProvider`,
+ * so a refusal thrown by its `#overpassJson` reaches the pass as it would in a run.
+ */
+function overValhalla(valhalla: ValhallaGroundingProvider): RunGrounding {
+  return {
+    name: "valhalla",
+    refused: 0,
+    locate: async (request) => {
+      const located = await valhalla.locate(request);
+      return located === null ? UNKNOWN : answered(located);
+    },
+    nearby: async (request) => answered(await valhalla.nearby(request)),
+    nearbyPoint: async (request) => answered(await valhalla.nearbyPoint(request)),
+    travel: async (request) => request.origins.map(() => request.destinations.map(() => UNKNOWN)),
+    articlesNear: async () => answered([]),
+  };
+}

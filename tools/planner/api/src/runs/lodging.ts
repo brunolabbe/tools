@@ -200,9 +200,11 @@ async function locateTown(
     return outcome.kind === "answered" ? outcome.value.coordinates : null;
   } catch (error: unknown) {
     if (isCancellation(error, input.signal)) throw error;
+    const status = AppError.from(error).details?.status;
     input.logger.warn("the town pass could not locate a town", {
       provider: input.provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
     return null;
   }
@@ -225,9 +227,11 @@ async function queryTown(input: LodgingInput, point: Coordinates): Promise<Find[
     return outcome.kind === "answered" ? outcome.value : [];
   } catch (error: unknown) {
     if (isCancellation(error, input.signal)) throw error;
+    const status = AppError.from(error).details?.status;
     input.logger.warn("the town pass could not query a town", {
       provider: input.provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
     return [];
   }

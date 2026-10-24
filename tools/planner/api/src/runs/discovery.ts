@@ -831,9 +831,14 @@ async function nearby(
     // one this pass's one entry per corridor can carry without a second kind,
     // and both leave a traveller in the identical position — this plan cannot
     // say what is nearby.
+    // pl-61: the HTTP status of a refused backend goes in the log, so a 406
+    // reads as a refusal rather than as a quiet network failure. The URL is not
+    // logged: a request URL is as sensitive as a credential in a log line.
+    const status = AppError.from(error).details?.status;
     logger.warn("the corridor could not be queried", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
     return { kind: "answered", value: [] };
   }
