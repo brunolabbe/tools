@@ -3,7 +3,7 @@ id: lg-68
 tool: ledger
 title: A workbook's free-text cells drop a number or a date instead of keeping it
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -109,6 +109,37 @@ or a date (lg-68, round 1)_, and each fails on the reader before round 1 except
 11. api, _a number in the person column refuses the import, naming the cell_:
     exit 1, the report names the cell (`2022!E10 names "42"`), and nothing is
     written.
+
+## Review
+
+**Gate: PASS** — 2026-10-24 · `972ab6a0..64c6a9f0` · Sonnet 5.5, depth standard
+
+| Done when                                                                    | Proof                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A numeric detail reads as the number's text (42, 7, -3.5, 0.3)            | `books/test/workbook.test.ts` › "a detail cell that holds a number (lg-68)" › "is read as the number's text, never as an empty detail" ✓ — asserts the five details and an empty `problems`. Red on the base reader.                                  |
+| 2. Through `.xlsx` with `--write`, the number 42 is stored as `42`           | `api/test/workbook-import.test.ts` › "a detail cell that holds a number (lg-68)" › "is stored as the number's text, not as an empty description" ✓ — exit 0, stored `[{ description: "42" }]`. Red on the base reader.                                |
+| 3. A re-import onto books holding the defect's `""` is refused, tables equal | same describe › "a re-import onto books that already hold the import is refused, whatever the detail" ✓ — exit 1, the `alreadyHeld` sentence, `Refused:` line, `dump` equal, `""` kept. Green on the base too: it pins an existing refusal.           |
+| 4. `npm test -- --project ledger` passes, no existing test changed           | **verified** — 1687 of 1687 in 81 files, `npm run check` exit 0; the test diff only adds (its four deleted lines are field types in `api/test/helpers/workbook.ts`, widened to `string \| number \| Date`).                                           |
+| 5. A date detail reads as its ISO day                                        | `books/test/workbook.test.ts` › "a free-text cell that holds a number or a date (lg-68, round 1)" › "a detail holding a date is read as its ISO day" ✓. Red on the round-0 reader.                                                                    |
+| 6. A formula detail reads as its cached number                               | same describe › "a detail holding a formula is read as its cached number" ✓ — `["2"]`. Green on the round-0 reader (pins); red on the base.                                                                                                           |
+| 7. A movement's note holding a number or a date reads as text                | same describe › "a movement's note holding a number or a date is read as its text" ✓ — `[null, "marché", "2022-01-05", "42"]`. Red on the round-0 reader.                                                                                             |
+| 8. A period line's note holding a number or a date reads as text, items kept | same describe › "a period line's note holding a number or a date is read as its text" ✓ — labels and notes asserted together. Red on the round-0 reader.                                                                                              |
+| 9. A number or a date in the person column is refused, naming the cell       | same describe › "a number or a date in the person column is refused, naming the cell" ✓ — both `names` sentences and movement row 4 only. Red on the round-0 reader and with only the person line reverted (positive control).                        |
+| 10. A date detail and either note are stored as text through `.xlsx`         | `api/test/workbook-import.test.ts` › "a free-text cell that holds a number or a date (lg-68, round 1)" › "a date detail, and a number or a date in either note, are stored as their text" ✓ — three tables' rows asserted. Red on the round-0 `dist`. |
+| 11. A number in the person column refuses the import, naming the cell        | same describe › "a number in the person column refuses the import, naming the cell" ✓ — exit 1, `2022!E10 names "42"`, `Refused: nothing was written.`; I measured that no books file exists afterwards. Red with only the person line reverted.      |
+
+CI at `64c6a9f0`: every check pass, the Windows leg (informational) and `test (ubuntu-latest)` included.
+
+- **low** · no `Done when` line depends on it · `nfr:reliability` — a date-typed cell that is not a calendar day reaches the description as an invented date. A time-only detail (`14:30`, serial 0.604) is stored `1899-12-30`, where `main` stored `""`; serials 1 to 59 on a date format read one day early (`7` → `1900-01-06`, `59` → `1900-02-27`, from exceljs's own date conversion, which `api/src/xlsx.ts` passes through). No fixture holds either, and TZ and the 1904 system are clean (below), so it needs a household that types a time into a free-text cell. **Open decision** (answer 3 named dates, not times): (a) leave it; (b) `readSheets` yields no date for a time-only cell, so the cell is a reported problem or stays empty; (c) read it as `HH:MM`, which needs a new cell kind. Recommendation: (a) until the lg-37 dry run shows a time in a real workbook, then (b). Direction, not run.
+- **low** · no `Done when` line depends on it · `nfr:reliability` — `String(Number(n.toPrecision(15)))` is exact for Excel-authored cells, and can change what the file holds when another producer wrote it: `4111111111111111` stores `4111111111111110` (an exact double, 16 digits), `9007199254740993` stores `9007199254740990`; `1e21` stores `1e+21` and `1e-7` stores `1e-7` (exponent form below 1e-6 and from 1e21); `-0` stores `0`; a percent or currency format loses its sign (`50%` stores `0.5`). Build 2 accepts the 15 digits and the missing format; the 16-digit loss and the exponent form are not named there. No live call site: an Excel entry already zeroes past 15 digits (not measured here, no Excel).
+- **low** · no `Done when` line depends on it · `nfr:maintainability` — a period line's item stays silent for a lone number: `A8 = 42` stores `category null`, exit 0, and `B8 = 3` beside a text `A8` is dropped. Owner answer 2 left the item alone for the joined-label reason, which holds only when text is also present; the lone-number case is the same cell and the answer covers it. Recorded, not a defect of the build. It is the only remaining call site of `textOf` where a number or a date is dropped without a message (the other seven are a label match, a bucket (refused as `""`) or a name that has to match).
+- **low** · no `Done when` line depends on it · `nfr:maintainability` — the ticket's `title:` and Why still name only the detail cell, while Build 3 and `Done when` 5 to 11 carry the notes, the date and the person column. Safe direction: the PR is retitled at landing (answer 6); the lander may reword the ticket's title the same way. `status` stays `ready` until the lander moves it.
+- **dropped** · the follow-on running-balance and carry-over failures after a refused person cell: the same two lines follow any unmapped name on `main`, and the cell-naming sentence is the first of the report. Not a defect of this diff.
+- **dropped** · a number in the bucket column is refused as `"" is not a bucket`, naming the cell: loud, unchanged, outside the diff.
+- **dropped** · the corrections file's `people` map: `{ "42": "sam" }` and `{ "2022-01-05": "sam" }` and `{ "0.3": "sam" }` all import with no problem (measured), so the refusal's remedy works.
+- **dropped** · timezone and the date systems: the ISO day is identical under `America/Montreal`, `UTC` and `Pacific/Kiritimati`, at 00:00:01, 12:00, 23:59:59.999, across both DST edges and at the year boundary, in the 1900 and 1904 systems. Not a defect.
+- **findings** · the hunt returned 8; 4 carried (the first bullet merges the time-only and the early-1900 mechanisms), 4 dropped.
+- NFR: security n/a (no URL, header or subprocess; the refusal echoes the user's own cell to their terminal as the text path does) · performance n/a (constant work per cell) · reliability ✓ except the first two bullets · maintainability — above.
 
 ## Log
 
