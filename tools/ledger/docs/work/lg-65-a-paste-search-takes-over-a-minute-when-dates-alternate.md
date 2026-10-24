@@ -608,7 +608,7 @@ check`; the draws are unchanged). It is gate 1's `gate-fuzz.test.ts` made typed:
 - **F2's three gaps, and how each is drawn** (also in the spec's header). The spec
   counts each and fails if one is not drawn:
   - _A paste that cannot fit (`miss`) in an alternating or long-day history._ In
-    every date shape, 22 % of pastes get one row's amount changed by 100 cents or one
+    every date shape, about 15 % of pastes get one row's amount changed by 100 cents or one
     row dated a day off (the draw's `mode`; half of the amount draws add 0 and are
     not counted). Drawn at 20,000 cases: 1,764 of them in an `alt`, `altwide` or `long`
     history.
@@ -659,3 +659,38 @@ ledger`: exit 0, `Test Files 81 passed (81)`, `Tests 1677 passed (1677)` (gate 1
   amount (and so do not alter the paste), which this spec's tally excludes; and its
   script, as written, could not be committed, not only for its `as never` casts
   but because the repo's lint rejects `Array#sort` (two errors, fixed above).
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, F3 — "text and a count that
+  say a little more than the code does, in the round's new file
+  `api/test/lg-65-search-direct.test.ts` and its Log entry. (a) The header says "a
+  fifth of the pastes have one row's amount changed by 100 cents or one row's date
+  moved a day", and the Log says 22 %; the draw alters about 14.5 % (7.5 % amount, 7 %
+  date) … (b) The header says the default run takes "about a second or two here"; the
+  same file's `DEFAULT_CASES` comment says about 3 s … (c) `tally.altOrLongAltered`,
+  which the "miss is drawn" assertion reads, counts pastes the draw altered, not
+  pastes the search refused: 1,146 of the 1,764 got a refusal from `main`'s search …
+  Direction, untested: say "about 15 %" and "about three seconds", and count
+  `reading === null` among the altered pastes beside the altered count." Applied as
+  stated: (a) the header and this Log's F2 entry now say "about 15 %"; (b) the header
+  says "about three seconds"; (c) the tally gains `altOrLongRefused`, counted in the
+  same place as `altOrLongAltered` when `main`'s search gave no reading, and the test
+  asserts it is greater than 0 beside the altered count.
+  - `LG65_DIRECT_SUMMARY=<file> npx vitest run tools/ledger/api/test/lg-65-search-direct.test.ts`
+    → `Tests 1 passed (1)`, 2.79 s of test time; the summary reads `"cases": "1-20000"`,
+    `"mismatches": 0`, `"altOrLongAltered": 1764`, `"altOrLongRefused": 1146`.
+  - **Control, on a committed tree (`0fdf2b06`), restored from that sha afterwards.**
+    The alteration was weakened until it no longer refuses: the amount change and the
+    date shift multiplied by 0 (the `r()` calls kept, so the draws are the same
+    stream), `altered` kept true. That alone left `altOrLongRefused` at 436 of 2,678:
+    the copy's neighbour swaps and re-dating refuse some pastes without any
+    alteration. Swaps (`swapRate`) and the copy's re-dating off, the `long` day cut to
+    2 rows, and the stored rows (`storedRate`) off, took it to 0 refusals (a debug
+    line printed one per refused paste; 0 printed). With the two neighbouring
+    assertions that also depend on refusals (`foundTotal < total`, each shape's
+    `found < calls`) turned into no-ops so the new one is the first left, the run
+    exits 1: `AssertionError: expected 0 to be greater than 0`, at the line of
+    `expect(tally.altOrLongRefused).toBeGreaterThan(0)`, and the line before it,
+    `expect(tally.altOrLongAltered).toBeGreaterThan(0)`, passed (the altered count,
+    2,729 in the run before the stored rows were turned off). Before the neighbours were turned off, the same weakened run
+    failed one assertion earlier, `expected 4041 to be less than 4041`, so the new
+    assertion is not what stops a drifting alteration there; it is what stops one
+    whose other checks stay green.
