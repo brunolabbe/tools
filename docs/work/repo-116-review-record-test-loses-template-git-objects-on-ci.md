@@ -241,13 +241,15 @@ afterAll scripts/test/review-record.test.ts`, run at `524d6352` (line numbers
      file's last test. The failure also names the copy's path, not the template's.
 
   2. _A remover outside the repo deleted `review-record-<random>`._ **Refuted**, as the
-     cause. Nothing in the repo removes it, and the failure reproduces with nothing
-     outside the copying process touching the directories; it stops when the fix's one
+     cause. Nothing in the repo removes it, and the failure reproduces with no process
+     touching the directories but the copy and git's own detached maintenance child
+     (hypothesis 3); it stops when the fix's one
      config line is added.
      - `grep -rn "review-record-" scripts packages tools --include=*.ts --include=*.mjs`,
        run at `524d6352` (14 lines; the three `scripts/review-record.mjs` lines are other
        prefixes, `-diff-`, `-fmt-` and `-land-`; the 11 in `scripts/test/review-record.test.ts`
-       are `mkdtemp` prefixes, a prefix constant and its `startsWith`, a regex and two
+       are `mkdtemp` prefixes, a prefix constant, a `startsWith` on a literal prefix (in the test "land() creates its
+       scratch clone with gc.auto=0, so a commit there cannot spawn a detached gc (repo-94)"), a regex and two
        comments):
 
        ```
@@ -274,8 +276,8 @@ afterAll scripts/test/review-record.test.ts`, run at `524d6352` (line numbers
        "### 1. The causal claim, with my own reproduction"; the builder's own table
        above agrees). `node gate-1/repro.mjs driver <git 2.55.0 bin> on 8000 8 10 …`
        builds the fixture and copies it with `fs.cpSync` in a private `TMPDIR`, in 8
-       processes under 10 busy loops, with no other process touching those
-       directories: `"builds":8000,"failures":14,…"seconds":86.204`, every failure
+       processes under 10 busy loops, with no process touching those
+       directories but the copy and git's own detached maintenance child: `"builds":8000,"failures":14,…"seconds":86.204`, every failure
        `ENOENT path=…/g1-copy-X/.git/objects syscall=cp`, the CI error's shape. The same
        command with `[maintenance] auto = false` in `.git/config` before the commit (the
        fix's line): `"builds":8000,"failures":0,…"seconds":71.375`. With git 2.43.0 and
@@ -331,8 +333,8 @@ passed (64)`, 829 s in all. As uninformative as the sweep on `main`; the evidenc
   hypotheses 1 and 2 carry the real output of `grep -n afterAll …` and `grep -rn
 "review-record-" …` run at `524d6352`. The second grep printed 14 lines (3 in
   `scripts/review-record.mjs`, 11 in the test file); gate 1's finding counted "11
-  `mkdtemp`/comment hits", which is the test file's share only, and 2 of those 11 are not
-  `mkdtemp` or comment lines (the prefix constant and the `startsWith` and regex uses).
+  `mkdtemp`/comment hits", which is the test file's share only, and 3 of those 11 are not
+  `mkdtemp` or comment lines (the prefix constant, the `startsWith` and the regex).
   None removes `review-record-<random>`, as the finding said. No `Done when` line,
   `status` or code changed.
 
@@ -355,6 +357,44 @@ passed (64)`, 829 s in all. As uninformative as the sweep on `main`; the evidenc
 clone --no-hardlinks` being exposed to the same lock. Gate 1 measured no exposure
      (`gc.auto 0` in `land()` leaves the clone's commit with no `child_start` on git
      2.55.0, and nothing copies the clone). **Options:** no ticket; file one anyway.
-     **Chosen:** no ticket. The probe scripts stay uncommitted in scratch. The "Not done"
+     **Chosen:** no ticket. The chosen option was labelled "No ticket
+     (Recommended)", and its description read: "The gate's trace shows no exposure. The
+     builder also recommended leaving it until a reproduction exists. The probe scripts
+     stay uncommitted in scratch." The "Not done"
      bullet above about `land()` therefore stands as written, with gate 1's measurement
      as its answer.
+
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, lows 1, 2 and 4, applied as
+  the gate states them. The owner left low 3 recorded unfixed. Gate 2's section is not
+  touched.
+  - Low 1 — the fixer's entry said "2 of those 11" were not `mkdtemp` or comment lines,
+    then named three, and hypothesis 2 called the `startsWith` line the prefix
+    constant's own. The count is 3, and the `startsWith` line uses a literal, inside the
+    test "land() creates its scratch clone with gc.auto=0, so a commit there cannot
+    spawn a detached gc (repo-94)".
+  - Low 2 — hypothesis 2 said nothing outside the copying process touched the
+    directories, which hypothesis 3 contradicts: git's own detached maintenance child
+    does. Both sentences now name the copy and that child as the only processes.
+  - Low 4 — the second sentence of owner answer 3's "Chosen" was the chosen option's
+    description, not the owner's words. It is now attributed to the option "No ticket
+    (Recommended)", as the orchestrator's session gave it.
+
+  The commands, run at the landing. Each `awk` reads the ticket only up to this entry,
+  since the entry quotes what it removed.
+
+  ```
+  $ grep -rn "review-record-" scripts packages tools --include=*.ts --include=*.mjs | grep -v mkdtemp | grep -vc '^[^:]*:[0-9]*: *//'
+  3
+  $ awk '/Fixed at landing by owner choice/{exit} {print}' <ticket> | grep -c "2 of those 11"
+  0
+  $ awk '/Fixed at landing by owner choice/{exit} {print}' <ticket> | grep -c "and its .startsWith"
+  0
+  $ awk '/Fixed at landing by owner choice/{exit} {print}' <ticket> | grep -c "outside the copying process"
+  0
+  $ awk '/Fixed at landing by owner choice/{exit} {print}' <ticket> | grep -c "no other process touching those"
+  0
+  $ awk '/Fixed at landing by owner choice/{exit} {print}' <ticket> | grep -c "but the copy and git's own detached maintenance child"
+  2
+  $ awk '/Fixed at landing by owner choice/{exit} {print}' <ticket> | grep -c "No ticket"
+  1
+  ```
