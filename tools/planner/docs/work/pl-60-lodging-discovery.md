@@ -1285,3 +1285,148 @@ the owner opens the firewall. The builder runs none.
   a find are not in the stratum unless they are named premises.
 - **Not done here:** the searches, the verdicts and the per-object rate (Done when 9's
   second half).
+
+**2026-10-24 — Build 7's web check: the verdicts and the per-object rate
+(general-purpose agent, Opus 5.5).** WebSearch ran in a **general-purpose agent**, as in
+pl-57 and pl-58, at `8741d2de` (the pre-registration `89fdedc3` with `main` merged in;
+`git diff --stat 89fdedc3 8741d2de -- tools/planner/` is empty). The searches ran from
+14:36:33Z to about 14:42Z, after the pre-registration was pushed.
+
+**Firewall.** The owner opened it on 2026-10-24 and gave no time. **The orchestrator first
+observed it open at 14:34Z** (`curl https://wiki.openstreetmap.org` → 200, after an earlier
+timeout). **Closed: not observed by the builder**; the owner closes it after the report.
+WebSearch runs on the vendor's side; both WebFetch calls returned a page.
+
+**Spend against the budget: 16 queries and 2 page fetches**, against a cap of 90 and 20,
+1.78 queries per object (pl-58: 1.23). **Every first query ran in the pre-registered order
+and wording**, one per object, objects 1 to 9 in key order. The 7 further queries:
+
+- Le Loup Marin, 2: queries 2 and 3 of the budget, because query 1 found no current listing.
+- La Rêvasse, 3: queries 2 and 3, then a fourth, `La Rêvasse Percé gîte rue Saint-Michel`.
+  That fourth one is the further query the budget allows for a locality the results leave
+  open. This run's own Overpass capture puts La Rêvasse (way 373624823,
+  `addr:hamlet` Cap des Rosiers, 16 rue Saint-Michel) with its centre at about 48.525,
+  −64.214, which is Percé and not Cap-des-Rosiers.
+- Motel L'Eglantier, 2: query 1 returned booking aggregators only, so two more were run, as
+  pl-58 did for Hotel Duca d'Alba.
+
+Each check's `queries` holds every query run for it. The fetches were the Routard forum
+thread (Le Loup Marin) and a Centris url (L'Eglantier), which now serves a results page
+that does not mention the motel. Every other piece of evidence is a page **seen in the
+search result**, not fetched, and each note says which.
+
+**The verdicts, 17 keys and 9 objects:** 12 `exists`, 0 `exists-elsewhere`, 2 `closed`, 3
+`not-found`. Each object:
+
+1. **Le Loup Marin** (keys 1 and 6): **closed**, 2014. A Routard forum thread, fetched,
+   has a post of 2015-02-22 ("En 2012, j'ai séjourné au Gîte du Loup Marin près de
+   Forillon") and a reply of 2015-02-23 ("le Gite du Loup marin est desormais fermé depuis
+   Octobre 2014"). None of the three queries found a listing, a directory entry or a
+   website. **Judgement call:** the closure rests on one unofficial reply. Without it, the
+   verdict would be `not-found`, which is also not confirmed, so the rate does not move.
+   OSM still holds it as `tourism=guest_house` (node 351976272, a CanVec building import,
+   near Cap-aux-Os), and the run handed it to `lodging` as a find.
+2. **La Rêvasse** (keys 2, 3 and 14): **not-found**. The queries were "La Rêvasse
+   Cap-des-Rosiers", `"La Rêvasse"`, "La Rêvasse gîte hébergement Cap-des-Rosiers Gaspé"
+   and "La Rêvasse Percé gîte rue Saint-Michel". pl-56 has no OSM row for any key in this
+   stratum. **We did not find it.** It is in OSM, as above.
+3. **Auberge internationale de Forillon** (keys 4 and 9): **exists**. Québec Vacances lists a
+   youth hostel in the village of Cap-aux-Os at 2095 boulevard Grande-Grève, Gaspé. Cap-aux-Os
+   is a sector of the town of Gaspé, so both keys' localities hold.
+4. **Motel L'Eglantier** (key 5): **exists**, at 193 Route 132 Ouest, Percé, which is OSM's
+   address too. The evidence is Skyscanner listings carrying guest reviews from 2020 and
+   2021, and a Centris sale listing's search summary that calls it a twelve-unit motel in
+   business for over 30 years. No tourism-office listing and no site of its own was found.
+   It is the weakest `exists`: whether it operates today rests on aggregators.
+5. **Motel et Chalets Natabel** (key 7): **exists**, at 196 route 132 Ouest, Percé (Québec
+   Vacances; Yellow Pages). OSM gives 25 Route 132.
+6. **Motel Bellevue** (key 8): **exists**, at 183 route 132 Ouest, Percé (Bonjour Québec,
+   season 1 April to 30 November 2026; Québec Vacances).
+7. **Auberge La Petite École de Forillon** (keys 10, 12, 13, 16 and 17): **exists**, at
+   1826 boulevard de Forillon, Gaspé, a few minutes from Cap-aux-Os beach and the park
+   (Québec Vacances; Sortir au Québec). The key at `gaspé (cap-aux-os)` is judged by
+   municipality, as pl-58 judged Gaspé's sectors.
+8. **Petit-Gaspé campground** (key 11): **exists**, as the South Area campground of Forillon
+   (Parks Canada; Tourisme Gaspésie). The first query is pl-58's, verbatim.
+9. **Manoir de Percé** (key 15): **exists**, at 212 route 132 Ouest, Percé (Tourisme
+   Gaspésie; Québec Vacances, a booking window of 30 May to 1 October 2026).
+
+**Every one of the 9 objects is an entity in the run's lodging capture**
+(`overpass-lodging-towns.json`), read by name with a scratch script. **Both objects that are
+not confirmed are map entries**: one the web says closed in 2014, one the web does not know.
+pl-58's two `lodging` objects that were not confirmed were names that Parks Canada does not
+use. No element in this run's capture, which covers Forillon National Park's point and Gaspé's
+at 10 km, has a name containing `Rivières` or `Gauche`. The defect has changed kind. It is no longer an
+invented name; it is a stale or unverifiable map entry. The sample is 2 events, so this is
+an observation, not a rate.
+
+**The record.** `PLANNER_INVENTION_OFFLINE=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl60-2026-10-24` gave exit 0 and wrote
+`invention/pl60-2026-10-24/2026-10-24.json` only. Its `stratumDraw`: seed 20261020,
+**17 keys taken for 9 of 40 objects, stop `exhausted`**, as planned. `withoutParks` is the
+same 9 objects, because no key in the stratum is tagged `park-visit`.
+
+**The rate per object (Done when 9's second half).** It is the harness's `render` line,
+recomputed with a scratch Wilson script, which agrees:
+
+| stratum                                                          | objects | not confirmed | rate  | 95% Wilson |
+| ---------------------------------------------------------------- | ------- | ------------- | ----- | ---------- |
+| pl-58, `lodging` only (above, from its `verdicts.json`)          | 19      | 2             | 10.5% | 2.9–31.4   |
+| **pl-60, `lodging`'s named premises**                            | **9**   | **2**         | 22.2% | 6.3–54.7   |
+| pl-60, sensitivity: Motel L'Eglantier also read as not confirmed | 9       | 3             | 33.3% | 12.1–64.6  |
+
+The two intervals overlap almost entirely, so **this sample cannot say the rate moved**, in
+either direction. Nine objects is the whole stratum and not a draw from it. That is because
+the run named few distinct premises: 17 keys, against pl-58's 51. Against the owner's
+earlier bar (above about 10%, lower bound above 5%), 22.2% (6.3–54.7) clears it, on 2 events
+in 9. Per key, the harness gives 5 of 17 not confirmed, 29.4% (13.3–53.1).
+
+**Checks, each exit code read from a file and never through a pipe** (`run-harness.sh`):
+
+- `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts` gave exit 0, `111 live records, 2594 place
+mentions, 1019 distinct places`, and "check: the committed record equals its
+  regeneration; every sampled place has a verdict". So pl-57's record is unchanged.
+- The same with `--after pl60-2026-10-24` gave exit 0, `110 live records, 2693 place
+mentions, 700 distinct places`, and the same check line.
+- The same with `--after pl58-2026-10-21` gave exit 0, with pl-58's 5 of 40 unchanged.
+- **The check can fail.** With `la rêvasse|cap-des-rosiers` flipped to `exists` in
+  `verdicts.json`, the pl-60 check gave exit 1, "the committed record is not what the inputs
+  regenerate". The verdicts were then regenerated from the scratch generator that wrote them
+  (`gen-verdicts.py`), and the check gave exit 0 again (`mutate.sh`).
+
+**What the brief had wrong, or left open.**
+
+- The budget gives no rule for a first query that finds only booking aggregators.
+  pl-58's Duca d'Alba precedent was followed (L'Eglantier, 2 more).
+- The budget's "the name in the local language" is the name itself when the name is
+  already French. Query 3 therefore added French category words (`gîte`, `hébergement`),
+  as pl-58's query 3 did for Camping des Rivières.
+- The record's field `sampleByObject.lodgingOrFood` and the printed "lodging or food" label
+  name a `lodging`-only stratum here, as the previous entry says.
+
+**Folded in: nothing.** Two things were offered. Filing `food`'s ticket waits on the open
+decision below. Correcting OSM's La Rêvasse and Le Loup Marin is outside this repository.
+
+**Open decision, for the owner (the builder does not choose).** Question 4's answer files
+`food` "as its own ticket if this one works". Two measurements bear on whether it works.
+The named-premises share rose: `lodging`'s mentions went from 33 of 418 (7.9%) to 301 of
+443 (67.9%), and to 300 of 360 (83.3%) where finds were given. The not-confirmed rate on
+what `lodging` names cannot be shown to have fallen: 2 of 9, 22.2% (6.3–54.7), against
+2 of 19, 10.5% (2.9–31.4). Both of its misses are map entries.
+
+- **(a) Call the route working, and file `food`'s discovery ticket now.** It costs a docs
+  pull request, and later the restaurant clauses, their call count and a paid run, which
+  question 4 (b) said nothing has measured. It carries the finding that a find can be a
+  stale map entry into that ticket's brief.
+- **(b) First file an existence check scoped to map-sourced premises.** For example, a find
+  with no `website`, or one past a `check_date`, is flagged, or is checked by a lookup.
+  Then decide on `food`. It costs a ticket and a measurement before `food`. It reaches
+  exactly the class this check found, and only that class.
+- **(c) File nothing. Land pl-60 on the measurement and leave `food` and existence open.**
+  It costs nothing now. The staleness finding then lives only in this Log.
+
+**Recommendation: (a).** The prompt-only route moved nothing, and the share of named
+premises it was meant to raise went from 7.9% to 67.9% of mentions. 2 events in 9 objects cannot carry (b)'s
+premise yet. The `food` ticket's own re-measure doubles that sample on the same rubric.
+(b) is the honest alternative if the owner reads both misses as the start of a pattern.

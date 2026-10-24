@@ -10,5 +10,334 @@
     ],
     "osm": "Copied by the harness from pl-56's hours-coverage record for a checked key it has a row for; null for the keys pl-56 never read. A place pl-56 located is not thereby real."
   },
-  "checks": {}
+  "checks": {
+    "le loup marin|": {
+      "verdict": "closed",
+      "queries": [
+        "Le Loup Marin Gaspé",
+        "\"Le Loup Marin\"",
+        "Gîte du Loup Marin Gaspé Forillon gîte"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.routard.com/forums/t/hebergement-environ-parc-forillon/116075",
+          "readOn": "2026-10-24",
+          "note": "Fetched. Routard forum thread on lodging near Forillon: an anonymous post of 2015-02-22 says 'En 2012, j'ai séjourné au Gîte du Loup Marin près de Forillon'; a reply by 'mln' of 2015-02-23 says 'le Gite du Loup marin est desormais fermé depuis Octobre 2014'. Returned by queries 1 and 3."
+        }
+      ],
+      "closedYear": 2014,
+      "note": "The key has no locality; the gîte was near Forillon, in the town of Gaspé. Queries 1 to 3 found no current listing, directory entry or website; query 2 returned only the seal and unrelated places. The one source is a forum reply, so the closing rests on a single unofficial statement. OSM still holds 'Le Loup Marin' as tourism=guest_house (node 351976272, a CanVec building import, near Cap-aux-Os), and the run handed it to `lodging` as a find. Judgement call: read without the forum reply it would be `not-found`; either reading is not confirmed."
+    },
+    "la rêvasse|cap-des-rosiers, gaspé": {
+      "verdict": "not-found",
+      "queries": [
+        "La Rêvasse Cap-des-Rosiers",
+        "\"La Rêvasse\"",
+        "La Rêvasse gîte hébergement Cap-des-Rosiers Gaspé",
+        "La Rêvasse Percé gîte rue Saint-Michel"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/gite-aux-petales-de-rose",
+          "readOn": "2026-10-24",
+          "note": "Query 3's nearest lodging result: Gîte aux Pétales de Rose, 1184 boul. de Cap-Des-Rosiers, Gaspé, a different establishment. Seen in the search result."
+        },
+        {
+          "url": "https://www.bonjourquebec.com/fr/repertoire/hebergement/gite-nycole/0ya4",
+          "readOn": "2026-10-24",
+          "note": "Query 4's nearest lodging result: Gîte Nycole, 44 rue de l'Église, Percé, a different establishment. Seen in the search result."
+        }
+      ],
+      "note": "Every query in the budget was run; pl-56 has no OSM row for this key. We did not find it. This run's own Overpass capture holds 'La Rêvasse' as tourism=guest_house (way 373624823, addr:hamlet Cap des Rosiers, 16 rue Saint-Michel) with its centre at about 48.525, -64.214, which is in Percé and not at Cap-des-Rosiers; query 4, the name with Percé, was run as the one further query the budget allows for a locality the results leave open, and found nothing either."
+    },
+    "la rêvasse|cap-des-rosiers": {
+      "verdict": "not-found",
+      "queries": [
+        "La Rêvasse Cap-des-Rosiers",
+        "\"La Rêvasse\"",
+        "La Rêvasse gîte hébergement Cap-des-Rosiers Gaspé",
+        "La Rêvasse Percé gîte rue Saint-Michel"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/gite-aux-petales-de-rose",
+          "readOn": "2026-10-24",
+          "note": "Query 3's nearest lodging result: Gîte aux Pétales de Rose, 1184 boul. de Cap-Des-Rosiers, Gaspé, a different establishment. Seen in the search result."
+        },
+        {
+          "url": "https://www.bonjourquebec.com/fr/repertoire/hebergement/gite-nycole/0ya4",
+          "readOn": "2026-10-24",
+          "note": "Query 4's nearest lodging result: Gîte Nycole, 44 rue de l'Église, Percé, a different establishment. Seen in the search result."
+        }
+      ],
+      "note": "Every query in the budget was run; pl-56 has no OSM row for this key. We did not find it. This run's own Overpass capture holds 'La Rêvasse' as tourism=guest_house (way 373624823, addr:hamlet Cap des Rosiers, 16 rue Saint-Michel) with its centre at about 48.525, -64.214, which is in Percé and not at Cap-des-Rosiers; query 4, the name with Percé, was run as the one further query the budget allows for a locality the results leave open, and found nothing either."
+    },
+    "auberge internationale de forillon|gaspé (cap-aux-os)": {
+      "verdict": "exists",
+      "queries": [
+        "Auberge internationale de Forillon Cap-aux-Os"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/auberge-de-gaspe-hi",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Auberge Internationale Forillon, a youth hostel in the village of Cap-aux-Os, 2095 boulevard Grande-Grève, Gaspé, facing Gaspé Bay in Forillon National Park; establishment number 075795. Seen in the search result."
+        },
+        {
+          "url": "https://quebecmaritime.ca/en/blog/my-trip-in-gaspesie-lodging-at-auberge-internationale-forillon",
+          "readOn": "2026-10-24",
+          "note": "Le Québec maritime (regional tourism) blog post on lodging at Auberge internationale Forillon. Seen in the search result of object 1's third query, not this object's."
+        }
+      ],
+      "note": "At Cap-aux-Os, the key's own sector."
+    },
+    "motel l'eglantier|percé": {
+      "verdict": "exists",
+      "queries": [
+        "Motel L'Eglantier Percé",
+        "Motel l'Églantier Percé route 132 hébergement Bonjour Québec",
+        "\"Motel l'Églantier\""
+      ],
+      "evidence": [
+        {
+          "url": "https://www.skyscanner.fr/hotels-a/canada/perce-hotels/motel-l-eglantier/ht-227796090",
+          "readOn": "2026-10-24",
+          "note": "Skyscanner listing: Motel l'Églantier, 193 Route 132 Ouest, Percé, G0C 2L0, about 1.4 km from Percé Rock, with guest reviews dated 2020 and 2021. Seen in the search result of queries 1 and 3."
+        },
+        {
+          "url": "https://centris.ca/en/commercial-buildings~for-sale~perce/20353162",
+          "readOn": "2026-10-24",
+          "note": "Query 2: the search summary of a Centris sale listing says a building on Route 132 Ouest faces the Églantier, a twelve-unit motel in business for more than 30 years. Fetched: the listing is gone and the url now serves a results page that does not mention the motel, so this rests on the search summary."
+        }
+      ],
+      "note": "Query 1 returned booking aggregators only, so two more were run, as pl-58 did for Hotel Duca d'Alba; neither found a tourism-office listing or the motel's own site. The address matches OSM (way 598351270, 193 Route 132). Real and in Percé; that it operates today rests on aggregator listings with reviews no later than 2021."
+    },
+    "le loup marin|gaspé": {
+      "verdict": "closed",
+      "queries": [
+        "Le Loup Marin Gaspé",
+        "\"Le Loup Marin\"",
+        "Gîte du Loup Marin Gaspé Forillon gîte"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.routard.com/forums/t/hebergement-environ-parc-forillon/116075",
+          "readOn": "2026-10-24",
+          "note": "Fetched. Routard forum thread on lodging near Forillon: an anonymous post of 2015-02-22 says 'En 2012, j'ai séjourné au Gîte du Loup Marin près de Forillon'; a reply by 'mln' of 2015-02-23 says 'le Gite du Loup marin est desormais fermé depuis Octobre 2014'. Returned by queries 1 and 3."
+        }
+      ],
+      "closedYear": 2014,
+      "note": "Its locality is Gaspé, where the gîte was. Queries 1 to 3 found no current listing, directory entry or website; query 2 returned only the seal and unrelated places. The one source is a forum reply, so the closing rests on a single unofficial statement. OSM still holds 'Le Loup Marin' as tourism=guest_house (node 351976272, a CanVec building import, near Cap-aux-Os), and the run handed it to `lodging` as a find. Judgement call: read without the forum reply it would be `not-found`; either reading is not confirmed."
+    },
+    "motel et chalets natabel|percé": {
+      "verdict": "exists",
+      "queries": [
+        "Motel et Chalets Natabel Percé"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/motel-et-chalets-natabel",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Motel et Chalets Natabel, 196 route 132 Ouest, Percé, G0C 2L0, 12 units, about 100 m from the sea. Seen in the search result."
+        },
+        {
+          "url": "https://www.yellowpages.ca/bus/Quebec/Perce/Motel-Natabel-Enr/4393322.html",
+          "readOn": "2026-10-24",
+          "note": "Yellow Pages listing: Motel Natabel Enr, 196 Route 132 Ouest, Percé. Seen in the search result."
+        }
+      ],
+      "note": "OSM gives the address as 25 Route 132 (way 598360362); the listings give 196 route 132 Ouest. Both are Percé."
+    },
+    "motel bellevue|percé": {
+      "verdict": "exists",
+      "queries": [
+        "Motel Bellevue Percé"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.bonjourquebec.com/en/listing/accommodation/motel-bellevue/05lg",
+          "readOn": "2026-10-24",
+          "note": "Bonjour Québec (the province's tourism directory) listing: Motel Bellevue, 183 route 132 Ouest, Percé, 12 rooms, season 1 April to 30 November 2026. Seen in the search result."
+        },
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/motel-bellevue-de-perce",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Motel Bellevue de Percé. Seen in the search result."
+        }
+      ]
+    },
+    "auberge internationale de forillon|gaspé": {
+      "verdict": "exists",
+      "queries": [
+        "Auberge internationale de Forillon Cap-aux-Os"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/auberge-de-gaspe-hi",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Auberge Internationale Forillon, a youth hostel in the village of Cap-aux-Os, 2095 boulevard Grande-Grève, Gaspé, facing Gaspé Bay in Forillon National Park; establishment number 075795. Seen in the search result."
+        },
+        {
+          "url": "https://quebecmaritime.ca/en/blog/my-trip-in-gaspesie-lodging-at-auberge-internationale-forillon",
+          "readOn": "2026-10-24",
+          "note": "Le Québec maritime (regional tourism) blog post on lodging at Auberge internationale Forillon. Seen in the search result of object 1's third query, not this object's."
+        }
+      ],
+      "note": "Cap-aux-Os is a sector of the town of Gaspé, and the address is Gaspé."
+    },
+    "auberge la petite école de forillon|": {
+      "verdict": "exists",
+      "queries": [
+        "Auberge La Petite École de Forillon Gaspé"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/hebergement-touristique-forillon",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Auberge la Petite École de Forillon, a former schoolhouse run by a non-profit as an inn, 1826 boulevard de Forillon, Gaspé, a few minutes from Cap-aux-Os beach and Forillon National Park. Seen in the search result."
+        },
+        {
+          "url": "https://sortirauquebec.com/en/listing/youth-hostel/auberge-la-petite-ecole-de-forillon",
+          "readOn": "2026-10-24",
+          "note": "Sortir au Québec listing: Auberge La Petite École de Forillon, a youth hostel. Seen in the search result."
+        }
+      ],
+      "note": "The key has no locality."
+    },
+    "petit-gaspé campground, forillon national park|gaspé": {
+      "verdict": "exists",
+      "queries": [
+        "Petit-Gaspé campground Forillon National Park Parks Canada"
+      ],
+      "evidence": [
+        {
+          "url": "https://pc.gc.ca/pn-np/qc/forillon/activ/camping/avant-front",
+          "readOn": "2026-10-24",
+          "note": "Parks Canada frontcountry camping page: Petit-Gaspé is the South Area campground of Forillon National Park; sites are reservable. Seen in the search result."
+        },
+        {
+          "url": "https://tourisme-gaspesie.com/en/visiter/camping-petit-gaspe/3685505C.html",
+          "readOn": "2026-10-24",
+          "note": "Tourisme Gaspésie listing: Camping Petit-Gaspé – Forillon National Park, 173 sites. Seen in the search result."
+        }
+      ],
+      "note": "First query reused verbatim from pl-58. The key's locality is Gaspé, the town the park lies in."
+    },
+    "auberge la petite école de forillon|gaspé (forillon)": {
+      "verdict": "exists",
+      "queries": [
+        "Auberge La Petite École de Forillon Gaspé"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/hebergement-touristique-forillon",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Auberge la Petite École de Forillon, a former schoolhouse run by a non-profit as an inn, 1826 boulevard de Forillon, Gaspé, a few minutes from Cap-aux-Os beach and Forillon National Park. Seen in the search result."
+        },
+        {
+          "url": "https://sortirauquebec.com/en/listing/youth-hostel/auberge-la-petite-ecole-de-forillon",
+          "readOn": "2026-10-24",
+          "note": "Sortir au Québec listing: Auberge La Petite École de Forillon, a youth hostel. Seen in the search result."
+        }
+      ],
+      "note": "Its address is Gaspé, beside Forillon National Park."
+    },
+    "auberge la petite école de forillon|gaspé (cap-aux-os)": {
+      "verdict": "exists",
+      "queries": [
+        "Auberge La Petite École de Forillon Gaspé"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/hebergement-touristique-forillon",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Auberge la Petite École de Forillon, a former schoolhouse run by a non-profit as an inn, 1826 boulevard de Forillon, Gaspé, a few minutes from Cap-aux-Os beach and Forillon National Park. Seen in the search result."
+        },
+        {
+          "url": "https://sortirauquebec.com/en/listing/youth-hostel/auberge-la-petite-ecole-de-forillon",
+          "readOn": "2026-10-24",
+          "note": "Sortir au Québec listing: Auberge La Petite École de Forillon, a youth hostel. Seen in the search result."
+        }
+      ],
+      "note": "Its address is boulevard de Forillon, Gaspé, a few minutes west of Cap-aux-Os, a sector of the same town; judged by municipality, as pl-58 judged Gaspé's sectors."
+    },
+    "la rêvasse|cap des rosiers": {
+      "verdict": "not-found",
+      "queries": [
+        "La Rêvasse Cap-des-Rosiers",
+        "\"La Rêvasse\"",
+        "La Rêvasse gîte hébergement Cap-des-Rosiers Gaspé",
+        "La Rêvasse Percé gîte rue Saint-Michel"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/gite-aux-petales-de-rose",
+          "readOn": "2026-10-24",
+          "note": "Query 3's nearest lodging result: Gîte aux Pétales de Rose, 1184 boul. de Cap-Des-Rosiers, Gaspé, a different establishment. Seen in the search result."
+        },
+        {
+          "url": "https://www.bonjourquebec.com/fr/repertoire/hebergement/gite-nycole/0ya4",
+          "readOn": "2026-10-24",
+          "note": "Query 4's nearest lodging result: Gîte Nycole, 44 rue de l'Église, Percé, a different establishment. Seen in the search result."
+        }
+      ],
+      "note": "Every query in the budget was run; pl-56 has no OSM row for this key. We did not find it. This run's own Overpass capture holds 'La Rêvasse' as tourism=guest_house (way 373624823, addr:hamlet Cap des Rosiers, 16 rue Saint-Michel) with its centre at about 48.525, -64.214, which is in Percé and not at Cap-des-Rosiers; query 4, the name with Percé, was run as the one further query the budget allows for a locality the results leave open, and found nothing either."
+    },
+    "manoir de percé|percé": {
+      "verdict": "exists",
+      "queries": [
+        "Manoir de Percé Percé"
+      ],
+      "evidence": [
+        {
+          "url": "https://tourisme-gaspesie.com/en/visiter/hotel-motel-manoir-perce/7822022.html",
+          "readOn": "2026-10-24",
+          "note": "Tourisme Gaspésie listing: Hôtel-Motel Manoir Percé, 212 route 132 Ouest, Percé, facing Percé Rock. Seen in the search result."
+        },
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/hotel-motel-manoir-perce",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Hôtel-Motel Manoir Percé, open May to early October; one listing gives a booking window of 30 May to 1 October 2026. Seen in the search result."
+        }
+      ]
+    },
+    "auberge la petite école de forillon|forillon": {
+      "verdict": "exists",
+      "queries": [
+        "Auberge La Petite École de Forillon Gaspé"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/hebergement-touristique-forillon",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Auberge la Petite École de Forillon, a former schoolhouse run by a non-profit as an inn, 1826 boulevard de Forillon, Gaspé, a few minutes from Cap-aux-Os beach and Forillon National Park. Seen in the search result."
+        },
+        {
+          "url": "https://sortirauquebec.com/en/listing/youth-hostel/auberge-la-petite-ecole-de-forillon",
+          "readOn": "2026-10-24",
+          "note": "Sortir au Québec listing: Auberge La Petite École de Forillon, a youth hostel. Seen in the search result."
+        }
+      ],
+      "note": "Its locality is Forillon; the listing puts the inn a few minutes from the park."
+    },
+    "auberge la petite école de forillon|gaspé": {
+      "verdict": "exists",
+      "queries": [
+        "Auberge La Petite École de Forillon Gaspé"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.quebecvacances.com/fr/hebergement/hebergement-touristique-forillon",
+          "readOn": "2026-10-24",
+          "note": "Québec Vacances listing: Auberge la Petite École de Forillon, a former schoolhouse run by a non-profit as an inn, 1826 boulevard de Forillon, Gaspé, a few minutes from Cap-aux-Os beach and Forillon National Park. Seen in the search result."
+        },
+        {
+          "url": "https://sortirauquebec.com/en/listing/youth-hostel/auberge-la-petite-ecole-de-forillon",
+          "readOn": "2026-10-24",
+          "note": "Sortir au Québec listing: Auberge La Petite École de Forillon, a youth hostel. Seen in the search result."
+        }
+      ],
+      "note": "Its address is Gaspé."
+    }
+  }
 }
