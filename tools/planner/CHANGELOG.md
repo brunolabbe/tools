@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/brunolabbe/tools/compare/planner-v0.9.0...planner-v0.10.0) (2026-10-24)
+
+
+### Features
+
+* **planner:** food chooses among places to eat found around the trip's towns (pl-62) ([#619](https://github.com/brunolabbe/tools/issues/619)) ([a91a14c](https://github.com/brunolabbe/tools/commit/a91a14cca32b1917ed0aa36a47843204c2bf045a))
+* **planner:** lodging chooses among places to stay found around the trip's towns (pl-60) ([#607](https://github.com/brunolabbe/tools/issues/607)) ([aa83440](https://github.com/brunolabbe/tools/commit/aa83440304134dc19707ca333fbfeef0011c3b89))
+
+
+### Fixes
+
+* **planner:** send a user agent to Overpass and log refusal status (pl-61) ([#618](https://github.com/brunolabbe/tools/issues/618)) ([972ab6a](https://github.com/brunolabbe/tools/commit/972ab6a0f701a6450500e6699a770b7937bb2331))
+
 ## [0.9.0](https://github.com/brunolabbe/tools/compare/planner-v0.8.1...planner-v0.9.0) (2026-10-22)
 
 
