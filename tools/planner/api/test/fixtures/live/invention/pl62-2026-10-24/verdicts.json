@@ -10,5 +10,213 @@
     ],
     "osm": "Copied by the harness from pl-56's hours-coverage record for a checked key it has a row for; null for the keys pl-56 never read. A place pl-56 located is not thereby real."
   },
-  "checks": {}
+  "checks": {
+    "resto du capitaine|percé": {
+      "verdict": "not-found",
+      "queries": [
+        "Resto du Capitaine Percé",
+        "\"Resto du Capitaine\"",
+        "Resto du Capitaine restaurant fruits de mer pizza Percé route 132"
+      ],
+      "evidence": [
+        {
+          "url": "https://sortirauquebec.com/en/listing/hotel/domaine-du-capitaine",
+          "readOn": "2026-10-24",
+          "note": "Query 1's nearest result: Domaine du Capitaine, a five-room lodging at 10 chemin du Belvédère, Percé, a different establishment. Seen in the search result."
+        },
+        {
+          "url": "https://kupi.com/en-ae/explore/canada/perce/la-boite-a-fruits-de-mer",
+          "readOn": "2026-10-24",
+          "note": "Query 3's nearest seafood result besides La Maison du Pêcheur: La Boîte à Fruits de Mer, 155 route 132 Ouest, Percé, a different name. Seen in the search result."
+        }
+      ],
+      "note": "Every query in the budget was run; pl-56 has no OSM row for this key. We did not find it. Query 2 returned only Capitaine in Paris and Le Capitaine restaurants elsewhere in Québec. The run's food capture holds 'RESTO du CAPITAINE' as amenity=restaurant (way 302432445, 162 Route 132 unit b, Percé, cuisine seafood;pizza, check_date 2022-05-31, website restoducaputaine.com as tagged), and the run handed it to `food` as a find."
+    },
+    "peppino pizza|gaspé": {
+      "verdict": "exists",
+      "queries": [
+        "Peppino Pizza Gaspé"
+      ],
+      "evidence": [
+        {
+          "url": "https://tourisme-gaspesie.com/en/visiter/camping-parc-nature-gaspe/8925256.html",
+          "readOn": "2026-10-24",
+          "note": "Tourisme Gaspésie listing for Camping Parc Nature Gaspé, 1986 boulevard de Grande-Grève, Cap-aux-Os: its Italian restaurant Peppino serves Neapolitan-style pizzas with local beers. Seen in the search result."
+        }
+      ],
+      "note": "Cap-aux-Os is a sector of the town of Gaspé, so the key's locality holds, judged by municipality as pl-58 and pl-60 judged Gaspé's sectors. OSM gives the same address (node 9979845990, 1986 Bd de Grande Greve, website peppinopizza.ca). The result gives no current season or hours."
+    },
+    "gaspésie brasserie gourmande|percé": {
+      "verdict": "exists-elsewhere",
+      "queries": [
+        "Gaspésie Brasserie Gourmande Percé",
+        "\"Gaspésie Brasserie Gourmande\"",
+        "Gaspésie Brasserie Gourmande restaurant Percé village route 132",
+        "Gaspésie Brasserie Gourmande Percé succursale saison été"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.restomontreal.ca/resto/gaspesie-brasserie-gourmande-montreal/13619/en/?book=1",
+          "readOn": "2026-10-24",
+          "note": "RestoMontreal: Gaspésie Brasserie Gourmande, 30 rue Sainte-Catherine Ouest, Montréal, a seafood menu from the Gulf of St. Lawrence. Returned by query 2. Seen in the search result."
+        },
+        {
+          "url": "https://restoenligne.com/en/restaurants/evaluations/gaspesie-brasserie-gourmande-montreal",
+          "readOn": "2026-10-24",
+          "note": "Restoenligne: the same Montréal restaurant, 4.2 of 5 from 12 reviews; one review of January 2026 says it was closed for renovation. Returned by query 2. Seen in the search result."
+        }
+      ],
+      "actualLocality": "Montréal, QC (30 rue Sainte-Catherine Ouest)",
+      "note": "Query 1 found nothing in Percé; query 2, the name alone, found one restaurant of that name, in Montréal; query 3 (French category words with Percé) and one further query for the locality found no Percé premises. Judged as pl-58 judged Pit Caribou at Gaspé: the place exists, not in the key's town. The run's food capture holds 'Gaspésie Brasserie Gourmande' as amenity=restaurant in Percé village (node 12972316601, name and amenity tags only), and the run handed it to `food` as a find, so the wrong town is the map's and not the model's. Judgement call: a Percé summer outlet the search did not find would make this `not-found`, also not confirmed; whether the Montréal room reopened after January 2026 is not established."
+    },
+    "restaurant le surcouf|percé": {
+      "verdict": "exists",
+      "queries": [
+        "Restaurant Le Surcouf Percé"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.yellowpages.ca/bus/Quebec/Perce/Restaurant-Le-Surcouf-Cafe/1330486.html",
+          "readOn": "2026-10-24",
+          "note": "Yellow Pages listing: Restaurant Le Surcouf Café, Percé. Seen in the search result."
+        },
+        {
+          "url": "https://sortirauquebec.com/en/listing/restaurant/restaurant-le-surcouf",
+          "readOn": "2026-10-24",
+          "note": "Sortir au Québec listing for Restaurant Le Surcouf; the search summary gives 168 Route 132 Ouest, Percé, a seafood restaurant with a terrace. Seen in the search result."
+        }
+      ],
+      "note": "OSM gives the same address (way 598383461, 168 Route 132, Percé). Reviews are summarised in the result; current hours and season were not in it."
+    },
+    "la cantina|": {
+      "verdict": "exists",
+      "queries": [
+        "La Cantina Gaspé"
+      ],
+      "evidence": [
+        {
+          "url": "https://restoenligne.com/restaurants/home/la-cantina-latinogaspesienne",
+          "readOn": "2026-10-24",
+          "note": "Restoenligne listing: La Cantina Latinogaspésienne, 30 rue de la Plage, Gaspé, a 'cantine gastronomique située sur la plage Haldimand', open daily 10h to 16h, nine ratings. Seen in the search result."
+        }
+      ],
+      "note": "The key has no locality; Gaspé was added to its first query, as pl-60 did for 'le loup marin|'. The run handed `food` one 'La Cantina', OSM node 6753296585 at 48.7900, -64.3808, which is at Haldimand in the town of Gaspé; the listing's beach and street are there. The listing's name is longer than OSM's. No official site or menu was found, so the season is the directory's."
+    },
+    "pub aire salin|percé": {
+      "verdict": "exists",
+      "queries": [
+        "Pub Aire Salin Percé",
+        "\"Aire Salin\" Percé",
+        "Aire Salin microbrasserie pub 182 route 132 Percé",
+        "\"Pub Aire Salin\"",
+        "Aire Salin Percé pub"
+      ],
+      "evidence": [
+        {
+          "url": "https://wanderlog.com/place/details/10666871/pub-aire-salin",
+          "readOn": "2026-10-24",
+          "note": "Fetched. Wanderlog: Pub Aire Salin, 182 QC-132 O, Percé, Google 4.7 from 138 reviews, regular hours listed, no closed marker."
+        },
+        {
+          "url": "https://www.tripadvisor.ca/Restaurant_Review-g182144-d30352437-Reviews-Pub_Aire_Salin-Perce_Gaspesie_Region_Quebec.html",
+          "readOn": "2026-10-24",
+          "note": "Fetched. Tripadvisor: Pub Aire Salin, 182 Route 132-O, Percé, with a review written 23 September 2026."
+        }
+      ],
+      "note": "Query 1 returned only a passing mention in hotel listings (Camp de Base Gaspésie, 'Pub Aire Salin' as a nearby restaurant); queries 2 to 4 found nothing; query 5, the same words limited to directory and review sites, found the listings above, and its search summary reports a reviewer saying the building used to be the Pit Caribou. Five queries, two more than the budget's three before not-found: the budget's own three would have ended at `not-found`, and the Log gives that as a sensitivity reading. OSM holds it as way 484236636 (182 Route 132, amenity=pub, microbrewery=yes, website airesalin.com); that site was fetched twice and answered with a certificate for another domain (tristanetvirginie.com)."
+    },
+    "la maison du pêcheur|percé": {
+      "verdict": "exists",
+      "queries": [
+        "La Maison du Pêcheur Percé"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.tourisme-gaspesie.com/en/visiter/la-maison-du-pecheur/7825331.html",
+          "readOn": "2026-10-24",
+          "note": "Tourisme Gaspésie listing: La Maison du Pêcheur, Percé, 160 seats, a 2026 season of 29 May to 10 October. Seen in the search result."
+        },
+        {
+          "url": "https://www.quebecmaritime.ca/en/company/la-maison-du-pecheur",
+          "readOn": "2026-10-24",
+          "note": "Le Québec maritime listing: 155 Place du Quai, Percé, late May to late September. Seen in the search result."
+        }
+      ],
+      "note": "Sources give 157 Route 132 Ouest and 155 Place du Quai; OSM gives 155 Place du Quai (way 302432126, website maisondupecheur.ca, with a note that the building was moved in 2017-18). A Wanderlog capture marked it temporarily closed; the 2026 season listing is the more specific."
+    },
+    "odprta kuhna|ljubljana": {
+      "verdict": "exists",
+      "queries": [
+        "Odprta Kuhna Ljubljana"
+      ],
+      "evidence": [
+        {
+          "url": "https://www.inyourpocket.com/slovenia/ljubljana/events/odprta-kuhna",
+          "readOn": "2026-10-24",
+          "note": "In Your Pocket: Odprta Kuhna, Friday food market at Pogačarjev trg, 2026 season 7 March to 31 October. Seen in the search result."
+        },
+        {
+          "url": "https://www.slovenia.info/en/press-centre/news-of-the-tourism-press-agency/32294-the-13th-season-of-odprta-kuhna-kicks-off-at-pogacarjev-trg",
+          "readOn": "2026-10-24",
+          "note": "Slovenian Tourist Board release on a season of Odprta Kuhna at Pogačarjev trg, Ljubljana. Seen in the search result."
+        }
+      ],
+      "note": "pl-58's first query, reused verbatim; pl-58's verdict was `exists`. A seasonal Friday food market, not a fixed restaurant. The one set A key in this stratum, and not a map entry."
+    },
+    "pub pit caribou|percé": {
+      "verdict": "closed",
+      "queries": [
+        "Pub Pit Caribou Percé",
+        "Pub Pit Caribou Percé fermeture nouveau pub Aire Salin"
+      ],
+      "evidence": [
+        {
+          "url": "https://wanderlog.com/place/details/1098902/pub-pit-caribou-perc",
+          "readOn": "2026-10-24",
+          "note": "Fetched. Wanderlog: 'Pub Pit Caribou Percé', marked 'Permanently Closed', every day's hours 'Permanently closed', Google 4.5 from 1,470 reviews (its address line reads 155 QC-132)."
+        },
+        {
+          "url": "https://wanderlog.com/place/details/10666871/pub-aire-salin",
+          "readOn": "2026-10-24",
+          "note": "Fetched. Pub Aire Salin trading at 182 QC-132 O, Percé, the address Québec Vacances and Mapstr give for Pub Pit Caribou; a search summary of its reviews (object 6's query 5) reports a reviewer saying the building used to be the Pit Caribou."
+        },
+        {
+          "url": "https://www.quebecvacances.com/fr/attractions/pub-pit-caribou-perce",
+          "readOn": "2026-10-24",
+          "note": "Fetched. Québec Vacances still lists 'Pub Pit Caribou de Percé', 182 route 132 Ouest, 'Ouvert à l'année', with no date on the page. The contrary evidence."
+        }
+      ],
+      "note": "Pre-registered as its own object, distinct from pl-58's brewery at L'Anse-à-Beaufils (OSM node 6644593426, 8.8 km away) and from Pub Aire Salin, and pre-registered to read `closed` if the Percé pub now trades as Aire Salin. Two directories (Québec Vacances, Mapstr, both fetched) still list it at 182 route 132 Ouest with no date and no closed marker; Wanderlog's Google data marks it permanently closed, and Pub Aire Salin, with reviews into September 2026, trades at that address. No source gives a closing year. Judgement call: read on the two undated directories it would be `exists`, and the Log gives that reading. OSM holds both names 0.2 m apart (node 9437751976 'Pub Pit Caribou'; way 484236636 'Pub Aire Salin'), and the run handed both to `food` as finds."
+    },
+    "resto du village|percé": {
+      "verdict": "exists",
+      "queries": [
+        "Resto du Village Percé",
+        "\"Resto du Village\" Percé",
+        "Resto du Village casse-croûte guédille homard Percé"
+      ],
+      "evidence": [
+        {
+          "url": "https://wanderlog.com/place/details/2798631",
+          "readOn": "2026-10-24",
+          "note": "Fetched. Wanderlog: 'Resto du Village', 172 QC-132, Percé, QC G0C 2L0, Google 4.3 from 578 reviews and Tripadvisor 4.1 from 38, no closed marker; review summaries describe a small casual place on the village's main street serving lobster rolls."
+        }
+      ],
+      "note": "All three queries returned the one aggregator page; no tourism-office listing, directory entry or site of its own was found. Two more queries were run after query 1 returned an aggregator only, as pl-58 did for Hotel Duca d'Alba and pl-60 for Motel L'Eglantier. It is the weakest `exists`: whether it operates today rests on an aggregator. OSM holds it as node 5739969621 (name and amenity only) in Percé village."
+    },
+    "la cantina|gaspé": {
+      "verdict": "exists",
+      "queries": [
+        "La Cantina Gaspé"
+      ],
+      "evidence": [
+        {
+          "url": "https://restoenligne.com/restaurants/home/la-cantina-latinogaspesienne",
+          "readOn": "2026-10-24",
+          "note": "Restoenligne listing: La Cantina Latinogaspésienne, 30 rue de la Plage, Gaspé, a 'cantine gastronomique située sur la plage Haldimand', open daily 10h to 16h, nine ratings. Seen in the search result."
+        }
+      ],
+      "note": "The run handed `food` one 'La Cantina', OSM node 6753296585 at 48.7900, -64.3808, which is at Haldimand in the town of Gaspé; the listing's beach and street are there. The listing's name is longer than OSM's. No official site or menu was found, so the season is the directory's."
+    }
+  }
 }

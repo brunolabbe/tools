@@ -1501,3 +1501,150 @@ walk takes every key and stops `exhausted`.
   municipality, as pl-58 judged Gaspé's sectors.
 - **Firewall:** WebSearch runs on the vendor's side; WebFetch is tried before a page is
   called unreachable.
+
+**2026-10-24 — Build 7's web check: the verdicts and the per-object rate (general-purpose
+agent, Opus 5.5).** WebSearch ran in a general-purpose agent, as in pl-57, pl-58 and pl-60,
+after the pre-registration above was pushed as `335543eb` at 19:12:57Z; the searches ran
+from then to about 19:19Z. **Every first query ran in the pre-registered wording**, one per
+object, objects 1 to 10 in key order, and the grouping was not changed. No source, test or
+code changed: `verdicts.json`'s `checks` and the record the harness writes from them.
+
+**Spend against the budget: 22 queries and 11 page fetches attempted, 6 of which returned a
+page**, against a cap of 90 and 20; 2.2 queries per object (pl-60: 1.78, pl-58: 1.23). The
+further queries:
+
+- Resto du Capitaine, 2: the budget's queries 2 and 3, because query 1 found no listing.
+- Gaspésie Brasserie Gourmande, 3: queries 2 and 3, then one further query for the
+  locality, because query 2 found the name in Montréal and none of them in Percé.
+- Pub Aire Salin, 4: queries 2 and 3 of the budget (`"Pub Aire Salin"`, and French
+  category words with the address) found nothing, nor did `"Aire Salin" Percé`, which I ran
+  as a second form of query 2. A fifth query, the same words limited to directory and
+  review sites, found it. **That is two more than the budget's three before `not-found`**,
+  and the sensitivity line below gives the budget-strict reading.
+- Pub Pit Caribou, 1: French words for a closing, because the first query's directories and
+  a Wanderlog page disagreed on whether it is open.
+- Resto du Village, 2: queries 2 and 3, because query 1 returned an aggregator only, as
+  pl-58 did for Hotel Duca d'Alba and pl-60 for Motel L'Eglantier.
+
+Fetches: `airesalin.com` (the OSM `website` of Pub Aire Salin), twice, which answered with a
+TLS certificate for another domain (`tristanetvirginie.com`); Travelocity, HTTP 429;
+Hotels.com, a 60 s timeout; Tourisme Gaspésie's Pit Caribou page, HTTP 403; and six that
+returned a page: Québec Vacances (Pub Pit Caribou), Mapstr (Pub Pit Caribou), Wanderlog
+three times (Resto du Village, Pub Pit Caribou, Pub Aire Salin), Tripadvisor (Pub Aire
+Salin). **The two `airesalin.com` fetches read a URL from an OSM tag, not a result page**,
+which the budget does not provide for; neither returned anything.
+
+**The verdicts, 11 keys and 10 objects: 8 `exists`, 1 `exists-elsewhere`, 1 `closed`, 1
+`not-found`.**
+
+| object | key(s)                                | verdict          | settled by                                                                  | source                                                                                                                 |
+| ------ | ------------------------------------- | ---------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1      | `resto du capitaine\|percé`           | not-found        | all three: `Resto du Capitaine Percé`, `"Resto du Capitaine"`, French words | none; nearest results Domaine du Capitaine (lodging) and La Boîte à Fruits de Mer                                      |
+| 2      | `peppino pizza\|gaspé`                | exists           | query 1, `Peppino Pizza Gaspé`                                              | Tourisme Gaspésie, Camping Parc Nature Gaspé, 1986 boul. de Grande-Grève, Cap-aux-Os (seen in the result)              |
+| 3      | `gaspésie brasserie gourmande\|percé` | exists-elsewhere | query 2, `"Gaspésie Brasserie Gourmande"`                                   | RestoMontreal and Restoenligne, 30 rue Sainte-Catherine Ouest, Montréal (seen in the result)                           |
+| 4      | `restaurant le surcouf\|percé`        | exists           | query 1, `Restaurant Le Surcouf Percé`                                      | Yellow Pages; Sortir au Québec, 168 Route 132 Ouest (seen in the result)                                               |
+| 5      | `la cantina\|`, `la cantina\|gaspé`   | exists (both)    | query 1, `La Cantina Gaspé`                                                 | Restoenligne, La Cantina Latinogaspésienne, 30 rue de la Plage, plage Haldimand, Gaspé (seen in the result)            |
+| 6      | `pub aire salin\|percé`               | exists           | query 5, `Aire Salin Percé pub` on directory sites                          | Wanderlog (fetched: 182 QC-132 O, 138 reviews, no closed marker); Tripadvisor (fetched: a review of 23 September 2026) |
+| 7      | `la maison du pêcheur\|percé`         | exists           | query 1, `La Maison du Pêcheur Percé`                                       | Tourisme Gaspésie, 2026 season 29 May to 10 October (seen in the result)                                               |
+| 8      | `odprta kuhna\|ljubljana`             | exists           | query 1, pl-58's verbatim                                                   | In Your Pocket, 2026 season 7 March to 31 October (seen in the result)                                                 |
+| 9      | `pub pit caribou\|percé`              | closed           | query 1, `Pub Pit Caribou Percé`, with object 6's evidence                  | Wanderlog (fetched: "Permanently Closed"); Pub Aire Salin trading at the same 182 Route 132                            |
+| 10     | `resto du village\|percé`             | exists           | query 1, `Resto du Village Percé`                                           | Wanderlog (fetched: 172 QC-132, Percé, Google 4.3 from 578 reviews, no closed marker)                                  |
+
+What each verdict rests on, where it is not plain:
+
+- **Resto du Capitaine**: we did not find it. pl-56 has no OSM row for the key. The capture
+  holds it (way 302432445, 162 Route 132 unit b, `check_date` 2022-05-31, a `website` tag
+  that reads `restoducaputaine.com`).
+- **Gaspésie Brasserie Gourmande** is a Montréal restaurant (one review of January 2026 says
+  it was closed for renovation). The capture holds a node of that name in Percé village (node
+  12972316601, `name` and `amenity` only), and `food` wrote the locality the map gave it, so
+  **the wrong town is the map's, not the model's**. Judgement call: a Percé summer outlet the
+  search missed would make it `not-found`, which is also not confirmed.
+- **Pub Pit Caribou** (pre-registered rule 3): Québec Vacances ("Ouvert à l'année") and
+  Mapstr still list it at 182 route 132 Ouest, both undated and with no closed marker.
+  Wanderlog's Google data marks it permanently closed. Pub Aire Salin trades at that address,
+  with reviews into September 2026, and a review summary in object 6's fifth search says the
+  building used to be the Pit Caribou. No source gives a year, so no `closedYear`. Judgement
+  call: read on the two undated directories, it would be `exists`. pl-58's brewery at
+  L'Anse-à-Beaufils is a different premises and was not re-judged.
+- **Resto du Village** is the weakest `exists`. All three queries returned one aggregator
+  page, so whether it is open today rests on that page, as L'Eglantier's did in pl-60.
+- **Peppino Pizza** is at Cap-aux-Os, judged by municipality (Gaspé), as pl-58 and pl-60
+  judged Gaspé's sectors.
+
+**The record.** `PLANNER_INVENTION_OFFLINE=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24` gave exit 0 and wrote
+`invention/pl62-2026-10-24/2026-10-24.json` only. Its `stratumDraw` reads `11 keys taken for
+10 of 40 objects (exhausted)`, as planned. `withoutParks` is the same 10 objects.
+
+**The rate per object (`Done when` 10).** This is the harness's `render` line, and a scratch
+Wilson script agrees with it:
+
+| stratum                                                   | objects | not confirmed | rate  | 95% Wilson    |
+| --------------------------------------------------------- | ------- | ------------- | ----- | ------------- |
+| pl-58, `food` only (from its `verdicts.json`, above)      | 21      | 3             | 14.3% | 5.0–34.6      |
+| pl-60, `lodging`'s named premises                         | 9       | 2             | 22.2% | 6.3–54.7      |
+| **pl-62, `food`'s named premises**                        | **10**  | **3**         | 30.0% | **10.8–60.3** |
+| pl-62, Pub Pit Caribou read as `exists`                   | 10      | 2             | 20.0% | 5.7–51.0      |
+| pl-62, Resto du Village also read as not confirmed        | 10      | 4             | 40.0% | 16.8–68.7     |
+| pl-62, Pub Aire Salin on the budget's three queries alone | 10      | 4             | 40.0% | 16.8–68.7     |
+
+The intervals for pl-62 and pl-58 overlap over most of their width, so **this sample cannot
+say `food`'s rate moved**, in either direction. All ten objects are the whole stratum, not a
+draw from it: the run named 11 `food` premises keys making 10 objects, against pl-58's 21
+`food` objects. Per key the harness gives 3 of 11, 27.3% (9.7–56.6). pl-58's baseline was
+re-run here: `node --import tsx <scratch>/pl-62/build-6/pl58-food-rate.mts <worktree>`,
+from the worktree, printed `food's 21, not confirmed 3 (14.3%, 95% Wilson 5.0–34.6)`.
+
+**Each object not confirmed, by class, and whether the capture holds it:**
+
+| object                       | class                                                       | in `overpass-food-towns.json`                   |
+| ---------------------------- | ----------------------------------------------------------- | ----------------------------------------------- |
+| Resto du Capitaine           | a premises not found                                        | yes, way 302432445 (Percé), handed to `food`    |
+| Gaspésie Brasserie Gourmande | a wrong-town premises (Montréal), the map's wrong town      | yes, node 12972316601 (Percé), handed to `food` |
+| Pub Pit Caribou              | a premises the web says closed (replaced by Pub Aire Salin) | yes, node 9437751976 (Percé), handed to `food`  |
+
+**All three objects not confirmed are map entries the run handed `food`**, and none is an
+invented name. pl-58's three `food` misses were all real premises in another town, from
+memory: two smokehouses and a brewery. Here, the one wrong-town object is a map entry placed
+in the wrong town. So **the defect changed kind, as it did for `lodging` in pl-60**: from a
+premises recalled in the wrong town to a map entry that is stale (Pit Caribou), misplaced
+(the Brasserie) or unverifiable (Capitaine). That is 3 events, so it is an observation and
+not a rate. Two of the three have no contact tag. Capitaine has a `website` and a
+`check_date`, but the website's spelling is not the business's name. Pub Aire Salin, the
+premises that replaced Pit Caribou, is in the same capture 0.2 m away. So the map had both
+the old name and the new one at one address, and `food` chose each (7 and 35 candidates).
+
+**Checks, each exit code read from a file and never through a pipe** (`checks.sh`):
+
+- `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts` gave exit 0, `111 live records, 2594 place
+mentions, 1019 distinct places`, "check: the committed record equals its regeneration;
+  every sampled place has a verdict".
+- The same with `--after pl58-2026-10-21`: exit 0, `112 live records … 847 distinct places`,
+  40 objects, 5 not confirmed, unchanged.
+- The same with `--after pl60-2026-10-24`: exit 0, `110 live records … 700 distinct places`,
+  2 of 9, unchanged.
+- The same with `--after pl62-2026-10-24`: exit 0, `111 live records, 2714 place mentions,
+640 distinct places`, and the same check line.
+- **The check can fail.** With `resto du capitaine|percé` flipped to `exists`, the pl-62
+  check gave exit 1, "the committed record is not what the inputs regenerate". The verdicts
+  were regenerated from the scratch generator that wrote them (`gen-verdicts.py`), and the
+  check gave exit 0 again (`mutate.sh`).
+- `npx vitest run tools/planner/api/test/live-records.test.ts
+tools/planner/api/test/invention-population.test.ts`: `Test Files 2 passed (2)`, `Tests
+506 passed (506)`, exit 0.
+
+**What the brief and the handover had wrong, or left open.**
+
+- The budget gives no rule for a first query whose results disagree on whether a place is
+  open. Pit Caribou was settled by the rule pre-registered for it, and the sensitivity line
+  gives the other reading.
+- The handover put `La Cantina` in "Forillon's capture". It is in Gaspé's reply as well as
+  Forillon National Park's. The run's sets B to D handed it to `food` from Forillon's, since
+  only Percé and Forillon are stood in for.
+- `pl58-food-rate.mts`'s usage line says `node --import tsx pl58-food-rate.mts <worktree>`.
+  Run from the scratch directory, it fails with `ERR_MODULE_NOT_FOUND`. Run from the
+  worktree, it prints the figure above.
+- The budget's sentence "WebFetch only to read a result page" leaves out a URL from the
+  capture's own tags. I fetched one such URL and say so above.
