@@ -3,7 +3,7 @@ id: lg-67
 tool: ledger
 title: Read a bank CSV the reader does not know through a layout a model describes, into the inbox
 kind: work-package
-status: needs-decision
+status: ready
 milestone: P6
 depends_on: [lg-66, lg-68]
 difficulty: hard
@@ -85,14 +85,17 @@ UTF-8 is tested with `csv-balance` re-encoded and one synthetic file (Done when
   role reads it. Nothing at the base calls that reader outside the test
   harness. This half is Decision 6.
 
-## Decision — open
+## Decision — answered 2026-10-24 by the owner
 
-Seven questions the owner's answers do not settle. The Build is written for the
-recommended option of each; under another, the Build steps named under the
-question are rewritten. None is answered here, and the Log's entry of today
-records the measurements each option's costs rest on.
+Seven questions the owner's answers to lg-66 did not settle, answered by the
+owner on 2026-10-24, each with the recommended option (the Log's entry of that
+date). The options stay as they were put, and the answer is marked under each
+question. The Build is written for the answers given. Rate of the work: `hard`,
+as filed.
 
 ### 1. What proves a CSV that has no balance column
+
+**Answered 2026-10-24 by the owner: (a), refuse it, in plain words** (the recommendation).
 
 A balance column is what proves a CSV's rows against themselves: the reader
 checks that each row's balance follows from the one before. Without one,
@@ -136,6 +139,8 @@ Under (b), (c) or (d), Build 4's second bullet and Done when 6 are rewritten,
 and (b) adds a field to the confirmation (Decision 4).
 
 ### 2. How its rows are placed against rows already stored
+
+**Answered 2026-10-24 by the owner: (a), after the stored tail, or into an empty history; never overlapping** (the recommendation).
 
 A paste is placed by `statements.ts`: the first paste into an empty database is
 the anchor; a later paste must overlap the stored tail exactly, row by row
@@ -224,6 +229,8 @@ names is `workbook`, not `paste`.
 
 ### 3. The shapes the reader does not read
 
+**Answered 2026-10-24 by the owner: (a), refuse them in plain words, naming the shape** (the recommendation).
+
 `csv.ts` reads a comma delimiter, `.` decimals, no thousands separator and ISO
 dates, and the models were measured on files written that way. Offline (Log):
 the 7 fixtures re-serialised five other ways (a semicolon delimiter; a comma
@@ -265,6 +272,8 @@ Under (b) or (c), Build 2 and Done when 3 are rewritten.
 
 ### 4. What the confirmation shows for a CSV
 
+**Answered 2026-10-24 by the owner: (a), the date column element alone, and the dry run's report** (the recommendation).
+
 lg-66 Build 4.2 shows the date column the description chose (letter, header,
 3 oldest and 3 newest rows' dates with detail and amount) and each bucket
 label. A CSV has no bucket label, so the second element has nothing to show.
@@ -289,6 +298,8 @@ more is "a choice for the owner, not an addition for the builder".
 Under (b), Build 6.2 and Done when 11 gain the totals.
 
 ### 5. What the CSV's sheet is called in what is sent
+
+**Answered 2026-10-24 by the owner: (a), a fixed name, `statement.csv`** (the recommendation).
 
 A CSV has no sheet name of its own, so the reader names its one sheet. The
 fixtures name it as a bank file would (`releve-2024.csv`), the view prints it
@@ -316,6 +327,8 @@ repeat of the 70 runs, since the request is then the measured one (the live read
 stays).
 
 ### 6. What the CSV reader does with a field of digits that starts with a zero
+
+**Answered 2026-10-24 by the owner: (a), a field that starts with a zero followed by a digit stays text** (the recommendation).
 
 Only the CSV half of the digits-only detail defect is open here; the `.xlsx`
 half, lg-68's `detailOf` in the books reader, is lg-68's (Why, above). Reproduced (Log, round 1): the CSV reader turns a
@@ -347,6 +360,8 @@ Under (b) or (c), the change Build 1 makes under this Decision is rewritten and
 Done when 5 changes with it.
 
 ### 7. Whether the stored rows pass through the rules
+
+**Answered 2026-10-24 by the owner: (a), as a paste does** (the recommendation).
 
 A paste's rows are run through `classifyAdded` in the same transaction that
 stores them (lg-4, lg-17): a row the most specific matching rules agree on is
@@ -903,3 +918,17 @@ bullet" (the rows' source), Decision 3's "Done when 3", and Done when 10's "the 
 pins of Done when 2".
 
 ### 2026-10-24 — `lg-68` added to `depends_on`: lg-68 merged to `main` (#626, `940e4511`), as gate 2's N2 and the landing entry said it would be.
+
+### 2026-10-24 — the owner's answers to the seven Decisions
+
+Asked in two batches, each question with the options as the Decision section
+puts them (the options beyond four were left to the free-text answer). The owner
+chose the recommended option of every one: 1 (a) refuse a CSV with no balance
+column; 2 (a) after the stored tail or into an empty history, never
+overlapping, stored as `paste` (not (e) or (f)); 3 (a) refuse the unread shapes,
+naming the shape; 4 (a) the date column element alone; 5 (a) the fixed sheet
+name `statement.csv`; 6 (a) a leading-zero field stays text; 7 (a) the rows pass
+through `classifyAdded` as a paste's do. The Build already reads for these, so
+no step changes; `status` moves to `ready`, and the ticket is still blocked by
+lg-66 through `depends_on`. Done when 13 (the re-run of the 70 Haiku runs under
+the fixed name, about $0.053) stays the owner's, with their key.
