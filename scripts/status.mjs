@@ -534,15 +534,6 @@ function ticketDirs(repoRoot) {
 }
 
 /**
- * The ids of every finished ticket in `graph`.
- *
- * @param {ReturnType<typeof readTickets>} graph
- */
-function doneIds(graph) {
-  return new Set(graph.filter((t) => t.status === "done").map((t) => t.id));
-}
-
-/**
  * The tickets that could be started right now.
  *
  * "Ready" in the frontmatter means nobody has picked it up; it says nothing
@@ -561,17 +552,10 @@ function doneIds(graph) {
  * until it merges, which is why CLAUDE.md says `gh pr list` first — `--prs`
  * folds that in.
  *
- * **The done set is the whole graph, not the list asked about (repo-114).**
- * `--tool` narrows the rows a reader is shown; it must never narrow what counts
- * as finished, or a ticket that depends on a `done` ticket of another tool reads
- * as waiting on work that has landed. `graph` is every ticket on the board and
- * defaults to `tickets`, which is right for a caller whose list is already whole.
- *
  * @param {ReturnType<typeof readTickets>} tickets
- * @param {ReturnType<typeof readTickets>} [graph]
  */
-export function readyTickets(tickets, graph = tickets) {
-  const done = doneIds(graph);
+export function readyTickets(tickets) {
+  const done = new Set(tickets.filter((t) => t.status === "done").map((t) => t.id));
   return tickets.filter((t) => t.status === "ready" && t.depends_on.every((id) => done.has(id)));
 }
 
@@ -606,16 +590,12 @@ export function readyTickets(tickets, graph = tickets) {
  * is never serialised, and `status` already says which of the two reasons
  * applies, so a tag with no reader would just be a field to keep true.
  *
- * Its `graph` is `readyTickets`'s, for the same reason (repo-114): the reason
- * names only the dependencies that are not `done` anywhere on the board.
- *
  * @param {ReturnType<typeof readTickets>} tickets
- * @param {ReturnType<typeof readTickets>} [graph]
  * @returns {Array<{file: string, id: string, status: string, reason: string, message: string}>}
  */
-export function withheldFromReady(tickets, graph = tickets) {
-  const done = doneIds(graph);
-  const offered = new Set(readyTickets(tickets, graph).map((t) => t.id));
+export function withheldFromReady(tickets) {
+  const done = new Set(tickets.filter((t) => t.status === "done").map((t) => t.id));
+  const offered = new Set(readyTickets(tickets).map((t) => t.id));
   return tickets
     .filter((t) => UNSTARTED.has(t.status) && !offered.has(t.id))
     .map((ticket) => {
@@ -978,7 +958,7 @@ function renderView(all, problems, flags, values, repoRoot) {
   }
 
   if (flags.has("ready")) {
-    const ready = readyTickets(selected, all);
+    const ready = readyTickets(selected);
     for (const ticket of ready) {
       process.stdout.write(`${ticket.id}\t${ticket.tool}\t${ticket.title}\n`);
     }
@@ -990,7 +970,7 @@ function renderView(all, problems, flags, values, repoRoot) {
     // the number this exists to make true. Narrowed by `--tool` along with the
     // view, unlike `problems`: a reader who asked about one tool is being told
     // what *that* question withheld, not handed a fact about the whole graph.
-    for (const withheld of withheldFromReady(selected, all)) {
+    for (const withheld of withheldFromReady(selected)) {
       process.stderr.write(`${withheld.message}\n`);
     }
     return;
@@ -1008,10 +988,7 @@ function renderView(all, problems, flags, values, repoRoot) {
       );
     }
     if (open.length > 0) process.stdout.write("\n");
-    // The whole graph, not `mine`: a dependency on another tool's done ticket
-    // is met, and `mine` is one tool's rows (repo-114).
-    const unblocked = new Set(readyTickets(mine, all).map((t) => t.id));
-    const done = doneIds(all);
+    const unblocked = new Set(readyTickets(mine).map((t) => t.id));
     for (const ticket of open) {
       // `?` for a ticket waiting on a human, which is not `·`: a dot means the
       // queue will clear it and this one will not. It also needs its own suffix
@@ -1025,7 +1002,7 @@ function renderView(all, problems, flags, values, repoRoot) {
         ? " (waits on a decision)"
         : unblocked.has(ticket.id) || ticket.status === "in-flight"
           ? ""
-          : ` (waits on ${ticket.depends_on.filter((id) => !done.has(id)).join(", ")})`;
+          : ` (waits on ${ticket.depends_on.join(", ")})`;
       process.stdout.write(`  ${mark} ${ticket.id.padEnd(6)} ${ticket.title}${blocked}\n`);
     }
 
