@@ -271,11 +271,12 @@ screen's shape depends on which tags the answer names.
 Six decisions. **Decisions 1 to 4 were asked before a builder was dispatched**, because
 each changes what is built, and the owner answered all four on 2026-10-24, each time as
 the filing builder's recommendation, through the session's question. "Leave open" was
-not offered as a listed option; a free-text answer was. **Decisions 5 and 6 are still
-open**: **Decision 6 is asked at Build 1's stop**, with the capture's counts, since
+not offered as a listed option; a free-text answer was. **Decision 6 was answered at
+Build 1's stop** (10 km and ten; see Decision 6), and **Decision 5 is still open**. Both
+were held back: **Decision 6 was asked at Build 1's stop**, with the capture's counts, since
 "hold a question until you can bring a measurement", and **Decision 5 at the stop
-before the paid run**, as pl-58's and pl-60's were. Their recommendations are the
-filing builder's and are not settled.
+before the paid run**, as pl-58's and pl-60's were. Decision 5's recommendation is the
+filing builder's and is not settled.
 
 **What was not measured when this was filed.** Overpass was unreachable from the filing
 builder's sandbox (`curl -m 25` to `https://overpass-api.de/api/status` returned
@@ -495,6 +496,13 @@ the party stays.
 **Recommendation: (c),** because restaurant density is unmeasured, so (a) and (b) are
 each a guess at a number the capture will give, and (c) costs nothing beyond the stop
 Build 1 makes anyway.
+
+**Chosen: (a), 10 km and ten, by the owner on 2026-10-24**, at Build 1's stop, relayed by
+the orchestrator. It was chosen from Build 1's table (the Log's Build 1 entry): at 10 km
+with a closest-first cap of ten, **65 of 117** food finds are shown over the nine
+localities, the cap binding in Gaspé (17), Matane (17), Percé (23) and Rivière-du-Loup
+(35). The options put were (a), (b) at 6 km (62 of 108 shown), (c) with 10 km and
+fifteen priced (85 of 117 shown), and (d); (a) was the Build 1 builder's recommendation.
 
 ## Done when
 
