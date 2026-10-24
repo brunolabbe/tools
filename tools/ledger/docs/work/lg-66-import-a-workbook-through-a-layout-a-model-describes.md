@@ -85,7 +85,14 @@ screen" and "a confirmation screen".
   confirmation and confirms. It matches "on screen", and it is the only reading
   under which a P6 household can import its own file, since it cannot run a
   command on the host. Costs: the tool's first route that takes a spreadsheet
-  (a hostile `.xlsx` is parsed by the server, hence Done when 8), a paid,
+  (a hostile `.xlsx` is parsed by the server). **The byte bound does not
+  bound that parse**: at the base, `readSheets` (exceljs) inflates every entry
+  of the zip whole, so a real one-sheet workbook of 210,368 bytes whose sheet
+  XML holds 200 MiB of spaces reads in full in 1,823 ms with the process's
+  resident memory up 215 MB (gate 4's `upload.mts`; 40 MiB of padding in 47,297
+  bytes: +79 MB, 416 ms, on this branch). The parse is bounded by the sixth
+  bound of Build 3.3, the workbook's inflated size, which Done when 8 tests. A
+  paid,
   rate-limited route, a new screen with its 360 px case, and it reverses
   lg-7's "a command, not a route" for this path (the existing `import:ledger` command
   stays as it is).
@@ -130,14 +137,16 @@ it would need matching one for one against a statement paste of the same dates
 `ignored` is a list of sheets the contract text calls "read as none of the
 above". The reader never consults it: the reading is identical whether it is
 empty, holds every sheet, or holds the account sheets themselves (lg-38 gate 1,
-low). In the runs, 6 of Haiku's 20 `lg7` answers (four shown, two masked) listed
-`Accueil` as ignored and also named it the salaries sheet. The import was the
-same as the correct description's. In a build, a description that contradicts
+low). In the runs, 8 of Haiku's 260 answers contradict themselves this way: 6
+of its 20 `lg7` answers (four shown, two masked) listed `Accueil` as ignored and
+also named it the salaries sheet, and 2 of its 10 shown `english` answers
+(`english-8`, `english-10`) listed `Home` as ignored and as the salaries sheet.
+The import was the same as the correct description's in all 8. In a build, a description that contradicts
 itself drives a real import.
 
 - **(a) Recommended: leave the reader, correct the text.** The schema's
   description says what is true (the list is advisory and is not read). The
-  reader's behaviour is the one measured, and the 6 answers keep importing
+  reader's behaviour is the one measured, and the 8 answers keep importing
   correctly. Costs: a self-contradictory answer still passes silently. **And it
   changes what the model is sent.** The phrase "read as none of the above" is a
   `.describe()` text of the answer's schema, which goes to the model as the
@@ -148,16 +157,16 @@ itself drives a real import.
   deliberate edit. For scale, lg-56's Haiku shown run over the 13 fixtures
   cost $0.1297.
 - **(b) The schema refuses a layout that names a sheet as ignored and as an
-  account, period or salaries sheet.** Costs: the 6 answers above, which
+  account, period or salaries sheet.** Costs: the 8 answers above, which
   imported correctly, would have been refused as `invalid`, which the person
   sees as a failed read.
-- **(c) The reader honours `ignored`.** Costs: for the same 6 answers the
+- **(c) The reader honours `ignored`.** Costs: for the same 8 answers the
   salaries sheet is ignored and the salaries read as none, and **nothing
-  refuses it**. Measured offline, reading `lg7`'s fixture through each of the 6
-  actual answers with `salaries: null` (how a reader honouring `ignored` reads
-  them) scores `let-through` in 6 of 6, the same outcome the base suite pins
-  for lg-37's "the salaries missed". So (c) turns 6 correct imports into 6
-  wrong ones that the verifications let through. (The score compares the
+  refuses it**. Measured offline, reading each fixture (`lg7` for six, `english`
+  for two) through each of the 8 actual answers with `salaries: null` (how a
+  reader honouring `ignored` reads them) scores `let-through` in 8 of 8, the same
+  outcome the base suite pins for lg-37's "the salaries missed". So (c) turns 8
+  correct imports into 8 wrong ones that the verifications let through. (The score compares the
   reader's `problems`; `importWorkbook`'s own further checks were not run on
   these six.)
 
@@ -220,9 +229,16 @@ records the owner's answers on this page and moves `status` to `ready`, as
    1. **Describe.** Takes the file and an explicit consent field. **Only an
       `.xlsx` is read** (Decision 2 (a)): both requests refuse anything else,
       a CSV included, with a typed error and a plain message, judged from the
-      bytes (an `.xlsx` is a zip, which opens with `PK`) and not from the file's
-      name, after the byte bound and before the file is parsed or anything is
-      sent. Reads the sheets, builds the request, makes **one** model call, validates the answer
+      bytes and not from the file's name. The judgement is the zip's own
+      structure: the file opens with `PK`, has a readable end-of-central-directory
+      record and central directory, and holds the workbook's own entries,
+      `[Content_Types].xml` and `xl/workbook.xml`. It is made from the central
+      directory without inflating anything, after the byte bound and before the
+      file is parsed or anything is sent; a file that fails any part of it gets
+      the same plain message, not the parser's reason. (Opening with `PK` alone is
+      not enough: a CSV whose first header is `PK ID` passes it, and a zip that is
+      not a workbook reads as 0 sheets with no error.) A reading of **0 sheets**
+      is a typed refusal before anything is sent. Reads the sheets, builds the request, makes **one** model call, validates the answer
       with `workbookLayoutSchema`, reads the file through it, and runs
       `importWorkbook` with `commit: false` so that its `report` is what the
       person is shown. Writes nothing. An answer that is not JSON, does not
@@ -233,19 +249,31 @@ records the owner's answers on this page and moves `status` to `ready`, as
       (`commit: true`) in the one transaction only when all hold. It makes no
       model call. **The server stores nothing of the upload** between the two.
    3. **Bounds**, each a named constant, and each handled at the one point it
-      can be known:
+      can be known, in this order:
       - **The upload's bytes** are checked before the workbook is parsed; over
         the bound is a typed refusal.
+      - **The workbook's inflated size** is checked before exceljs inflates
+        anything. The central directory gives each entry's declared uncompressed
+        size; the total over the bound is a typed refusal. **A zip can declare
+        less than it holds**, so the inflate is also stopped at the bound: the
+        bytes actually inflated, summed over the entries, are counted as they
+        are produced, and the parse is refused the moment the count passes the
+        bound, whatever the zip declared. The builder says how (a counting
+        wrapper in front of the inflate, or a parse that streams), states the
+        bound with the inflated size of the largest of the six workbook
+        fixtures beside it, and names the chunk by which a stop may overshoot.
       - **The number of sheets, and the rows and cells read,** need the parsed
         file. Over either is a typed refusal before anything is sent.
       - **The length of a cell's text sent** is a truncation, not a refusal: the
         view cuts the text at the bound and the file is still read in full.
       - **The request's size** is an estimate, since the API counts tokens only
-        by a call. It is the four-characters estimate of the request, the
-        answer's schema included, multiplied by 2.3, the upper end of the 2.2 to
-        2.3 ratio lg-38's Log measured between the API's count and that
-        estimate on its six fixtures. It is stated as an estimate, and over the
-        bound is a typed refusal before the call.
+        by a call. It is the four-characters estimate of the request plus the
+        answer's schema (1,461 tokens at the base), multiplied by 2.32. The
+        measured ratio of the API's count to that estimate is 2.2 to 2.3 in
+        lg-38's Log and, in lg-56's 300 records, at most 2.317 (`lg37`; 2.314 to
+        2.317); the owner's "measured 2.3 ratio" is rounded up to 2.32 because
+        2.3 under-counts the largest request by about 0.7%. It is stated as an
+        estimate, and over the bound is a typed refusal before the call.
 
       The builder states each value and the arithmetic for the largest request
       the bounds allow. The route has its own rate-limit bucket, per person, as
@@ -302,9 +330,11 @@ records the owner's answers on this page and moves `status` to `ready`, as
    `bank-two-dates`, `bank-footer`, `bank-wide`) differs from its value at the
    base. Another test fails when the sha256 of the format schema,
    `JSON.stringify(zodOutputFormat(workbookLayoutSchema).schema)`, differs from
-   its value at the base. The Log gives the 14 hashes. Any edit to a
-   `.describe()` text in `@ledger/contract` is a deliberate edit of the second
-   pin, said in the Log with its reason.
+   the value the Log gives. The Log gives the 14 hashes at the base. The schema
+   pin is the base's value until a deliberate edit of a `.describe()` text in
+   `@ledger/contract` (Build 2.4 under Decision 3 (a)) moves it, and then it is
+   the edited schema's value, with the new value and the reason in the Log; the
+   13 `layoutRequest` pins stay the base's.
 2. `importWorkbook` given no `layout` imports lg-7's and lg-37's fixtures as
    before: `api/test/workbook-import.test.ts` and `books/test/workbook.test.ts`
    pass with no case edited. Given a `layout` under which a row has no bucket
@@ -329,8 +359,9 @@ records the owner's answers on this page and moves `status` to `ready`, as
    each time, the fake was called once each time, and the books are unchanged.
 6. The fake is called once per describe request, and zero times for: a request
    without the consent field; a request with no key configured; a file over each
-   of the four bounds of Build 3.3 that refuse (bytes, sheets, rows and cells,
-   the request's size estimate), one test per bound; and a confirm request.
+   of the five bounds of Build 3.3 that refuse (bytes, inflated size, sheets,
+   rows and cells, the request's size estimate), one test per bound; a file that
+   reads as 0 sheets; and a confirm request.
    Each refusal is a typed error.
 7. The confirm request given `lg37`'s fixture and its correct description
    leaves the books as `import:ledger --write` on the same workbook leaves them
@@ -339,14 +370,24 @@ records the owner's answers on this page and moves `status` to `ready`, as
    and balance swapped, outcome `refused`), it refuses, and the books are
    unchanged.
 8. An upload over the byte bound is refused before the workbook is parsed (a
-   test where the sheet reader is a spy that is never called), and one over the
-   sheets bound, the rows-and-cells bound or the request-size estimate is
-   refused before anything is sent (a test per bound; the fake uncalled). A
-   cell whose text is longer than the cell-text bound is not refused: the
-   request carries it cut at the bound (a test reads the request the fake was
-   given), and the file is still read in full. The request-size estimate is the
-   four-characters estimate times 2.3, and the Log says it is an estimate. No
-   log line holds the file's content.
+   test where the sheet reader is a spy that is never called). Two tests bound
+   the inflate. (i) A real one-sheet workbook whose sheet XML is padded with
+   whitespace to more than the inflated-size bound, small enough to pass the
+   byte bound (the file `upload.mts` builds in gate 4's directory, at 40 and
+   at 200 MiB of padding), is refused from its declared sizes, with the inflate
+   spy at 0 bytes. (ii) A crafted zip holding the workbook's entries whose
+   declared sizes understate its content, which would inflate to more than the
+   bound, is refused with the inflate spy at no more than the bound plus the
+   chunk the Log names (the spy's count, not the process's memory, is what the
+   test reads). One over the sheets bound, the rows-and-cells bound or the
+   request-size estimate is refused before anything is sent (a test per
+   bound; the fake uncalled). A cell whose text is longer than the cell-text
+   bound is not refused: the request carries it cut at the bound (a test reads
+   the request the fake was given), and the file is still read in full. The
+   request-size estimate is the four-characters estimate plus the schema times
+   2.32, and the Log says it is an estimate. In the describe and confirm
+   requests of Done when 5, 8 and 13 no log line holds any of the upload's
+   content, its name or the key (a test reads every line the logger received).
 9. The web tests show, for a fake describe response on `lg37`'s fixture: the
    statement of Build 4.1 present before the button is pressed, and the fake
    uncalled until it is; the date column's letter, header text and 3 + 3
@@ -369,12 +410,15 @@ records the owner's answers on this page and moves `status` to `ready`, as
     `packages/core/test/image-closure.test.ts` passes with the moved code.
     Whichever file under `tools/ledger/api` still imports `@anthropic-ai/sdk`
     belongs to a package that declares it.
-13. Decision 2 (a): the describe request and the confirm request, each given the
-    `csv-balance` fixture's text as the upload, return a typed error with a
-    plain message that only an `.xlsx` is read, the fake is not called, the sheet
-    reader is not called, and the books are unchanged. An `.xlsx` that is
-    renamed `.csv` is still read, and a CSV renamed `.xlsx` is still refused
-    (the check is on the bytes).
+13. Decision 2 (a): the describe request and the confirm request, each given as
+    the upload (i) the `csv-balance` fixture's text, (ii) a CSV whose first
+    header is `PK ID`, and (iii) a zip that is not a workbook (one text entry),
+    return the same typed error with the same plain message that only an
+    `.xlsx` is read, the fake is not called, the sheet reader is not called, and
+    the books are unchanged. A zip with the workbook's two entries and no sheet
+    reads as 0 sheets and is a typed refusal with the fake uncalled. An `.xlsx`
+    that is renamed `.csv` is still read, and a CSV renamed `.xlsx` is still
+    refused (the check is on the bytes).
 
 ## Notes for the builder
 
@@ -487,8 +531,16 @@ fixtures and the 300 records and calls no model):
 
 ```
 lg7 with salaries null: outcome=let-through problems=0 salaries=0
-shown/lg7-10, -3, -6, -9 and masked/lg7-1, -10: honoured outcome=let-through   (6 of 6)
+ledger-layout-lg56-shown/lg7-10.json: salaries={"sheet":"Accueil","label":"Salaires bruts"} -> honoured outcome=let-through
+ledger-layout-lg56-shown/lg7-3.json: ... -> honoured outcome=let-through
+ledger-layout-lg56-shown/lg7-6.json: ... -> honoured outcome=let-through
+ledger-layout-lg56-shown/lg7-9.json: ... -> honoured outcome=let-through
+ledger-layout-lg56-masked/lg7-1.json: ... -> honoured outcome=let-through
+ledger-layout-lg56-masked/lg7-10.json: ... -> honoured outcome=let-through
 ```
+
+(Each line is the probe's, one per file; the `...` stands for the same salaries
+text as the first. Round 2 corrects the count: see N4 below.)
 
 (c) now says so: 6 correct imports become 6 wrong ones nothing refuses. The
 probe scores `problems`; `importWorkbook`'s own further checks were not run on
@@ -537,3 +589,79 @@ Decision 1 and from the filing entry above.
 
 **F9 (low): fixed in lg-38's entry.** The owner was shown a description for each
 option; the entry now quotes each verbatim, as the orchestrator gave them.
+
+### 2026-10-24 — round 2: gate 4 returned FAIL at `b0788d12`; the owner's answers
+
+Gate 4 (on PR #623, `571ad077..b0788d12`) confirmed all nine of gate 3's
+findings fixed and returned FAIL on one high and six others (N1 to N7).
+
+**The owner's answers, 2026-10-24.** Two questions, from the orchestrator:
+
+1. "Which remedy should the brief specify for N1?" Options: "Bound the inflated
+   size" (the gate's recommendation), "Parse in a worker", and "Both". **The
+   owner chose "Bound the inflated size."** As put to the owner, that is a sixth
+   bound: read the zip's central directory, total each entry's declared
+   uncompressed size, and refuse over a limit before exceljs inflates anything;
+   and "a zip that lies about its sizes needs the inflate stopped at the limit
+   as well".
+2. "What goes in the round?" Options: "All seven, N3 included" and "All but N3".
+   **The owner chose "All seven, N3 included."** For N3: require the workbook's
+   own zip entries, and refuse a 0-sheet read before any model call, plus a line
+   in Done when 13.
+
+No `## Decision — open` question is answered, and both `status:` lines are
+unchanged.
+
+**N1 (high): reproduced, and it was right.** `node --import tsx upload.mts
+<tree> 40` on this branch, through the base's `readSheets`:
+
+```
+csv starting PK: 51 bytes, opensWithPK=true -> threw BAD_REQUEST: The file could not be read as an .xlsx workbook (Can't find end of central directory : is  (rss +0 MB, 1 ms)
+zip, not a workbook: 123 bytes, opensWithPK=true -> read 0 sheets (rss +0 MB, 7 ms)
+small workbook: 6415 bytes, opensWithPK=true -> read 1 sheets (rss +0 MB, 19 ms)
+workbook inflating to 40 MB more: 47297 bytes, opensWithPK=true -> read 1 sheets (rss +79 MB, 416 ms)
+```
+
+(The gate's own run at 200 MB: 210,368 bytes, +215 MB, 1,823 ms; I ran 40.) Fixed
+as the owner chose. Build 3.3 has a sixth bound, the workbook's inflated size:
+the declared total refused from the central directory before any inflate, and
+the inflate itself stopped at the bound, because a zip can declare less than it
+holds. Done when 8 has two tests: the padded workbook (the file `upload.mts`
+builds) refused from its declared sizes with the inflate spy at 0 bytes, and a
+crafted zip whose declared sizes understate its content, refused with the spy at
+no more than the bound plus a named chunk. Decision 1 (a)'s cost now says the
+parse is bounded by that bound, not by the byte bound. The test reads the spy's
+count and not the process's memory, which would measure the machine.
+
+**N2 (med): fixed.** Done when 1 now pins "the value the Log gives": the base's
+until a deliberate edit of a `.describe()` text (Build 2.4 under Decision 3 (a))
+moves it, and then the edited schema's, with the new value and reason in the
+Log. The 13 `layoutRequest` pins stay the base's.
+
+**N3 (med): reproduced (the first two lines above), and fixed.** Build 3.1
+judges an `.xlsx` by the zip's structure from the central directory (opens with
+`PK`, a readable directory, `[Content_Types].xml` and `xl/workbook.xml`
+present), gives every failure the one plain message, and refuses a reading of 0
+sheets before anything is sent. Done when 13 gains the `PK ID` CSV, a zip that is
+not a workbook, and a workbook-shaped zip with no sheet.
+
+**N4 (med): reproduced, and it was right.** `node --import tsx ignored.mts
+<tree> /home/pwuser` prints 8 lines ending `salaries-null outcome=let-through`:
+the six `lg7` files, and `english-8` and `english-10` (shown), which list `Home` as
+ignored and as the salaries sheet. Decision 3's count is now 8 in 260 Haiku
+answers, in the intro and in (a), (b) and (c) (8 of 8 let through under (c)). The
+round-1 entry above counts 6; this corrects it.
+
+**N5 (low): fixed.** The ratio is 2.32, not 2.3. lg-56's 300 records give at most
+2.317 (`lg37`, 2.314 to 2.317; lg-38's table 9,468 / 4,091 is 2.314), so 2.3
+under-counts the largest request by about 0.7%. The owner's "measured 2.3 ratio"
+is rounded up to the largest measured, and Build 3.3 and Done when 8 say so, with
+the estimate defined as the four-characters estimate plus the schema's 1,461
+tokens, which is what the ratio was taken against.
+
+**N6 (low): fixed.** The round-1 entry's code block now prints the probe's lines,
+one per file, with `...` for the repeated salaries text, and says so.
+
+**N7 (low): fixed.** Done when 8's log clause is scoped to the describe and
+confirm requests of Done when 5, 8 and 13, and graded by a test that reads every
+line the logger received.
