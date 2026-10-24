@@ -990,3 +990,127 @@ towns through the built `overpassPointQuery(point, <radius>, <food kinds>, 28)`,
 the same way (`capture.mjs`'s `send`, the same user agent or one naming the fixture),
 and should expect HTTP 502 "at capacity" from the public instance and back off rather
 than fail.
+
+**2026-10-24 — Builds 2 to 5, 7's harness label and 8, stopped at Build 8's contract
+comment (builder, Opus 5.5).** Decision 6 is recorded above (10 km and ten, the
+owner's answer relayed by the orchestrator, in `c19be984`). Base `89a38d30`; pl-61
+(PR #618) had not landed, so nothing was merged from `main`. **Stopped at Build 8**,
+as Build 8 and the dispatch say: `contract/src/unchecked.ts`'s comment on `coverage`
+says the town query "found nowhere on the map to sleep there" and names `lodging`
+alone, and it is not edited (the open decision is in the dispatch's report). **Build 9
+is not done**: the stub routing in `run.ts` and its spec (`Done when` 13) are the next
+builder's first step, then Decision 5's stop.
+
+- **The base prompts were snapshotted before any source changed**, in `0f74201d`:
+  `agent/test/fixtures/pl62-prompt-inputs.json` (pl-60's capacity and two corridor
+  finds, plus one lodging find, plus a `foodFind` the test adds) and
+  `pl62-base-prompts.json`, the four prompts `activities`, `conditions-and-gear`,
+  `lodging` and `food` that `agent/src` at `89a38d30` built from them
+  (`node --import tsx <scratch>/pl-62/build/snapshot.mts <worktree> 89a38d30`).
+- **Build 2, the query.** `FOOD_KINDS` in `agent/src/grounding.ts` (`restaurant`,
+  `cafe`, `bar`, `pub`, `bakery`), `DiscoveryKind` their union with the other two
+  lists, `isFoodKind` and `isCorridorKind` beside `isLodgingKind`; five
+  `KIND_FILTERS` clauses and `KIND_MATCHES` predicates in `valhalla.ts`, after the
+  lodging ones, so a café that is also a bakery is a café. `runs/lodging.ts` asks each
+  located town a second `nearbyPoint` for `FOOD_KINDS` after the lodging one,
+  `FOOD_RADIUS_METRES` = 10 000 and `MAX_FOOD_FINDS_PER_TOWN` = 10, closest first,
+  de-duplicated across towns apart from the lodging list. **The cap is argued in its
+  comment**: 65 of Build 1's 117 shown, binding in Gaspé, Matane, Percé and
+  Rivière-du-Loup where the ten are each town's centre, and no longer a block than
+  `lodging`'s for the same towns. `LODGING_STEPS_PER_TOWN` (2) became
+  `TOWN_STEPS_PER_TOWN` (3). Places to sleep come first in the pass's list, so
+  `lodging`'s filtered list is the one it had.
+- **`findsFor` routes each reader to its own kinds**: `lodging` the lodging kinds;
+  `food` the food kinds and the corridor's; `activities` and `conditions-and-gear` the
+  corridor's alone. **Mutation, committed first**: with `findsFor` put back to pl-60's
+  two-way rule at `91087ffe`, `npx vitest run tools/planner/agent/test/prompt.test.ts`
+  gave `3 failed | 36 passed (39)` (the two byte-identical pins for `activities` and
+  `conditions-and-gear` and "no other specialist is shown a place to eat"); restored
+  with `git checkout 91087ffe -- tools/planner/agent/src/prompt.ts`.
+- **Calls per set A shape** (`lodging-run.test.ts` › "%s spends the calls pl-62's Log
+  asserts"), total and `nearbyPoint`, beside pl-60's: `road-trip` 20 (4) against 18
+  (2); `backcountry` 13 (2) against 12 (1); `motorised-touring` 6 (0) against 6;
+  `city-and-culture` 15 (2) against 14 (1); `resort` 4 (0) against 4; `multi-city` 26
+  (6) against 23 (3). `locate`, `travel`, `nearby` and `articlesNear` are pl-60's,
+  unchanged. These are Decision 3 (a)'s predicted 20, 13, 6, 15, 4 and 26. **The
+  town pass's ceiling is 12 of `MAX_GROUNDING_CALLS` = 40** (`lodging-pass.test.ts` ›
+  "over the real cache and budget, the pass claims at most 12 calls however many
+  towns a brief names").
+- **Re-plans** (`revisions.test.ts`): a re-plan naming only `lodging`, only `food` or
+  only `activities` spends `nearbyCalls` 1 and `nearbyPointCalls` 2, on that suite's
+  one-town corridor brief. pl-60's numbers for `lodging` were 1 and 1. `activities`
+  reads neither town list and pays both town queries; `revise.ts`'s comment names the
+  cost, as pl-60's named the corridor's.
+- **Coverage.** Two new sentences, after `lodging`'s: "No places to eat around … are
+  on the map. Somewhere to eat there may exist without this plan having found it." and
+  "Places to eat around … were never looked up: the run had already used the number of
+  lookups it is allowed." **The brief did not say what to do with the sentences a town
+  shares**, so the three that cover a town checked for neither were reworded rather
+  than doubled: "… so places to stay and places to eat there were not checked.",
+  "Places to stay and places to eat around … were not looked up: …", and "This trip
+  names no town to stay in, so the map was not checked for places to stay or to eat."
+  `lodging`'s own two (empty, refused) are unchanged. pl-60's tests that pinned the
+  old wording were updated in `lodging-pass.test.ts`, `lodging-run.test.ts` and
+  `revisions.test.ts`.
+- **Build 3, the block.** `food` gets the corridor block as it was, then a second block,
+  "Places to eat around the towns this trip names, …", only when it has food finds,
+  whose close is its own: "… Nothing in a place's tags is evidence about a diet: what
+  the party said they cannot eat still decides, whatever a tag says it serves. Where one
+  of these fits the party, propose it by the name it has here; where none fits, or a
+  town has none listed, propose a kind of place instead. A meal there is a choice, not
+  a slot to fill."
+- **Build 4, the role.** Before (pl-58's): "You propose meals that are part of the trip
+  rather than fuel for it, and you respect anything the party said they cannot eat. A
+  proposal does one of two things. It names one premises, an establishment or a site,
+  by its name and at its locality: `place.name` is that name and `place.locality` the
+  town. Or it says plainly, in its title or its summary, that it is a kind of place and
+  names no premises: then `place.name` holds the kind, for example `bakery`, and
+  `place.locality` the town." After: the same, then "Where you are given places to eat
+  from map data for a town, a premises you name there is one of those, under the name
+  it is given, if any of them fits the party and what they cannot eat. A kind of place
+  is the fallback, for a town whose list is empty or where nothing in it fits."
+  **pl-60's test was changed, on purpose**: `prompt.test.ts` › "the %s prompt is
+  byte-identical to the base commit's, with and without places to sleep in the finds"
+  now runs `activities` and `conditions-and-gear` only, because the appended sentences
+  make `food`'s prompt differ from pl-60's base by design; `food` is pinned in pl-62's
+  block instead.
+- **Build 5, hostile text.** pl-29's caps unchanged; a food find whose `name`,
+  `cuisine`, `website` and `description` carry instructions reaches `food`'s prompt as
+  quoted data after the warning, and the adapter makes one request for a reply whose
+  tags hold two urls.
+- **Build 7, the harness label only.** `"pl-62": ["food"]` in `invention.ts`'s
+  `STRATUM_SPECIALISTS`. The classification, the shares and the web check need the
+  paid run.
+- **Build 8.** The three paragraphs of `tools/planner/CLAUDE.md` and the clause of
+  `.claude/rules/planner-unchecked-constraints.md` now name `food` and places to eat.
+  `grep -c '^\*\*'` gives 25 before (`git show 89a38d30:tools/planner/CLAUDE.md`) and
+  25 after, and 5 and 5 for the rules file. Then the stop.
+- **The checked-in food capture**, `api/test/fixtures/overpass-food-towns.json`: one
+  reply per town to `overpassPointQuery(point, 10_000, FOOD_KINDS, 28)` from the built
+  `api/dist`, points and `geocodedAs` copied from the lodging capture, sent from
+  `<scratch>/pl-62/build/fixture-capture.mjs` with the user agent
+  `webtools-planner/0.9 (pl-62 fixture capture)`, serial and 5 s apart, from 17:27:45
+  to 17:36:24 UTC. 13 requests: 9 HTTP 200 in 23.8 to 51.2 s, and **4 HTTP 502** ("at
+  capacity", 0.35 s each), two each for Gaspésie and Rivière-du-Loup, each answered on
+  its third try after 30 s and 60 s of back-off. No `remark`. Through `nearbyPoint`
+  offline at 10 km it gives Build 1's counts town for town (117 in all: node 89, way
+  28, relation 0; restaurant 69, café 18, bar 10, pub 15, bakery 5, the two
+  café-or-restaurant bakeries counting as their `amenity`), and at 2 km Build 1's 76.
+  **No food relation lies within 10 km of any point**, so `Done when` 2's relation case
+  is composed by hand, beside the capture's ten Percé ways.
+- **pl-61 will need one line when the second of the two merges**: pl-61 appends a test
+  to `lodging-pass.test.ts` ("a 406 from the geocoder and from Overpass reaches each
+  town-pass warn with its status") that expects one "the town pass could not query a
+  town" warn for Gaspé. With the food query that town is queried twice, so the count
+  becomes 2. Not changed here, since pl-61 has not landed.
+- **Checks.** `npm run check` exit 0. `npm test -- --project planner`: `Test Files 83
+passed (83)`, `Tests 1810 passed (1810)`. New specs: `api/test/grounding-food.test.ts`
+  (17 tests), `api/test/food-pass.test.ts` (6). The e2e suite and the image gate did not
+  run locally.
+
+**What the next builder does.** Build 9: route `run.ts` › `lodgingFinds`'s stub by the
+query's kinds and point, answering a food query from `overpass-food-towns.json` and
+throwing on a query that matches no capture, and its `Done when` 13 spec. **Until then
+the stub answers the town pass's food queries with the lodging reply**, so sets B to D
+would hand `food` no town finds without an error, the trap Build 9 describes. Then stop
+for Decision 5. Builds 6 and 7's measurements and `Done when` 8 to 10 follow the paid run.
