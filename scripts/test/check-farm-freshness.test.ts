@@ -26,7 +26,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { findMissingPackages, warnIfStale } from "../../.claude/scripts/check-farm-freshness.mjs";
+import {
+  findMissingPackages,
+  findMissingWorkspaceLinks,
+  linkMissingWorkspaces,
+  listWorkspaces,
+  warnIfStale,
+} from "../../.claude/scripts/check-farm-freshness.mjs";
 
 const FARM_SCRIPT = path.join(
   import.meta.dirname,
@@ -328,5 +334,250 @@ test("worktree-farm.sh's stderr names the failure as a parse failure, on an unpa
   } finally {
     tree.cleanup();
     shared.cleanup();
+  }
+});
+
+// --- workspaces: repo-117 ----------------------------------------------------
+//
+// The farm copies whatever the shared checkout's `node_modules` holds, so a
+// workspace `main` added after the shared checkout's last `npm install`
+// (`packages/ui`, repo-108) was linked by nobody and every `npm run build`
+// failed on it. The list of workspaces is the worktree's own `package.json`.
+
+const CHECK_SCRIPT = path.join(
+  import.meta.dirname,
+  "..",
+  "..",
+  ".claude",
+  "scripts",
+  "check-farm-freshness.mjs",
+);
+
+/** Workspace layout used by every case below: two `packages/`, one tool, one unscoped. */
+const FIXTURE_WORKSPACES = [
+  { name: "@webtools/core", dir: "packages/core" },
+  { name: "@webtools/ui", dir: "packages/ui" },
+  { name: "@demo/api", dir: "tools/demo/api" },
+  { name: "plain-name", dir: "tools/demo/plain" },
+];
+
+/** A git repository whose root `package.json` declares `FIXTURE_WORKSPACES`. */
+function makeWorkspaceTree() {
+  const tree = makeGitRepo();
+  fs.writeFileSync(
+    path.join(tree.dir, "package.json"),
+    JSON.stringify({ name: "root", workspaces: ["packages/*", "tools/*/*"] }),
+  );
+  for (const ws of FIXTURE_WORKSPACES) {
+    fs.mkdirSync(path.join(tree.dir, ws.dir), { recursive: true });
+    fs.writeFileSync(
+      path.join(tree.dir, ws.dir, "package.json"),
+      JSON.stringify({ name: ws.name }),
+    );
+  }
+  // Not workspaces: a directory without a package.json, and a node_modules.
+  fs.mkdirSync(path.join(tree.dir, "packages", "not-a-package"), { recursive: true });
+  fs.mkdirSync(path.join(tree.dir, "packages", "node_modules"), { recursive: true });
+  return tree;
+}
+
+/** Link every `FIXTURE_WORKSPACES` entry except `without`, as npm writes them. */
+function linkWorkspaces(root: string, without: string[]) {
+  for (const ws of FIXTURE_WORKSPACES) {
+    if (without.includes(ws.name)) continue;
+    const link = path.join(root, "node_modules", ...ws.name.split("/"));
+    fs.mkdirSync(path.dirname(link), { recursive: true });
+    fs.symlinkSync(path.relative(path.dirname(link), path.join(root, ws.dir)), link, "dir");
+  }
+}
+
+/** A shared root whose `node_modules` links every workspace except `without`. */
+function makeSharedWithWorkspaceLinks(without: string[]) {
+  const shared = makeSharedRoot({ packages: { "": {} }, present: ["left-pad"] });
+  linkWorkspaces(shared.dir, without);
+  return shared;
+}
+
+/** A farmed-looking tree: workspace links present except those in `without`. */
+function makeFarmedTree(without: string[]) {
+  const tree = makeWorkspaceTree();
+  fs.mkdirSync(path.join(tree.dir, "node_modules"), { recursive: true });
+  linkWorkspaces(tree.dir, without);
+  return tree;
+}
+
+/** Run the checker the way the skill and the farm do. */
+function runCheck(args: string[]) {
+  return spawnSync(process.execPath, [CHECK_SCRIPT, ...args], {
+    shell: false,
+    encoding: "utf8",
+  });
+}
+
+test("worktree-farm.sh links a workspace the shared root has no link for, inside the scope directory the copy loop made", () => {
+  const shared = makeSharedWithWorkspaceLinks(["@webtools/ui"]);
+  const tree = makeWorkspaceTree();
+  try {
+    expect(fs.existsSync(path.join(shared.dir, "node_modules", "@webtools", "ui"))).toBe(false);
+    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+      cwd: tree.dir,
+      shell: false,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toContain("linked workspace @webtools/ui -> ../../packages/ui");
+
+    const scope = path.join(tree.dir, "node_modules", "@webtools");
+    // A real directory the loop made, not a link into the shared checkout.
+    expect(fs.lstatSync(scope).isSymbolicLink()).toBe(false);
+    const link = path.join(scope, "ui");
+    expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(fs.readlinkSync(link)).toBe("../../packages/ui");
+    expect(fs.realpathSync(link)).toBe(fs.realpathSync(path.join(tree.dir, "packages", "ui")));
+    // The shared root was only read.
+    expect(fs.existsSync(path.join(shared.dir, "node_modules", "@webtools", "ui"))).toBe(false);
+    // A link the shared root did have still came from the copy loop.
+    expect(fs.readlinkSync(path.join(scope, "core"))).toBe("../../packages/core");
+  } finally {
+    tree.cleanup();
+    shared.cleanup();
+  }
+});
+
+test("worktree-farm.sh creates the scope directory and an unscoped link when the shared root has neither", () => {
+  const shared = makeSharedWithWorkspaceLinks(["@demo/api", "plain-name"]);
+  const tree = makeWorkspaceTree();
+  try {
+    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+      cwd: tree.dir,
+      shell: false,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(fs.readlinkSync(path.join(tree.dir, "node_modules", "@demo", "api"))).toBe(
+      "../../tools/demo/api",
+    );
+    expect(fs.readlinkSync(path.join(tree.dir, "node_modules", "plain-name"))).toBe(
+      "../tools/demo/plain",
+    );
+  } finally {
+    tree.cleanup();
+    shared.cleanup();
+  }
+});
+
+test("worktree-farm.sh prints no workspace line and no warning when the shared root links every workspace", () => {
+  const shared = makeSharedWithWorkspaceLinks([]);
+  const tree = makeWorkspaceTree();
+  try {
+    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+      cwd: tree.dir,
+      shell: false,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).not.toContain("linked workspace");
+  } finally {
+    tree.cleanup();
+    shared.cleanup();
+  }
+});
+
+test("linkMissingWorkspaces leaves a scope directory that is itself a symlink alone", () => {
+  const tree = makeWorkspaceTree();
+  const elsewhere = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "farm-scope-")));
+  try {
+    fs.mkdirSync(path.join(tree.dir, "node_modules"));
+    fs.symlinkSync(elsewhere, path.join(tree.dir, "node_modules", "@webtools"), "dir");
+    linkMissingWorkspaces(tree.dir);
+    // Writing through the scope link would have put these in `elsewhere`.
+    expect(fs.readdirSync(elsewhere)).toEqual([]);
+  } finally {
+    tree.cleanup();
+    fs.rmSync(elsewhere, { recursive: true, force: true });
+  }
+});
+
+test("listWorkspaces reads the tree's own package.json globs, skipping directories with no package.json and node_modules", () => {
+  const tree = makeWorkspaceTree();
+  try {
+    expect(listWorkspaces(tree.dir)).toEqual(
+      FIXTURE_WORKSPACES.toSorted((a, b) => (a.name < b.name ? -1 : 1)),
+    );
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("listWorkspaces returns nothing for a tree with no package.json", () => {
+  const tree = makeGitRepo();
+  try {
+    expect(listWorkspaces(tree.dir)).toEqual([]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("check-farm-freshness.mjs <root> exits 0 and names the workspace with no link and the ln -s that repairs it", () => {
+  const tree = makeFarmedTree(["@webtools/ui"]);
+  try {
+    const result = runCheck([tree.dir]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("@webtools/ui");
+    expect(result.stderr).toContain("ln -s ../../packages/ui node_modules/@webtools/ui");
+    // Only the one that is missing.
+    expect(result.stderr).not.toContain("@webtools/core");
+    expect(findMissingWorkspaceLinks(tree.dir).map((m) => m.name)).toEqual(["@webtools/ui"]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("check-farm-freshness.mjs <root> prints nothing when no workspace link is missing", () => {
+  const tree = makeFarmedTree([]);
+  try {
+    const result = runCheck([tree.dir]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toBe("");
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("the workspace check reads the tree's package.json, so a lockfile that omits the workspace cannot hide it", () => {
+  // The shared root's lockfile predates the workspace (repo-117: it had no
+  // `packages/ui` entry) and its own check passes; the tree on main has it.
+  const tree = makeFarmedTree(["@webtools/ui"]);
+  fs.writeFileSync(
+    path.join(tree.dir, "package-lock.json"),
+    JSON.stringify({ packages: { "": {} } }),
+  );
+  try {
+    const result = runCheck([tree.dir]);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("ln -s ../../packages/ui node_modules/@webtools/ui");
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("check-farm-freshness.mjs --workspaces names a missing link without running the package check", () => {
+  const tree = makeFarmedTree(["@demo/api"]);
+  // A stale lockfile that the package check would warn about.
+  fs.writeFileSync(
+    path.join(tree.dir, "package-lock.json"),
+    JSON.stringify({ packages: { "": {}, "node_modules/@anthropic-ai/sdk": {} } }),
+  );
+  try {
+    const result = runCheck(["--workspaces", tree.dir]);
+    expect(result.stderr).toContain("ln -s ../../tools/demo/api node_modules/@demo/api");
+    expect(result.stderr).not.toContain("@anthropic-ai/sdk");
+  } finally {
+    tree.cleanup();
   }
 });

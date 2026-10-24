@@ -86,3 +86,28 @@ directories as real directories; the new links go inside them.
   batch entries (tools-11 items 1–2, tools-dd item 2, tools-8e item 1, tools-cc item 1, tools-49
   item 6); the reproductions above are theirs, re-read against the shared checkout on 2026-10-24,
   where `ls node_modules/@webtools/` → `core ui` and the check exits 0.
+- 2026-10-24 — Built (branch `repo-117-farm-links-missing-workspaces`).
+  - `check-farm-freshness.mjs` gains `listWorkspaces`, `findMissingWorkspaceLinks`,
+    `linkMissingWorkspaces` and `warnIfWorkspacesUnlinked`, and flags: `--packages`
+    (the repo-45 pass, as before), `--workspaces` (the new warning), `--link` (create
+    the links); `<root>` alone runs both checks on `<root>`. `worktree-farm.sh` calls
+    `--packages` on the shared root before the copy loop, then `--link` and
+    `--workspaces` on the worktree after it, so the link lands in the real scope
+    directory the loop made. A scope directory that is itself a symlink is skipped, as
+    writing through it would put the link in the shared checkout.
+  - The brief's step 2 says to compare "against the worktree's lockfile"; the pass reads
+    the worktree's `package.json` `workspaces` globs instead (step 1's own source), which
+    needs no lockfile and cannot disagree with it. Only a whole `*` path segment is
+    expanded (`packages/*`, `tools/*/*`), no `**` or negation.
+  - Done when 2 says the workspace warning exits 0, unlike the fetched-package pass
+    (exit 1); built as written. The farm discards both exit codes.
+  - Fixture proof (scratch `build/real.sh`): a shared root whose `@webtools` held only
+    `core`, farmed into this worktree with `node_modules` removed, printed
+    `linked workspace @webtools/ui -> ../../packages/ui`, and `npm run build` exited 0
+    with no hand `ln -s`. Against a healthy shared root the farm is silent about workspaces.
+  - Not folded in: `reference/worktree-hygiene.md` › _Give a new worktree its
+    dependencies_ still says the shared checkout "needs one `npm install`" after a new
+    workspace merges, and `SKILL.md` step 1 runs `check-farm-freshness.mjs
+/workspaces/tools`, which now also names an unlinked workspace there. Both are pages
+    this ticket's dispatch put out of scope; the first sentence is now stale for the link
+    (not for fetched dependencies).

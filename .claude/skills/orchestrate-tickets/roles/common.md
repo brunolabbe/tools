@@ -39,15 +39,18 @@ worktree: several sessions run against this repo at once.
   checkout has no link for is different** — one your branch adds, or one
   `main` added after the shared checkout's last install: that install replaces
   the farm's links and leaves native modules unbuilt (lg-8: 63 of 101 failed on
-  `better_sqlite3.node`). After the farm, compare `ls node_modules/@webtools
-  node_modules/@<tool>` with the worktree's own `package.json` `workspaces`
-  and link each missing one by hand — `ln -s ../../packages/<name>
+  `better_sqlite3.node`). **The farm links these itself** (repo-117): after its
+  copy loop it reads the worktree's own `package.json` `workspaces` and links
+  each one `node_modules` lacks, printing a `linked workspace <name> -> <path>`
+  line for each, and it names (stderr, with the `ln -s`) any it could not link.
+  Read those lines rather than comparing directories; every agent of four
+  batches linked `packages/ui` by hand before it did (2026-10-20 to
+  2026-10-21). **The hand-link is the fallback for a workspace your branch adds
+  after you farmed**, since the farm reads `package.json` as it stood: run the
+  farm again (it is idempotent), or `ln -s ../../packages/<name>
   node_modules/@webtools/<name>` for a `packages/` workspace,
   `ln -s ../../tools/<tool>/<package> node_modules/@<tool>/<package>` for a
-  tool's — say so in your report, and a gate on that branch does the same. The
-  farm links only what the shared checkout has, and the freshness check skips
-  workspace links by design, so neither warned while every agent of four
-  batches linked `packages/ui` by hand (2026-10-20 to 2026-10-21; repo-117).
+  tool's, and say so in your report; a gate on that branch does the same.
 - **Undo a temporary mutation from a commit, never with `git checkout -- <file>`**,
   which restores the index and discards every uncommitted edit to that file,
   yours included (lg-8's builder lost its three Dockerfile lines that way).

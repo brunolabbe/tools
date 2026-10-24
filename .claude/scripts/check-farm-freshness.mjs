@@ -51,7 +51,14 @@
  *   would warn on every run over those two.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -130,12 +137,205 @@ export function warnIfStale(sharedRoot) {
   return 1;
 }
 
+// --- workspaces (repo-117) ---------------------------------------------------
+//
+// The pass above reads the *shared* checkout and skips every `link: true`
+// entry, so a workspace that `main` added after the shared checkout's last
+// `npm install` (`packages/ui`, repo-108) was linked by nobody and warned about
+// by nobody: the farm copies what the shared `node_modules` holds, and the
+// check compared the shared checkout with its own lockfile. This pass reads the
+// *worktree's* own root `package.json` `workspaces` globs instead, so a shared
+// checkout that is behind `main` cannot hide a workspace `main` has.
+
+/**
+ * Expand one `workspaces` glob to directories under `root`. Only `*` as a whole
+ * path segment is understood (a `packages` directory's children, or a `tools`
+ * directory's grandchildren), which is every shape this repo's `package.json`
+ * uses; npm's double star and negations are not emulated, and a pattern that
+ * needs them yields what its plain segments match.
+ *
+ * @param {string} root
+ * @param {string} pattern
+ * @returns {string[]} paths relative to `root`, POSIX separators
+ */
+function expandWorkspaceGlob(root, pattern) {
+  let dirs = [""];
+  for (const segment of pattern.split("/").filter((s) => s !== "" && s !== ".")) {
+    const next = [];
+    for (const dir of dirs) {
+      if (segment === "*") {
+        let entries = [];
+        try {
+          entries = readdirSync(path.join(root, dir), { withFileTypes: true });
+        } catch {
+          continue;
+        }
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+          next.push(dir === "" ? entry.name : `${dir}/${entry.name}`);
+        }
+      } else {
+        next.push(dir === "" ? segment : `${dir}/${segment}`);
+      }
+    }
+    dirs = next;
+  }
+  return dirs;
+}
+
+/**
+ * The workspaces `root`'s own `package.json` declares: each directory its
+ * `workspaces` globs match that holds a `package.json` with a `name`. Empty when
+ * there is no `package.json` or it declares none (a bare fixture tree), and
+ * throws `JSON.parse`'s own error on one that does not parse.
+ *
+ * @param {string} root
+ * @returns {{ name: string, dir: string }[]} `dir` relative to `root`, POSIX
+ */
+export function listWorkspaces(root) {
+  const manifest = path.join(root, "package.json");
+  if (!existsSync(manifest)) return [];
+  const declared = JSON.parse(readFileSync(manifest, "utf8")).workspaces;
+  // `workspaces` is an array, or `{ packages: [...] }` in npm's older form.
+  const globs = Array.isArray(declared) ? declared : (declared?.packages ?? []);
+  const found = new Map();
+  for (const glob of globs) {
+    if (typeof glob !== "string" || glob.startsWith("!")) continue;
+    for (const dir of expandWorkspaceGlob(root, glob)) {
+      const file = path.join(root, dir, "package.json");
+      if (!existsSync(file)) continue;
+      const name = JSON.parse(readFileSync(file, "utf8")).name;
+      if (typeof name === "string" && name !== "") found.set(name, dir);
+    }
+  }
+  return [...found].map(([name, dir]) => ({ name, dir })).toSorted((a, b) => (a.name < b.name ? -1 : 1));
+}
+
+/** True when `p` is anything at all on disk, a dangling symlink included. */
+function existsAsEntry(p) {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Where a workspace's link goes and what it points at, relative the way npm
+ * writes them (`../../packages/ui` from `node_modules/@webtools/ui`), so the
+ * link resolves from wherever it physically lives — inside the worktree.
+ *
+ * @param {string} root
+ * @param {{ name: string, dir: string }} workspace
+ */
+function workspaceLink(root, workspace) {
+  const link = path.join(root, "node_modules", ...workspace.name.split("/"));
+  const target = path.relative(path.dirname(link), path.join(root, workspace.dir));
+  return { link, target: target.split(path.sep).join("/") };
+}
+
+/**
+ * The workspaces `root` declares that have no `node_modules/<name>` entry, each
+ * with the `ln -s` (run from `root`) that repairs it.
+ *
+ * @param {string} root
+ * @returns {{ name: string, dir: string, command: string }[]}
+ */
+export function findMissingWorkspaceLinks(root) {
+  const missing = [];
+  for (const workspace of listWorkspaces(root)) {
+    const { link, target } = workspaceLink(root, workspace);
+    if (existsAsEntry(link)) continue;
+    const rel = path.relative(root, link).split(path.sep).join("/");
+    missing.push({ ...workspace, command: `ln -s ${target} ${rel}` });
+  }
+  return missing;
+}
+
+/**
+ * Create the link for every workspace of `root` that has none. The farm's copy
+ * loop has already recreated each scope directory (`node_modules/@webtools`) as
+ * a real directory, so the link goes inside it; a scope the shared checkout had
+ * no entry for at all is created. A scope that is itself a symlink is left
+ * alone: writing through it would put the link in the shared checkout.
+ *
+ * @param {string} root
+ * @returns {{ name: string, target: string }[]} what was linked
+ */
+export function linkMissingWorkspaces(root) {
+  const linked = [];
+  for (const workspace of listWorkspaces(root)) {
+    const { link, target } = workspaceLink(root, workspace);
+    if (existsAsEntry(link)) continue;
+    const parent = path.dirname(link);
+    if (existsAsEntry(parent) && lstatSync(parent).isSymbolicLink()) continue;
+    mkdirSync(parent, { recursive: true });
+    symlinkSync(target, link, "dir");
+    linked.push({ name: workspace.name, target });
+  }
+  return linked;
+}
+
+/**
+ * Names each workspace of `root` with no link, and the `ln -s` that repairs it,
+ * on stderr. Always returns 0: unlike a missing fetched package this is a
+ * warning about a tree the farm just built, and the farm links these itself, so
+ * what is left to name is a link it could not make. Prints nothing when none is
+ * missing, or when `package.json` does not parse (a single notice replaces
+ * `JSON.parse`'s stack, as `warnIfStale` does for the lockfile).
+ *
+ * @param {string} root
+ * @returns {number}
+ */
+export function warnIfWorkspacesUnlinked(root) {
+  let missing;
+  try {
+    missing = findMissingWorkspaceLinks(root);
+  } catch (err) {
+    process.stderr.write(
+      `warning: could not read the workspaces of ${root}, skipping the workspace link check (${err.message}).\n`,
+    );
+    return 0;
+  }
+  if (missing.length === 0) return 0;
+  process.stderr.write(
+    [
+      `warning: ${root} declares ${missing.length} workspace(s) with no node_modules link:`,
+      ...missing.map((m) => `  ${m.name}`),
+      `repair, from ${root}:`,
+      ...missing.map((m) => `  ${m.command}`),
+    ].join("\n") + "\n",
+  );
+  return 0;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const sharedRoot = process.argv[2];
-  if (!sharedRoot) {
-    process.stderr.write("usage: node check-farm-freshness.mjs <shared-root>\n");
+  // `<root>` alone runs both checks against it. The farm splits them: the
+  // fetched-package check against the shared checkout before anything is
+  // linked, the workspace links against the worktree after.
+  const args = process.argv.slice(2);
+  const flags = args.filter((a) => a.startsWith("--"));
+  const root = args.find((a) => !a.startsWith("--"));
+  if (!root || flags.some((f) => !["--packages", "--workspaces", "--link"].includes(f))) {
+    process.stderr.write(
+      "usage: node check-farm-freshness.mjs [--packages | --workspaces | --link] <root>\n",
+    );
     process.exitCode = 1;
+  } else if (flags.includes("--link")) {
+    try {
+      for (const { name, target } of linkMissingWorkspaces(root)) {
+        process.stdout.write(`linked workspace ${name} -> ${target}\n`);
+      }
+    } catch (err) {
+      process.stderr.write(`warning: could not link the workspaces of ${root} (${err.message}).\n`);
+    }
   } else {
-    process.exitCode = warnIfStale(sharedRoot);
+    const both = flags.length === 0;
+    let code = 0;
+    if (both || flags.includes("--packages")) code = warnIfStale(root);
+    if (both || flags.includes("--workspaces")) warnIfWorkspacesUnlinked(root);
+    process.exitCode = code;
   }
 }
