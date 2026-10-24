@@ -33,8 +33,9 @@
  * cannot drift away from them:
  *
  * - **A paste that cannot fit (`miss`) in an alternating or long-day history.**
- *   In every shape, a fifth of the pastes have one row's amount changed by
- *   100 cents or one row's date moved a day (`mode` in `draw`).
+ *   In every shape, about 15 % of the pastes have one row's amount changed by
+ *   100 cents or one row's date moved a day (`mode` in `draw`). Some of those
+ *   still find a reading, so the test also counts the ones the search refuses.
  * - **An alternating history over 40 rows.** `n` is drawn from 8 to 46 for
  *   every shape but `long`, so `alt` and `altwide` histories pass 40 rows.
  * - **Rows a paste stored inside an alternating run.** A share of the copy's
@@ -42,7 +43,7 @@
  *   bank's own row, marked `fromWorkbook: false`, in every shape.
  *
  * `LG65_DIRECT_CASES` is `first-last` (case numbers); the suite runs the first
- * `DEFAULT_CASES`, about a second or two here. `LG65_DIRECT_SUMMARY=<file>` writes
+ * `DEFAULT_CASES`, about three seconds here. `LG65_DIRECT_SUMMARY=<file>` writes
  * the counts as JSON. The Log's larger run is this file with
  * `LG65_DIRECT_CASES=1-150000`.
  */
@@ -290,6 +291,7 @@ test("matchStretch answers every drawn case as main's search did (lg-65)", () =>
   const found = new Map<Kind, { calls: number; found: number }>();
   const tally = {
     altOrLongAltered: 0,
+    altOrLongRefused: 0,
     altOver40: 0,
     altWithStored: 0,
     holds20: 0,
@@ -321,7 +323,12 @@ test("matchStretch answers every drawn case as main's search did (lg-65)", () =>
     found.set(drawn.kind, stat);
     const alternating = drawn.kind === "alt" || drawn.kind === "altwide";
     if (reading) tally.foundTotal += 1;
-    if (drawn.altered && (alternating || drawn.kind === "long")) tally.altOrLongAltered += 1;
+    if (drawn.altered && (alternating || drawn.kind === "long")) {
+      tally.altOrLongAltered += 1;
+      // The draw altered the paste; whether `main`'s search then refused it is
+      // what the F2 gap needs, so count that beside the altered count.
+      if (!reading) tally.altOrLongRefused += 1;
+    }
     if (drawn.over40 && alternating) tally.altOver40 += 1;
     if (drawn.hasStored && alternating) tally.altWithStored += 1;
     if (drawn.holds20) {
@@ -351,6 +358,7 @@ test("matchStretch answers every drawn case as main's search did (lg-65)", () =>
     expect(stat.found).toBeLessThan(stat.calls);
   }
   expect(tally.altOrLongAltered).toBeGreaterThan(0);
+  expect(tally.altOrLongRefused).toBeGreaterThan(0);
   expect(tally.altOver40).toBeGreaterThan(0);
   expect(tally.altWithStored).toBeGreaterThan(0);
   // The cut-off's two sides: a block of exactly 20 rows and of 21 hold the stretch,
