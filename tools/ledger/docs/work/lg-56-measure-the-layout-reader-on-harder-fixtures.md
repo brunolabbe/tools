@@ -910,7 +910,7 @@ Claiming no more than the fixtures show:
    nothing for it. But reading the fixture through each of the ten answers
    reports 2 rows `outOfOrder` (for example `2024-02-29` on row 19 listed above
    `2024-03-02` on row 18) against 0 for the correct description, and the import
-   prints each one as "dated out of order: … imported as typed"
+   would print each one as "dated out of order: … imported as typed"
    (`api/src/workbook-import.ts`, in the import report). In what is shown to the
    model only the header says which date is which, because the 21 rows it sees
    hold no inversion. The owner's chosen guard, "confirm on screen", was chosen
@@ -975,9 +975,10 @@ place, with the sentence that was wrong now saying what holds.
 - **F1 (high): reproduced, and it was right.** The entry said the ten
   let-through runs "score `problems: 0` because the file reads cleanly either
   way" and that "the books' own checks cannot catch it". The books notice it.
-  `git show e92dff07:tools/ledger/api/test/layout.test.ts` lines 478 to 497 (the
-  "bank-two-dates: the dates differ on some rows…" test) read the fixture through
-  `moveColumn(copy, "date", "B")` and assert `wrongly.outOfOrder.length` greater
+  The "bank-two-dates: the dates differ on some rows…" test in
+  `api/test/layout.test.ts` (`git show 89a38d30:tools/ledger/api/test/layout.test.ts`)
+  reads the fixture through
+  `moveColumn(copy, "date", "B")` and asserts `wrongly.outOfOrder.length` greater
   than 0 and `wrongly.problems` equal to `[]`. I read the fixture through each of
   the ten actual answers with the books' `readWorkbook` (a scratch script that
   reads the records and the fixture and calls no model):
@@ -990,7 +991,7 @@ place, with the sentence that was wrong now saying what holds.
   ```
 
   So the verifications (`problems`) do not refuse this mistake, the books report
-  2 rows out of order, and `workbook-import.ts` prints each as "dated out of
+  2 rows out of order, and `workbook-import.ts` would print each as "dated out of
   order: … imported as typed". The recommendation's second point and the
   options now say so, and add the guard built on that signal as option (b), with
   "unmeasured beyond this fixture" beside it: whether a real export shows
@@ -1019,3 +1020,6 @@ Fast-forward` at 1792859785 seconds, which is 2026-10-24T16:36:25Z (`date -u -d
 @1792859785`), before the run's 17:32:40Z start. The entry cites it.
   (`git reflog` run through `git -C` was refused by the worktree-isolation check,
   so the file under `.git/logs/` was read directly.)
+
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, F8 — "The round-1 entry cites `git show e92dff07:…/layout.test.ts` lines 478 to 497. `e92dff07` is a branch commit, so the citation stops resolving once the squash merge lands." The round-1 entry now cites the test by its title, at `89a38d30`, with no line pin. `grep -v "Fixed at landing" tools/ledger/docs/work/lg-56-measure-the-layout-reader-on-harder-fixtures.md | grep -c "git show e92dff07:"` → `0`.
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, F9 — "The Log says the import prints each one as 'dated out of order: …'", while `workbook-import.ts` passes no `layout` today. Both places that made the claim now say "would print": the Build steps 3–4 entry's second recommendation point and the round-1 entry's F1 paragraph. `grep -v "Fixed at landing" tools/ledger/docs/work/lg-56-measure-the-layout-reader-on-harder-fixtures.md | grep -c "prints each one as\|prints each as"` → `0`.
