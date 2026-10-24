@@ -582,3 +582,80 @@ holding rows from more than two pastes. **An unexplained clock gap**, as in Buil
 `performance.now()` (13 s of wall against 14,799 ms on `main`'s first 250-row run),
 and vitest reported 236 s for the 20,000-seed spec where the wrapper read 216 s.
 The medians above are `performance.now()`'s.
+
+### 2026-10-24 — gate 1's F1 and F2 applied: a direct differential, committed (lg-65's fixer, round 1)
+
+- **The owner's answer, 2026-10-24.** The question: "lg-65 F1: the committed check
+  barely reaches the pairAt tie-break (a planted fault passes the 200 seeds the spec
+  runs). The code itself shows 0 differences over 400,000 cases. What should
+  happen?" The options: "A: commit the direct check" (the gate's recommendation, a
+  typed no-database differential of `matchStretch` against the reference copy, which
+  also covers F2; one round, then a narrow gate 2), "B: widen the seeded population",
+  and "Record it, land now". The owner chose **A**.
+- **Committed.** `api/test/lg-65-search-direct.test.ts`, "matchStretch answers every
+  drawn case as main's search did (lg-65)", at `5f9514c8` (the spec) and `5daf0f83`
+  (`Array#toSorted` for two lint errors, `unicorn(no-array-sort)`, found by `npm run
+check`; the draws are unchanged). It is gate 1's `gate-fuzz.test.ts` made typed:
+  the same generator, so its draws are the ones gate 1 measured. It calls
+  `matchStretch` and `helpers/reference-search.ts` (`main`'s search, verbatim) on the
+  same rows, start, paste and tolerance, with no database, and compares the JSON.
+  `paste-population.ts` and `lg-65-search.test.ts` are untouched. Its case count is
+  20,000 (`DEFAULT_CASES`): 2.8 s of test time here against the ledger project's 20 s
+  a test (`vitest.config.ts`), which leaves about seven times for a loaded runner.
+  `LG65_DIRECT_CASES=first-last` and `LG65_DIRECT_SUMMARY=<file>` size and report a
+  larger run; a run of more than about 100,000 cases must also pass `--testTimeout`,
+  since 150,000 cases take 20 s and the project's limit is 20 s.
+- **F2's three gaps, and how each is drawn** (also in the spec's header). The spec
+  counts each and fails if one is not drawn:
+  - _A paste that cannot fit (`miss`) in an alternating or long-day history._ In
+    every date shape, 22 % of pastes get one row's amount changed by 100 cents or one
+    row dated a day off (the draw's `mode`; half of the amount draws add 0 and are
+    not counted). Drawn at 20,000 cases: 1,764 of them in an `alt`, `altwide` or `long`
+    history.
+  - _An alternating history over 40 rows._ `n` runs 8 to 46 for every shape but
+    `long`. 1,255 `alt`/`altwide` cases at 20,000 hold more than 40 rows.
+  - _Rows a paste stored inside an alternating run._ A share of the copy's rows
+    (none half the time, then 10 % or 30 %) is replaced by the bank's own row with
+    `fromWorkbook: false`, in every shape. 3,178 `alt`/`altwide` cases at 20,000 hand
+    the search one.
+- **Not vacuous, asserted.** At least one case found a reading and at least one did
+  not, in each of the five shapes (`alt` 3,177 of 3,971 at 20,000, and so on); a block
+  of exactly 20 rows and of exactly 21 rows holding the stretch, some of each read
+  (2,792 and 2,449 cases at 20,000; 2,086 and 1,840 found).
+- **Positive controls.** Gate 1's `mutate.mjs` (M1 to M4), one at a time into this
+  tree's `api/src/workbook-days.ts`, the spec run at its committed count with
+  `npx vitest run tools/ledger/api/test/lg-65-search-direct.test.ts`, the file
+  restored with `git checkout 5daf0f83 -- tools/ledger/api/src/workbook-days.ts`
+  (`git diff 5daf0f83 --stat` empty after each, `git status --short` empty at the
+  end). All four fail on the committed spec as it stands at `5daf0f83`; the
+  `5f9514c8` version failed all four with the same cases.
+
+  | id  | planted line                                                                    | result at 20,000 cases      | cases that differ | first                                                            |
+  | --- | ------------------------------------------------------------------------------- | --------------------------- | ----------------- | ---------------------------------------------------------------- |
+  | M1  | `closes - opens > LONGEST_SEARCHED_DAY` becomes `>=`                            | fails, `Tests 1 failed`     | 101 of 20,000     | case 280 (alt): `[12,3,14,5]` against `[12,1,14,3]`              |
+  | M2  | `dates.sort((one, other) => one.first - other.first);` deleted from `pairAt`    | **fails**, `Tests 1 failed` | 21 of 20,000      | case 1774 (const): `[18,20,22,21,19]` against `[18,20,22,19,21]` |
+  | M3  | the closing-balance test for a block opening before the stretch made `false &&` | fails, `Tests 1 failed`     | 274 of 20,000     | case 65 (alt): `[0,15,2,17,5,21,6]` against `null`               |
+  | M4  | a stored row's `from + 1 < past` becomes `from + 1 <= past`                     | fails, `Tests 1 failed`     | 1,275 of 20,000   | case 19 (altwide): `null` against `[0,1,2,4,7,5,8]`              |
+
+  M2, the one gate 1 showed the seeded spec missing, is caught at case 1774, within
+  the first tenth of the committed count. It is the same 21 as gate 1's script
+  measured over 20,000, as it should be: the generator is the same.
+
+- **The head shows no difference.** At the committed count, `Tests 1 passed`, 0 of
+  20,000 cases differ (`foundTotal` 14,879 read a reading). At 150,000 cases
+  (`LG65_DIRECT_CASES=1-150000 npx vitest run --testTimeout=900000 …`): `Tests 1
+passed`, 20.1 s, 0 of 150,000 differ, 112,219 found a reading (gate 1's script
+  saw 0 of 400,000 with the same generator).
+- **Checks.** `npm run check` exit 0 (after the `toSorted` commit; its first run
+  failed on those two lint errors). `npx vitest run` on this spec and on
+  `lg-65-search.test.ts` together: 2 of 2 passed, 3.7 s. `npm test -- --project
+ledger`: exit 0, `Test Files 81 passed (81)`, `Tests 1677 passed (1677)` (gate 1's run of the head read 80 and 1,676).
+- **Done when 3 now names two tests:** `lg-65-search.test.ts` (outcomes and every
+  call over the seeded population) and `lg-65-search-direct.test.ts` (every call over
+  drawn inputs, which reaches the `pairAt` tie-break and the four shortcut edges).
+- **What gate 1 had wrong.** Nothing in its figures: the 21 cases of M2 in 20,000 and
+  the 20-second cost of 150,000 both reproduce. Two corrections to how it described the
+  population: "22 % altered" in its script includes draws that add 0 cents to an
+  amount (and so do not alter the paste), which this spec's tally excludes; and its
+  script, as written, could not be committed, not only for its `as never` casts
+  but because the repo's lint rejects `Array#sort` (two errors, fixed above).
