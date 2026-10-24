@@ -19,6 +19,7 @@ import {
   layoutFor,
   parseInventionCli,
   populationFiles,
+  runLabel,
   stratumOrder,
   walkStratum,
   type Check,
@@ -100,8 +101,8 @@ describe("the command line", () => {
     expect(after.recordFile).not.toBe(base.recordFile);
   });
 
-  test("a label without the -pl58- shape is refused", () => {
-    expect(() => layoutFor("/live", "2026-10-20")).toThrow(/pl58-2026-10-20/);
+  test("a label without the -pl<n>- shape is refused", () => {
+    expect(() => layoutFor("/live", "2026-10-20")).toThrow(/like pl60-2026-10-24/);
   });
 });
 
@@ -360,5 +361,77 @@ describe("the record under --after", () => {
     expect(record.samplePerFamily).toBe(50);
     expect(record).not.toHaveProperty("stratumDraw");
     expect(Object.keys(record.sample)).toEqual(["haiku", "opus", "sonnet"]);
+  });
+});
+
+describe("a label for any ticket's re-measure, pl-60's included (pl-60, Build 7)", () => {
+  test("--after pl60-<date> is accepted, and its files are the run's own", () => {
+    expect(parseInventionCli(["--after", "pl60-2026-10-24"])).toEqual({ run: "pl60-2026-10-24" });
+    expect(runLabel("pl60-2026-10-24")).toEqual({ ticket: "pl-60", date: "2026-10-24" });
+    // pl-58's label keeps meaning what it meant, so its committed record still regenerates.
+    expect(runLabel("pl58-2026-10-21")).toEqual({ ticket: "pl-58", date: "2026-10-21" });
+
+    const own = path.join("/live", "invention", "pl60-2026-10-24");
+    const layout = layoutFor("/live", "pl60-2026-10-24");
+    expect(layout.recordFile).toBe(path.join(own, "2026-10-24.json"));
+    expect(layout.classificationFile).toBe(path.join(own, "classification.json"));
+    expect(layout.verdictsFile).toBe(path.join(own, "verdicts.json"));
+  });
+
+  test.each([
+    "pl-60-2026-10-24",
+    "pl060-2026-10-24",
+    "PL60-2026-10-24",
+    "pl60-2026-1-24",
+    "pl60-2026-10-24x",
+    "pl60",
+    "pl60-",
+    "60-2026-10-24",
+  ])("a malformed label, %s, is refused", (label) => {
+    expect(() => layoutFor("/live", label)).toThrow(/--after takes a label like pl60-2026-10-24/);
+  });
+
+  test("the record names the label's own ticket, read from its directories alone", () => {
+    const live = liveDir();
+    writeRecord(live, "claude-opus-5-5-low-pl60-2026-10-24/set-b-run-1.json", [
+      ["lodging", "motel", "Percé"],
+    ]);
+    writeRecord(live, "claude-opus-5-5-low-pl58-2026-10-21/set-b-run-1.json", [
+      ["lodging", "Hotel One", "Percé"],
+    ]);
+    const layout = layoutFor(live, "pl60-2026-10-24");
+    const files = populationFiles(layout);
+    const { places, files: count } = collectPlaces(live, files);
+
+    expect(files.map((file) => path.relative(live, file))).toEqual([
+      path.join("claude-opus-5-5-low-pl60-2026-10-24", "set-b-run-1.json"),
+    ]);
+    const record = buildRecord({
+      places,
+      files: count,
+      classification: {
+        rubric: {
+          written: "test",
+          classes: {
+            "named-premises": { definition: "d", example: "e" },
+            "kind-of-place": { definition: "d", example: "e" },
+            "settlement-or-area": { definition: "d", example: "e" },
+            "route-or-transit": { definition: "d", example: "e" },
+          },
+          edgeRules: {},
+        },
+        classes: { "motel|percé": { class: "kind-of-place", edge: [] } },
+      },
+      verdicts: {
+        runDate: "2026-10-24",
+        budget: { written: "", queriesBeforeNotFound: [], osm: "" },
+        checks: {},
+      },
+      hoursRows: [],
+      run: "pl60-2026-10-24",
+      target: 40,
+    });
+
+    expect(record.ticket).toBe("pl-60");
   });
 });
