@@ -79,5 +79,7 @@ Two ways to get a green run that proves nothing, and neither announces itself:
 `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`, then `npm run build`.
 Never `npm install` or `npm ci` in a worktree: it takes minutes, and can fail
 outright when a postinstall cannot reach the network. The farm mirrors the shared
-checkout, so after a new workspace merges, the shared checkout itself needs one
-`npm install` — the owner's to run, or yours when no peer session is live.
+checkout's fetched packages, so after a merge adds one the shared checkout itself
+needs one `npm install` — the owner's to run, or yours when no peer session is
+live. A new workspace does not: the farm links the worktree's own workspaces
+(repo-117), whatever the shared checkout holds.

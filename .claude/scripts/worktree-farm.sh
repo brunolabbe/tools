@@ -39,7 +39,8 @@ DEST="$(git rev-parse --show-toplevel)/node_modules"
 # stale until a TS2307 surfaces it deep into a build. This names the missing
 # package and the remedy before anything is linked; it never blocks the farm,
 # because a false positive here would stop every dispatch instead of one.
-node "$(dirname "${BASH_SOURCE[0]}")/check-farm-freshness.mjs" "$SHARED_ROOT" || true
+FRESHNESS="$(dirname "${BASH_SOURCE[0]}")/check-farm-freshness.mjs"
+node "$FRESHNESS" --packages "$SHARED_ROOT" || true
 
 link_entry() { # $1 = source path, $2 = dest path
   local target
@@ -57,6 +58,20 @@ for e in $(ls -A "$SHARED"); do
     *)  link_entry "$SHARED/$e" "$DEST/$e" ;;
   esac
 done
+
+# Workspaces (repo-117). The loop above only recreates what the shared checkout
+# holds, so a workspace that main added since its last `npm install` (packages/ui,
+# repo-108) was linked by nobody and every build failed on it. The worktree's own
+# package.json `workspaces` is the list, and the link goes in the scope directory
+# the loop just made (a real directory, so it lands in THIS worktree). The links
+# point at directories with no dist yet; `npm run build` makes it.
+WORKTREE="$(dirname "$DEST")"
+node "$FRESHNESS" --link "$WORKTREE" || true
+node "$FRESHNESS" --workspaces "$WORKTREE" || true
+# The worktree's own lockfile against what the loop just linked (repo-117, gate 1):
+# the pass above reads the shared checkout's lockfile, so a shared checkout that is
+# behind main passes it while this tree declares a package it lacks.
+node "$FRESHNESS" --worktree-packages "$WORKTREE" || true
 
 echo "farm built: $(ls -A "$DEST" | wc -l) top-level entries in $DEST"
 echo "now run: npm run build   (without dist, suites fail with packageEntryFailure)"
