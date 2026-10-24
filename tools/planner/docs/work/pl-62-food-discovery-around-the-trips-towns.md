@@ -272,11 +272,11 @@ Six decisions. **Decisions 1 to 4 were asked before a builder was dispatched**, 
 each changes what is built, and the owner answered all four on 2026-10-24, each time as
 the filing builder's recommendation, through the session's question. "Leave open" was
 not offered as a listed option; a free-text answer was. **Decision 6 was answered at
-Build 1's stop** (10 km and ten; see Decision 6), and **Decision 5 is still open**. Both
-were held back: **Decision 6 was asked at Build 1's stop**, with the capture's counts, since
-"hold a question until you can bring a measurement", and **Decision 5 at the stop
-before the paid run**, as pl-58's and pl-60's were. Decision 5's recommendation is the
-filing builder's and is not settled.
+Build 1's stop** (10 km and ten; see Decision 6), and **Decision 5 at the stop before the
+paid run** (shape (a); see Decision 5). Both were held back: **Decision 6 was asked at
+Build 1's stop**, with the capture's counts, since "hold a question until you can bring a
+measurement", and **Decision 5 at the stop before the paid run**, as pl-58's and pl-60's
+were.
 
 **What was not measured when this was filed.** Overpass was unreachable from the filing
 builder's sandbox (`curl -m 25` to `https://overpass-api.de/api/status` returned
@@ -475,6 +475,12 @@ These are lodging-prompt costs, and `food`'s block carries more finds per town
 **Recommendation: (a),** so the re-measure is the same shape as both earlier runs and
 `lodging` stays a comparable control. The decision stays the owner's, as the model
 families, efforts, runs and `--max-usd` were for pl-58 and pl-60.
+
+**Chosen: (a), by the owner on 2026-10-24**, after gate 1, relayed by the orchestrator in
+the dispatch for Build 6; it was the recommendation. The options put were (a) to (d) as
+worded above. The authorisation is for (a)'s shape with **a $10 total bound**: no session
+beyond it is re-run without asking, and the run stops for a question if the projected
+total passes $10.
 
 ### 6. The food pass's radius and per-town cap (asked at Build 1's stop)
 
@@ -1171,3 +1177,59 @@ tools/planner/api/test/live/run.ts`.
   API.
 - **Checks.** `npm run check` exit 0. `npm test -- --project planner`: `Test Files 84
 passed (84)`, `Tests 1814 passed (1814)`.
+
+**2026-10-24 — Gate 1's lows 1 to 3, Decision 5 answered, and Build 6, the live run
+(builder, Opus 5.5).** A fresh builder, from the previous entry's handover at
+`38bfd8cb`. Gate 1 (Sonnet 5.5) graded that head PASS for the slice, with `Done when`
+8 to 10 `unproven (scope)`; the owner chose to fold its lows 1 to 3 into this round and
+to leave low 4 (`Done when` 12's literal "name `food`") recorded and unfixed. pl-61
+(#618) had not merged into `main` (`origin/main` still `89a38d30`), so nothing was merged
+and the `queried` expectation the earlier entry describes is still pending.
+
+- **Decision 5, answered (a)** by the owner on 2026-10-24, relayed in this dispatch,
+  and recorded under Decision 5 above in this commit, **before the run starts**. The
+  authorisation is (a)'s shape with a $10 total bound.
+- **Low 1, the after-pass throw in `townFinds`.** `townFinds` now takes its two
+  captures as a parameter defaulting to the checked-in files.
+  `town-capture-stub.test.ts` › "townFinds throws after the pass when a town query had
+  no reply, rather than handing food an empty list" hands it a food capture with
+  Percé's reply removed. **Plant**, at `0845c3a4`: the five-line guard deleted, and
+  `npx vitest run tools/planner/api/test/town-capture-stub.test.ts` gave `Tests 1 failed
+| 4 passed (5)`, `AssertionError: promise resolved "[ …(22) ]" instead of rejecting`.
+  Restored with `git checkout 0845c3a4 -- tools/planner/api/test/live/run.ts`.
+- **Low 2, food's de-duplication apart from lodging's.** `food-pass.test.ts` › "one
+  element tagged both a place to stay and a place to eat is handed to each reader once,
+  since the two lists are de-duplicated apart": `node/42` comes back as a hotel from the
+  lodging query and as a restaurant from the food query, and both finds are in the
+  pass's list. **Plant**, at `0845c3a4`: `eat.seen = sleep.seen;` after `const eat =
+newCategory();` in `discoverLodging`, and the five town-pass specs
+  (`food-pass`, `lodging-pass`, `lodging-run`, `town-capture-stub`, `revisions`) gave
+  `Tests 1 failed | 72 passed (73)`, `expected [ { …(7) } ] to deeply equal [ { …(7) },
+{ …(7) } ]`. Restored with `git checkout 0845c3a4 --
+tools/planner/api/src/runs/lodging.ts`; `73 passed (73)` after.
+- **Low 3, the comments.** `GroundingProvider.nearbyPoint` (`agent/src/grounding.ts`)
+  and `ValhallaGroundingProvider.nearbyPoint` (`api/src/grounding/valhalla.ts`) now say
+  the town query is `food`'s as well; `FixtureGroundingProvider.nearbyPoint` says no
+  town has anything to sleep in or to eat at; and the comment in `lodging-pass.test.ts`
+  › "names each town by what happened to it, one sentence per outcome" says the budget
+  refused Amqui's `locate`, which is the double's `"refused"`, not "never located".
+- **The wrapper**, `run-pl62.mjs` in the dispatch's scratch directory (`pl-62/build-6/`),
+  is pl-60's `run-pl60.mjs` with the label `pl62-<date>` and nothing else changed: the
+  five pairs, the per-session caps (1, 1, 1, 5 and 10, each also bounded by what is left
+  of the $10), and pl-58's prices, which equal the `prices` in pl-60's five directories.
+  It refuses a total above $10 and a session directory that exists.
+- **Dry run** under the scripted provider into scratch: `node run-pl62.mjs 2026-10-24 -
+<scratch>/pl-62/build-6/dry/live <scratch>/pl-62/build-6/dry/logs 10`, exit 0, five
+  sessions of 25 records each at $0.0000, "all five sessions done, observed $0.0000 of
+  $10". Every set B record carries 72 finds: the corridor's 40, `lodging`'s 20 and
+  `food`'s 12 (Percé's closest ten and Forillon's two), and its `food` prompt carries the
+  block "Places to eat around the towns this trip names"; set A records carry none
+  (`inspect.mjs`).
+- **The projection, against the bound.** pl-60's five sessions observed $7.2134. pl-62
+  adds 3,204 characters to `food`'s prompt in sets B to D only, about 800 tokens a call
+  by the usual four characters a token (not measured: `count_tokens` was not run before
+  the session). Over pl-60's 80 sets B to D records and at most three attempts in set D,
+  that is under 0.3 M input tokens, under $1.20 at Opus's $4 per MTok even if every
+  record were Opus's. **The projection is $7.2 to $8.4, under $10**, so the run went
+  ahead. The wrapper's caps bound it at $10 in any case, apart from run.ts's documented
+  one-run fallback excess.
