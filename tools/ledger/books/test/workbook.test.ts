@@ -800,3 +800,137 @@ describe("reading the workbook through a layout", () => {
     ]);
   });
 });
+
+describe("a detail cell that holds a number (lg-68)", () => {
+  /** One movement per detail, listed newest first as the household's sheets are. */
+  function details(...cells: Input[]): Sheet {
+    const rows: Input[][] = cells.map((detail, index) => [
+      null,
+      d(`2022-03-${String(cells.length - index).padStart(2, "0")}`),
+      "Dép. Courantes",
+      detail,
+      "Alex",
+      (cells.length - index) * 10,
+      10,
+    ]);
+    return sheet("2022", [
+      [null, "Date", "Compte", "Détail", "Personne", "Solde", "Montant"],
+      ...rows,
+    ]);
+  }
+
+  test("is read as the number's text, never as an empty detail", () => {
+    // `007` typed in Excel is saved as the number 7: the cell keeps no zeros.
+    const reading = readWorkbook([details(42, 7, -3.5, 0.1 + 0.2, "Versement"), ACCUEIL], {
+      people,
+    });
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.movements.map((movement) => movement.detail)).toEqual([
+      "Versement",
+      "0.3",
+      "-3.5",
+      "7",
+      "42",
+    ]);
+  });
+});
+
+/** One movement per entry, newest first, each cell as given: the household's `D`, `E` and `H`. */
+function movementRows(entries: { detail?: Input; person?: Input; note?: Input }[]): Sheet {
+  const rows: Input[][] = entries.map((entry, index) => [
+    null,
+    d(`2022-03-${String(entries.length - index).padStart(2, "0")}`),
+    "Dép. Courantes",
+    entry.detail ?? "Versement",
+    entry.person ?? "Alex",
+    (entries.length - index) * 10,
+    10,
+    entry.note ?? null,
+  ]);
+  return sheet("2022", [
+    [null, "Date", "Compte", "Détail", "Personne", "Solde", "Montant", "Note"],
+    ...rows,
+  ]);
+}
+
+describe("a free-text cell that holds a number or a date (lg-68, round 1)", () => {
+  test("a detail holding a date is read as its ISO day", () => {
+    const reading = readWorkbook(
+      [movementRows([{ detail: d("2022-01-05") }, { detail: "Versement" }]), ACCUEIL],
+      { people },
+    );
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.movements.map((movement) => movement.detail)).toEqual([
+      "Versement",
+      "2022-01-05",
+    ]);
+  });
+
+  test("a detail holding a formula is read as its cached number", () => {
+    const reading = readWorkbook(
+      [movementRows([{ detail: { formula: "1+1", result: 2 } }]), ACCUEIL],
+      { people },
+    );
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.movements.map((movement) => movement.detail)).toEqual(["2"]);
+  });
+
+  test("a movement's note holding a number or a date is read as its text", () => {
+    const reading = readWorkbook(
+      [movementRows([{ note: 42 }, { note: d("2022-01-05") }, { note: "marché" }, {}]), ACCUEIL],
+      { people },
+    );
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.movements.map((movement) => movement.note)).toEqual([
+      null,
+      "marché",
+      "2022-01-05",
+      "42",
+    ]);
+  });
+
+  test("a period line's note holding a number or a date is read as its text", () => {
+    const reading = readWorkbook(
+      [
+        sheet("$ (A)", [
+          ["Période", null, "Alex", "Sam"],
+          [],
+          [],
+          [],
+          [],
+          ["Du", d("2022-04-01"), "au", d("2022-08-31")],
+          ["Item", null, null, null, "Note"],
+          ["Épicerie", null, null, 300, 42],
+          ["Quincaillerie", null, 120, null, d("2022-05-03")],
+          ["Montant à déposer", null, { formula: "D10/Accueil!B1-C10", result: 380 }],
+        ]),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(reading.periods[0]?.lines.map((line) => [line.label, line.note])).toEqual([
+      ["Épicerie", "42"],
+      ["Quincaillerie", "2022-05-03"],
+    ]);
+  });
+
+  test("a number or a date in the person column is refused, naming the cell", () => {
+    const reading = readWorkbook(
+      [movementRows([{ person: 42 }, { person: d("2022-01-05") }, {}]), ACCUEIL],
+      { people },
+    );
+
+    expect(reading.problems).toEqual(
+      expect.arrayContaining([
+        `2022!E2 names "42", who is not one of the household (alex, sam). Map the name to a person in the corrections file's "people".`,
+        `2022!E3 names "2022-01-05", who is not one of the household (alex, sam). Map the name to a person in the corrections file's "people".`,
+      ]),
+    );
+    expect(reading.movements.map((movement) => movement.row)).toEqual([4]);
+  });
+});

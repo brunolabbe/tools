@@ -28,13 +28,17 @@ export interface YearRow {
   /** As written in the cell, `yyyy-mm-dd`: a typo'd year is written wrong here. */
   written: string;
   bucket: "Hypothèque" | "Dép. Courantes";
-  detail: string;
-  person?: string;
+  /**
+   * A number is written as a number cell, as Excel saves `42` or `007` typed
+   * in it, and a `Date` as a date cell (lg-68); so are `person` and `note`.
+   */
+  detail: string | number | Date;
+  person?: string | number | Date;
   /** In dollars; absent on a placeholder. */
   amount?: number;
   /** The amount cell as a formula, saved with `amount`, or with 0 when there is none. */
   amountFormula?: string;
-  note?: string;
+  note?: string | number | Date;
 }
 
 export interface YearSheet {
@@ -51,7 +55,8 @@ export interface PeriodLineSpec {
   label: string;
   alex?: number | { formula: string; result: number };
   sam?: number | { formula: string; result: number };
-  note?: string;
+  /** A number or a `Date` is written as a number or a date cell (lg-68). */
+  note?: string | number | Date;
 }
 
 export interface PeriodSheet {
