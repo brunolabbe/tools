@@ -558,3 +558,191 @@ has no `## Review` section and no `--land`.
   which this ticket does not cite).
 - **Not fixed, as the owner chose:** N3, the area form conditional in Build 1 and
   unconditional in `Done when` 3, stays recorded in gate 2's report.
+
+**2026-10-24 — Intake answer: how far the first dispatch goes (orchestrator,
+relayed to the builder).** Question (orchestrator, 2026-10-24): "How far should the
+first builder-hard dispatch go before it comes back to you?" Options: (1) Build 1
+and price the seam — capture, commit the counts, read the cost of Build 2's seam
+options (a), (b), (c) from the code with no seam code written, then stop
+(recommended); (2) Build 1 only, as written; (3) do not start pl-60. **Chosen by
+the owner: option 1, the orchestrator's recommendation.** It widens Build 1's
+"stop after this step" by the costing only. No prompt, role, specialist or seam
+code is written under it.
+
+**2026-10-24 — Build 1: the capture, and Build 2's seam priced (builder, Opus
+5.5).** Branched from `8a6dcf9a` (`origin/main`, pl-58 merged as #593). Stopped
+here, as Build 1 and the intake answer say. The scratch scripts and every raw reply
+are in the dispatch's scratch directory, under `build/` and `build/raw/`. No
+payload is checked in: `Done when` 3's payload is re-captured through the built
+`overpassQuery` once Build 2 has changed it.
+
+- **The towns: 9 distinct `place.locality` values, from 23 `lodging` candidates.**
+  Read from `candidatesAccepted` (`specialist === "lodging"`, every one
+  `kind: "at"`) of `set-a-road-trip.json` in each of the five
+  `claude-*-pl58-2026-10-21/` directories: haiku high 4, haiku low 4, haiku
+  medium 3, opus low 6, sonnet low 6. No `lodging` candidate was rejected. The
+  localities, with mentions: Gaspé 8, Percé 6, Forillon National Park 2,
+  Rivière-du-Loup 2, Amqui 1, Bonaventure 1, Carleton-sur-Mer 1, Gaspésie 1,
+  Matane 1. Two are not towns: `Gaspésie` is the peninsula, and `Forillon National
+Park` a park.
+- **Each town's point** came from one Nominatim search per town (`q=<locality>, Québec`,
+  `limit=1`, an identifying user agent, 1.5 s apart). Seven are the town's
+  `boundary=administrative` relation. Forillon is `boundary=national_park`
+  (relation 1603116), and Gaspésie is `natural=peninsula` (relation 15597971), whose
+  point is inland at 48.615, −66.067. **`Bonaventure, Québec` came back as a
+  railway station in Montréal** (node 7052605738, 600 km away). It was re-asked
+  as `Bonaventure, Gaspésie, Québec`, which returned the village (relation
+  8271759, 48.045, −65.493). A town pass that geocodes a bare locality inherits
+  pl-37's ambiguity problem. `locate`'s `chooseResult` exists for that problem, and this
+  capture did not go through it.
+- **The tag set** is `tourism=` `hotel`, `motel`, `guest_house`, `hostel`,
+  `chalet`, `apartment`, `camp_site`, `caravan_site`. **It was not read from the OSM wiki:
+  `wiki.openstreetmap.org` is unreachable from this container** (curl timed out
+  after 20 s; WebFetch `ECONNREFUSED`). It was taken instead from iD's tagging presets,
+  `openstreetmap/id-tagging-schema` `data/presets/tourism/<value>.json` on GitHub.
+  Their `geometry` field is the editor's own "used on": all eight are
+  `["point","area"]`, and `camp_site` and `caravan_site` add `vertex`. Rejected:
+  `alpine_hut` and `wilderness_hut` (backcountry shelters, unstaffed or
+  hut-booked, not a premises a road-trip party books; captured anyway and counted
+  apart, 0 to 3 per town at 25 km), `camp_pitch` (a pitch inside a `camp_site`, so
+  it would count one campground many times; not queried), and anything outside
+  `tourism=*` (`building=hotel` names a building and not a use).
+- **The query** came from `build/capture.mjs` and not through the seam: one
+  `nwr["tourism"="<value>"](around:25000,<lat>,<lon>);` clause per value, then
+  `out center tags;`, `[timeout:80]`. It was captured once at 25 km per town and counted
+  offline by haversine distance from the town's point at 2, 6, 10 and 25 km. 6 km
+  is `DISCOVERY_RADIUS_METRES`, the corridor pass's radius. A find is counted as
+  `findFrom` would keep it: a coordinate (`lat`/`lon`, or `center` for a way or a
+  relation) and a non-empty `name`.
+- **Queries made: 11 to Overpass and 10 to Nominatim**, serial, no retries.
+  Overpass: 9 for the capture (one per town, 5 s apart, all HTTP 200 in 11.3 to
+  30.1 s, no `remark`), and 2 for the adapter probe below. Nominatim: 9, plus the
+  Bonaventure re-ask.
+- **Lodging finds per town, by element type (`n`ode, `w`ay, `r`elation):**
+
+  | Town                   | 2 km            | 6 km             | 10 km            | 25 km              |
+  | ---------------------- | --------------- | ---------------- | ---------------- | ------------------ |
+  | Amqui                  | 4 (n3 w1 r0)    | 6 (n3 w3 r0)     | 8 (n4 w4 r0)     | 30 (n10 w20 r0)    |
+  | Bonaventure            | 4 (n2 w2 r0)    | 6 (n4 w2 r0)     | 8 (n5 w3 r0)     | 18 (n9 w9 r0)      |
+  | Carleton-sur-Mer       | 5 (n4 w1 r0)    | 7 (n5 w2 r0)     | 8 (n6 w2 r0)     | 24 (n9 w14 r1)     |
+  | Forillon National Park | 1 (n1 w0 r0)    | 8 (n6 w2 r0)     | 17 (n9 w6 r2)    | 46 (n25 w18 r3)    |
+  | Gaspé                  | 7 (n3 w3 r1)    | 9 (n3 w5 r1)     | 24 (n16 w7 r1)   | 47 (n27 w17 r3)    |
+  | Gaspésie (peninsula)   | 0               | 0                | 0                | 0                  |
+  | Matane                 | 7 (n0 w7 r0)    | 13 (n2 w11 r0)   | 14 (n2 w11 r1)   | 25 (n9 w15 r1)     |
+  | Percé                  | 29 (n4 w24 r1)  | 37 (n9 w27 r1)   | 40 (n12 w27 r1)  | 47 (n13 w33 r1)    |
+  | Rivière-du-Loup        | 8 (n6 w2 r0)    | 18 (n14 w4 r0)   | 22 (n17 w5 r0)   | 39 (n31 w8 r0)     |
+  | **All 9**              | 65 (n23 w40 r2) | 104 (n46 w56 r2) | 141 (n71 w65 r5) | 276 (n133 w134 r9) |
+
+  **There is one zero town at every radius, and it is the peninsula**: `Gaspésie`'s point
+  had 2 elements within 25 km, a nameless lodging element and a hut. Every
+  locality that is a town had at least 4 finds at 2 km and 6 at 6 km. Unnamed lodging
+  elements, which `findFrom` drops, were 0 to 5 per town at 6 km and up to 23 at
+  25 km (Rivière-du-Loup).
+
+- **The area form is not optional.** At 6 km, 58 of the 104 finds (55.8%) are ways
+  or relations, and at 2 km 42 of 65 (64.6%) are. A node-only clause would have
+  returned 46 at 6 km, and none of Matane's 7 at 2 km. The measurement settles
+  gate 2's N3 (the area form conditional in Build 1 and unconditional in `Done when` 3):
+  the build keeps the area form, so it needs both the parser's `center` read and the
+  type-derived source URL.
+- **The three Forillon campgrounds Parks Canada names are all in OSM, as
+  `tourism=camp_site`, and all are areas:** `Camping Petit-Gaspé`, way 1013617284;
+  `Camping Des-Rosiers`, relation 3009120; and `Campig Cap-Bon-Ami` (sic),
+  relation 3007267. **They are among Gaspé's finds only at 25 km**: their centres
+  are 16.8, 19.1 and 19.1 km from Gaspé's point, so none is a Gaspé find at 2, 6 or
+  10 km. From Forillon National Park's point they are 8.5, 9.2 and 9.9 km away: finds at
+  10 km and not at 6. A node-only query finds none of them at any radius.
+  So whether a candidate that says `Forillon National Park campground` reaches them
+  turns on the town pass's radius, and on whether the pass asks about the park,
+  which is not a town. Both are Build 2's to settle.
+- **The public instance refuses the adapter as it stands.**
+  `#overpassJson` sends only `content-type: text/plain`, and Node 22.23.3's
+  `fetch` fills in `user-agent: node` (measured against a local server,
+  `build/ua-echo.mjs`). The probe built `ValhallaGroundingProvider` from `dist`,
+  pointed it at `https://overpass-api.de/api`, and called `nearby` with Gaspé's point twice and
+  `["viewpoint"]`. It got **HTTP 406 in 0.45 s**, raised as `UNREACHABLE` with
+  `details: { status: 406 }`. The identical `overpassQuery` text, sent with an
+  identifying user agent, got HTTP 200 in 12.8 s with 3 elements
+  (`build/probe.mts`, `build/raw/probe.json`). So the header is the cause, and
+  the public instance accepts the built query, including Build 2 option (a)'s
+  `around:` with the same point twice. Not fixed here, as the dispatch said. It touches
+  no deployment that follows `.env.example`, which points `OVERPASS_URL` at a
+  self-hosted instance. It does not block `Done when` 3 either: that re-capture needs
+  the built query's text, not the adapter's `fetch`. But a deployment whose `OVERPASS_URL` is the public instance
+  discovers nothing on any run, and by design `discovery.ts`'s `nearby` turns that
+  `UNREACHABLE` into the "very little on the map" coverage sentence. pl-33's
+  latency figures, "with the query the adapter really sends", were not re-checked.
+- **Which of the nine towns a brief names before `lodging` runs** (an input to
+  Build 2, which decides where the towns come from): the set A `road-trip` brief
+  leaves from `Montréal, Québec`, goes to `Gaspésie`, and its `mustSee` is
+  `Percé Rock, Forillon National Park`. **14 of the 23 mentions are in towns no
+  brief field names**: Gaspé 8, Rivière-du-Loup 2, and Amqui, Bonaventure,
+  Carleton-sur-Mer and Matane 1 each. The 9 the brief does reach are Percé 6
+  (through `Percé Rock`), Forillon 2 and Gaspésie 1. `locate` would decline
+  `Gaspésie` (`peninsula` is deliberately absent from `SETTLEMENT_ADDRESS_TYPES`).
+  Not measured: whether it locates `Percé Rock` or `Forillon National Park`.
+
+**Build 2's stop condition, priced from the code; no seam code was written.** Some work
+is shared by all three options and does not separate them: a lodging `DiscoveryKind`, its
+`KIND_FILTERS` clauses and `kindOf`; the `nwr` and `out center` query; `findFrom`
+reading `center` and taking its URL from `type`; the town pass in `discovery.ts`
+and its wiring in `orchestrator.ts` and `revise.ts`; and inverting
+`revisions.test.ts`'s "naming only lodging never asks" test, which pins the
+re-plan cost the Build says to state. The counts below come from `grep -rn "implements
+GroundingProvider"`, `grep -rn "RunGrounding\b"`, `grep -rn "request\.corridor"`
+and `grep -rn "corridor:"` over `tools/planner/{agent,api}/{src,test}`:
+
+- **(a) A degenerate corridor.** None of the 9 `GroundingProvider` implementers or the
+  5 `RunGrounding` implementers changes, and no `NearbyRequest` literal does. Two
+  doc-comments in `agent/src/grounding.ts` stop being true (`Corridor`, "at least
+  two points"; `Find.detourMinutes`, "from one end of the corridor to the other"),
+  and a town find's `detourMinutes` gains a third meaning of `null`. Overpass
+  accepts the doubled point (the probe above). There is also a cost the ticket did not name:
+  the corridor pass and the town pass share one method and one counter. So
+  `revisions.test.ts`'s `RecordingGrounding.nearbyCalls` (asserted `1` and `0`) and
+  `discovery-pass.test.ts`'s `nearbyCalled` count both passes, and `Done when` 6's
+  per-shape call test has to tell them apart by inspecting a request's geometry.
+- **(b) A sibling method.** 14 implementers, as the ticket lists them, in 11 files,
+  plus the two interfaces (`agent/src/grounding.ts`, and `cache.ts`, which also
+  holds two of the implementers): 12 files. Each implementer takes the method: the 9
+  `GroundingProvider`s (`FixtureGroundingProvider`, `CachingGroundingProvider`,
+  `ValhallaGroundingProvider`, and the 6 test doubles: `brief-edits` 1,
+  `revisions` 1, `travel-pass` 2, `grounding-cache` 2) and the 5 `RunGrounding`s
+  (`CachingGroundingProvider.forRun` and the literals in `test/live/run.ts`,
+  `discovery-pass`, `discovery-prompt-bound` and `travel-measure`; the spreads in
+  `travel-measure` take theirs from the literal). Each double's body is a line or
+  two (`return []`, or a throw). `nearby` is uncached, so the cache table and its
+  `kind` column are untouched. Gains: a request type that says what a town is, a
+  separate call count per pass, and `articlesNear` as the precedent.
+- **(c) Widen `NearbyRequest`.** It is cheaper than the ticket says if the union is
+  additive (`{ corridor } | { point }`, with `corridor` kept). Then **one** reader branches,
+  `ValhallaGroundingProvider.nearby`, which reads `request.corridor` twice (the
+  query and the `distanceToCorridorMetres` re-filter), and the 19 existing
+  `NearbyRequest` literals (1 in `discovery.ts`, 16 in `grounding-valhalla.test.ts`,
+  1 each in `discovery-pass` and `discovery-prompt-bound`) compile unchanged. A
+  discriminated union with a renamed field touches all 19. Either way it keeps
+  (a)'s one method and one counter.
+- **Builder's recommendation: (b).** The capture says the town pass is worth
+  building: 8 of 9 localities have finds at every radius, and the zero is a
+  peninsula. Its finds behave differently from a corridor's: no detour, a radius
+  chosen per town, and half of them areas. (b) is the only option where a test,
+  a log line or the `Done when` 6 call count can see which pass spent a call
+  without inspecting coordinates. Its cost is mechanical: 12 files, most of them
+  one-line doubles. (c), additive, is the cheaper fallback with honest types.
+
+**Open decisions, for the owner (not settled here):** the zero-find counts above,
+which Build 1 reports because no threshold was set, and Build 2's seam option. The
+radius a town pass asks with is content, like `DISCOVERY_RADIUS_METRES`, and
+Build 2 argues it in the Log. The table gives its cost: Forillon's campgrounds
+are 16.8 to 19.1 km from Gaspé's point.
+
+- **Folded in: nothing.** The filing Log offered this ticket's builder the stale `accept` doc-comment in
+  `agent/src/orchestrator.ts` (no run "has been captured with `finds` in it"), but
+  fixing it is a source edit. This branch is docs-only and titled `docs(planner):`,
+  and a `.ts` path would change what its title may say. The fix belongs with Build 6,
+  which uses the fact. The adapter's missing user agent is a one-line change
+  beside `locate`'s `USER_AGENT`. It is held back because the dispatch says a 406 is a
+  finding for this stop, not a fix.
+- **Checks:** `npx oxfmt` on this file, `npm run check`, and preflight's fast
+  checks; the dispatch's report carries their results. No test was added, so no
+  spec ran.
