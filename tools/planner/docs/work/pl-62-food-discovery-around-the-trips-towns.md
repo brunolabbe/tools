@@ -3,7 +3,7 @@ id: pl-62
 tool: planner
 title: Food chooses among restaurants and cafés fetched from map data around the trip's towns, instead of proposing from memory
 kind: work-package
-status: needs-decision
+status: ready
 milestone: P3
 depends_on: [pl-60]
 difficulty: hard
@@ -117,8 +117,10 @@ squash merge. The order is the order the Log reports them.
 
 ## Build
 
-Written for the recommendations below. A builder starts only on an answered Decision
-1 to 4; decisions 5 and 6 are asked at their stops (_Decision — open_ says when).
+Written for the owner's answers of 2026-10-24 (_Decision — answered_), each the
+recommendation: the meal set without `fast_food`, the town pass added to what `food`
+reads, a separate food query per town, and no screen. Decisions 5 and 6 are asked at
+their stops (_Decision — answered_ says when).
 
 1. **Capture first, and stop with the counts.** From a scratch script and not through
    the seam, send the food query for the nine localities pl-60's Build 1 used: Amqui,
@@ -261,13 +263,16 @@ If the owner answers Decision 4 with option (b), the commit that records the ans
 adds a Build step and a `Done when` line for it. They are not written here, because the
 screen's shape depends on which tags the answer names.
 
-## Decision — open
+## Decision — answered 2026-10-24 by the owner
 
-Six decisions. **Decisions 1 to 4 are asked before a builder is dispatched**, because
-each changes what is built. **Decision 6 is asked at Build 1's stop**, with the
-capture's counts, since "hold a question until you can bring a measurement". **Decision
-5 is asked at the stop before the paid run**, as pl-58's and pl-60's were. Each
-recommendation is the filing builder's, and none is settled.
+Six decisions. **Decisions 1 to 4 were asked before a builder was dispatched**, because
+each changes what is built, and the owner answered all four on 2026-10-24, each time as
+the filing builder's recommendation, through the session's question. "Leave open" was
+not offered as a listed option; a free-text answer was. **Decisions 5 and 6 are still
+open**: **Decision 6 is asked at Build 1's stop**, with the capture's counts, since
+"hold a question until you can bring a measurement", and **Decision 5 at the stop
+before the paid run**, as pl-58's and pl-60's were. Their recommendations are the
+filing builder's and are not settled.
 
 **What was not measured when this was filed.** Overpass was unreachable from the filing
 builder's sandbox (`curl -m 25` to `https://overpass-api.de/api/status` returned
@@ -302,6 +307,8 @@ all three.
 **Recommendation: (a).** It matches the sentence `food` already carries, and the
 capture prices what it leaves out.
 
+**Chosen: (a), by the owner on 2026-10-24.**
+
 ### 2. Which finds does `food` read?
 
 `food` already reads the corridor pass's finds (pl-29), and none can be a restaurant.
@@ -324,6 +331,9 @@ capture prices what it leaves out.
 **Recommendation: (a).** `food`'s measured defects are about a premises in the wrong
 town, which a town list reaches, and (b) changes two other specialists' prompts under a
 cap built for sites. The road lunch is a gap this ticket names and does not close.
+
+**Chosen: (a), by the owner on 2026-10-24.** `Done when` 1, 2, 7 and 13 stand as
+written; the rewrites below are not taken.
 
 `Done when` 1, 2, 7 and 13 are written for (a). If the owner answers (b) or (c), the
 commit that records the answer rewrites them. In both, line 1 stops pinning `activities`
@@ -376,6 +386,9 @@ are not measured for `food`; Build 2 asserts the real numbers.
 
 **Recommendation: (a),** for the control it keeps and the failure it isolates.
 Build 1 times (b) once per town, so the answer can be revisited with a number.
+
+**Chosen: (a), by the owner on 2026-10-24.** Build 1 still sends the combined query
+once per town and records its time and reply size, so the answer can be revisited.
 
 If the owner answers (b), the commit that records the answer rewords `Done when` 2 so
 that "the food query" is the combined query, with its finds split by kind afterwards,
@@ -431,6 +444,9 @@ and is in the Log: pl-60's own lodging capture, 140 named distinct elements.
 **Recommendation: (a),** because the measured screen is wrong about three real
 premises in seven and the class is two events. The Log's tag-presence table for `food`
 is what lets the owner answer (b) or (c) with `food`'s numbers.
+
+**Chosen: (a), by the owner on 2026-10-24.** No Build step or `Done when` line is
+added for a screen.
 
 ### 5. The paid run's shape (asked at the stop before it)
 
@@ -735,3 +751,22 @@ Decisions 1 to 6 stay open and `status` stays `needs-decision`.
 - **Checks at this round:** recorded in the dispatch's report (`npx oxfmt`, `npm run
 check`, `node scripts/status.mjs --json`, preflight).
 - **Thread:** gate 1's and gate 2's full reports are comments on PR #612.
+
+**2026-10-24 — Decisions 1 to 4 answered (owner, through the session's question).**
+`status` moves from `needs-decision` to `ready` in this commit, as `docs/01-TICKETS.md`
+says, and the heading reads _Decision — answered_. The four were put to the owner in one
+question with the filing's options, the recommendation first; the owner chose the
+recommendation each time: **1 (a)** the meal set without `fast_food`
+(`amenity=restaurant|cafe|bar|pub`, `shop=bakery`); **2 (a)** the town pass's food
+finds added to the corridor finds `food` already reads; **3 (a)** one more
+`nearbyPoint` per located town; **4 (a)** no screen. Decisions 5 and 6 stay open, to be
+asked at their stops. `difficulty` stays `hard`.
+
+- **pl-60 has merged**, as `aa834403` (#607), after this ticket was filed. The planner
+  tree there is pl-60's branch head `3669c20b` unchanged (`git diff --stat 3669c20b
+aa834403 -- tools/planner` lists only this ticket and pl-61's), so every "on pl-60's
+  branch" and "at pl-60's head" above reads as `main` for code. The branch is deleted
+  and `3669c20b` is not an ancestor of `main`, so it stands only as the provenance of
+  the measurements made at it. The fixtures Build 1 and 9 name are on `main`:
+  `api/test/fixtures/overpass-lodging-towns.json` and
+  `agent/test/fixtures/pl60-base-prompts.json`.
