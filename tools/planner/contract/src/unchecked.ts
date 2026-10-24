@@ -122,6 +122,13 @@ export const UNCHECKED_CONSTRAINTS = [
    * with thin map data produces a plan that *looks* exactly like one through a
    * well-mapped region — which is precisely the gap this list exists to name.
    *
+   * Since pl-60 the same is said of a **town**: the brief named it, and the
+   * town query found nowhere on the map to sleep there, or could not find the
+   * town, or never asked because the budget or the town cap ran out. `detail`
+   * names the towns; the kind and its shape are unchanged. `lodging` then
+   * proposes a kind of place there, as it did before pl-60, and this entry is
+   * what tells a reader that nothing checked it.
+   *
    * **Neither existing kind fits, and both fail the root `CLAUDE.md`'s test**:
    * the copy would have to be re-worded at the raise site either way.
    * `PlanGap` names a specialist that did not contribute, and every specialist
@@ -142,8 +149,8 @@ export const UNCHECKED_CONSTRAINTS = [
    *
    * **It is evidence, stored, not derived** — `PlanRevision.coverage`, beside
    * `gaps` and for the same reason `PlanItem.travelFromPrevious` is stored
-   * rather than recomputed (pl-27): the corridor query that decided this was
-   * thin ran once, at compose time, against a live backend whose answer
+   * rather than recomputed (pl-27): the corridor or town query that decided
+   * this was thin ran once, at compose time, against a live backend whose answer
    * cannot be re-asked for free on every later read of the plan. A re-read
    * that re-queried the backend to reproduce this note would drift from the
    * plan it is printed beside, in the same way re-composing `travel-time`
@@ -166,7 +173,7 @@ export const UNCHECKED_CONSTRAINTS = [
    * book this" depends on today, and `uncheckedForRevision` reads no clock, so
    * the edit that moved the dates answers it once with the `now` it was given
    * and the revision keeps the answer. It does not go in `coverage`, whose name
-   * and whose note are about a thin corridor.
+   * and whose note are about a thin corridor or town.
    */
   "booking-deadline-passed",
 ] as const;
