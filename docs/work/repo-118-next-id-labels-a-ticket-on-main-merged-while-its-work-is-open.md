@@ -59,3 +59,14 @@ on PR#<m>)` and not as a clash.
 - 2026-10-24 — Filed by the 2026-10-24 review of the orchestration log (tools-01 item 4; the
   stacked-branch and last-line readings relayed by session tools-f6 from lg-66's builder, not
   re-run by the review).
+- 2026-10-24 — Owner answers at intake, recorded by the builder before any source change:
+  1. **Layout: option (a), answer first.** Line 1 is `next free:`, the notes come straight
+     after it, then the claimant rows and clashes. Options offered: (a) answer first, notes
+     under, with `render`'s comment reworded to say notes sit immediately _below_ the answer,
+     for the same reason; (b) keep the answer last and mark it, rewording Done when 2; (c)
+     print it both first and last. Build 2 is therefore the "print first" branch. Recommended
+     by the builder's question; chosen by the owner.
+  2. **Rating: keep `mechanical`.** Options offered: keep `mechanical`, or re-rate to
+     `standard` because of Build 3's ancestor check. Chosen: keep. `difficulty` is not edited.
+     Status stays `ready`; this is the owner's answer to a `ready` ticket's open question, not a
+     change of state.
