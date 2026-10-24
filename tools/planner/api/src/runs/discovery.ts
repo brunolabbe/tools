@@ -65,7 +65,7 @@ import { unchecked } from "@planner/itinerary";
 import type { GroundingOutcome, RunGrounding, TravelOutcomeMatrix } from "../grounding/cache.ts";
 import { distanceToCorridorMetres, haversineMetres } from "../grounding/geometry.ts";
 import type { AppLogger } from "../logger.ts";
-import { discoverLodging, LODGING_STEPS_PER_TOWN, lodgingTowns } from "./lodging.ts";
+import { discoverLodging, lodgingTowns, TOWN_STEPS_PER_TOWN } from "./lodging.ts";
 
 /**
  * How far off the corridor still counts as "on the way" — pl-29's own title
@@ -244,7 +244,8 @@ export function hasCorridor(brief: TripBrief): boolean {
 
 /**
  * Whether either discovery pass would make a call for this brief — a corridor
- * to query along, or a town to find somewhere to sleep in (pl-60). The
+ * to query along, or a town to find somewhere to sleep in (pl-60) and to eat
+ * at (pl-62). The
  * orchestrator's question, asked before it enters `grounding`, for `hasCorridor`'s
  * reason.
  */
@@ -259,17 +260,19 @@ export function hasDiscovery(brief: TripBrief): boolean {
  * The corridor pass runs first because it locates the destination, and the
  * town pass then finds that `locate` in the cache at no cost. Their finds go
  * into one list, which `@planner/agent`'s `findsFor` splits by kind: `lodging`
- * reads the places to sleep and the corridor readers read the rest. Their
+ * reads the places to sleep, `food` the places to eat (pl-62) and the
+ * corridor's kinds, and `activities` and `conditions-and-gear` the corridor's
+ * kinds alone. Their
  * `coverage` entries go into one list too, each a sentence about its own pass.
  *
  * With nothing to discover it makes no call and reports no progress, and still
  * returns the town pass's "names no town" note: the plan should say that the
- * map was never asked about places to stay.
+ * map was never asked about places to stay or to eat.
  */
 export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   const towns = lodgingTowns(input.brief);
   const corridorSteps = hasCorridor(input.brief) ? TOTAL_STEPS : 0;
-  const total = corridorSteps + towns.length * LODGING_STEPS_PER_TOWN;
+  const total = corridorSteps + towns.length * TOWN_STEPS_PER_TOWN;
   let done = 0;
   const report = (): void => {
     input.onProgress({ type: "grounding", done, total });
@@ -503,9 +506,11 @@ async function notability(
       // One tile failing is not the pass failing: the rest of the corridor is
       // still worth asking about, and a find nobody reached keeps the same
       // empty `notability` a find nobody wrote about has.
+      const status = AppError.from(error).details?.status;
       logger.warn("a notability lookup failed, continuing with the rest", {
         provider: provider.name,
         code: AppError.from(error).code,
+        ...(typeof status === "number" ? { status } : {}),
       });
       continue;
     }
@@ -572,9 +577,11 @@ async function corridorReading(
       });
     } catch (error: unknown) {
       if (isCancellation(error, signal)) throw error;
+      const status = AppError.from(error).details?.status;
       logger.warn("a corridor reading lookup failed, continuing", {
         provider: provider.name,
         code: AppError.from(error).code,
+        ...(typeof status === "number" ? { status } : {}),
       });
       continue;
     }
@@ -674,9 +681,11 @@ async function locate(
     return { ...place, coordinates: outcome.value.coordinates };
   } catch (error: unknown) {
     if (isCancellation(error, signal)) throw error;
+    const status = AppError.from(error).details?.status;
     logger.warn("discovery could not locate a corridor endpoint", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
     return null;
   }
@@ -831,9 +840,14 @@ async function nearby(
     // one this pass's one entry per corridor can carry without a second kind,
     // and both leave a traveller in the identical position — this plan cannot
     // say what is nearby.
+    // pl-61: the HTTP status of a refused backend goes in the log, so a 406
+    // reads as a refusal rather than as a quiet network failure. The URL is not
+    // logged: a request URL is as sensitive as a credential in a log line.
+    const status = AppError.from(error).details?.status;
     logger.warn("the corridor could not be queried", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
     return { kind: "answered", value: [] };
   }
@@ -875,9 +889,11 @@ async function detourCosts(
     matrix = outcome;
   } catch (error: unknown) {
     if (isCancellation(error, signal)) throw error;
+    const status = AppError.from(error).details?.status;
     logger.warn("a detour cost could not be measured", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
   }
 

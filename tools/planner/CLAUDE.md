@@ -131,9 +131,10 @@ out with no drives in it.
 **A specialist reads the brief, and only the brief** — plus, since pl-29,
 what a discovery pass found on the map before the fan-out. That is the one
 addition to this rule and it is deliberately narrow: `activities`, `food` and
-`conditions-and-gear` are handed what a corridor pass found along the way, and
+`conditions-and-gear` are handed what a corridor pass found along the way,
 `lodging` what a town pass found to sleep in around the towns the brief names
-(pl-60), each as `Find[]` — a name, a location, its tags, its sources, never a
+(pl-60), and `food` what the same town pass found to eat at there (pl-62), each
+reader only its own kinds and each as `Find[]` — a name, a location, its tags, its sources, never a
 `Candidate` — because §4's "a specialist proposes; data does not" still holds. Not the raw answers, not the tree, not another specialist's
 output. The `TripBrief` indirection is what makes the fan-out testable from a
 fixture, and it is what made swapping the interview for a question tree cost
@@ -145,9 +146,9 @@ proposes and a pass verifies. Discovery is the opposite direction — a corridor
 query between the brief's two ends and, beside it since pl-60, a town query
 around each town the brief names. Both run _before_ the fan-out and propose what
 a specialist gets to judge, because a model asked for stops between two towns
-returns the famous ones, and asked for somewhere to sleep names a premises from
-memory, and nothing in the fan-out as built would ever surface the one a local
-would name. Discovery is not a new specialist and does not go on the roster; it
+returns the famous ones, and asked for somewhere to sleep or to eat names a
+premises from memory, and nothing in the fan-out as built would ever surface the
+one a local would name. Discovery is not a new specialist and does not go on the roster; it
 hands its finds to the four specialists above, each the kind it reads, and stops
 there. `RUN_TRANSITIONS` enters `grounding`
 twice for this — once before the fan-out for discovery, once after for pl-27's
@@ -157,7 +158,7 @@ to explain for nothing. `queued → grounding → fanning-out` is the discovery
 half; `fanning-out → grounding → composing` is pl-27's.
 
 **`coverage` names a corridor the ground was thin along, or a town the map had
-nowhere to sleep in** (pl-60), and it is one of the
+nowhere to sleep in** (pl-60) **or nowhere to eat in** (pl-62), and it is one of the
 two `UncheckedConstraintKind`s that are stored rather than derived; the other is
 `booking-deadline-passed` (pl-47), and they share one reason: a fact from
 outside, or from a clock, cannot be re-derived on read. Every other entry

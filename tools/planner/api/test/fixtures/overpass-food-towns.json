@@ -1,0 +1,1999 @@
+{
+ "note": "pl-62: one real Overpass reply per town, each to the exact query `overpassPointQuery` builds (10 km, the food kinds, [timeout:28]). Captured from overpass-api.de with an identifying user agent; the adapter's own fetch is refused there (HTTP 406) until pl-61 lands. Points and geocodedAs are pl-60's, copied from overpass-lodging-towns.json.",
+ "capturedAt": "2026-10-24T17:36:24.206Z",
+ "userAgent": "webtools-planner/0.9 (pl-62 fixture capture)",
+ "radiusMetres": 10000,
+ "towns": [
+  {
+   "locality": "Amqui",
+   "point": {
+    "latitude": 48.4656706,
+    "longitude": -67.4315171
+   },
+   "geocodedAs": "relation/8262628",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"amenity\"=\"restaurant\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"amenity\"=\"cafe\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"amenity\"=\"bar\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"amenity\"=\"pub\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"shop\"=\"bakery\"](around:10000,48.4656706,-67.4315171);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T17:27:03Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 5850274203,
+      "lat": 48.4542082,
+      "lon": -67.4152278,
+      "tags": {
+       "addr:housenumber": "219",
+       "addr:street": "Boulevard Saint-Benoît Est",
+       "amenity": "restaurant",
+       "name": "Restaurant Chez Jojo"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9975330497,
+      "lat": 48.4670963,
+      "lon": -67.4363002,
+      "tags": {
+       "addr:city": "Amqui",
+       "addr:housenumber": "232",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard Saint-Benoît Ouest",
+       "amenity": "pub",
+       "name": "Pub La Terrasse",
+       "website": "http://hotelgagnon.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10743634528,
+      "lat": 48.4216754,
+      "lon": -67.3419272,
+      "tags": {
+       "addr:city": "Lac-au-Saumon",
+       "addr:housenumber": "281",
+       "addr:postcode": "G0J 1M0",
+       "addr:province": "Québec",
+       "addr:street": "Rue Saint-Edmond",
+       "amenity": "pub",
+       "name": "Auberge du Lac",
+       "phone": "+1 418 778-3548"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10743636284,
+      "lat": 48.4212288,
+      "lon": -67.341222,
+      "tags": {
+       "addr:city": "Lac-au-Saumon",
+       "addr:housenumber": "291",
+       "addr:postcode": "G0J 1M0",
+       "addr:province": "Québec",
+       "addr:street": "Rue Saint-Edmond",
+       "amenity": "restaurant",
+       "name": "Restaurant du Lac",
+       "phone": "+1 418 778-2000",
+       "website": "https://facebook.com/restaurantdulac2016"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10756815827,
+      "lat": 48.4722744,
+      "lon": -67.4389449,
+      "tags": {
+       "addr:city": "Amqui",
+       "addr:housenumber": "340",
+       "addr:postcode": "G5J 2G2",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard Saint-Benoît Ouest",
+       "amenity": "restaurant",
+       "name": "Restaurant Pastali",
+       "phone": "+1 418 629-4471"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10756815828,
+      "lat": 48.4724286,
+      "lon": -67.4390384,
+      "tags": {
+       "addr:city": "Amqui",
+       "addr:housenumber": "340",
+       "addr:postcode": "G5J 2G2",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard Saint-Benoît Ouest",
+       "amenity": "bar",
+       "name": "Bar le Billard"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1020394706,
+      "center": {
+       "lat": 48.4708033,
+       "lon": -67.4388322
+      },
+      "tags": {
+       "addr:city": "Amqui",
+       "addr:housenumber": "320",
+       "addr:postcode": "G5J 2G2",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard Saint-Benoît Ouest",
+       "amenity": "restaurant",
+       "building": "yes",
+       "email": "cantinefortier@hotmail.com",
+       "name": "Restaurant Cantine Fortier",
+       "phone": "+1 418 629-3535",
+       "website": "https://facebook.com/Restaurant-Cantine-Fortier-259592397410512/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1088857188,
+      "center": {
+       "lat": 48.4656436,
+       "lon": -67.4337428
+      },
+      "tags": {
+       "addr:city": "Amqui",
+       "addr:housenumber": "140",
+       "addr:postcode": "G5J 2E8",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard Saint-Benoît Ouest",
+       "amenity": "pub",
+       "building": "yes",
+       "cuisine": "burger;pizza",
+       "email": "info@lacaptive.ca",
+       "internet_access": "wlan",
+       "microbrewery": "yes",
+       "name": "Microbrasserie La Captive",
+       "opening_hours": "Tu,We 10:00-22:00; Th,Fr 10:00-23:00; Sa 12:00-23:00",
+       "phone": "+1 418 631-1343",
+       "website": "http://lacaptive.ca",
+       "wikidata": "Q109628384"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1154243954,
+      "center": {
+       "lat": 48.475789,
+       "lon": -67.4403399
+      },
+      "tags": {
+       "addr:city": "Amqui",
+       "addr:housenumber": "394",
+       "addr:postcode": "G5J 2G6",
+       "addr:province": "Québec",
+       "addr:street": "Route 132 Ouest",
+       "amenity": "cafe",
+       "brand": "Tim Hortons",
+       "brand:wikidata": "Q175106",
+       "building": "yes",
+       "cuisine": "coffee_shop",
+       "name": "Tim Hortons",
+       "phone": "+1 418 629-2909",
+       "takeaway": "yes"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Bonaventure",
+   "point": {
+    "latitude": 48.0449189,
+    "longitude": -65.4931458
+   },
+   "geocodedAs": "relation/8271759",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"amenity\"=\"restaurant\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"amenity\"=\"cafe\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"amenity\"=\"bar\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"amenity\"=\"pub\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"shop\"=\"bakery\"](around:10000,48.0449189,-65.4931458);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T17:27:03Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 3706996895,
+      "lat": 48.0156437,
+      "lon": -65.4632657,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Poissonerie du Pêcheur",
+       "opening_hours": "We-Su 11:00-20:00"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3706997621,
+      "lat": 48.0466681,
+      "lon": -65.4893574,
+      "tags": {
+       "name": "La Pétrie",
+       "opening_hours": "Mo-Sa 07:00-18:00",
+       "shop": "bakery"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4584750091,
+      "lat": 48.0910832,
+      "lon": -65.4565686,
+      "tags": {
+       "amenity": "restaurant"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4584750092,
+      "lat": 48.0910215,
+      "lon": -65.4565162,
+      "tags": {
+       "amenity": "bar"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4988607823,
+      "lat": 48.0518165,
+      "lon": -65.4790889,
+      "tags": {
+       "amenity": "restaurant",
+       "cuisine": "burger;hot_dog;seafood;friture",
+       "internet_access": "wlan",
+       "name": "Chez Bergeron",
+       "name:en": "Chez Bergeron",
+       "name:fr": "Chez Bergeron"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5716141728,
+      "lat": 48.044527,
+      "lon": -65.4929407,
+      "tags": {
+       "amenity": "restaurant",
+       "level": "0",
+       "name": "kano"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6831762840,
+      "lat": 48.0482991,
+      "lon": -65.4871195,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Jack Crusoé"
+      }
+     },
+     {
+      "type": "way",
+      "id": 493141289,
+      "center": {
+       "lat": 48.0377702,
+       "lon": -65.481883
+      },
+      "tags": {
+       "amenity": "restaurant",
+       "building": "yes",
+       "name": "Café Acadien"
+      }
+     },
+     {
+      "type": "way",
+      "id": 493142164,
+      "center": {
+       "lat": 48.0433824,
+       "lon": -65.4888247
+      },
+      "tags": {
+       "amenity": "restaurant",
+       "building": "yes",
+       "name": "Dixee Lee Bonaventure"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1197650852,
+      "center": {
+       "lat": 48.0458571,
+       "lon": -65.4910513
+      },
+      "tags": {
+       "amenity": "pub",
+       "building": "yes",
+       "microbrewery": "yes",
+       "name": "Microbrasserie La belle aventure"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Carleton-sur-Mer",
+   "point": {
+    "latitude": 48.101464,
+    "longitude": -66.1140521
+   },
+   "geocodedAs": "relation/8271765",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"amenity\"=\"restaurant\"](around:10000,48.101464,-66.1140521);\n  nwr[\"amenity\"=\"cafe\"](around:10000,48.101464,-66.1140521);\n  nwr[\"amenity\"=\"bar\"](around:10000,48.101464,-66.1140521);\n  nwr[\"amenity\"=\"pub\"](around:10000,48.101464,-66.1140521);\n  nwr[\"shop\"=\"bakery\"](around:10000,48.101464,-66.1140521);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T17:28:06Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 4243141097,
+      "lat": 48.1041382,
+      "lon": -66.1260699,
+      "tags": {
+       "name": "La mie véritable",
+       "shop": "bakery"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5031274121,
+      "lat": 48.1040454,
+      "lon": -66.1255171,
+      "tags": {
+       "addr:housenumber": "586",
+       "addr:street": "Boulevard Perron",
+       "amenity": "bar",
+       "name": "Microbrewery Le Naufrageur",
+       "name:en": "Microbrewery Le Naufrageur",
+       "name:fr": "Microbrasserie Le Naufrageur"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5052366018,
+      "lat": 48.1045026,
+      "lon": -66.1272907,
+      "tags": {
+       "amenity": "restaurant",
+       "microbrewery": "yes",
+       "name": "Restaurant Cap à la mer",
+       "outdoor_seating": "yes",
+       "toilets": "yes"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5871262635,
+      "lat": 48.1054823,
+      "lon": -66.1297277,
+      "tags": {
+       "addr:city": "Carleton-sur-Mer",
+       "addr:housenumber": "200",
+       "addr:postcode": "G0C 1J0",
+       "addr:street": "Rue Du Quai",
+       "amenity": "cafe",
+       "cuisine": "coffee_shop;chocolate;sandwich;dessert",
+       "internet_access": "yes",
+       "internet_access:fee": "no",
+       "name": "Brulerie du Quai",
+       "outdoor_seating": "yes",
+       "smoking": "no",
+       "website": "brulerieduquai.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5912787185,
+      "lat": 48.1044445,
+      "lon": -66.129939,
+      "tags": {
+       "addr:housenumber": "215",
+       "addr:street": "Rue Du Quai",
+       "amenity": "restaurant",
+       "name": "Le Marin d'eau douce"
+      }
+     },
+     {
+      "type": "node",
+      "id": 11021246603,
+      "lat": 48.102737,
+      "lon": -66.1247974,
+      "tags": {
+       "addr:housenumber": "597",
+       "amenity": "restaurant",
+       "cuisine": "local",
+       "microbrewery": "no",
+       "name": "Restaurant du Cap à la Mer",
+       "toilets": "yes"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Forillon National Park",
+   "point": {
+    "latitude": 48.8669242,
+    "longitude": -64.3339235
+   },
+   "geocodedAs": "relation/1603116",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"amenity\"=\"restaurant\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"amenity\"=\"cafe\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"amenity\"=\"bar\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"amenity\"=\"pub\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"shop\"=\"bakery\"](around:10000,48.8669242,-64.3339235);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T17:29:06Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 6753296585,
+      "lat": 48.7899937,
+      "lon": -64.3808062,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "La Cantina"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9979845990,
+      "lat": 48.8298857,
+      "lon": -64.3204332,
+      "tags": {
+       "addr:housenumber": "1986",
+       "addr:street": "Bd de Grande Greve, Gaspé, QC G4X 6L6",
+       "amenity": "restaurant",
+       "name": "Peppino Pizza",
+       "website": "https://peppinopizza.ca/"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Gaspé",
+   "point": {
+    "latitude": 48.8317223,
+    "longitude": -64.4837569
+   },
+   "geocodedAs": "relation/8237761",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"amenity\"=\"restaurant\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"amenity\"=\"cafe\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"amenity\"=\"bar\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"amenity\"=\"pub\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"shop\"=\"bakery\"](around:10000,48.8317223,-64.4837569);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T17:29:06Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 1339244069,
+      "lat": 48.8315829,
+      "lon": -64.4832,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "20",
+       "addr:postcode": "G4X 2R8",
+       "addr:province": "QC",
+       "addr:street": "Rue Adams",
+       "amenity": "restaurant",
+       "brand": "St-Hubert",
+       "brand:wikidata": "Q3495225",
+       "capacity": "30",
+       "cuisine": "chicken;barbecue",
+       "drive_through": "yes",
+       "facebook": "https://www.facebook.com/STHGaspe/",
+       "internet_access": "yes",
+       "name": "St-Hubert",
+       "old_name": "Restaurant Adams",
+       "phone": "+1-418-368-4949",
+       "smoking": "no",
+       "terrace": "yes",
+       "website": "https://www.st-hubert.com/fr/restaurants/qc/gasp%C3%A9/20-rue-adams",
+       "wheelchair": "yes"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3067303719,
+      "lat": 48.8301129,
+      "lon": -64.4826526,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "101",
+       "addr:postcode": "G4X 1T5",
+       "addr:street": "Rue de la Reine",
+       "amenity": "cafe",
+       "cuisine": "coffee_shop",
+       "email": "cafedesartistesgaspe@hotmail.com",
+       "internet_access": "wlan",
+       "name": "Café des Artistes",
+       "opening_hours": "Mo-Fr 07:30-21:30; Sa-Su 07:30-15:00",
+       "phone": "+1-418-368-3366",
+       "smoking": "no",
+       "start_date": "1999",
+       "website": "https://cafedesartistes.co/",
+       "wheelchair": "limited"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3683173947,
+      "lat": 48.8293962,
+      "lon": -64.4837977,
+      "tags": {
+       "amenity": "restaurant",
+       "contact:facebook": "BistroBarBriseBise",
+       "contact:instagram": "bistrobarbrisebise",
+       "cuisine": "fish_and_chips;pasta;pizza;seafood",
+       "email": "info@brisebise.ca",
+       "facebook": "https://www.facebook.com/BistroBarBriseBise/",
+       "internet_access": "wlan",
+       "loc_name": "Brise",
+       "name": "Bistro-Bar le Brise-Bise",
+       "phone": "+1 418-368-1456",
+       "reservation": "yes",
+       "start_date": "1986",
+       "website": "https://brisebise.ca/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4392475854,
+      "lat": 48.8279644,
+      "lon": -64.478303,
+      "tags": {
+       "amenity": "bar",
+       "name": "Capitainerie"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5003115032,
+      "lat": 48.8285055,
+      "lon": -64.4863429,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "178",
+       "addr:postcode": "G4X 1T6",
+       "addr:province": "QC",
+       "addr:street": "Rue de la Reine",
+       "amenity": "pub",
+       "contact:instagram": "https://www.instagram.com/teturesto/",
+       "email": "info@teturesto.ca",
+       "facebook": "https://www.teturesto.ca/fr/",
+       "name": "Tétû",
+       "name:fr": "Tétû",
+       "opening_hours": "Tu 17:30-21:30; We-Fr 07:00-11:00,17:30-21:30; Sa 08:00-12:00,17:30-21:30; Su 08:00-12:00",
+       "phone": "+1-418-368-4388",
+       "website": "https://www.teturesto.ca/fr/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5216953615,
+      "lat": 48.776915,
+      "lon": -64.4547997,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "627",
+       "addr:street": "Boulevard York Sud",
+       "amenity": "restaurant",
+       "cuisine": "seafood;poutine;fish_and_chips;burger;pizza",
+       "facebook": "https://www.facebook.com/restaurantchezron/",
+       "name": "Chez Ron",
+       "opening_hours": "Tu-We 11:00-19:00; Th 07:00-19:00; Fr-Sa 07:00-20:00; Su 07:00-19:00",
+       "phone": "+1-418-368-6274"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6753296585,
+      "lat": 48.7899937,
+      "lon": -64.3808062,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "La Cantina"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6831775441,
+      "lat": 48.8277689,
+      "lon": -64.4841515,
+      "tags": {
+       "amenity": "cafe",
+       "drinking_water": "yes",
+       "name": "Taverne Baker",
+       "power_supply": "yes"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9622556619,
+      "lat": 48.8306238,
+      "lon": -64.4823719,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "100",
+       "addr:postcode": "G4X 1T2",
+       "addr:street": "Rue de la Reine",
+       "amenity": "cafe",
+       "brand": "Tim Hortons",
+       "brand:wikidata": "Q175106",
+       "brand:wikipedia": "en:Tim Hortons",
+       "cuisine": "coffee_shop",
+       "drive_through": "no",
+       "name": "Tim Hortons",
+       "opening_hours": "Mo-Sa 05:00-22:00; Su 08:00-22:00",
+       "phone": "+1-418-368-8989",
+       "smoking": "no",
+       "takeaway": "yes",
+       "website": "https://www.timhortons.com/ca/en/locations/get-directions.php?id=101159",
+       "wheelchair": "yes"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9622556621,
+      "lat": 48.8326292,
+      "lon": -64.4813702,
+      "tags": {
+       "amenity": "restaurant",
+       "cuisine": "pizza",
+       "name": "Maestro pizzeria",
+       "takeaway": "yes"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9622556624,
+      "lat": 48.8329728,
+      "lon": -64.4817938,
+      "tags": {
+       "amenity": "restaurant",
+       "cuisine": "chicken",
+       "name": "Dixie Lee poulet frit"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9699193597,
+      "lat": 48.8299065,
+      "lon": -64.483406,
+      "tags": {
+       "amenity": "bar",
+       "name": "La Voûte"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9699193598,
+      "lat": 48.8298617,
+      "lon": -64.4835127,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "114B",
+       "addr:postcode": "G4X 1T4",
+       "addr:street": "Rue de la Reine",
+       "name": "Oh! les pains",
+       "payment:cash": "yes",
+       "payment:contactless": "yes",
+       "payment:credit_cards": "yes",
+       "payment:debit_cards": "yes",
+       "phone": "+1-581-822-0555",
+       "shop": "bakery",
+       "website": "https://www.ohlespains.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9719199303,
+      "lat": 48.8295949,
+      "lon": -64.483515,
+      "tags": {
+       "amenity": "cafe",
+       "cuisine": "coffee_shop",
+       "name": "Le Paquebot",
+       "website": "https://paquebot.ca/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10247001896,
+      "lat": 48.8275777,
+      "lon": -64.487759,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "186",
+       "addr:street": "Rue de la Reine",
+       "amenity": "restaurant",
+       "capacity": "50",
+       "cuisine": "fish;fish_and_chips;seafood",
+       "name": "Auberge William Wakeham",
+       "website": "https://reseauaubergiste.com/inn/auberge-william-wakeham/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 11357296369,
+      "lat": 48.8298785,
+      "lon": -64.4830352,
+      "tags": {
+       "amenity": "cafe",
+       "name": "Seaflower Café"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12770797467,
+      "lat": 48.8335343,
+      "lon": -64.4837571,
+      "tags": {
+       "amenity": "restaurant",
+       "cuisine": "coffee_shop",
+       "name": "Café Oscar"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Gaspésie",
+   "point": {
+    "latitude": 48.6146774,
+    "longitude": -66.0665726
+   },
+   "geocodedAs": "relation/15597971",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"amenity\"=\"restaurant\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"amenity\"=\"cafe\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"amenity\"=\"bar\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"amenity\"=\"pub\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"shop\"=\"bakery\"](around:10000,48.6146774,-66.0665726);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T17:31:05Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "way",
+      "id": 541717476,
+      "center": {
+       "lat": 48.6581412,
+       "lon": -66.1571291
+      },
+      "tags": {
+       "amenity": "restaurant",
+       "building": "yes",
+       "shop": "convenience"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Matane",
+   "point": {
+    "latitude": 48.8468883,
+    "longitude": -67.5295198
+   },
+   "geocodedAs": "relation/7998297",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"amenity\"=\"restaurant\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"amenity\"=\"cafe\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"amenity\"=\"bar\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"amenity\"=\"pub\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"shop\"=\"bakery\"](around:10000,48.8468883,-67.5295198);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T17:32:05Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 2250620785,
+      "lat": 48.8433475,
+      "lon": -67.5643232,
+      "tags": {
+       "addr:city": "Matane",
+       "addr:housenumber": "1310",
+       "addr:street": "Rue de Matane sur Me",
+       "amenity": "restaurant",
+       "cuisine": "regional",
+       "name": "Restaurant Belle Plage"
+      }
+     },
+     {
+      "type": "node",
+      "id": 2330782412,
+      "lat": 48.7669723,
+      "lon": -67.5444793,
+      "tags": {
+       "amenity": "restaurant"
+      }
+     },
+     {
+      "type": "node",
+      "id": 2330782413,
+      "lat": 48.7669705,
+      "lon": -67.5443452,
+      "tags": {
+       "amenity": "bar"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5853896291,
+      "lat": 48.8515648,
+      "lon": -67.5079636,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Restaurant du Chef"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12137966840,
+      "lat": 48.8456222,
+      "lon": -67.5293202,
+      "tags": {
+       "amenity": "cafe",
+       "name": "La Miss Café"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12138315464,
+      "lat": 48.8522248,
+      "lon": -67.5368614,
+      "tags": {
+       "amenity": "bar",
+       "name": "La Cachette"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12138315469,
+      "lat": 48.8522939,
+      "lon": -67.5365736,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Le 21"
+      }
+     },
+     {
+      "type": "node",
+      "id": 14313763778,
+      "lat": 48.84675,
+      "lon": -67.5297931,
+      "tags": {
+       "amenity": "restaurant",
+       "cuisine": "pizza",
+       "name": "Pizzeria Italia"
+      }
+     },
+     {
+      "type": "node",
+      "id": 14313763779,
+      "lat": 48.846663,
+      "lon": -67.5297899,
+      "tags": {
+       "amenity": "pub",
+       "name": "Brasserie au Vieux Loup de Mer"
+      }
+     },
+     {
+      "type": "node",
+      "id": 14313763782,
+      "lat": 48.8460148,
+      "lon": -67.5293311,
+      "tags": {
+       "amenity": "pub",
+       "cuisine": "regional",
+       "name": "La Fabrique"
+      }
+     },
+     {
+      "type": "node",
+      "id": 14313763800,
+      "lat": 48.8471831,
+      "lon": -67.5297474,
+      "tags": {
+       "amenity": "restaurant",
+       "cuisine": "regional",
+       "name": "Café boulangerie Toujours Dimanche",
+       "shop": "bakery",
+       "website": "https://boulangerietoujoursdimanche.com"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215076022,
+      "center": {
+       "lat": 48.8495114,
+       "lon": -67.5387039
+      },
+      "tags": {
+       "addr:housename": "Disco bar le Chameau",
+       "amenity": "bar",
+       "area": "yes",
+       "building": "yes",
+       "name": "Disco bar le Chameau"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215076039,
+      "center": {
+       "lat": 48.8512994,
+       "lon": -67.535259
+      },
+      "tags": {
+       "addr:housenumber": "695",
+       "addr:street": "Avenue du Phare Ouest",
+       "amenity": "cafe",
+       "brand": "Tim Hortons",
+       "brand:wikidata": "Q175106",
+       "building": "yes",
+       "cuisine": "coffee_shop",
+       "name": "Tim Hortons",
+       "takeaway": "yes"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215102001,
+      "center": {
+       "lat": 48.8442874,
+       "lon": -67.5308151
+      },
+      "tags": {
+       "amenity": "restaurant",
+       "building": "yes",
+       "building:levels": "1",
+       "name": "Restaurant Café aux Délices"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215102297,
+      "center": {
+       "lat": 48.8449787,
+       "lon": -67.5276258
+      },
+      "tags": {
+       "addr:city": "Matane",
+       "addr:housename": "Le Lounge",
+       "addr:housenumber": "50",
+       "addr:street": "avenue D'Amours",
+       "amenity": "bar",
+       "building": "yes",
+       "name": "Café Bistro Le Lounge"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215671820,
+      "center": {
+       "lat": 48.8450995,
+       "lon": -67.5574182
+      },
+      "tags": {
+       "amenity": "cafe",
+       "brand": "Tim Hortons",
+       "brand:wikidata": "Q175106",
+       "building": "yes",
+       "cuisine": "coffee_shop",
+       "name": "Tim Hortons",
+       "takeaway": "yes"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215680967,
+      "center": {
+       "lat": 48.8423956,
+       "lon": -67.5613518
+      },
+      "tags": {
+       "amenity": "restaurant",
+       "building": "yes"
+      }
+     },
+     {
+      "type": "way",
+      "id": 539663327,
+      "center": {
+       "lat": 48.8532955,
+       "lon": -67.5254471
+      },
+      "tags": {
+       "addr:housenumber": "250",
+       "addr:street": "Avenue du Phare Est",
+       "amenity": "restaurant",
+       "building": "yes",
+       "cuisine": "regional",
+       "name": "Cargo",
+       "phone": "+1-418-566-2651",
+       "website": "https://restocargo.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 557047277,
+      "center": {
+       "lat": 48.8487937,
+       "lon": -67.5390071
+      },
+      "tags": {
+       "building": "commercial",
+       "shop": "bakery"
+      }
+     },
+     {
+      "type": "way",
+      "id": 557047282,
+      "center": {
+       "lat": 48.8487822,
+       "lon": -67.5507513
+      },
+      "tags": {
+       "amenity": "restaurant",
+       "building": "yes",
+       "cuisine": "regional",
+       "name": "Bistro Borealis"
+      }
+     },
+     {
+      "type": "way",
+      "id": 557047298,
+      "center": {
+       "lat": 48.8513428,
+       "lon": -67.5360012
+      },
+      "tags": {
+       "addr:housenumber": "701",
+       "addr:street": "Avenue du Phare Ouest",
+       "amenity": "restaurant",
+       "building": "yes",
+       "cuisine": "sushi",
+       "name": "Passion SUSHI",
+       "takeaway": "yes"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Percé",
+   "point": {
+    "latitude": 48.5222989,
+    "longitude": -64.2136423
+   },
+   "geocodedAs": "relation/8237764",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"amenity\"=\"restaurant\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"amenity\"=\"cafe\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"amenity\"=\"bar\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"amenity\"=\"pub\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"shop\"=\"bakery\"](around:10000,48.5222989,-64.2136423);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T17:33:06Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 1299139852,
+      "lat": 48.5199857,
+      "lon": -64.2159201,
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "194",
+       "addr:street": "Rue de l'Église / 132 OUEST",
+       "name": "Le Fournand",
+       "name:en": "Le Fournand",
+       "name:fr": "Le Fournand",
+       "shop": "bakery",
+       "source": "NRCan-CanVec-7.0",
+       "website": "http://www.boulangerielefournand.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 1340687450,
+      "lat": 48.5219775,
+      "lon": -64.2148182,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Le p'tit bateau"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3706992904,
+      "lat": 48.4775003,
+      "lon": -64.3008609,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Le Resto de l'Anse"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4241679889,
+      "lat": 48.521033,
+      "lon": -64.215283,
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "172",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "addr:unit": "D",
+       "amenity": "restaurant",
+       "cuisine": "seafood",
+       "internet_access": "wlan",
+       "name": "Restaurant au Mille Délices",
+       "website": "https://routedurocherperce.com/organisme/restaurant-mille-delices-3"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5216954364,
+      "lat": 48.4939919,
+      "lon": -64.1453337,
+      "tags": {
+       "amenity": "cafe",
+       "name": "Le Relais des fous"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5678570142,
+      "lat": 48.5162234,
+      "lon": -64.2184116,
+      "tags": {
+       "amenity": "restaurant",
+       "cuisine": "regional",
+       "name": "Restaurant Paqbo",
+       "url": "https://www.riotel.com/en/hotels/perce/paqbo-restaurant",
+       "website": "https://www.riotel.com/fr/hotels/perce/restaurant-paqbo"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5683537426,
+      "lat": 48.520215,
+      "lon": -64.2156699,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "La Table a Roland"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5739968622,
+      "lat": 48.5178963,
+      "lon": -64.2172254,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Restaurant la Normandie"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5739969621,
+      "lat": 48.5222368,
+      "lon": -64.213956,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Resto du Village"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6644593426,
+      "lat": 48.4711788,
+      "lon": -64.3084064,
+      "tags": {
+       "amenity": "pub",
+       "microbrewery": "yes",
+       "name": "Microbrasserie Pit Caribou"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6733773094,
+      "lat": 48.5260988,
+      "lon": -64.2106455,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Comptoir de Monsieur Émile"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9437751976,
+      "lat": 48.5207094,
+      "lon": -64.2153527,
+      "tags": {
+       "amenity": "pub",
+       "microbrewery": "yes",
+       "name": "Pub Pit Caribou"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12972316601,
+      "lat": 48.5218188,
+      "lon": -64.2138015,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Gaspésie Brasserie Gourmande"
+      }
+     },
+     {
+      "type": "way",
+      "id": 302432126,
+      "center": {
+       "lat": 48.5212743,
+       "lon": -64.2137606
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "155",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Place du Quai",
+       "amenity": "restaurant",
+       "building": "yes",
+       "capacity": "100",
+       "cuisine": "seafood",
+       "name": "La Maison du Pêcheur",
+       "note": "Le bâtiment a été déménagé en 2017-18.",
+       "phone": "+1-418-782-5331",
+       "smoking": "no",
+       "website": "https://www.maisondupecheur.ca/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 302432445,
+      "center": {
+       "lat": 48.5216253,
+       "lon": -64.214825
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "162",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "addr:unit": "b",
+       "amenity": "restaurant",
+       "building": "yes",
+       "capacity": "50",
+       "check_date": "2022-05-31",
+       "cuisine": "seafood;pizza",
+       "name": "RESTO du CAPITAINE",
+       "payment:mastercard": "yes",
+       "payment:visa": "yes",
+       "phone": "+1 4188781631",
+       "smoking": "outside",
+       "website": "https://www.restoducaputaine.com"
+      }
+     },
+     {
+      "type": "way",
+      "id": 373628302,
+      "center": {
+       "lat": 48.5024662,
+       "lon": -64.1739683
+      },
+      "tags": {
+       "amenity": "restaurant",
+       "building": "yes",
+       "name": "Resto des Margaulx"
+      }
+     },
+     {
+      "type": "way",
+      "id": 484236636,
+      "center": {
+       "lat": 48.5207103,
+       "lon": -64.2153504
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "182",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "amenity": "pub",
+       "building": "retail",
+       "microbrewery": "yes",
+       "name": "Pub Aire Salin",
+       "outdoor_seating": "yes",
+       "smoking": "no",
+       "website": "https://www.airesalin.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 596689170,
+      "center": {
+       "lat": 48.5171609,
+       "lon": -64.2173046
+      },
+      "tags": {
+       "amenity": "restaurant",
+       "building": "hotel",
+       "name": "Restaurant La Morutière",
+       "website": "https://www.vacancesperce.com/restaurant-morutiere.html"
+      }
+     },
+     {
+      "type": "way",
+      "id": 598360367,
+      "center": {
+       "lat": 48.5200657,
+       "lon": -64.2158949
+      },
+      "tags": {
+       "addr:housenumber": "194",
+       "addr:street": "Route 132",
+       "amenity": "cafe",
+       "building": "retail",
+       "name": "Le Fournand Boulangerie",
+       "outdoor_seating": "yes",
+       "shop": "bakery",
+       "wheelchair": "no"
+      }
+     },
+     {
+      "type": "way",
+      "id": 598383461,
+      "center": {
+       "lat": 48.5211875,
+       "lon": -64.2150056
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "168",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "amenity": "restaurant",
+       "building": "retail",
+       "cuisine": "regional",
+       "name": "Restaurant Le Surcouf"
+      }
+     },
+     {
+      "type": "way",
+      "id": 599480137,
+      "center": {
+       "lat": 48.5267641,
+       "lon": -64.212928
+      },
+      "tags": {
+       "addr:housenumber": "99",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "amenity": "restaurant",
+       "building": "retail",
+       "cuisine": "seafood",
+       "name": "Restaurant Biard",
+       "start_date": "1927",
+       "website": "https://m.facebook.com/Restaurant-Biard-159981404207528"
+      }
+     },
+     {
+      "type": "way",
+      "id": 599480140,
+      "center": {
+       "lat": 48.5274057,
+       "lon": -64.213803
+      },
+      "tags": {
+       "addr:housenumber": "85",
+       "addr:street": "Route 132",
+       "amenity": "restaurant",
+       "building": "yes",
+       "name": "la maison mathilde"
+      }
+     },
+     {
+      "type": "way",
+      "id": 600012142,
+      "center": {
+       "lat": 48.5294052,
+       "lon": -64.2166021
+      },
+      "tags": {
+       "amenity": "restaurant",
+       "building": "yes",
+       "name": "Les Sacs à Vin"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Rivière-du-Loup",
+   "point": {
+    "latitude": 47.8541229,
+    "longitude": -69.5333016
+   },
+   "geocodedAs": "relation/8189523",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"amenity\"=\"restaurant\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"amenity\"=\"cafe\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"amenity\"=\"bar\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"amenity\"=\"pub\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"shop\"=\"bakery\"](around:10000,47.8541229,-69.5333016);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T17:35:03Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 471558661,
+      "lat": 47.8333631,
+      "lon": -69.5372128,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "290",
+       "addr:postcode": "G5R 3A8",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "name": "Au Pain Gamin",
+       "shop": "bakery"
+      }
+     },
+     {
+      "type": "node",
+      "id": 472500663,
+      "lat": 47.8383386,
+      "lon": -69.5390703,
+      "tags": {
+       "addr:housenumber": "31",
+       "amenity": "bar",
+       "name": "Iberville"
+      }
+     },
+     {
+      "type": "node",
+      "id": 476729720,
+      "lat": 47.8353358,
+      "lon": -69.5369188,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "185",
+       "addr:postcode": "G5R 3A6",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "restaurant",
+       "cuisine": "thai",
+       "name": "Délice Phnom Penh",
+       "opening_hours": "We 11:00-13:30,17:00-19:45; Th 11:00-13:30,17:00-20:00; Fr 11:00-13:30,17:00-21:00; Sa 17:00-20:00; Su-Tu off"
+      }
+     },
+     {
+      "type": "node",
+      "id": 482467533,
+      "lat": 47.8319781,
+      "lon": -69.5366757,
+      "tags": {
+       "addr:housenumber": "334",
+       "amenity": "restaurant",
+       "cuisine": "thai",
+       "name": "Les Jardins de Lotus"
+      }
+     },
+     {
+      "type": "node",
+      "id": 482467536,
+      "lat": 47.8316836,
+      "lon": -69.5365305,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "344",
+       "addr:postcode": "G5R 3B1",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "restaurant",
+       "cuisine": "sushi",
+       "name": "Yuzu sushi"
+      }
+     },
+     {
+      "type": "node",
+      "id": 482467585,
+      "lat": 47.8565937,
+      "lon": -69.5476837,
+      "tags": {
+       "addr:housenumber": "50",
+       "amenity": "restaurant",
+       "cuisine": "asian",
+       "name": "FuXing",
+       "opening_hours": "Tu-Su 11:00-21:00"
+      }
+     },
+     {
+      "type": "node",
+      "id": 1142949347,
+      "lat": 47.8312288,
+      "lon": -69.5357772,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "371",
+       "addr:postcode": "G5R 3B5",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "cafe",
+       "cuisine": "coffee_shop",
+       "name": "Van Houtte",
+       "source": "NRCan-CanVec-7.0"
+      }
+     },
+     {
+      "type": "node",
+      "id": 1849743598,
+      "lat": 47.8515092,
+      "lon": -69.5427519,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "80",
+       "addr:postcode": "G5R 2N1",
+       "addr:province": "QC",
+       "addr:street": "Boulevard Cartier",
+       "amenity": "restaurant",
+       "brand": "St-Hubert",
+       "brand:wikidata": "Q3495225",
+       "brand:wikipedia": "fr:St-Hubert (restaurant)",
+       "cuisine": "chicken;barbecue",
+       "name": "St-Hubert",
+       "phone": "+14188624442",
+       "website": "https://www.st-hubert.com/fr/restaurants/qc/rivi%C3%A8re-du-loup/80-boulevard-cartier"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3797628372,
+      "lat": 47.8311942,
+      "lon": -69.5362299,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "364",
+       "addr:postcode": "G5R 3B3",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "restaurant",
+       "name": "Symposium"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3797628376,
+      "lat": 47.8306719,
+      "lon": -69.5347519,
+      "tags": {
+       "amenity": "pub",
+       "name": "Le loft"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4085604831,
+      "lat": 47.8338412,
+      "lon": -69.5371953,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "262",
+       "addr:postcode": "G5R 3A8",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "pub",
+       "microbrewery": "yes",
+       "name": "Aux Fous Brassant"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4092733399,
+      "lat": 47.8325878,
+      "lon": -69.5364422,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "299",
+       "addr:postcode": "G5R 3A9",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "restaurant",
+       "check_date": "2024-09-29",
+       "cuisine": "burger",
+       "name": "L'estaminet"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4093376372,
+      "lat": 47.8288923,
+      "lon": -69.5324911,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "460",
+       "addr:postcode": "G5R 3C2",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "restaurant",
+       "name": "Café l'innocent"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4370559497,
+      "lat": 47.7795451,
+      "lon": -69.5988407,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Auberge sur Mer",
+       "website": "https://aubergesurmer.ca/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 5355716739,
+      "lat": 47.8195931,
+      "lon": -69.5019464,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Casse-croûte la Licorne"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6015196294,
+      "lat": 47.8303272,
+      "lon": -69.5343268,
+      "tags": {
+       "addr:housenumber": "409",
+       "addr:postcode": "G5R 3B6",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "bar",
+       "level": "-1",
+       "name": "Le monroe",
+       "outdoor_seating": "no",
+       "smoking": "no"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6015200181,
+      "lat": 47.8307776,
+      "lon": -69.5355294,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "386",
+       "addr:postcode": "G5R 3B4",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "pub",
+       "name": "L'Hôte Bar"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6015200183,
+      "lat": 47.8305552,
+      "lon": -69.5352066,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "402",
+       "addr:postcode": "G5R 3B4",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "restaurant",
+       "cuisine": "fried_food",
+       "name": "Le Taxi"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6015200184,
+      "lat": 47.8300996,
+      "lon": -69.5344488,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "414",
+       "addr:postcode": "G5R 3B7",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "pub",
+       "name": "Super Bar"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6015201287,
+      "lat": 47.8303319,
+      "lon": -69.5341967,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "409",
+       "addr:postcode": "G5R 3B6",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "pub",
+       "name": "Le triangle"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6015201288,
+      "lat": 47.830162,
+      "lon": -69.5339622,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "419",
+       "addr:postcode": "G5R 3B6",
+       "addr:province": "Québec",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "cafe",
+       "name": "Brulerie de l'est Café du clocher",
+       "opening_hours": "Mo-Fr 07:30-16:00; Sa,Su 08:00-16:00",
+       "source": "NRCan-CanVec-7.0"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6165067013,
+      "lat": 47.9137946,
+      "lon": -69.4357991,
+      "tags": {
+       "addr:city": "Saint-Arsène",
+       "addr:housenumber": "95",
+       "addr:postcode": "G5R1L7",
+       "addr:province": "Quebec",
+       "addr:street": "Rue Principale",
+       "amenity": "cafe",
+       "cuisine": "sandwich",
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "Brioches et Babioles",
+       "takeaway": "yes"
+      }
+     },
+     {
+      "type": "node",
+      "id": 8059085288,
+      "lat": 47.8305997,
+      "lon": -69.5347097,
+      "tags": {
+       "addr:housenumber": "403",
+       "addr:postcode": "G5R3B6",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "bar",
+       "internet_access": "wlan",
+       "name": "La P'tite Grenouille",
+       "name:fr": "La P'tite Grenouille - Boîte à Chansons",
+       "website": "https://www.le403.com/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 8059100321,
+      "lat": 47.8313927,
+      "lon": -69.5364954,
+      "tags": {
+       "addr:housenumber": "356",
+       "addr:postcode": "G5R3B3",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "restaurant",
+       "cuisine": "fine_dining",
+       "name": "La Porte Arrière",
+       "phone": "+1-418-862-6262"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9943148799,
+      "lat": 47.8509684,
+      "lon": -69.5403709,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "83",
+       "addr:postcode": "G5R 2N1",
+       "addr:province": "QC",
+       "addr:street": "Boulevard Cartier",
+       "amenity": "restaurant",
+       "name": "Restaurant Normandin Rivière-du-Loup",
+       "phone": "+14188671366",
+       "website": "https://restaurantnormandin.com/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10674791822,
+      "lat": 47.8581335,
+      "lon": -69.5482397,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "47",
+       "addr:postcode": "G5R 5Z3",
+       "addr:province": "QC",
+       "addr:street": "Boulevard Cartier",
+       "amenity": "restaurant",
+       "name": "Snack Bar D'Amours",
+       "opening_hours": "Mo-Su 11:00-20:00",
+       "phone": "+14188671649",
+       "website": "https://www.snackbardamours.com/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10674791849,
+      "lat": 47.8558694,
+      "lon": -69.5449669,
+      "tags": {
+       "amenity": "cafe",
+       "brand": "Tim Hortons",
+       "brand:wikidata": "Q175106",
+       "brand:wikipedia": "en:Tim Hortons",
+       "cuisine": "coffee_shop",
+       "drive_through": "yes",
+       "name": "Tim Hortons",
+       "takeaway": "yes"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10677492933,
+      "lat": 47.8255162,
+      "lon": -69.5523423,
+      "tags": {
+       "amenity": "restaurant",
+       "name": "Restaurant Dixie Lee"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10910042647,
+      "lat": 47.8603136,
+      "lon": -69.5523115,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "80",
+       "addr:postcode": "G5R 5Z8",
+       "addr:province": "QC",
+       "addr:street": "Rue Mackay",
+       "amenity": "cafe",
+       "cuisine": "coffee_shop",
+       "name": "Le chalet de la Côte-des-Bains"
+      }
+     },
+     {
+      "type": "node",
+      "id": 11808648355,
+      "lat": 47.8297712,
+      "lon": -69.5522012,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "169",
+       "addr:postcode": "G5R1E2",
+       "addr:province": "QC",
+       "addr:street": "Rue Fraser",
+       "amenity": "restaurant",
+       "name": "Restaurant Le Saint-Patrice",
+       "phone": "+1 418 862 9895",
+       "website": "https://lesaintpatrice.ca/menu"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12141560981,
+      "lat": 47.819585,
+      "lon": -69.5596945,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "311",
+       "addr:postcode": "G5R 5S4",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard de l'Hôtel-de-Ville",
+       "amenity": "restaurant",
+       "name": "Boréal Univers Gourmand",
+       "opening_hours": "Mo-Th 06:30-21:00; Fr-Sa 06:30-22:00; Su 06:30-21:00",
+       "phone": "+14188629520",
+       "website": "https://www.borealuniversgourmand.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 333188849,
+      "center": {
+       "lat": 47.8266193,
+       "lon": -69.5495613
+      },
+      "tags": {
+       "amenity": "cafe",
+       "brand": "Tim Hortons",
+       "brand:wikidata": "Q175106",
+       "brand:wikipedia": "en:Tim Hortons",
+       "building": "yes",
+       "cuisine": "coffee_shop",
+       "name": "Tim Hortons",
+       "takeaway": "yes"
+      }
+     },
+     {
+      "type": "way",
+      "id": 406507386,
+      "center": {
+       "lat": 47.8339805,
+       "lon": -69.5369147
+      },
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "235",
+       "addr:postcode": "G5R 3A6",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "restaurant",
+       "building": "yes",
+       "building:levels": "2",
+       "cuisine": "pizza",
+       "name": "Pizzéria Bon voyage"
+      }
+     },
+     {
+      "type": "way",
+      "id": 407265433,
+      "center": {
+       "lat": 47.8304867,
+       "lon": -69.534493
+      },
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "407",
+       "addr:postcode": "G5R 3B6",
+       "addr:street": "Rue Lafontaine",
+       "amenity": "restaurant",
+       "building": "yes",
+       "building:levels": "2",
+       "name": "L'intercolonial"
+      }
+     },
+     {
+      "type": "way",
+      "id": 555012457,
+      "center": {
+       "lat": 47.8195981,
+       "lon": -69.5019786
+      },
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "383 B",
+       "addr:street": "Rue Témiscouata",
+       "amenity": "restaurant",
+       "building": "yes",
+       "cuisine": "burger;poutine",
+       "name": "Casse-croûte la Licorne"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

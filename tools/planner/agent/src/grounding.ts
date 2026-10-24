@@ -126,15 +126,52 @@ export const LODGING_KINDS = [
   "caravan-site",
 ] as const;
 
+/**
+ * The kinds of place to eat a town query asks for — pl-62.
+ *
+ * A third list, beside `LODGING_KINDS` and for the same reason: they are asked
+ * around a town the trip names, by the town pass, and only `food` reads them
+ * (`findsFor` in `prompt.ts`). The owner chose the set on 2026-10-24 (pl-62's
+ * Decision 1 (a)): the meals `food`'s `role` asks for, and not `amenity=fast_food`,
+ * which pl-62's Build 1 captured and counted apart (26 named within 10 km of its
+ * nine localities, against 117 kept). Each value is from iD's tagging presets,
+ * and each can be a point or an area.
+ */
+export const FOOD_KINDS = [
+  /** `amenity=restaurant`. */
+  "restaurant",
+  /** `amenity=cafe`. */
+  "cafe",
+  /** `amenity=bar`. Some serve no meals, and the block does not pretend otherwise. */
+  "bar",
+  /** `amenity=pub`. */
+  "pub",
+  /** `shop=bakery`, where a boulangerie is mapped. */
+  "bakery",
+] as const;
+
 export type CorridorKind = (typeof DISCOVERY_KINDS)[number];
 export type LodgingKind = (typeof LODGING_KINDS)[number];
-export type DiscoveryKind = CorridorKind | LodgingKind;
+export type FoodKind = (typeof FOOD_KINDS)[number];
+export type DiscoveryKind = CorridorKind | LodgingKind | FoodKind;
 
 const LODGING_KIND_SET: ReadonlySet<DiscoveryKind> = new Set(LODGING_KINDS);
+const FOOD_KIND_SET: ReadonlySet<DiscoveryKind> = new Set(FOOD_KINDS);
+const CORRIDOR_KIND_SET: ReadonlySet<DiscoveryKind> = new Set(DISCOVERY_KINDS);
 
 /** Whether a find is a place to sleep, which decides which specialist reads it. */
 export function isLodgingKind(kind: DiscoveryKind): kind is LodgingKind {
   return LODGING_KIND_SET.has(kind);
+}
+
+/** Whether a find is a place to eat — only `food` reads those (pl-62). */
+export function isFoodKind(kind: DiscoveryKind): kind is FoodKind {
+  return FOOD_KIND_SET.has(kind);
+}
+
+/** Whether a find came from the corridor query's kinds, which the three corridor readers read. */
+export function isCorridorKind(kind: DiscoveryKind): kind is CorridorKind {
+  return CORRIDOR_KIND_SET.has(kind);
 }
 
 /** A name no adapter should keep past this length — see `Find.name`. */
@@ -467,8 +504,9 @@ export interface GroundingProvider {
   nearby(request: NearbyRequest): Promise<Find[]>;
   /**
    * What a database knows within a radius of one point — pl-60, the town
-   * query `lodging`'s finds come from. One call, however many finds, and an
-   * empty array is an honest answer, exactly as `nearby`'s is.
+   * query `lodging`'s finds come from, and since pl-62 `food`'s as well, asked
+   * once per category. One call, however many finds, and an empty array is an
+   * honest answer, exactly as `nearby`'s is.
    */
   nearbyPoint(request: NearbyPointRequest): Promise<Find[]>;
   /**

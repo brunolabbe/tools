@@ -6201,3 +6201,75 @@ Beside the agents: pl-60's paid live run, five `run.ts` sessions, 110 records, $
 - Gating a paid-run ticket before the spend: gate 1 on Build 2–5 found the silent town cap and the unasserted budget claim, both fixed before the $7.21 run rather than after it.
 - Retiring a long-lived builder at an owner checkpoint: the web check, gate 2 and both landers were fresh agents at $0.60–$3.92 each.
 - A gate handed a builder's own measurement as a claim to attack measured it rather than re-derived it: pl-60 gate 1 ran the six set A shapes at the base commit and turned the Log's derived "base" call counts into measured ones (6 of 6 equal).
+
+### Batch 2026-10-24 (tools-a3, repo-114 repo-116, pl-61 answer recorded) — base aa834403
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / high | a7e29152b2876617f | seam-mapper, dl-130 pl-61 pl-62 repo-114 repo-116 | 2m37s / 2m35s | 0 | $0.4462 |
+| #616 | merged 89a38d30 | Haiku 5.5 / high | a7a3447998d64ea03 | builder-mechanical, pl-61 maintenance: owner's lodging.ts scope answer recorded | 4m08s / 4m08s | 0 | $0.0471 |
+| #617 | open, ready, green at bbcec515 | Sonnet 5.5 / high | a481019c504967449 | builder-standard, repo-114 + Done-when 6 partial-fix send-back | 8m05s / 8m05s | 0 | $0.8993 |
+| #617 | open, ready, green at bbcec515 | Opus 5.5 / high | a60e6f4a3307bc33b | ticket-reviewer-opus, repo-114 gate 1 | 6m45s / 6m40s | 0 | $1.6677 |
+| #617 | open, ready, green at bbcec515 | Sonnet 5.5 / high | a2084eca029b46426 | fixer, repo-114 two lows at landing + landing | 4m12s / 4m11s | 0 | $0.3005 |
+| #620 | open, ready, checks pending at 5960eefe | Sonnet 5.5 / high | a14d257ae4a347bde | builder-standard, repo-116 (git 2.55.0 built from source to reproduce) | 44m11s / 1h08m52s | 0 | $2.4443 |
+| #620 | open, ready, checks pending at 5960eefe | Opus 5.5 / high | abf42a8e754584105 | ticket-reviewer-opus, repo-116 gate 1 | 16m37s / 16m37s | 0 | $2.2614 |
+| #620 | open, ready, checks pending at 5960eefe | Sonnet 5.5 / high | ad1fae2d0974e947d | fixer, repo-116 round 1 (gate-1 high + three owner answers) | 1m15s / 1m15s | 0 | $0.3038 |
+| #620 | open, ready, checks pending at 5960eefe | Opus 5.5 / high | a2b2b14ca890a92f2 | ticket-reviewer-opus, repo-116 gate 2 (narrow) | 3m56s / 3m56s | 0 | $1.1508 |
+| #620 | open, ready, checks pending at 5960eefe | Sonnet 5.5 / high | a6e5b377ab5805e1e | fixer, repo-116 three gate-2 lows at landing + landing | 5m13s / 5m10s | 0 | $0.5822 |
+| — | — | Opus 5.5 / high | orchestrator f72d6af1 | orchestrator (floor) | 48m55s / 2h06m02s | 0 | $3.7923 |
+| | | | | **total** (rates read 2026-10-10) | 2h25m54s | 0 | **$13.8957** |
+
+**Tickets:**
+- repo-114 → #617: owner chose fixture-only Done-when wording at intake (lg-64, lg-65 done since #605's rewording). Sent back once before gating: Done-when 6's partial-fix red was unrun. Gate 1 PASS, 2 lows, both fixed at landing by owner choice. Ready, green at bbcec515.
+- repo-116 → #620: cause named — git 2.55.0 (the runner's) starts `git maintenance run --auto --detach` after `git commit`, leaving `maintenance.lock` in `.git/objects` while `fs.cpSync` lists it; fixed by `maintenance.auto = false` in the fixture config. Gate 1 FAIL (1 high: hypothesis 2 graded "Not confirmed"; 1 med open decision on Done-when 1's 0-of-20 count taken on git 2.43.0); independent repro 14/8000 → 0/8000. Owner accepted the micro-reproductions, the builder's 0-of-20 sweep, and no land() follow-up. Gate 2 PASS, 4 lows; 3 fixed at landing by owner choice, L3 (Done-when 1 still says "stays open") recorded unfixed. Ready, checks pending at 5960eefe.
+- pl-61 → #616: owner folded lodging.ts's two town-pass warns into scope at this intake; recorded by maintenance dispatch, no gate. Merged 89a38d30; main push CI green there. Peer tools-4d then built pl-61 and pl-62.
+
+**Defects in the skill:**
+
+1. `.claude/agents/seam-mapper.md` › _What you read_, step 2 (`git log --oneline -20 -- <paths>`), and its intro's `npm run -s status -- --json` — neither works when the shared checkout is stale and the orchestrator hands the mapper an exported `origin/main` snapshot, which `SKILL.md` step 1 makes the normal case while a peer is live; the page names no `--root`. Reproduction: `git -C <scratch>/main-snap log --oneline -1 -- .` → `fatal: your current branch 'master' does not have any commits yet`; `git show origin/main:.claude/agents/seam-mapper.md | grep -c -i -E 'snapshot|--root'` → `0`.
+2. `SKILL.md` › _The loop_ step 2, "Ask the candidates' open decisions in the same checkpoint" — cannot be met when a candidate holds four pre-dispatch decisions: `AskUserQuestion` takes at most four questions, and the batch question is a fifth. pl-62 was a candidate. Reproduction: `git show aa834403:tools/planner/docs/work/pl-62-food-discovery-around-the-trips-towns.md | grep -c 'Decisions 1 to 4 are asked before'` → `1`.
+3. `roles/builder.md` — covers recording an owner's answer only for a `needs-decision` ticket (moved to `ready` in the commit that records it); a `ready` ticket receiving an answer that adds a Build step and a `Done when` line (pl-61's lodging.ts fold-in) has no procedure, though `reference/dispatching.md` › _An answered decision has to be recorded even when you do not build it_ schedules exactly that dispatch. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n -i -E 'ready.*answer|answer.*ready'` → lines 14 and 139, both the `needs-decision` path.
+4. `roles/reviewer.md` › _What you are not given, on purpose_ — the read-the-Log-last recipe is `git show <head>:<ticket> | awk '/^## Log/{exit} {print}'`, but the diff step of a branch that edits its own ticket prints the Log additions anyway, since `## Log` is unchanged context outside the hunk. Reproduction (repo-116 gate 1): `git diff 89a38d30...524d6352 -- docs/work/repo-116-*.md | awk '/^\+## Log|^ ## Log/{exit} {print}'` → printed the Log additions.
+5. `roles/common.md` › _Your worktree_ ("Populate and build before you measure anything") and `roles/reviewer.md` › _When you are dispatched as gate 2_ — recurred (tools-38 item 6): repo-116 gate 1 (a `scripts/` test importing no workspace) and gate 2 (a ticket-only round) both skipped the build and said so. Reproduction: `git diff --stat 524d6352 b96cf98d` → `1 file changed, 88 insertions(+), 9 deletions(-)`, the ticket only; `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -c -i -E 'ticket-only|docs-only'` → `1`, and that line is about cancelled CI runs, not the build.
+6. `reference/records.md` › _Fixed at landing_ — recurred (tools-38 item 3): repo-116's three landing fixes were all inside the Log, so "scope the command above `## Log`" could not tell old text from new; the lander scoped with `awk '/Fixed at landing by owner choice/{exit} {print}'` instead. The page is also silent on correcting a committed Log claim (repo-114's L1) — edit in place, or withdraw. Reproduction (repo-116 lander): `awk '/Fixed at landing by owner choice/{exit} {print}' docs/work/repo-116-*.md | grep -c "2 of those 11"` → `0`.
+
+**Worked, and worth keeping:**
+- Exporting `origin/main` to a scratch snapshot and running `node scripts/status.mjs --root <snap>` at intake while a peer held the shared checkout: the ready list came from main without resetting anyone's tree.
+- A dispatch that relays a seam-mapper's quote with "verify against the file yourself": the pl-61 recorder found the mapper had misquoted `lodging.ts:203`'s warn, and wrote the real text.
+- Gating a flake fix with an independent reproduction against a source-built git matching the runner's: repo-116's gate 1 measured 14/8000 → 0/8000 itself, so the cause was proven on two separate probes.
+
+### Batch 2026-10-24 (tools-7e, pl-61 pl-62) — base 89a38d30
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / high | a92db07800dac73a3 | seam-mapper, pl-61 pl-62 | 2m03s / 2m02s | 0 | $0.2831 |
+| #618 | open, ready, green at 7c379fbf | Haiku 5.5 / high | acfda7e82c4437399 | builder-mechanical, pl-61 build + owner's two answers + gate-1 round + landing | 27m25s / 56m07s | 0 | $1.5997 |
+| #618 | open, ready, green at 7c379fbf | Sonnet 5.5 / xhigh | a5b8fb3656f2bac44 | ticket-reviewer-sonnet, pl-61 gate 1 (narrow) | 9m12s / 9m11s | 0 | $1.1248 |
+| #618 | open, ready, green at 7c379fbf | Sonnet 5.5 / xhigh | af1da3e8eed177a66 | ticket-reviewer-sonnet, pl-61 gate 2 (narrow) | 8m43s / 8m13s | 0 | $1.0337 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Opus 5.5 / high | a98aba036686371c5 | builder-hard, pl-62 Build 1 capture, Builds 2–5 + 7–8 to the contract stop, Build 9 (two resumes) | 40m46s / 1h15m01s | 0 | $12.0086 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Sonnet 5.5 / xhigh | af13358aaeb7ebee6 | ticket-reviewer-sonnet, pl-62 gate 1 (slice) | 22m36s / 22m20s | 0 | $4.5548 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Opus 5.5 / high | aa050a51ab40902ef | builder-hard (fresh), pl-62 gate-1 lows 1–3 + Build 6 paid run, join, re-measure | 29m13s / 44m54s | 0 | $7.5762 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Opus 5.5 / high | ac2f50aac45777dd5 | general-purpose (no `model` passed), pl-62 web check + gate-2 round | 18m33s / 37m18s | 1 | $6.2808 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Sonnet 5.5 / xhigh | a2b4614e6f64f4e8c | ticket-reviewer-sonnet, pl-62 gate 2 | 17m29s / 17m24s | 0 | $3.3875 |
+| #619 | open, draft (held behind #618), CodeQL green at 5012353d | Sonnet 5.5 / high | a847da0778d2348a8 | fixer, pl-62 owner answer recorded + landing | 3m42s / 3m40s | 0 | $0.4279 |
+| — | — | Opus 5.5 / high | orchestrator e1a41c54 | orchestrator (floor) | 1h23m46s / 3h15m17s | 0 | $5.7515 |
+| | | | | **total** (rates read 2026-10-10) | 4h23m28s | 1 | **$44.0287** |
+
+Beside the agents: pl-62's paid live run, five `run.ts` sessions, 111 records, $7.4018 `observedUsd` against a $10 total bound.
+
+**Tickets:**
+- pl-61 → #618: owner named planner and chose both tickets side by side; peer tools-a3 held repo-114/116 and lg-56. Owner folded four more `discovery.ts` warns in (overriding the builder's "file it") and reworded Done-when 3 to the two-stub form before the gate. Gate 1 narrow PASS (3 low); owner folded the two `travel.ts` warns in (gate's recommendation) and the `USER_AGENT` comment, L3 recorded unfixed. Gate 2 narrow PASS (0 new). Landed `done`, green at 7c379fbf.
+- pl-62 → #619: Decision 6 (a) 10 km and ten from Build 1's capture (117 named at 10 km, 65 shown); Build 8 contract comment-only edit (a); gate 1 PASS for the slice (4 low, 1–3 folded into Build 6 by owner choice, 4 recorded unfixed); Decision 5 (a), run $7.4018 / 111 records, food join 302/335 against pl-60's 0/322, food named premises 303/406 (band 71.2–74.6%); set A food naming no premises accepted as designed, held draft behind #618; web check 3 of 10 not confirmed (30.0%, 10.8–60.3) against pl-58's 3 of 21. Gate 2 CONCERNS (1 med behind Done-when 10: Le Surcouf's cited pages named another restaurant; 2 low), all three fixed by the web-check agent (Le Surcouf re-settled `exists` on a fetched page naming Percé, rate unchanged). Landed `done`; still owes a merge of `main` and a one-line `queried` 1 → 2 change in `lodging-pass.test.ts` once #618 merges.
+
+**Defects in the skill:**
+
+1. `agents/seam-mapper.md` and `SKILL.md` › _The loop_ step 2, "each `## Decision — open` question" — a ticket can hold open decisions under a `## Decision — answered` heading, so a search for the open heading misses them; pl-62's Decisions 5 and 6 were open at intake. Reproduction: `git show 89a38d30:tools/planner/docs/work/pl-62-food-discovery-around-the-trips-towns.md | grep -n '^## Decision'` → `266:## Decision — answered 2026-10-24 by the owner`, the only Decision heading.
+2. `SKILL.md` › _Which model built it, and which gated it_ — still no row for a WebSearch step (tools-f6 item 1, tools-49 item 2, tools-38 item 2). pl-62's web check ran general-purpose with no `model`, on Opus. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/SKILL.md | grep -c -i websearch` → `0`; `node scripts/agent-cost.mjs --agent ac2f50aac45777dd5` → `claude-opus-5-5 effort=high … $6.2808`.
+3. `roles/builder.md` › _Before you report_ — a dispatch that stops before any code (pl-62's Build 1 capture) cannot open its draft PR under the ticket's eventual `feat` title, and the page gives no rule for a `docs` title retitled later. Reproduction: a detached worktree at `83d7c748`, then `node scripts/preflight.mjs --only title --base 89a38d30 --title "feat(planner): food chooses among places to eat found around the trip's towns (pl-62)"` → exit 8, `FAIL … is type "feat", which reaches a changelog, but every tools/ path in the diff is markdown`.
+4. `roles/builder.md` › _Before you report_, "`npx oxfmt <the files you touched>`" — exits 2 when every named file is under an ignore pattern (`**/test/fixtures/`), and in a chained command that skipped the next step; pl-62's builder committed under the previous commit message and had to amend. Reproduction: `npx oxfmt --check tools/planner/api/test/fixtures/overpass-lodging-towns.json; echo exit=$?` → `Expected at least one target file. All matched files may have been excluded by ignore rules.`, `exit=2`.
+5. `roles/common.md` › _Preflight runs longer than a foreground call allows_ — prescribes waiting with `until [ -s <exit file> ]; do sleep 3; done`, a foreground `sleep` loop the Bash tool now blocks; pl-62's gate 2 ran the script with `run_in_background: true` instead, which re-invokes the agent on exit. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -n 'sleep 3'` → `113:directory, then wait with \`until [ -s <exit file> ]; do sleep 3; done\`. The wait`.
+
+**Worked, and worth keeping:**
+- A re-gate that WebFetched every page the web check cited (13 of 17 read) found the one verdict resting on another establishment's page; the fix kept the rate and replaced the citation with a page naming the town.
+- Retiring the first pl-62 builder at $12.01 for a fresh Build 6 builder ($7.58) and a fresh web-check agent: pl-62's build, gates, web check and landing cost $34.24 in agents against pl-60's $47.50 for the same shape (tools-38 rows, seam-mapper excluded from both).
+- Gating the built slice before the paid run again, and having the Build 6 builder commit gate 1's folded lows before launching, so the $7.40 run measured the code gate 2 saw.

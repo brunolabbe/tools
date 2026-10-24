@@ -2265,3 +2265,21 @@ describe("nearbyPoint — pl-60's town query, against a checked-in capture", () 
     ]);
   });
 });
+
+describe("nearby, the Overpass request's own headers (pl-61)", () => {
+  test("the POST names its client, because node's default user-agent gets HTTP 406 from the public instance", async () => {
+    // pl-61: `#overpassJson` sent `content-type` alone, so Node sent its own
+    // `user-agent: node`, which overpass-api.de answers 406. The locate request
+    // already sends `USER_AGENT`. This pins that the Overpass POST sends one
+    // too; the value is not pinned, only that something names us.
+    const { fetch, calls } = answering(overpassReply([]));
+    await discoveryProvider(fetch, "http://overpass.internal:8090").nearby({
+      corridor: CORRIDOR,
+      radiusMetres: 6_000,
+      kinds: ["viewpoint"],
+    });
+
+    const headers = calls[0]?.init?.headers as Record<string, string> | undefined;
+    expect(headers?.["user-agent"]).toMatch(/\S/u);
+  });
+});

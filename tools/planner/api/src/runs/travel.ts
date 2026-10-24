@@ -333,9 +333,11 @@ export async function measureTravel(input: MeasureInput): Promise<MeasureResult>
       // with no coordinates, whose legs the plan then names as unmeasured. A
       // thrown backend is not a refusal: nobody declined to pay for this.
       unlocated.set(each.key, NOT_ESTABLISHED);
+      const status = AppError.from(error).details?.status;
       logger.warn("a place could not be located", {
         provider: provider.name,
         code: AppError.from(error).code,
+        ...(typeof status === "number" ? { status } : {}),
       });
     }
     finished();
@@ -374,9 +376,11 @@ export async function measureTravel(input: MeasureInput): Promise<MeasureResult>
     // The backend being down entirely lands here, and it is the same answer as
     // one place failing to resolve: the plan is the plan it would have been
     // without grounding, and it says travel time went unchecked.
+    const status = AppError.from(error).details?.status;
     logger.warn("the travel matrix could not be measured", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
   }
   finished();

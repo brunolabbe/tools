@@ -17,6 +17,13 @@
  * - **The calls are counted.** Each shape spends the grounding calls pl-60's
  *   Log asserts, by seam method, so a town query is told apart from a corridor
  *   query by the method it went through — the shape the owner chose for Build 2.
+ *
+ * pl-62 added a food query per located town and kept both lines: its `Done
+ * when` 7 is the first (the fixture's food query finds nothing either, so the
+ * days stay the base's and the plan names each town with nowhere to eat), and
+ * its `Done when` 4 is the second, with `nearbyPoint` doubled. The base days are
+ * still `8a6dcf9a`'s: pl-62's base, `89a38d30`, drafts the same days, which is
+ * what this file asserted there.
  */
 
 import { readFileSync } from "node:fs";
@@ -123,11 +130,15 @@ const UNLOCATED_ENDS =
 const THIN_CORRIDOR =
   "There is very little on the map along this route. Something worth stopping for may exist without this plan ever finding it.";
 const NO_TOWN =
-  "This trip names no town to stay in, so the map was not checked for places to stay.";
+  "This trip names no town to stay in, so the map was not checked for places to stay or to eat.";
+/** The food query's note (pl-62): the fixture default finds nowhere to eat in any town. */
+const NO_FOOD = (towns: string): string =>
+  `No places to eat around ${towns} are on the map. Somewhere to eat there may exist without this plan having found it.`;
 
 /**
  * Each shape's whole `coverage` list on the fixture default: the corridor
- * pass's entry as the base commit wrote it, then the town pass's. The fixture
+ * pass's entry as the base commit wrote it, then the town pass's, places to
+ * sleep before places to eat (pl-62). The fixture
  * gazetteer knows `Gaspésie`, `Forillon National Park`, `Parc national de la
  * Gaspésie`, `Rome`, `Vienna`, `Ljubljana` and `Trieste`, and not `Percé Rock`
  * or `Central Europe`; its town query finds nothing anywhere.
@@ -135,27 +146,31 @@ const NO_TOWN =
 const COVERAGE: Record<TripShape, string[]> = {
   "road-trip": [
     UNLOCATED_ENDS,
-    "Where Percé Rock is could not be found on the map, so places to stay there were not checked.",
+    "Where Percé Rock is could not be found on the map, so places to stay and places to eat there were not checked.",
     "No places to stay around Forillon National Park and Gaspésie are on the map. Somewhere to stay there may exist without this plan having found it.",
+    NO_FOOD("Forillon National Park and Gaspésie"),
   ],
   backcountry: [
     THIN_CORRIDOR,
     "No places to stay around Parc national de la Gaspésie are on the map. Somewhere to stay there may exist without this plan having found it.",
+    NO_FOOD("Parc national de la Gaspésie"),
   ],
   "motorised-touring": [NO_TOWN],
   "city-and-culture": [
     THIN_CORRIDOR,
     "No places to stay around Rome are on the map. Somewhere to stay there may exist without this plan having found it.",
+    NO_FOOD("Rome"),
   ],
   resort: [NO_TOWN],
   "multi-city": [
     UNLOCATED_ENDS,
-    "Where Central Europe is could not be found on the map, so places to stay there were not checked.",
+    "Where Central Europe is could not be found on the map, so places to stay and places to eat there were not checked.",
     "No places to stay around Vienna, Ljubljana and Trieste are on the map. Somewhere to stay there may exist without this plan having found it.",
+    NO_FOOD("Vienna, Ljubljana and Trieste"),
   ],
 };
 
-describe("the six set A drafts with the town pass, on the fixture default (pl-60)", () => {
+describe("the six set A drafts with the town pass, on the fixture default (pl-60, pl-62)", () => {
   test.each(TRIP_SHAPES)(
     "%s: the days are byte-identical to the base commit's, and the plan names the towns it could not check",
     async (shape) => {
@@ -172,7 +187,9 @@ describe("the six set A drafts with the town pass, on the fixture default (pl-60
 
 /**
  * Calls by method for each shape's draft, on the fixture default, and the
- * names the town pass itself asked `locate` — pl-60's Log argues each row.
+ * names the town pass itself asked `locate` — pl-60's Log argues each row, and
+ * pl-62's adds one `nearbyPoint` per located town (pl-60's 2, 1, 0, 1, 0 and 3
+ * became 4, 2, 0, 2, 0 and 6) and no `locate`.
  *
  * The town pass's own calls are its `nearbyPoint`s plus the `locate`s in
  * `town`: a name the corridor pass already located is a cache hit and reaches
@@ -194,11 +211,11 @@ const CALLS: Record<
   }
 > = {
   "road-trip": {
-    calls: { locate: 15, travel: 1, nearby: 0, nearbyPoint: 2, articlesNear: 0 },
+    calls: { locate: 15, travel: 1, nearby: 0, nearbyPoint: 4, articlesNear: 0 },
     town: ["Percé Rock", "Forillon National Park"],
   },
   backcountry: {
-    calls: { locate: 9, travel: 1, nearby: 1, nearbyPoint: 1, articlesNear: 0 },
+    calls: { locate: 9, travel: 1, nearby: 1, nearbyPoint: 2, articlesNear: 0 },
     town: [],
   },
   "motorised-touring": {
@@ -206,7 +223,7 @@ const CALLS: Record<
     town: [],
   },
   "city-and-culture": {
-    calls: { locate: 11, travel: 1, nearby: 1, nearbyPoint: 1, articlesNear: 0 },
+    calls: { locate: 11, travel: 1, nearby: 1, nearbyPoint: 2, articlesNear: 0 },
     town: [],
   },
   resort: {
@@ -214,13 +231,13 @@ const CALLS: Record<
     town: [],
   },
   "multi-city": {
-    calls: { locate: 19, travel: 1, nearby: 0, nearbyPoint: 3, articlesNear: 0 },
+    calls: { locate: 19, travel: 1, nearby: 0, nearbyPoint: 6, articlesNear: 0 },
     town: ["Vienna", "Ljubljana", "Trieste", "Central Europe"],
   },
 };
 
-describe("grounding calls per set A shape, with the town pass (pl-60)", () => {
-  test.each(TRIP_SHAPES)("%s spends the calls pl-60's Log asserts", async (shape) => {
+describe("grounding calls per set A shape, with the town pass (pl-60, pl-62)", () => {
+  test.each(TRIP_SHAPES)("%s spends the calls pl-62's Log asserts", async (shape) => {
     const grounding = new CountingGrounding();
     await draftShape(shape, grounding);
 
