@@ -148,11 +148,15 @@ either. A PR whose head branch is not fetched, or comes from a fork, keeps its
 own `gh pr diff`, which cannot be filtered that way and still over-reports.
 
 A stacked pull request's parent ticket is taken off its claim only when git says
-the parent's head is in the child's history (`git merge-base --is-ancestor`), and
-only the paths the parent holds are taken off. Two unrelated pull requests that
-file one id still clash, and so does a stacked child's own, different ticket under
-a parent's id. A stacked branch with no pull request of its own is not checked
-against its parent; it still reads as a clash with the parent's pull request.
+the parent's head is in the child's history (`git merge-base --is-ancestor`). The
+files the parent holds come off the child, and so does an id in the child's
+*branch name* that the parent also holds, so `repo-66-followup` stacked on
+`repo-66-parent` does not clash on 66 by its name (repo-118). An id in the name
+that the parent does not hold stays. Two unrelated pull requests that file one id,
+or whose branch names share one, still clash, and so does a stacked child's own,
+different ticket under a parent's id. A stacked branch with **no pull request** is
+not checked against its parent, so it still reads as a clash with that parent's
+pull request; the follow-up is repo-124.
 
 **So a `branch/…`/`on main` clash is one of two things, and both need a look.**
 Either the branch filed a second ticket under a taken id — the collision this
@@ -187,6 +191,7 @@ verified by removing each one in turn, not by assertion.
 | sweep a PR and its head branch separately | one claim prints as two, and the PR's unfilterable diff clashes on every merged ticket it edits |
 | find a PR's head branch by its label | the first PR relabels it, so a second PR on the same head keeps its unfiltered diff and clashes |
 | ask git whether one pull request's head contains another's (`merge-base --is-ancestor`) | a PR stacked on another's head claims its parent's ticket as well, and the two print as a clash: `clash: repo-66 is claimed by PR#623, PR#625`. Measured in repo-118's build by removing the check; the stacked-pair test went red on that line |
+| take a stacked child's name-derived ids off its claim | a branch named `repo-66-followup` on `repo-66-parent` claims 66 by its name, and the two print as `clash: repo-66 is claimed by PR#623, PR#625`. Measured in repo-118's build by removing the name rule; the stacked-name test went red on that line |
 | let an unfetched head branch stand for its PR | only the branch's name was read, so the PR's files are dropped |
 | drop the branch source (repo-41) | a **pushed branch with no pull request** is in neither of the other two sources, so a ticket file already committed and pushed on one is handed out as free. Measured on `main` at `a5e31c7`: `next free: repo-39` while `docs/work/repo-39-….md` was on `repo-37-anchor-planner-review-corpus` |
 | read `refs/remotes/origin/*` instead of `ls-remote` | wrong in both directions at once — a plain `git fetch` does not prune, so it keeps branches the remote deleted (**twelve refs against the remote's five**, measured), and it cannot see a branch pushed since your last fetch at all |

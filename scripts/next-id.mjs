@@ -527,6 +527,9 @@ function unheldName(child, heldByParent, prefix) {
  * both file the same path do not contain one another, and still clash — that
  * is a real collision. And a stacked child's *own* different file under a
  * parent's id still clashes, because only paths the parent holds are removed.
+ * The child's branch name is a path of its own here, and the ids in it that the
+ * parent holds come off the same way (`unheldName`), so `repo-66-followup` on
+ * `repo-66-parent` does not clash on 66 by its name.
  *
  * Only a pull request whose head is read has a sha to ask git about. One whose
  * head is unfetched, or comes from a fork, is never treated as stacked: that
