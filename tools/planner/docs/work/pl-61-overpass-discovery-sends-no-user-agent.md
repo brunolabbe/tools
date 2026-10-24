@@ -49,9 +49,10 @@ this request is unknown.
    case asserts the outgoing POST carries a non-empty `user-agent`. Run it on the base
    first and confirm it fails with the header absent, then apply the change and confirm
    it passes.
-3. Do not change the `catch` in `discovery.ts`, the coverage sentence, or the way
-   `#overpassJson` is shaped. Whether a refused backend should say "could not ask"
-   rather than "very little on the map" is a separate decision and is not this ticket.
+3. Do not change what the `catch` in `discovery.ts` returns, the coverage sentence, or the
+   way `#overpassJson` is shaped. The one thing changed in that `catch` is the warn line,
+   by step 6. Whether a refused backend should say "could not ask" rather than "very little
+   on the map" was decided on 2026-10-24: keep it. Do not re-raise it here.
 4. Live check, once, after the change: run the adapter against the public instance the
    way the Log's probe did, serially, with no retries. The `adapter` result must be
    `ok: true`, not `UNREACHABLE`/406. Log the reading with its date. This check is
@@ -59,14 +60,34 @@ this request is unknown.
 5. Not in scope, unmeasured: `#json`'s routing `POST` to `sources_to_targets`
    (valhalla.ts, around line 358) also sends no `user-agent`. Whether a public Valhalla
    refuses it has not been measured. Name it in the Log if you check it; do not fix it here.
+6. `tools/planner/api/src/runs/discovery.ts`, `nearby()`'s `catch`. The warn call currently
+   reads:
+   ```
+   logger.warn("the corridor could not be queried", {
+     provider: provider.name,
+     code: AppError.from(error).code,
+   });
+   ```
+   Add `status` to it, read from `AppError.from(error).details` when that carries a numeric
+   `status`. `details` is `Record<string, unknown>`, so narrow with `typeof`, and omit the
+   field when there is none rather than logging `undefined`. Keep `code` as it is. Do not
+   log the URL. The test for it drives `discoverAlongCorridor` over a `ValhallaGroundingProvider`
+   built on a stubbed `fetch`, with a spy `AppLogger` (the interface in
+   `packages/core/src/logger.ts`) whose `warn` records its fields. Put it in the file step 2
+   names, or in a planner api test that already drives `discoverAlongCorridor`.
 
 ## Done when
 
 1. The `nearby` case added to `tools/planner/api/test/grounding-valhalla.test.ts`
    asserts the Overpass `POST` carries a non-empty `user-agent` header, through the
    stubbed `fetch`. It fails on the base and passes after the change. Offline.
-2. `npx vitest run tools/planner/api/test/grounding-valhalla.test.ts` passes in full.
-3. `npm run check` passes.
+2. A stubbed `fetch` answers the discovery pass's Overpass `POST` with HTTP 406,
+   `discoverAlongCorridor` runs over a `ValhallaGroundingProvider` built on that stub with
+   a spy logger, and the recorded `warn` for `the corridor could not be queried` carries
+   `status: 406`. It fails on the base, where the field is absent, and passes after the
+   change. Offline.
+3. `npx vitest run` on each spec file that Build steps 2 and 6 name passes in full.
+4. `npm run check` passes.
 
 ## Log
 
@@ -116,3 +137,22 @@ sentence. An unset `OVERPASS_URL` returns `[]` from `valhalla.ts` `nearby()` bef
 any request, so it gets the same sentence.
 
 Filing only: no source changed in this branch.
+
+### 2026-10-24 — two decisions recorded, owner answers relayed by the orchestrator
+
+Decision A, the warn line. Question: when `nearby()` in `api/src/runs/discovery.ts` hits an
+Overpass error, it logs only the error `code`, so the 406 status never reaches the log.
+What should happen to it? Options: (1) fold it into pl-61, with a Done-when making the warn
+line carry `details.status`, fixed by pl-61's builder together with the user agent; (2) a
+separate follow-up ticket, which the builder recommended; (3) leave it. Chosen: (1). The
+owner's answer overrode the builder's recommendation of (2). Recorded here as the answer.
+
+Decision B, a refused backend reads as a thin map. Question: a 406 and an unset
+`OVERPASS_URL` both produce "There is very little on the map along this route." Options:
+(1) keep it, which the comment in `nearby()`'s `catch` says is deliberate, with no second
+kind; (2) add a distinct "could not ask" sentence, which needs copy and reverses that
+comment. The builder recommended (1). Chosen: keep it for now. Nothing is filed for it. The
+next agent should not re-raise it unless a measurement changes the premise.
+
+Difficulty: `mechanical`, unchanged by the addition. The warn change is one field read with
+a type narrow, and the test follows the stub pattern step 2 already names.
