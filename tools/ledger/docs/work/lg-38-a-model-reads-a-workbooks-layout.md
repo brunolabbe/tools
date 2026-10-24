@@ -610,3 +610,15 @@ the owner answers 1. lg-56 carries them as context, not as Build.
 ### 2026-10-18 — gate records
 
 The gate records for the pull request that filed this entry and lg-56 are on PR #552's thread, not in a `## Review` section: gate 1 CONCERNS at `d76699a2`, gate 2 PASS at `1135f0a6`.
+
+### 2026-10-24 — lg-56's measurement is in; Done when 4 is the owner's
+
+lg-56's paid run (Haiku 5.5 shown and masked on 13 fixtures, 10 runs each; Sonnet
+5.5 shown on four of them) is reported in [lg-56's Log](./lg-56-measure-the-layout-reader-on-harder-fixtures.md),
+entry "2026-10-24 — Build steps 3 and 4". In short: 300 runs, 10 let through, all
+on one fixture (`bank-two-dates`, the transaction date read where the posted date
+belongs), 0 that changed an amount, balance or detail; no model made the swapped-label or the empty-column mistake; masked
+and shown cost the same per run. That entry ends with the recommendation (corrected in its round 1, the entry
+after it).
+**Done when 4 stays open**: this ticket's `status` is unchanged, and building or
+dropping it is the owner's decision.

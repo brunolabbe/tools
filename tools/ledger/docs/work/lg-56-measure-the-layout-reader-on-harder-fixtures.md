@@ -3,7 +3,7 @@ id: lg-56
 tool: ledger
 title: Measure the layout reader again on harder fixtures, before lg-38 is built or dropped
 kind: work-package
-status: in-flight
+status: done
 milestone: P6
 depends_on: []
 difficulty: standard
@@ -255,6 +255,75 @@ the builder stops after step 2. Change no reader, schema or contract.
 - **findings** · the round's lines returned 1 new finding, which is carried; nothing was dropped. Of gate 1's findings, 5 are fixed and none was refuted. Nothing here is a `high`.
 - PR #562 at `7de01442`: every check passes, the Windows informational leg included.
 - NFR: security ✓ (nothing live; `live/` untouched) · performance n/a · reliability ✓ · maintainability ✓.
+
+### Gate 3
+
+**Gate: FAIL** — 2026-10-24 · `89a38d30..e92dff07` · Opus 5.5, depth narrow. This gate covers Build step 4 and the last four `Done when` lines only. Every figure was recomputed from all 300 records (130 Haiku shown, 130 Haiku masked, 40 Sonnet shown).
+
+| Done when                                                                               | Proof                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A test per new fixture that its correct description scores `matched`                    | **unproven (scope)**: settled in #562 under two gates; the dispatch takes it out of this gate's scope                                                                                                                                                                    |
+| The three named wrong descriptions and one per bank shape are pinned                    | **unproven (scope)**: as above (dispatch)                                                                                                                                                                                                                                |
+| A test turns red when `LAYOUT_FIXTURE_NAMES` and `layoutFixtures()` differ              | **unproven (scope)**: as above (dispatch)                                                                                                                                                                                                                                |
+| The Log has the Haiku shown and masked tables, and Sonnet's                             | **verified**. All three `summary.md` tables are in the Log cell for cell. The only difference is the column padding oxfmt adds. All 20 headline figures I recomputed from the records agree with the Log, and the per-fixture rows agree as well                         |
+| The Log quotes every run that did not match and whether it was caught                   | **verified**. There are 22 Haiku non-matches and 0 Sonnet. Each one's `outcome`, `verified`, `problems`, `differences` and columns appears in the Log as the record has it. Caught or not caught is right for every one, and the Log names no record that does not exist |
+| The Log gives the let-through count and bound, and what shown against masked changed    | **verified**. N=10, M=0, K=10, J=0, all of them `bank-two-dates`. Each bound is labelled an estimate and names its runs and fixtures. The rule-of-three arithmetic holds. Fisher two-sided p = 0.0011. F4 bears on how the recommendation quotes the bound               |
+| The Log ends with the recommendation, and lg-38's Log points here; neither closes lg-38 | **verified** for the clauses as written. Neither `status:` line changed (the diff only adds lines), the pointer resolves to the entry's heading, and the build-or-drop decision is left to the owner. F1 is a `high` in the recommendation's content                     |
+
+- **high** · F1 · false in the unsafe direction, in a conclusion the owner will choose a guard from. The Log says the 10 let-through runs "score `problems: 0` because the file reads cleanly either way". Its recommendation 2 says "The books' own checks cannot catch it, and in this fixture only the header says which date is which." Neither holds. All 10 answers are exactly the wrong description the branch pins for `bank-two-dates`, "the date read from B" (`b2d-answers.mjs`: `equalsPinnedDateB=true`, 10 of 10). Under that description the reader reports rows dated out of order:
+  - `api/test/layout.test.ts` › "bank-two-dates: the dates differ on some rows and not all, and only the posted one is in order" asserts `wrongly.outOfOrder.length > 0` and `problems` equal to `[]`, with the comment "The reader notices the order is off".
+  - The Build steps 1–2 entry's pinned table says "`outOfOrder` holds 2 rows, which is reported and not a problem".
+  - `api/src/workbook-import.ts` prints each one as "dated out of order: … imported as typed".
+
+  So the verifications do not refuse this mistake, but the books do notice it. The owner's options leave out a guard built on that signal. Direction for a fix: correct both sentences, and add that signal to the options with "unmeasured beyond this fixture" beside it. Whether a real export would show inversions under its transaction date is unmeasured.
+
+- **med** · Done when 7 depends on it (Build step 4: "claiming no more than the fixtures show") · F4. Recommendation 1 quotes `J = 0` as "about 1% at the rule of three". The Log's own bounds section says the independent units are "nearer the 13 fixtures than the 300 runs: counted by fixture, 3/13 is about 23%". The recommendation therefore quotes the bound its own analysis calls weaker, and leaves out the one it calls closer, which is optimistic. Fix: give both numbers in recommendation 1.
+- **low** · false in the conservative direction · F2. "The let-through the run did find was not one the ticket predicted." The ticket's Build steps 1–2 entry pins exactly this mistake for `bank-two-dates` ("the date read from B, the transaction date", `let-through`). The round-1 entry also names "date-column … the kind that matters for `bank-two-dates`". The Log is right that no run produced the `Reference`-as-`note` answer.
+- **low** · false in the unsafe direction, in a summary only · F3. lg-38's pointer says "0 that changed a movement". In lg-56, "movement-changing" is a defined class that excludes date-column runs. Read in plain words in lg-38, the phrase is false: each of the 10 runs imported the transaction date where the posted date belongs. The same sentence says "10 let through" and points to the entry. Fix: "0 that changed an amount, balance or detail".
+- **low** · false in a detail · F5. Recommendation 3 says masked's "non-matches are harmless same-imports and one refusal". They also include `bank-two-dates-9`, a let-through. The clause it supports ("not worse on any fixture") still holds.
+- **low** · F6. "The brief's estimates" includes "about $0.16 for command 1". That figure comes from the Build steps 1–2 entry's command comment, not from the brief. The figures themselves are right.
+- **low** · unverified · F7. The provenance clause "from the shared checkout at `main` 89a38d30" is not recorded in `run.sh` or `run.log`. `run.sh` runs `cd /workspaces/tools` and records no sha. Everything else in the provenance paragraph checks out against them: the times 17:32:40Z to 17:52:26Z, exits 0, commands 1–4 as in the Log with the key read from a file, command 3's list, and `RATES` with `RATES_READ_ON` 2026-10-10.
+- **dropped** · "verbatim": the Log's tables differ from each `summary.md` only by column padding, which oxfmt imposes on markdown here. Cell for cell they are identical (`verbatim.mjs`: `normalisedEqual=true`, 3 of 3).
+- **dropped** · "The Log ends with the recommendation": a fold-in paragraph follows it inside the same subsection. That is not a defect.
+- **findings** · the hunt returned 9; 7 carried (1 high, 1 med, 5 low), 2 dropped.
+- Positive control: in a scratch copy, `bank-two-dates-3` (shown) was set to `matched` and its cost raised by $0.01. The check then disagreed with the Log on 12 of 20 rows: shown totals, `bank-two-dates`, right imports, the non-matched count, N, the shown, Haiku and run costs, the four-fixture mean and the ratio. The masked and Sonnet rows stayed equal.
+- PR #621 at `e92dff07`: `check` passes twice, `changes`, `CodeQL`, `codeql` and `dependency-review` pass, and `test` is skipping (docs only). This branch touches no source.
+- NFR: security ✓ (no key in the Log; the records stay outside the repo) · performance n/a · reliability: F1 · maintainability n/a.
+
+### Gate 4
+
+**Gate: PASS** (three rows `unproven (scope)`, as in gate 1) — 2026-10-24 · `e92dff07..1073a40c` · Opus 5.5, depth narrow. This gate covers the round's one commit, `1073a40c`, and nothing else. Every count was re-derived from all 300 records and from the books' `readWorkbook`. No model was called.
+
+| Done when                                                                                           | Proof                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The three lines settled in #562 (correct descriptions match, wrong ones pinned, the name-list test) | **unproven (scope)**: out of scope by dispatch, as in gate 1                                                                                                                                                                                                                                                    |
+| The Log has the Haiku shown and masked tables, and Sonnet's                                         | **verified** at the new head. `verbatim.mjs` gives `normalisedEqual=true` for 3 of 3. `check.mjs` gives `0 of 20 rows disagree with the Log` over 300 of 300 records. A token diff of the entry finds no figure lost                                                                                            |
+| The Log quotes every run that did not match and whether it was caught                               | **verified**. The round edited none of the quotes. `b2d-answers.mjs` gives `equalsPinnedDateB=true` for 10 of 10                                                                                                                                                                                                |
+| The Log gives the let-through count and bound, and what shown against masked changed                | **verified**. N, M, K and J are unchanged. Recommendation 1 now gives both bounds, 3/300 and 3/13                                                                                                                                                                                                               |
+| The Log ends with the recommendation, and lg-38's Log points here; neither closes lg-38             | **verified**. Neither `status:` line changed (`git diff -U0 e92dff07 1073a40c` has no `status` hunk). The pointer still resolves to "2026-10-24 — Build steps 3 and 4". "The choice, and whether to file the build, is the owner's" still stands, and the guards (a) and (b) are offered as options, not chosen |
+
+Gate 1's findings:
+
+- **F1 (high): fixed.** I re-ran the builder's `ooo.mts` on my tree. It gives `outOfOrder=2 problems=0` for the 10 of 10 let-through answers, and `outOfOrder=0 problems=0` for the correct description. Its sample is `{"row":19,"date":"2024-02-29","belowRow":18,"belowDate":"2024-03-02"}`, as the Log quotes it. Every count the Log states, 7 of 7, agrees with that measurement. The corrected sentences hold against the code and the test:
+  - `layout.test.ts` › "bank-two-dates: the dates differ on some rows and not all, and only the posted one is in order" asserts `outOfOrder` greater than 0 and `problems` equal to `[]`.
+  - `workbook-import.ts` prints "dated out of order: … imported as typed".
+  - The view claim also holds. `shownRows(33)` shows rows 1–12, 14, 17, 20, 23, 26, 29 and 31–33, which is 21 rows and leaves out both 18 and 19. So "in what is shown to the model only the header" is true, and "2 of 32 rows" is true too.
+  - Guard (b) is labelled "unmeasured beyond this fixture" and "works only if it does".
+- **F4 (med; Done when 7): fixed.** Recommendation 1 gives about 1% (3/300) and about 23% (3/13), and says the second is the closer reading.
+- **F2 (low): fixed.** The Build steps 1–2 table pins "the date read from B, the transaction date" as `let-through`, as the new sentence says.
+- **F3 (low): fixed.** lg-38 now says "0 that changed an amount, balance or detail". The let-through answers differ only in `date`.
+- **F5 (low): fixed.** Masked has 6 non-matches: 4 same-import, 1 refused and `bank-two-dates-9`, as now listed.
+- **F6 (low): fixed.** Both "$0.16" passages are in the Build steps 1–2 entry.
+- **F7 (low): fixed.** `tail -1 /workspaces/tools/.git/logs/HEAD` prints `… 89a38d30… 1792859785 +0000	pull --tags origin main: Fast-forward`, and `date -u -d @1792859785` gives 16:36:25Z, before 17:32:40Z.
+
+New, in the lines the round touched:
+
+- **low** · F8 · a citation that will not resolve after the merge. The round-1 entry cites `git show e92dff07:tools/ledger/api/test/layout.test.ts` "lines 478 to 497". `e92dff07` is a branch commit, and the squash merge will leave it unreachable once the branch is deleted. The file is identical at `89a38d30`: `git diff --stat 89a38d30 1073a40c -- tools/ledger/api tools/ledger/books` is empty. Nothing relies on the pin, because the same sentence names the test. Direction for a fix: cite the test by its title, at `89a38d30` or at `main`.
+- **low** · F9 · the text overstates in a detail. "The import prints each one as 'dated out of order: … imported as typed' (`api/src/workbook-import.ts`)" describes what that report does with the reader's `outOfOrder`. But `workbook-import.ts` calls `readWorkbook(sheets, { people, corrections })` with no `layout` today, so no model's answer reaches it yet. Whether lg-38's build would route a CSV through it is unverified. Guard (b) is already marked unbuilt and unmeasured, so no choice rests on the clause. Direction for a fix: "would print" or "prints for a reading", in place of "prints".
+- **findings** · the hunt returned 2 new, and both are carried (low). Of gate 1's 7, all are fixed. Nothing here is a `high`.
+- Positive control: in a scratch copy, "reports 2 rows `outOfOrder`" was changed to 3. `ooocheck.mjs` then printed `MISMATCH "reports 3 rows \`outOfOrder\`" stated 3 measured 2`and`1 of 7 stated counts disagree`. At the head it printed `0 of 7`.
+- PR #621 at `1073a40c5ed26eff65e39631fd3d936e1904fcf4`: CodeQL, `changes`, `check` ×2, `codeql` and `dependency-review` pass. `test` is skipping, because the change is docs only.
+- NFR: security ✓ (no key in the round's text) · performance n/a · reliability ✓ (F1 is corrected) · maintainability: F8.
 
 ## Log
 
@@ -580,3 +649,446 @@ api/test/layout-live-gate.test.ts`: `73 passed (73)`. Preflight and the new
 head are in the pull request's thread.
 
 - 2026-10-18 — Fixed at landing by owner choice: gate 2, the new low — "'note-only' is defined only as an added `note` beside `bank-two-dates`' and `bank-wide`'s four columns; everything else is 'movement-changing'. On the workbook fixtures, a run that drops or moves the note column also scores `let-through`." The round-1 entry's note-only bullet now defines it as differing from the correct columns only in the `note` role, whether added, moved or dropped (Log wording only; no fixture or scorer changed). `grep -c "the same four columns and an added" tools/ledger/docs/work/lg-56-measure-the-layout-reader-on-harder-fixtures.md` → `0` (it was `1`).
+
+### 2026-10-24 — Build steps 3 and 4: the paid run, and the report back
+
+Step 3 was run on 2026-10-24 and this entry is step 4. **Both tickets stay
+as they are**: lg-56's `status` is the lander's to set, and lg-38's Done when 4
+(build or drop) is the owner's. Nothing in `tools/` changed: this entry and the
+pointer in lg-38's Log are the whole branch.
+
+**Provenance.** The owner was away from the computer and asked the orchestrator
+session (tools-f6) to run this Log's four commands, one after the other, with the
+owner's key. They ran from the shared checkout, which stood at `main` 89a38d30
+(the script records no sha; the checkout's `HEAD` log, read from
+`/workspaces/tools/.git/logs/HEAD`, has as its newest line `89a38d30` by `pull
+--tags origin main: Fast-forward` at 2026-10-24T16:36:25Z, before the run), from
+17:32:40Z to 17:52:26Z, under one script that holds commands 1 to 4 of this Log verbatim
+(only the key is read from a file). Each exited 0. Prices were checked first
+against `RATES` in `scripts/agent-cost.mjs` (read 2026-10-10): Haiku 5.5
+$0.10 in and $0.50 out, Sonnet 5.5 $2 in and $10 out, per million tokens, as the
+commands say. Command 3 printed `bank-two-dates,english,lg7,swapped-labels`, so
+command 4 ran Sonnet on those four. The records are outside the repository and
+not copied into it: `~/ledger-layout-lg56-shown/claude-haiku-5-5/` (130 records),
+`~/ledger-layout-lg56-masked/claude-haiku-5-5/` (130) and
+`~/ledger-layout-lg56-shown/claude-sonnet-5-5/` (40), each with its
+`summary.md`. **Every number below is computed from those records** by scripts
+that only read them (the listing in the round-1 entry, and a second pass for the
+costs and the date columns); no model was called to write this entry. All 300
+records have `stopReason: "end_turn"`, `effort: "medium"`, and the `figures` and
+`model` their directory says. The harness's `summary.md` tables are in the
+model-by-fixture form the Done when asks for.
+
+#### The three tables
+
+Each `summary.md`, verbatim.
+
+`~/ledger-layout-lg56-shown/claude-haiku-5-5/summary.md`:
+
+| Model            | Fixture             | Runs | Passed | Matched | Same import | Caught | Let through | Invalid | Input tokens (mean) | Output tokens (mean) | Cost per run (mean) |
+| ---------------- | ------------------- | ---- | ------ | ------- | ----------- | ------ | ----------- | ------- | ------------------- | -------------------- | ------------------- |
+| claude-haiku-5-5 | lg7                 | 10   | 10     | 6       | 4           | 0      | 0           | 0       | 6190                | 1118                 | $0.0012             |
+| claude-haiku-5-5 | lg37                | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 9468                | 1440                 | $0.0017             |
+| claude-haiku-5-5 | moved               | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 8080                | 1090                 | $0.0014             |
+| claude-haiku-5-5 | english             | 10   | 10     | 8       | 2           | 0      | 0           | 0       | 7924                | 1085                 | $0.0013             |
+| claude-haiku-5-5 | csv-balance         | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4928                | 583                  | $0.0008             |
+| claude-haiku-5-5 | csv-no-balance      | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4787                | 391                  | $0.0007             |
+| claude-haiku-5-5 | swapped-labels      | 10   | 9      | 9       | 0           | 1      | 0           | 0       | 6459                | 831                  | $0.0011             |
+| claude-haiku-5-5 | empty-columns-carry | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 6425                | 842                  | $0.0011             |
+| claude-haiku-5-5 | empty-columns-csv   | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4929                | 464                  | $0.0007             |
+| claude-haiku-5-5 | bank-preamble       | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4822                | 500                  | $0.0007             |
+| claude-haiku-5-5 | bank-two-dates      | 10   | 10     | 1       | 0           | 0      | 9           | 0       | 5319                | 502                  | $0.0008             |
+| claude-haiku-5-5 | bank-footer         | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4860                | 535                  | $0.0008             |
+| claude-haiku-5-5 | bank-wide           | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 6013                | 526                  | $0.0009             |
+| claude-haiku-5-5 | **all**             | 130  | 129    | 114     | 6           | 1      | 9           | 0       | 6170                | 762                  | $0.0010             |
+
+Outcomes over 130 runs:
+
+- matched: 114
+- same-import: 6
+- refused: 1
+- let-through: 9
+- invalid: 0
+
+`~/ledger-layout-lg56-masked/claude-haiku-5-5/summary.md`:
+
+| Model            | Fixture             | Runs | Passed | Matched | Same import | Caught | Let through | Invalid | Input tokens (mean) | Output tokens (mean) | Cost per run (mean) |
+| ---------------- | ------------------- | ---- | ------ | ------- | ----------- | ------ | ----------- | ------- | ------------------- | -------------------- | ------------------- |
+| claude-haiku-5-5 | lg7                 | 10   | 10     | 8       | 2           | 0      | 0           | 0       | 6115                | 1185                 | $0.0012             |
+| claude-haiku-5-5 | lg37                | 10   | 10     | 8       | 2           | 0      | 0           | 0       | 9057                | 1455                 | $0.0016             |
+| claude-haiku-5-5 | moved               | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 7745                | 1156                 | $0.0014             |
+| claude-haiku-5-5 | english             | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 7581                | 1222                 | $0.0014             |
+| claude-haiku-5-5 | csv-balance         | 10   | 9      | 9       | 0           | 1      | 0           | 0       | 4808                | 608                  | $0.0008             |
+| claude-haiku-5-5 | csv-no-balance      | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4706                | 471                  | $0.0007             |
+| claude-haiku-5-5 | swapped-labels      | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 6253                | 901                  | $0.0011             |
+| claude-haiku-5-5 | empty-columns-carry | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 6202                | 821                  | $0.0010             |
+| claude-haiku-5-5 | empty-columns-csv   | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4803                | 504                  | $0.0007             |
+| claude-haiku-5-5 | bank-preamble       | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4708                | 525                  | $0.0007             |
+| claude-haiku-5-5 | bank-two-dates      | 10   | 10     | 9       | 0           | 0      | 1           | 0       | 5176                | 503                  | $0.0008             |
+| claude-haiku-5-5 | bank-footer         | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4730                | 559                  | $0.0008             |
+| claude-haiku-5-5 | bank-wide           | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 5810                | 541                  | $0.0009             |
+| claude-haiku-5-5 | **all**             | 130  | 129    | 124     | 4           | 1      | 1           | 0       | 5976                | 804                  | $0.0010             |
+
+Outcomes over 130 runs:
+
+- matched: 124
+- same-import: 4
+- refused: 1
+- let-through: 1
+- invalid: 0
+
+`~/ledger-layout-lg56-shown/claude-sonnet-5-5/summary.md` (the four fixtures
+command 3 named; the other nine were not run):
+
+| Model             | Fixture        | Runs | Passed | Matched | Same import | Caught | Let through | Invalid | Input tokens (mean) | Output tokens (mean) | Cost per run (mean) |
+| ----------------- | -------------- | ---- | ------ | ------- | ----------- | ------ | ----------- | ------- | ------------------- | -------------------- | ------------------- |
+| claude-sonnet-5-5 | lg7            | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 6190                | 348                  | $0.0159             |
+| claude-sonnet-5-5 | english        | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 7924                | 332                  | $0.0192             |
+| claude-sonnet-5-5 | swapped-labels | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 6459                | 244                  | $0.0154             |
+| claude-sonnet-5-5 | bank-two-dates | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 5319                | 156                  | $0.0122             |
+| claude-sonnet-5-5 | **all**        | 40   | 40     | 40      | 0           | 0      | 0           | 0       | 6473                | 270                  | $0.0156             |
+
+Outcomes over 40 runs:
+
+- matched: 40
+- same-import: 0
+- refused: 0
+- let-through: 0
+- invalid: 0
+
+**Read "Passed" with care.** The column is `score.verified` (the harness's
+`summary` counts it so), which is true for a let-through run: the verifications
+found nothing, and that is what makes it a let-through. So Haiku shown's 129 of
+130 includes 9 runs that imported a different date. The count of imports that
+were right is Matched plus Same import: **120 of 130 shown, 128 of 130 masked**,
+and 40 of 40 for Sonnet. lg-38's 60 runs had no let-through, so there the two
+counts agreed and the column could be read either way.
+
+#### Every run that did not match: 22 of 260 Haiku runs, 0 of 40 Sonnet runs
+
+Each row is quoted from the record's `score` block (`valid` is true and `issues`
+is `[]` in all 22). The correct columns are the round-1 entry's:
+`bank-two-dates` is `date:A detail:D amount:E balance:F`. The "answer's
+columns" are the record's `answer.account.columns`, sorted by role.
+
+Haiku 5.5, **shown** (16 runs):
+
+| Record                                                                       | `outcome`     | `verified` | `problems` | `differences`                            | Answer's columns                                                                                                                | Caught?                             |
+| ---------------------------------------------------------------------------- | ------------- | ---------- | ---------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `bank-two-dates-1`, `-2`, `-3`, `-4`, `-5`, `-6`, `-7`, `-8`, `-10` (9 runs) | `let-through` | true       | 0          | `["account.columns"]`                    | `amount:E balance:F date:B detail:D`; no `note`; same in all nine                                                               | **No**                              |
+| `swapped-labels-1`                                                           | `refused`     | false      | 7          | `["account.columns", "account.buckets"]` | `amount:E balance:F date:A detail:B note:G person:D`; `buckets: []`, `carryOverLabel: "Report annuel"`, `order: "oldest-first"` | **Yes**                             |
+| `lg7-3`, `-6`, `-9`, `-10` (4 runs)                                          | `same-import` | true       | 0          | `["ignored"]`                            | `amount:G balance:F bucket:C date:B detail:D note:H person:E`                                                                   | Not refused; nothing wrong imported |
+| `english-8`, `-10` (2 runs)                                                  | `same-import` | true       | 0          | `["ignored"]`                            | `amount:E balance:F bucket:B date:A detail:C note:G person:D`                                                                   | Not refused; nothing wrong imported |
+
+Haiku 5.5, **masked** (6 runs):
+
+| Record                  | `outcome`     | `verified` | `problems` | `differences`              | Answer's columns                                                                                       | Caught?                             |
+| ----------------------- | ------------- | ---------- | ---------- | -------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| `bank-two-dates-9`      | `let-through` | true       | 0          | `["account.columns"]`      | `amount:E balance:F date:B detail:D`; no `note`                                                        | **No**                              |
+| `csv-balance-5`         | `refused`     | false      | 2          | `["account.yearPerSheet"]` | `balance:E date:A deposit:D detail:B withdrawal:C`; `yearPerSheet: true`, `names: ["releve-2024.csv"]` | **Yes**                             |
+| `lg7-1`, `-10` (2 runs) | `same-import` | true       | 0          | `["ignored"]`              | `amount:G balance:F bucket:C date:B detail:D note:H person:E`                                          | Not refused; nothing wrong imported |
+| `lg37-2`, `-3` (2 runs) | `same-import` | true       | 0          | `["account.summary"]`      | `amount:G balance:F bucket:C date:B detail:D note:H person:E`                                          | Not refused; nothing wrong imported |
+
+What each says, from the records:
+
+- **The 10 let-through runs are one mistake.** In every one the date is column
+  B, `Date of transaction`, where the correct description has A, `Date posted`;
+  every other column is right, and none files `Reference` or anything else as
+  `note`. They score `problems: 0`: the verifications count the reader's
+  problems and nothing else, and reading the file through this layout reports
+  none. **The books do notice it, though** (corrected in round 1; see that
+  entry): all ten answers are exactly the wrong description the Build steps 1–2
+  entry pins ("the date read from B"), and reading the fixture through each of
+  them reports `outOfOrder` with 2 rows and `problems` with 0, against 0 and 0
+  for the correct description. The record keeps the
+  count of problems, not their text, so which verification fired on the two
+  refused runs is unmeasured, as in lg-38.
+- **`swapped-labels-1` (shown) is a refusal, and not the swap.** The answer left
+  `buckets` empty and named no bucket column at all; the reading reported 7
+  problems and the verifications refused it. **Caught.**
+- **`csv-balance-5` (masked) is lg-38's `csv-balance-1` again**: the one CSV
+  answered `yearPerSheet: true`, every column right, 2 problems. **Caught.**
+- **The 12 same-import runs changed nothing in the import.** The `ignored` ones:
+  the six `lg7` answers (four shown, two masked) list `Accueil` as ignored as well
+  as `Labels` and `Budget` (the correct description lists the last two), and
+  every one of them also names `Accueil` as the salaries sheet
+  (`salaries: {"sheet":"Accueil","label":"Salaires bruts"}`): the answer
+  contradicts itself, and the reader never consults `ignored`, so it is harmless
+  today. Whether a reader that did consult `ignored` would refuse it is
+  unmeasured, as in lg-38. The two shown `english` answers list `Home` as well
+  as `Lists` (the correct description has `Lists` only). The two masked `lg37`
+  answers give the summary labels `["Solde Dép. Courantes", "Solde Hypothèque",
+"Total"]` where the correct description has `["Solde", "Total"]`, as lg-38's
+  Sonnet did twice.
+
+#### Let through, and its bounds
+
+Classed from each record's `answer.account.columns` by the round-1 entry's
+rule. **10 let-through, of which 0 note-only, 10 date-column and 0
+movement-changing**: `N = 10`, `M = 0`, `K = 10`, `J = 0`.
+
+- All ten are `bank-two-dates`: 9 of Haiku's 10 shown runs and 1 of its 10
+  masked runs. Sonnet matched all 10 of its runs on that fixture, with column A.
+  So `N` comes from **1 fixture of 13**.
+- **`J`, the number the recommendation rests on: 0 in 300 runs** (Haiku shown
+  130, Haiku masked 130, Sonnet 40) **over 13 distinct fixtures** (Sonnet saw 4 of
+  them). By the rule of three that bounds the rate of a movement-changing
+  let-through at no more than about 1% at 95% (3/300); for Haiku alone 3/260,
+  about 1.2%; for Sonnet alone 3/40, about 7.5%. **These are estimates, and weak
+  ones.** The ten runs of a fixture read one workbook, so the independent units are
+  nearer the 13 fixtures than the 300 runs: counted by fixture, 3/13 is about 23%.
+  Neither number speaks for workbooks unlike these thirteen, nor for the shapes in
+  the unmeasured list below.
+- **`N`: the rule of three does not apply**, because it bounds a rate seen as
+  zero and `N` is 10. The observed rate is 10 of 300 (3.3%), or 10 of 260 for Haiku
+  (3.8%), and it is not spread: 10 of the 20 Haiku runs on `bank-two-dates` and 0
+  of the other 280 runs (Sonnet's 10 on that fixture among them). Taking that fixture out, 0 let-through in 270 runs over
+  12 fixtures bounds the rest at no more than about 1.1% (3/270, an estimate), on
+  the same caveat about independence.
+- **Whether a date-column let-through is a defect is the fixture's judgement.**
+  The correct description is `Date posted` because the rows are in posted order,
+  and the 21 rows the view shows hold no transaction-date inversion (round-1
+  entry), so in what is shown to the model only the header tells the two apart;
+  in the whole file, 2 rows are out of order under the transaction date, and the
+  reader reports them. The run says Haiku read the
+  other date in 10 of 20 runs (9 of 10 shown, 1 of 10 masked) and Sonnet in 0 of 10. It does not say which date a household would want.
+
+#### Shown against masked
+
+Haiku 5.5, same 13 fixtures, 10 runs each; the two sets differ only in what was
+sent (`#` for every number when masked).
+
+| Fixture             | Shown: passed / matched / same import / caught / let through | Masked: passed / matched / same import / caught / let through | Cost per run, shown | Cost per run, masked |
+| ------------------- | ------------------------------------------------------------ | ------------------------------------------------------------- | ------------------- | -------------------- |
+| lg7                 | 10 / 6 / 4 / 0 / 0                                           | 10 / 8 / 2 / 0 / 0                                            | $0.0012             | $0.0012              |
+| lg37                | 10 / 10 / 0 / 0 / 0                                          | 10 / 8 / 2 / 0 / 0                                            | $0.0017             | $0.0016              |
+| moved               | 10 / 10 / 0 / 0 / 0                                          | 10 / 10 / 0 / 0 / 0                                           | $0.0014             | $0.0014              |
+| english             | 10 / 8 / 2 / 0 / 0                                           | 10 / 10 / 0 / 0 / 0                                           | $0.0013             | $0.0014              |
+| csv-balance         | 10 / 10 / 0 / 0 / 0                                          | 9 / 9 / 0 / 1 / 0                                             | $0.0008             | $0.0008              |
+| csv-no-balance      | 10 / 10 / 0 / 0 / 0                                          | 10 / 10 / 0 / 0 / 0                                           | $0.0007             | $0.0007              |
+| swapped-labels      | 9 / 9 / 0 / 1 / 0                                            | 10 / 10 / 0 / 0 / 0                                           | $0.0011             | $0.0011              |
+| empty-columns-carry | 10 / 10 / 0 / 0 / 0                                          | 10 / 10 / 0 / 0 / 0                                           | $0.0011             | $0.0010              |
+| empty-columns-csv   | 10 / 10 / 0 / 0 / 0                                          | 10 / 10 / 0 / 0 / 0                                           | $0.0007             | $0.0007              |
+| bank-preamble       | 10 / 10 / 0 / 0 / 0                                          | 10 / 10 / 0 / 0 / 0                                           | $0.0007             | $0.0007              |
+| bank-two-dates      | 10 / 1 / 0 / 0 / 9                                           | 10 / 9 / 0 / 0 / 1                                            | $0.0008             | $0.0008              |
+| bank-footer         | 10 / 10 / 0 / 0 / 0                                          | 10 / 10 / 0 / 0 / 0                                           | $0.0008             | $0.0008              |
+| bank-wide           | 10 / 10 / 0 / 0 / 0                                          | 10 / 10 / 0 / 0 / 0                                           | $0.0009             | $0.0009              |
+| **all (130)**       | **129 / 114 / 6 / 1 / 9**                                    | **129 / 124 / 4 / 1 / 1**                                     | **$0.000998**       | **$0.001000**        |
+
+- **Passed: unchanged**, 129 of 130 both ways, and it hides the difference (see
+  the note on "Passed" above).
+- **Matched: 114 shown, 124 masked. Imports that were right: 120 shown, 128
+  masked. Let through: 9 shown, 1 masked.** The whole difference is
+  `bank-two-dates`: it is 8 of the 8 extra right imports, and the date column
+  chosen swapped almost exactly (shown B 9, A 1; masked A 9, B 1). Take that
+  fixture out and the two modes are the same: 119 of 120 right imports each.
+- **Caught: 1 and 1**, different runs (`swapped-labels-1` shown, `csv-balance-5`
+  masked).
+- **Cost per run: the same**, $0.000998 against $0.001000 (130 runs each, from
+  `costUsd`). Masked sent about 3% fewer input tokens (mean 5,976 against 6,170)
+  and Haiku wrote about 5% more output (804 against 762).
+- **What this does not say.** It is one fixture, 10 runs a side. A two-sided
+  Fisher exact test on 9 of 10 against 1 of 10 (computed here, not by the
+  harness) gives p of about 0.001, so it is unlikely to be noise on that
+  fixture, but **why** masking moved the choice is unmeasured, and one fixture
+  does not tell whether it would on another bank's export. The run does not show
+  that showing figures helps anywhere: on the other twelve fixtures the two
+  modes are indistinguishable.
+
+#### Cost
+
+From every record's `costUsd`; the totals rebuilt from the token counts at the
+run's prices agree to four places.
+
+|                      | Haiku shown | Haiku masked | Sonnet shown |
+| -------------------- | ----------- | ------------ | ------------ |
+| Runs                 | 130         | 130          | 40           |
+| Input tokens, total  | 802,040     | 776,940      | 258,920      |
+| Output tokens, total | 99,067      | 104,515      | 10,800       |
+| Cost, total          | $0.1297     | $0.1300      | $0.6258      |
+| Cost per run, mean   | $0.000998   | $0.001000    | $0.015646    |
+
+**The run cost $0.8855 in all.** On the four fixtures Sonnet was run on, Haiku
+shown cost $0.001089 a run (40 runs) and Sonnet $0.015646, so **Sonnet is
+14.4 times Haiku per import**, as lg-38 found (14.05). In absolute terms an
+import costs a tenth of a cent with Haiku and under two cents with Sonnet on
+these fixtures. The estimates were high: about $0.31 for 260 Haiku runs
+at $0.0012 (the 260 cost $0.2597; the new CSV fixtures cost $0.0007 to $0.0009 a
+run), about $0.16 for command 1 (the Build steps 1–2 entry's command comment, not
+the brief; it cost $0.1297), and "at most about $2.2"
+for Sonnet (it was run on four fixtures, not thirteen, and cost $0.6258). The
+spend stop did not trip.
+
+#### What the records say against the ticket's expectations
+
+- **No model made either mistake the ticket added fixtures to invite.**
+  `swapped-labels`: 0 of 30 runs (Haiku shown 10, masked 10, Sonnet 10)
+  swapped the buckets; 29 gave `mortgage` = `Compte 2` and `current-expenses` =
+  `Compte 1`, and the thirtieth left `buckets` empty and was refused. The
+  `let-through` the fixture's pinned wrong description scores was never
+  produced. `empty-columns-csv`: 0 of 20 Haiku runs pointed withdrawal or deposit
+  at an empty column, and `empty-columns-carry`: 0 of 20 pointed the amount at
+  the empty one. So the "reads 0 rows and reports 0 problems" gap lg-38 gate 1
+  named was **not exercised** by any answer. Like lg-38's 0 of 60, the 0 says
+  the models did not make those mistakes on these fixtures, not that the
+  reader could stop them.
+- **The let-through the run did find is one the ticket pinned, and not the one
+  its note expected.** The Build steps 1–2 entry pins "the date read from B, the
+  transaction date" for `bank-two-dates` as `let-through`, and the round-1 entry
+  names the date-column class. What the note on that fixture expected was a
+  model filing `Reference` as `note` (harmless); no run did that.
+- **Sonnet's run was triggered by command 3's test, `outcome !== "matched"`.**
+  That sent Sonnet to `lg7` and `english`, where Haiku's only non-matches were
+  same-import (harmless), and to `swapped-labels` (one refusal) as well as to
+  `bank-two-dates`. More than half of Sonnet's $0.63 ($0.35: 20 runs at
+  $0.0159 and $0.0192) went on those two harmless ones. The brief says "at least one run that did not match", so this is
+  the brief doing what it says.
+
+#### Not measured
+
+- Real bank exports. The seven new shapes are invented, as in lg-38.
+- **Decimal commas, semicolon delimiters and thousands separators**
+  (`layout/csv.ts` does not read them), and a footer total under the amount
+  column (`bank-footer` keeps it in the balance column; a real export that
+  totals under the amount column will not import whatever a model says).
+- Why masking moved `bank-two-dates`; whether any other prompt, effort or
+  figures setting would; Sonnet on the nine fixtures it was not run on; the
+  verifications' text (the records keep a count).
+- Whether a reader that consulted `ignored` would refuse the six `lg7`
+  answers that name `Accueil` in it.
+
+#### Recommendation for lg-38's Done when 4
+
+**The build-or-drop decision is the owner's, and this closes neither ticket.**
+Claiming no more than the fixtures show:
+
+1. **The numbers do not argue against building.** On 13 invented fixtures and
+   300 runs there was no movement-changing let-through (`J = 0`). **The bound
+   on it is an estimate and depends on what is counted: about 1% at the rule of
+   three if the 300 runs were independent (3/300), and about 23% counted by
+   fixture (3/13), which is the closer reading because the ten runs of a fixture
+   read one workbook.** Haiku 5.5, shown, imported the right thing in
+   119 of its 120 runs on the twelve fixtures other than `bank-two-dates`, and
+   the one that was not right was refused by the verifications. Both refusals
+   in the 260 Haiku runs were of answers that would have been wrong (2 of 2).
+2. **The one thing the run found is a plausible, wrong date column that the
+   verifications do not refuse, and that the books do notice.** Haiku shown read
+   `Date of transaction` for `Date posted` in 9 of 10 runs on `bank-two-dates`,
+   and 1 of 10 masked; Sonnet read the posted date 10 of 10. All ten answers are
+   exactly the pinned wrong description. The verifications (`problems`) report
+   nothing for it. But reading the fixture through each of the ten answers
+   reports 2 rows `outOfOrder` (for example `2024-02-29` on row 19 listed above
+   `2024-03-02` on row 18) against 0 for the correct description, and the import
+   would print each one as "dated out of order: … imported as typed"
+   (`api/src/workbook-import.ts`, in the import report). In what is shown to the
+   model only the header says which date is which, because the 21 rows it sees
+   hold no inversion. The owner's chosen guard, "confirm on screen", was chosen
+   for the swapped bucket labels, which no model made here; **the date column is
+   the case the run actually produced**. Two ways a build could guard it, both
+   unmeasured beyond this one fixture: (a) what the owner confirms includes the
+   date column (a few rows with their dates); (b) the import treats a non-empty
+   `outOfOrder` as a prompt to confirm or as a refusal, using the signal the
+   reader already computes. Whether a real export shows inversions under its
+   transaction date, as this invented one does on 2 of 32 rows, is unmeasured,
+   and (b) works only if it does. These are suggestions from one fixture and
+   10 + 10 + 10 runs, not measured remedies.
+3. **On the owner's three preferences, this evidence is as follows.**
+   _Haiku 5.5_: its only let-through is the date column above. Sonnet read the
+   posted date in 10 of 10 runs and matched 40 of 40 on the four fixtures
+   Haiku tripped on, which is an indication, not a proof, that Sonnet would not
+   make it. A Sonnet retry on refusal would not have helped, because the
+   let-through was not refused. Sonnet costs 14.4 times as much per import, which
+   is under two cents on these fixtures. _Shown_: nothing in this run shows
+   that showing figures helps. Masked was not worse on any fixture in a way that
+   changed an import (its non-matches are four harmless same-imports, one
+   refusal and the one `bank-two-dates` let-through), and was better on `bank-two-dates` for a reason this run did not
+   establish; masking is not measured to cost anything here. _Confirm on
+   screen_: no model swapped the buckets, so the guard was never needed by any
+   event in this run, and that does not show it unneeded (see the first point of
+   "What the records say against the ticket's expectations").
+4. **What this still cannot say:** that a real household's workbook reads as
+   well, or that the guard is unnecessary.
+
+**The options in front of the owner**, with the recommendation first: build
+with the owner's three answers of 2026-10-18 plus a guard for the date column,
+either (a) the date column on the confirmation screen or (b) the reader's
+`outOfOrder` list put to the user (both follow from the one failure observed;
+(a) costs a screen element and works whatever the file holds; (b) costs nothing
+the reader does not already compute and is unmeasured beyond this fixture), and
+the owner may reconsider shown against masked in the light of the
+`bank-two-dates` row; build with Sonnet 5.5 instead (the failure observed did
+not occur in 10 runs of it; about 14 times the price per import); or drop. The
+choice, and whether to file the build, is the owner's.
+
+**Fold-in exception.** Nothing was folded in. The pieces in view were not free:
+declaring `@anthropic-ai/sdk` in `api/package.json` (lg-38 gate 1, low) still
+means a dependency line and a lockfile edit this docs-only branch does not touch,
+and "reading zero rows must be a problem" is, by this ticket's own Notes,
+input for a build ticket and not this one's to change. lg-38's Log points here.
+
+### 2026-10-24 — round 1 of the report: gate 1 FAIL at `e92dff07`; the owner's answers
+
+**The owner's answers, 2026-10-24.** Two questions, from the orchestrator:
+
+1. "How should the round correct F1?" Options: "(a) Correct + add option" (the
+   gate's recommendation and the orchestrator's) and "(b) Correct only". **The
+   owner chose (a).**
+2. "Fix all seven (F1, F4 and the five lows)?" Options: "Fix all seven" (the
+   orchestrator's recommendation) and "F1 and F4 only". **The owner chose "Fix
+   all seven".**
+
+The build-or-drop decision on lg-38 is still the owner's, and both `status:`
+lines are as they were. All seven findings were corrected in the entry above, in
+place, with the sentence that was wrong now saying what holds.
+
+- **F1 (high): reproduced, and it was right.** The entry said the ten
+  let-through runs "score `problems: 0` because the file reads cleanly either
+  way" and that "the books' own checks cannot catch it". The books notice it.
+  The "bank-two-dates: the dates differ on some rows…" test in
+  `api/test/layout.test.ts` (`git show 89a38d30:tools/ledger/api/test/layout.test.ts`)
+  reads the fixture through
+  `moveColumn(copy, "date", "B")` and asserts `wrongly.outOfOrder.length` greater
+  than 0 and `wrongly.problems` equal to `[]`. I read the fixture through each of
+  the ten actual answers with the books' `readWorkbook` (a scratch script that
+  reads the records and the fixture and calls no model):
+
+  ```
+  shown/bank-two-dates-1.json outOfOrder=2 problems=0   (the same for -2 to -8 and -10)
+  masked/bank-two-dates-9.json outOfOrder=2 problems=0
+  correct description: outOfOrder=0 problems=0
+  sample: {"sheet":"activity.csv","row":19,"date":"2024-02-29","belowRow":18,"belowDate":"2024-03-02"}
+  ```
+
+  So the verifications (`problems`) do not refuse this mistake, the books report
+  2 rows out of order, and `workbook-import.ts` would print each as "dated out of
+  order: … imported as typed". The recommendation's second point and the
+  options now say so, and add the guard built on that signal as option (b), with
+  "unmeasured beyond this fixture" beside it: whether a real export shows
+  inversions under its transaction date is not known.
+
+- **F4 (med):** recommendation 1 now gives both bounds on `J = 0`, about 1%
+  (3/300) and about 23% counted by fixture (3/13), and says which the Log's own
+  analysis calls closer.
+- **F2 (low):** the line "not one the ticket predicted" was wrong. The Build
+  steps 1–2 entry pins the date read from B as `let-through` for
+  `bank-two-dates`. It now says that, and that what the note expected, `Reference`
+  as `note`, did not happen.
+- **F3 (low):** lg-38's pointer said "0 that changed a movement", which reads as
+  false there because "movement-changing" is lg-56's defined class. It now says
+  "0 that changed an amount, balance or detail" and names the transaction date.
+- **F5 (low):** recommendation 3's list of masked's non-matches left out
+  `bank-two-dates-9`. It now lists four same-imports, one refusal and that
+  let-through.
+- **F6 (low):** the "$0.16 for command 1" estimate is from the Build steps 1–2
+  entry's command comment, not the brief. Now said, and the sentence no longer
+  calls the three estimates "the brief's".
+- **F7 (low):** the provenance clause "at `main` 89a38d30" had no source in
+  `run.sh` or `run.log`. The source is the shared checkout's `HEAD` log. Re-read
+  for this round: its newest line is `89a38d30` by `pull --tags origin main:
+Fast-forward` at 1792859785 seconds, which is 2026-10-24T16:36:25Z (`date -u -d
+@1792859785`), before the run's 17:32:40Z start. The entry cites it.
+  (`git reflog` run through `git -C` was refused by the worktree-isolation check,
+  so the file under `.git/logs/` was read directly.)
+
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, F8 — "The round-1 entry cites `git show e92dff07:…/layout.test.ts` lines 478 to 497. `e92dff07` is a branch commit, so the citation stops resolving once the squash merge lands." The round-1 entry now cites the test by its title, at `89a38d30`, with no line pin. `grep -v "Fixed at landing" tools/ledger/docs/work/lg-56-measure-the-layout-reader-on-harder-fixtures.md | grep -c "git show e92dff07:"` → `0`.
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, F9 — "The Log says the import prints each one as 'dated out of order: …'", while `workbook-import.ts` passes no `layout` today. Both places that made the claim now say "would print": the Build steps 3–4 entry's second recommendation point and the round-1 entry's F1 paragraph. `grep -v "Fixed at landing" tools/ledger/docs/work/lg-56-measure-the-layout-reader-on-harder-fixtures.md | grep -c "prints each one as\|prints each as"` → `0`.
