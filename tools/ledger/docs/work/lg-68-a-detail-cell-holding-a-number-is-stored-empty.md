@@ -56,8 +56,13 @@ through the same `textOf`.
    `42` is `42`, `-3.5` is `-3.5`, and a float's noise (`0.1 + 0.2`) is `0.3`.
    `007` is saved as 7 and reads `7`: the cell as the books see it carries no
    number format.
-3. Nothing else changes. A detail cell of another kind (a date) stays as it is
-   on `main`; see the Log.
+3. _Round 1, the owner's answers of 2026-10-24 (the Log):_ that reader,
+   `freeTextOf`, reads a date as its ISO day (`2022-01-05`), and it also reads
+   a movement's note, a period line's note and the person column. A number or
+   a date in the person column is then a name nobody holds, refused naming the
+   cell, where `main` filed the row joint. A period line's item stays on
+   `textOf`: its label is joined from every column left of the amounts, so a
+   number there would join it (`Épicerie 3`).
 
 ## Done when
 
@@ -76,6 +81,31 @@ through the same `textOf`.
    re-import of the workbook with the number in the cell, exit 1, and every
    table reads the same after as before.
 4. `npm test -- --project ledger` passes with no existing test changed.
+
+Round 1. The tests are in `books/test/workbook.test.ts` or
+`api/test/workbook-import.test.ts`, under _a free-text cell that holds a number
+or a date (lg-68, round 1)_, and each fails on the reader before round 1 except
+6, which pins a case round 0 already fixed:
+
+5. books, _a detail holding a date is read as its ISO day_: a date detail reads
+   `2022-01-05`, with no problem reported.
+6. books, _a detail holding a formula is read as its cached number_: `=1+1`,
+   cached as 2, reads `2`.
+7. books, _a movement's note holding a number or a date is read as its text_:
+   notes 42 and a date read `42` and `2022-01-05`, beside a text note and none.
+8. books, _a period line's note holding a number or a date is read as its
+   text_: a period line's notes 42 and a date read `42` and `2022-05-03`, its
+   items unchanged.
+9. books, _a number or a date in the person column is refused, naming the
+   cell_: `2022!E2 names "42"` and `2022!E3 names "2022-01-05"` are reported,
+   and only the third row is read as a movement.
+10. api, _a date detail, and a number or a date in either note, are stored as
+    their text_: through the `.xlsx` path with `--write`, a date detail is
+    stored as `2022-01-05`, a movement's notes as `42` and `2022-01-12`, and a
+    period line's note as `2022-05-03`.
+11. api, _a number in the person column refuses the import, naming the cell_:
+    exit 1, the report names the cell (`2022!E10 names "42"`), and nothing is
+    written.
 
 ## Log
 
@@ -134,3 +164,69 @@ Decision 6 (PR #625) depend on this landing; neither ticket is edited here.
   files, the three tests above among them; `npm run check` exited 0.
 - **Fold-in:** none. The other cells above are not specified anywhere, and lg-66
   is a build, not a small piece.
+
+**2026-10-24 — round 1: the owner's three answers (lg-68's builder).** The
+builder's report put three open decisions; the owner answered each on
+2026-10-24, and each answer took the builder's recommendation.
+
+- **A. Other cells that drop a number while the import exits 0** (the person
+  column, the movement's note, a period line's item and its note). Options:
+  "Round on lg-68 now", "File a ticket for them", "Leave them". Chosen: **"Round
+  on lg-68 now"**, as put to the owner: read the movement's note and the period
+  line's note through the detail's reader; refuse a number in the person
+  column, naming the cell; leave the period item alone, because reading it
+  would join numbers into labels (`Épicerie 3`).
+- **B. A date in a detail cell.** Options: "Its ISO day", "A reported
+  problem", "Leave it empty". Chosen: **"Its ISO day"**: stored as
+  `2022-01-05`.
+- **C. Books already written with the defect.** Options, as the report put
+  them: the owner confirms no `--write` has run on real books and nothing more
+  is needed, or, if one has, a correction ticket is filed. Answered **"No,
+  never written"**:
+  `import:ledger --write` has never run on the household's real books, so
+  nothing more is needed. That stands beside the measurement above: a
+  re-import onto written books is refused whole by `alreadyHeld` (exit 1,
+  nothing written), so it could not have repaired them, and does not need to.
+
+What round 1 built and measured:
+
+- **One reader.** `detailOf` is renamed `freeTextOf`, since it now reads more
+  than the detail: a number as its 15 significant digits, a date as its ISO
+  day (the `date` the `.xlsx` reader already gives, `yyyy-mm-dd` from the
+  cell's UTC day), anything else through `textOf`. **The two notes read a date
+  the same way as the detail**, the same reader and rule: a note is free text
+  stored verbatim as the detail is, and nothing measured says otherwise
+  (`kinds.mts`, below, and 1687 of 1687 tests).
+- **The person column reads through it too, so a date there is refused
+  with a number.** The owner's answer named a number; on `main` a date in that
+  column files the row joint the same way (`kinds.mts` before round 1: exit 0,
+  `"person_id":null`), and reading it through the same reader refuses it with
+  the same message. This is the one point the builder settled beyond the
+  answer, and it is in the report.
+- **Failing first**, commit `67296d34`: against the round-0 reader (`books`
+  rebuilt, `freeTextOf` absent from `dist`), 6 of the 7 new tests failed
+  (`expected [ 'Versement', '' ] to deeply equal [ 'Versement', '2022-01-05' ]`,
+  `expected [ null, 'marché', null, null ] …`,
+  `expected [ [ 'Épicerie', null ], …(1) ] …`, an empty problem list for the
+  person column, and both api tests); the formula
+  test passed, as round 0 already read a formula's cached number.
+- **`kinds.mts`** (render, exceljs, `readSheets`, `readWorkbook`, `--write`),
+  before round 1 and after, on each cell it changes:
+
+  | cell                          | before                   | after                                 |
+  | ----------------------------- | ------------------------ | ------------------------------------- |
+  | detail `D`, a date            | exit 0, `description ""` | exit 0, `description "2022-01-05"`    |
+  | note `H`, 42                  | exit 0, `note null`      | exit 0, `note "42"`                   |
+  | note `H`, a date              | exit 0, `note null`      | exit 0, `note "2022-01-05"`           |
+  | person `E`, 42                | exit 0, `person_id null` | exit 1, `2022!E10 names "42"`         |
+  | person `E`, a date            | exit 0, `person_id null` | exit 1, `2022!E10 names "2022-01-05"` |
+  | period line note `E8`, 42     | exit 0, `note null`      | exit 0, `note "42"`                   |
+  | period line note `E8`, a date | exit 0, `note null`      | exit 0, `note "2022-05-03"`           |
+  | period line item `A8`, 42     | exit 0, `category null`  | unchanged                             |
+
+  Every other case (the control, a number, `007` and a formula as the detail,
+  a boolean detail, a number as the bucket, a number beside the item in `B8`)
+  printed the same before and after.
+
+- **After round 1**, with `books` rebuilt: `npm test -- --project ledger`, 1687
+  of 1687 passed in 81 files.
