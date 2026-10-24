@@ -318,6 +318,19 @@ function textOf(cell: Cell | null): string | null {
   return text === "" ? null : text;
 }
 
+/**
+ * A movement's detail, which the household types freely: `42`, or `007`,
+ * which Excel saves as the number 7, is a detail, not an empty one (lg-68).
+ * A number reads as the 15 significant digits Excel keeps of what was typed,
+ * so a float's noise (`0.30000000000000004`) never reaches the books. Kept
+ * apart from `textOf`, which also reads the cells matched against words (a
+ * bucket, a name, a sheet's labels), where a number's text would be read as one.
+ */
+function detailOf(cell: Cell | null): string | null {
+  if (cell?.value?.kind === "number") return String(Number(cell.value.number.toPrecision(15)));
+  return textOf(cell);
+}
+
 function numberOf(cell: Cell | null): number | null {
   return cell?.value?.kind === "number" ? cell.value.number : null;
 }
@@ -674,7 +687,7 @@ function readYear(
       amountCents: centsOf(read, plan),
       balanceCents,
       detail:
-        (columns.detail === undefined ? null : textOf(cellAt(sheet, row, columns.detail))) ?? "",
+        (columns.detail === undefined ? null : detailOf(cellAt(sheet, row, columns.detail))) ?? "",
       note: columns.note === undefined ? null : textOf(cellAt(sheet, row, columns.note)),
     });
   }
