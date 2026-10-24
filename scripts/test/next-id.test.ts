@@ -1102,6 +1102,16 @@ test("a pull request stacked on another's head reports no clash for the parent's
     },
   ]);
   const sources = collect("repo", { run, cwd: peer, rev: "origin/trunk" });
+  const result = claims(sources, "repo");
+  // The assertion that goes red without the check comes first, so the failure
+  // names the clash and not a label.
+  expect(clashes(result)).toEqual([]);
+  expect(rows(result)).toEqual([
+    "at origin/trunk repo-5",
+    "PR#623 repo-66",
+    "PR#625 (stacked on PR#623) repo-67",
+  ]);
+  expect(nextFree(result)).toBe(68);
   expect(sources.map((source) => source.source).toSorted()).toEqual([
     "PR#623",
     "PR#625 (stacked on PR#623)",
@@ -1109,14 +1119,6 @@ test("a pull request stacked on another's head reports no clash for the parent's
     // The trunk's own head, which claims nothing: its diff against itself is empty.
     "branch/trunk",
   ]);
-  const result = claims(sources, "repo");
-  expect(rows(result)).toEqual([
-    "at origin/trunk repo-5",
-    "PR#623 repo-66",
-    "PR#625 (stacked on PR#623) repo-67",
-  ]);
-  expect(clashes(result)).toEqual([]);
-  expect(nextFree(result)).toBe(68);
 });
 
 /**
