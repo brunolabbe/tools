@@ -163,7 +163,9 @@ the one rule below.
   time; while `lg-64` is `ready` it is the named example, on stdout, since `repo-109`
   is `done`.
 - `npm run -s status -- --show lg-64` still prints `unblocked` on the builder's head,
-  with `lg-64` still `ready`, unchanged by the fix.
+  with `lg-64` still `ready`, unchanged by the fix. If `lg-64` is `done` by build time,
+  the `--show` fixture reproduction in the Log stands in for this live reading, as the
+  plain-status line's fixture does for its own.
 - `npm run -s status -- --json > <scratch>/status.json; echo $?` prints `0`.
 - `npm run check` exits `0`.
 
@@ -325,6 +327,25 @@ repo-114` outside `docs/work` printed nothing, and no branch or open pull reques
     $ npx oxfmt --check docs/work/repo-114-*.md
     All matched files use the correct format.
     ```
-  - **Not covered by the fixture.** The fixture reproduction above shows `--tool
-planner` and `--ready`, and no `--show`. The `--show` line has no fixture stand-in:
-    if lg-64 is `done` by build time, nothing in this ticket reads that line live.
+  - **Not covered by the fixture.** The fixture reproduction above shows `--tool planner` and `--ready`, and no `--show`. The `--show` line therefore had no fixture stand-in when this entry was written. Round 2 below closes that gap.
+  - **Round 2, the `--show` fixture (2026-10-24).** Question, put to the owner by the coordinator on 2026-10-24: "the reworded '--show lg-64 still prints unblocked' line has no fixture to fall back on, so once lg-64 lands nothing can read it. How should that gap be closed?" Options: (1) "Add a --show fixture": one throwaway-tree fixture run of `--show` in this Log, so the "live pair + fixture" answer covers all three lines. (2) "Read any eligible ticket": reword the line like the `--ready` one. (3) "Leave it". Choice: option (1), "Add a --show fixture", chosen by the owner on 2026-10-24. It was the builder's recommendation and the orchestrator's.
+  - **Fixture.** A throwaway tree in the builder's scratch directory, `show-fixture`, built the way the fixture reproduction above is built: `tools/planner/docs/work/pl-2-slug.md`, `status: ready`, `depends_on: [repo-9]`, and `docs/work/repo-9-slug.md`, `status: done`. It is planner-to-repo, not ledger-to-repo as lg-64 is, but the `--show` reading uses the same whole-graph code path. `scripts/status.mjs` is identical at `8a6dcf9a` and at this head: `git diff --stat 8a6dcf9a HEAD -- scripts/status.mjs` prints nothing.
+    ```
+    $ npm run -s status -- --root <scratch>/repo-114/build/show-fixture --show pl-2
+    pl-2  the pl-2 thing
+
+      tool        planner
+      kind        chore
+      status      ready
+      milestone   —
+      depends on  repo-9
+      note        —
+      difficulty  standard
+      awaiting    —
+      file        tools/planner/docs/work/pl-2-slug.md
+
+      unblocked
+    exit 0
+    ```
+  - **Control.** The same tree with `repo-9` set to `status: ready` (`show-fixture-control`) gives `  blocked by  repo-9 (ready)` in place of `  unblocked` for the same command, so the line tells the two readings apart.
+  - **Live state at this head.** `lg-64` is still `status: ready` on this branch, and PR #604 is open for it. The `--show` line is read live until lg-64 is `done`, then the fixture above stands in.
