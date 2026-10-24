@@ -1099,3 +1099,52 @@ describe("the workbook against pasted rows that list a day in another order (lg-
     expect(refused.out).not.toContain("one for one");
   });
 });
+
+describe("a detail cell that holds a number (lg-68)", () => {
+  /** The history with 2022's first row's detail cell holding `detail`. */
+  function withDetail(detail: string | number): Fixture {
+    const fixture = history();
+    const row = fixture.years[0]?.rows[0];
+    if (row === undefined) throw new Error("the fixture has no 2022 row");
+    row.detail = detail;
+    return fixture;
+  }
+
+  function stored(): unknown {
+    const db = books();
+    const rows = db
+      .prepare("SELECT description FROM statement_rows WHERE date = '2022-01-05'")
+      .all();
+    db.close();
+    return rows;
+  }
+
+  test("is stored as the number's text, not as an empty description", async () => {
+    const ran = await run(await workbook(withDetail(42)), "--as", "alex", "--write");
+
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toMatch(/imported +17\n/u);
+    expect(stored()).toEqual([{ description: "42" }]);
+  });
+
+  test("a re-import onto books that already hold the import is refused, whatever the detail", async () => {
+    // An empty detail stores what the defect stored for a number: "".
+    expect((await run(await workbook(withDetail("")), "--as", "alex", "--write")).code).toBe(0);
+    const db = books();
+    db.pragma("wal_checkpoint(TRUNCATE)");
+    const before = dump(db);
+    db.close();
+
+    const again = await run(await workbook(withDetail(42)), "--as", "alex", "--write");
+
+    expect(again.code).toBe(1);
+    expect(again.out).toContain(
+      "The books already hold 2 closed periods. The workbook's are their first record, so it is imported into books that hold none.",
+    );
+    expect(again.out).toContain("Refused: nothing was written.");
+    const after = books();
+    expect(dump(after)).toEqual(before);
+    after.close();
+    expect(stored()).toEqual([{ description: "" }]);
+  });
+});

@@ -800,3 +800,38 @@ describe("reading the workbook through a layout", () => {
     ]);
   });
 });
+
+describe("a detail cell that holds a number (lg-68)", () => {
+  /** One movement per detail, listed newest first as the household's sheets are. */
+  function details(...cells: Input[]): Sheet {
+    const rows: Input[][] = cells.map((detail, index) => [
+      null,
+      d(`2022-03-${String(cells.length - index).padStart(2, "0")}`),
+      "Dép. Courantes",
+      detail,
+      "Alex",
+      (cells.length - index) * 10,
+      10,
+    ]);
+    return sheet("2022", [
+      [null, "Date", "Compte", "Détail", "Personne", "Solde", "Montant"],
+      ...rows,
+    ]);
+  }
+
+  test("is read as the number's text, never as an empty detail", () => {
+    // `007` typed in Excel is saved as the number 7: the cell keeps no zeros.
+    const reading = readWorkbook([details(42, 7, -3.5, 0.1 + 0.2, "Versement"), ACCUEIL], {
+      people,
+    });
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.movements.map((movement) => movement.detail)).toEqual([
+      "Versement",
+      "0.3",
+      "-3.5",
+      "7",
+      "42",
+    ]);
+  });
+});

@@ -28,7 +28,8 @@ export interface YearRow {
   /** As written in the cell, `yyyy-mm-dd`: a typo'd year is written wrong here. */
   written: string;
   bucket: "Hypothèque" | "Dép. Courantes";
-  detail: string;
+  /** A number is written as a number cell, as Excel saves `42` or `007` typed in it (lg-68). */
+  detail: string | number;
   person?: string;
   /** In dollars; absent on a placeholder. */
   amount?: number;
