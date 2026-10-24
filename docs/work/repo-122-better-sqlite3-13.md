@@ -24,7 +24,7 @@ afterthought.
 
 1. Read the 13.0.0 release notes; note any change to supported Node versions,
    prebuilt platforms, or the API this tree calls (`grep -rn better-sqlite3
-tools/*/api/src`).
+   tools/*/api/src`).
 2. Bump both packages in the three `package.json` files together.
 3. `npm test` for all three tools, then build each tool's image (its
    `.github/workflows/<tool>.yml` container job is the reference) — the

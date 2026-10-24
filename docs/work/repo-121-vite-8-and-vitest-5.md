@@ -39,7 +39,7 @@ vite 8's `Plugin`). That update added `overrides.vitest.vite: ^7.3.7` to the roo
 ## Done when
 
 - One vite (8.x) in `package-lock.json`, no `vitest` override, and `npm run
-check`, `npm test`, `npm run build` and the three e2e suites pass.
+  check`, `npm test`, `npm run build` and the three e2e suites pass.
 
 ## Log
 
