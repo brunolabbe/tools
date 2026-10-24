@@ -3,7 +3,7 @@ id: repo-114
 tool: repo
 title: status --tool withholds a cross-tool dependency that is done
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -26,7 +26,7 @@ unchanged. The unscoped `--ready` listing is not: at `93bfa1f1` it had eight row
 no `lg-64` yet), where the one below is `aaccab20`'s. The live case at `aaccab20`
 was pl-59, which depends on `repo-108`. At `8a6dcf9a` (2026-10-24) the planner pair
 no longer reproduces: pl-59 is `done` (PR #591), so it drops out of `--ready` and
-the block below is history. The pair that reproduces now is lg-64 and `repo-109`,
+the block below is history. The pair that reproduced then is lg-64 and `repo-109`,
 shown after the second block:
 
 ```
@@ -93,7 +93,7 @@ the one rule below.
 4. **The regression tests go at the end of `scripts/test/status.test.ts`**, using
    `repoWith` from the top of the file, so no test line moves. The fixture is a
    planner ticket with `depends_on: [repo-9]` and a `repo-9` ticket with
-   `status: done`, in a tree of its own. Six cases, the first three on that fixture:
+   `status: done`, in a tree of its own. Eight cases, the first three on that fixture:
    - `run(["--tool", "planner", "--ready"], root)` lists the planner ticket on
      stdout and writes nothing about it to stderr. On `origin/main` it prints
      `nothing is ready and unblocked` and withholds the ticket, so this test fails
@@ -122,6 +122,17 @@ the one rule below.
      still withholds the planner ticket under `--tool planner --ready`. This pins
      Build 3's cross-tool `needs-decision` clause, which no existing test reaches (a
      dangling id is pinned by `WITHHELD_REPO9`).
+   - The seventh case, on the first fixture plus a `ready` planner ticket with
+     `depends_on: [repo-10]` (`repo-10` `ready`) and a `needs-decision` planner ticket:
+     unscoped `run(["--ready"], root)` lists the first ticket on stdout and names the
+     other two as withheld on stderr. The unscoped view was never wrong; this pins it.
+   - The eighth case, on the first fixture: `run(["--show", "pl-2"], root)` prints
+     `unblocked`, and with `repo-9` at `status: ready` prints
+     `blocked by  repo-9 (ready)`. `--show` already reads the whole graph; this pins it.
+
+   The seventh and eighth cases replace the live-board readings (owner's answer,
+   2026-10-24, in the Log): the proof is a fixture and names no current ticket.
+
 5. Do not edit `CLAUDE.md`, `docs/01-TICKETS.md` or any ticket's frontmatter.
 6. **The `(waits on …)` label lists only dependencies that are not `done`.** The
    default view's label is `ticket.depends_on.join(", ")` (`scripts/status.mjs:1005`),
@@ -139,11 +150,11 @@ the one rule below.
 - `scripts/test/status.test.ts`, the second case of Build 4: the default view, under
   `--tool planner` and with no flag, marks that ticket `•` and shows no `(waits on`
   label. Fails before the fix.
-- Plain `npm run -s status`, read on the builder's head with `lg-64` still `ready`,
-  marks it with `•` and no `(waits on` label. At the base it prints
-  `· lg-64 … (waits on repo-109)`, with `repo-109` `done`, and no flag at all. If
-  `lg-64` is `done` by build time, the fixture reproduction in the Log stands in for
-  this live reading.
+- `scripts/test/status.test.ts`, the no-flag call of the second case of Build 4:
+  `run([], root)`, plain status with no `--tool`, marks the planner ticket `•` with no
+  `(waits on` label, its dependency being a `done` repo ticket. Before the fix it
+  prints `· pl-2 … (waits on repo-9)` with `repo-9` `done`, and no flag at all. This
+  line names no live ticket; the fixture is the proof (owner's answer, 2026-10-24).
 - `scripts/test/status.test.ts`, the third case of Build 4: with the dependency
   `ready`, the planner ticket is still withheld with `waits on repo-9`. Passes before
   and after the fix.
@@ -157,17 +168,43 @@ the one rule below.
 - `scripts/test/status.test.ts`, the sixth case of Build 4: with the dependency at
   `needs-decision`, the planner ticket is still withheld under `--tool planner` with
   `--ready`. Passes before and after the fix.
-- `npm run -s status -- --ready` still lists on stdout each `ready` ticket whose
-  dependencies are all `done`, and its stderr still names `lg-65` and `repo-98` as
-  withheld. Read on the builder's head, off whichever tickets are `ready` at build
-  time; while `lg-64` is `ready` it is the named example, on stdout, since `repo-109`
-  is `done`.
-- `npm run -s status -- --show lg-64` still prints `unblocked` on the builder's head,
-  with `lg-64` still `ready`, unchanged by the fix. If `lg-64` is `done` by build time,
-  the `--show` fixture reproduction in the Log stands in for this live reading, as the
-  plain-status line's fixture does for its own.
+- `scripts/test/status.test.ts`, the seventh case of Build 4: unscoped
+  `run(["--ready"], root)` still lists on stdout each `ready` ticket whose
+  dependencies are all `done`, and its stderr still names, as withheld, a `ready`
+  ticket with an open dependency and a `needs-decision` ticket. Passes before and
+  after the fix.
+- `scripts/test/status.test.ts`, the eighth case of Build 4: `run(["--show", "pl-2"],
+root)` on the first fixture still prints `unblocked`, and with `repo-9` at
+  `status: ready` prints `blocked by  repo-9 (ready)`. Passes before and after the
+  fix; `--show` is unchanged by it.
 - `npm run -s status -- --json > <scratch>/status.json; echo $?` prints `0`.
 - `npm run check` exits `0`.
+
+## Review
+
+**Gate: PASS** — 2026-10-24 · `5ed9ad6e..a33ab138` · Opus 5.5, depth standard
+
+| Done when                                                                                     | Proof                                                                                                                                                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1st case: `--tool planner --ready` lists the planner ticket, no stderr line; fails before     | `scripts/test/status.test.ts` › "repo-114: --tool planner --ready lists a ticket whose dependency is a done repo ticket" ✓ — `stdout` toBe the one row, `stderr` toBe `""`. Red on the base's `status.mjs` (gate run, 4 of 8 `repo-114` tests fail); `status.mjs` is byte-identical at `aaccab20` and the base |
+| 2nd case: default view, `--tool planner` and no flag, `•` and no `(waits on`; fails before    | same file › "repo-114: the default view marks that ticket startable, with and without --tool" ✓ — `PL2_ROW` match (empty on no match) then `toMatch(/^ +• pl-2 /)`, `not.toContain("(waits on")`, for both arg sets. Red on the base source                                                                    |
+| No-flag call of the 2nd case: `run([], root)` marks `•`; before, `· pl-2 … (waits on repo-9)` | same test, its `[]` iteration ✓. The "before" text verified by the gate's CLI probe on the base: `· pl-2   the pl-2 thing (waits on repo-9)`                                                                                                                                                                   |
+| 3rd case: dependency `ready` still withholds with `waits on repo-9`; passes before and after  | same file › "repo-114: a dependency that is still ready keeps the ticket withheld" ✓ — exact stdout and stderr; green on base and head                                                                                                                                                                         |
+| 4th case: label `(waits on <open id>)` only; fails before                                     | same file › "repo-114: the waits-on label names only the dependencies that are not done" ✓ — `toContain("(waits on repo-10)")`, `not.toContain("repo-9")`. Red on base; red under mutation (b), the label on `doneIds(selected)`                                                                               |
+| 5th case: `--ready` stderr `waits on repo-10`; fails before and on a partial fix              | same file › "repo-114: the --ready reason names only the open dependency" ✓ — exact stderr. Red on base; red under mutation (c), `withheldFromReady` on `doneIds(tickets)`                                                                                                                                     |
+| 6th case: `needs-decision` dependency still withholds under `--tool planner --ready`          | same file › "repo-114: a needs-decision dependency in another tool still withholds" ✓ — exact stdout and stderr; green on base and head                                                                                                                                                                        |
+| 7th case: unscoped `--ready` lists the startable ticket, names the other two withheld         | same file › "repo-114: unscoped --ready lists the startable ticket and names the other two as withheld" ✓; green on base and head                                                                                                                                                                              |
+| 8th case: `--show pl-2` prints `unblocked`, and `blocked by  repo-9 (ready)` when ready       | same file › "repo-114: --show reads the whole graph, unblocked with the dependency done and blocked when ready" ✓; green on base and head                                                                                                                                                                      |
+| `npm run -s status -- --json > <scratch>/status.json; echo $?` prints `0`                     | **verified** — run at the head: `exit=0`                                                                                                                                                                                                                                                                       |
+| `npm run check` exits `0`                                                                     | **verified** — run at the head after farm and build: exit `0`                                                                                                                                                                                                                                                  |
+
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · the Log's build entry says `npm run -s status -- --ready --tool ledger` printed `pl-62` and `repo-98` on stderr. That cannot happen: `withheldFromReady(selected, all)` maps only `selected`, the ledger's rows, and `pl-62` is a planner ticket and `repo-98` a repo ticket. Both were `needs-decision` at the builder's base `aa834403`, so the reading matches unscoped `--ready`. At the head, `--ready --tool ledger` prints `nothing is ready and unblocked`, exit 0, and nothing on stderr. The falsehood is in the safe direction: a misattributed reading in a "for the record" note.
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · the Why still says "The pair that reproduces now is lg-64 and `repo-109`", and `lg-64` is `status: done` at the head. The Log names this and leaves it as history. The sentence's "now" makes it read as current, so it is false in the safe direction: a reader who checks finds nothing. The fix is to change "now" to "then", or to "at `8a6dcf9a`".
+- **dropped** · `readyTickets` and `withheldFromReady` default `graph` to `tickets`, which would bring the defect back for a future caller that passes a scoped list. Dropped because every caller was enumerated and none is scoped. The three `renderView` sites pass `all`. The five test call sites pass a whole `readTickets(root)`. `--show` goes through `describeTicket(all, …)`. `--json`, `--markdown` and `--prs` compute no readiness. No other script imports either function: `review-record.mjs` imports `parseFrontmatter` and `preflight.mjs` imports `hasGateRecord`. The JSDoc states the default's condition.
+- **CI** · on `a33ab138`, `test (ubuntu-latest)` and `test (windows-latest, informational)` were still pending when read. `check`, `changes`, `CodeQL`, `codeql` and `dependency-review` had passed. Every acceptance line is proven or verified locally, so none waits on a leg.
+- **findings** · the hunt returned 3; 2 carried, 1 dropped.
+- Invariants: no shell, since nothing spawns. No `console`, the CLI writes through `process.stdout`/`stderr` as before. The new tests are appended at the end of `status.test.ts` with 0 deleted lines, and the file is already registered. The PR title passes `commit-message.mjs` (exit 0), and no path is under `tools/`. Skipped as untouched by a `scripts/` change: tool imports, `AppError`, redaction, SSRF, progress, contract, Dockerfile, routes.
+- NFR: security n/a (no input surface added) · performance ✓ (one extra `Set` per view, O(n)) · reliability ✓ (`--json` exit code unchanged: 1 with a dangling id, scoped and unscoped, 0 without, on the base and the head) · maintainability: the two lows above.
 
 ## Log
 
@@ -349,3 +386,22 @@ repo-114` outside `docs/work` printed nothing, and no branch or open pull reques
     ```
   - **Control.** The same tree with `repo-9` set to `status: ready` (`show-fixture-control`) gives `  blocked by  repo-9 (ready)` in place of `  unblocked` for the same command, so the line tells the two readings apart.
   - **Live state at this head.** `lg-64` is still `status: ready` on this branch, and PR #604 is open for it. The `--show` line is read live until lg-64 is `done`, then the fixture above stands in.
+- 2026-10-24 — Owner's answer at batch intake, recorded before any source change. The status is `ready` already and stays so.
+  - **Question.** "repo-114's Done-when lines name live examples that are now done (the stderr line expects lg-65 and repo-98 withheld; the 'while lg-64 is ready' readings). No ready ticket on main has a cross-tool done dependency. How should those lines read before dispatch?"
+  - **Options.** (1) "Fixture-only (Recommended)": reword the live-reading lines so the fixture reproduction is the proof, naming no current ticket; this is the second rewording after #605 and fixture-only stops a third. (2) "Live names at build time": reword to whatever tickets are live when built; goes stale again. (3) "Leave as written": the gate grades those lines unmet or by the ticket's fallback.
+  - **Choice.** (1) Fixture-only, chosen by the owner on 2026-10-24. It was the orchestrator's recommendation; nothing was overridden.
+  - **Rewording.** The plain-status, `--ready` and `--show` Done-when lines are now fixture tests in `scripts/test/status.test.ts` and name no live ticket: the plain-status line is the no-flag half of Build 4's second case, and the `--ready` and `--show` lines are new seventh and eighth cases (Build 4 now says eight). The earlier 2026-10-24 entry above, with its live-pair rewording and its lg-64 transcripts, stays as history.
+- 2026-10-24 — Built on `origin/main` at `aa834403`, branch `repo-114-status-tool-cross-tool-done`. `scripts/status.mjs` only: `readyTickets(tickets, graph = tickets)` and `withheldFromReady(tickets, graph = tickets)` take the done set from `graph` through a new `doneIds` helper; `renderView` passes `all` at the `--ready` site, the withheld site and the default view's `unblocked` set, and the default view's `(waits on …)` label filters on `doneIds(all)`.
+  - **Tests.** Eight cases at the end of `scripts/test/status.test.ts`, all named `repo-114: …`. On the base source (the base file checked out over `scripts/status.mjs`, committed as a baseline and restored) four fail and four pass: the first, second, fourth and fifth cases of Build 4 fail (`--tool planner --ready` prints `nothing is ready and unblocked`; the default view prints `waits on repo-9`; the label and the `--ready` reason name `repo-9, repo-10`), and the third, sixth, seventh and eighth pass before and after. `npx vitest run scripts/test/status.test.ts` on the fix: 147 of 147 (139 before; 8 new).
+  - **No-flag half of the second case, measured on its own.** Fixture `pl-2` depends on `repo-9` (done), run as `node scripts/status.mjs --root <fixture>` with the base file and with the fix: base prints `  · pl-2   the pl-2 thing (waits on repo-9)` for both the no-flag and the `--tool planner` call; the fix prints `  • pl-2   the pl-2 thing` for both.
+  - **No live readings.** Per the owner's answer above no Done-when line reads the live board. For the record, `npm run -s status -- --json > <scratch>/status.json` exits 0, and `npm run -s status -- --ready --tool ledger` prints `nothing is ready and unblocked` with nothing on stderr, because it maps only the ledger's rows and `pl-62` and `repo-98` are not ledger tickets (corrected at landing, see the entry below). `npm run check` exits 0.
+  - **Not folded in.** The Why paragraph still says "the pair that reproduces now is lg-64 and `repo-109`", which is no longer true now lg-64 is done. It is a history block the dispatch said stays as history, and a rewrite would change the ticket's account of the filing, not fix a defect, so it was left.
+  - **Partial-fix mutation, run at the gate's request (2026-10-24).** Done-when 6 says the `--ready` reason test fails "on a fix that leaves `withheldFromReady`'s message on its argument". Mutation, uncommitted: in `withheldFromReady`, `const done = doneIds(graph)` changed to `const done = doneIds(tickets)`, with `readyTickets(tickets, graph)` and `renderView`'s `all` arguments left in place. `npx vitest run scripts/test/status.test.ts -t "repo-114: the --ready reason names only the open dependency"` failed, 1 failed of 147 (146 skipped):
+    ```
+    - tools/planner/docs/work/pl-2-slug.md: withheld from --ready — waits on repo-10
+    + tools/planner/docs/work/pl-2-slug.md: withheld from --ready — waits on repo-9, repo-10
+    ```
+    The test discriminates the partial from the full fix, so it was not tightened. After restoring the file, the same command passes and `git diff HEAD -- scripts/status.mjs` is empty.
+- 2026-10-24 — Fixed at landing by owner choice (chosen 2026-10-24 from "Apply both at landing"): gate 1, two lows, both `nfr:maintainability` and neither load-bearing for a `Done when` line.
+  - **Misattributed reading** — "the Log's build entry says `npm run -s status -- --ready --tool ledger` printed `pl-62` and `repo-98` on stderr. That cannot happen: `withheldFromReady(selected, all)` maps only `selected`". The "No live readings" line of the build entry now says nothing is on stderr and why. Both readings run at the head `a33ab138`: `npm run -s status -- --ready --tool ledger` → stdout `nothing is ready and unblocked`, stderr empty, exit 0; `npm run -s status -- --ready` → exit 0, stdout five rows (`dl-130`, `pl-61`, `pl-62`, `repo-114`, `repo-116`), stderr one line naming `docs/work/repo-98-open-the-ledgers-access-policy.md` as withheld, status `needs-decision`. Neither matches the old claim as written: at the head `pl-62` is `status: ready` and is on stdout, not stderr. That `pl-62` was `needs-decision` at the builder's base `aa834403` is the gate's reading of the base and was not re-run here.
+  - **Stale "now" in the Why** — "The pair that reproduces now is lg-64 and `repo-109`". Now reads "The pair that reproduced then is lg-64 and `repo-109`", so the sentence no longer claims to be current. `awk '/^## Log/{exit} {print}' docs/work/repo-114-status-tool-withholds-a-cross-tool-dependency-that-is-done.md | grep -c "reproduces now"` → 0, and `grep -c "reproduced then"` over the same range → 1.
