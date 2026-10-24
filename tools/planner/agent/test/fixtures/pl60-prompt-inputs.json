@@ -1,0 +1,48 @@
+{
+  "note": "pl-60 Done when 2: the fixed inputs the three corridor readers' prompts are built from. The brief is contract/test/fixtures/road-trip.json's. Tags are entries, since a Find's tags are a Map.",
+  "capacity": { "dayCount": 9, "activityMinutes": 300, "driveMinutes": 300, "activityItems": null },
+  "finds": [
+    {
+      "name": "Belvédère du Cap-Bon-Ami",
+      "coordinates": { "latitude": 48.7942, "longitude": -64.2142 },
+      "kind": "viewpoint",
+      "tags": [
+        ["tourism", "viewpoint"],
+        ["name", "Belvédère du Cap-Bon-Ami"]
+      ],
+      "sources": [
+        {
+          "url": "https://www.openstreetmap.org/node/101",
+          "title": "OpenStreetMap",
+          "fetchedAt": "2027-01-01T00:00:00.000Z"
+        }
+      ],
+      "notability": [],
+      "detourMinutes": 12
+    },
+    {
+      "name": "Chute du Ruisseau Castor",
+      "coordinates": { "latitude": 48.9, "longitude": -64.45 },
+      "kind": "waterfall",
+      "tags": [
+        ["natural", "waterfall"],
+        ["name", "Chute du Ruisseau Castor"]
+      ],
+      "sources": [
+        {
+          "url": "https://www.openstreetmap.org/node/102",
+          "title": "OpenStreetMap",
+          "fetchedAt": "2027-01-01T00:00:00.000Z"
+        }
+      ],
+      "notability": [
+        {
+          "url": "https://fr.wikipedia.org/wiki/Chute_du_Ruisseau_Castor",
+          "title": "Chute du Ruisseau Castor",
+          "fetchedAt": "2027-01-01T00:00:00.000Z"
+        }
+      ],
+      "detourMinutes": null
+    }
+  ]
+}
