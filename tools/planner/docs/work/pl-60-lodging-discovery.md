@@ -1185,6 +1185,10 @@ forillon|gaspé` (43, plus 4 under `gaspé (cap-aux-os)`) is `named-premises`,
 des-rosiers|forillon national park`. `central market (centralna tržnica)|ljubljana`
     is `named-premises`, because it carries the established Slovene name; pl-58 took the
     bare `central market|ljubljana` as a kind.
+    `manoir de percé|percé` (36 lodging mentions, no edge tag) is `named-premises`
+    too, though it is a locality plus a category noun, the shape of the rubric's
+    `locality-plus-category` case that the three campgrounds were moved under; a
+    reader may reverse it. (Added at landing, below.)
 - **The re-measure** (`PLANNER_LIVE_RUN=1 node --import tsx
 tools/planner/api/test/live/invention.ts --after pl60-2026-10-24`, which makes no
   request). The after population is the new run's 110 records alone: 700 places and
@@ -1209,6 +1213,12 @@ tools/planner/api/test/live/invention.ts --after pl60-2026-10-24`, which makes n
       `lodging` is 334 of 443 (75.4%).
     - With the Auberge internationale's two keys moved to `kind-of-place`, it is 254 of
       443 (57.3%).
+    - With `manoir de percé|percé` moved to `kind-of-place` alone, it is 265 of 443
+      (59.8%).
+    - With `manoir de percé|percé` and the Auberge internationale's two keys all moved
+      to `kind-of-place`, it is 218 of 443 (49.2%).
+    - **The band is 49.2% to 75.4%**, not 57.3% to 75.4%. pl-58's 33 of 418 (7.9%) is
+      far below either end.
   - Not claimed: that this is caused by more than the finds and the role together. The
     finds come from one checked-in capture, so sets B to D see the same 20 lodging
     finds every time.
@@ -1294,7 +1304,7 @@ pl-57 and pl-58, at `8741d2de` (the pre-registration `89fdedc3` with `main` merg
 
 **Firewall.** The owner opened it on 2026-10-24 and gave no time. **The orchestrator first
 observed it open at 14:34Z** (`curl https://wiki.openstreetmap.org` → 200, after an earlier
-timeout). **Closed: not observed by the builder**; the owner closes it after the report.
+timeout). **Left open after the check, by the owner's choice** (2026-10-24).
 WebSearch runs on the vendor's side; both WebFetch calls returned a page.
 
 **Spend against the budget: 16 queries and 2 page fetches**, against a cap of 90 and 20,
@@ -1436,3 +1446,34 @@ what `lodging` names cannot be shown to have fallen: 2 of 9, 22.2% (6.3–54.7),
 premises it was meant to raise went from 7.9% to 67.9% of mentions. 2 events in 9 objects cannot carry (b)'s
 premise yet. The `food` ticket's own re-measure doubles that sample on the same rubric.
 (b) is the honest alternative if the owner reads both misses as the start of a pattern.
+
+**2026-10-24 — The owner's answers to the web check's open decision and the firewall
+(relayed by the orchestrator to the lander, the same day).**
+
+1. **The open decision on `food` (above).** Options: (a) call the route working and
+   file `food`'s discovery ticket now; (b) first file an existence check scoped to
+   map-sourced premises; (c) file nothing now, land pl-60 on the measurement.
+   **Chosen: (a)**, the web-check agent's recommendation. The filing is dispatched
+   separately as **pl-62**; this branch does not file it, and adds no roadmap row for
+   it.
+2. **The firewall.** The owner opened it for the web check and gave no time; the
+   orchestrator first observed it open at 14:34Z. **Chosen: leave it open** after the
+   check. The Firewall paragraph of the web check's entry says so in place of "Closed:
+   not observed by the builder".
+
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, low — "The Log's 'judgement
+  cases a reader may reverse' omits `manoir de percé|percé`, and its sensitivity band
+  understates the downside. The key carries 36 of `lodging`'s 301 named mentions with
+  no edge tag; it is a locality plus a category noun, the shape of the rubric's
+  `locality-plus-category` case that the Log moved the three campgrounds under.
+  Reversed alone: 265 of 443 (59.8%). Reversed with the Auberge internationale's two
+  keys, which the Log does list: 218 of 443 (49.2%), below the Log's stated 57.3%."
+  The two bullets are corrected where the Log makes them (the judgement cases and the
+  sensitivity list of the re-measure). `node
+.../gate-2/sample.mjs <tree> <outdir>` at `2a3aa467`, then `node
+.../land/band.mjs <outdir>/lodging-named.json` →
+  `manoir mentions 36 auberge two keys 47`, `manoir reversed 265 of 443 (59.8%)`,
+  `manoir + auberge reversed 218 of 443 (49.2%)`, and the Log's own `auberge reversed
+254 of 443 (57.3%)` and `campgrounds to named-premises 334 of 443 (75.4%)` unchanged.
+  The band is 49.2–75.4%; the direction does not move (pl-58 is 33 of 418, 7.9%).
+  Gate 2's section is untouched.
