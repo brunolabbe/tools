@@ -59,12 +59,29 @@ What the two measurements (lg-38, lg-56) show about CSVs, and no more:
 Nothing here speaks for a real bank's export, for a model, effort or prompt
 other than the ones lg-56 measured, or for more than 13 invented fixtures.
 
-**A defect found in the CSV reader while writing this**, reproduced at lg-66's
-base (`834006f0`): `api/test/layout/csv.ts` reads a field of plain digits as a
-number, so `007` in a detail column becomes the number 7, and the books' reader
-returns the detail as `""` with no problem, because `textOf` reads only text
-cells (`books/src/workbook.ts`). The reproduction is in the Log. Decision 6
-asks where it is fixed.
+**The build edits those seven fixtures' text** (Build 1, on the owner's answer
+of round 1, Log): each gains a non-ASCII character, so that a file not in UTF-8
+can be told from one that is. After that edit the 150 records measure the old
+text, not the fixtures as they then stand, and 7 of lg-66's 13 `layoutRequest`
+pins move.
+
+**Two defects found while writing this**, both reproduced at lg-66's base
+(`834006f0`), the first also on `main` (`7a2a0f61`):
+
+- **A number in a detail cell reads as an empty detail**, because `textOf` in
+  `books/src/workbook.ts` reads only text cells. This is live on `main`, on the
+  `.xlsx` path of the household's `import:ledger`: a workbook whose detail cell
+  is the number 42 imports with exit 0, the same report as the text control, and
+  stores `description` `""` (Log, round 1). Per the owner (Log, round 1) it is
+  filed as lg-68 and built on its own pull request from `main`, branch
+  `lg-68-numeric-detail-cell`, which fixes `textOf` for the `.xlsx` path. It is
+  not this ticket's, and this ticket depends on it **in prose only** (lg-68 is
+  not on this branch's base, so there is no `depends_on`): the CSV path of this
+  ticket must not be built before lg-68 has landed.
+- **`api/test/layout/csv.ts` reads a field of plain digits as a number**, so
+  `007` becomes the number 7 and its leading zeros are gone before any detail
+  role reads it. Nothing at the base calls that reader outside the test
+  harness. This half is Decision 6.
 
 ## Decision — open
 
@@ -113,8 +130,8 @@ a balance column; `csv-no-balance` does not.
   becomes the only proof; a missing or extra row is silent, which is what the
   reader's problem exists to stop. Not recommended.
 
-Under (b), (c) or (d), Build 4 and Done when 5 are rewritten, and (b) adds a
-field to the confirmation (Decision 4).
+Under (b), (c) or (d), Build 4's second bullet and Done when 6 are rewritten,
+and (b) adds a field to the confirmation (Decision 4).
 
 ### 2. How its rows are placed against rows already stored
 
@@ -127,8 +144,19 @@ another bank's wording and **no category**: `statement_rows.category` is
 `NOT NULL`, and the paste parser itself refuses an empty one
 (`books/src/statement.ts`, "an empty category").
 
-Measured offline (Log): 8 invented paste rows stored, then a paste of rows 5 to 9. Identical rows: 2 stored, 3 already present. With row 6's category changed
-and nothing else: `STATEMENT_ROW_CONFLICT`, fields `["category"]`.
+Measured offline (Log), 8 invented rows stored and then a paste of rows 5 to 9
+(`importStatement`, in memory):
+
+- Rows stored in AccèsD's own wording, an identical overlapping paste: 2 stored,
+  3 already present. With row 6's category changed and nothing else:
+  `STATEMENT_ROW_CONFLICT`, fields `["category"]`.
+- **Rows stored in another bank's wording**, which is a CSV's case, then an
+  AccèsD paste of rows 5 to 9 in its own wording with the same dates, amounts
+  and balances: `STATEMENT_CHAIN_BROKEN`, "A row is missing between the two, so
+  paste a longer stretch that overlaps what is stored". `candidates` in
+  `statements.ts` matches on date, description, amount and balance, so no stored
+  row is found, and **no longer paste can satisfy that advice**. A paste of rows
+  8 and 9 only, starting after the stored tail: 2 stored.
 
 - **(a) Recommended: after the stored tail, or into an empty history; never
   overlapping.** The first CSV into an empty history is the anchor. Otherwise
@@ -138,17 +166,21 @@ and nothing else: `STATEMENT_ROW_CONFLICT`, fields `["category"]`.
   `paste` (no migration), oldest lowest, in one `IMMEDIATE` transaction with
   the tail read inside it. Costs: a person whose export overlaps what is stored
   must cut the file first; the refusal says where. **And the other direction is
-  not solved**: rows stored from a CSV have no category, so a later AccèsD paste
-  that overlaps them meets the conflict measured above, since `candidates`
-  compares stored paste-sourced rows field for field. That is a cost this
-  ticket leaves to a later one, and the Notes record it. An empty category on a
-  stored row is also new (no paste can store one); what the spending-category map
-  and the history make of it is unmeasured.
+  not solved, and fails with advice that cannot be followed**: rows stored from a
+  CSV are stored as pastes and compared as pastes, so a later AccèsD paste that
+  overlaps them is refused `STATEMENT_CHAIN_BROKEN` as measured above, telling
+  the person to paste a longer stretch. The way out the measurement found is to
+  paste only the rows after the stored tail. That is a cost this ticket leaves
+  to a later one, and the Notes record it. An empty category on a stored row is
+  also new (no paste can store one); what the spending-category map and the
+  history make of it is unmeasured.
 - **(b) Overlap allowed, compared as a paste compares.** Costs: it cannot work
-  as measured, because a CSV row has no category to equal the stored one's; it
-  would need `statements.ts`'s comparison changed for CSV rows (a rule shared
-  with every paste, tuned by lg-2, lg-40, lg-58, lg-59 and lg-61), or a
-  category invented for the row.
+  as measured: a CSV row has another bank's wording and no category, and
+  `candidates` matches on date, description, amount and balance, so an
+  overlapping row is never found (the second measurement above, from the CSV's
+  side). It would need `statements.ts`'s comparison changed for CSV rows (a rule
+  shared with every paste, tuned by lg-2, lg-40, lg-58, lg-59 and lg-61), or a
+  wording and a category invented for the row.
 - **(c) Overlap allowed, compared as the workbook's rows are** (day by day,
   amounts counted with repeats, dates a day off). Costs: new code in the most
   tuned module of the tool, ambiguity refusals to design for a source with no
@@ -157,11 +189,24 @@ and nothing else: `STATEMENT_ROW_CONFLICT`, fields `["category"]`.
 - **(d) Always stored as a new batch, never compared.** Costs: a CSV that
   overlaps stored rows double-books them; with a balance column the chain
   would break at the seam and nothing would say so. Not recommended.
+- **(e) (a), plus a `source` value for CSV rows that a later paste compares day
+  by day, as it compares the workbook's.** This is the only option that
+  addresses the later-paste direction. Costs: a table rebuild
+  (`statement_imports.source` is a `CHECK`, which SQLite cannot alter in place),
+  and the matcher of `workbook-days.ts` and `statements.ts` taught a third
+  source, in the code lg-40, lg-59 and lg-61 tuned, for a case (a CSV, then a
+  paste over it) not yet seen and with no real example to tune on.
 
-Under (b), (c) or (d), Build 4 and Done when 8 are rewritten; (c) and (b) also
-change `statements.ts`, and a new `source` value for a CSV would be a table
-rebuild (`statement_imports.source` is a `CHECK`, which SQLite cannot alter in
-place).
+**Why (a) is still first.** The later-paste cost is shared by (a), (b), (c) and
+(d), and only (e) removes it, at the price above. What changed with the
+measurement is what (a) is said to cost: not "a conflict the person can read"
+but a refusal whose own advice cannot be followed, with a way out (paste only the
+rows after the tail). If the owner expects households to paste AccèsD rows over
+CSV rows, (e) is the option to take.
+
+Under (b), (c), (d) or (e), Build 4's third bullet, Build 5, Build 6.2's report
+line and Done when 8 are rewritten; (b), (c) and (e) also change
+`statements.ts`.
 
 ### 3. The shapes the reader does not read
 
@@ -176,7 +221,9 @@ reports 0 problems (14 of 14 semicolon files), the gap lg-66's Build 2.2 closes;
 the rest reported at least one problem (21 of 21; a thousands-comma
 `csv-no-balance` read 24 of 32 rows and reported 9 problems, the missing balance
 among them). What the **model** answers on such a file is unmeasured, and so is
-a file that is not UTF-8 (a sixth shape, not among the 35).
+a tab-delimited file and a file that is not UTF-8 (a sixth and a seventh shape,
+not among the 35; and 6 of the 7 fixtures hold no non-ASCII character, so a
+re-encoding of them is the same bytes, which Build 1 and Done when 3 address).
 
 - **(a) Recommended: refuse them in plain words, naming the shape.** Before
   anything is sent, whole-field patterns find a semicolon or tab delimiter, a
@@ -199,7 +246,7 @@ a file that is not UTF-8 (a sixth shape, not among the 35).
   date order). Costs: three more controls on a screen with a 360 px case, and
   the person must know them.
 
-Under (b) or (c), Build 2 is rewritten.
+Under (b) or (c), Build 2 and Done when 3 are rewritten.
 
 ### 4. What the confirmation shows for a CSV
 
@@ -224,7 +271,7 @@ more is "a choice for the owner, not an addition for the builder".
   owner chose; the totals are the file's, so they show a wrong sign only to a
   person who knows the real totals.
 
-Under (b), Build 5 and Done when 11 gain the totals.
+Under (b), Build 6.2 and Done when 11 gain the totals.
 
 ### 5. What the CSV's sheet is called in what is sent
 
@@ -237,55 +284,60 @@ name** (`names`), the 70th by `prefix`.
 - **(a) Recommended: a fixed name, `statement.csv`.** Nothing about the uploaded
   file's name goes to Anthropic or into a log. Costs: the request for a CSV then
   differs from the measured one by that string, so the seven CSV fixtures get
-  seven new `layoutRequest` pins beside the old (a deliberate addition, not an
-  edit of the 13), and the effect of the new name on what Haiku answers is
+  seven new `layoutRequest` pins beside the seven that Build 1's edit of their
+  text moves, and the effect of the new name on what Haiku answers is
   unmeasured. Re-measuring the 70 Haiku shown runs on the 7 fixtures would cost
-  about $0.053 (the 70 records' `costUsd` sum to $0.0532), with the owner's key;
-  Done when 12 is that, awaiting.
+  about $0.053 (the 70 old records' `costUsd` sum to $0.0532; the edited text's
+  is unmeasured), with the owner's key; Done when 13 is that, awaiting.
 - **(b) The uploaded file's name, cut and cleaned.** Costs: whatever the bank
   or the person put in the name leaves the house, so lg-66 Build 4.1's statement
   must name it; it reaches the request, so it needs the same cleaning as a cell's
   text; and no log line may hold it (lg-66 Build 3.6). The request is the
-  measured kind, so the 13 pins stand.
+  measured kind, so the pins as Build 1 moves them stand.
 
-Under (b), Build 3 and Done when 10 are rewritten and Done when 12 goes.
+Under (b), Build 3, Build 6.1 and Done when 10 are rewritten, and Done when 13's
+clause "under Decision 5 (a), with the fixed sheet name" goes (the repeat of the
+70 runs on the edited text, and the live read, stay).
 
-### 6. Where the digits-only detail is fixed
+### 6. What the CSV reader does with a field of digits that starts with a zero
 
-Reproduced (Log): `007` in a CSV's detail column reads as the number 7, and the
-books' reader returns the detail as `""` with `problems` `[]`. The cause is two
-steps: the CSV reader turns a plain-digits field into a number cell (a leading
-zero is gone at that step), and `textOf` in `books/src/workbook.ts` reads only
-text cells, so a number cell in the detail column is empty. An `.xlsx` whose
-detail cell is a number would read empty the same way (from the code; not
-reproduced). Offline, 0 of the 13 fixtures read any row with an empty detail, so
-neither a fix nor its absence moves a pin.
+Only the CSV half of the digits-only detail defect is open here; the `textOf`
+half is lg-68's (Why, above). Reproduced (Log, round 1): the CSV reader turns a
+field of plain digits into a number cell, so `007` becomes the number 7 and its
+leading zeros are gone before the books read it. Nothing at the base calls that
+reader outside the test harness, and the 13 fixtures read 0 rows with an empty
+detail. The reader's number rule is `^-?\d+(\.\d+)?$`, so `0.50` and `-0.5` are
+numbers and `007` and `-007` match it too.
 
-- **(a) Recommended: fix it here.** The CSV reader keeps a field that starts with
-  a zero followed by a digit as text (`007` stays `007`; `0.50` is still a
-  number), and the detail role reads a number cell as its digits (`42` reads
-  `"42"`). Costs: the second change is in `@ledger/books`, which the household's
-  own `import:ledger` also uses; a detail cell that is a number would then be read
-  where it was read as empty, and the import's own report would differ for a
-  workbook that has one (unmeasured: the household's workbook is not in the
-  repository, and none of the 13 fixtures has one).
-- **(b) File it as its own `fix` ticket, and have the CSV path refuse an empty
-  detail for now.** Costs: an intake slot, a dispatch, a gate and a merge for a
-  reproduction already in hand, and a good file with a digits-only reference is
-  refused until it lands.
-- **(c) Leave it.** Costs: a digits-only detail is stored empty, silently.
+- **(a) Recommended: a field that starts with a zero followed by a digit stays
+  text** (`007` stays `007`; `0.50` is still a number). Costs: an amount written
+  with a leading zero (`007.50`) would be text and the reading would report a
+  problem rather than a figure, which is a refusal and not a misreading; the
+  model's view prints such a field quoted where it printed it bare, for any field
+  of that shape (whether any measured fixture holds one is settled by the pins
+  Build 1 records); and a detail of plain digits with no leading zero (`42`)
+  still becomes a number cell, which reads as the detail `"42"` only once lg-68's
+  `textOf` fix has landed, so this ticket's CSV path waits for lg-68.
+- **(b) Leave the reader as it is.** Costs: with lg-68 landed, `007` is stored as
+  `"7"`: the detail differs from the file's, silently.
+- **(c) The reader keeps every field as text and the layout says which are
+  figures.** Costs: the model's view changes for every figure of every CSV
+  (quoted text instead of bare numbers), so all seven CSV pins move and the 150
+  records no longer describe what the model is sent; the reader needs the layout
+  before it can read, which it does not have at the describe step.
 
-Under (b) or (c), the change Build 1 makes under this Decision goes and Done
-when 4 is rewritten.
+Under (b) or (c), the change Build 1 makes under this Decision is rewritten and
+Done when 5 changes with it.
 
 ### 7. Whether the stored rows pass through the rules
 
 A paste's rows are run through `classifyAdded` in the same transaction that
 stores them (lg-4, lg-17): a row the most specific matching rules agree on is
 filed, a row whose description three person-given answers agree on is filed
-from history, and every other row waits in the inbox. The owner's words for a
-CSV were "stored the way a statement paste stores them (they wait in the inbox,
-unfiled)".
+from history, and every other row waits in the inbox. lg-66's Decision 2 (b),
+the option the owner chose, reads "stored the way a statement paste stores them
+(they wait in the inbox, unfiled)": that is lg-66's text, not words the owner
+wrote.
 
 - **(a) Recommended: as a paste does.** The same call, in the same transaction;
   `rowsInInbox` is the rows nothing filed. Costs: a rule or a history answer
@@ -296,36 +348,53 @@ unfiled)".
   each row by hand, including those their own rules would have filed; it is the
   literal reading of "unfiled", and a store path without `classifyAdded`.
 
-Under (b), Build 4 drops the classification call and Done when 9 is rewritten.
+Under (b), Build 5 drops its classification bullet and Done when 9 is rewritten.
 
 ## Build
 
 Written for the recommended option of each Decision above: no-balance CSVs
 refused (1 a), placement after the tail or into an empty history (2 a), the
 unread shapes refused plainly (3 a), the date column alone (4 a), a fixed sheet
-name (5 a), the digits-only detail fixed here (6 a), and the rules run as for a
-paste (7 a). It reuses lg-66's flow and does not restate it: "lg-66 Build 3.1"
+name (5 a), a leading-zero field kept as text (6 a), and the rules run as for a
+paste (7 a). **It is not built before lg-68 has landed** (Why): the build merges
+`main` in first and checks that a number cell in a detail column reads as its
+digits. It reuses lg-66's flow and does not restate it: "lg-66 Build 3.1"
 is that ticket's describe request, "Build 3.2" its confirm request, "Build 3.3"
 its bounds, "Build 4" its confirmation screen. Everything not named here is as
 lg-66 builds it, including the consent field, the single model call, nothing
 stored between the two requests, the error taxonomy, and the rule that no log
 line holds the upload's content, its name or the key. **This build amends
 lg-66's Done when 13**, which refuses a CSV "until lg-67": Done when 1 below
-replaces it, and lg-66's Build 3.1 sentence "A CSV is refused this way until
-lg-67" goes with it.
+replaces that line's three CSV cases (i) to (iii), its sentence "That holds
+until lg-67", and the second half of its last sentence ("a CSV renamed `.xlsx`
+is still refused"). Its 0-sheet clause, and "an `.xlsx` that is renamed `.csv`
+is still read", stand. lg-66's Build 3.1 sentence "A CSV is refused this way
+until lg-67" goes with them.
 
 1. **Move the CSV reader from `api/test/layout/csv.ts` into `api/src`**, taking
    bytes as well as text: a leading byte-order mark is dropped, and the bytes
    are decoded as UTF-8 only when they are valid UTF-8 (Build 2 says what
-   happens otherwise). The fixtures and
-   the harness import it back, so there is one copy. lg-66's 13 `layoutRequest`
-   pins and its schema pin stay as they are and must pass unchanged: the seven
-   CSV fixtures are built from the moved reader. The quoted-field rule, the
-   number rule and the date rule are the ones measured; one change is made
-   (Decision 6 (a)): a field that starts with a zero followed by a digit stays
-   text, and `textOf` in `books/src/workbook.ts` reads a number cell as its digits
-   for the detail role. The Log records the 13 fixtures' count of rows read with
-   an empty detail before and after (0 of 13 before).
+   happens otherwise). The fixtures and the harness import it back, so there is
+   one copy. The quoted-field rule, the number rule and the date rule are the
+   ones measured; one change is made (Decision 6 (a)): a field that starts with
+   a zero followed by a digit stays text. **Two edits to the measured material,
+   deliberate:**
+   - **Each of the 7 CSV fixtures in `api/test/layout/fixtures.ts` gains at least
+     one character from U+0080 to U+00FF in a text cell the file carries** (a
+     detail or a header), so that its Latin-1 bytes differ from its UTF-8 bytes
+     and are not valid UTF-8. Only `csv-balance` has one today (`é` and `ô`; the
+     other six hold no non-ASCII character, the gate's `latin1.mts`). This was the
+     owner's choice in round 1 (Log) over adding accents to `csv-balance` and a
+     synthetic file only. It changes no column, role or row count, so the correct
+     descriptions are unchanged, and the generator's written rows
+     (`writtenRows`) move with the text.
+   - **7 of lg-66's 13 `layoutRequest` pins move**, the seven CSV fixtures' (the
+     6 workbook fixtures' pins and lg-66's schema pin stay and must pass
+     unchanged). This is a deliberate edit by this build, not a drift: lg-66's
+     Done when 1 constrains lg-66's own build. The Log gives each moved pin's old
+     and new sha256. **The fixtures' text then differs from what lg-56's 300 runs
+     measured**, so the 150 CSV records no longer measure the fixtures as they
+     stand; Done when 13 is the re-measure.
 2. **Judge a CSV from the bytes** (lg-66 Build 3.1's judgement is for an `.xlsx`).
    A file that is a workbook by lg-66's zip test is read as one. Otherwise it is
    a CSV candidate when it holds no NUL byte and its first line holds a comma, a
@@ -344,7 +413,8 @@ lg-67" goes with it.
    upload's bytes, the rows and cells read, the length of a cell's text sent
    (cut, not refused) and the request's size estimate. The builder says in the
    Log whether the sheets bound is moot. The Log records the 7 new
-   `layoutRequest` pins (the CSV fixtures' text under the fixed name).
+   `layoutRequest` pins (the edited CSV fixtures' text under the fixed name),
+   beside the 7 that Build 1 moves.
 4. **The describe request for a CSV** is lg-66 Build 3.1, then these refusals,
    each typed, before the dry run is shown, with the fake uncalled again:
    - the description names a part a CSV cannot have: a bucket mapping, a bucket
@@ -373,10 +443,10 @@ lg-67" goes with it.
      The builder says in the Log how the insert is shared with `importStatement`
      rather than copied.
 6. **The screen** is lg-66 Build 4 with the differences below.
-   1. The upload accepts a CSV, and Build 4.1's statement names what leaves the
+   1. The upload accepts a CSV, and lg-66 Build 4.1's statement names what leaves the
       house for a CSV: the one sheet's first 12 rows, 6 from the middle and last
       3, with their figures; the file's name is not sent.
-   2. Build 4.2 shows the date column element and the dry run's report, and no
+   2. lg-66 Build 4.2 shows the date column element and the dry run's report, and no
       bucket section. The report adds, from the placement check, either "first
       import: no history is stored" or "continues from the stored balance of
       <amount> on <date>".
@@ -384,7 +454,7 @@ lg-67" goes with it.
       screen shows the reason and has no confirm control. `e2e/layout.spec.ts`
       gets the CSV state of the screen at 360 px and 1280 px.
 7. **No test calls a model.** The tests use lg-66's fake. The one live check is
-   the owner's (Done when 12).
+   the owner's (Done when 13).
 
 ## Done when
 
@@ -397,35 +467,46 @@ lg-67" goes with it.
    message of Build 2, the fake and the sheet reader uncalled, the books
    unchanged. An `.xlsx` renamed `.csv` is read as a workbook, and a CSV renamed
    `.xlsx` as a CSV. One test each.
-2. `npm test -- --project ledger` passes with lg-66's 13 `layoutRequest` pins and
-   its schema pin unchanged, and with the seven CSV fixtures built from the
-   moved reader (Build 1); `api/test/layout/csv.ts` is gone and `grep -rn
-"layout/csv" tools/ledger/api` finds nothing.
-3. The six unread shapes are refused: for each of the 7 CSV fixtures, the file
+2. `npm test -- --project ledger` passes, with the seven CSV fixtures built from
+   the moved reader (Build 1). A test fails when the sha256 of `layoutRequest`
+   for any one of the 6 workbook fixtures differs from lg-66's value, or the
+   format schema's differs from lg-66's; and another fails when it differs from
+   the value the Log gives for any one of the 7 CSV fixtures, all 7 of which
+   differ from lg-66's (the Log lists the 7 old and 7 new). `api/test/layout/csv.ts`
+   is gone and `grep -rn "layout/csv" tools/ledger/api` finds nothing.
+3. Seven unread shapes are refused. For each of the 7 CSV fixtures, the file
    re-serialised with a semicolon delimiter, with quoted decimal commas, with a
    semicolon and decimal commas, with quoted thousands commas, with dd/mm/yyyy
-   dates, and re-encoded as Latin-1 (42 files), gets the typed error of Build 2,
-   naming its shape, on the describe request and on the confirm request, with the
-   fake uncalled and the books unchanged. The 7 files as written are not refused
-   for their shape.
-4. `007` in a CSV's detail column reads as the detail `"007"`, `42` as `"42"`,
-   and `0.50` in an amount column as the number 0.5. `books/test/workbook.test.ts`
-   and `api/test/workbook-import.test.ts` pass with no case edited, and the Log
-   gives the count of rows read with an empty detail for each of the 13 fixtures
-   before and after (0 of 13 before).
-5. `csv-no-balance` read through its correct description is refused on the
+   dates, with a tab delimiter, and re-encoded as Latin-1 (49 files), gets the
+   typed error of Build 2, naming its shape, on the describe request and on the
+   confirm request, with the fake uncalled and the books unchanged. For each of
+   the 7 Latin-1 files a test first asserts that its bytes differ from the
+   fixture's UTF-8 bytes and that decoding them as UTF-8 with `fatal` set throws,
+   so no file in the line is a vacuous case. The 7 files as written are not
+   refused for their shape.
+4. Each of the 7 CSV fixtures as written, with a UTF-8 byte-order mark in front,
+   reads as the same sheet as without it (deep-equal) and gives the same
+   `layoutRequest` sha256.
+5. `007` in a CSV's detail column reads as the detail `"007"`, `0.50` in an
+   amount column as the number 0.5, `007.50` in an amount column as a reading
+   problem, and, on a base that carries lg-68, `42` in a detail column as `"42"`.
+   `books/test/workbook.test.ts` and `api/test/workbook-import.test.ts` pass with
+   no case edited, and the Log gives, for each of the 13 fixtures, the count of
+   rows read with an empty detail after Build 1's edits (0 of 13 at the base).
+6. `csv-no-balance` read through its correct description is refused on the
    describe request with the missing-balance reason in plain words, and a
    confirm request is refused; the fake is called once on the first and the books
    are unchanged on both.
-6. With the fake answering each correct description in turn, the describe
+7. With the fake answering each correct description in turn, the describe
    request on `csv-balance`, `empty-columns-csv`, `bank-preamble`,
    `bank-two-dates`, `bank-footer` and `bank-wide` (six) returns the
    description, the date column's letter, header text and 3 + 3 dates with each
-   row's detail and amount, and a report, and the row count of each table the
-   household's books database lists in `sqlite_master` is the same before and
-   after. A description naming each of the eight parts of Build
-   4's first bullet is refused with the fake called once (eight tests).
-7. Placement, in `api/test/` against a real in-memory database: (i) a CSV into an
+   row's detail and amount, and a report, and the books database is unchanged:
+   `dump` in `api/test/workbook-import.test.ts` (every row of every table that
+   `sqlite_master` lists as a table) is deep-equal before and after. A
+   description naming each of the eight parts of Build 4's first bullet is
+   refused with the fake called once (eight tests).
+8. Placement, in `api/test/` against a real in-memory database: (i) a CSV into an
    empty history stores its rows with `seq` from 0 and the file's balances;
    (ii) a CSV whose oldest row opens from the stored tail's balance stores after
    the tail; (iii) a CSV that overlaps one stored row is refused, and (iv) one
@@ -433,40 +514,45 @@ lg-67" goes with it.
    rows unchanged; (v) `bank-wide`, listed newest first, is stored oldest first;
    (vi) two confirm requests on the same file, one after the other, store the
    rows once and refuse the second as (iii) does. One test each.
-8. Rules: with a rule keyed on one description of `csv-balance`, the confirm
-   request files that row, leaves the others in the inbox, and reports
-   `rowsInInbox` equal to the number of rows not filed. A test that makes the
-   classification throw finds no statement row stored, since both run in the one
-   transaction.
-9. The request for each of the 7 CSV fixtures carries `statement.csv` and nothing
-   of the uploaded file's name: a test uploads each under a name holding a
-   distinctive token and finds the token in neither the request the fake was given
-   nor any line the logger received. The seven new pins are in the Log, and the
-   13 old ones are unedited.
-10. The web tests show, for a fake describe response on `csv-balance`: the
+9. Rules: `csv-balance` has 7 distinct details over its 40 rows, each repeated.
+   With a rule keyed on one of those details, the confirm request files exactly
+   the rows that carry it (the number the test counts from the fixture), leaves
+   the other rows in the inbox, and reports `rowsInInbox` equal to 40 less that
+   number. A test that makes the classification throw finds no statement row
+   stored, since both run in the one transaction.
+10. The request for each of the 7 CSV fixtures carries `statement.csv` and nothing
+    of the uploaded file's name: a test uploads each under a name holding a
+    distinctive token and finds the token in neither the request the fake was
+    given nor any line the logger received. The seven new pins are in the Log,
+    and the 6 workbook pins and the 7 moved pins of Done when 2 are unedited by
+    this line's change.
+11. The web tests show, for a fake describe response on `csv-balance`: the
     statement of Build 6.1 before the button is pressed, with the fake uncalled
     until it is; the date column's letter, header text and 3 + 3 dates with
     detail and amount; no bucket section; the report line of Build 6.2; the
     confirm control present when the verifications and the placement hold and
     absent when either fails. `e2e/layout.spec.ts` has the CSV state at 360 px
     and 1280 px.
-11. On `bank-two-dates` with the model's wrong description (the date read from
+12. On `bank-two-dates` with the model's wrong description (the date read from
     column B, pinned in `layout.test.ts`), the confirmation shows the header
     `Date of transaction` and dates that differ from the correct description's in
     3 of the 6 positions, and a test pins it.
-12. **Awaiting, the owner's, after the merge:** one live read of a synthetic CSV
+13. **Awaiting, the owner's, after the merge:** one live read of a synthetic CSV
     through the web screen with the owner's key returns a description that
     confirms and stores its rows, and the Log records the request's input tokens
-    and cost against the measured mean of about a tenth of a cent. With the
-    fixed sheet name (Decision 5 (a)), the 70 Haiku shown runs on the 7 CSV
-    fixtures are repeated with it, and the Log gives the table beside lg-56's
-    (about $0.053). A builder has no key.
-13. `npm run check` and `node scripts/check-lockfile-sync.mjs` exit 0, and
+    and cost against the measured mean of about a tenth of a cent. The 70 Haiku
+    shown runs on the 7 edited CSV fixtures (and, under Decision 5 (a), with the
+    fixed sheet name) are repeated, and the Log gives the table beside lg-56's
+    (about $0.053 on the old text). A builder has no key.
+14. `npm run check` and `node scripts/check-lockfile-sync.mjs` exit 0, and
     `packages/core/test/image-closure.test.ts` passes.
 
 ## Notes for the builder
 
-- **Builders have no Anthropic key.** Done when 12 is the owner's.
+- **Builders have no Anthropic key.** Done when 13 is the owner's.
+- **Not before lg-68** (Why): the CSV path reads a plain-digits detail as a
+  number cell, which only reads as its digits once lg-68's `textOf` fix is on the
+  base. Merge `main` in first and check it.
 - **Real bank data never enters the repository**, including what a test or a
   fixture is modelled on (lg-38). Use the 7 synthetic CSV fixtures; add one only
   to test a repeated (date, amount) pair or a same-day pair, and name it in the
@@ -478,8 +564,9 @@ lg-67" goes with it.
 amount with no date` whatever a model says, so such a file will not import
   (lg-56). `bank-footer` keeps it in the balance column.
 - **Stored from a CSV, then pasted over.** Decision 2 (a) leaves a later AccèsD
-  paste that overlaps CSV-stored rows meeting the category conflict. File it when
-  it is hit.
+  paste that overlaps CSV-stored rows refused `STATEMENT_CHAIN_BROKEN`, whose
+  advice to paste a longer stretch cannot be followed; pasting only the rows after
+  the stored tail works (Decision 2, measured). File it when it is hit.
 - **Depends on lg-66's Build 2.2** (reading no rows is a problem): without it a
   semicolon file reads 0 rows and 0 problems (Decision 3).
 - A new `scripts/*.mjs` needs an `include` line in `scripts/test/tsconfig.json`.
@@ -580,3 +667,137 @@ reproduced defect in code `@ledger/books` shares with the household's own
 importer, so whether it is fixed here or filed is a decision (6), not a free
 piece of work. lg-66 has no row in `02-ROADMAP.md`, so none is added for this
 ticket.
+
+### 2026-10-24 — round 1: gate 1 returned FAIL at `0b772573`; the owner's answers
+
+Gate 1 (on PR #625, `834006f0..0b772573`) returned FAIL: 3 high, 2 med, 4 low
+(F1 to F9). Its record is this ticket's `## Review`, which the lander commits. The
+brief is changed above `## Log` only; no source and no fixture is touched, both
+`status:` lines are as they were, and no Decision is answered.
+
+**The owner's answers, 2026-10-24**, three questions from the orchestrator:
+
+1. **F1, "how is the live number-cell defect handled?"** Options: "File lg-68 and
+   build it now", "File lg-68 only" (the gate's recommendation), "Fold into
+   lg-66". **The owner chose "File lg-68 and build it now."** lg-68 is filed and
+   built in a separate pull request from `main`, branch
+   `lg-68-numeric-detail-cell`, and fixes `textOf` for the `.xlsx` path. In this
+   ticket Decision 6 shrinks to the CSV leading-zero half, the `textOf` fix is
+   lg-68's, and lg-67 depends on it in prose only (no `depends_on`, because lg-68
+   is not on this branch's base).
+2. **F2, "which fix for Done when 3's Latin-1 case?"** Options: "csv-balance + a
+   synthetic" (the gate's recommendation) and "Non-ASCII in every fixture".
+   **The owner chose "Non-ASCII in every fixture", overriding the gate's
+   recommendation.** As put to the owner, the cost was: "Add accented text to all
+   7 CSV fixtures. That moves lg-66's 13 request pins and the measured fixtures'
+   text." Build 1 and Done when 3 are written for it. One correction to that
+   cost line, from the code: the 6 workbook fixtures' text is untouched, so it is
+   **7 of the 13 pins** that move, the CSV fixtures'; Build 1 says so.
+3. **The round, "fix all, then gate 2?"** Options: "Fix all, then gate 2" and
+   "Highs and meds only". **The owner chose "Fix all, then gate 2."**
+
+**F1 (high): reproduced, and it was right.** The gate's
+`xlsx-import-command.mts <tree> <outdir>` (the household's `import:ledger
+--write` on the synthetic workbook, once as written and once with 2022's first
+row's detail cell written as the number 42), run here at `0b772573`:
+
+```
+--- detail cell as text: exit 0
+statement_rows 2022-01-05: [{"date":"2022-01-05","description":"Versement","amount_cents":50000}]
+--- detail cell as number: exit 0
+statement_rows 2022-01-05: [{"date":"2022-01-05","description":"","amount_cents":50000}]
+```
+
+Both runs report `imported 17`. Fixed as the owner chose: the Why separates the
+two halves, names lg-68, and says this ticket is not built before it lands;
+Decision 6 is now only what the CSV reader does with a field of digits that
+starts with a zero, with three options priced on that basis; Build 1 loses the
+`textOf` change and gains the leading-zero rule; Done when 5 says `42` is graded
+"on a base that carries lg-68". The earlier entry of today ("The digits-only
+detail", "Fold-in exception") is superseded by this one.
+
+**F2 (high): reproduced, and it was right.** The gate's `latin1.mts <tree>`:
+
+```
+csv-balance: text cells 45, non-ASCII chars ["é","ô"] (sheet-name 0); details 40, distinct 7, repeated details 7
+csv-no-balance: text cells 35, non-ASCII chars [] ...
+(empty-columns-csv, bank-preamble, bank-two-dates, bank-footer, bank-wide: non-ASCII chars [])
+```
+
+6 of the 7 fixtures hold no non-ASCII character, so their Latin-1 bytes are their
+UTF-8 bytes. Fixed as the owner chose: Build 1 gives each of the 7 a character
+from U+0080 to U+00FF, says 7 of lg-66's 13 pins move as a deliberate edit by this
+build (lg-66's Done when 1 constrains lg-66's own build), and says the fixtures'
+text then differs from what lg-56's 300 runs measured; Done when 3 now asserts,
+per file, that the Latin-1 bytes differ from the UTF-8 bytes and that decoding
+them as UTF-8 with `fatal` set throws, before it asserts the refusal. Done when 13
+repeats the 70 runs on the edited text.
+
+**F3 (high): reproduced, and it was right.** The gate's `overlap-wording.mts
+<tree>`, and a variant of mine (`overlap-remedy.mts`: the same, plus a second
+paste of rows 8 and 9 only), run here:
+
+```
+stored rows 0-7 in another bank's wording: stored 8, already present 0
+AccèsD paste, rows 5-9, its own wording: STATEMENT_CHAIN_BROKEN ... "A row is missing between the two, so paste a longer stretch that overlaps what is stored."
+stored rows 0-7, other wording: stored 8, already present 0
+AccèsD rows 5-9 (overlaps stored rows 5-7): STATEMENT_CHAIN_BROKEN
+stored rows 0-7, other wording: stored 8, already present 0
+AccèsD rows 8-9 (starts after the stored tail): stored 2, already present 0
+```
+
+Decision 2's costs are restated from this: the later-paste cost of (a) is a
+refusal whose advice cannot be followed, with the way out of pasting only the rows
+after the tail; (b)'s cost is now also the wording, not only the category; and an
+option (e) is added, (a) plus a CSV `source` that a later paste compares day by
+day, the only option that removes that cost. **The recommendation does not
+change**: the cost is shared by (a) to (d), and (e) removes it at the price of a
+table rebuild and a third source taught to the most tuned matcher in the tool,
+for a case not yet seen; the text says so and says when (e) is the one to take.
+The earlier entry's overlap measurement (same wording, category changed) stands
+as what it measured.
+
+**F4 (med): fixed.** The pointers now name: Decision 1, Build 4's second bullet
+and Done when 6; Decision 2, Build 4's third bullet, Build 5, Build 6.2's report
+line and Done when 8; Decision 3, Build 2 and Done when 3; Decision 4, Build 6.2
+and Done when 11; Decision 5, Build 3, Build 6.1, Done when 10 and only the
+fixed-name clause of Done when 13; Decision 6, Build 1 and Done when 5; Decision
+7, Build 5's classification bullet and Done when 9. Done when was renumbered by
+the new line (4, the byte-order mark), so every reference was re-read.
+
+**F5 (med): fixed.** Done when 9 (was 8) says `csv-balance` has 7 distinct details
+over 40 rows, each repeated (the gate's count, reproduced above), and asserts the
+rule files exactly the rows that carry the detail, the number counted from the
+fixture, with `rowsInInbox` equal to 40 less that number.
+
+**F6 (low): fixed.** The Build's amendment of lg-66's Done when 13 now replaces
+its three CSV cases, its "That holds until lg-67" sentence and the second half of
+its last sentence, and says its 0-sheet clause and "an `.xlsx` renamed `.csv` is
+still read" stand.
+
+**F7 (low): fixed.** Done when 7 (was 6) asserts `dump` in
+`api/test/workbook-import.test.ts` (every row of every table `sqlite_master` lists
+as a table) deep-equal before and after, in place of the row counts.
+
+**F8 (low): fixed.** New Done when 4 (a byte-order mark in front of each of the 7
+fixtures reads as the same sheet and gives the same `layoutRequest` hash) and a
+tab delimiter in Done when 3's shapes, which are now seven and 49 files.
+
+**F9 (low): fixed.** Decision 7 says the quoted words are lg-66's Decision 2 (b)
+text, which the owner chose, and not words the owner wrote.
+
+**The phrase checks**, above `## Log`, whitespace-normalised so a phrase that
+wraps across lines is still found (the gate found that a wrapped phrase planted
+nothing). `phrases.mjs <before> <after>` (session scratch, not committed) counts 13
+phrases that must be gone, each present in `0b772573`'s text and absent now, and 16
+that must be new, each absent then and present now:
+
+```
+all checks held   (13 gone, 16 new; e.g. "gone: before 1, after 0: meets the conflict measured above"; "new: before 0, after 3: STATEMENT_CHAIN_BROKEN")
+```
+
+and, as the positive control, the same script given the old text as both
+arguments: `29 FAILED`, exit 1.
+
+**Fold-in exception.** Nothing was folded in. lg-68 is the owner's separate
+ticket; the leading-zero rule is Decision 6.
