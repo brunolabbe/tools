@@ -1,7 +1,7 @@
 ---
 id: repo-116
 tool: repo
-title: review-record.test.ts's fixture copy fails with ENOENT on a .git/objects path, twice on CI
+title: review-record.test.ts's fixture copy fails with ENOENT on a .git/objects path, three times on CI
 kind: fix
 status: ready
 milestone: null
@@ -9,19 +9,20 @@ depends_on: []
 difficulty: standard
 ---
 
-# repo-116 — review-record.test.ts's fixture copy fails with ENOENT on a .git/objects path, twice on CI
+# repo-116 — review-record.test.ts's fixture copy fails with ENOENT on a .git/objects path, three times on CI
 
 ## Why
 
 `scripts/test/review-record.test.ts` builds one committed fixture repository per
 file and copies it for each test that uses the default ticket (`withTicketRepo`,
 from [repo-113](./repo-113-review-record-test-spawns-839-git-processes-on-windows.md)).
-Twice in the last 60 `ci.yml` runs, that copy failed on `ubuntu-latest` with
-`ENOENT` on a `.git/objects` path under the copy's destination, and the test
-failed with it. No other test failed in either run. The failure has not been
-reproduced locally.
+Three times in four days, that copy failed on `ubuntu-latest` with `ENOENT` on a
+`.git/objects` path under the copy's destination, and the test failed with it:
+twice in the 60 `ci.yml` runs the filing counted, and a third time on a `push` to
+`main` after it (below). No other test failed in any of the three runs. The
+failure had not been reproduced locally when this was filed.
 
-The two readings, with ANSI codes removed, from `gh run view <run> --log-failed`
+The three readings, with ANSI codes removed, from `gh run view <run> --log-failed`
 (the first with `--attempt 1 --job 120728098807`):
 
 Run `40046099052` (PR #604, head `db204337`, branch `lg-64-radios-and-name-field`):
@@ -46,6 +47,20 @@ Error: ENOENT, No such file or directory '/tmp/review-record-PjNSKN/.git/objects
  Test Files  1 failed | 299 passed | 1 skipped (301)
       Tests  1 failed | 6323 passed | 2 skipped (6326)
 Serialized Error: { errno: 2, code: 'ENOENT', path: '/tmp/review-record-PjNSKN/.git/objects', syscall: 'cp' }
+```
+
+Run `40059133782` (a `push` to `main`, head `a99bde49be56d441de166a76a6602902418c6982`,
+created 2026-10-24T03:38:33Z, job `test (ubuntu-latest)` `120768938189`, attempt 1;
+filed into this ticket by the builder, read with `gh run view 40059133782 --log-failed`):
+
+```
+FAIL  repo scripts/test/review-record.test.ts > a gate appended later lands inside the existing "## Review" block, after gate 1
+Error: ENOENT, No such file or directory '/tmp/review-record-74LOcr/.git/objects'
+ ❯ withTicketRepo scripts/test/review-record.test.ts:323:8
+ ❯ scripts/test/review-record.test.ts:386:39
+ Test Files  1 failed | 307 passed | 1 skipped (309)
+      Tests  1 failed | 6525 passed | 2 skipped (6528)
+Serialized Error: { errno: 2, code: 'ENOENT', path: '/tmp/review-record-74LOcr/.git/objects', syscall: 'cp' }
 ```
 
 Line 323 is `fs.cpSync(ticketRepoTemplateDir(), dir, { recursive: true });` and line
@@ -87,7 +102,9 @@ indicative.
 2026-10-24T02:19Z): 37 success, 21 cancelled, 1 completed failure
 (`39531046583`), and `40046099052` with an empty conclusion because its attempt 2
 is running after attempt 1 failed. The 21 cancelled runs are not read. So 2 failed
-attempts out of the 39 runs that completed or are running.
+attempts out of the 39 runs that completed or are running. The third failure,
+`40059133782`, was created at 2026-10-24T03:38:33Z, after that window closed, and
+the filing's "twice" counted only inside it.
 
 ## Build
 
@@ -140,3 +157,125 @@ informational)` and the other checks pass.
     (Node `v22.23.3`): `Test Files 1 passed (1)`, `Tests 64 passed (64)`, exit 0,
     33.80 s. This is one reading, and it does not reproduce the failure.
   - `grep -c 'withTicketRepo()' scripts/test/review-record.test.ts`: `12`.
+
+- **2026-10-24 — built (builder; no ship authority).** **Cause named and fixed.**
+  `git commit` in git 2.55.0, the version the runner has, ends by starting `git
+maintenance run --auto --quiet --detach`. That process takes
+  `objects/maintenance.lock`, forks into the background and removes the lock when the
+  child next gets the CPU, so `git commit` returns with a regular file in
+  `.git/objects` that is gone a moment later. `fs.cpSync` lists `objects`, then
+  copies each entry, and a file that was listed and then vanished is the `ENOENT`.
+  Hypothesis 3 below is the one confirmed, with a correction to how the brief put it.
+  The fix is one line of fixture config, `[maintenance] auto = false`, written to
+  `.git/config` before the template's commit (`disableAutoMaintenance` in
+  `scripts/test/review-record.test.ts`). It is not a retry and not a copy per test.
+
+  The probes are `.mjs` files in the builder's scratch directory
+  (`/tmp/claude-1000/-workspaces-tools/f72d6af1-5b10-4e8c-b0e5-2fd8b586a66c/scratchpad/repo-116/build/`:
+  `probe.mjs`, `micro.mjs`, `stress.mjs`, `burn.mjs`, `mechanism.mjs`, `lockwatch.mjs`,
+  `trace.mjs`); they are not committed, and each command below says what it did.
+
+  **Third occurrence.** `gh run view 40059133782 --log-failed`: a `push` to `main`
+  at `a99bde49`, `test (ubuntu-latest)`, the same test, `ENOENT ...
+'/tmp/review-record-74LOcr/.git/objects'`, `Test Files 1 failed | 307 passed | 1
+skipped (309)`, `Tests 1 failed | 6525 passed | 2 skipped (6528)`. The title and the
+  Why said "twice"; they now say three times (the filing counted inside a 60-run
+  window that closed before this run).
+
+  **Load applied.** The machine has 12 cores and a live peer session. Every
+  contention figure below is `burn.mjs`: N busy loops, each ending itself at a
+  deadline (60 to 300 s) and killed by pid when its run ended. Nothing outlived a
+  sweep. Load before the first sweep: `uptime` 2.66 3.64 2.38.
+
+  **Reproduction.** The same fixture steps and the same `fs.cpSync` as
+  `buildTicketRepo` and `withTicketRepo`, without vitest (`micro.mjs fresh`: build a
+  template, copy it once, repeat; 8 processes in parallel under 10 busy loops for
+  90 to 120 s, driven by `stress.mjs`):
+
+  | git                                                                            | `maintenance.auto`                                                                  | failures / builds                                     | error                                                                                 |
+  | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
+  | 2.43.0 (this container's)                                                      | default                                                                             | 0 / 8000 under load; 0 / 100 builds with no load      | none                                                                                  |
+  | 2.55.0 (built from the kernel.org tarball with `NO_RUST=1 NO_CURL=1`, scratch) | default                                                                             | 7 / 4800, 4 / 4800 (90 s load), 7 / 8000 (120 s load) | `ENOENT, No such file or directory '/tmp/rr-probe-XXXXXX/.git/objects'`, syscall `cp` |
+  | 2.55.0                                                                         | `-c maintenance.auto=false`                                                         | 0 / 8000 (120 s load)                                 | none                                                                                  |
+  | 2.55.0                                                                         | `[maintenance] auto = false` in `.git/config` before the commit: the fix's own line | 0 / 8000 (120 s load)                                 | none                                                                                  |
+
+  The 2.55.0 rows have the message and path shape of the three CI failures. The last
+  two rows ran under the same 10 busy loops for 120 s as the 7 / 8000 row.
+
+  **Why the message names `objects`.** `src/node_file.cc` at `v22.23.3` (read with
+  WebFetch, summarised, not quoted whole) reports the destination directory of the
+  level being copied, not the file, for a failed regular-file copy. `mechanism.mjs 100`
+  (a child creating and renaming `tmp_obj_*` files in `src/objects` while the parent
+  copies `src`): `rounds=100 [ [ 'ENOENT path=objects syscall=cp', 40 ] ]`. So the
+  error means a regular file directly in `.git/objects` was listed and then gone. A
+  finished fixture has only directories there (`15 7e 9d cb info pack`), so the file
+  is transient.
+
+  **What the file is.** `git-2.55.0/builtin/gc.c`, `maintenance_run_tasks`: it holds
+  `<objects>/maintenance.lock` (`hold_lock_file_for_update(&lk, lock_path, ...)`), runs
+  the foreground tasks, calls `daemonize()` when `--detach`, runs the background tasks,
+  then `rollback_lock_file(&lk)`. `GIT_TRACE2_EVENT` on the fixture's `commit`
+  (`trace.mjs`): git 2.43.0 has `child_start ["git","maintenance","run","--auto","--quiet"]`,
+  which the commit waits for; git 2.55.0 has `child_start
+["git","maintenance","run","--auto","--quiet","--detach"]`, and that process
+  records `region_enter "maintenance"` and then `exit 0` in the parent. Seen
+  directly: `lockwatch.mjs <git> 150 40` (build the fixture, then poll `.git/objects`
+  for 40 ms after `commit` returns, under 10 busy loops): git 2.55.0 `regular files
+seen directly in objects/ after commit returned: [["maintenance.lock",71]]`, so in
+  71 of 150 builds; git 2.43.0 `[]`, run straight after under the same loops. With no
+  load, 60 builds of each were `[]`: the window is milliseconds, and the runner is
+  slower than this machine.
+
+  **The hypotheses in "What the code shows".**
+  1. _The template's `afterAll` removed it during the test._ **Refuted.** `grep -n
+afterAll scripts/test/review-record.test.ts`: the one hook, after the template
+     helper, and vitest runs it after the file's last test. The failure also names
+     the copy's path, not the template's.
+  2. _A remover outside the repo deleted `review-record-<random>`._ **Not
+     confirmed, and not needed.** The failure reproduces with nothing else in the
+     process tree touching `/tmp/rr-probe-*` (`micro.mjs`). Nothing in the repo
+     removes the directory either: `grep -rn "review-record-" scripts packages tools
+--include=*.ts --include=*.mjs` lists only `mkdtemp` prefixes and the test's own
+     cleanup.
+  3. _A `git` process still writing into the template._ **Confirmed, in a changed
+     form:** not a process writing objects but the detached `git maintenance` child
+     holding `objects/maintenance.lock`. The brief said neither the test nor
+     `buildTicketRepo` starts one; `git commit` does, in git 2.55.0.
+  4. _Node's recursive copy creating `.git` and `.git/objects` in an order that fails
+     for a freshly written source._ **Refuted.** Node 22.23.3 copies the same freshly
+     written fixture 0 / 8000 times under the same load with git 2.43.0 and 0 / 8000
+     with git 2.55.0 and `maintenance.auto=false`. The only variable that moved the
+     count was the maintenance child.
+
+  The first bullet there (a bad template would fail every copy) is an observation and
+  stands: the template is good, and a transient file in it is not.
+
+  **Done when.**
+  1. _Probe count on `main`, with its contention._ `probe.mjs <tree> 20 6 <out>` runs
+     `vitest run scripts/test/review-record.test.ts` 20 times one after another, with 6
+     busy loops for the length of each run, git 2.43.0: `probe: 0 of 20 runs named
+ENOENT; 0 of 20 exited non-zero`, every run `Tests 64 passed (64)`, 908 s in all.
+     Also `vitest run scripts/test/` (14 files, no added load, 10 runs): `0 of 10`,
+     `Tests 571 passed (571)`, 409 s. A 0 is recorded as 0. This probe cannot see the
+     failure: one exposed event per run at roughly 0.1 % per event (the 7 / 8000 above)
+     is not visible in 20 runs. **The same probe against `main` with git 2.55.0 was not
+     run.**
+  2. _Each hypothesis_: above.
+  3. _The fixed head._ `probe.mjs <tree> 20 6 <out> <scratch git 2.55.0 bin>` (git 2.55.0
+     first on `PATH`; the probe prints `git on the probe's PATH: git version 2.55.0`):
+     `probe: 0 of 20 runs named ENOENT; 0 of 20 exited non-zero`, every run `Tests 64
+passed (64)`, 829 s in all. As uninformative as the sweep on `main`; the evidence
+     that the line removes the failure is the last row of the table, 0 / 8000 against 7
+     / 8000 for the same load, the same git and the same copy. The test names are
+     unchanged: no `test(` line was added, removed or renamed.
+
+  **Not done.**
+  - Other places that run `git commit` and then copy or clone a repository are not
+    changed. In this file only `withTicketRepo` copies one. `land()` in
+    `scripts/review-record.mjs` clones the fixture with `--no-hardlinks`, which also
+    copies `objects/`; whether `git clone` tolerates a vanished `maintenance.lock` is
+    not measured here, so it is not claimed exposed or safe. The fixtures it clones are
+    built by `buildTicketRepo` and now carry the setting; a real checkout carries none.
+    That needs its own reproduction before it is a ticket.
+  - The setting is in `buildTicketRepo` only: the bare and `otherDir` repos the `land()`
+    tests build are untouched, and nothing copies them.
