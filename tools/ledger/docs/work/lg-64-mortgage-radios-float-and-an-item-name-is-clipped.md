@@ -3,7 +3,7 @@ id: lg-64
 tool: ledger
 title: Two layout defects — the mortgage radios float away from their labels, and an item's name field clips its entry
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [repo-109]
 difficulty: standard
@@ -117,6 +117,50 @@ selectors give, not something observed in a browser.
 4. `npm run check` exits 0, and `npm run e2e:ledger` passes in CI's ledger workflow
    with the assertions in lines 1 to 3 green; the Household and Receipt screenshots
    at both widths are looked at, and the Log names what each one showed.
+
+## Review
+
+**Gate: PASS** — 2026-10-24 · `8a6dcf9a..058d8604` · Opus 5.5, depth standard
+
+| Done when                                                                                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Each mortgage radio, on Household and on Salaries, at 360 and 1280 px, is no wider than it is tall and its label starts beside it. Red on `main`'s `styles.css`, green after | `e2e/layout.spec.ts` › "Household fits a phone and a desktop" and › "Salaries fits a phone and a desktop", through `radiosBesideTheirLabels`: `width <= height`, text left `>=` radio right, text top `<` radio bottom. With base `styles.css` on the head's spec: Household radios 159/175/185 px wide at 360 and 375/398/413 px at 1280, 44 tall; Salaries radios 262 px at 360 and 510 px at 1280, label starting below the radio at both widths. Both cases ✘. At the head both ✓. CI `e2e` (ledger workflow) green on `058d8604` ✓ |
+| 2. The filled item's name field is at least as wide as "Organic rolled oats" set in its own font, at both widths. Red on `main`, green after                                    | `e2e/layout.spec.ts` › "Receipt fits a phone and a desktop, with a photo kept and an item typed", the `fits(… nth(0), "Organic rolled oats")` assertion. With base `styles.css`: 108 px at 360 and 81.375 px at 1280 for 131.3125 px of text, ✘. At the head ✓, field 260 / 508 px wide. CI `e2e` green on `058d8604` ✓                                                                                                                                                                                                                 |
+| 3. "12.99" fits the price field's content box at both widths, and the shared, taxable and remove controls are inside the page width                                             | Same Receipt test: `fits(… nth(1), "12.99")` plus the three controls' `left >= 0` and `right <= innerWidth`. The price assertion passes at the base too, and the line does not ask for a red at the base. It can still fail: a planted 3rem price field turns it red at both widths ("30 px for 43.171875 px of text"). CI `e2e` green on `058d8604` ✓                                                                                                                                                                                  |
+| 4. `npm run check` exits 0; `npm run e2e:ledger` passes in CI's ledger workflow; the screenshots were looked at and the Log names what each showed                              | `npm run check` exit 0 at the head (local). Ledger workflow run on `058d8604`: `e2e` success, "12 passed (16.9s)". **Verified** by reading for the screenshot clause: the Log describes all four screenshots, and the gate's own geometry probe matches each description. The gate did not open the PNGs ✓                                                                                                                                                                                                                              |
+
+- **low** · no `Done when` line depends on it · `nfr:maintainability`. In
+  `radiosBesideTheirLabels`, "beside" is read from the first line box of the
+  label's text only. A label whose second line wraps back under the radio passes.
+  Planted at 360 px only (`.rule-form .choice { display: block; width: 4.5rem }`):
+  "By shares" breaks into (77, w15) and then (49, w42), and 49 is left of the
+  radio's 54–74 px. "Salaries fits a phone and a desktop" stayed ✓. Done when 1
+  says "starts beside", so the line as written is met. The head's flex `.choice`
+  cannot produce this layout unless its `display` changes.
+- **dropped** · the name on its own row at 1280 px, raised by the dispatch as a
+  possible regression. Per item row: 165 → 217 px (+52 px) at 1280 px, and
+  269 → 269 px at 360 px. Price grows from 99 to 153 px at 1280 and stays 126 px
+  at 360. Deposit goes from 99 to 153 px at 1280 and from 164 to 126 px at 360.
+  Every control is reachable at both widths. Build step 3 asks only that the
+  price and deposit fields keep the size they need and that the row stays
+  reachable at 360 px, and both hold. A taller desktop row is a product choice,
+  not a defect the ticket rejects.
+- **dropped** · `throw new Error("no canvas")` in the spec's `fits`. It runs
+  inside `page.evaluate`, in the browser, where the tool's `AppError` is not
+  available. That rule does not reach it.
+- **findings** · the hunt returned 3: 1 carried, 2 dropped.
+- Reach of the stylesheet change. Widened selectors: `.choice` (was
+  `.mortgage-form .choice`) and the new `input[type="radio"]`. A grep of
+  `web/src` finds `choice` labels and radios only in
+  `household/MortgageSetting.tsx` (Household) and `salaries/MortgageSplit.tsx`
+  (Salaries). `.items .item > input:first-child` matches only the item rows of
+  `receipts/Receipts.tsx` (Receipt). That is 3 screens, all 3 measured at 360
+  and 1280 px, and all 3 are in `layout.spec.ts`. The whole spec is 12 of 12 ✓
+  at the head.
+- `expect.soft` failures fail their case and the run: with base `styles.css`
+  the run printed "3 failed / 12 passed", exit 1.
+- NFR: security n/a (CSS and a spec) · performance n/a · reliability ✓ (no
+  wall-clock assertion added) · maintainability — the low above.
 
 ## Log
 
