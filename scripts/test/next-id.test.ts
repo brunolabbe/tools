@@ -1145,3 +1145,99 @@ test("two unrelated pull requests that file one id still clash", () => {
   ]);
   expect(clashes(claims(sources, "repo"))).toEqual([{ id: 70, sources: ["PR#801", "PR#802"] }]);
 });
+
+/**
+ * repo-118's Q2, the name floor under stacking: a branch named for a ticket
+ * claims that ticket through its name, and a branch stacked on a parent that
+ * holds the same id is claiming the parent's ticket by name as well.
+ *
+ * `repo-66-followup` is cut from `repo-66-parent`, and files `repo-67`. Without
+ * the name being taken off the child, the child claims 66 by name and clashes
+ * with its parent on it — the same clash the diff-level check removes.
+ */
+test("a stacked child whose branch name carries its parent's id reports no clash for it", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("repo-66-parent", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  runGit(peer, ["checkout", "-q", "-b", "repo-66-followup", "repo-66-parent"]);
+  fs.writeFileSync(path.join(peer, "docs/work/repo-67-child.md"), "the child\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", "repo-66-followup"]);
+  runGit(peer, ["push", "-q", "origin", "repo-66-followup"]);
+
+  const run = withGh([
+    { number: "623", head: "repo-66-parent", files: ["docs/work/repo-66-parent.md"] },
+    {
+      number: "625",
+      head: "repo-66-followup",
+      files: ["docs/work/repo-66-parent.md", "docs/work/repo-67-child.md"],
+    },
+  ]);
+  const sources = collect("repo", { run, cwd: peer, rev: "origin/trunk" });
+  const result = claims(sources, "repo");
+  expect(clashes(result)).toEqual([]);
+  expect(rows(result)).toEqual([
+    "at origin/trunk repo-5",
+    "PR#623 repo-66",
+    "PR#625 (stacked on PR#623) repo-67",
+  ]);
+  expect(sources.map((source) => source.source).toSorted()).toEqual([
+    "PR#623",
+    "PR#625 (stacked on PR#623)",
+    "at origin/trunk",
+    "branch/trunk",
+  ]);
+});
+
+/**
+ * The partial case of the same rule: a stacked child whose name names two ids,
+ * one of them the parent's, keeps the other. `repo-68` is not held by the
+ * parent, so it stays claimed by the child, by its name, and the parent's 66 is
+ * the only id taken off.
+ */
+test("a stacked child's name keeps the ids its parent does not hold", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("repo-66-parent", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  // The second id is spelled with the prefix, because that is the only form
+  // `idsIn` reads as a claim: `repo-66-and-68` names 66 alone.
+  const name = "repo-66-and-repo-68-followup";
+  runGit(peer, ["checkout", "-q", "-b", name, "repo-66-parent"]);
+  fs.writeFileSync(path.join(peer, "docs/work/repo-67-child.md"), "the child\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", name]);
+  runGit(peer, ["push", "-q", "origin", name]);
+
+  const run = withGh([
+    { number: "623", head: "repo-66-parent", files: ["docs/work/repo-66-parent.md"] },
+    {
+      number: "625",
+      head: name,
+      files: ["docs/work/repo-66-parent.md", "docs/work/repo-67-child.md"],
+    },
+  ]);
+  const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
+  expect(clashes(result)).toEqual([]);
+  expect(rows(result)).toEqual([
+    "at origin/trunk repo-5",
+    "PR#623 repo-66",
+    "PR#625 (stacked on PR#623) repo-67",
+    "PR#625 (stacked on PR#623) repo-68",
+  ]);
+});
+
+/**
+ * The reverse of the stacked name case, and the one that keeps the name floor
+ * honest: two pull requests that are not stacked, whose branch names both carry
+ * id 70, still clash on it. Neither contains the other, so neither name is taken
+ * off anything.
+ */
+test("two unrelated pull requests whose branch names share an id still clash", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("repo-70-first-filer", ({ write }) => write("notes-first.txt", "first\n"));
+  branch("repo-70-second-filer", ({ write }) => write("notes-second.txt", "second\n"));
+  const run = withGh([
+    { number: "801", head: "repo-70-first-filer", files: ["notes-first.txt"] },
+    { number: "802", head: "repo-70-second-filer", files: ["notes-second.txt"] },
+  ]);
+  const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
+  expect(clashes(result)).toEqual([{ id: 70, sources: ["PR#801", "PR#802"] }]);
+});

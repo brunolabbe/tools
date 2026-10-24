@@ -66,7 +66,7 @@ function fail(message, exit) {
  * `sha` is set on a branch the checkout holds, and on nothing else: it is what
  * `stackPulls` asks git about, and only a commit in hand can be asked.
  *
- * @typedef {{source: string, paths: string[], note?: string, unread?: boolean, sha?: string}} Source
+ * @typedef {{source: string, paths: string[], note?: string, unread?: boolean, sha?: string, name?: string}} Source
  */
 
 /**
@@ -309,9 +309,10 @@ export function branchSources(options = {}) {
           `unrelated: branch ${name} shares no history with ${rev}, so every file it holds that ` +
           `${rev} lacks was read, not just the branch's own — expect it to over-claim`,
         sha,
+        name,
       };
     }
-    return { source, paths, sha };
+    return { source, paths, sha, name };
   });
 }
 
@@ -457,7 +458,7 @@ export function collect(prefix, options = {}) {
   }
 
   sources.push(...branches);
-  return stackPulls(sources, { run, cwd });
+  return stackPulls(sources, { run, cwd, prefix });
 }
 
 /**
@@ -484,6 +485,34 @@ export function isAncestor(ancestor, descendant, run, cwd) {
 }
 
 /**
+ * The child's branch name, with the ids its parent already holds taken off it.
+ *
+ * A branch named for a ticket claims that ticket through its name, which is a
+ * floor and not a diff (repo-49). Stacked on a parent that holds the same id,
+ * the name is the parent's ticket as well, so `repo-66-followup` on
+ * `repo-66-parent` must not clash on 66 (repo-118's Q2). A name that also names
+ * an id the parent does not hold keeps that id, restated on its own, so the
+ * name claims what it claims.
+ *
+ * Only the branch's own name is touched, and only where it still sits first in
+ * `paths` — `collect` strips a name naming only merged ids, and that case has
+ * nothing here to take off.
+ *
+ * @param {Source} child
+ * @param {Set<number>} heldByParent
+ * @param {string} prefix
+ * @returns {string[]}
+ */
+function unheldName(child, heldByParent, prefix) {
+  const [head = "", ...rest] = child.paths;
+  if (child.name === undefined || head !== child.name) return child.paths;
+  const named = idsIn([child.name], prefix);
+  const unheld = named.filter((id) => !heldByParent.has(id));
+  if (unheld.length === named.length) return child.paths;
+  return unheld.length === 0 ? rest : [unheld.map((id) => `${prefix}-${id}`).join(" "), ...rest];
+}
+
+/**
  * repo-118's stacked case: a pull request whose head contains another open
  * pull request's head is stacked on it, and must not clash with it.
  *
@@ -507,12 +536,13 @@ export function isAncestor(ancestor, descendant, run, cwd) {
  * that is itself stacked must still be named by its own label.
  *
  * @param {Source[]} sources
- * @param {{run?: typeof runCommand, cwd?: string}} [options]
+ * @param {{run?: typeof runCommand, cwd?: string, prefix: string}} options
  * @returns {Source[]}
  */
-export function stackPulls(sources, options = {}) {
+export function stackPulls(sources, options) {
   const run = options.run ?? runCommand;
   const cwd = options.cwd;
+  const prefix = options.prefix;
   const pulls = sources.filter(
     (source) => source.sha !== undefined && !source.unread && source.source.startsWith("PR#"),
   );
@@ -543,10 +573,16 @@ export function stackPulls(sources, options = {}) {
         ),
     );
     const inherited = new Set(parents.flatMap((parent) => parent.paths));
+    const heldByParent = new Set(
+      idsIn(
+        parents.flatMap((parent) => parent.paths),
+        prefix,
+      ),
+    );
     restated.set(child, {
       ...child,
       source: `${child.source} (stacked on ${nearest.map((parent) => parent.source).join(", ")})`,
-      paths: child.paths.filter((entry) => !inherited.has(entry)),
+      paths: unheldName(child, heldByParent, prefix).filter((entry) => !inherited.has(entry)),
     });
   }
   return sources.map((source) => restated.get(source) ?? source);
