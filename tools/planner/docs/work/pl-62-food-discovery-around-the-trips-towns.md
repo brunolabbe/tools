@@ -102,7 +102,10 @@ squash merge. The order is the order the Log reports them.
 - **Restaurants outnumber places to sleep in a town** by a margin nothing here has
   measured, so the per-town cap decides which ten are shown, and "closest to the
   town's point" is a ranking that favours a town centre. Build 1 measures density
-  before the cap is chosen.
+  before the cap is chosen. **Build 1 found the premise false on the map for these
+  nine localities**: 117 food finds against 141 places to sleep at 10 km, more food in
+  three localities, less in four and the same in two (the Log's Build 1 entry). The point about the ranking
+  stands: Gaspé's and Percé's ten closest all sit within 300 m of the town's point.
 - **The role string is `food`'s and says what a meal is.** pl-58's `role` for `food`
   reads "meals that are part of the trip rather than fuel for it", and it is the
   second change to that string within a week if Build 4 appends to it, as pl-60
@@ -770,3 +773,212 @@ aa834403 -- tools/planner` lists only this ticket and pl-61's), so every "on pl-
   the measurements made at it. The fixtures Build 1 and 9 name are on `main`:
   `api/test/fixtures/overpass-lodging-towns.json` and
   `agent/test/fixtures/pl60-base-prompts.json`.
+
+**2026-10-24 — Build 1: the food capture, and the counts Decision 6 is asked from
+(builder, Opus 5.5).** Branched from `89a38d30` (`origin/main`) as
+`pl-62-food-town-pass`. Stopped here, as Build 1 says: **no source, test or fixture
+changed**. The scratch scripts and every raw reply are in the dispatch's scratch
+directory, `pl-62/build/` (`capture.mjs`, `retry.mjs`, `count.mjs`, `combined.mjs`) and
+`pl-62/build/raw/` (24 files, one per request, each holding the query, the user agent,
+the status, the time and the reply text verbatim). Nothing of it is checked in: the
+fixture Build 9 and `Done when` 2 name is captured at the radius Decision 6 chooses,
+through `overpassPointQuery` once Build 2 gives it the food kinds, so this capture is
+the evidence for the decision and not that fixture.
+
+- **Network.** `curl -s -m 40 -A 'webtools-planner/0.9 (pl-62 food capture)'
+https://overpass-api.de/api/status` → `http=200 t=38.472164`. The filing's
+  `http=000` was the sandbox of the day, not the instance.
+- **The query, and what the brief had wrong about it.** Build 1 says to build the text
+  "through the built `overpassPointQuery`". That cannot be done before the stop: the
+  function maps `DiscoveryKind`s through `KIND_FILTERS`, which has no food kind until
+  Build 2 adds one, and Build 1 writes no code. So `capture.mjs` builds the text with a
+  copy of the function's template that takes filters directly, and **first proves the
+  copy byte-identical to the built function**: for each of the nine towns,
+  `pointQuery(point, 10000, <the eight lodging filters>, 28)` equals both
+  `overpassPointQuery(point, 10_000, LODGING_KINDS, 28)` from `api/dist` and the
+  `query` pl-60 stored in `overpass-lodging-towns.json` (printed `template check: 9 of 9
+towns equal overpassPointQuery and the stored query`). The food query is then that
+  template with one `nwr[...]` clause each for `"amenity"="restaurant"`, `"cafe"`,
+  `"bar"`, `"pub"`, `"shop"="bakery"` and, counted apart, `"amenity"="fast_food"`,
+  `around:25000` at each town's `towns[].point`, `[timeout:80]` (pl-60's for 25 km),
+  `out center tags;`.
+- **How it was sent.** `fetch` from Node 22.23.3, `POST` to
+  `https://overpass-api.de/api/interpreter`, headers `content-type: text/plain` and
+  `user-agent: webtools-planner/0.9 (pl-62 food capture)`, not through the adapter
+  (whose `user-agent: node` is answered 406, pl-61). Serial, 5 s apart. Commands:
+  `node capture.mjs <worktree> <scratch>/pl-62/build`, then for the 502s below
+  `node retry.mjs <worktree> <scratch>/pl-62/build "food25:Forillon National Park"
+"combined10:Bonaventure" "combined10:Forillon National Park" "combined10:Gaspé"
+"combined10:Gaspésie"`, then `node count.mjs raw` and `node combined.mjs raw
+<worktree>/tools/planner/api/test/fixtures/overpass-lodging-towns.json`, each run
+  from `pl-62/build/`.
+- **Requests and timings: 24 to Overpass, 16:44:40 to 17:00:05 UTC**, plus the status
+  probe. No HTTP 429. **Six HTTP 502s**, each in 0.35 to 0.38 s, with the body "This
+  Overpass API server is currently at capacity … Retry your request using exponential
+  backoff". The brief's "one retry after an HTTP 429" did not cover them, so
+  `retry.mjs` re-asked each 502 after 30 s, then 60 s, at most three times; one (Gaspé's
+  combined query) needed two re-asks. The food queries: 9 HTTP 200 in 22.1 to 42.0 s,
+  one of them Forillon's re-ask (31.4 s), no `remark`. The combined queries: below.
+- **What a find is, here.** As `findFrom` keeps it: a coordinate (`lat`/`lon`, or
+  `center`), a non-empty trimmed `name`, and a tag among the asked ones; within a
+  radius by haversine from the town's point to that coordinate, as `nearbyPoint`
+  re-filters. Counted offline from the one 25 km reply per town. A cross-check: the
+  combined query below asks the server for 10 km directly, and its food elements per
+  town (named and unnamed) equal this count's 10 km named plus unnamed, town for town.
+
+**Food finds (Decision 1 (a)'s tags) by town and radius, by element type**
+(`n`ode, `w`ay, `r`elation):
+
+| Town                   | 2 km           | 6 km            | 10 km           | 25 km             |
+| ---------------------- | -------------- | --------------- | --------------- | ----------------- |
+| Amqui                  | 7 (n4 w3 r0)   | 7 (n4 w3 r0)    | 9 (n6 w3 r0)    | 18 (n13 w5 r0)    |
+| Bonaventure            | 7 (n4 w3 r0)   | 8 (n5 w3 r0)    | 8 (n5 w3 r0)    | 13 (n10 w3 r0)    |
+| Carleton-sur-Mer       | 6 (n6 w0 r0)   | 6 (n6 w0 r0)    | 6 (n6 w0 r0)    | 20 (n15 w4 r1)    |
+| Forillon National Park | 0              | 1 (n1 w0 r0)    | 2 (n2 w0 r0)    | 20 (n20 w0 r0)    |
+| Gaspé                  | 15 (n15 w0 r0) | 15 (n15 w0 r0)  | 17 (n17 w0 r0)  | 20 (n20 w0 r0)    |
+| Gaspésie (peninsula)   | 0              | 0               | 0               | 0                 |
+| Matane                 | 15 (n8 w7 r0)  | 17 (n9 w8 r0)   | 17 (n9 w8 r0)   | 21 (n11 w10 r0)   |
+| Percé                  | 19 (n10 w9 r0) | 21 (n11 w10 r0) | 23 (n13 w10 r0) | 29 (n16 w13 r0)   |
+| Rivière-du-Loup        | 7 (n7 w0 r0)   | 33 (n29 w4 r0)  | 35 (n31 w4 r0)  | 41 (n35 w6 r0)    |
+| **All 9, summed**      | 76 (n54 w22)   | 108 (n80 w28)   | 117 (n89 w28)   | 182 (n140 w41 r1) |
+| All 9, distinct        | 76             | 108             | 116             | 161               |
+
+- **Two zero localities at 2 km and one at 6 and 10 km**, and neither is a town: the
+  peninsula has none at any radius, and the park has 0, 1 and 2. **Forillon National
+  Park's 25 km reply holds exactly Gaspé's 27 elements** (the same `type/id` set; the
+  query texts differ), so the park's food is Gaspé's and only past 10 km. One element is
+  in both Gaspé's and Forillon's 10 km lists, which is why 117 summed is 116 distinct.
+- **Ways are 28 of 117 (23.9%) at 10 km**, against lodging's 65 of 141, and only one
+  relation exists at any radius. The area form still matters: Matane's 17 include 8
+  ways and Percé's 23 include 10.
+- **Rivière-du-Loup's finds lie mostly 2 to 6 km from its point**: 7 at 2 km, 33 at 6 km.
+
+**By tag value**, counted apart, so an element carrying two meal tags counts under each
+(two do: `Café boulangerie Toujours Dimanche`, node 14313763800, `amenity=restaurant`
+and `shop=bakery`; `Le Fournand Boulangerie`, way 598360367, `amenity=cafe` and
+`shop=bakery`). Restaurant / café / bar / pub / bakery:
+
+| Town                   | 2 km                | 6 km                  | 10 km                 | 25 km                  |
+| ---------------------- | ------------------- | --------------------- | --------------------- | ---------------------- |
+| Amqui                  | 3 / 1 / 1 / 2 / 0   | 3 / 1 / 1 / 2 / 0     | 4 / 1 / 1 / 3 / 0     | 9 / 2 / 3 / 4 / 0      |
+| Bonaventure            | 5 / 0 / 0 / 1 / 1   | 6 / 0 / 0 / 1 / 1     | 6 / 0 / 0 / 1 / 1     | 8 / 2 / 0 / 1 / 2      |
+| Carleton-sur-Mer       | 3 / 1 / 1 / 0 / 1   | 3 / 1 / 1 / 0 / 1     | 3 / 1 / 1 / 0 / 1     | 11 / 4 / 2 / 2 / 1     |
+| Forillon National Park | 0 / 0 / 0 / 0 / 0   | 1 / 0 / 0 / 0 / 0     | 2 / 0 / 0 / 0 / 0     | 10 / 5 / 3 / 1 / 1     |
+| Gaspé                  | 6 / 5 / 2 / 1 / 1   | 6 / 5 / 2 / 1 / 1     | 8 / 5 / 2 / 1 / 1     | 10 / 5 / 3 / 1 / 1     |
+| Gaspésie               | 0                   | 0                     | 0                     | 0                      |
+| Matane                 | 8 / 2 / 3 / 2 / 1   | 9 / 3 / 3 / 2 / 1     | 9 / 3 / 3 / 2 / 1     | 13 / 3 / 3 / 2 / 1     |
+| Percé                  | 15 / 1 / 0 / 2 / 2  | 16 / 2 / 0 / 2 / 2    | 17 / 2 / 0 / 3 / 2    | 20 / 4 / 1 / 3 / 2     |
+| Rivière-du-Loup        | 4 / 2 / 1 / 0 / 0   | 19 / 5 / 3 / 5 / 1    | 20 / 6 / 3 / 5 / 1    | 24 / 8 / 3 / 5 / 1     |
+| **All 9, summed**      | 44 / 12 / 8 / 8 / 6 | 63 / 17 / 10 / 13 / 7 | 69 / 18 / 10 / 15 / 7 | 105 / 33 / 18 / 19 / 9 |
+
+**What the code would drop or exclude, summed over the nine (2 / 6 / 10 / 25 km):**
+food elements with no name, which `findFrom` drops, 1 / 4 / 7 / 13 (at most 4 in one
+town, Matane at 10 km). **`amenity=fast_food`, excluded by Decision 1 (a)**, named
+18 / 24 / 26 / 42 (unnamed 1 / 1 / 2 / 7). At 10 km by town: Amqui 3, Bonaventure 1,
+Carleton-sur-Mer 1, Forillon 2, Gaspé 3, Gaspésie 0, **Matane 10**, Percé 1,
+Rivière-du-Loup 5. So the exclusion costs 26 finds against the 117 kept (22.2%), and
+in Matane 10 against 17.
+
+**Tag presence over the named food finds, de-duplicated by `type/id` across towns.**
+Beside it, the lodging capture's 140 at 10 km from Decision 4 (exact keys).
+
+| Key                       | Food, 10 km: 116, exact | Food, wider reading | Food, 25 km: 161, exact | Lodging, 10 km: 140, exact |
+| ------------------------- | ----------------------- | ------------------- | ----------------------- | -------------------------- |
+| `website`                 | 31 (26.7%)              | 31 (26.7%)          | 36 (22.4%)              | 49 (35.0%)                 |
+| `phone`                   | 22 (19.0%)              | 22 (19.0%)          | 29 (18.0%)              | 25 (17.9%)                 |
+| `email`                   | 5 (4.3%)                | 5 (4.3%)            | 6 (3.7%)                | 15 (10.7%)                 |
+| at least one of the three | 36 (31.0%)              | 36 (31.0%)          | 46 (28.6%)              | 53 (37.9%)                 |
+| none of the three         | 80 (69.0%)              | 80 (69.0%)          | 115 (71.4%)             | 87 (62.1%)                 |
+| `opening_hours`           | 12 (10.3%)              |                     | 16 (9.9%)               | 0 (0.0%)                   |
+| `check_date`              | 2 (1.7%)                |                     | 3 (1.9%)                | 3 (2.1%)                   |
+
+The wider reading (`website` ∪ `contact:website` ∪ `url`, `phone` ∪ `contact:phone`,
+`email` ∪ `contact:email`) adds nothing for food at either radius: no named food find
+carries one of the wider keys without the exact one. Lodging's wider "at least one" was
+62 of 140 (44.3%). Decision 4 is answered (a), so this is the record it asked for and
+not a reopening.
+
+**Food against lodging at 10 km, by locality** (lodging from pl-60's fixture): Amqui 9
+and 8, Bonaventure 8 and 8, Carleton-sur-Mer 6 and 8, Forillon National Park 2 and 17,
+Gaspé 17 and 24, Gaspésie 0 and 0, Matane 17 and 14, Percé 23 and 40, Rivière-du-Loup 35
+and 22; **117 against 141 in all**. _What differs from pl-60_'s "restaurants outnumber
+places to sleep in a town" is false on this map for these nine, and is corrected there
+in this commit.
+
+**What a closest-first cap shows** (finds shown of finds in the radius, summed over the
+nine; a town where the cap binds is named):
+
+| Radius | Cap 10                                                                        | Cap 15                                                    | Cap 20                                     |
+| ------ | ----------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------ |
+| 2 km   | 57 of 76; binds in Gaspé (15), Matane (15), Percé (19)                        | 72 of 76; binds in Percé                                  | 76 of 76                                   |
+| 6 km   | 62 of 108; binds in Gaspé (15), Matane (17), Percé (21), Rivière-du-Loup (33) | 82 of 108; binds in Matane, Percé, Rivière-du-Loup        | 94 of 108; binds in Percé, Rivière-du-Loup |
+| 10 km  | 65 of 117; binds in Gaspé (17), Matane (17), Percé (23), Rivière-du-Loup (35) | 85 of 117; binds in Gaspé, Matane, Percé, Rivière-du-Loup | 99 of 117; binds in Percé, Rivière-du-Loup |
+
+- **Where the cap binds, the ten closest are the centre**: the tenth-closest food find
+  is 237 m from Gaspé's point, 276 m from Percé's, 733 m from Matane's and 2,274 m from
+  Rivière-du-Loup's; the farthest inside 10 km is 8,852, 9,004, 2,577 and 9,843 m. In
+  the other five localities the cap does not bind at 10 km (9, 8, 6, 2 and 0 finds).
+- **The radius moves few finds; the cap moves many.** 6 km to 10 km adds 9 of 117
+  (Amqui 2, Forillon 1, Gaspé 2, Percé 2, Rivière-du-Loup 2), and with a cap of ten it
+  adds 3 shown finds (62 to 65). Cap 10 to cap 15 at 10 km adds 20 shown finds.
+- **The ten closest by tag** at 10 km, restaurant / café / bar / pub / bakery: Gaspé 4 /
+  4 / 1 / 0 / 1, Matane 4 / 2 / 2 / 2 / 1, Percé 8 / 0 / 0 / 2 / 0, Rivière-du-Loup 6 /
+  2 / 1 / 1 / 0. Bars and pubs together are 1 to 4 of each capped ten.
+
+**The combined query (Decision 3 (b)'s shape), sent once per town as the answer to
+Decision 3 asks**: the eight lodging clauses and the five food clauses in one
+`overpassPointQuery`-shaped text at 10 km, `[timeout:28]`, the timeout `nearbyPoint`
+derives from the default 30 s deadline. The lodging-only column is pl-60's checked-in
+reply for the same point, radius and timeout. That fixture stores each reply parsed,
+so its wire size is unknown; both sides are compared as compact JSON.
+
+| Town                   | Tries (status, s)          | Combined: wire, compact, elements (lodging / food) | Lodging only: compact, elements |
+| ---------------------- | -------------------------- | -------------------------------------------------- | ------------------------------- |
+| Amqui                  | 200 24.5                   | 6,517 B, 5,197 B, 17 (8 / 9)                       | 2,170 B, 8                      |
+| Bonaventure            | 502 0.4; 200 43.4          | 5,533 B, 4,375 B, 21 (11 / 10)                     | 2,896 B, 11                     |
+| Carleton-sur-Mer       | 200 35.6                   | 3,933 B, 3,099 B, 15 (9 / 6)                       | 1,723 B, 9                      |
+| Forillon National Park | 502 0.4; 200 37.6          | 6,008 B, 4,716 B, 22 (20 / 2)                      | 4,357 B, 20                     |
+| Gaspé                  | 502 0.4; 502 0.4; 200 38.4 | 15,390 B, 12,264 B, 43 (26 / 17)                   | 7,159 B, 26                     |
+| Gaspésie               | 502 0.4; 200 34.7          | 653 B, 512 B, 2 (1 / 1)                            | 366 B, 1                        |
+| Matane                 | 200 29.9                   | 10,252 B, 7,968 B, 35 (14 / 21)                    | 4,310 B, 14                     |
+| Percé                  | 200 29.4                   | 20,053 B, 15,765 B, 63 (40 / 23)                   | 10,609 B, 40                    |
+| Rivière-du-Loup        | 200 27.7                   | 21,083 B, 16,712 B, 64 (29 / 35)                   | 7,114 B, 29                     |
+
+- The lodging element counts equal pl-60's fixture's, town for town.
+- **7 of 9 combined queries took over 28 s and 5 of 9 over 30 s**, which `nearbyPoint`'s
+  default deadline would have abandoned. **That is the instance's load, not the query's
+  size**: Gaspésie's, with 2 elements, took 34.7 s, and the food-only 25 km queries took
+  22.1 to 42.0 s in the same quarter-hour, while pl-60's 25 km lodging queries took
+  11.3 to 30.1 s. So this run cannot separate (a)'s two queries from (b)'s one on time,
+  and it does not price the food query at the radius Decision 6 chooses: **unmeasured**,
+  and Build 9's fixture capture times it. Decision 3 stays (a).
+
+**Open decision: Decision 6, the food pass's radius and per-town cap.** Put to the
+orchestrator with the options as Decision 6 words them; not settled here.
+
+- (a) The same, 10 km and ten. The table: 65 of 117 finds shown; the cap binds in four
+  towns, whose ten are each town's centre (the tenth within 237 m to 2,274 m).
+- (b) A smaller radius, such as the corridor's 6 km, with the same cap: 62 of 108
+  shown. It loses Forillon's second find, Amqui's two outer ones, and two each in Gaspé,
+  Percé and Rivière-du-Loup.
+- (c) Choose from Build 1's table of counts at 2, 6 and 10 km: the table above.
+- (d) Leave open.
+
+**Builder's recommendation: (a), 10 km and ten.** The reason Decision 6 gave for a
+different number was density, and the capture says food is not denser than lodging
+here (117 against 141 at 10 km), so the case for two numbers is gone. The radius barely
+matters between 6 and 10 km (9 finds in 117), so the one that matches `lodging` keeps
+the two lists over the same circle. The cap of ten does cut four towns' lists to their centres,
+which suits "a meal close to where the party stays" and keeps `food`'s block no longer
+than `lodging`'s, so Decision 5's lodging-based cost floor still applies. If the owner
+wants more choice in a dense town, the next option to price is (c) with 10 km and
+fifteen: 85 of 117 shown, 20 more finds in four towns' blocks.
+
+**Where the next builder starts.** Build 2, once Decision 6 is answered. The food tags
+are Decision 1 (a)'s; the template proof above is the check that Build 2's new
+`KIND_FILTERS` entries produce the text this capture sent (the same clause strings,
+`"amenity"="restaurant"` and so on). Build 9's fixture is a fresh capture of the nine
+towns through the built `overpassPointQuery(point, <radius>, <food kinds>, 28)`, sent
+the same way (`capture.mjs`'s `send`, the same user agent or one naming the fixture),
+and should expect HTTP 502 "at capacity" from the public instance and back off rather
+than fail.
