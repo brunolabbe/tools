@@ -3,7 +3,7 @@ id: lg-66
 tool: ledger
 title: Import a workbook the reader does not know, through a layout Haiku 5.5 describes and the person confirms
 kind: work-package
-status: needs-decision
+status: ready
 milestone: P6
 depends_on: [lg-38]
 difficulty: hard
@@ -68,13 +68,17 @@ screen (chosen); Haiku + the reader's `outOfOrder` list put to the user; Sonnet
   confirmation shows **the date column the description chose, with a few rows'
   dates**, beside the bucket labels the 2026-10-18 preference covered.
 
-## Decision — open
+## Decision — answered 2026-10-24 by the owner
 
-Three questions the owner's answers do not settle. Each changes the Build
-below; the Build is written for the recommended option of each, and says what
-would change. Rate of the work once answered: `hard`, as filed.
+Three questions the owner's earlier answers did not settle, answered by the
+owner on 2026-10-24 (the Log's entry of that date has each question, its
+options and the one chosen). The options stay as they were put, and the answer
+is marked under each question. The Build is written for the answers given. Rate
+of the work: `hard`, as filed.
 
 ### 1. Where the import runs
+
+**Answered: (a), a web flow** (the recommendation).
 
 lg-7's Build made the importer "A command, not a route": "It is a one-off, and
 it has no reason to exist on the network." The owner's answers say "confirm on
@@ -105,6 +109,12 @@ screen" and "a confirmation screen".
 
 ### 2. Which files
 
+**Answered: (b), bank CSVs too** (this overrode the recommendation, (a)). The
+owner was then asked how to carry it out, and chose **"Split: file lg-67 for
+CSVs"**: lg-66 is the `.xlsx` build below, and a CSV is refused with the plain
+message until lg-67, which serves bank CSVs (to be filed after this pull
+request merges; it depends on lg-66 and is not in this ticket's `depends_on`).
+
 Of the 13 measured fixtures, six are workbooks and seven are bank CSVs. A CSV
 has no bucket column: the reader returns its rows as `unfiled`, and
 `importWorkbook` refuses any unfiled row (lg-38's Log, "A CSV has no
@@ -133,6 +143,8 @@ it would need matching one for one against a statement paste of the same dates
   rows already stored, are open design.
 
 ### 3. What `ignored` means
+
+**Answered: (a), leave the reader and correct the text** (the recommendation).
 
 `ignored` is a list of sheets the contract text calls "read as none of the
 above". The reader never consults it: the reading is identical whether it is
@@ -172,9 +184,10 @@ itself drives a real import.
 
 ## Build
 
-Written for the recommended option of each decision above. The first commit
-records the owner's answers on this page and moves `status` to `ready`, as
-`docs/01-TICKETS.md` says, before any source changes.
+Written for the owner's answers above: a web flow (Decision 1 (a)), the
+`.xlsx` import with bank CSVs left to lg-67 (Decision 2, split), and the text
+of `ignored` corrected (Decision 3 (a)). The answers are recorded on this page
+and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
 
 1. **Move what was measured from `api/test` into `src`, so the product sends
    what the harness measured and there is one copy.** That is `layoutView`,
@@ -227,9 +240,10 @@ records the owner's answers on this page and moves `status` to `ready`, as
 3. **The two requests** (web flow, Decision 1 (a)). Both resolve the caller's
    household as the other routes do (`booksOf`, `personOf`).
    1. **Describe.** Takes the file and an explicit consent field. **Only an
-      `.xlsx` is read** (Decision 2 (a)): both requests refuse anything else,
-      a CSV included, with a typed error and a plain message, judged from the
-      bytes and not from the file's name. The judgement is the zip's own
+      `.xlsx` is read** (Decision 2, split): both requests refuse anything
+      else, a CSV included, with a typed error and a plain message, judged from
+      the bytes and not from the file's name. A CSV is refused this way until
+      lg-67, which serves bank CSVs (to be filed). The judgement is the zip's own
       structure: the file opens with `PK`, has a readable end-of-central-directory
       record and central directory, and holds the workbook's own entries,
       `[Content_Types].xml` and `xl/workbook.xml`. It is made from the central
@@ -417,12 +431,13 @@ records the owner's answers on this page and moves `status` to `ready`, as
     `packages/core/test/image-closure.test.ts` passes with the moved code.
     Whichever file under `tools/ledger/api` still imports `@anthropic-ai/sdk`
     belongs to a package that declares it.
-13. Decision 2 (a): the describe request and the confirm request, each given as
-    the upload (i) the `csv-balance` fixture's text, (ii) a CSV whose first
-    header is `PK ID`, and (iii) a zip that is not a workbook (one text entry),
-    return the same typed error with the same plain message that only an
-    `.xlsx` is read, the fake is not called, the sheet reader is not called, and
-    the books are unchanged. A zip with the workbook's two entries and no sheet
+13. Decision 2, split: the describe request and the confirm request, each
+    given as the upload (i) the `csv-balance` fixture's text, (ii) a CSV whose
+    first header is `PK ID`, and (iii) a zip that is not a workbook (one text
+    entry), return the same typed error with the same plain message that only
+    an `.xlsx` is read, the fake is not called, the sheet reader is not called,
+    and the books are unchanged. That holds until lg-67, which serves bank CSVs
+    (to be filed). A zip with the workbook's two entries and no sheet
     (its `xl/workbook.xml` a valid workbook with an empty `<sheets/>`; an empty
     file or text there fails in the parser, not at the 0-sheet refusal) reads as
     0 sheets and is a typed refusal with the fake uncalled, and the test asserts
@@ -722,3 +737,37 @@ wording fix: the findings' own evidence is the gate's `order.mts` (P1) and
   → 0 (was 1); `grep -c "inflates every accepted file a second time"` → 1 (was 0);
   `grep -c "avoid importing jszip, a dependency the api does not declare"` → 1
   (was 0).
+
+### 2026-10-24 — the owner's answers to the three open decisions; `status` is `ready`
+
+Asked of the owner after gate 5, through the orchestrator. The page's `## Decision`
+heading now reads `answered 2026-10-24 by the owner`, the answer is marked under
+each question, and Build 3.1 and Done when 13 say that a CSV is refused until
+lg-67. The options are as the Decision section states them.
+
+1. **"Where the import runs"** — (a) a web flow: a screen to upload, a button
+   that sends samples to the model, a confirmation; the tool's first route that
+   takes a spreadsheet; reverses lg-7's "a command, not a route" for this path.
+   (b) the existing `import:ledger` command with a flag that asks the model and
+   prints the confirmation in the terminal. **Chosen: (a). It took the
+   recommendation.**
+2. **"Which files"** — (a) `.xlsx` workbooks only, a CSV refused with a plain
+   message. (b) bank CSVs too, as statement rows, stored the way a statement
+   paste stores them. **Chosen: (b). It overrode the recommendation, (a).**
+   A follow-up question, "How should 'bank CSVs too' be carried out?", gave
+   three options: "Split: file lg-67 for CSVs" (recommended: lg-66 lands as the
+   `.xlsx` build with the CSV refusal kept "until lg-67", and lg-67 is filed
+   after #623 as bank CSVs read through a described layout into the inbox,
+   depending on lg-66, with its two design questions open: what proves a CSV with
+   no balance column, and how its rows are placed against rows already stored);
+   "Fold into lg-66"; "Re-pick Decision 2". **Chosen: "Split". It took the
+   recommendation.** So lg-66's Build stays the `.xlsx` build; Build 3.1 and Done
+   when 13 add that the CSV refusal holds until lg-67, and nothing else about
+   the refusal or its tests changes. lg-67 is not filed in this pull request
+   (`node scripts/next-id.mjs lg` printed `next free: lg-67`), and it is not in
+   any `depends_on`.
+3. **"What `ignored` means"** — (a) leave the reader, correct the schema's text
+   (the list is advisory and is not read; changes what the model is sent, so the
+   schema pin moves with a deliberate edit). (b) the schema refuses a layout that
+   names a sheet as ignored and as an account, period or salaries sheet. (c) the
+   reader honours `ignored`. **Chosen: (a). It took the recommendation.**
