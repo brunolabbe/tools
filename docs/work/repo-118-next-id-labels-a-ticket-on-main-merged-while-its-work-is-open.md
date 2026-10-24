@@ -70,3 +70,40 @@ on PR#<m>)` and not as a clash.
      `standard` because of Build 3's ancestor check. Chosen: keep. `difficulty` is not edited.
      Status stays `ready`; this is the owner's answer to a `ready` ticket's open question, not a
      change of state.
+- 2026-10-24 — Built on `repo-118-next-id-labels-and-stacked` from `5f9e3c0a`. Commits:
+  `2af649ed` (the answers above), `9b1e3f17` (the build), `561ed0c8` (the clash assertion moved
+  ahead of the labels, so a red run names the clash).
+  - **Build 1, the label.** The source for ticket files at the ref is `on main`, or `at <rev>`
+    for another ref. `scripts/test/next-id.test.ts` expectations are relabelled throughout.
+    The brief says `--ref`; the flag is `--rev` (`parseArgs`), and the build uses that. Done
+    when 1 is `on main repo-40` with no `merged` source, in "a ticket file on main is labelled
+    on main, and no row says merged". Live, `node scripts/next-id.mjs lg` on this checkout
+    printed 0 `merged` rows and 55 `on main` rows.
+  - **Build 2, the answer first.** `render` prints `next free:` on line 1, the notes straight
+    under it, then the rows and clashes. Its doc comment is reworded with the same reason.
+    Done when 2 is "the next free answer is the first line, and a note sits directly under
+    it", a 50-ticket board with one unread note: line 1 `next free: repo-51`, line 2 the unread
+    note, line 3 `on main repo-1`, last row `on main repo-50`.
+  - **Build 3, stacked.** `stackPulls` runs after the sources are built. A read pull request
+    head that `git merge-base --is-ancestor` puts inside another's is labelled `PR#<n> (stacked
+on PR#<m>)`, and the parent's paths come off its claim. Done when 3 is "a pull request
+    stacked on another's head reports no clash for the parent's ticket", over a real fixture
+    remote, and "two unrelated pull requests that file one id still clash", which keeps the
+    check from being a rule about paths. **Removal:** `isAncestor` made to return `false`
+    without running git, the spec red on the clash:
+    `expected [ { id: 66, sources: [ …(2) ] } ] to deeply equal []`, with `PR#623` and `PR#625`
+    in the sources. Restored from `9b1e3f17`; `scripts/test/next-id.test.ts` 33 of 33.
+  - **Fold-in, the owner-selected `concurrency.md`.** Its paragraph, sample (answer first, the
+    new labels, one stacked row), pull-request paragraph, clash paragraph and two table rows
+    are reworded. No other page under `.claude/skills/` is edited. The guard table gains a row
+    for the ancestor check. Nothing else on the ready list is made free by this work
+    (`repo-117` shares no file), so there is no other fold-in.
+  - **Not covered, and why.** A stacked branch with no pull request is not checked against its
+    parent. It still reads as a clash with the parent's pull request. The brief scopes Build 3 to
+    two pull requests, and widening it is a decision for the owner. A stacked child whose
+    _branch name_ carries its parent's id still clashes through the name floor. Read from the
+    code, not run.
+  - **Live, not a test:** `node scripts/next-id.mjs repo` on this checkout prints
+    `clash: repo-93 is claimed by branch/repo-93-sqlite-file-tests-windows-timeout, on main`.
+    That is a branch with no pull request, so the stacking check does not reach it. Its cause
+    was not investigated.
