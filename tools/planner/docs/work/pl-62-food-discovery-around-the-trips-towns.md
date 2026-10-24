@@ -1423,3 +1423,81 @@ tools/planner/api/test/live/invention.ts --after pl62-2026-10-24`, and its check
   whether the capture holds it (the column above).
 - **pl-61 (#618) has still not merged**: when it does, the `queried` count in
   `lodging-pass.test.ts` that the Build 2 entry describes goes from 1 to 2.
+
+**2026-10-24 — The web check's pre-registration (general-purpose agent, Opus 5.5).**
+Committed and pushed before any search runs. From the branch at `7fe6da26`; no
+source, test or fixture changes. It records each key's planned first query and the
+grouping of keys into objects, with the reasoning, before any search result can bear on
+either.
+
+- **The stratum and its order, re-read.** `PLANNER_LIVE_RUN=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24` (exit 0; it makes no
+  request) printed `stratum draw (pl62-2026-10-24, seed 20261020): 11 lodging-or-food
+named-premises keys` and its worksheet lists the eleven keys in the order of the
+  previous entry's table, which agrees with the Build 6 builder's handover.
+- **The capture, re-read.** `overpass-food-towns.json`, by `type/id`: `La Cantina` is
+  node 6753296585 (48.78999, −64.38081) and is in **both** Gaspé's and Forillon National
+  Park's replies (the previous entry names Forillon's only); `Pub Pit Caribou` is node
+  9437751976 and `Pub Aire Salin` way 484236636 (182 Route 132, `website`
+  airesalin.com), **0.197 m apart** by haversine, both `amenity=pub` with
+  `microbrewery=yes`, both in Percé's reply only. The same reply holds a third element,
+  **`Microbrasserie Pit Caribou`, node 6644593426 (48.47118, −64.30841), 8.79 km from the
+  Percé pub**, at L'Anse-à-Beaufils. It was not among the twelve food finds the run
+  handed `food` (Percé's closest ten and Forillon's two).
+
+**The grouping, decided here and not revisited after the searches.**
+
+1. **`la cantina|` and `la cantina|gaspé` are one object** (object 5). The run handed
+   `food` one element of that name, node 6753296585, in the town of Gaspé; the key with no
+   locality is a candidate that left the locality empty, as `le loup marin|` did in pl-60,
+   and it gets Gaspé added to its first query the same way. Each key is still judged from
+   its own locality, so `la cantina|` cannot be `exists-elsewhere`.
+2. **`pub pit caribou|percé` is not the object pl-58 searched** as `Brasserie Pit Caribou
+L'Anse-à-Beaufils`. pl-58's object is the brewery at 27 rue de l'Anse,
+   L'Anse-à-Beaufils (its `pit caribou|gaspé` note: "its pubs are in Percé and
+   Montréal"); the map holds the brewery and the Percé pub as two elements 8.8 km apart,
+   and the key names the pub, in Percé. So the budget's "where pl-57, pl-58 or pl-60
+   searched the same entity its first query is reused verbatim" does not apply, and
+   object 9 takes query 1 of the budget, `Pub Pit Caribou Percé`.
+3. **`pub pit caribou|percé` and `pub aire salin|percé` are two objects** (6 and 9),
+   though the two elements share one building. The budget joins keys that **name** one
+   real-world entity; these name two businesses, and whether one replaced the other at
+   182 Route 132 is a question the search answers, not one to assume before it. Joined,
+   they would share one first query that names only one of them, and the other name would
+   never be searched. **How the answer is read, fixed now:** each key is judged by its own
+   name at its own locality. If the web shows Pub Pit Caribou in Percé operating, it is
+   `exists`. If it shows the Percé pub now trading as Aire Salin, or Pit Caribou's Percé
+   pub closed, `pub pit caribou|percé` is `closed`, with the year where a source gives
+   one, and the Log counts it as a stale map entry. If the search finds neither, it is
+   `not-found` after the budget's three queries.
+4. **`odprta kuhna|ljubljana` is pl-58's object**, and reuses pl-58's first query
+   verbatim, `Odprta Kuhna Ljubljana` (pl-58's verdict was `exists`). It is the one set A
+   key, and not a map entry.
+5. **Every other key is its own object** under query 1 of the budget, the name with its
+   locality as the candidate wrote it.
+
+So **11 keys make 10 objects**, as the Build 6 builder read them. Fewer than 40, so the
+walk takes every key and stops `exhausted`.
+
+| #   | key                                   | planned first query                | object            | map entry the run handed `food`     |
+| --- | ------------------------------------- | ---------------------------------- | ----------------- | ----------------------------------- |
+| 1   | `resto du capitaine\|percé`           | Resto du Capitaine Percé           | object 1          | way 302432445                       |
+| 2   | `peppino pizza\|gaspé`                | Peppino Pizza Gaspé                | object 2          | node 9979845990                     |
+| 3   | `gaspésie brasserie gourmande\|percé` | Gaspésie Brasserie Gourmande Percé | object 3          | node 12972316601                    |
+| 4   | `restaurant le surcouf\|percé`        | Restaurant Le Surcouf Percé        | object 4          | way 598383461                       |
+| 5   | `la cantina\|`                        | La Cantina Gaspé                   | object 5          | node 6753296585                     |
+| 6   | `pub aire salin\|percé`               | Pub Aire Salin Percé               | object 6          | way 484236636                       |
+| 7   | `la maison du pêcheur\|percé`         | La Maison du Pêcheur Percé         | object 7          | way 302432126                       |
+| 8   | `odprta kuhna\|ljubljana`             | Odprta Kuhna Ljubljana             | object 8          | no (set A; pl-58's query, `exists`) |
+| 9   | `pub pit caribou\|percé`              | Pub Pit Caribou Percé              | object 9          | node 9437751976                     |
+| 10  | `resto du village\|percé`             | Resto du Village Percé             | object 10         | node 5739969621                     |
+| 11  | `la cantina\|gaspé`                   | La Cantina Gaspé                   | object 5 (repeat) | node 6753296585                     |
+
+- **Rules carried from pl-60's check, for cases its budget does not name:** a first
+  query that returns booking or listing aggregators only earns up to two more (pl-58's
+  Duca d'Alba, pl-60's L'Eglantier); query 3's "name in the local language" is the name
+  itself for a French name, so it adds French category words (`restaurant`, `pub`,
+  `casse-croûte`), as pl-60's did; a key in a sector of a municipality is judged by the
+  municipality, as pl-58 judged Gaspé's sectors.
+- **Firewall:** WebSearch runs on the vendor's side; WebFetch is tried before a page is
+  called unreachable.
