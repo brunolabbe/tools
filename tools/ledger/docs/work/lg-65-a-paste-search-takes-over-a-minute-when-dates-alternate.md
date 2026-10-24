@@ -1,7 +1,7 @@
 ---
 id: lg-65
 tool: ledger
-title: A paste search takes over a minute when a workbook's dates alternate by a day
+title: A paste search holds the write lock for 30 s to minutes when a workbook's dates alternate by a day
 kind: fix
 status: ready
 milestone: null
@@ -9,7 +9,7 @@ depends_on: []
 difficulty: hard
 ---
 
-# lg-65 — A paste search takes over a minute when a workbook's dates alternate by a day
+# lg-65 — A paste search holds the write lock for 30 s to minutes when a workbook's dates alternate by a day
 
 ## Why
 
@@ -448,3 +448,137 @@ The Decision is answered (above). The work is:
   - Build step 3's smaller shape is chosen after looking up the suite's budget.
   - Stop conditions: C missing the bound (above), and any outcome difference the
     oracle finds that is not a bug in the new search, reported with its seed.
+
+### 2026-10-24 — option C built: the same answers, found faster (lg-65's builder)
+
+- **C met the bound, so A was not built.** The search code is at `5f0bc943`
+  (`api/src/workbook-days.ts`); `statements.ts` is unchanged. The base is `main`
+  `8a6dcf9a`.
+- **What changed, and why each step keeps the answer.** `matchStretch` still runs
+  the same search over the same cuts, in the same order, with the same
+  tie-break; it skips only blocks whose answer is known without weighing them, as
+  its doc now lists: blocks wholly before the stretch pair nothing, so every cut up
+  to the stretch's first row is reached with nothing dated otherwise, and those
+  cuts are set rather than searched; a block holding the whole stretch and more
+  than `LONGEST_SEARCHED_DAY` rows is refused by `matchPart`, and so is every longer
+  block from the same cut, so the cut's search stops there; `matchPart`'s two
+  balance checks are made before the block is built, since one depends only on
+  where the block opens and the other only on where it closes. A block's date
+  range and whether it holds a paste's row are kept as the block grows instead of
+  being rebuilt with `slice` and `Math.min(...)` for every pair, and its pairing is
+  read from per-amount, per-date position lists (`pairAt`, `pairAmounts` step for
+  step) instead of being built from the block. `someAddUpTo` gives the same answer
+  with less work: it searches the smaller of "the `count` taken" and "the rest
+  left", carries a sum only while enough amounts remain to make the count, and
+  extends its sets in place.
+- **What the brief had wrong.** Option C said "the search tries each (from, to)
+  pair once, so the obvious memo does not help". That is true, and no memo is used:
+  the time went to pairs whose answer was known before weighing them, and to the
+  per-pair `slice`. It also did not know that `someAddUpTo` (a part that starts and
+  ends inside a day) is most of the time on small workbooks with mixed amounts: on
+  population seed 531, a 57-row alternating workbook with mixed amounts, it took
+  812 of 898 ms of the search before the rewrite (10,028 calls), and the search
+  took 333 ms after it.
+
+**Done when 1 and 2: the bound.** Each run is the reproduction spec on this page,
+in its own vitest process, one at a time, through the Build 1 wrapper with the
+tree as an argument (`time.sh` in the build scratch). The load is
+`/proc/loadavg`'s one-minute figure before each run; none was over 6. `main`'s
+times are the 2026-10-24 Build 1 entry above, at `8a6dcf9a`.
+
+| shape (`"p":3,"mode":"inside","redate":"alt"`) | `main` `8a6dcf9a`           | fixed `5f0bc943`, runs (load)           | fixed median | bound | met |
+| ---------------------------------------------- | --------------------------- | --------------------------------------- | ------------ | ----- | --- |
+| 300-row, 100 a date, alternating amounts       | 30,508 · 30,766 · 33,729 ms | 722 (1.24) · 738 (1.14) · 730 (1.13) ms | 730 ms       | 10 s  | yes |
+| 300-row, 100 a date, constant amounts          | 51,311 · 61,189 · 71,423 ms | 874 (1.24) · 857 (1.14) · 869 (1.13) ms | 869 ms       | 10 s  | yes |
+| 1,000-row, 200 a date, alternating amounts     | not finished, cut at ~277 s | 4,354 ms (1.13), one run                | —            | 30 s  | yes |
+
+Outcomes on the fixed build: `STATEMENT_ROW_CONFLICT` (two ways), accepted with 0
+added and 3 present, and `STATEMENT_ROW_CONFLICT` (two ways), the first two equal
+to `main`'s in Build 1. **`main`'s outcome on the 1,000-row shape is not known**:
+it never finished. A first single run of each shape, before `someAddUpTo` was
+rewritten, read 962 ms, 1,135 ms and 4,983 ms at load 0.6 to 1.0.
+
+Three more shapes, one run each on the fixed build, not graded: 1,000-row constant
+amounts 4,320 ms; the spec's mixed amounts (`"amts":"five"`) at 300 rows 1,289 ms
+and at 1,000 rows 5,772 ms; all accepted, 0 added, 3 present. Where the 1,000-row
+time goes now: a CPU profile of a 1,000-row constant paste (4,551 ms in all) puts
+2,509 ms in `nearby` in `statements.ts` (the SQL walk out from each candidate's
+edge, 1,284,798 rows read over 2,002 calls) and 1,634 ms in `matchStretch`. That is
+inside the bound, and this branch does not touch it.
+
+**Done when 3: outcomes unchanged.**
+
+- **(b) The seeded differential, seeds 1 to 20,000, run once.** The population is
+  `api/test/helpers/paste-population.ts`, rebuilt from lg-58's Log ("the tail of a
+  synthetic bank stretch, with or without a new row, against a workbook of the same
+  3 to 6 movements with rows re-dated and swapped"; that generator was never
+  committed) and widened with a second paste across rows a first paste stored,
+  pastes that cannot fit, lg-65's alternating shape at 12 to 40 rows, and one day
+  of 16 to 24 rows. Draws over the 20,000 seeds: 6,783 stretch tails, 5,081 slices
+  inside, 2,560 two-paste cases, 2,600 that cannot fit, 1,947 alternating and 1,029
+  long days. The 22,560 pastes came to 16,590 accepted (5,503 of them naming dates
+  that differ), 4,368 `STATEMENT_CHAIN_BROKEN`, 1,451 `STATEMENT_ROW_CONFLICT` and
+  151 `STATEMENT_BEFORE_HISTORY`. Two readings of it:
+  - **Against `main`'s code, in a second tree.** A worktree at `8a6dcf9a` (farmed
+    and built) and this branch at `5f0bc943` each ran every seed through
+    `importStatement` and wrote one line per seed (every paste's report or error
+    code, message and details, and every stored row after). The two files are
+    byte-identical: 20,000 lines each, sha256 `2fd32c3e…0b1f5633` both (96 s on
+    `main`, 82 s on the branch).
+  - **Call by call, in process.** `api/test/lg-65-search.test.ts` with
+    `LG65_SEEDS=1-20000` answers every `matchStretch` call by both this search and
+    `api/test/helpers/reference-search.ts`, `main`'s search at `8a6dcf9a` kept
+    verbatim, and runs every seed once on each: 0 of 387,077 calls differ (78,730
+    of them found a reading), 0 of 20,000 outcomes differ; exit 0 in 236 s.
+  - **Positive control: two planted divergences, each caught.** Each was edited
+    into `5f0bc943`'s `matchStretch`, run, and restored with
+    `git checkout 5f0bc943 -- tools/ledger/api/src/workbook-days.ts`.
+    (1) The `dayEnds` cut never made (`(false && dayEnds(...))`): the committed spec
+    fails (2 call mismatches in seeds 1 to 200), the compare run below fails 3 of
+    126 tests, and the two-tree dump differs from `main`'s on 4 of 20,000 seeds
+    (6387, 6716, 9902, 19989). (2) Blocks from before the stretch skip the first
+    cut past its start (`let to = from + 1 < past ? past + 1 : from + 1;`): the
+    committed spec fails (43 call mismatches, 6 outcome mismatches in seeds 1 to
+    200), the compare run fails 4 of 126, and 1,004 of 20,000 seeds differ.
+- **(a) Every paste the lg-59 and lg-61 suites cover.** Those suites are in
+  `api/test/workbook-days.test.ts`; `statements.test.ts` holds the other paste
+  cases. Both ran under a scratch config that adds a setup file wrapping
+  `matchStretch` the same way, throwing on any call where the two searches
+  differ, with `workbook-import.test.ts` beside them: 158 of 158 pass, 0
+  mismatches over 118 calls (`workbook-days.test.ts`, 40 finding a reading) and
+  725 calls (`statements.test.ts`, 120); `workbook-import.test.ts` makes none.
+  Plainly, with no wrapper: `npx vitest run` on the first two files, 126 of 126.
+- **(c) The committed spec** is `api/test/lg-65-search.test.ts`, "the search pairs
+  and decides every seeded paste as main's search did (lg-65)": seeds 1 to 200,
+  2.7 s of test time here, against the ledger project's 20 s a test
+  (`vitest.config.ts`). Before the 20,000-seed run, the population's alternating
+  shape was cut from 20 to 60 rows to 12 to 40, and each seed now copies a
+  migrated database instead of migrating one: 600 seeds of this spec had taken
+  28 s.
+
+**Done when 4 and Build 3: the pinned shape.** The ledger project allows 20 s a
+test. Times measured on the reproduction spec, 3 runs each, load 1.0 to 1.5:
+200-row constant 5,066 · 4,794 · 4,896 ms on `main`, 503 · 481 · 497 ms fixed;
+200-row alternating 3,095 · 3,200 · 3,148 on `main`, 378 · 348 · 354 fixed;
+250-row alternating 14,799 · 15,650 · 17,501 on `main`, 562 · 556 · 547 fixed.
+The 250-row alternating shape leaves the widest margin on both sides of a ceiling,
+so `api/test/lg-65-alternating-dates.test.ts`, "a three-row paste into 250 rows
+whose dates alternate by a day is read in under 5 s (lg-65)", pins it: the three
+readings `main` gives (3, 2 and 0 rows already stored) and under 5,000 ms. Run 3
+times on each tree, alternately: on the `main` tree it fails 3 of 3 on the time
+line alone ("expected 15087 / 15388 / 15790 to be less than 5000", the readings
+matching), and on the branch it passes 3 of 3 (588, 560, 578 ms). A 5 s ceiling is
+3.0 times under `main`'s fastest run and 8.5 times over the branch's slowest.
+
+**Folded in.** The title said the search "takes over a minute"; Build 1 measured
+the 300-row alternating shape at about 30 s, so it now reads "holds the write lock
+for 30 s to minutes". The file name keeps its old slug, since `status` reads only
+the id from it and the PR and dispatch name the path.
+
+**Not measured.** `main`'s outcome and time on the 1,000-row shape (it never
+finished); real workbooks with this shape; the `tail` and `miss` modes; histories
+holding rows from more than two pastes. **An unexplained clock gap**, as in Build 1
+(277 s against a 300 s cap): the wrapper's `date +%s` reads less than the spec's
+`performance.now()` (13 s of wall against 14,799 ms on `main`'s first 250-row run),
+and vitest reported 236 s for the 20,000-seed spec where the wrapper read 216 s.
+The medians above are `performance.now()`'s.
