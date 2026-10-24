@@ -529,6 +529,29 @@ stop with the options and a recommendation:
 builder's recommendation. The edit is exactly that: the comment, and nothing else in
 the contract.
 
+### Build 6's stop: `food` names almost no premises when no town pass ran (answered)
+
+Not one of the six decisions above; the Build 6 builder put it at the paid run's report.
+With no list of places (set A: no town pass ran), `food` names almost no premises, **1 of
+71 set A mentions against pl-60's 27 of 73** (the Log's Build 6 entry). That is what Build
+4's role sentence specifies, and `lodging` did the same in pl-60. It matters more while
+pl-61 is unmerged, because every public-Overpass food query gets 406. The options, with
+the builder's recommendation first:
+
+- **(a) Accept it as designed.** Costs: until pl-61 merges, a trip with no town pass gets
+  kinds of place and no premises from `food`. Gains: no code change, and `food` and
+  `lodging` behave alike.
+- **(b) A follow-up ticket** that lets `food` name premises from memory when no town pass
+  ran. Costs: an intake slot, and a premise named from memory is the invention pl-58
+  measured. Gains: set A keeps the premises it had.
+- **(c) Hold this pull request until pl-61 merges.** Costs: the pull request waits on
+  another branch. Gains: the paid run's set A reading is not what a user meets.
+
+**Chosen: (a), by the owner on 2026-10-24**, relayed by the orchestrator; it was the
+builder's recommendation. **#619 is held as a draft until #618 (pl-61) has merged**, which
+carries (c)'s effect as merge order and not as a condition of the code. No follow-up
+ticket is filed.
+
 ## Done when
 
 Each line is provable by the test or command it names. The towns are the nine of Build
