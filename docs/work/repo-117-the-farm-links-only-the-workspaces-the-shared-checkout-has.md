@@ -105,9 +105,25 @@ directories as real directories; the new links go inside them.
     `core`, farmed into this worktree with `node_modules` removed, printed
     `linked workspace @webtools/ui -> ../../packages/ui`, and `npm run build` exited 0
     with no hand `ln -s`. Against a healthy shared root the farm is silent about workspaces.
-  - Not folded in: `reference/worktree-hygiene.md` › _Give a new worktree its
-    dependencies_ still says the shared checkout "needs one `npm install`" after a new
-    workspace merges, and `SKILL.md` step 1 runs `check-farm-freshness.mjs
-/workspaces/tools`, which now also names an unlinked workspace there. Both are pages
-    this ticket's dispatch put out of scope; the first sentence is now stale for the link
-    (not for fetched dependencies).
+  - Not folded in (superseded by the next entry): `reference/worktree-hygiene.md` ›
+    _Give a new worktree its dependencies_ still said the shared checkout "needs one
+    `npm install`" after a new workspace merges, and `SKILL.md` step 1 ran the check with
+    no flag, which now also names an unlinked workspace there. Both pages were outside
+    this ticket's dispatch.
+- 2026-10-24 — Owner's decision on that open decision, relayed by the orchestrator. The
+  question: the two pages above are now partly stale; what to do? The options: (1) file a
+  one-line follow-up (the builder's recommendation), (2) log it for the next review (the
+  orchestrator's recommendation), (3) fold it into repo-117 now, with `SKILL.md` step 1
+  taking `--packages` and the `worktree-hygiene.md` sentence reworded. The owner chose
+  **(3), fold into repo-117 now**, overriding both recommendations. Both page edits are
+  the owner's and in scope:
+  - `SKILL.md` step 1 now runs `check-farm-freshness.mjs --packages /workspaces/tools`.
+    Measured equal to the old no-flag form on main (`5f9e3c0a`): against a stale shared
+    root (lockfile declares `@anthropic-ai/sdk`, absent) both print the same warning and
+    exit 1, and against a healthy root both print nothing and exit 0 (`cmp` on stdout,
+    stderr and exit code: identical).
+  - `worktree-hygiene.md` › _Give a new worktree its dependencies_ now says the shared
+    checkout needs one `npm install` for a newly fetched package, and that a new
+    workspace does not, since the farm links the worktree's own workspaces. The
+    paragraph's first line (the shared copy of the farm script) is unchanged: it was not
+    part of the answer.
