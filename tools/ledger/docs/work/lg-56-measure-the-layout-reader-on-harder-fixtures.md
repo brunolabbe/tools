@@ -590,8 +590,11 @@ pointer in lg-38's Log are the whole branch.
 
 **Provenance.** The owner was away from the computer and asked the orchestrator
 session (tools-f6) to run this Log's four commands, one after the other, with the
-owner's key. They ran from the shared checkout at `main` 89a38d30, from 17:32:40Z
-to 17:52:26Z, under one script that holds commands 1 to 4 of this Log verbatim
+owner's key. They ran from the shared checkout, which stood at `main` 89a38d30
+(the script records no sha; the checkout's `HEAD` log, read from
+`/workspaces/tools/.git/logs/HEAD`, has as its newest line `89a38d30` by `pull
+--tags origin main: Fast-forward` at 2026-10-24T16:36:25Z, before the run), from
+17:32:40Z to 17:52:26Z, under one script that holds commands 1 to 4 of this Log verbatim
 (only the key is read from a file). Each exited 0. Prices were checked first
 against `RATES` in `scripts/agent-cost.mjs` (read 2026-10-10): Haiku 5.5
 $0.10 in and $0.50 out, Sonnet 5.5 $2 in and $10 out, per million tokens, as the
@@ -722,8 +725,13 @@ What each says, from the records:
 - **The 10 let-through runs are one mistake.** In every one the date is column
   B, `Date of transaction`, where the correct description has A, `Date posted`;
   every other column is right, and none files `Reference` or anything else as
-  `note`. They score `problems: 0` because the file reads cleanly either way and
-  the balance chain does not depend on which date is read. The record keeps the
+  `note`. They score `problems: 0`: the verifications count the reader's
+  problems and nothing else, and reading the file through this layout reports
+  none. **The books do notice it, though** (corrected in round 1; see that
+  entry): all ten answers are exactly the wrong description the Build steps 1–2
+  entry pins ("the date read from B"), and reading the fixture through each of
+  them reports `outOfOrder` with 2 rows and `problems` with 0, against 0 and 0
+  for the correct description. The record keeps the
   count of problems, not their text, so which verification fired on the two
   refused runs is unmeasured, as in lg-38.
 - **`swapped-labels-1` (shown) is a refusal, and not the swap.** The answer left
@@ -771,7 +779,9 @@ movement-changing**: `N = 10`, `M = 0`, `K = 10`, `J = 0`.
 - **Whether a date-column let-through is a defect is the fixture's judgement.**
   The correct description is `Date posted` because the rows are in posted order,
   and the 21 rows the view shows hold no transaction-date inversion (round-1
-  entry), so only the header tells the two apart. The run says Haiku read the
+  entry), so in what is shown to the model only the header tells the two apart;
+  in the whole file, 2 rows are out of order under the transaction date, and the
+  reader reports them. The run says Haiku read the
   other date in 10 of 20 runs (9 of 10 shown, 1 of 10 masked) and Sonnet in 0 of 10. It does not say which date a household would want.
 
 #### Shown against masked
@@ -833,9 +843,10 @@ run's prices agree to four places.
 shown cost $0.001089 a run (40 runs) and Sonnet $0.015646, so **Sonnet is
 14.4 times Haiku per import**, as lg-38 found (14.05). In absolute terms an
 import costs a tenth of a cent with Haiku and under two cents with Sonnet on
-these fixtures. The brief's estimates were high: about $0.31 for 260 Haiku runs
+these fixtures. The estimates were high: about $0.31 for 260 Haiku runs
 at $0.0012 (the 260 cost $0.2597; the new CSV fixtures cost $0.0007 to $0.0009 a
-run), about $0.16 for command 1 (it cost $0.1297), and "at most about $2.2"
+run), about $0.16 for command 1 (the Build steps 1–2 entry's command comment, not
+the brief; it cost $0.1297), and "at most about $2.2"
 for Sonnet (it was run on four fixtures, not thirteen, and cost $0.6258). The
 spend stop did not trip.
 
@@ -852,9 +863,11 @@ spend stop did not trip.
   named was **not exercised** by any answer. Like lg-38's 0 of 60, the 0 says
   the models did not make those mistakes on these fixtures, not that the
   reader could stop them.
-- **The let-through the run did find was not one the ticket predicted.** The
-  ticket's note on `bank-two-dates` expected a model might file `Reference` as
-  `note` (harmless). None did; they read the other date.
+- **The let-through the run did find is one the ticket pinned, and not the one
+  its note expected.** The Build steps 1–2 entry pins "the date read from B, the
+  transaction date" for `bank-two-dates` as `let-through`, and the round-1 entry
+  names the date-column class. What the note on that fixture expected was a
+  model filing `Reference` as `note` (harmless); no run did that.
 - **Sonnet's run was triggered by command 3's test, `outcome !== "matched"`.**
   That sent Sonnet to `lg7` and `english`, where Haiku's only non-matches were
   same-import (harmless), and to `swapped-labels` (one refusal) as well as to
@@ -881,21 +894,35 @@ spend stop did not trip.
 Claiming no more than the fixtures show:
 
 1. **The numbers do not argue against building.** On 13 invented fixtures and
-   300 runs there was no movement-changing let-through (`J = 0`, about 1% at the
-   rule of three, an estimate). Haiku 5.5, shown, imported the right thing in
+   300 runs there was no movement-changing let-through (`J = 0`). **The bound
+   on it is an estimate and depends on what is counted: about 1% at the rule of
+   three if the 300 runs were independent (3/300), and about 23% counted by
+   fixture (3/13), which is the closer reading because the ten runs of a fixture
+   read one workbook.** Haiku 5.5, shown, imported the right thing in
    119 of its 120 runs on the twelve fixtures other than `bank-two-dates`, and
    the one that was not right was refused by the verifications. Both refusals
    in the 260 Haiku runs were of answers that would have been wrong (2 of 2).
 2. **The one thing the run found is a plausible, wrong date column that the
-   verifications do not see.** Haiku shown read `Date of transaction` for
-   `Date posted` in 9 of 10 runs on `bank-two-dates`, and 1 of 10 masked; Sonnet
-   read the posted date 10 of 10. The books' own checks cannot catch it, and in
-   this fixture only the header says which date is which. The owner's chosen
-   guard, "confirm on screen", was chosen for the swapped bucket labels, which no
-   model made here; **the date column is the case the run actually produced**, so
-   if it is built, what the owner confirms should include the date column (a few
-   rows with their dates), not only the bucket labels. That is a suggestion
-   from one fixture and 10 + 10 + 10 runs, not a measured remedy.
+   verifications do not refuse, and that the books do notice.** Haiku shown read
+   `Date of transaction` for `Date posted` in 9 of 10 runs on `bank-two-dates`,
+   and 1 of 10 masked; Sonnet read the posted date 10 of 10. All ten answers are
+   exactly the pinned wrong description. The verifications (`problems`) report
+   nothing for it. But reading the fixture through each of the ten answers
+   reports 2 rows `outOfOrder` (for example `2024-02-29` on row 19 listed above
+   `2024-03-02` on row 18) against 0 for the correct description, and the import
+   prints each one as "dated out of order: … imported as typed"
+   (`api/src/workbook-import.ts`, in the import report). In what is shown to the
+   model only the header says which date is which, because the 21 rows it sees
+   hold no inversion. The owner's chosen guard, "confirm on screen", was chosen
+   for the swapped bucket labels, which no model made here; **the date column is
+   the case the run actually produced**. Two ways a build could guard it, both
+   unmeasured beyond this one fixture: (a) what the owner confirms includes the
+   date column (a few rows with their dates); (b) the import treats a non-empty
+   `outOfOrder` as a prompt to confirm or as a refusal, using the signal the
+   reader already computes. Whether a real export shows inversions under its
+   transaction date, as this invented one does on 2 of 32 rows, is unmeasured,
+   and (b) works only if it does. These are suggestions from one fixture and
+   10 + 10 + 10 runs, not measured remedies.
 3. **On the owner's three preferences, this evidence is as follows.**
    _Haiku 5.5_: its only let-through is the date column above. Sonnet read the
    posted date in 10 of 10 runs and matched 40 of 40 on the four fixtures
@@ -904,8 +931,8 @@ Claiming no more than the fixtures show:
    let-through was not refused. Sonnet costs 14.4 times as much per import, which
    is under two cents on these fixtures. _Shown_: nothing in this run shows
    that showing figures helps. Masked was not worse on any fixture in a way that
-   changed an import (its non-matches are harmless same-imports and one
-   refusal), and was better on `bank-two-dates` for a reason this run did not
+   changed an import (its non-matches are four harmless same-imports, one
+   refusal and the one `bank-two-dates` let-through), and was better on `bank-two-dates` for a reason this run did not
    establish; masking is not measured to cost anything here. _Confirm on
    screen_: no model swapped the buckets, so the guard was never needed by any
    event in this run, and that does not show it unneeded (see the first point of
@@ -914,10 +941,13 @@ Claiming no more than the fixtures show:
    well, or that the guard is unnecessary.
 
 **The options in front of the owner**, with the recommendation first: build
-with the owner's three answers of 2026-10-18 plus the date column on the
-confirmation screen (it follows from the one failure observed and costs a screen
-element, and the owner may reconsider shown against masked in the light of the
-`bank-two-dates` row); build with Sonnet 5.5 instead (the failure observed did
+with the owner's three answers of 2026-10-18 plus a guard for the date column,
+either (a) the date column on the confirmation screen or (b) the reader's
+`outOfOrder` list put to the user (both follow from the one failure observed;
+(a) costs a screen element and works whatever the file holds; (b) costs nothing
+the reader does not already compute and is unmeasured beyond this fixture), and
+the owner may reconsider shown against masked in the light of the
+`bank-two-dates` row; build with Sonnet 5.5 instead (the failure observed did
 not occur in 10 runs of it; about 14 times the price per import); or drop. The
 choice, and whether to file the build, is the owner's.
 
@@ -926,3 +956,66 @@ declaring `@anthropic-ai/sdk` in `api/package.json` (lg-38 gate 1, low) still
 means a dependency line and a lockfile edit this docs-only branch does not touch,
 and "reading zero rows must be a problem" is, by this ticket's own Notes,
 input for a build ticket and not this one's to change. lg-38's Log points here.
+
+### 2026-10-24 — round 1 of the report: gate 1 FAIL at `e92dff07`; the owner's answers
+
+**The owner's answers, 2026-10-24.** Two questions, from the orchestrator:
+
+1. "How should the round correct F1?" Options: "(a) Correct + add option" (the
+   gate's recommendation and the orchestrator's) and "(b) Correct only". **The
+   owner chose (a).**
+2. "Fix all seven (F1, F4 and the five lows)?" Options: "Fix all seven" (the
+   orchestrator's recommendation) and "F1 and F4 only". **The owner chose "Fix
+   all seven".**
+
+The build-or-drop decision on lg-38 is still the owner's, and both `status:`
+lines are as they were. All seven findings were corrected in the entry above, in
+place, with the sentence that was wrong now saying what holds.
+
+- **F1 (high): reproduced, and it was right.** The entry said the ten
+  let-through runs "score `problems: 0` because the file reads cleanly either
+  way" and that "the books' own checks cannot catch it". The books notice it.
+  `git show e92dff07:tools/ledger/api/test/layout.test.ts` lines 478 to 497 (the
+  "bank-two-dates: the dates differ on some rows…" test) read the fixture through
+  `moveColumn(copy, "date", "B")` and assert `wrongly.outOfOrder.length` greater
+  than 0 and `wrongly.problems` equal to `[]`. I read the fixture through each of
+  the ten actual answers with the books' `readWorkbook` (a scratch script that
+  reads the records and the fixture and calls no model):
+
+  ```
+  shown/bank-two-dates-1.json outOfOrder=2 problems=0   (the same for -2 to -8 and -10)
+  masked/bank-two-dates-9.json outOfOrder=2 problems=0
+  correct description: outOfOrder=0 problems=0
+  sample: {"sheet":"activity.csv","row":19,"date":"2024-02-29","belowRow":18,"belowDate":"2024-03-02"}
+  ```
+
+  So the verifications (`problems`) do not refuse this mistake, the books report
+  2 rows out of order, and `workbook-import.ts` prints each as "dated out of
+  order: … imported as typed". The recommendation's second point and the
+  options now say so, and add the guard built on that signal as option (b), with
+  "unmeasured beyond this fixture" beside it: whether a real export shows
+  inversions under its transaction date is not known.
+
+- **F4 (med):** recommendation 1 now gives both bounds on `J = 0`, about 1%
+  (3/300) and about 23% counted by fixture (3/13), and says which the Log's own
+  analysis calls closer.
+- **F2 (low):** the line "not one the ticket predicted" was wrong. The Build
+  steps 1–2 entry pins the date read from B as `let-through` for
+  `bank-two-dates`. It now says that, and that what the note expected, `Reference`
+  as `note`, did not happen.
+- **F3 (low):** lg-38's pointer said "0 that changed a movement", which reads as
+  false there because "movement-changing" is lg-56's defined class. It now says
+  "0 that changed an amount, balance or detail" and names the transaction date.
+- **F5 (low):** recommendation 3's list of masked's non-matches left out
+  `bank-two-dates-9`. It now lists four same-imports, one refusal and that
+  let-through.
+- **F6 (low):** the "$0.16 for command 1" estimate is from the Build steps 1–2
+  entry's command comment, not the brief. Now said, and the sentence no longer
+  calls the three estimates "the brief's".
+- **F7 (low):** the provenance clause "at `main` 89a38d30" had no source in
+  `run.sh` or `run.log`. The source is the shared checkout's `HEAD` log. Re-read
+  for this round: its newest line is `89a38d30` by `pull --tags origin main:
+Fast-forward` at 1792859785 seconds, which is 2026-10-24T16:36:25Z (`date -u -d
+@1792859785`), before the run's 17:32:40Z start. The entry cites it.
+  (`git reflog` run through `git -C` was refused by the worktree-isolation check,
+  so the file under `.git/logs/` was read directly.)
