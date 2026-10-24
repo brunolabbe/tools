@@ -1798,3 +1798,20 @@ tools/planner/api/test/live/invention.ts --after pl62-2026-10-24` gave exit 0, w
 pl58-2026-10-21`, `--after pl60-2026-10-24` and `--after pl62-2026-10-24`) each gave exit
   0 and "check: the committed record equals its regeneration; every sampled place has a
   verdict". `npm run check` and preflight's fast checks are in the dispatch's report.
+
+**2026-10-24 — Maintenance (builder, Claude Haiku 5.5), at the orchestrator's dispatch: main
+merged after #618, and one test expectation changed.** `origin/main` was at `972ab6a0`
+(pl-61's PR #618 merged), and this branch was merged into it with a merge commit, not a
+rebase; the merge applied clean with no conflicts, in `tools/planner/api/src/grounding/valhalla.ts`,
+`runs/discovery.ts`, `runs/lodging.ts`, `runs/travel.ts` and their tests. With pl-62's food
+query, Gaspé is queried twice, once for lodging and once for food, so pl-61's case in
+`tools/planner/api/test/lodging-pass.test.ts` ("the town pass, when the backend refuses
+(pl-61)") now sees two "the town pass could not query a town" warns. **One expectation
+changed**, `expect(queried).toHaveLength(1)` to `toHaveLength(2)`; no other assertion moved.
+`npx vitest run tools/planner/api/test/lodging-pass.test.ts`, before the edit and after the
+merge:
+
+- before: `  Test Files  1 failed (1)` and `     Tests  1 failed | 15 passed (16)`, the one
+  failure `expected [ { …(2) }, { …(2) } ] to have a length of 1 but got 2` at
+  `lodging-pass.test.ts:516`, the `queried` line
+- after: `  Test Files  1 passed (1)` and `     Tests  16 passed (16)`

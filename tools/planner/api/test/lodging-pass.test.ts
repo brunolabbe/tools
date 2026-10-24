@@ -513,7 +513,7 @@ describe("the town pass, when the backend refuses (pl-61)", () => {
     );
     expect(located).toHaveLength(1);
     expect(located[0]?.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
-    expect(queried).toHaveLength(1);
+    expect(queried).toHaveLength(2);
     expect(queried[0]?.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
   });
 });
