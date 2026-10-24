@@ -3,7 +3,7 @@ id: lg-56
 tool: ledger
 title: Measure the layout reader again on harder fixtures, before lg-38 is built or dropped
 kind: work-package
-status: in-flight
+status: done
 milestone: P6
 depends_on: []
 difficulty: standard
@@ -255,6 +255,40 @@ the builder stops after step 2. Change no reader, schema or contract.
 - **findings** · the round's lines returned 1 new finding, which is carried; nothing was dropped. Of gate 1's findings, 5 are fixed and none was refuted. Nothing here is a `high`.
 - PR #562 at `7de01442`: every check passes, the Windows informational leg included.
 - NFR: security ✓ (nothing live; `live/` untouched) · performance n/a · reliability ✓ · maintainability ✓.
+
+### Gate 3
+
+**Gate: FAIL** — 2026-10-24 · `89a38d30..e92dff07` · Opus 5.5, depth narrow. This gate covers Build step 4 and the last four `Done when` lines only. Every figure was recomputed from all 300 records (130 Haiku shown, 130 Haiku masked, 40 Sonnet shown).
+
+| Done when                                                                               | Proof                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A test per new fixture that its correct description scores `matched`                    | **unproven (scope)**: settled in #562 under two gates; the dispatch takes it out of this gate's scope                                                                                                                                                                    |
+| The three named wrong descriptions and one per bank shape are pinned                    | **unproven (scope)**: as above (dispatch)                                                                                                                                                                                                                                |
+| A test turns red when `LAYOUT_FIXTURE_NAMES` and `layoutFixtures()` differ              | **unproven (scope)**: as above (dispatch)                                                                                                                                                                                                                                |
+| The Log has the Haiku shown and masked tables, and Sonnet's                             | **verified**. All three `summary.md` tables are in the Log cell for cell. The only difference is the column padding oxfmt adds. All 20 headline figures I recomputed from the records agree with the Log, and the per-fixture rows agree as well                         |
+| The Log quotes every run that did not match and whether it was caught                   | **verified**. There are 22 Haiku non-matches and 0 Sonnet. Each one's `outcome`, `verified`, `problems`, `differences` and columns appears in the Log as the record has it. Caught or not caught is right for every one, and the Log names no record that does not exist |
+| The Log gives the let-through count and bound, and what shown against masked changed    | **verified**. N=10, M=0, K=10, J=0, all of them `bank-two-dates`. Each bound is labelled an estimate and names its runs and fixtures. The rule-of-three arithmetic holds. Fisher two-sided p = 0.0011. F4 bears on how the recommendation quotes the bound               |
+| The Log ends with the recommendation, and lg-38's Log points here; neither closes lg-38 | **verified** for the clauses as written. Neither `status:` line changed (the diff only adds lines), the pointer resolves to the entry's heading, and the build-or-drop decision is left to the owner. F1 is a `high` in the recommendation's content                     |
+
+- **high** · F1 · false in the unsafe direction, in a conclusion the owner will choose a guard from. The Log says the 10 let-through runs "score `problems: 0` because the file reads cleanly either way". Its recommendation 2 says "The books' own checks cannot catch it, and in this fixture only the header says which date is which." Neither holds. All 10 answers are exactly the wrong description the branch pins for `bank-two-dates`, "the date read from B" (`b2d-answers.mjs`: `equalsPinnedDateB=true`, 10 of 10). Under that description the reader reports rows dated out of order:
+  - `api/test/layout.test.ts` › "bank-two-dates: the dates differ on some rows and not all, and only the posted one is in order" asserts `wrongly.outOfOrder.length > 0` and `problems` equal to `[]`, with the comment "The reader notices the order is off".
+  - The Build steps 1–2 entry's pinned table says "`outOfOrder` holds 2 rows, which is reported and not a problem".
+  - `api/src/workbook-import.ts` prints each one as "dated out of order: … imported as typed".
+
+  So the verifications do not refuse this mistake, but the books do notice it. The owner's options leave out a guard built on that signal. Direction for a fix: correct both sentences, and add that signal to the options with "unmeasured beyond this fixture" beside it. Whether a real export would show inversions under its transaction date is unmeasured.
+
+- **med** · Done when 7 depends on it (Build step 4: "claiming no more than the fixtures show") · F4. Recommendation 1 quotes `J = 0` as "about 1% at the rule of three". The Log's own bounds section says the independent units are "nearer the 13 fixtures than the 300 runs: counted by fixture, 3/13 is about 23%". The recommendation therefore quotes the bound its own analysis calls weaker, and leaves out the one it calls closer, which is optimistic. Fix: give both numbers in recommendation 1.
+- **low** · false in the conservative direction · F2. "The let-through the run did find was not one the ticket predicted." The ticket's Build steps 1–2 entry pins exactly this mistake for `bank-two-dates` ("the date read from B, the transaction date", `let-through`). The round-1 entry also names "date-column … the kind that matters for `bank-two-dates`". The Log is right that no run produced the `Reference`-as-`note` answer.
+- **low** · false in the unsafe direction, in a summary only · F3. lg-38's pointer says "0 that changed a movement". In lg-56, "movement-changing" is a defined class that excludes date-column runs. Read in plain words in lg-38, the phrase is false: each of the 10 runs imported the transaction date where the posted date belongs. The same sentence says "10 let through" and points to the entry. Fix: "0 that changed an amount, balance or detail".
+- **low** · false in a detail · F5. Recommendation 3 says masked's "non-matches are harmless same-imports and one refusal". They also include `bank-two-dates-9`, a let-through. The clause it supports ("not worse on any fixture") still holds.
+- **low** · F6. "The brief's estimates" includes "about $0.16 for command 1". That figure comes from the Build steps 1–2 entry's command comment, not from the brief. The figures themselves are right.
+- **low** · unverified · F7. The provenance clause "from the shared checkout at `main` 89a38d30" is not recorded in `run.sh` or `run.log`. `run.sh` runs `cd /workspaces/tools` and records no sha. Everything else in the provenance paragraph checks out against them: the times 17:32:40Z to 17:52:26Z, exits 0, commands 1–4 as in the Log with the key read from a file, command 3's list, and `RATES` with `RATES_READ_ON` 2026-10-10.
+- **dropped** · "verbatim": the Log's tables differ from each `summary.md` only by column padding, which oxfmt imposes on markdown here. Cell for cell they are identical (`verbatim.mjs`: `normalisedEqual=true`, 3 of 3).
+- **dropped** · "The Log ends with the recommendation": a fold-in paragraph follows it inside the same subsection. That is not a defect.
+- **findings** · the hunt returned 9; 7 carried (1 high, 1 med, 5 low), 2 dropped.
+- Positive control: in a scratch copy, `bank-two-dates-3` (shown) was set to `matched` and its cost raised by $0.01. The check then disagreed with the Log on 12 of 20 rows: shown totals, `bank-two-dates`, right imports, the non-matched count, N, the shown, Haiku and run costs, the four-fixture mean and the ratio. The masked and Sonnet rows stayed equal.
+- PR #621 at `e92dff07`: `check` passes twice, `changes`, `CodeQL`, `codeql` and `dependency-review` pass, and `test` is skipping (docs only). This branch touches no source.
+- NFR: security ✓ (no key in the Log; the records stay outside the repo) · performance n/a · reliability: F1 · maintainability n/a.
 
 ## Log
 
