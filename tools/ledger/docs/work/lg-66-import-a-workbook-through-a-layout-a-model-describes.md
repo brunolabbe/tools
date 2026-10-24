@@ -46,8 +46,9 @@ fixtures. What those two measurements show, and no more:
   pointing at an empty one (0 of 20 runs on `empty-columns-carry` and 0 of 20
   on `empty-columns-csv`). Those 0s say the models did not make the mistakes on
   these fixtures, not that the reader can stop them.
-- Cost: Haiku shown $0.000998 a run (130 runs); Sonnet 14.4 times that on the
-  four fixtures it was run on.
+- Cost: Haiku shown $0.000998 a run (130 runs). On the four fixtures Sonnet
+  was run on, Haiku shown cost $0.001089 a run and Sonnet $0.015646, 14.4 times
+  as much (15.7 times $0.000998).
 
 Nothing here speaks for a real household's workbook, for the shapes lg-56 lists
 as not measured (below), or for a model, effort or prompt other than the ones
@@ -75,9 +76,9 @@ would change. Rate of the work once answered: `hard`, as filed.
 
 ### 1. Where the import runs
 
-lg-7 made the importer "a command and not a route": run by the owner on the
-machine that holds the database, with no reason to exist on the network. The
-owner's answers say "confirm on screen" and "a confirmation screen".
+lg-7's Build made the importer "A command, not a route": "It is a one-off, and
+it has no reason to exist on the network." The owner's answers say "confirm on
+screen" and "a confirmation screen".
 
 - **(a) Recommended: a web flow.** A screen where a member of the household
   uploads the file, presses a button that sends samples to the model, reads the
@@ -86,14 +87,14 @@ owner's answers say "confirm on screen" and "a confirmation screen".
   command on the host. Costs: the tool's first route that takes a spreadsheet
   (a hostile `.xlsx` is parsed by the server, hence Done when 8), a paid,
   rate-limited route, a new screen with its 360 px case, and it reverses
-  lg-7's "never a route" for this path (the existing `import:ledger` command
+  lg-7's "a command, not a route" for this path (the existing `import:ledger` command
   stays as it is).
 - **(b) The existing command.** `import:ledger` gains a flag that asks the
   model, prints the confirmation in the terminal and waits for `y`. No upload,
   no route, no screen, no responsive case. Costs: only whoever runs commands on
   the host can use it, so a household cannot import its own file; "on screen"
   becomes "in the terminal". Under (b) Build steps 3 and 4 and Done when 5 to
-  9 are rewritten around the command.
+  9, 11 and 13 are rewritten around the command.
 
 ### 2. Which files
 
@@ -108,7 +109,14 @@ it would need matching one for one against a statement paste of the same dates
   message. The build is the workbook import the title says. Costs: a household
   arriving with a bank CSV gets nothing from this ticket, and seven of the
   thirteen measured shapes (including `bank-two-dates`, the one let-through)
-  are not served.
+  are not served. **And the failure the owner's guard answers was seen only on
+  a CSV.** The date-column let-through (9 of Haiku's 10 shown runs on
+  `bank-two-dates`, 1 of 10 masked) is a CSV fixture. On the six workbook
+  fixtures Haiku had 0 let-through in 120 runs: shown, 59 right and 1 refused
+  by the verifications; masked, 60 right. Under (a) the date column and the
+  bucket labels are still shown, as the owner chose, but the measurement
+  observed no workbook failure for either to guard against (no model swapped
+  the bucket labels either).
 - **(b) Bank CSVs too, as statement rows.** The described CSV's rows are read
   and stored the way a statement paste stores them (they wait in the inbox,
   unfiled). Costs: a second feature of the same size. The CSV reader now in
@@ -128,16 +136,30 @@ same as the correct description's. In a build, a description that contradicts
 itself drives a real import.
 
 - **(a) Recommended: leave the reader, correct the text.** The schema's
-  description says what is true (the list is advisory and is not read). It
-  keeps the behaviour that was measured, and the 6 answers keep importing
-  correctly. Costs: a self-contradictory answer still passes silently.
+  description says what is true (the list is advisory and is not read). The
+  reader's behaviour is the one measured, and the 6 answers keep importing
+  correctly. Costs: a self-contradictory answer still passes silently. **And it
+  changes what the model is sent.** The phrase "read as none of the above" is a
+  `.describe()` text of the answer's schema, which goes to the model as the
+  structured output's format (5,842 characters at the base, the phrase in it);
+  `layoutRequest` contains it for 0 of the 13 fixtures. All 300 runs were taken
+  with the old text, so the effect of the new text on what Haiku answers is
+  unmeasured. The build's schema pin (Build 1, Done when 1) moves with it, as a
+  deliberate edit. For scale, lg-56's Haiku shown run over the 13 fixtures
+  cost $0.1297.
 - **(b) The schema refuses a layout that names a sheet as ignored and as an
   account, period or salaries sheet.** Costs: the 6 answers above, which
   imported correctly, would have been refused as `invalid`, which the person
   sees as a failed read.
 - **(c) The reader honours `ignored`.** Costs: for the same 6 answers the
-  salaries sheet is ignored and the salaries read as none. What the import
-  then does is unmeasured.
+  salaries sheet is ignored and the salaries read as none, and **nothing
+  refuses it**. Measured offline, reading `lg7`'s fixture through each of the 6
+  actual answers with `salaries: null` (how a reader honouring `ignored` reads
+  them) scores `let-through` in 6 of 6, the same outcome the base suite pins
+  for lg-37's "the salaries missed". So (c) turns 6 correct imports into 6
+  wrong ones that the verifications let through. (The score compares the
+  reader's `problems`; `importWorkbook`'s own further checks were not run on
+  these six.)
 
 ## Build
 
@@ -162,9 +184,14 @@ records the owner's answers on this page and moves `status` to `ready`, as
      is "the receipt reader: a photo in, proposals out" and that it is "the only
      package that talks to a model". The builder proposes the changed lines in
      its report.
-   - Before moving anything, record the sha256 of `layoutRequest` for each of the
-     13 fixtures at the base, and pin them afterwards with a test, so a change
-     to what is sent is a deliberate edit of a pin.
+   - Before moving anything, record at the base the sha256 of `layoutRequest`
+     for each of the 13 fixtures **and** of the format schema the model is sent,
+     `JSON.stringify(zodOutputFormat(workbookLayoutSchema).schema)` (5,842
+     characters at the base; its `.describe()` texts, "read as none of the
+     above" among them, are in it and in no `layoutRequest`). Pin all 14
+     afterwards with a test, so a change to what is sent is a deliberate edit of
+     a pin. An edit to a `.describe()` text in `@ledger/contract` moves the
+     schema pin.
 2. **The reader and the schema.**
    1. `importWorkbook` takes a `layout` option, passed to `readWorkbook`, with
       the household's layout as the default. That makes the `unfiled` guard in
@@ -190,8 +217,12 @@ records the owner's answers on this page and moves `status` to `ready`, as
    4. **`ignored`**: as Decision 3 is answered.
 3. **The two requests** (web flow, Decision 1 (a)). Both resolve the caller's
    household as the other routes do (`booksOf`, `personOf`).
-   1. **Describe.** Takes the file and an explicit consent field. Reads the
-      sheets, builds the request, makes **one** model call, validates the answer
+   1. **Describe.** Takes the file and an explicit consent field. **Only an
+      `.xlsx` is read** (Decision 2 (a)): both requests refuse anything else,
+      a CSV included, with a typed error and a plain message, judged from the
+      bytes (an `.xlsx` is a zip, which opens with `PK`) and not from the file's
+      name, after the byte bound and before the file is parsed or anything is
+      sent. Reads the sheets, builds the request, makes **one** model call, validates the answer
       with `workbookLayoutSchema`, reads the file through it, and runs
       `importWorkbook` with `commit: false` so that its `report` is what the
       person is shown. Writes nothing. An answer that is not JSON, does not
@@ -201,13 +232,25 @@ records the owner's answers on this page and moves `status` to `ready`, as
       description, re-reads the file and runs every verification, and imports
       (`commit: true`) in the one transaction only when all hold. It makes no
       model call. **The server stores nothing of the upload** between the two.
-   3. **Bounds**, each a named constant: the upload's bytes, the number of
-      sheets, the rows and cells read, the length of a cell's text sent, and the
-      request's size. The request's size is counted in the API's tokens, not in
-      the four-characters estimate: lg-38's Log found the API's count at 2.2 to
-      2.3 times that estimate. The builder states each value and the arithmetic
-      for the largest request the bounds allow. The route has its own
-      rate-limit bucket, per person, as the receipt reader's paid route has.
+   3. **Bounds**, each a named constant, and each handled at the one point it
+      can be known:
+      - **The upload's bytes** are checked before the workbook is parsed; over
+        the bound is a typed refusal.
+      - **The number of sheets, and the rows and cells read,** need the parsed
+        file. Over either is a typed refusal before anything is sent.
+      - **The length of a cell's text sent** is a truncation, not a refusal: the
+        view cuts the text at the bound and the file is still read in full.
+      - **The request's size** is an estimate, since the API counts tokens only
+        by a call. It is the four-characters estimate of the request, the
+        answer's schema included, multiplied by 2.3, the upper end of the 2.2 to
+        2.3 ratio lg-38's Log measured between the API's count and that
+        estimate on its six fixtures. It is stated as an estimate, and over the
+        bound is a typed refusal before the call.
+
+      The builder states each value and the arithmetic for the largest request
+      the bounds allow. The route has its own rate-limit bucket, per person, as
+      the receipt reader's paid route has.
+
    4. **Configuration.** The key is the receipt reader's `ANTHROPIC_API_KEY`,
       with `ANTHROPIC_CUSTOM_HEADERS` refused as `loadReceiptReaderConfig`
       refuses it. With no key the route is refused with a typed error and no
@@ -257,7 +300,11 @@ records the owner's answers on this page and moves `status` to `ready`, as
    `english`, `csv-balance`, `csv-no-balance`, `swapped-labels`,
    `empty-columns-carry`, `empty-columns-csv`, `bank-preamble`,
    `bank-two-dates`, `bank-footer`, `bank-wide`) differs from its value at the
-   base. The Log gives the 13 hashes.
+   base. Another test fails when the sha256 of the format schema,
+   `JSON.stringify(zodOutputFormat(workbookLayoutSchema).schema)`, differs from
+   its value at the base. The Log gives the 14 hashes. Any edit to a
+   `.describe()` text in `@ledger/contract` is a deliberate edit of the second
+   pin, said in the Log with its reason.
 2. `importWorkbook` given no `layout` imports lg-7's and lg-37's fixtures as
    before: `api/test/workbook-import.test.ts` and `books/test/workbook.test.ts`
    pass with no case edited. Given a `layout` under which a row has no bucket
@@ -280,19 +327,26 @@ records the owner's answers on this page and moves `status` to `ready`, as
    a fake that answers text that is not JSON, a schema-invalid object, and a
    valid object after `stop_reason: "max_tokens"`, it returns a typed error
    each time, the fake was called once each time, and the books are unchanged.
-6. The fake is called once per describe request, and zero times for a request
-   without the consent field, for a request with no key configured, for any
-   file over a bound (one test per bound of Build 3.3), and for a confirm
-   request. Each refusal is a typed error.
+6. The fake is called once per describe request, and zero times for: a request
+   without the consent field; a request with no key configured; a file over each
+   of the four bounds of Build 3.3 that refuse (bytes, sheets, rows and cells,
+   the request's size estimate), one test per bound; and a confirm request.
+   Each refusal is a typed error.
 7. The confirm request given `lg37`'s fixture and its correct description
    leaves the books as `import:ledger --write` on the same workbook leaves them
    (the same movements and the same report figures); given a description that
    fails the verifications (the pinned wrong description of `lg37` with amount
    and balance swapped, outcome `refused`), it refuses, and the books are
    unchanged.
-8. The server refuses an upload over each bound of Build 3.3 before it parses
-   the workbook or sends anything, with a test per bound, and logs none of the
-   file's content.
+8. An upload over the byte bound is refused before the workbook is parsed (a
+   test where the sheet reader is a spy that is never called), and one over the
+   sheets bound, the rows-and-cells bound or the request-size estimate is
+   refused before anything is sent (a test per bound; the fake uncalled). A
+   cell whose text is longer than the cell-text bound is not refused: the
+   request carries it cut at the bound (a test reads the request the fake was
+   given), and the file is still read in full. The request-size estimate is the
+   four-characters estimate times 2.3, and the Log says it is an estimate. No
+   log line holds the file's content.
 9. The web tests show, for a fake describe response on `lg37`'s fixture: the
    statement of Build 4.1 present before the button is pressed, and the fake
    uncalled until it is; the date column's letter, header text and 3 + 3
@@ -315,6 +369,12 @@ records the owner's answers on this page and moves `status` to `ready`, as
     `packages/core/test/image-closure.test.ts` passes with the moved code.
     Whichever file under `tools/ledger/api` still imports `@anthropic-ai/sdk`
     belongs to a package that declares it.
+13. Decision 2 (a): the describe request and the confirm request, each given the
+    `csv-balance` fixture's text as the upload, return a typed error with a
+    plain message that only an `.xlsx` is read, the fake is not called, the sheet
+    reader is not called, and the books are unchanged. An `.xlsx` that is
+    renamed `.csv` is still read, and a CSV renamed `.xlsx` is still refused
+    (the check is on the bytes).
 
 ## Notes for the builder
 
@@ -367,8 +427,8 @@ lg-56's corrected Log (its entries "2026-10-24 — Build steps 3 and 4" and "rou
 fixtures.
 
 **Why `needs-decision`.** Three questions the owner's answers leave open, in
-"Decision — open": where the import runs (a web flow, against lg-7's "never a
-route"), which files (workbooks only, because a CSV has no bucket column and
+"Decision — open": where the import runs (a web flow, against lg-7's "a command,
+not a route"), which files (workbooks only, because a CSV has no bucket column and
 `importWorkbook` refuses unfiled rows), and what `ignored` means (the reader
 never consults it, and 6 of 20 Haiku `lg7` answers contradict themselves
 through it). The Build is written for the recommended option of each. The
@@ -398,3 +458,82 @@ to `ready`.
 **Fold-in exception.** Nothing else was made free by this filing; lg-38's
 status and Log are edited on the same branch because this filing is what meets
 its Done when 4.
+
+### 2026-10-24 — round 1: the gate on the filing returned FAIL at `571ad077`; the owner's answers
+
+Gate 3 (on PR #623, `4081e30d..571ad077`) returned FAIL: 2 high, 3 med, 4 low.
+Its record is for lg-38's `## Review`, as `### Gate 3`.
+
+**The owner's answers, 2026-10-24.** Three questions, from the orchestrator:
+
+1. "When should you answer lg-66's three decisions?" Options: "Fix first, then
+   ask" (the gate's recommendation) and "Ask now, findings attached". **The owner
+   chose "Fix first, then ask."** So no `## Decision — open` question is
+   answered here, `status` stays `needs-decision`, and the options' text is
+   corrected so the owner can answer them afterwards.
+2. "F3: how should the round reword Done when 8?" Options: "Gate's precise
+   reword" (the gate's recommendation) and "Minimal reword". **The owner chose
+   "Gate's precise reword"**: refuse on the byte bound before parsing and on
+   every other bound before anything is sent; make the cell-text bound a
+   truncation, not a refusal; count the request's API-token size by applying the
+   measured 2.3 ratio to the estimate, stated as an estimate.
+3. "Fix F4, F5 and the lows F6 to F9 in the same round?" Options: "Fix all
+   six" and "F4 and F5 only". **The owner chose "Fix all six."**
+
+**F1 (high): reproduced, and it was right.** Decision 3 (c) said what the import
+does with `Accueil` ignored "is unmeasured". The gate's probe, re-run on this
+branch (`node --import tsx probe.mts <tree> /home/pwuser`, which reads the
+fixtures and the 300 records and calls no model):
+
+```
+lg7 with salaries null: outcome=let-through problems=0 salaries=0
+shown/lg7-10, -3, -6, -9 and masked/lg7-1, -10: honoured outcome=let-through   (6 of 6)
+```
+
+(c) now says so: 6 correct imports become 6 wrong ones nothing refuses. The
+probe scores `problems`; `importWorkbook`'s own further checks were not run on
+these six, and the text says that.
+
+**F2 (high): reproduced, and it was right.** `node --import tsx format.mts
+<tree>`:
+
+```
+format schema: 5842 chars; contains "read as none of the above": true
+layoutRequest contains it for 0 of 13 fixtures
+```
+
+Build 1 and Done when 1 now also pin the sha256 of
+`JSON.stringify(zodOutputFormat(workbookLayoutSchema).schema)` (14 hashes), and
+Decision 3 (a) says it changes what the model is sent, that the 300 runs were
+taken with the old text, and what the Haiku shown run cost ($0.1297, lg-56).
+
+**F3 (med): fixed** as the owner chose. Build 3.3 handles each bound where it can
+be known: bytes before the parse, sheets and rows-and-cells after the parse and
+before anything is sent, the cell text as a truncation, and the request's size as
+the four-characters estimate times 2.3, an estimate. Done when 6 and 8 follow,
+with the spy on the sheet reader for the byte bound.
+
+**F4 (med): fixed.** Build 3.1 refuses anything but an `.xlsx`, judged from the
+bytes, and the new Done when 13 tests it with the `csv-balance` text.
+
+**F5 (med): fixed.** Decision 2 (a)'s costs now say the date-column failure was
+seen only on a CSV, and that on the six workbook fixtures Haiku had 0
+let-through in 120 runs (shown 59 right and 1 refused, masked 60 right), from
+lg-56's tables: `lg7` 6 + 4, `lg37` 10, `moved` 10, `english` 8 + 2,
+`swapped-labels` 9 + 1 refused, `empty-columns-carry` 10; masked: `lg7`
+8 + 2, `lg37` 8 + 2, and 10 each for the other four (matched + same import).
+
+**F6 (low): fixed.** Haiku shown cost $0.001089 a run on the four fixtures Sonnet
+was run on, so 14.4 times is against that; against $0.000998 it is 15.7
+($0.015646 / $0.000998).
+
+**F7 (low): fixed.** Decision 1 and the Log quote lg-7's Build as it reads: "A
+command, not a route." and "It is a one-off, and it has no reason to exist on the
+network." The filing had paraphrased it as a "never a route" that lg-7 does
+not say, and had dropped its reason (a one-off); the paraphrase is gone from
+Decision 1 and from the filing entry above.
+
+**F8 (low): fixed.** Decision 1 (b) lists Done when 5 to 9, 11 and 13.
+
+**F9 (low): fixed in lg-38's entry.** The owner was shown a description for each
+option; the entry now quotes each verbatim, as the orchestrator gave them.

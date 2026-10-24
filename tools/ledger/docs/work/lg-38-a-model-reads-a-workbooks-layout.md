@@ -628,17 +628,24 @@ dropping it is the owner's decision.
 **The question, as the orchestrator put it to the owner on 2026-10-24:**
 "lg-38's last Done-when line is your decision: file the build as the next
 ticket, or close lg-38 as dropped." The options, with the recommendation
-first:
+first, each with the description the owner was shown (verbatim, as the
+orchestrator gave them to the round that fixed this entry):
 
-1. **Build: Haiku + date on confirm.** lg-56's recommendation, and the
-   orchestrator's. Keep the owner's 2026-10-18 answers (Haiku 5.5, figures
-   shown, confirm on screen) and add the date column, with a few rows' dates,
-   to the confirmation screen.
-2. **Build: Haiku + outOfOrder.** The guard puts the reader's existing
-   `outOfOrder` list to the user, to confirm or to refuse. Unmeasured beyond
-   the one fixture (`bank-two-dates`).
-3. **Build on Sonnet 5.5.**
-4. **Drop lg-38.**
+1. **Build: Haiku + date on confirm.** "The Log's recommendation. Keep your
+   2026-10-18 answers (Haiku 5.5, figures shown, confirm on screen), and add the
+   date column, with a few rows' dates, to the confirmation screen. This works
+   whatever the file holds. I'd dispatch the build ticket's filing and lg-38's
+   close as a separate docs PR, roughly $2 to write plus one narrow gate."
+2. **Build: Haiku + outOfOrder.** "Same, but the guard puts the reader's
+   existing outOfOrder list to the user, to confirm or to refuse. It costs
+   nothing new to compute, but it is unmeasured beyond this one fixture, and
+   works only if a real export shows inversions under its transaction date."
+3. **Build on Sonnet 5.5.** "Sonnet made none of the observed errors in its 40
+   runs, 10 of them on bank-two-dates. That is an indication, not a proof. It
+   costs about 14 times Haiku per import, still under two cents on these
+   fixtures."
+4. **Drop lg-38.** "Close lg-38 as dropped: no model reads unknown workbooks.
+   lg-56 still lands as the record of the measurement."
 
 **The owner chose option 1.** It was lg-56's recommendation (its entry
 "Recommendation for lg-38's Done when 4", as corrected in that ticket's round 1
