@@ -440,7 +440,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
 
   /**
    * What OpenStreetMap holds within a radius of one point — pl-60, the town
-   * query `lodging`'s finds come from.
+   * query `lodging`'s finds come from, and since pl-62 `food`'s as well.
    *
    * Overpass, like `nearby` above, and through the same `#overpassJson`, so the
    * same timeout, failure mapping and `remark` check apply. What differs is the

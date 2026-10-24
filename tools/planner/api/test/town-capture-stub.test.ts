@@ -101,4 +101,15 @@ describe("the offline town-capture stub (pl-62, Done when 13)", () => {
     expect(lodging).toHaveLength(20);
     expect(food.length + lodging.length).toBe(finds.length);
   });
+
+  test("townFinds throws after the pass when a town query had no reply, rather than handing food an empty list", async () => {
+    // Percé's food reply missing: the adapter turns the stub's throw into a
+    // failed query and the pass into "nothing on the map", so only the check
+    // after the pass makes the run fail (pl-62's gate 1, finding 1).
+    const food = { towns: FOOD.towns.filter((each) => each.locality !== "Percé") };
+
+    await expect(
+      townFinds(loadFixture("road-trip").brief, silent, { lodging: LODGING, food }),
+    ).rejects.toThrow("the offline town capture had no reply for 1 town query");
+  });
 });

@@ -504,8 +504,9 @@ export interface GroundingProvider {
   nearby(request: NearbyRequest): Promise<Find[]>;
   /**
    * What a database knows within a radius of one point — pl-60, the town
-   * query `lodging`'s finds come from. One call, however many finds, and an
-   * empty array is an honest answer, exactly as `nearby`'s is.
+   * query `lodging`'s finds come from, and since pl-62 `food`'s as well, asked
+   * once per category. One call, however many finds, and an empty array is an
+   * honest answer, exactly as `nearby`'s is.
    */
   nearbyPoint(request: NearbyPointRequest): Promise<Find[]>;
   /**

@@ -518,14 +518,20 @@ export function townCaptureFetch(captures: { lodging: TownCapture; food: TownCap
  * `Gaspésie` at Québec City so pl-40's corridor capture applies, and the town
  * pass must ask about Gaspésie where its capture is. Keeping them apart leaves
  * sets B to D's corridor finds exactly what they were for pl-58.
+ *
+ * `captures` defaults to the two checked-in files; a spec hands it a capture
+ * with a town's reply missing to see the after-pass throw (pl-62's gate 1).
  */
-export async function townFinds(brief: TripBrief, logger: AppLogger): Promise<readonly Find[]> {
-  const capture = readTownCapture("overpass-lodging-towns.json");
-  const byLocality = new Map(capture.towns.map((town) => [town.locality, town]));
-  const { fetch: fetchStub, unmatched } = townCaptureFetch({
-    lodging: capture,
+export async function townFinds(
+  brief: TripBrief,
+  logger: AppLogger,
+  captures: { lodging: TownCapture; food: TownCapture } = {
+    lodging: readTownCapture("overpass-lodging-towns.json"),
     food: readTownCapture("overpass-food-towns.json"),
-  });
+  },
+): Promise<readonly Find[]> {
+  const byLocality = new Map(captures.lodging.towns.map((town) => [town.locality, town]));
+  const { fetch: fetchStub, unmatched } = townCaptureFetch(captures);
 
   const adapter = new ValhallaGroundingProvider({
     routingUrl: "http://valhalla.invalid",

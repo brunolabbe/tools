@@ -234,8 +234,8 @@ describe("what the pass finds and says", () => {
     const result = await lodgingFor(roadTrip(["Gaspé", "Percé", "Amqui"], "Matane"), provider);
 
     expect(result.finds).toEqual([]);
-    // Percé's lodging query was refused and its food query was not; Amqui was
-    // never located, so neither of its queries was made (pl-62).
+    // Percé's lodging query was refused and its food query was not; the budget
+    // refused Amqui's locate, so neither of its queries was made (pl-62).
     expect(result.coverage.map((entry) => entry.detail)).toEqual([
       "Where Matane is could not be found on the map, so places to stay and places to eat there were not checked.",
       "No places to stay around Gaspé are on the map. Somewhere to stay there may exist without this plan having found it.",

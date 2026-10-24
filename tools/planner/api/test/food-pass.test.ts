@@ -236,4 +236,25 @@ describe("the town pass's food query (pl-62)", () => {
       "Places to eat around Gaspé were never looked up: the run had already used the number of lookups it is allowed.",
     ]);
   });
+
+  test("one element tagged both a place to stay and a place to eat is handed to each reader once, since the two lists are de-duplicated apart", async () => {
+    // Overpass answers each query with the element under the kinds it asked
+    // for, so the same node/42 comes back as a hotel and as a restaurant.
+    // Neither list may drop it because the other already holds it (gate 1).
+    const asHotel: Find = {
+      ...place("Hôtel-Restaurant du Quai", GASPE, 42, "motel"),
+      kind: "hotel",
+    };
+    const asRestaurant = place("Hôtel-Restaurant du Quai", GASPE, 42, "restaurant");
+    const provider = grounding({
+      towns: { Gaspé: GASPE },
+      sleep: async () => answered([asHotel]),
+      eat: async () => answered([asRestaurant]),
+    });
+
+    const result = await townPass(roadTrip(["Gaspé"], null), provider);
+
+    expect(result.finds).toEqual([asHotel, asRestaurant]);
+    expect(result.coverage).toEqual([]);
+  });
 });
