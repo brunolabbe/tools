@@ -100,13 +100,15 @@ Decision 6 (PR #625) depend on this landing; neither ticket is edited here.
   `api/src`: that is the 12 and the definition; `api/src` has none). Measured
   by making `textOf` itself read numbers, rebuilding `books`, and running
   `npm test -- --project ledger`: 1680 of 1680 passed, so no existing test or
-  fixture tells the two scopes apart. Read against the household layout, the
-  global change would also alter what the importer reads elsewhere: a number
-  beside a period line's item in a label column would join its stored label
-  (`Épicerie 3`), a carry-over scan and a period's names row would see numbers
-  as words, and a number in the person column would be resolved as a name
-  instead of being dropped. The detail is the one cell the household types
-  freely and the books store verbatim, so the fix is kept to it.
+  fixture tells the two scopes apart. Through the `.xlsx` path with that same
+  global `textOf`, it changes what the import reads elsewhere: a number 3 in
+  `B8` beside a period line's item `Épicerie` is stored as the category
+  `Épicerie 3`; a number in the person column is refused as a name not in the
+  household (`2022!E10 names "42"`) where `main` files the row joint; a number
+  note is stored; a number as a bucket is refused naming `"42"` rather than
+  `""`. The carry-over scan, a period's names row and Accueil's rows would also
+  see numbers as words, harmlessly in the fixture. The detail is the cell this
+  ticket is about, so the fix is kept to it.
 - **What reaches the reader for each kind**, through the real `.xlsx` path
   (render, exceljs, `readSheets`, `readWorkbook`, `--write`), after the fix: a
   number detail `42`, `7` for `007`, a formula cached as 2 `2`, a boolean
@@ -128,5 +130,7 @@ Decision 6 (PR #625) depend on this landing; neither ticket is edited here.
   description, and a stored row is never edited; whether any household's books
   were written with it is not measurable from here (lg-37's dry run of the real
   workbook is still owed).
+- **After the fix**, `npm test -- --project ledger`: 1680 of 1680 passed in 81
+  files, the three tests above among them; `npm run check` exited 0.
 - **Fold-in:** none. The other cells above are not specified anywhere, and lg-66
   is a build, not a small piece.

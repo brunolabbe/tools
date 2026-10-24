@@ -1100,16 +1100,16 @@ describe("the workbook against pasted rows that list a day in another order (lg-
   });
 });
 
-describe("a detail cell that holds a number (lg-68)", () => {
-  /** The history with 2022's first row's detail cell holding `detail`. */
-  function withDetail(detail: string | number): Fixture {
-    const fixture = history();
-    const row = fixture.years[0]?.rows[0];
-    if (row === undefined) throw new Error("the fixture has no 2022 row");
-    row.detail = detail;
-    return fixture;
-  }
+/** The history with 2022's first row's detail cell holding `detail` (lg-68). */
+function withDetail(detail: string | number): Fixture {
+  const fixture = history();
+  const row = fixture.years[0]?.rows[0];
+  if (row === undefined) throw new Error("the fixture has no 2022 row");
+  row.detail = detail;
+  return fixture;
+}
 
+describe("a detail cell that holds a number (lg-68)", () => {
   function stored(): unknown {
     const db = books();
     const rows = db
