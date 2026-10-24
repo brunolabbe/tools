@@ -941,3 +941,35 @@ MAX_LODGING_TOWNS` = 8 of `MAX_GROUNDING_CALLS`.
 tools/planner/api` reports no errors; its `no-await-in-loop` warnings are on serial
   loops, the corridor pass's pattern. The e2e suite and the image gate were not run
   locally.
+
+**2026-10-24 — The owner's answers after gate 1 (relayed by the orchestrator to the
+builder, the same day).** Gate 1 returned CONCERNS on `55fd5df8` (2 med, 4 low); its
+report is in the dispatch's scratch directory, and its findings are fixed in this
+round.
+
+1. **The remedy for towns past the cap.** Options: (a) a coverage sentence names the
+   towns beyond the cap, with the cap (4) and the order (stops, then destination)
+   unchanged; (a) with the destination moved first; (b) overflow stays silent, with the
+   destination first. **Chosen: (a)**, gate 1's recommendation.
+2. **Which of gate 1's findings to fix in this round.** Options: all six; the two meds
+   only; none. **Chosen: all six**, the orchestrator's recommendation.
+3. **Build 6's paid-run shape.** Options:
+   - (a) mirror pl-58: Haiku 5.5 `low`, `medium` and `high`, Sonnet 5.5 `low`, Opus 5.5
+     `low`, over `run.ts`'s sets A to D. About 112 records, estimated at $7.4–7.8, with
+     `--max-usd` split per session under a $10 total bound;
+   - (b) drop Opus: about 94 records, about $3.1, bound $5;
+   - (c) Sonnet and Opus only: about 37 records, about $6.9, bound $10.
+
+   **Chosen: (a)**, the builder's recommendation. **This is the paid run's
+   authorisation, dated 2026-10-24.** The run itself waits for a key: none is on this
+   machine (`stat /home/pwuser/.planner-live-key`: "No such file or directory",
+   2026-10-24).
+
+4. **The corridor-only descriptions of `coverage`.** Options: reword both in Build 8
+   (the comment in `contract/src/unchecked.ts`, a comment only, and the third
+   `tools/planner/CLAUDE.md` paragraph); `CLAUDE.md` only; leave both. **Chosen: reword
+   both**, the builder's recommendation. This authorises a comment-only edit to
+   `tools/planner/contract/src/unchecked.ts`, with no type, schema or export changed.
+   The paragraph that begins "**`coverage` names a corridor the ground was thin
+   along**" joins Build 8's two. Build 8's "the diff to that file adds no new rule"
+   binds all three.
