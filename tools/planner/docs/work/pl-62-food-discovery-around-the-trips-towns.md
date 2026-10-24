@@ -1510,8 +1510,9 @@ object, objects 1 to 10 in key order, and the grouping was not changed. No sourc
 code changed: `verdicts.json`'s `checks` and the record the harness writes from them.
 
 **Spend against the budget: 22 queries and 11 page fetches attempted, 6 of which returned a
-page**, against a cap of 90 and 20; 2.2 queries per object (pl-60: 1.78, pl-58: 1.23). The
-further queries:
+page**, against a cap of 90 and 20; 2.2 queries per object (pl-60: 1.78, pl-58: 1.23). Gate
+2's round, below, added 2 queries and 4 fetches for Restaurant Le Surcouf: 24 queries and 15
+fetches in all. The further queries:
 
 - Resto du Capitaine, 2: the budget's queries 2 and 3, because query 1 found no listing.
 - Gaspésie Brasserie Gourmande, 3: queries 2 and 3, then one further query for the
@@ -1537,18 +1538,18 @@ which the budget does not provide for; neither returned anything.
 **The verdicts, 11 keys and 10 objects: 8 `exists`, 1 `exists-elsewhere`, 1 `closed`, 1
 `not-found`.**
 
-| object | key(s)                                | verdict          | settled by                                                                  | source                                                                                                                 |
-| ------ | ------------------------------------- | ---------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 1      | `resto du capitaine\|percé`           | not-found        | all three: `Resto du Capitaine Percé`, `"Resto du Capitaine"`, French words | none; nearest results Domaine du Capitaine (lodging) and La Boîte à Fruits de Mer                                      |
-| 2      | `peppino pizza\|gaspé`                | exists           | query 1, `Peppino Pizza Gaspé`                                              | Tourisme Gaspésie, Camping Parc Nature Gaspé, 1986 boul. de Grande-Grève, Cap-aux-Os (seen in the result)              |
-| 3      | `gaspésie brasserie gourmande\|percé` | exists-elsewhere | query 2, `"Gaspésie Brasserie Gourmande"`                                   | RestoMontreal and Restoenligne, 30 rue Sainte-Catherine Ouest, Montréal (seen in the result)                           |
-| 4      | `restaurant le surcouf\|percé`        | exists           | query 1, `Restaurant Le Surcouf Percé`                                      | Yellow Pages; Sortir au Québec, 168 Route 132 Ouest (seen in the result)                                               |
-| 5      | `la cantina\|`, `la cantina\|gaspé`   | exists (both)    | query 1, `La Cantina Gaspé`                                                 | Restoenligne, La Cantina Latinogaspésienne, 30 rue de la Plage, plage Haldimand, Gaspé (seen in the result)            |
-| 6      | `pub aire salin\|percé`               | exists           | query 5, `Aire Salin Percé pub` on directory sites                          | Wanderlog (fetched: 182 QC-132 O, 138 reviews, no closed marker); Tripadvisor (fetched: a review of 23 September 2026) |
-| 7      | `la maison du pêcheur\|percé`         | exists           | query 1, `La Maison du Pêcheur Percé`                                       | Tourisme Gaspésie, 2026 season 29 May to 10 October (seen in the result)                                               |
-| 8      | `odprta kuhna\|ljubljana`             | exists           | query 1, pl-58's verbatim                                                   | In Your Pocket, 2026 season 7 March to 31 October (seen in the result)                                                 |
-| 9      | `pub pit caribou\|percé`              | closed           | query 1, `Pub Pit Caribou Percé`, with object 6's evidence                  | Wanderlog (fetched: "Permanently Closed"); Pub Aire Salin trading at the same 182 Route 132                            |
-| 10     | `resto du village\|percé`             | exists           | query 1, `Resto du Village Percé`                                           | Wanderlog (fetched: 172 QC-132, Percé, Google 4.3 from 578 reviews, no closed marker)                                  |
+| object | key(s)                                | verdict          | settled by                                                                  | source                                                                                                                                                                             |
+| ------ | ------------------------------------- | ---------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1      | `resto du capitaine\|percé`           | not-found        | all three: `Resto du Capitaine Percé`, `"Resto du Capitaine"`, French words | none; nearest results Domaine du Capitaine (lodging) and La Boîte à Fruits de Mer                                                                                                  |
+| 2      | `peppino pizza\|gaspé`                | exists           | query 1, `Peppino Pizza Gaspé`                                              | Tourisme Gaspésie, Camping Parc Nature Gaspé, 1986 boul. de Grande-Grève, Cap-aux-Os (seen in the result)                                                                          |
+| 3      | `gaspésie brasserie gourmande\|percé` | exists-elsewhere | query 2, `"Gaspésie Brasserie Gourmande"`                                   | RestoMontreal and Restoenligne, 30 rue Sainte-Catherine Ouest, Montréal (seen in the result)                                                                                       |
+| 4      | `restaurant le surcouf\|percé`        | exists           | queries 1 to 3, the page they all returned (gate 2's round)                 | Wanderlog (fetched: 168 QC-132, Percé, Google 3.9 from 677 reviews, no closed marker); the first two citations dropped                                                             |
+| 5      | `la cantina\|`, `la cantina\|gaspé`   | exists (both)    | query 1, `La Cantina Gaspé`                                                 | Restoenligne, La Cantina Latinogaspésienne, 30 rue de la Plage, plage Haldimand, Gaspé (seen in the result)                                                                        |
+| 6      | `pub aire salin\|percé`               | exists           | query 5, `Aire Salin Percé pub` on directory sites                          | Wanderlog (fetched: 182 QC-132 O, 138 reviews, no closed marker); Tripadvisor (fetched: a review of 23 September 2026)                                                             |
+| 7      | `la maison du pêcheur\|percé`         | exists           | query 1, `La Maison du Pêcheur Percé`                                       | Tourisme Gaspésie, 2026 season 29 May to 10 October (seen in the result)                                                                                                           |
+| 8      | `odprta kuhna\|ljubljana`             | exists           | query 1, pl-58's verbatim                                                   | In Your Pocket, 2026 season 7 March to 31 October (seen in the result)                                                                                                             |
+| 9      | `pub pit caribou\|percé`              | closed           | query 1, `Pub Pit Caribou Percé`, with object 6's evidence                  | Wanderlog (fetched: "Pub Pit Caribou Percé" "Permanently Closed", at 155 QC-132, not 182); Pub Aire Salin at 182 Route 132, the pub's directory address; a replacement unconfirmed |
+| 10     | `resto du village\|percé`             | exists           | query 1, `Resto du Village Percé`                                           | Wanderlog (fetched: 172 QC-132, Percé, Google 4.3 from 578 reviews, no closed marker)                                                                                              |
 
 What each verdict rests on, where it is not plain:
 
@@ -1562,13 +1563,23 @@ What each verdict rests on, where it is not plain:
   search missed would make it `not-found`, which is also not confirmed.
 - **Pub Pit Caribou** (pre-registered rule 3): Québec Vacances ("Ouvert à l'année") and
   Mapstr still list it at 182 route 132 Ouest, both undated and with no closed marker.
-  Wanderlog's Google data marks it permanently closed. Pub Aire Salin trades at that address,
-  with reviews into September 2026, and a review summary in object 6's fifth search says the
-  building used to be the Pit Caribou. No source gives a year, so no `closedYear`. Judgement
+  Wanderlog's Google data marks "Pub Pit Caribou Percé" permanently closed, **at 155
+  QC-132, not the 182 that OSM and both directories give**. Pub Aire Salin trades at 182, with
+  reviews into September 2026, and a review summary in object 6's fifth search says the
+  building used to be the Pit Caribou. **That Aire Salin replaced the pub is unconfirmed**:
+  it rests on that one summarised review and on the shared address, and the closed listing's
+  address differs. No source gives a year, so no `closedYear`. Judgement
   call: read on the two undated directories, it would be `exists`. pl-58's brewery at
   L'Anse-à-Beaufils is a different premises and was not re-judged.
-- **Resto du Village** is the weakest `exists`. All three queries returned one aggregator
-  page, so whether it is open today rests on that page, as L'Eglantier's did in pl-60.
+- **Resto du Village** and **Restaurant Le Surcouf** are the weakest `exists`. For each, all
+  three queries returned one aggregator page that names the Percé premises (Wanderlog), so
+  whether it is open today rests on that page, as L'Eglantier's did in pl-60.
+- **Restaurant Le Surcouf**, corrected in gate 2's round: this entry first cited Sortir au
+  Québec and Yellow Pages "seen in the search result". Re-fetched, the Sortir au Québec page
+  is the Restaurant Le Surcouf at 51 rue Ste-Anne, Sainte-Anne-de-Bellevue (chef and owner
+  Serge Magnier), and the Yellow Pages url answers "Sorry, we didn't find any business
+  matching “Restaurant-Le-Surcouf-Cafe” in “Percé QC”". Both are dropped; the verdict now
+  rests on Wanderlog's page alone.
 - **Peppino Pizza** is at Cap-aux-Os, judged by municipality (Gaspé), as pl-58 and pl-60
   judged Gaspé's sectors.
 
@@ -1587,6 +1598,8 @@ Wilson script agrees with it:
 | **pl-62, `food`'s named premises**                        | **10**  | **3**         | 30.0% | **10.8–60.3** |
 | pl-62, Pub Pit Caribou read as `exists`                   | 10      | 2             | 20.0% | 5.7–51.0      |
 | pl-62, Resto du Village also read as not confirmed        | 10      | 4             | 40.0% | 16.8–68.7     |
+| pl-62, Restaurant Le Surcouf also read as not confirmed   | 10      | 4             | 40.0% | 16.8–68.7     |
+| pl-62, Resto du Village and Le Surcouf both not confirmed | 10      | 5             | 50.0% | 23.7–76.3     |
 | pl-62, Pub Aire Salin on the budget's three queries alone | 10      | 4             | 40.0% | 16.8–68.7     |
 
 The intervals for pl-62 and pl-58 overlap over most of their width, so **this sample cannot
@@ -1598,11 +1611,11 @@ from the worktree, printed `food's 21, not confirmed 3 (14.3%, 95% Wilson 5.0–
 
 **Each object not confirmed, by class, and whether the capture holds it:**
 
-| object                       | class                                                       | in `overpass-food-towns.json`                   |
-| ---------------------------- | ----------------------------------------------------------- | ----------------------------------------------- |
-| Resto du Capitaine           | a premises not found                                        | yes, way 302432445 (Percé), handed to `food`    |
-| Gaspésie Brasserie Gourmande | a wrong-town premises (Montréal), the map's wrong town      | yes, node 12972316601 (Percé), handed to `food` |
-| Pub Pit Caribou              | a premises the web says closed (replaced by Pub Aire Salin) | yes, node 9437751976 (Percé), handed to `food`  |
+| object                       | class                                                                                                                     | in `overpass-food-towns.json`                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Resto du Capitaine           | a premises not found                                                                                                      | yes, way 302432445 (Percé), handed to `food`    |
+| Gaspésie Brasserie Gourmande | a wrong-town premises (Montréal), the map's wrong town                                                                    | yes, node 12972316601 (Percé), handed to `food` |
+| Pub Pit Caribou              | a premises the web says closed (a Google listing at 155 Route 132; that Pub Aire Salin at 182 replaced it is unconfirmed) | yes, node 9437751976 (Percé), handed to `food`  |
 
 **All three objects not confirmed are map entries the run handed `food`**, and none is an
 invented name. pl-58's three `food` misses were all real premises in another town, from
@@ -1648,3 +1661,48 @@ tools/planner/api/test/invention-population.test.ts`: `Test Files 2 passed (2)`,
   worktree, it prints the figure above.
 - The budget's sentence "WebFetch only to read a result page" leaves out a URL from the
   capture's own tags. I fetched one such URL and say so above.
+
+**2026-10-24 — Gate 2's round on the web check (general-purpose agent, Opus 5.5).** Gate 2
+(Sonnet 5.5) graded `cf1ed416` CONCERNS, 1 med and 2 low, no high. All three are applied
+here, each reproduced first, and the previous entry is corrected in place where it was
+wrong.
+
+- **Med, Restaurant Le Surcouf's citations: reproduced, and the verdict re-settled.**
+  WebFetch of `sortirauquebec.com/en/listing/restaurant/restaurant-le-surcouf` returned
+  "Restaurant Le Surcouf", "51, rue Ste-Anne", "Sainte-Anne-de-Bellevue", chef and owner
+  "Serge Magnier". WebFetch of the Yellow Pages Percé url returned "Sorry, we didn't find any
+  business matching “Restaurant-Le-Surcouf-Cafe” in “Percé QC”". Both citations are dropped,
+  and `verdicts.json`'s note says what each re-fetch found. Within the budget, the object had
+  used 1 query. Query 2, `"Restaurant Le Surcouf"`, and query 3, `Le Surcouf restaurant fruits
+de mer guédille homard 168 route 132 Ouest Percé`, were run. Restoenligne's
+  `restaurant-le-surcouf` evaluations page, fetched, is also the Sainte-Anne-de-Bellevue
+  restaurant (51 Rue Ste Anne, H9X 1L5). **The one page read that names the Percé premises is
+  Wanderlog's**, returned by all three queries, fetched: "Restaurant Le Surcouf", "168 QC-132,
+  Percé, Quebec G0C 2L0", Google 3.9 from 677 reviews, Tripadvisor 3.6 from 268, hours 11AM–8PM
+  every day, no closed marker. **The verdict stays `exists`**, on that page, and like Resto du
+  Village it is aggregator-only. The rate is unchanged: **3 of 10, 30.0% (95% Wilson
+  10.8–60.3)**. The sensitivity table gains a row for Le Surcouf (4 of 10, 40.0%, 16.8–68.7)
+  and one for both aggregator-only objects (5 of 10, 50.0%, 23.7–76.3). Every reading still
+  overlaps pl-58's 14.3% (5.0–34.6). Spend in all: 24 queries and 15 fetches, inside 90 and 20.
+- **Low, Pit Caribou's wording: reproduced and reworded, with the verdict unchanged.**
+  Wanderlog's closed listing reads "Pub Pit Caribou Percé" at 155 QC-132, as the first
+  entry's fetch had it and `verdicts.json` says. The verdict row, the bullet and the class
+  table now say the closed listing is at 155 and not 182, and that Aire Salin replacing the
+  pub is unconfirmed. The verdict stays `closed`. It is pre-registered rule 3's case, a web
+  source that shows Pit Caribou's Percé pub closed: the listing is named for the Percé pub, and
+  its address is not the brewery's (27 rue de l'Anse). The `exists` reading is in the
+  sensitivity table already (2 of 10, 20.0%, 5.7–51.0).
+- **Low, the planner test count: reproduced.** `npm test -- --project planner` at this
+  round's tree printed `Test Files 84 passed (84)` and `Tests 1930 passed (1930)`, exit 0.
+  **1930 is the current count.** The Build 6 entry's 1929 was right at its own head. The web
+  check added one JSON file under `fixtures/live/`, the record
+  `invention/pl62-2026-10-24/2026-10-24.json`, and `live-records.test.ts` takes one case per
+  file.
+- **The record, regenerated.** `PLANNER_INVENTION_OFFLINE=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24` gave exit 0, wrote
+  the record only, and printed `10 objects, not confirmed 3 of 10, 30.0% (10.8%–60.3%)`.
+- **Checks, each exit code read from a file and never through a pipe** (`checks.sh`): the
+  four `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1` modes (no argument, `--after
+pl58-2026-10-21`, `--after pl60-2026-10-24` and `--after pl62-2026-10-24`) each gave exit
+  0 and "check: the committed record equals its regeneration; every sampled place has a
+  verdict". `npm run check` and preflight's fast checks are in the dispatch's report.

@@ -11901,21 +11901,18 @@
       "check": {
         "verdict": "exists",
         "queries": [
-          "Restaurant Le Surcouf Percé"
+          "Restaurant Le Surcouf Percé",
+          "\"Restaurant Le Surcouf\"",
+          "Le Surcouf restaurant fruits de mer guédille homard 168 route 132 Ouest Percé"
         ],
         "evidence": [
           {
-            "url": "https://www.yellowpages.ca/bus/Quebec/Perce/Restaurant-Le-Surcouf-Cafe/1330486.html",
+            "url": "https://wanderlog.com/place/details/2798654/restaurant-le-surcouf",
             "readOn": "2026-10-24",
-            "note": "Yellow Pages listing: Restaurant Le Surcouf Café, Percé. Seen in the search result."
-          },
-          {
-            "url": "https://sortirauquebec.com/en/listing/restaurant/restaurant-le-surcouf",
-            "readOn": "2026-10-24",
-            "note": "Sortir au Québec listing for Restaurant Le Surcouf; the search summary gives 168 Route 132 Ouest, Percé, a seafood restaurant with a terrace. Seen in the search result."
+            "note": "Fetched (returned by queries 1 to 3). Wanderlog: 'Restaurant Le Surcouf', 168 QC-132, Percé, Quebec G0C 2L0, Google 3.9 from 677 reviews and Tripadvisor 3.6 from 268, hours 11AM-8PM every day, no closed marker."
           }
         ],
-        "note": "OSM gives the same address (way 598383461, 168 Route 132, Percé). Reviews are summarised in the result; current hours and season were not in it."
+        "note": "The first version of this check cited two pages that gate 2 re-fetched and that do not support it, and both are dropped: Sortir au Québec's 'restaurant-le-surcouf' listing is the Restaurant Le Surcouf at 51 rue Ste-Anne, Sainte-Anne-de-Bellevue (chef and owner Serge Magnier), a different restaurant; Yellow Pages' Percé url answers 'Sorry, we didn't find any business matching “Restaurant-Le-Surcouf-Cafe” in “Percé QC”'. Both re-fetched and reproduced on 2026-10-24. Queries 2 and 3 were then run, and Restoenligne's 'restaurant-le-surcouf' evaluations page, fetched, is also the Sainte-Anne-de-Bellevue restaurant. The one page read that names the Percé premises is Wanderlog's, an aggregator, so this is an aggregator-only `exists`, as Resto du Village's is; the Log gives the reading that counts both as not confirmed. OSM gives the same address (way 598383461, 168 Route 132, Percé), and the run handed it to `food` as a find."
       }
     },
     {
