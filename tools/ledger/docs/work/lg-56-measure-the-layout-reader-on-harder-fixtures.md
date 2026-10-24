@@ -290,6 +290,41 @@ the builder stops after step 2. Change no reader, schema or contract.
 - PR #621 at `e92dff07`: `check` passes twice, `changes`, `CodeQL`, `codeql` and `dependency-review` pass, and `test` is skipping (docs only). This branch touches no source.
 - NFR: security ✓ (no key in the Log; the records stay outside the repo) · performance n/a · reliability: F1 · maintainability n/a.
 
+### Gate 4
+
+**Gate: PASS** (three rows `unproven (scope)`, as in gate 1) — 2026-10-24 · `e92dff07..1073a40c` · Opus 5.5, depth narrow. This gate covers the round's one commit, `1073a40c`, and nothing else. Every count was re-derived from all 300 records and from the books' `readWorkbook`. No model was called.
+
+| Done when                                                                                           | Proof                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The three lines settled in #562 (correct descriptions match, wrong ones pinned, the name-list test) | **unproven (scope)**: out of scope by dispatch, as in gate 1                                                                                                                                                                                                                                                    |
+| The Log has the Haiku shown and masked tables, and Sonnet's                                         | **verified** at the new head. `verbatim.mjs` gives `normalisedEqual=true` for 3 of 3. `check.mjs` gives `0 of 20 rows disagree with the Log` over 300 of 300 records. A token diff of the entry finds no figure lost                                                                                            |
+| The Log quotes every run that did not match and whether it was caught                               | **verified**. The round edited none of the quotes. `b2d-answers.mjs` gives `equalsPinnedDateB=true` for 10 of 10                                                                                                                                                                                                |
+| The Log gives the let-through count and bound, and what shown against masked changed                | **verified**. N, M, K and J are unchanged. Recommendation 1 now gives both bounds, 3/300 and 3/13                                                                                                                                                                                                               |
+| The Log ends with the recommendation, and lg-38's Log points here; neither closes lg-38             | **verified**. Neither `status:` line changed (`git diff -U0 e92dff07 1073a40c` has no `status` hunk). The pointer still resolves to "2026-10-24 — Build steps 3 and 4". "The choice, and whether to file the build, is the owner's" still stands, and the guards (a) and (b) are offered as options, not chosen |
+
+Gate 1's findings:
+
+- **F1 (high): fixed.** I re-ran the builder's `ooo.mts` on my tree. It gives `outOfOrder=2 problems=0` for the 10 of 10 let-through answers, and `outOfOrder=0 problems=0` for the correct description. Its sample is `{"row":19,"date":"2024-02-29","belowRow":18,"belowDate":"2024-03-02"}`, as the Log quotes it. Every count the Log states, 7 of 7, agrees with that measurement. The corrected sentences hold against the code and the test:
+  - `layout.test.ts` › "bank-two-dates: the dates differ on some rows and not all, and only the posted one is in order" asserts `outOfOrder` greater than 0 and `problems` equal to `[]`.
+  - `workbook-import.ts` prints "dated out of order: … imported as typed".
+  - The view claim also holds. `shownRows(33)` shows rows 1–12, 14, 17, 20, 23, 26, 29 and 31–33, which is 21 rows and leaves out both 18 and 19. So "in what is shown to the model only the header" is true, and "2 of 32 rows" is true too.
+  - Guard (b) is labelled "unmeasured beyond this fixture" and "works only if it does".
+- **F4 (med; Done when 7): fixed.** Recommendation 1 gives about 1% (3/300) and about 23% (3/13), and says the second is the closer reading.
+- **F2 (low): fixed.** The Build steps 1–2 table pins "the date read from B, the transaction date" as `let-through`, as the new sentence says.
+- **F3 (low): fixed.** lg-38 now says "0 that changed an amount, balance or detail". The let-through answers differ only in `date`.
+- **F5 (low): fixed.** Masked has 6 non-matches: 4 same-import, 1 refused and `bank-two-dates-9`, as now listed.
+- **F6 (low): fixed.** Both "$0.16" passages are in the Build steps 1–2 entry.
+- **F7 (low): fixed.** `tail -1 /workspaces/tools/.git/logs/HEAD` prints `… 89a38d30… 1792859785 +0000	pull --tags origin main: Fast-forward`, and `date -u -d @1792859785` gives 16:36:25Z, before 17:32:40Z.
+
+New, in the lines the round touched:
+
+- **low** · F8 · a citation that will not resolve after the merge. The round-1 entry cites `git show e92dff07:tools/ledger/api/test/layout.test.ts` "lines 478 to 497". `e92dff07` is a branch commit, and the squash merge will leave it unreachable once the branch is deleted. The file is identical at `89a38d30`: `git diff --stat 89a38d30 1073a40c -- tools/ledger/api tools/ledger/books` is empty. Nothing relies on the pin, because the same sentence names the test. Direction for a fix: cite the test by its title, at `89a38d30` or at `main`.
+- **low** · F9 · the text overstates in a detail. "The import prints each one as 'dated out of order: … imported as typed' (`api/src/workbook-import.ts`)" describes what that report does with the reader's `outOfOrder`. But `workbook-import.ts` calls `readWorkbook(sheets, { people, corrections })` with no `layout` today, so no model's answer reaches it yet. Whether lg-38's build would route a CSV through it is unverified. Guard (b) is already marked unbuilt and unmeasured, so no choice rests on the clause. Direction for a fix: "would print" or "prints for a reading", in place of "prints".
+- **findings** · the hunt returned 2 new, and both are carried (low). Of gate 1's 7, all are fixed. Nothing here is a `high`.
+- Positive control: in a scratch copy, "reports 2 rows `outOfOrder`" was changed to 3. `ooocheck.mjs` then printed `MISMATCH "reports 3 rows \`outOfOrder\`" stated 3 measured 2`and`1 of 7 stated counts disagree`. At the head it printed `0 of 7`.
+- PR #621 at `1073a40c5ed26eff65e39631fd3d936e1904fcf4`: CodeQL, `changes`, `check` ×2, `codeql` and `dependency-review` pass. `test` is skipping, because the change is docs only.
+- NFR: security ✓ (no key in the round's text) · performance n/a · reliability ✓ (F1 is corrected) · maintainability: F8.
+
 ## Log
 
 ### 2026-10-18 — filed; `depends_on` dropped by the owner's answer
