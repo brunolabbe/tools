@@ -1,0 +1,1090 @@
+{
+  "set": "A",
+  "briefFixture": "resort",
+  "requestedModel": "claude-sonnet-5-5",
+  "effort": "low",
+  "prices": {
+    "inputPerMTok": 2,
+    "outputPerMTok": 10,
+    "cacheReadPerMTok": 0.1,
+    "cacheWritePerMTok": 2.5
+  },
+  "servedModels": [
+    "claude-sonnet-5-5"
+  ],
+  "budget": {
+    "maxSpecialists": 5,
+    "maxOutputTokens": 8000,
+    "maxAttemptsPerSpecialist": 2
+  },
+  "finds": [],
+  "specialists": [
+    {
+      "specialist": "lodging",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: resort\nSpecialist: lodging\n\nYou are the lodging specialist on a trip-planning tool.\nYou propose places to sleep that match the roughest night the party said they would accept, and you say how far ahead each one has to be booked. A proposal does one of two things. It names one premises, an establishment or a site, by its name and at its locality: `place.name` is that name and `place.locality` the town. Or it says plainly, in its title or its summary, that it is a kind of place and names no premises: then `place.name` holds the kind, for example `motel`, and `place.locality` the town. Where you are given places to stay from map data for a town, a premises you name there is one of those, under the name it is given, if any of them fits the party. A kind of place is the fallback, for a town whose list is empty or where nothing in it fits.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 8 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: resort\nLeaving from: Ottawa\nGoing to: not answered\nDates: 7 nights, no dates chosen\nTravellers: 5\nAges that change the plan: 38, 37, 9, 6, 2\nAccess needs: not answered\nBudget: 7000 CAD, total\nAppetite for effort: gentle\nRoughest night they will accept: hotel\nWould rule the trip out: Nothing with a connecting flight longer than two hours, No adults-only property\n\nAbout this resort:\nBoard basis: all-inclusive\nSetting: beach\nMust have on site: Shallow pool the two-year-old can stand in, Kids' club that takes a six-year-old\nIn their words: The point of this trip is that nobody has to plan anything once we land. We do not intend to leave the property and would rather not rent a car."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Family all-inclusive beach resort, Punta Cana\",\"summary\":\"A kind of place, not a named premises: an all-inclusive beach resort with a kids' club and a shallow toddler pool. Destination was not answered, so Punta Cana is a guess; flights from Ottawa usually need a connection, so check that against the two-hour limit. Access needs and dates were not answered either, and each resort's kids' club age range and pool depth must be confirmed before booking.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"all-inclusive family beach resort\",\"locality\":\"Punta Cana\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":4500,\"high\":7500,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":120},{\"title\":\"Family all-inclusive beach resort, Varadero\",\"summary\":\"A kind of place, not a named premises: an all-inclusive beachfront family resort with a splash area and kids' club. Destination was not answered, so Varadero is a guess; direct flights from Ottawa are sometimes available, but this is not checked. Dates and access needs are unknown, so confirm the kids' club ages and shallow pool before booking.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"all-inclusive family beach resort\",\"locality\":\"Varadero\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":4000,\"high\":7000,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":90},{\"title\":\"Family all-inclusive beach resort, Cancún\",\"summary\":\"A kind of place, not a named premises: an all-inclusive beach resort on the Riviera Maya coast with family suites and kids' club. Destination was not answered, so Cancún is a guess; the flight routing from Ottawa is not checked against the two-hour connection limit. Dates and access needs are unknown, so confirm the pool depth and club ages.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"all-inclusive family beach resort\",\"locality\":\"Cancún\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":5000,\"high\":8000,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":120}]}",
+          "stopReason": "end",
+          "servedModel": "claude-sonnet-5-5",
+          "usage": {
+            "inputTokens": 4003,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 835,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 4003,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Family all-inclusive beach resort, Punta Cana",
+                "summary": "A kind of place, not a named premises: an all-inclusive beach resort with a kids' club and a shallow toddler pool. Destination was not answered, so Punta Cana is a guess; flights from Ottawa usually need a connection, so check that against the two-hour limit. Access needs and dates were not answered either, and each resort's kids' club age range and pool depth must be confirmed before booking.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "all-inclusive family beach resort",
+                    "locality": "Punta Cana",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 4500,
+                  "high": 7500,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 120
+              },
+              {
+                "title": "Family all-inclusive beach resort, Varadero",
+                "summary": "A kind of place, not a named premises: an all-inclusive beachfront family resort with a splash area and kids' club. Destination was not answered, so Varadero is a guess; direct flights from Ottawa are sometimes available, but this is not checked. Dates and access needs are unknown, so confirm the kids' club ages and shallow pool before booking.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "all-inclusive family beach resort",
+                    "locality": "Varadero",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 4000,
+                  "high": 7000,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 90
+              },
+              {
+                "title": "Family all-inclusive beach resort, Cancún",
+                "summary": "A kind of place, not a named premises: an all-inclusive beach resort on the Riviera Maya coast with family suites and kids' club. Destination was not answered, so Cancún is a guess; the flight routing from Ottawa is not checked against the two-hour connection limit. Dates and access needs are unknown, so confirm the pool depth and club ages.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "all-inclusive family beach resort",
+                    "locality": "Cancún",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 5000,
+                  "high": 8000,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 120
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "practicalities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: resort\nSpecialist: practicalities\n\nYou are the practicalities specialist on a trip-planning tool.\nYou cover permits, documents, rentals, insurance and connectivity — the paperwork that decides whether the trip happens.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 8 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: resort\nLeaving from: Ottawa\nGoing to: not answered\nDates: 7 nights, no dates chosen\nTravellers: 5\nAges that change the plan: 38, 37, 9, 6, 2\nAccess needs: not answered\nBudget: 7000 CAD, total\nAppetite for effort: gentle\nRoughest night they will accept: hotel\nWould rule the trip out: Nothing with a connecting flight longer than two hours, No adults-only property\n\nAbout this resort:\nBoard basis: all-inclusive\nSetting: beach\nMust have on site: Shallow pool the two-year-old can stand in, Kids' club that takes a six-year-old\nIn their words: The point of this trip is that nobody has to plan anything once we land. We do not intend to leave the property and would rather not rent a car."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Passports for all five travellers\",\"summary\":\"Every traveller needs a valid passport, including the two-year-old, and some destinations require months of validity beyond the return date. Destination is not answered, so entry rules, visas or electronic travel authorisations could not be checked; confirm with the official government source for wherever you choose. This is not clearance to travel.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Passport Canada / IRCC passport services\",\"locality\":\"Ottawa\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":600,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":60},{\"title\":\"Family travel medical insurance\",\"summary\":\"Covers illness or injury abroad for two adults and three children, and is worth comparing for trip cancellation cover too. Destination, dates and any health conditions are not answered, so the price and the exclusions could not be accounted for. Read the policy terms before buying.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Online or broker purchase from Ottawa\",\"locality\":\"Ottawa\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":150,\"high\":600,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":30},{\"title\":\"Parental consent letter and child ID check\",\"summary\":\"If either parent travels without the other, or the family travels with other adults, a signed consent letter for the children is often recommended. Whether this applies, and what the destination requires, is unknown because the destination and the travelling party are not answered. Check airline and destination guidance.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Home preparation, no venue needed\",\"locality\":\"Ottawa\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":null,\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":14},{\"title\":\"Resort connectivity: roaming plan or eSIM\",\"summary\":\"Lets the family stay reachable from the resort without leaving the property or renting a car. Destination is not answered, so coverage and plan prices could not be checked. Compare the carrier roaming pass with a local eSIM, and ask the resort about wifi.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Carrier or eSIM provider, set up before departure\",\"locality\":\"Ottawa\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":15,\"high\":120,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":3}]}",
+          "stopReason": "end",
+          "servedModel": "claude-sonnet-5-5",
+          "usage": {
+            "inputTokens": 3821,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 978,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3821,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Passports for all five travellers",
+                "summary": "Every traveller needs a valid passport, including the two-year-old, and some destinations require months of validity beyond the return date. Destination is not answered, so entry rules, visas or electronic travel authorisations could not be checked; confirm with the official government source for wherever you choose. This is not clearance to travel.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Passport Canada / IRCC passport services",
+                    "locality": "Ottawa",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 600,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 60
+              },
+              {
+                "title": "Family travel medical insurance",
+                "summary": "Covers illness or injury abroad for two adults and three children, and is worth comparing for trip cancellation cover too. Destination, dates and any health conditions are not answered, so the price and the exclusions could not be accounted for. Read the policy terms before buying.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Online or broker purchase from Ottawa",
+                    "locality": "Ottawa",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 150,
+                  "high": 600,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 30
+              },
+              {
+                "title": "Parental consent letter and child ID check",
+                "summary": "If either parent travels without the other, or the family travels with other adults, a signed consent letter for the children is often recommended. Whether this applies, and what the destination requires, is unknown because the destination and the travelling party are not answered. Check airline and destination guidance.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Home preparation, no venue needed",
+                    "locality": "Ottawa",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": null,
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 14
+              },
+              {
+                "title": "Resort connectivity: roaming plan or eSIM",
+                "summary": "Lets the family stay reachable from the resort without leaving the property or renting a car. Destination is not answered, so coverage and plan prices could not be checked. Compare the carrier roaming pass with a local eSIM, and ask the resort about wifi.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Carrier or eSIM provider, set up before departure",
+                    "locality": "Ottawa",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 15,
+                  "high": 120,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 3
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "budget",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: resort\nSpecialist: budget\n\nYou are the budget specialist on a trip-planning tool.\nYou give cost estimates as bands and say what assumption each one rests on. You never total anything: the tool sums the bands itself, in code.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 8 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: resort\nLeaving from: Ottawa\nGoing to: not answered\nDates: 7 nights, no dates chosen\nTravellers: 5\nAges that change the plan: 38, 37, 9, 6, 2\nAccess needs: not answered\nBudget: 7000 CAD, total\nAppetite for effort: gentle\nRoughest night they will accept: hotel\nWould rule the trip out: Nothing with a connecting flight longer than two hours, No adults-only property\n\nAbout this resort:\nBoard basis: all-inclusive\nSetting: beach\nMust have on site: Shallow pool the two-year-old can stand in, Kids' club that takes a six-year-old\nIn their words: The point of this trip is that nobody has to plan anything once we land. We do not intend to leave the property and would rather not rent a car."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"All-inclusive beach resort week, family room\",\"summary\":\"Core lodging cost for 7 nights at a family-friendly all-inclusive beach resort with a shallow pool and kids' club. Destination is not answered, so this band is a rough guess across typical sun destinations; the 2-year-old likely flies free but may incur small fees, and access needs and dates are also unaccounted for. Per-party for one family room or two connecting rooms.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Family-friendly all-inclusive beach resort (destination to be chosen)\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":4500,\"high\":9000,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Return flights from Ottawa, nonstop or short connection\",\"summary\":\"Return airfares for 2 adults and 2 children with a lap-infant, kept to nonstop or connections under two hours as required. Destination is not answered and no dates are set, so fares are a broad guess that swings with season; baggage and seat selection are not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Ottawa Macdonald-Cartier International Airport\",\"locality\":\"Ottawa\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":2200,\"high\":4800,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Resort transfer by shared shuttle, with car seats\",\"summary\":\"Shared airport-to-resort shuttle so no car rental is needed. Destination unknown so the band is wide; child car-seat availability should be confirmed with the operator, and it is not accounted for here.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Destination airport to resort transfer (destination to be chosen)\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":40,\"high\":250,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Travel insurance and incidentals buffer\",\"summary\":\"Set-aside for family travel medical and cancellation insurance, tips, resort extras and airport costs. Destination, dates and any health or access needs are not answered, so this is a loose guess and not a quote.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Ottawa, before departure\",\"locality\":\"Ottawa\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":300,\"high\":900,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-sonnet-5-5",
+          "usage": {
+            "inputTokens": 3821,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 989,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3821,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "All-inclusive beach resort week, family room",
+                "summary": "Core lodging cost for 7 nights at a family-friendly all-inclusive beach resort with a shallow pool and kids' club. Destination is not answered, so this band is a rough guess across typical sun destinations; the 2-year-old likely flies free but may incur small fees, and access needs and dates are also unaccounted for. Per-party for one family room or two connecting rooms.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Family-friendly all-inclusive beach resort (destination to be chosen)",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 4500,
+                  "high": 9000,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Return flights from Ottawa, nonstop or short connection",
+                "summary": "Return airfares for 2 adults and 2 children with a lap-infant, kept to nonstop or connections under two hours as required. Destination is not answered and no dates are set, so fares are a broad guess that swings with season; baggage and seat selection are not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Ottawa Macdonald-Cartier International Airport",
+                    "locality": "Ottawa",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 2200,
+                  "high": 4800,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Resort transfer by shared shuttle, with car seats",
+                "summary": "Shared airport-to-resort shuttle so no car rental is needed. Destination unknown so the band is wide; child car-seat availability should be confirmed with the operator, and it is not accounted for here.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Destination airport to resort transfer (destination to be chosen)",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 40,
+                  "high": 250,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Travel insurance and incidentals buffer",
+                "summary": "Set-aside for family travel medical and cancellation insurance, tips, resort extras and airport costs. Destination, dates and any health or access needs are not answered, so this is a loose guess and not a quote.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Ottawa, before departure",
+                    "locality": "Ottawa",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 300,
+                  "high": 900,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "activities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: resort\nSpecialist: activities\n\nYou are the activities specialist on a trip-planning tool.\nYou propose things to do: what they are, how long they take, and when they are open.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 8 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 8 days.\n- **Nothing you propose may be longer than 180 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: resort\nLeaving from: Ottawa\nGoing to: not answered\nDates: 7 nights, no dates chosen\nTravellers: 5\nAges that change the plan: 38, 37, 9, 6, 2\nAccess needs: not answered\nBudget: 7000 CAD, total\nAppetite for effort: gentle\nRoughest night they will accept: hotel\nWould rule the trip out: Nothing with a connecting flight longer than two hours, No adults-only property\n\nAbout this resort:\nBoard basis: all-inclusive\nSetting: beach\nMust have on site: Shallow pool the two-year-old can stand in, Kids' club that takes a six-year-old\nIn their words: The point of this trip is that nobody has to plan anything once we land. We do not intend to leave the property and would rather not rent a car."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Shallow-end pool play session\",\"summary\":\"Splash time in the resort's shallow pool, where the two-year-old can stand. Which resort and pool depth are unknown since the destination was not answered, so confirm on arrival. Stays on property.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Resort shallow family pool\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":0,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Kids' club morning session\",\"summary\":\"The six-year-old joins the on-site kids' club while the adults relax. Age limits, hours and the destination were not answered, so check the club's rules for the six-year-old and whether the nine-year-old fits too.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Resort kids' club\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":180,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":0,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Easy beach sandcastle and paddle\",\"summary\":\"A gentle stretch of beach play right at the resort with buckets and spades. Water conditions and the destination are unknown, so supervise the little ones near the water.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Resort beach\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":90,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":0,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Beachside sunset stroll\",\"summary\":\"A slow walk along the resort's shoreline at the end of the day, easy with a stroller. Sunset time depends on the unchosen destination and dates.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Resort beachfront\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":45,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":0,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Resort family games and poolside activities\",\"summary\":\"Many all-inclusive resorts run daily games, crafts or mini-disco for families. Whether this resort does, and the schedule, are unknown, so check the activity board on arrival.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Resort activities programme\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":60,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":0,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Non-motorised water sports try-out\",\"summary\":\"Kayaks, paddleboards or similar are often included at beach all-inclusives. Availability, age limits and any fees are unknown, so confirm with the resort; the younger children may need to sit out.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Resort water sports hut\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":60,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":60,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0}]}",
+          "stopReason": "end",
+          "servedModel": "claude-sonnet-5-5",
+          "usage": {
+            "inputTokens": 3898,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1206,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3898,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Shallow-end pool play session",
+                "summary": "Splash time in the resort's shallow pool, where the two-year-old can stand. Which resort and pool depth are unknown since the destination was not answered, so confirm on arrival. Stays on property.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Resort shallow family pool",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 0,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Kids' club morning session",
+                "summary": "The six-year-old joins the on-site kids' club while the adults relax. Age limits, hours and the destination were not answered, so check the club's rules for the six-year-old and whether the nine-year-old fits too.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Resort kids' club",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 180,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 0,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Easy beach sandcastle and paddle",
+                "summary": "A gentle stretch of beach play right at the resort with buckets and spades. Water conditions and the destination are unknown, so supervise the little ones near the water.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Resort beach",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 90,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 0,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Beachside sunset stroll",
+                "summary": "A slow walk along the resort's shoreline at the end of the day, easy with a stroller. Sunset time depends on the unchosen destination and dates.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Resort beachfront",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 45,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 0,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Resort family games and poolside activities",
+                "summary": "Many all-inclusive resorts run daily games, crafts or mini-disco for families. Whether this resort does, and the schedule, are unknown, so check the activity board on arrival.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Resort activities programme",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 60,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 0,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Non-motorised water sports try-out",
+                "summary": "Kayaks, paddleboards or similar are often included at beach all-inclusives. Availability, age limits and any fees are unknown, so confirm with the resort; the younger children may need to sit out.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Resort water sports hut",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 60,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 60,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "candidatesAccepted": [
+    {
+      "title": "Family all-inclusive beach resort, Punta Cana",
+      "summary": "A kind of place, not a named premises: an all-inclusive beach resort with a kids' club and a shallow toddler pool. Destination was not answered, so Punta Cana is a guess; flights from Ottawa usually need a connection, so check that against the two-hour limit. Access needs and dates were not answered either, and each resort's kids' club age range and pool depth must be confirmed before booking.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "all-inclusive family beach resort",
+          "locality": "Punta Cana",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 4500,
+        "high": 7500,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 120,
+      "id": "pl-40-5-lodging-1",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Family all-inclusive beach resort, Varadero",
+      "summary": "A kind of place, not a named premises: an all-inclusive beachfront family resort with a splash area and kids' club. Destination was not answered, so Varadero is a guess; direct flights from Ottawa are sometimes available, but this is not checked. Dates and access needs are unknown, so confirm the kids' club ages and shallow pool before booking.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "all-inclusive family beach resort",
+          "locality": "Varadero",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 4000,
+        "high": 7000,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 90,
+      "id": "pl-40-5-lodging-2",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Family all-inclusive beach resort, Cancún",
+      "summary": "A kind of place, not a named premises: an all-inclusive beach resort on the Riviera Maya coast with family suites and kids' club. Destination was not answered, so Cancún is a guess; the flight routing from Ottawa is not checked against the two-hour connection limit. Dates and access needs are unknown, so confirm the pool depth and club ages.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "all-inclusive family beach resort",
+          "locality": "Cancún",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 5000,
+        "high": 8000,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 120,
+      "id": "pl-40-5-lodging-3",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Shallow-end pool play session",
+      "summary": "Splash time in the resort's shallow pool, where the two-year-old can stand. Which resort and pool depth are unknown since the destination was not answered, so confirm on arrival. Stays on property.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Resort shallow family pool",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 0,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-5-activities-1",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Kids' club morning session",
+      "summary": "The six-year-old joins the on-site kids' club while the adults relax. Age limits, hours and the destination were not answered, so check the club's rules for the six-year-old and whether the nine-year-old fits too.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Resort kids' club",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 180,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 0,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-5-activities-2",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Easy beach sandcastle and paddle",
+      "summary": "A gentle stretch of beach play right at the resort with buckets and spades. Water conditions and the destination are unknown, so supervise the little ones near the water.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Resort beach",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 90,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 0,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-5-activities-3",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Beachside sunset stroll",
+      "summary": "A slow walk along the resort's shoreline at the end of the day, easy with a stroller. Sunset time depends on the unchosen destination and dates.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Resort beachfront",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 45,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 0,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-5-activities-4",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Resort family games and poolside activities",
+      "summary": "Many all-inclusive resorts run daily games, crafts or mini-disco for families. Whether this resort does, and the schedule, are unknown, so check the activity board on arrival.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Resort activities programme",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 60,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 0,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-5-activities-5",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Non-motorised water sports try-out",
+      "summary": "Kayaks, paddleboards or similar are often included at beach all-inclusives. Availability, age limits and any fees are unknown, so confirm with the resort; the younger children may need to sit out.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Resort water sports hut",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 60,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 60,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-5-activities-6",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Passports for all five travellers",
+      "summary": "Every traveller needs a valid passport, including the two-year-old, and some destinations require months of validity beyond the return date. Destination is not answered, so entry rules, visas or electronic travel authorisations could not be checked; confirm with the official government source for wherever you choose. This is not clearance to travel.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Passport Canada / IRCC passport services",
+          "locality": "Ottawa",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 600,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 60,
+      "id": "pl-40-5-practicalities-1",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Family travel medical insurance",
+      "summary": "Covers illness or injury abroad for two adults and three children, and is worth comparing for trip cancellation cover too. Destination, dates and any health conditions are not answered, so the price and the exclusions could not be accounted for. Read the policy terms before buying.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Online or broker purchase from Ottawa",
+          "locality": "Ottawa",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 150,
+        "high": 600,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-5-practicalities-2",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Parental consent letter and child ID check",
+      "summary": "If either parent travels without the other, or the family travels with other adults, a signed consent letter for the children is often recommended. Whether this applies, and what the destination requires, is unknown because the destination and the travelling party are not answered. Check airline and destination guidance.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Home preparation, no venue needed",
+          "locality": "Ottawa",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": null,
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 14,
+      "id": "pl-40-5-practicalities-3",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Resort connectivity: roaming plan or eSIM",
+      "summary": "Lets the family stay reachable from the resort without leaving the property or renting a car. Destination is not answered, so coverage and plan prices could not be checked. Compare the carrier roaming pass with a local eSIM, and ask the resort about wifi.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Carrier or eSIM provider, set up before departure",
+          "locality": "Ottawa",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 15,
+        "high": 120,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 3,
+      "id": "pl-40-5-practicalities-4",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "All-inclusive beach resort week, family room",
+      "summary": "Core lodging cost for 7 nights at a family-friendly all-inclusive beach resort with a shallow pool and kids' club. Destination is not answered, so this band is a rough guess across typical sun destinations; the 2-year-old likely flies free but may incur small fees, and access needs and dates are also unaccounted for. Per-party for one family room or two connecting rooms.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Family-friendly all-inclusive beach resort (destination to be chosen)",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 4500,
+        "high": 9000,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-5-budget-1",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Return flights from Ottawa, nonstop or short connection",
+      "summary": "Return airfares for 2 adults and 2 children with a lap-infant, kept to nonstop or connections under two hours as required. Destination is not answered and no dates are set, so fares are a broad guess that swings with season; baggage and seat selection are not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Ottawa Macdonald-Cartier International Airport",
+          "locality": "Ottawa",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 2200,
+        "high": 4800,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-5-budget-2",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Resort transfer by shared shuttle, with car seats",
+      "summary": "Shared airport-to-resort shuttle so no car rental is needed. Destination unknown so the band is wide; child car-seat availability should be confirmed with the operator, and it is not accounted for here.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Destination airport to resort transfer (destination to be chosen)",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 40,
+        "high": 250,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-5-budget-3",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Travel insurance and incidentals buffer",
+      "summary": "Set-aside for family travel medical and cancellation insurance, tips, resort extras and airport costs. Destination, dates and any health or access needs are not answered, so this is a loose guess and not a quote.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Ottawa, before departure",
+          "locality": "Ottawa",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 300,
+        "high": 900,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-5-budget-4",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    }
+  ],
+  "rejected": [],
+  "gaps": [
+    {
+      "specialist": "route-and-logistics",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about legs between places: this trip stays where it lands."
+    },
+    {
+      "specialist": "food",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about where to eat: the board you asked for already covers the meals."
+    },
+    {
+      "specialist": "conditions-and-gear",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about conditions or kit: this trip does not turn on them."
+    }
+  ],
+  "usage": {
+    "calls": 4,
+    "inputTokens": 15543,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "outputTokens": 4008,
+    "thinkingTokens": 0,
+    "fallbackCalls": 0
+  },
+  "observedUsd": 0.071166
+}

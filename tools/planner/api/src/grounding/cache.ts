@@ -75,6 +75,7 @@ import type {
   LocatedPlace,
   LocateRequest,
   NearbyArticle,
+  NearbyPointRequest,
   NearbyRequest,
   NotabilityRequest,
   TravelEstimate,
@@ -301,6 +302,12 @@ export interface RunGrounding {
    */
   nearby(request: NearbyRequest): Promise<GroundingOutcome<Find[]>>;
   /**
+   * A town query, one call — pl-60. Uncached for `nearby`'s reason: a run asks
+   * each town once, and a re-plan that re-runs discovery is asking again on
+   * purpose. Answers `answered` or `refused`, never `unknown`.
+   */
+  nearbyPoint(request: NearbyPointRequest): Promise<GroundingOutcome<Find[]>>;
+  /**
    * One geosearch, one call — pl-33.
    *
    * Uncached for the same reason `nearby` is, and more so: a corridor is tiled
@@ -411,6 +418,12 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
   /** Same, for discovery. An empty list either way is not distinguishable here. */
   async nearby(request: NearbyRequest): Promise<Find[]> {
     const outcome = await this.#nearby(request, null);
+    return outcome.kind === "answered" ? outcome.value : [];
+  }
+
+  /** Same, for a town query. */
+  async nearbyPoint(request: NearbyPointRequest): Promise<Find[]> {
+    const outcome = await this.#nearbyPoint(request, null);
     return outcome.kind === "answered" ? outcome.value : [];
   }
 
@@ -568,6 +581,20 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
     return answered(found);
   }
 
+  /** One town query, spent as one call whatever it finds. Never cached — see `RunGrounding.nearbyPoint`. */
+  async #nearbyPoint(
+    request: NearbyPointRequest,
+    spend: RunSpend | null,
+  ): Promise<GroundingOutcome<Find[]>> {
+    if (spend !== null && !spend.budget.claim()) {
+      spend.refuse();
+      return REFUSED;
+    }
+
+    const found = await this.#options.inner.nearbyPoint(request);
+    return answered(found);
+  }
+
   /**
    * One geosearch, spent as one call whatever it finds. Never cached — see
    * `RunGrounding.articlesNear`.
@@ -610,6 +637,7 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
       locate: (request) => this.#locate(request, spend),
       travel: (request) => this.#travel(request, spend),
       nearby: (request) => this.#nearby(request, spend),
+      nearbyPoint: (request) => this.#nearbyPoint(request, spend),
       articlesNear: (request) => this.#articlesNear(request, spend),
     };
   }

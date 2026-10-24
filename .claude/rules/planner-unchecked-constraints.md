@@ -60,7 +60,8 @@ column for the list: a stored list can disagree with the days it is printed
 beside, and re-composing on read would drift with `limits.ts` and with the clock.
 
 **`coverage` and `booking-deadline-passed` are the two exceptions, and they
-prove the rule** (pl-29, pl-47). A thin corridor is not a function of the brief,
+prove the rule** (pl-29, pl-47). A thin corridor, or a town the map had nowhere
+to sleep in (pl-60), is not a function of the brief,
 the candidates or the days — it is a live backend's answer to a query that ran
 once, upstream of any candidate — so it rides on `PlanRevision.coverage`, exactly
 as a measured leg rides on `PlanItem.travelFromPrevious`. A booking deadline that

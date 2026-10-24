@@ -94,7 +94,7 @@ import type { AppContext } from "../context.ts";
 import { insertCandidates, selectLatestItem, selectPlan } from "../db/plans.ts";
 import { insertRun, selectLiveRun } from "../db/runs.ts";
 import { groundingForRun } from "../grounding/cache.ts";
-import { discoverAlongCorridor, hasCorridor, tripContextFor } from "./discovery.ts";
+import { discover, hasDiscovery, tripContextFor } from "./discovery.ts";
 import {
   cancelRun,
   capacityFor,
@@ -571,10 +571,16 @@ async function executeReplan(
   // --- Discovery, only when it would change a prompt. Finds are not stored, so
   // re-planning `food` without them would be a worse specialist than the one
   // that drafted, and the diff would present that regression as a choice.
-  const discovering = hasCorridor(brief) && specialists.some((each) => readsFinds(each));
+  //
+  // Both passes run, whichever reader is named (pl-60). A re-plan of `lodging`
+  // alone re-asks the corridor too, which buys `lodging` nothing: the cost is
+  // the corridor pass's calls, up to four plus its geosearch tiles. The other
+  // way would carry the base's coverage for the pass that did not run, and the
+  // stored list has nothing that says which pass wrote which entry.
+  const discovering = hasDiscovery(brief) && specialists.some((each) => readsFinds(each));
   if (discovering && !moveTo(context, runId, "grounding")) return;
   const discovered = discovering
-    ? await discoverAlongCorridor({
+    ? await discover({
         brief,
         provider: grounding,
         logger,

@@ -143,6 +143,10 @@ class SilentGrounding implements GroundingProvider {
   async nearby(): Promise<Find[]> {
     return [];
   }
+
+  async nearbyPoint(): Promise<Find[]> {
+    return [];
+  }
 }
 
 /** A backend that is down. Every call throws, and the plan still has to ship. */
@@ -159,6 +163,10 @@ class BrokenGrounding implements GroundingProvider {
   }
 
   async nearby(): Promise<never> {
+    throw new AppError("UNREACHABLE", "the routing service refused the connection");
+  }
+
+  async nearbyPoint(): Promise<never> {
     throw new AppError("UNREACHABLE", "the routing service refused the connection");
   }
 }

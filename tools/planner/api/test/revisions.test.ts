@@ -52,6 +52,7 @@ import type {
   ModelReply,
   ModelRequest,
   NearbyArticle,
+  NearbyPointRequest,
   NearbyRequest,
   NotabilityRequest,
   TravelMatrix,
@@ -115,16 +116,25 @@ class RecordingGrounding implements GroundingProvider {
   readonly located: string[] = [];
   readonly travelled: string[][] = [];
   nearbyCalls = 0;
+  /** pl-60's town queries, counted apart from the corridor's. */
+  nearbyPointCalls = 0;
   articleCalls = 0;
 
   get calls(): number {
-    return this.located.length + this.travelled.length + this.nearbyCalls + this.articleCalls;
+    return (
+      this.located.length +
+      this.travelled.length +
+      this.nearbyCalls +
+      this.nearbyPointCalls +
+      this.articleCalls
+    );
   }
 
   forget(): void {
     this.located.length = 0;
     this.travelled.length = 0;
     this.nearbyCalls = 0;
+    this.nearbyPointCalls = 0;
     this.articleCalls = 0;
   }
 
@@ -167,6 +177,11 @@ class RecordingGrounding implements GroundingProvider {
         detourMinutes: null,
       },
     ];
+  }
+
+  async nearbyPoint(request: NearbyPointRequest): Promise<Find[]> {
+    this.nearbyPointCalls += 1;
+    return await this.#inner.nearbyPoint(request);
   }
 
   async articlesNear(request: NotabilityRequest): Promise<NearbyArticle[]> {
@@ -1050,15 +1065,20 @@ describe("discovery on a re-plan", () => {
       expect(revision.reading).toEqual([
         source("https://en.wikivoyage.org/wiki/Bas-Saint-Laurent", "Bas-Saint-Laurent"),
       ]);
-      expect(revision.coverage).toEqual([]);
-      expect(base.coverage).not.toEqual([]);
+      // The corridor had finds, so its pass says nothing; the town pass (pl-60)
+      // asked about `somewhere`, which this double locates and has nothing
+      // to sleep in.
+      expect(revision.coverage.map((entry) => entry.detail)).toEqual([
+        "No places to stay around somewhere are on the map. Somewhere to stay there may exist without this plan having found it.",
+      ]);
+      expect(base.coverage).not.toEqual(revision.coverage);
       expect(base.reading).toEqual([]);
     } finally {
       await f.close();
     }
   });
 
-  test("naming only lodging never asks, and the revision's coverage and reading are the base's", async () => {
+  test("naming only lodging re-runs both passes (pl-60), and the revision carries what they found", async () => {
     const f = await fixture();
     try {
       const view = await draft(f);
@@ -1072,10 +1092,20 @@ describe("discovery on a re-plan", () => {
       });
       expect((await runToCompletion(f.harness.app, run.id)).status).toBe("done");
 
-      expect(f.grounding.nearbyCalls).toBe(0);
+      // `lodging` reads the town pass's finds; the corridor is re-asked too,
+      // which is the cost `revise.ts` names — one corridor query here.
+      expect(f.grounding.nearbyCalls).toBe(1);
+      expect(f.grounding.nearbyPointCalls).toBe(1);
       const revision = latestOf((await readView(f.harness, view.plan.id)).plan);
-      expect(revision.coverage).toEqual(base.coverage);
-      expect(revision.reading).toEqual(base.reading);
+      // Exactly what this run's two passes said, and none of the base's: the
+      // corridor had finds, and `somewhere` had nothing to sleep in (gate 1).
+      expect(revision.coverage.map((entry) => entry.detail)).toEqual([
+        "No places to stay around somewhere are on the map. Somewhere to stay there may exist without this plan having found it.",
+      ]);
+      expect(base.coverage).not.toEqual(revision.coverage);
+      expect(revision.reading).toEqual([
+        source("https://en.wikivoyage.org/wiki/Bas-Saint-Laurent", "Bas-Saint-Laurent"),
+      ]);
     } finally {
       await f.close();
     }

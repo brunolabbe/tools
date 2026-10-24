@@ -1,0 +1,935 @@
+{
+  "note": "Written by pl-60's builder at the base commit, before any source changed: each set A brief's draft days under the scripted model and the fixture grounding default, run ids and plan ids replaced. Never regenerated. `coverage` is the base's, for reference only.",
+  "sha": "8a6dcf9a",
+  "shapes": {
+    "road-trip": {
+      "days": [
+        {
+          "id": "<run>-1-day-0",
+          "dayIndex": 0,
+          "date": "2027-07-03",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-1",
+              "candidateId": "<run>-route-and-logistics-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-activities-1",
+              "candidateId": "<run>-activities-1",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-1",
+              "candidateId": "<run>-lodging-1",
+              "position": 2,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-1",
+          "dayIndex": 1,
+          "date": "2027-07-04",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-2",
+              "candidateId": "<run>-route-and-logistics-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-activities-2",
+              "candidateId": "<run>-activities-2",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-2",
+              "candidateId": "<run>-lodging-2",
+              "position": 2,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-2",
+          "dayIndex": 2,
+          "date": "2027-07-05",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-3",
+              "candidateId": "<run>-route-and-logistics-3",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-activities-3",
+              "candidateId": "<run>-activities-3",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-3",
+              "candidateId": "<run>-lodging-3",
+              "position": 2,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-3",
+          "dayIndex": 3,
+          "date": "2027-07-06",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-4",
+              "candidateId": "<run>-route-and-logistics-4",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-food-1",
+              "candidateId": "<run>-food-1",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-4",
+          "dayIndex": 4,
+          "date": "2027-07-07",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-food-2",
+              "candidateId": "<run>-food-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-5",
+          "dayIndex": 5,
+          "date": "2027-07-08",
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-6",
+          "dayIndex": 6,
+          "date": "2027-07-09",
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-7",
+          "dayIndex": 7,
+          "date": "2027-07-10",
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-8",
+          "dayIndex": 8,
+          "date": "2027-07-11",
+          "items": []
+        }
+      ],
+      "coverage": [
+        {
+          "kind": "coverage",
+          "detail": "Where this trip starts or ends could not be found on the map, so nothing nearby along the way could be checked.",
+          "candidateIds": []
+        }
+      ]
+    },
+    "backcountry": {
+      "days": [
+        {
+          "id": "<run>-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-1",
+              "candidateId": "<run>-route-and-logistics-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-1",
+              "candidateId": "<run>-lodging-1",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-2",
+              "candidateId": "<run>-route-and-logistics-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-2",
+              "candidateId": "<run>-lodging-2",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-3",
+              "candidateId": "<run>-route-and-logistics-3",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-1",
+              "candidateId": "<run>-activities-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-activities-2",
+              "candidateId": "<run>-activities-2",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        }
+      ],
+      "coverage": [
+        {
+          "kind": "coverage",
+          "detail": "There is very little on the map along this route. Something worth stopping for may exist without this plan ever finding it.",
+          "candidateIds": []
+        }
+      ]
+    },
+    "motorised-touring": {
+      "days": [
+        {
+          "id": "<run>-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-1",
+              "candidateId": "<run>-route-and-logistics-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-1",
+              "candidateId": "<run>-lodging-1",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "measured",
+                "distanceMeters": 0,
+                "durationMinutes": 0,
+                "provenance": {
+                  "kind": "grounded",
+                  "sources": [
+                    {
+                      "url": "https://fixtures.invalid/planner/legs/alma",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-15T12:00:00.000Z"
+                    },
+                    {
+                      "url": "https://fixtures.invalid/planner/places/alma",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-15T12:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-2",
+              "candidateId": "<run>-route-and-logistics-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-2",
+              "candidateId": "<run>-lodging-2",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "measured",
+                "distanceMeters": 0,
+                "durationMinutes": 0,
+                "provenance": {
+                  "kind": "grounded",
+                  "sources": [
+                    {
+                      "url": "https://fixtures.invalid/planner/legs/saint-felicien",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-15T12:00:00.000Z"
+                    },
+                    {
+                      "url": "https://fixtures.invalid/planner/places/saint-felicien",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-15T12:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-3",
+              "candidateId": "<run>-route-and-logistics-3",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-1",
+              "candidateId": "<run>-activities-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-activities-2",
+              "candidateId": "<run>-activities-2",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        }
+      ],
+      "coverage": []
+    },
+    "city-and-culture": {
+      "days": [
+        {
+          "id": "<run>-1-day-0",
+          "dayIndex": 0,
+          "date": "2027-10-09",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-1",
+              "candidateId": "<run>-activities-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-1",
+              "candidateId": "<run>-lodging-1",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-1",
+          "dayIndex": 1,
+          "date": "2027-10-10",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-2",
+              "candidateId": "<run>-activities-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-2",
+              "candidateId": "<run>-lodging-2",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-2",
+          "dayIndex": 2,
+          "date": "2027-10-11",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-3",
+              "candidateId": "<run>-activities-3",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-3",
+          "dayIndex": 3,
+          "date": "2027-10-12",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-4",
+              "candidateId": "<run>-activities-4",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-4",
+          "dayIndex": 4,
+          "date": "2027-10-13",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-5",
+              "candidateId": "<run>-activities-5",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-5",
+          "dayIndex": 5,
+          "date": "2027-10-14",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-food-1",
+              "candidateId": "<run>-food-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-6",
+          "dayIndex": 6,
+          "date": "2027-10-15",
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-food-2",
+              "candidateId": "<run>-food-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-7",
+          "dayIndex": 7,
+          "date": "2027-10-16",
+          "items": []
+        }
+      ],
+      "coverage": [
+        {
+          "kind": "coverage",
+          "detail": "There is very little on the map along this route. Something worth stopping for may exist without this plan ever finding it.",
+          "candidateIds": []
+        }
+      ]
+    },
+    "resort": {
+      "days": [
+        {
+          "id": "<run>-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-1",
+              "candidateId": "<run>-activities-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-1",
+              "candidateId": "<run>-lodging-1",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "measured",
+                "distanceMeters": 0,
+                "durationMinutes": 0,
+                "provenance": {
+                  "kind": "grounded",
+                  "sources": [
+                    {
+                      "url": "https://fixtures.invalid/planner/legs/riviera maya",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-15T12:00:00.000Z"
+                    },
+                    {
+                      "url": "https://fixtures.invalid/planner/places/riviera maya",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-15T12:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-2",
+              "candidateId": "<run>-activities-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-2",
+              "candidateId": "<run>-lodging-2",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-3",
+              "candidateId": "<run>-activities-3",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-4",
+          "dayIndex": 4,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-5",
+          "dayIndex": 5,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-6",
+          "dayIndex": 6,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-7",
+          "dayIndex": 7,
+          "date": null,
+          "items": []
+        }
+      ],
+      "coverage": []
+    },
+    "multi-city": {
+      "days": [
+        {
+          "id": "<run>-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-1",
+              "candidateId": "<run>-route-and-logistics-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-3",
+              "candidateId": "<run>-route-and-logistics-3",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-1",
+              "candidateId": "<run>-lodging-1",
+              "position": 2,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-route-and-logistics-2",
+              "candidateId": "<run>-route-and-logistics-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-2",
+              "candidateId": "<run>-lodging-2",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "measured",
+                "distanceMeters": 0,
+                "durationMinutes": 0,
+                "provenance": {
+                  "kind": "grounded",
+                  "sources": [
+                    {
+                      "url": "https://fixtures.invalid/planner/legs/ljubljana",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-15T12:00:00.000Z"
+                    },
+                    {
+                      "url": "https://fixtures.invalid/planner/places/ljubljana",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-15T12:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-1",
+              "candidateId": "<run>-activities-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "<run>-1-item-<run>-lodging-3",
+              "candidateId": "<run>-lodging-3",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-2",
+              "candidateId": "<run>-activities-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-4",
+          "dayIndex": 4,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-activities-3",
+              "candidateId": "<run>-activities-3",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-5",
+          "dayIndex": 5,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-food-1",
+              "candidateId": "<run>-food-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-6",
+          "dayIndex": 6,
+          "date": null,
+          "items": [
+            {
+              "id": "<run>-1-item-<run>-food-2",
+              "candidateId": "<run>-food-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "<run>-1-day-7",
+          "dayIndex": 7,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-8",
+          "dayIndex": 8,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-9",
+          "dayIndex": 9,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-10",
+          "dayIndex": 10,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-11",
+          "dayIndex": 11,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "<run>-1-day-12",
+          "dayIndex": 12,
+          "date": null,
+          "items": []
+        }
+      ],
+      "coverage": [
+        {
+          "kind": "coverage",
+          "detail": "Where this trip starts or ends could not be found on the map, so nothing nearby along the way could be checked.",
+          "candidateIds": []
+        }
+      ]
+    }
+  }
+}

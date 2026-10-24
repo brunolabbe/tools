@@ -68,6 +68,7 @@ import type {
   LocatedPlace,
   LocateRequest,
   NearbyArticle,
+  NearbyPointRequest,
   NearbyRequest,
   NotabilityRequest,
   TravelEstimate,
@@ -427,13 +428,55 @@ export class ValhallaGroundingProvider implements GroundingProvider {
 
     assertAnswered(body);
 
+    const asked = new Set(request.kinds);
     return elementsOf(body)
-      .map((element) => findFrom(element, at))
+      .map((element) => findFrom(element, at, asked, "node"))
       .filter((find): find is Find => find !== null)
       .filter(
         (find) =>
           distanceToCorridorMetres(find.coordinates, request.corridor) <= request.radiusMetres,
       );
+  }
+
+  /**
+   * What OpenStreetMap holds within a radius of one point — pl-60, the town
+   * query `lodging`'s finds come from.
+   *
+   * Overpass, like `nearby` above, and through the same `#overpassJson`, so the
+   * same timeout, failure mapping and `remark` check apply. What differs is the
+   * query (`overpassPointQuery`): it asks for nodes, ways and relations and for
+   * an area's `center`, because most lodging is mapped as an area.
+   *
+   * **Re-filtered against the radius on this side, by the coordinate the find
+   * carries.** Overpass's `around:` admits a way whose outline crosses the
+   * circle, and its `center` can sit outside it; a find is in this town only if
+   * the point a reader is shown is.
+   */
+  async nearbyPoint(request: NearbyPointRequest): Promise<Find[]> {
+    if (request.signal?.aborted === true) throw new AppError("CANCELED");
+
+    if (this.#overpassUrl === undefined) {
+      this.#logger?.warn("nearbyPoint: no OVERPASS_URL configured, discovering nothing");
+      return [];
+    }
+
+    const query = overpassPointQuery(
+      request.point,
+      request.radiusMetres,
+      request.kinds,
+      serverTimeoutSeconds(this.#discoveryTimeoutMs),
+    );
+
+    const body = await this.#overpassJson(query, request.signal);
+    const at = this.#now();
+
+    assertAnswered(body);
+
+    const asked = new Set(request.kinds);
+    return elementsOf(body)
+      .map((element) => findFrom(element, at, asked, null))
+      .filter((find): find is Find => find !== null)
+      .filter((find) => haversineMetres(find.coordinates, request.point) <= request.radiusMetres);
   }
 
   /**
@@ -1156,7 +1199,38 @@ const KIND_FILTERS: Record<DiscoveryKind, string> = {
   waterfall: '"natural"="waterfall"',
   attraction: '"tourism"="attraction"',
   "historic-site": '"historic"',
+  // pl-60: places to sleep, asked only around a town (`overpassPointQuery`).
+  hotel: '"tourism"="hotel"',
+  motel: '"tourism"="motel"',
+  "guest-house": '"tourism"="guest_house"',
+  hostel: '"tourism"="hostel"',
+  chalet: '"tourism"="chalet"',
+  apartment: '"tourism"="apartment"',
+  "camp-site": '"tourism"="camp_site"',
+  "caravan-site": '"tourism"="caravan_site"',
 };
+
+/**
+ * Whether an element's tags are the thing a kind means — `KIND_FILTERS`, read
+ * back on this side of the wire. One predicate per kind, in the same order the
+ * kinds are declared, which is the precedence `kindOf` applies.
+ */
+const KIND_MATCHES: ReadonlyArray<
+  readonly [DiscoveryKind, (tags: ReadonlyMap<string, string>) => boolean]
+> = [
+  ["viewpoint", (tags) => tags.get("tourism") === "viewpoint"],
+  ["waterfall", (tags) => tags.get("natural") === "waterfall"],
+  ["attraction", (tags) => tags.get("tourism") === "attraction"],
+  ["historic-site", (tags) => tags.has("historic")],
+  ["hotel", (tags) => tags.get("tourism") === "hotel"],
+  ["motel", (tags) => tags.get("tourism") === "motel"],
+  ["guest-house", (tags) => tags.get("tourism") === "guest_house"],
+  ["hostel", (tags) => tags.get("tourism") === "hostel"],
+  ["chalet", (tags) => tags.get("tourism") === "chalet"],
+  ["apartment", (tags) => tags.get("tourism") === "apartment"],
+  ["camp-site", (tags) => tags.get("tourism") === "camp_site"],
+  ["caravan-site", (tags) => tags.get("tourism") === "caravan_site"],
+];
 
 /**
  * The Overpass QL text this adapter sends: one `around:` filter per requested
@@ -1211,6 +1285,34 @@ export function overpassQuery(
   const around = `around:${String(radiusMetres)},${points}`;
   const clauses = kinds.map((kind) => `  node[${KIND_FILTERS[kind]}](${around});`).join("\n");
   return `[out:json][timeout:${String(timeoutSeconds)}];\n(\n${clauses}\n);\nout body;`;
+}
+
+/**
+ * The Overpass QL text `nearbyPoint` sends: one `around:` filter per kind,
+ * around one point — pl-60.
+ *
+ * **`nwr` and `out center tags`, not `node` and `out body`**, and that is the
+ * whole difference from `overpassQuery`. pl-60's Build 1 measured why: at 6 km
+ * around its nine towns, 58 of 104 lodging finds were ways or relations, and a
+ * node-only clause finds none of Forillon's three campgrounds at any radius.
+ * `out center` gives an area the one coordinate a find needs; `tags` is all
+ * `findFrom` reads, so the geometry is never sent.
+ *
+ * The corridor query keeps its node-only shape on purpose: changing what it
+ * asks for would change pl-29's finds, which this ticket does not measure.
+ *
+ * Exported so a capture builds the *exact* query this adapter sends, for the
+ * same reason `overpassQuery` is — pl-60's checked-in payload came from it.
+ */
+export function overpassPointQuery(
+  point: Coordinates,
+  radiusMetres: number,
+  kinds: readonly DiscoveryKind[],
+  timeoutSeconds: number = DEFAULT_SERVER_TIMEOUT_SECONDS,
+): string {
+  const around = `around:${String(radiusMetres)},${String(point.latitude)},${String(point.longitude)}`;
+  const clauses = kinds.map((kind) => `  nwr[${KIND_FILTERS[kind]}](${around});`).join("\n");
+  return `[out:json][timeout:${String(timeoutSeconds)}];\n(\n${clauses}\n);\nout center tags;`;
 }
 
 /**
@@ -1269,6 +1371,8 @@ interface OverpassElement {
   id: unknown;
   lat: unknown;
   lon: unknown;
+  /** A way's or a relation's coordinate under `out center` — it has no `lat`/`lon` of its own. */
+  center?: unknown;
   tags: unknown;
 }
 
@@ -1397,12 +1501,25 @@ function articleUrl(language: string, site: "wikipedia" | "wikivoyage", title: s
   return `https://${language.toLowerCase()}.${site}.org/wiki/${path}`;
 }
 
-/** Which `DiscoveryKind` a node's tags mean, or `null` for none of the ones we asked about. */
-function kindOf(tags: ReadonlyMap<string, string>): DiscoveryKind | null {
-  if (tags.get("tourism") === "viewpoint") return "viewpoint";
-  if (tags.get("natural") === "waterfall") return "waterfall";
-  if (tags.get("tourism") === "attraction") return "attraction";
-  if (tags.has("historic")) return "historic-site";
+/**
+ * Which `DiscoveryKind` an element's tags mean, or `null` for none of the ones
+ * we asked about.
+ *
+ * **Only among the kinds the request asked for** (pl-60). Before the lodging
+ * kinds existed every kind was asked for at once, so "the first match" and "the
+ * first match among those asked" were the same thing. They are not now: a
+ * hotel in a listed building carries `historic=*`, and a town query asked for
+ * hotels, so it is a `hotel` and never a `historic-site`. The precedence among
+ * the kinds asked is still `KIND_MATCHES`'s order, whatever order the caller
+ * listed them in.
+ */
+function kindOf(
+  tags: ReadonlyMap<string, string>,
+  asked: ReadonlySet<DiscoveryKind>,
+): DiscoveryKind | null {
+  for (const [kind, matches] of KIND_MATCHES) {
+    if (asked.has(kind) && matches(tags)) return kind;
+  }
   return null;
 }
 
@@ -1429,6 +1546,22 @@ function tagsOf(raw: unknown): ReadonlyMap<string, string> {
   return tags;
 }
 
+/** The element types an OSM url path names. Anything else gets the copyright page, not a guess. */
+const OSM_ELEMENT_TYPES: ReadonlySet<string> = new Set(["node", "way", "relation"]);
+
+/** A node's own `lat`/`lon`, or an area's `center` — `null` for an element with neither. */
+function coordinatesOf(element: OverpassElement): { latitude: number; longitude: number } | null {
+  const own = { latitude: asNumber(element.lat), longitude: asNumber(element.lon) };
+  if (own.latitude !== undefined && own.longitude !== undefined) {
+    return { latitude: own.latitude, longitude: own.longitude };
+  }
+  const center = element.center as { lat?: unknown; lon?: unknown } | null | undefined;
+  if (typeof center !== "object" || center === null) return null;
+  const latitude = asNumber(center.lat);
+  const longitude = asNumber(center.lon);
+  return latitude === undefined || longitude === undefined ? null : { latitude, longitude };
+}
+
 /**
  * One element, as a `Find` — or `null` for one this adapter will not surface.
  *
@@ -1445,13 +1578,29 @@ function tagsOf(raw: unknown): ReadonlyMap<string, string> {
  * is that nothing here ever treats a find's text as anything but an opaque
  * string (see `agent/src/prompt.ts`'s discovery block), not that this parser
  * tries to sanitise a natural-language attack out of a name field.
+ *
+ * **A way or a relation is a find too** (pl-60). A town query asks for areas,
+ * because most lodging is mapped as one: 58 of the 104 finds pl-60 captured at
+ * 6 km were ways or relations, and all three of Forillon's campgrounds are. An
+ * area under `out center` carries its coordinate in `center` and has no `lat`
+ * or `lon`, and its source url names its own type — OSM ids are unique only
+ * within a type, so `/node/<a way's id>` is some unrelated node.
+ *
+ * `assumed` is the type an element with no usable `type` must be, given the
+ * query that produced it: `"node"` for the corridor query, which asks for
+ * nodes only, so its urls are what they were before pl-60; `null` for the town
+ * query, where it could be any of three and a guess would link the wrong one.
  */
-function findFrom(element: OverpassElement, at: Date): Find | null {
-  const latitude = asNumber(element.lat);
-  const longitude = asNumber(element.lon);
-  if (latitude === undefined || longitude === undefined) return null;
+function findFrom(
+  element: OverpassElement,
+  at: Date,
+  asked: ReadonlySet<DiscoveryKind>,
+  assumed: "node" | null,
+): Find | null {
+  const point = coordinatesOf(element);
+  if (point === null) return null;
 
-  const coordinates = coordinatesSchema.safeParse({ latitude, longitude });
+  const coordinates = coordinatesSchema.safeParse(point);
   if (!coordinates.success) return null;
 
   const tags = tagsOf(element.tags);
@@ -1459,14 +1608,15 @@ function findFrom(element: OverpassElement, at: Date): Find | null {
   const name = rawName?.trim().slice(0, MAX_FIND_NAME_CHARS) ?? "";
   if (name === "") return null;
 
-  const kind = kindOf(tags);
+  const kind = kindOf(tags, asked);
   if (kind === null) return null;
 
   const id = typeof element.id === "number" ? element.id : null;
+  const type = OSM_ELEMENT_TYPES.has(element.type as string) ? (element.type as string) : assumed;
   const url =
-    id === null
+    id === null || type === null
       ? "https://www.openstreetmap.org/copyright"
-      : `https://www.openstreetmap.org/node/${String(id)}`;
+      : `https://www.openstreetmap.org/${type}/${String(id)}`;
 
   return {
     name,

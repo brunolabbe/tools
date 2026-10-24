@@ -1,0 +1,2546 @@
+{
+ "note": "pl-60: one real Overpass reply per town, each to the exact query `overpassPointQuery` builds (10 km, the lodging kinds, [timeout:28]). Captured from overpass-api.de with an identifying user agent; the adapter's own fetch is refused there (HTTP 406), filed separately. Points are Nominatim's, from pl-60's Build 1.",
+ "capturedAt": "2026-10-24T01:50:47.731Z",
+ "userAgent": "webtools-planner/0.9 (pl-60 fixture capture)",
+ "radiusMetres": 10000,
+ "towns": [
+  {
+   "locality": "Amqui",
+   "point": {
+    "latitude": 48.4656706,
+    "longitude": -67.4315171
+   },
+   "geocodedAs": "relation/8262628",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"tourism\"=\"hotel\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"tourism\"=\"motel\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"tourism\"=\"guest_house\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"tourism\"=\"hostel\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"tourism\"=\"chalet\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"tourism\"=\"apartment\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"tourism\"=\"camp_site\"](around:10000,48.4656706,-67.4315171);\n  nwr[\"tourism\"=\"caravan_site\"](around:10000,48.4656706,-67.4315171);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T01:47:21Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 8281556562,
+      "lat": 48.4723181,
+      "lon": -67.439226,
+      "tags": {
+       "addr:city": "Amqui",
+       "addr:housenumber": "340",
+       "addr:postcode": "G5J 2G2",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard Saint-Benoît Ouest",
+       "email": "info@selectotelamqui.com",
+       "name": "Sélectôtel",
+       "phone": "+1 418 629-2241",
+       "tourism": "hotel",
+       "website": "https://selectotelamqui.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 8281556563,
+      "lat": 48.4683652,
+      "lon": -67.437467,
+      "tags": {
+       "name": "Auberge l'Ambassadeur",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9990972502,
+      "lat": 48.467864,
+      "lon": -67.4374158,
+      "tags": {
+       "addr:housenumber": "256",
+       "addr:street": "Boulevard Saint-Benoît Ouest, 132",
+       "description": "exquisite small hotel",
+       "name": "Hotel Les quatres bonheurs",
+       "phone": "+1418 629-4783",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10743717063,
+      "lat": 48.4421431,
+      "lon": -67.3512102,
+      "tags": {
+       "addr:city": "Lac-au-Saumon",
+       "addr:housenumber": "54",
+       "addr:postcode": "G0J 1M0",
+       "addr:province": "Québec",
+       "addr:street": "Route 132 Est",
+       "name": "Motel des Cèdres",
+       "phone": "+1 418 778-5815",
+       "tourism": "motel",
+       "website": "https://motel-des-cedres.business.site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 509475429,
+      "center": {
+       "lat": 48.4973437,
+       "lon": -67.456296
+      },
+      "tags": {
+       "fee": "yes",
+       "internet_access": "yes",
+       "name": "Camping d'Amqui",
+       "stars": "3",
+       "tourism": "camp_site",
+       "wikidata": "Q99410181"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1020359982,
+      "center": {
+       "lat": 48.4278652,
+       "lon": -67.3500234
+      },
+      "tags": {
+       "name": "Camping du Lac",
+       "tourism": "camp_site",
+       "website": "https://municipalites-du-quebec.ca/lac-au-saumon/camping.php"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1020394678,
+      "center": {
+       "lat": 48.4642365,
+       "lon": -67.4309879
+      },
+      "tags": {
+       "addr:city": "Amqui",
+       "addr:housenumber": "71",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard Saint-Benoît Ouest",
+       "building": "yes",
+       "name": "Auberge Beauséjour",
+       "tourism": "hotel",
+       "wikidata": "Q109302891"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1154243963,
+      "center": {
+       "lat": 48.4943721,
+       "lon": -67.4565316
+      },
+      "tags": {
+       "name": "Passion Plein-Air 132",
+       "tourism": "caravan_site"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Bonaventure",
+   "point": {
+    "latitude": 48.0449189,
+    "longitude": -65.4931458
+   },
+   "geocodedAs": "relation/8271759",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"tourism\"=\"hotel\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"tourism\"=\"motel\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"tourism\"=\"guest_house\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"tourism\"=\"hostel\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"tourism\"=\"chalet\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"tourism\"=\"apartment\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"tourism\"=\"camp_site\"](around:10000,48.0449189,-65.4931458);\n  nwr[\"tourism\"=\"caravan_site\"](around:10000,48.0449189,-65.4931458);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T01:47:21Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 4368662693,
+      "lat": 48.018638,
+      "lon": -65.4701489,
+      "tags": {
+       "internet_access": "wlan",
+       "name:fr": "Chalets à louer",
+       "opening_hours": "Mo-Su 09:00-21:00",
+       "tourism": "chalet"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4739920760,
+      "lat": 48.0315516,
+      "lon": -65.4702219,
+      "tags": {
+       "internet_access": "yes",
+       "name": "Les Chalets des Blés de Mer",
+       "operator": "Gaston Bourdages",
+       "tourism": "chalet",
+       "website": "https://www.chaletsalouer.com/fr/location-de-chalet/gaspesie/bonaventure/les-chalets-des-bles-de-mer/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6900309587,
+      "lat": 48.1017739,
+      "lon": -65.4618467,
+      "tags": {
+       "name": "Camping le malin",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "node",
+      "id": 7981518684,
+      "lat": 48.0464321,
+      "lon": -65.4954807,
+      "tags": {
+       "addr:housenumber": "106",
+       "addr:street": "Avenue de Port-Royal",
+       "email": "ugar4444@gmail.com",
+       "name": "Auberge Chambre DAMI",
+       "tourism": "guest_house"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9330605303,
+      "lat": 48.0456922,
+      "lon": -65.4895187,
+      "tags": {
+       "check_date": "2026-08-13",
+       "name": "Motel Grand-Pré",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9775857410,
+      "lat": 48.0474938,
+      "lon": -65.4631467,
+      "tags": {
+       "addr:city": "Bonaventure",
+       "addr:country": "CA",
+       "addr:postcode": "G0C1E0",
+       "addr:province": "Québec",
+       "amenity": "outfitter",
+       "email": "3campsengaspesie@gmail.com",
+       "fishing": "yes",
+       "name": "Camp Bonaventure",
+       "name:fr": "Camp Bonaventure",
+       "note:conflation": "Matched from SIT Québec: Camp Bonaventure | dist=43m sim=100%",
+       "phone": "+1-418-534-3678",
+       "ref:sit_quebec": "POURMTOV500473",
+       "source": "Ministère du Tourisme du Québec - SIT Québec",
+       "source:license": "CC BY 4.0",
+       "source:license:url": "https://wiki.openstreetmap.org/wiki/FR:Minist%C3%A8re_du_Tourisme_du_Qu%C3%A9bec",
+       "tourism": "hostel",
+       "website": "http://www.campbonaventure.com"
+      }
+     },
+     {
+      "type": "way",
+      "id": 75037660,
+      "center": {
+       "lat": 48.0444536,
+       "lon": -65.4928882
+      },
+      "tags": {
+       "building": "yes",
+       "building:levels": "3",
+       "description": "Hôtel sur mer",
+       "name": "Riôtel Bonaventure",
+       "tourism": "hotel",
+       "website": "https://www.riotel.com/fr/hotels/bonaventure"
+      }
+     },
+     {
+      "type": "way",
+      "id": 463181399,
+      "center": {
+       "lat": 48.0929481,
+       "lon": -65.4542355
+      },
+      "tags": {
+       "addr:city": "Bonaventure",
+       "addr:housenumber": "200",
+       "addr:postcode": "G0C 1E0",
+       "addr:street": "Chemin Athanase Arsenault",
+       "description": "Accepte les chiens",
+       "name": "Camping Cime Aventures",
+       "phone": "+1-418-534-2333",
+       "tourism": "camp_site",
+       "website": "https://cimeaventures.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 479618295,
+      "center": {
+       "lat": 48.0383393,
+       "lon": -65.4846278
+      },
+      "tags": {
+       "name": "Camping Beaubassin",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1019243707,
+      "center": {
+       "lat": 48.0670492,
+       "lon": -65.5497892
+      },
+      "tags": {
+       "tourism": "caravan_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1019243708,
+      "center": {
+       "lat": 48.0657926,
+       "lon": -65.5457548
+      },
+      "tags": {
+       "tourism": "caravan_site"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Carleton-sur-Mer",
+   "point": {
+    "latitude": 48.101464,
+    "longitude": -66.1140521
+   },
+   "geocodedAs": "relation/8271765",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"tourism\"=\"hotel\"](around:10000,48.101464,-66.1140521);\n  nwr[\"tourism\"=\"motel\"](around:10000,48.101464,-66.1140521);\n  nwr[\"tourism\"=\"guest_house\"](around:10000,48.101464,-66.1140521);\n  nwr[\"tourism\"=\"hostel\"](around:10000,48.101464,-66.1140521);\n  nwr[\"tourism\"=\"chalet\"](around:10000,48.101464,-66.1140521);\n  nwr[\"tourism\"=\"apartment\"](around:10000,48.101464,-66.1140521);\n  nwr[\"tourism\"=\"camp_site\"](around:10000,48.101464,-66.1140521);\n  nwr[\"tourism\"=\"caravan_site\"](around:10000,48.101464,-66.1140521);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T01:47:21Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 3770665175,
+      "lat": 48.1075789,
+      "lon": -66.2035861,
+      "tags": {
+       "internet_access": "wlan",
+       "name": "Motel La Tradition",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6935093653,
+      "lat": 48.1076223,
+      "lon": -66.1321876,
+      "tags": {
+       "addr:city": "Carleton-sur-Mer",
+       "addr:housenumber": "496",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard Perron",
+       "internet_access": "yes",
+       "internet_access:fee": "yes",
+       "name": "Bleu Mer, hôtel & résidences",
+       "rooms": "29",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9399619585,
+      "lat": 48.1119077,
+      "lon": -66.1452505,
+      "tags": {
+       "name": "Motel L'Abri",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9399659038,
+      "lat": 48.1085327,
+      "lon": -66.1336341,
+      "tags": {
+       "name": "Hostellerie Baie Bleue",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9399659054,
+      "lat": 48.1087432,
+      "lon": -66.1343035,
+      "tags": {
+       "name": "Hôtel Manoir Belle Plage",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9399659181,
+      "lat": 48.098659,
+      "lon": -66.1001428,
+      "tags": {
+       "name": "Aquamer Thalasso-Spa",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 878348123,
+      "center": {
+       "lat": 48.0886075,
+       "lon": -66.1159536
+      },
+      "tags": {
+       "name": "Camping de Carleton-sur-Mer",
+       "power_supply": "yes",
+       "sanitary_dump_station": "yes",
+       "tourism": "caravan_site",
+       "website": "https://campingcarletonsurmer.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1019074898,
+      "center": {
+       "lat": 48.111218,
+       "lon": -66.1543363
+      },
+      "tags": {
+       "name": "Chalets de la mer",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "caravan_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1046207128,
+      "center": {
+       "lat": 48.1124676,
+       "lon": -66.1447374
+      },
+      "tags": {
+       "tourism": "caravan_site"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Forillon National Park",
+   "point": {
+    "latitude": 48.8669242,
+    "longitude": -64.3339235
+   },
+   "geocodedAs": "relation/1603116",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"tourism\"=\"hotel\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"tourism\"=\"motel\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"tourism\"=\"guest_house\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"tourism\"=\"hostel\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"tourism\"=\"chalet\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"tourism\"=\"apartment\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"tourism\"=\"camp_site\"](around:10000,48.8669242,-64.3339235);\n  nwr[\"tourism\"=\"caravan_site\"](around:10000,48.8669242,-64.3339235);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T01:47:21Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 351975720,
+      "lat": 48.8560945,
+      "lon": -64.2037211,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:hamlet": "Cap des Rosiers",
+       "addr:housenumber": "1334",
+       "addr:postcode": "G4X 6H4",
+       "addr:street": "Route 132",
+       "building": "yes",
+       "canvec:datasetName": "022A16",
+       "canvec:source": "Buildings_and_Structures_3.0",
+       "canvec:uuid": "2942e537c5ea42ca9087ab041addb5e1",
+       "internet_access": "wlan",
+       "name": "Motel du haut phare",
+       "tourism": "motel",
+       "website": "https://motelduhautphare.com/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 351976272,
+      "lat": 48.8276308,
+      "lon": -64.3081065,
+      "tags": {
+       "building": "yes",
+       "canvec:datasetName": "022A16",
+       "canvec:source": "Buildings_and_Structures_3.0",
+       "canvec:uuid": "3b680a1c3928484dad7d957fc2df7996",
+       "name": "Le Loup Marin",
+       "tourism": "guest_house"
+      }
+     },
+     {
+      "type": "node",
+      "id": 1429133738,
+      "lat": 48.8640183,
+      "lon": -64.3282299,
+      "tags": {
+       "backcountry": "yes",
+       "name": "Camping des Crêtes (1)",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3706984631,
+      "lat": 48.836431,
+      "lon": -64.3413897,
+      "tags": {
+       "name": "Auberge La Petite école de Forillon",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4147087789,
+      "lat": 48.8280707,
+      "lon": -64.3035436,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "2095",
+       "addr:postcode": "G4X 6L6",
+       "addr:street": "Boulevard de Grande-Grève",
+       "name": "Auberge Internationale de Forillon",
+       "tourism": "hostel",
+       "website": "https://www.aubergeinternationaleforillon.com/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4337216812,
+      "lat": 48.8149007,
+      "lon": -64.2240855,
+      "tags": {
+       "group_only": "yes",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6287211053,
+      "lat": 48.8947528,
+      "lon": -64.4121123,
+      "tags": {
+       "backcountry": "yes",
+       "name": "Camping des Lacs",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "node",
+      "id": 8276547712,
+      "lat": 48.849291,
+      "lon": -64.3047005,
+      "tags": {
+       "backcountry": "yes",
+       "name": "Camping des Crêtes (2)",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9699223606,
+      "lat": 48.9106708,
+      "lon": -64.2587769,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "829",
+       "addr:street": "Boulevard du Griffon",
+       "name": "Auberge Griffon Aventure",
+       "tourism": "hostel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9699297447,
+      "lat": 48.8271756,
+      "lon": -64.311059,
+      "tags": {
+       "name": "Cap Aventure",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 435832088,
+      "center": {
+       "lat": 48.8604401,
+       "lon": -64.2042488
+      },
+      "tags": {
+       "addr:housenumber": "1293",
+       "addr:postcode": "G4X 6G7",
+       "addr:street": "Boulevard de Cap-des-Rosiers",
+       "building": "yes",
+       "internet_access": "wlan",
+       "name": "Hotel Motel Le Pharillon",
+       "phone": "+1 418-892-5200",
+       "tourism": "motel",
+       "website": "https://hotel-motel-lepharillon.com"
+      }
+     },
+     {
+      "type": "way",
+      "id": 441511638,
+      "center": {
+       "lat": 48.7912691,
+       "lon": -64.3954689
+      },
+      "tags": {
+       "addr:housenumber": "960",
+       "addr:street": "Route de Haldimand",
+       "area": "yes",
+       "name": "Motel Gaspé",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 443787144,
+      "center": {
+       "lat": 48.7890177,
+       "lon": -64.4041325
+      },
+      "tags": {
+       "name": "Camping Gaspé",
+       "tourism": "caravan_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1013617284,
+      "center": {
+       "lat": 48.8092884,
+       "lon": -64.2566686
+      },
+      "tags": {
+       "name": "Camping Petit-Gaspé",
+       "operator": "Parcs Canada",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1014493598,
+      "center": {
+       "lat": 48.8295691,
+       "lon": -64.302211
+      },
+      "tags": {
+       "name": "Camping Baie De Gaspé",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1014493622,
+      "center": {
+       "lat": 48.9574703,
+       "lon": -64.3230584
+      },
+      "tags": {
+       "name": "Camping Griffon",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1042444988,
+      "center": {
+       "lat": 48.8284973,
+       "lon": -64.3211643
+      },
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "1986",
+       "addr:street": "Boulevard de Grande-Grève",
+       "name": "Camping Parc Nature Gaspé",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1055545250,
+      "center": {
+       "lat": 48.9102858,
+       "lon": -64.261047
+      },
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "829",
+       "addr:street": "Boulevard du Griffon",
+       "name": "Auberge Griffon Aventure",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "relation",
+      "id": 3007267,
+      "center": {
+       "lat": 48.8146184,
+       "lon": -64.2237794
+      },
+      "tags": {
+       "name": "Campig Cap-Bon-Ami",
+       "operator": "Parcs Canada",
+       "source": "Bing",
+       "tourism": "camp_site",
+       "type": "multipolygon"
+      }
+     },
+     {
+      "type": "relation",
+      "id": 3009120,
+      "center": {
+       "lat": 48.828818,
+       "lon": -64.2223542
+      },
+      "tags": {
+       "name": "Camping Des-Rosiers",
+       "operator": "Parcs Canada",
+       "source": "Bing",
+       "tourism": "camp_site",
+       "type": "multipolygon"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Gaspé",
+   "point": {
+    "latitude": 48.8317223,
+    "longitude": -64.4837569
+   },
+   "geocodedAs": "relation/8237761",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"tourism\"=\"hotel\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"tourism\"=\"motel\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"tourism\"=\"guest_house\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"tourism\"=\"hostel\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"tourism\"=\"chalet\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"tourism\"=\"apartment\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"tourism\"=\"camp_site\"](around:10000,48.8317223,-64.4837569);\n  nwr[\"tourism\"=\"caravan_site\"](around:10000,48.8317223,-64.4837569);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T01:48:21Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 2093581366,
+      "lat": 48.8303985,
+      "lon": -64.4845151,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "137",
+       "addr:street": "Rue Jacques-Cartier",
+       "email": "info@hotelplante.com",
+       "facebook": "https://www.facebook.com/hotelplante/",
+       "internet_access": "wlan",
+       "name": "Hotel Plante",
+       "phone": "+1-888-368-2254",
+       "tourism": "hotel",
+       "website": "https://www.hotelplante.com/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 2093591609,
+      "lat": 48.7728441,
+      "lon": -64.4598683,
+      "tags": {
+       "name": "Chalet aux Saumons",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3754803710,
+      "lat": 48.7833683,
+      "lon": -64.4144879,
+      "tags": {
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "L'Eki",
+       "operator": "Les chalets du bout du monde",
+       "smoking": "no",
+       "tourism": "chalet",
+       "url": "http://www.chaletsduboutdumonde.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3754803711,
+      "lat": 48.7839666,
+      "lon": -64.4139075,
+      "tags": {
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "L'Iris",
+       "operator": "Les chalets du bout du monde",
+       "smoking": "no",
+       "tourism": "chalet",
+       "url": "http://www.chaletsduboutdumonde.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3754803712,
+      "lat": 48.7847391,
+      "lon": -64.4138309,
+      "tags": {
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "L'Églantier",
+       "operator": "Les chalets du bout du monde",
+       "smoking": "no",
+       "tourism": "chalet",
+       "url": "http://www.chaletsduboutdumonde.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3754803713,
+      "lat": 48.7836585,
+      "lon": -64.4138716,
+      "tags": {
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "Le MikMak",
+       "operator": "Les chalets du bout du monde",
+       "smoking": "no",
+       "tourism": "chalet",
+       "url": "http://www.chaletsduboutdumonde.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3754803714,
+      "lat": 48.7842123,
+      "lon": -64.4139694,
+      "tags": {
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "Le Ruisseau",
+       "operator": "Les chalets du bout du monde",
+       "smoking": "no",
+       "tourism": "chalet",
+       "url": "http://www.chaletsduboutdumonde.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3754803715,
+      "lat": 48.7834432,
+      "lon": -64.4142461,
+      "tags": {
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "Le Sous-Bois",
+       "operator": "Les chalets du bout du monde",
+       "smoking": "no",
+       "tourism": "chalet",
+       "url": "http://www.chaletsduboutdumonde.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3754803716,
+      "lat": 48.7844906,
+      "lon": -64.4140069,
+      "tags": {
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "Le Tamarak",
+       "operator": "Les chalets du bout du monde",
+       "smoking": "no",
+       "tourism": "chalet",
+       "url": "http://www.chaletsduboutdumonde.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 3754803717,
+      "lat": 48.7832642,
+      "lon": -64.4148028,
+      "tags": {
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "Le Wigwam",
+       "operator": "Les chalets du bout du monde",
+       "smoking": "no",
+       "tourism": "chalet",
+       "url": "http://www.chaletsduboutdumonde.com"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6287211053,
+      "lat": 48.8947528,
+      "lon": -64.4121123,
+      "tags": {
+       "backcountry": "yes",
+       "name": "Camping des Lacs",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "node",
+      "id": 7020765485,
+      "lat": 48.888564,
+      "lon": -64.5527542,
+      "tags": {
+       "addr:housenumber": "37",
+       "addr:postcode": "G4X6R1",
+       "addr:street": "Rue Fontenelle",
+       "email": "cafetraverse@gmail.com",
+       "name": "Café de la Traverse",
+       "operator": "Daniel et Anick",
+       "phone": "+14183600490",
+       "tourism": "guest_house"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9650422853,
+      "lat": 48.784906,
+      "lon": -64.4147076,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "1141",
+       "addr:street": "Route de Haldimand",
+       "name": "Chalets du bout du monde",
+       "tourism": "chalet"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9719199304,
+      "lat": 48.8297652,
+      "lon": -64.4832236,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "117",
+       "addr:province": "QC",
+       "addr:street": "Rue de la Reine",
+       "name": "Auberge Minville",
+       "source": "local knowledge",
+       "tourism": "guest_house"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9927976717,
+      "lat": 48.773308,
+      "lon": -64.4670153,
+      "tags": {
+       "name": "672",
+       "tourism": "apartment"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10249819678,
+      "lat": 48.8311126,
+      "lon": -64.4826931,
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "20",
+       "addr:street": "Rue Adams",
+       "brand": "Rodeway Inn",
+       "brand:wikidata": "Q7356709",
+       "facebook": "https://www.facebook.com/rodewayinngaspe/",
+       "internet_access": "yes",
+       "name": "Rodeway Inn",
+       "old_name": "Motel Adams",
+       "rooms": "96",
+       "smoking": "no",
+       "tourism": "motel",
+       "website": "https://www.reservations.com/Hotel/motel-adams-gaspe-qc?rmcid=dsa",
+       "wheelchair": "limited"
+      }
+     },
+     {
+      "type": "way",
+      "id": 302487568,
+      "center": {
+       "lat": 48.8320268,
+       "lon": -64.4825705
+      },
+      "tags": {
+       "building": "yes",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 302487569,
+      "center": {
+       "lat": 48.8316057,
+       "lon": -64.4824513
+      },
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "20",
+       "addr:postcode": "G4X 2R8",
+       "addr:street": "Rue Adams",
+       "building": "yes",
+       "phone": "+1-418-368-2244",
+       "smoking": "no",
+       "tourism": "motel",
+       "website": "https://www.moteladams.com/",
+       "wheelchair": "limited"
+      }
+     },
+     {
+      "type": "way",
+      "id": 441511638,
+      "center": {
+       "lat": 48.7912691,
+       "lon": -64.3954689
+      },
+      "tags": {
+       "addr:housenumber": "960",
+       "addr:street": "Route de Haldimand",
+       "area": "yes",
+       "name": "Motel Gaspé",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 443787144,
+      "center": {
+       "lat": 48.7890177,
+       "lon": -64.4041325
+      },
+      "tags": {
+       "name": "Camping Gaspé",
+       "tourism": "caravan_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 444951836,
+      "center": {
+       "lat": 48.8284233,
+       "lon": -64.4866537
+      },
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "178",
+       "addr:street": "Rue de la Reine",
+       "bar": "yes",
+       "building": "yes",
+       "email": "info@hotelbaker.ca",
+       "internet_access": "wlan",
+       "name": "Hôtel Baker",
+       "phone": "+1 800-462-3355",
+       "tourism": "hotel",
+       "website": "https://www.hotelbaker.ca/fr/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1011332315,
+      "center": {
+       "lat": 48.8469178,
+       "lon": -64.5024873
+      },
+      "tags": {
+       "name": "Motel & Camping Fort Ramsay",
+       "tourism": "caravan_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1011332316,
+      "center": {
+       "lat": 48.84773,
+       "lon": -64.5043982
+      },
+      "tags": {
+       "building": "yes",
+       "name": "Motel & Camping Fort Ramsay",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1047624938,
+      "center": {
+       "lat": 48.8293287,
+       "lon": -64.4849144
+      },
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "146",
+       "addr:postcode": "G4X 2R2",
+       "addr:province": "QC",
+       "addr:street": "Rue de la Reine",
+       "building": "yes",
+       "email": "info@aubergesouslesarbres.com",
+       "fax": "+1 418 360-0049",
+       "internet_access": "wlan",
+       "name": "Auberge sous les Arbres",
+       "phone": "+1 844 360-0060",
+       "start_date": "1880",
+       "tourism": "hotel",
+       "website": "https://aubergesouslesarbres.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1056098603,
+      "center": {
+       "lat": 48.8275625,
+       "lon": -64.4879106
+      },
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "186",
+       "addr:postcode": "G4X 1T6",
+       "addr:street": "Rue de la Reine",
+       "architect": "James Perchard",
+       "building": "yes",
+       "email": "maisonww@hotmail.fr",
+       "guest_house": "hostel",
+       "name": "La Maison William Wakeham",
+       "phone": "+1-418-368-5537",
+       "source": "https://www.patrimoine-culturel.gouv.qc.ca/rpcq/detail.do?methode=consulter&id=92598&type=bien",
+       "start_date": "1842",
+       "tourism": "guest_house",
+       "website": "http://www.maisonwakeham.ca/"
+      }
+     },
+     {
+      "type": "relation",
+      "id": 7501608,
+      "center": {
+       "lat": 48.8306023,
+       "lon": -64.4844829
+      },
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:housenumber": "137",
+       "addr:postcode": "G4X 1M8",
+       "addr:street": "Rue Jacques-Cartier",
+       "building": "yes",
+       "email": "hplante@hotelplante.com",
+       "name": "Hotel Plante",
+       "phone": "+1 888-368-2254",
+       "tourism": "motel",
+       "type": "site",
+       "website": "https://www.hotelplante.com/"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Gaspésie",
+   "point": {
+    "latitude": 48.6146774,
+    "longitude": -66.0665726
+   },
+   "geocodedAs": "relation/15597971",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"tourism\"=\"hotel\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"tourism\"=\"motel\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"tourism\"=\"guest_house\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"tourism\"=\"hostel\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"tourism\"=\"chalet\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"tourism\"=\"apartment\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"tourism\"=\"camp_site\"](around:10000,48.6146774,-66.0665726);\n  nwr[\"tourism\"=\"caravan_site\"](around:10000,48.6146774,-66.0665726);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T01:48:21Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "way",
+      "id": 541726004,
+      "center": {
+       "lat": 48.658055,
+       "lon": -66.1574045
+      },
+      "tags": {
+       "building": "yes",
+       "tourism": "motel"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Matane",
+   "point": {
+    "latitude": 48.8468883,
+    "longitude": -67.5295198
+   },
+   "geocodedAs": "relation/7998297",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"tourism\"=\"hotel\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"tourism\"=\"motel\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"tourism\"=\"guest_house\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"tourism\"=\"hostel\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"tourism\"=\"chalet\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"tourism\"=\"apartment\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"tourism\"=\"camp_site\"](around:10000,48.8468883,-67.5295198);\n  nwr[\"tourism\"=\"caravan_site\"](around:10000,48.8468883,-67.5295198);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T01:48:21Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 2250606097,
+      "lat": 48.8432204,
+      "lon": -67.5644854,
+      "tags": {
+       "addr:city": "Matane",
+       "addr:housename": "Motel Belle Plage",
+       "addr:housenumber": "1310",
+       "addr:street": "Rue de Matane sur Me",
+       "name": "Motel Belle Plage",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 2256183731,
+      "lat": 48.8395191,
+      "lon": -67.569181,
+      "tags": {
+       "name": "Motel le Beach",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 138547922,
+      "center": {
+       "lat": 48.8350693,
+       "lon": -67.5739998
+      },
+      "tags": {
+       "addr:city": "Matane",
+       "addr:housenumber": "1600",
+       "addr:postcode": "G4W 3M6",
+       "addr:street": "Avenue Du Phare Ouest",
+       "building": "yes",
+       "name": "Motel La Vigie",
+       "phone": "+1-418-562-3664",
+       "source": "NRCan-CanVec-8.0",
+       "tourism": "hotel",
+       "website": "https://www.lavigie.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 138550166,
+      "center": {
+       "lat": 48.8532646,
+       "lon": -67.5246735
+      },
+      "tags": {
+       "addr:housenumber": "250",
+       "addr:street": "Avenue du Phare Est",
+       "building": "yes",
+       "name": "Riôtel",
+       "phone": "+1-418-566-2651",
+       "source": "NRCan-CanVec-8.0",
+       "tourism": "hotel",
+       "website": "https://www.riotel.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 138550340,
+      "center": {
+       "lat": 48.8336524,
+       "lon": -67.5740605
+      },
+      "tags": {
+       "addr:city": "Matane",
+       "addr:housename": "Motel du Portage",
+       "addr:housenumber": "1681",
+       "addr:street": "Avenue Du Phare Ouest",
+       "building": "yes",
+       "name": "Motel du Portage",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 138550684,
+      "center": {
+       "lat": 48.8366095,
+       "lon": -67.5721449
+      },
+      "tags": {
+       "addr:housename": "Quality Inn",
+       "brand": "Quality Inn",
+       "brand:wikidata": "Q1075788",
+       "brand:wikipedia": "en:Choice Hotels International",
+       "building": "yes",
+       "name": "Quality Inn",
+       "source": "NRCan-CanVec-8.0",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 211378647,
+      "center": {
+       "lat": 48.8194487,
+       "lon": -67.5412826
+      },
+      "tags": {
+       "addr:city": "Matane",
+       "addr:housenumber": "150",
+       "addr:street": "Route Louis-Félix Dionne",
+       "email": "information@campingmatane.com",
+       "fax": "+1-418-562-5058",
+       "image": "http://campingmatane.com/images/Upload/sans_service/site-amenage-bord-riviere.jpg",
+       "internet_access": "wlan",
+       "name": "Camping de la Rivière Matane",
+       "phone": "+1-418-562-3414",
+       "sanitary_dump_station": "customers",
+       "stars": "3",
+       "tourism": "camp_site",
+       "website": "https://campingmatane.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215076021,
+      "center": {
+       "lat": 48.8493509,
+       "lon": -67.5391951
+      },
+      "tags": {
+       "addr:housename": "Motel Les Mouettes",
+       "area": "yes",
+       "building": "yes",
+       "name": "Les Mouettes",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215076040,
+      "center": {
+       "lat": 48.8511947,
+       "lon": -67.5341903
+      },
+      "tags": {
+       "building": "yes",
+       "name": "B & B",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215076041,
+      "center": {
+       "lat": 48.8506539,
+       "lon": -67.5328992
+      },
+      "tags": {
+       "addr:city": "Matane",
+       "addr:housenumber": "621",
+       "addr:postcode": "G4W 3B9",
+       "addr:street": "Avenue Saint-Jérôme",
+       "building": "yes",
+       "building:levels": "3",
+       "contact:email": "info@aubergelaseigneurie.com",
+       "contact:facebook": "https://www.facebook.com/Auberge-La-Seigneurie-216607661711060/",
+       "contact:phone": "+1-418-562-0021",
+       "contact:pinterest": "marieeveaudy",
+       "contact:website": "https://aubergelaseigneurie.com",
+       "internet_access": "wlan",
+       "name": "Auberge la Seigneurie",
+       "rooms": "8",
+       "smoking": "no",
+       "tourism": "guest_house"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215077928,
+      "center": {
+       "lat": 48.8536223,
+       "lon": -67.5275831
+      },
+      "tags": {
+       "addr:housenumber": "250",
+       "addr:street": "Avenue du Phare Est",
+       "building": "yes",
+       "name": "Riôtel",
+       "phone": "+1-418-566-2651",
+       "source": "NRCan-CanVec-8.0",
+       "tourism": "hotel",
+       "website": "https://www.riotel.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215079230,
+      "center": {
+       "lat": 48.8526662,
+       "lon": -67.505923
+      },
+      "tags": {
+       "building": "yes",
+       "name": "Motel Le Campagnard Matane",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 215680968,
+      "center": {
+       "lat": 48.8477707,
+       "lon": -67.554353
+      },
+      "tags": {
+       "addr:housenumber": "1032",
+       "addr:street": "Avenue Du Phare Ouest",
+       "building": "yes",
+       "name": "Motel la Marina",
+       "tourism": "hotel",
+       "website": "https://www.motellamarina.com/en/index.html"
+      }
+     },
+     {
+      "type": "relation",
+      "id": 14001049,
+      "center": {
+       "lat": 48.8148365,
+       "lon": -67.6061861
+      },
+      "tags": {
+       "addr:housenumber": "2345",
+       "addr:street": "Avenue Du Phare Ouest",
+       "name": "Camping Parc Sirois la Baleine",
+       "power_supply": "yes",
+       "sanitary_dump_station": "yes",
+       "tourism": "caravan_site",
+       "type": "multipolygon",
+       "website": "https://www.facebook.com/campinglabaleine"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Percé",
+   "point": {
+    "latitude": 48.5222989,
+    "longitude": -64.2136423
+   },
+   "geocodedAs": "relation/8237764",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"tourism\"=\"hotel\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"tourism\"=\"motel\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"tourism\"=\"guest_house\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"tourism\"=\"hostel\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"tourism\"=\"chalet\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"tourism\"=\"apartment\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"tourism\"=\"camp_site\"](around:10000,48.5222989,-64.2136423);\n  nwr[\"tourism\"=\"caravan_site\"](around:10000,48.5222989,-64.2136423);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T01:52:26Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 352990935,
+      "lat": 48.5019799,
+      "lon": -64.2298507,
+      "tags": {
+       "building": "yes",
+       "canvec:datasetName": "022A09",
+       "canvec:source": "Buildings_and_Structures_3.0",
+       "canvec:uuid": "51e87db913c843f0aaa7366160028405",
+       "name": "Gite du Cap Blanc",
+       "tourism": "guest_house"
+      }
+     },
+     {
+      "type": "node",
+      "id": 352992556,
+      "lat": 48.5042238,
+      "lon": -64.2199594,
+      "tags": {
+       "canvec:datasetName": "022A09",
+       "canvec:source": "Buildings_and_Structures_3.0",
+       "canvec:uuid": "376d6d96eada4707a49f4491071fae80",
+       "name": "The Capitain's B&B",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 352993474,
+      "lat": 48.5340619,
+      "lon": -64.2249788,
+      "tags": {
+       "canvec:datasetName": "022A09",
+       "canvec:source": "Buildings_and_Structures_3.0",
+       "canvec:uuid": "453a85eb05634cd8ac4402e64ff8f046",
+       "name": "Perce Au Pic de l'Aurore",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 352994129,
+      "lat": 48.5207792,
+      "lon": -64.3268208,
+      "tags": {
+       "canvec:datasetName": "022A09",
+       "canvec:source": "Buildings_and_Structures_3.0",
+       "canvec:uuid": "adb7481dcb894d738cac37f4a8b7898d",
+       "name": "Jardins de l'Anse",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 352994280,
+      "lat": 48.5053236,
+      "lon": -64.2216091,
+      "tags": {
+       "canvec:datasetName": "022A09",
+       "canvec:source": "Buildings_and_Structures_3.0",
+       "canvec:uuid": "b91a95c31410448e83cabc0caa4487e3",
+       "name": "Hotel Motel Panorama",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 352994453,
+      "lat": 48.5050271,
+      "lon": -64.2217265,
+      "tags": {
+       "canvec:datasetName": "022A09",
+       "canvec:source": "Buildings_and_Structures_3.0",
+       "canvec:uuid": "fa03b5c836b44c89808ceeb32d361a65",
+       "name": "Hotel La Cote Surprise",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4483057096,
+      "lat": 48.4763126,
+      "lon": -64.3020822,
+      "tags": {
+       "name": "Vagues Vertes",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4483057097,
+      "lat": 48.4929352,
+      "lon": -64.2536226,
+      "tags": {
+       "name": "Motel Seal Rock",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4483057102,
+      "lat": 48.524242,
+      "lon": -64.212126,
+      "tags": {
+       "name": "La Maison Rouge",
+       "tourism": "hostel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12014868829,
+      "lat": 48.5264128,
+      "lon": -64.2127511,
+      "tags": {
+       "name": "Motel Bleu-Blanc-Rouge",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12035877669,
+      "lat": 48.5573068,
+      "lon": -64.2929343,
+      "tags": {
+       "addr:housenumber": "315",
+       "addr:street": "Route 132 Est",
+       "name": "Auberge le Coin du Banc",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12088147869,
+      "lat": 48.5065427,
+      "lon": -64.2367308,
+      "tags": {
+       "addr:housenumber": "425",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route d'Irlande",
+       "email": "reservation@domainerenard.ca",
+       "internet_access": "wlan",
+       "name": "Domaine Renard",
+       "phone": "+1 418 782-4560",
+       "tourism": "apartment",
+       "website": "https://domainerenard.ca/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 75037561,
+      "center": {
+       "lat": 48.516858,
+       "lon": -64.2188919
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "262",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132 Ouest",
+       "building": "yes",
+       "building:levels": "2",
+       "name": "Motel et boutique Le Macareux",
+       "tourism": "motel",
+       "website": "https://motel-perce-macareux.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 114757920,
+      "center": {
+       "lat": 48.5061602,
+       "lon": -64.2204383
+      },
+      "tags": {
+       "addr:housenumber": "367",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "building": "hotel",
+       "name": "Hôtel La Côte Surprise",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "hotel",
+       "website": "https://www.hotelcotesurprise.com"
+      }
+     },
+     {
+      "type": "way",
+      "id": 373624823,
+      "center": {
+       "lat": 48.5252372,
+       "lon": -64.2144634
+      },
+      "tags": {
+       "addr:city": "Gaspé",
+       "addr:hamlet": "Cap des Rosiers",
+       "addr:housenumber": "16",
+       "addr:postcode": "G4X 6H4",
+       "addr:street": "Rue Saint-Michel",
+       "building": "yes",
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "La Rêvasse",
+       "tourism": "guest_house"
+      }
+     },
+     {
+      "type": "way",
+      "id": 496708972,
+      "center": {
+       "lat": 48.5219208,
+       "lon": -64.2462674
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "222",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route des Failles",
+       "building": "yes",
+       "name": "Auberge du Gargantua",
+       "status": "inactive",
+       "tourism": "chalet"
+      }
+     },
+     {
+      "type": "way",
+      "id": 595946075,
+      "center": {
+       "lat": 48.5159714,
+       "lon": -64.2185051
+      },
+      "tags": {
+       "addr:housenumber": "261",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "description:en": "Resort Hotel",
+       "description:fr": "Hôtel de Villégiature",
+       "landuse": "commercial",
+       "name": "Riôtel Percé",
+       "name:en": "Riotel Perce",
+       "name:fr": "Riôtel Percé",
+       "tourism": "hotel",
+       "url": "https://www.riotel.com/en/hotels/perce",
+       "website": "https://www.riotel.com/fr/hotels/perce"
+      }
+     },
+     {
+      "type": "way",
+      "id": 596121410,
+      "center": {
+       "lat": 48.5179363,
+       "lon": -64.2180598
+      },
+      "tags": {
+       "addr:housenumber": "242",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132 Ouest",
+       "landuse": "commercial",
+       "name": "Motel Chez Ti-Lou",
+       "tourism": "motel",
+       "website": "http://www.moteltilou.com"
+      }
+     },
+     {
+      "type": "way",
+      "id": 596683973,
+      "center": {
+       "lat": 48.520282,
+       "lon": -64.2158391
+      },
+      "tags": {
+       "addr:housenumber": "190",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "building": "hotel",
+       "building:levels": "2",
+       "name": "Auberge Restaurant La Table a Roland",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 596691166,
+      "center": {
+       "lat": 48.5182605,
+       "lon": -64.2175046
+      },
+      "tags": {
+       "addr:housenumber": "232",
+       "addr:street": "Route 132",
+       "building": "hotel",
+       "name": "Auberge au Fil des Saisons",
+       "tourism": "hostel",
+       "website": "https://www.aubergeperce.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 597141976,
+      "center": {
+       "lat": 48.5178375,
+       "lon": -64.2169794
+      },
+      "tags": {
+       "landuse": "commercial",
+       "name": "Chalets de l'Escale",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 597141977,
+      "center": {
+       "lat": 48.5175555,
+       "lon": -64.2172173
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "241",
+       "addr:postcode": "G0C 2L0",
+       "addr:province": "Québec",
+       "addr:street": "Route 132",
+       "landuse": "commercial",
+       "name": "Motel Plage Flynn",
+       "tourism": "motel",
+       "website": "https://www.perce-vacances.com/?page_id=10"
+      }
+     },
+     {
+      "type": "way",
+      "id": 597141978,
+      "center": {
+       "lat": 48.5182485,
+       "lon": -64.2164505
+      },
+      "tags": {
+       "landuse": "commercial",
+       "name": "Hotel La Normandie",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 597564945,
+      "center": {
+       "lat": 48.5190554,
+       "lon": -64.2169374
+      },
+      "tags": {
+       "addr:housenumber": "212",
+       "addr:postcode": "G0C2L0",
+       "addr:street": "Route 132",
+       "alt_name": "Hotel Motel Manoir de Percé",
+       "building": "hotel",
+       "building:levels": "2",
+       "description": "Hotel Motel",
+       "name": "Manoir de Percé",
+       "tourism": "hotel",
+       "website": "https://manoirdeperce.com"
+      }
+     },
+     {
+      "type": "way",
+      "id": 598351270,
+      "center": {
+       "lat": 48.5199973,
+       "lon": -64.2153267
+      },
+      "tags": {
+       "addr:housenumber": "193",
+       "addr:street": "Route 132",
+       "building": "hotel",
+       "building:colour": "brown",
+       "building:levels": "2",
+       "name": "Motel L'Eglantier",
+       "tourism": "motel",
+       "wheelchair": "no"
+      }
+     },
+     {
+      "type": "way",
+      "id": 598360362,
+      "center": {
+       "lat": 48.5200791,
+       "lon": -64.2165738
+      },
+      "tags": {
+       "addr:housenumber": "25",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "building": "hotel",
+       "description": "cuisinettes",
+       "name": "Motel et chalets Natabel",
+       "tourism": "motel",
+       "url": "https://www.facebook.com/moteletchaletsnatabel",
+       "website": "https://www.moteletchaletsnatabel.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 598383453,
+      "center": {
+       "lat": 48.520112,
+       "lon": -64.2147431
+      },
+      "tags": {
+       "addr:housenumber": "183",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "building": "hotel",
+       "name": "Motel Bellevue",
+       "tourism": "motel",
+       "website": "https://routedurocherperce.com/organisme/motel-bellevue"
+      }
+     },
+     {
+      "type": "way",
+      "id": 598927628,
+      "center": {
+       "lat": 48.5227871,
+       "lon": -64.2168722
+      },
+      "tags": {
+       "name": "Camping de la Baie de Percé",
+       "operator": "Géoparc de Percé",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "caravan_site",
+       "website": "http://www.campingbaiedeperce.com"
+      }
+     },
+     {
+      "type": "way",
+      "id": 599897387,
+      "center": {
+       "lat": 48.5256919,
+       "lon": -64.2126873
+      },
+      "tags": {
+       "addr:housenumber": "114",
+       "building": "hotel",
+       "name": "Maison Le Havre",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 599924843,
+      "center": {
+       "lat": 48.5265757,
+       "lon": -64.2124875
+      },
+      "tags": {
+       "addr:housenumber": "103",
+       "addr:street": "Route 132",
+       "landuse": "commercial",
+       "name": "Motel Bleu Blanc Rouge",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 599924847,
+      "center": {
+       "lat": 48.5281534,
+       "lon": -64.2139503
+      },
+      "tags": {
+       "addr:housenumber": "77",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "alt_name": "Auberge les Trois Soeurs",
+       "landuse": "commercial",
+       "name": "Motel Les Trois Soeurs",
+       "tourism": "motel",
+       "website": "https://www.aubergelestroissoeurs.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 600012174,
+      "center": {
+       "lat": 48.5312914,
+       "lon": -64.2202416
+      },
+      "tags": {
+       "addr:housenumber": "30",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "building": "hotel",
+       "canvec:datasetName": "022A09",
+       "canvec:source": "Buildings_and_Structures_3.0",
+       "canvec:uuid": "ac013e0e15034333a7775baf699db17e",
+       "description": "cuisinettes",
+       "name": "Motel au Soleil Levant",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 600504373,
+      "center": {
+       "lat": 48.5095544,
+       "lon": -64.2210994
+      },
+      "tags": {
+       "addr:housenumber": "335",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "name": "Camping Côte Surprise",
+       "tourism": "caravan_site",
+       "website": "http://www.campingperce.com"
+      }
+     },
+     {
+      "type": "way",
+      "id": 600838724,
+      "center": {
+       "lat": 48.5131652,
+       "lon": -64.2214928
+      },
+      "tags": {
+       "addr:housenumber": "316",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "landuse": "commercial",
+       "name": "Motel & Chalet Nouvel Horizon",
+       "tourism": "motel",
+       "website": "https://routedurocherperce.com/organisme/motel-nouvel-horizon-5"
+      }
+     },
+     {
+      "type": "way",
+      "id": 600873050,
+      "center": {
+       "lat": 48.5146686,
+       "lon": -64.2217873
+      },
+      "tags": {
+       "addr:housenumber": "288",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "landuse": "commercial",
+       "name": "Hôtel Motel Le Mirage",
+       "tourism": "hotel",
+       "tourism:motel": "yes",
+       "website": "https://routedurocherperce.com/organisme/hotel-motel-le-mirage/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 813277939,
+      "center": {
+       "lat": 48.5261446,
+       "lon": -64.2110237
+      },
+      "tags": {
+       "name": "Camping au Havre de la Nuit",
+       "tourism": "caravan_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 855611388,
+      "center": {
+       "lat": 48.5195136,
+       "lon": -64.2202132
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "230",
+       "addr:postcode": "G0C 2L0",
+       "addr:street": "Route 132",
+       "name": "Camping du Village",
+       "tourism": "caravan_site",
+       "website": "https://www.campingduvillage.com/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1011325467,
+      "center": {
+       "lat": 48.5058325,
+       "lon": -64.2272257
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "400",
+       "addr:street": "Route 132 Ouest",
+       "name": "Chalets Camping Nature Océan",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "caravan_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1011325473,
+      "center": {
+       "lat": 48.5034531,
+       "lon": -64.219785
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "385",
+       "addr:street": "Route 132 Ouest",
+       "name": "Camping du Phare à Percé",
+       "tourism": "caravan_site"
+      }
+     },
+     {
+      "type": "relation",
+      "id": 8369029,
+      "center": {
+       "lat": 48.5174126,
+       "lon": -64.2179074
+      },
+      "tags": {
+       "addr:city": "Percé",
+       "addr:housenumber": "247",
+       "addr:street": "Route 132",
+       "name": "Hôtel-Motel Fleurs de Lys",
+       "tourism": "hotel",
+       "type": "multipolygon",
+       "website": "https://www.vacancesperce.com/"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "locality": "Rivière-du-Loup",
+   "point": {
+    "latitude": 47.8541229,
+    "longitude": -69.5333016
+   },
+   "geocodedAs": "relation/8189523",
+   "query": "[out:json][timeout:28];\n(\n  nwr[\"tourism\"=\"hotel\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"tourism\"=\"motel\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"tourism\"=\"guest_house\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"tourism\"=\"hostel\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"tourism\"=\"chalet\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"tourism\"=\"apartment\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"tourism\"=\"camp_site\"](around:10000,47.8541229,-69.5333016);\n  nwr[\"tourism\"=\"caravan_site\"](around:10000,47.8541229,-69.5333016);\n);\nout center tags;",
+   "status": 200,
+   "reply": {
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.11 87bfad18",
+    "osm3s": {
+     "timestamp_osm_base": "2026-10-24T01:49:21Z",
+     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+     {
+      "type": "node",
+      "id": 476256546,
+      "lat": 47.8323157,
+      "lon": -69.5427262,
+      "tags": {
+       "addr:housenumber": "150",
+       "addr:street": "Boulevard de l'Hôtel-deVille",
+       "name": "Le Séjour",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 2357212000,
+      "lat": 47.8371945,
+      "lon": -69.5356017,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "46",
+       "addr:postcode": "G5R 1L5",
+       "addr:street": "Hôtel-de-Ville",
+       "alt_name": "HI Rivière-du-Loup",
+       "internet_access": "yes",
+       "name": "Auberge internationale de Rivière-du-loup",
+       "tourism": "hostel",
+       "website": "https://www.hihostels.ca/riviereduloup"
+      }
+     },
+     {
+      "type": "node",
+      "id": 4370560613,
+      "lat": 47.7810032,
+      "lon": -69.5960513,
+      "tags": {
+       "internet_access": "wlan",
+       "name": "Halte du Verger",
+       "tourism": "guest_house"
+      }
+     },
+     {
+      "type": "node",
+      "id": 6012491385,
+      "lat": 47.8294036,
+      "lon": -69.5539261,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "170",
+       "addr:postcode": "G5R1C8",
+       "addr:province": "QC",
+       "addr:street": "Rue Fraser",
+       "email": "info@lefrasermotel.com",
+       "name": "Le Fraser Motel",
+       "phone": "+14188625255",
+       "rooms": "38",
+       "tourism": "motel",
+       "website": "https://lefrasermotel.com/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9418956782,
+      "lat": 47.9164926,
+      "lon": -69.501431,
+      "tags": {
+       "name": "Place Saint-Georges Cacouna",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 9789136936,
+      "lat": 47.8248677,
+      "lon": -69.5587486,
+      "tags": {
+       "name": "Motel Cabines au Fleuve d'Argent",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10674791718,
+      "lat": 47.8607604,
+      "lon": -69.5503118,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "10",
+       "addr:postcode": "G5R 6A1",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard Cartier",
+       "email": "auberge@aubergedelapointe.com",
+       "internet_access": "yes",
+       "name": "Auberge De La Pointe",
+       "phone": "+14188623514",
+       "rooms": "107",
+       "stars": "4",
+       "tourism": "hotel",
+       "website": "https://www.aubergedelapointe.com/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10674791821,
+      "lat": 47.8586796,
+      "lon": -69.5487044,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "49",
+       "addr:postcode": "G5R 5Z3",
+       "addr:province": "QC",
+       "addr:street": "Boulevard Cartier",
+       "name": "Motel D'Amours",
+       "phone": "+14188624781",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10674791848,
+      "lat": 47.8563783,
+      "lon": -69.5455703,
+      "tags": {
+       "brand": "Quality Inn",
+       "brand:wikidata": "Q113152195",
+       "brand:wikipedia": "en:Choice Hotels",
+       "name": "Quality Inn",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10798232690,
+      "lat": 47.8505432,
+      "lon": -69.53987,
+      "tags": {
+       "brand": "Comfort Inn",
+       "brand:wikidata": "Q1075788",
+       "brand:wikipedia": "en:Choice Hotels",
+       "name": "Comfort Inn",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10806578516,
+      "lat": 47.8277255,
+      "lon": -69.5559532,
+      "tags": {
+       "brand": "Days Inn",
+       "brand:wikidata": "Q1047239",
+       "brand:wikipedia": "en:Days Inn",
+       "name": "Days Inn by Wyndham Riviere-Du-Loup",
+       "official_name": "Days Inn by Wyndham",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10806578806,
+      "lat": 47.8268716,
+      "lon": -69.5555175,
+      "tags": {
+       "name": "Motel Au Vieux Piloteux",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 10900331680,
+      "lat": 47.8510846,
+      "lon": -69.5424584,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "80",
+       "addr:postcode": "G5R 2M9",
+       "addr:province": "QC",
+       "addr:street": "Boulevard Cartier",
+       "air_conditioning": "yes",
+       "check_date": "2025-08-09",
+       "internet_access": "wlan",
+       "internet_access:fee": "no",
+       "name": "Motel Boulevard Cartier Inc",
+       "phone": "+14188671830",
+       "smoking": "no",
+       "tourism": "motel",
+       "website": "https://www.motelcartier.com/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 11808648356,
+      "lat": 47.8299232,
+      "lon": -69.5520496,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "167",
+       "addr:postcode": "G5R1E2",
+       "addr:province": "QC",
+       "addr:street": "Rue Fraser",
+       "internet_access": "yes",
+       "name": "Auberge Mr.James",
+       "phone": "+14188629895",
+       "tourism": "hostel",
+       "website": "http://www.mrjames.ca/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 11808648357,
+      "lat": 47.8302336,
+      "lon": -69.5515196,
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "165",
+       "addr:postcode": "G5R1E2",
+       "addr:province": "QC",
+       "addr:street": "Rue Fraser",
+       "guest_house": "hostel",
+       "name": "Auberge Amérilys",
+       "phone": "+14188672881",
+       "tourism": "hostel",
+       "website": "https://www.aubergeamerilys.ca/"
+      }
+     },
+     {
+      "type": "node",
+      "id": 11810841967,
+      "lat": 47.8322294,
+      "lon": -69.5432231,
+      "tags": {
+       "name": "Auberge et Motel Le Séjour",
+       "tourism": "hostel"
+      }
+     },
+     {
+      "type": "node",
+      "id": 12206306501,
+      "lat": 47.9284882,
+      "lon": -69.4928213,
+      "tags": {
+       "addr:housenumber": "1073",
+       "addr:street": "Rue du Patrimoine",
+       "internet_access": "wlan",
+       "name": "Gîte La Veilleuse",
+       "tourism": "guest_house"
+      }
+     },
+     {
+      "type": "way",
+      "id": 98812959,
+      "center": {
+       "lat": 47.8294055,
+       "lon": -69.555072
+      },
+      "tags": {
+       "building": "yes",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 98813147,
+      "center": {
+       "lat": 47.7795595,
+       "lon": -69.5990243
+      },
+      "tags": {
+       "building": "yes",
+       "internet_access": "wlan",
+       "name": "Auberge sur Mer",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "hotel",
+       "website": "https://aubergesurmer.ca/"
+      }
+     },
+     {
+      "type": "way",
+      "id": 98813588,
+      "center": {
+       "lat": 47.8287102,
+       "lon": -69.5530631
+      },
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "171",
+       "addr:postcode": "G5R 1E2",
+       "addr:street": "Rue Fraser",
+       "air_conditioning": "yes",
+       "building": "commercial",
+       "email": "hotel@hotellevesque.com",
+       "internet_access": "yes",
+       "internet_access:fee": "no",
+       "level": "4",
+       "name": "Hôtel Levesque",
+       "phone": "+1-418-862-6927",
+       "smoking": "no",
+       "stars": "4",
+       "tourism": "hotel",
+       "website": "https://www.hotellevesque.com/",
+       "wheelchair": "yes"
+      }
+     },
+     {
+      "type": "way",
+      "id": 98816058,
+      "center": {
+       "lat": 47.8277119,
+       "lon": -69.5559772
+      },
+      "tags": {
+       "building": "yes",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 439440314,
+      "center": {
+       "lat": 47.7791998,
+       "lon": -69.5995592
+      },
+      "tags": {
+       "building": "yes",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1015436834,
+      "center": {
+       "lat": 47.8586602,
+       "lon": -69.5523847
+      },
+      "tags": {
+       "name": "Camping municipal de la Pointe",
+       "source": "NRCan-CanVec-7.0",
+       "tourism": "camp_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1015443149,
+      "center": {
+       "lat": 47.8542338,
+       "lon": -69.5561223
+      },
+      "tags": {
+       "check_date": "2026-03-31",
+       "name": "bis 12.10.26, Queiie KI, Camping du Quai: Fast direkt am Fährterminal. Von hier aus hast du einen fantastischen Blick auf den Sonnenuntergang über dem St. Lorenz Strom.",
+       "tourism": "caravan_site"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1147509435,
+      "center": {
+       "lat": 47.8195199,
+       "lon": -69.5589384
+      },
+      "tags": {
+       "addr:city": "Rivière-du-Loup",
+       "addr:housenumber": "311",
+       "addr:province": "Québec",
+       "addr:street": "Boulevard de l'Hôtel-de-Ville",
+       "air_conditioning": "yes",
+       "building": "yes",
+       "email": "info@hoteluniverselrdl.com",
+       "internet_access": "wlan",
+       "name": "Hôtel Universel",
+       "phone": "+14188629520",
+       "rooms": "301",
+       "tourism": "hotel",
+       "website": "https://www.hoteluniverselrdl.com/",
+       "wheelchair": "yes"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1157537319,
+      "center": {
+       "lat": 47.8294138,
+       "lon": -69.5539361
+      },
+      "tags": {
+       "building": "yes",
+       "tourism": "hotel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1161949090,
+      "center": {
+       "lat": 47.8268755,
+       "lon": -69.5554734
+      },
+      "tags": {
+       "building": "yes",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1161949091,
+      "center": {
+       "lat": 47.8266774,
+       "lon": -69.5545961
+      },
+      "tags": {
+       "building": "yes",
+       "tourism": "motel"
+      }
+     },
+     {
+      "type": "way",
+      "id": 1531647567,
+      "center": {
+       "lat": 47.8072657,
+       "lon": -69.4216947
+      },
+      "tags": {
+       "tourism": "camp_site"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -32,6 +32,7 @@ import type {
   LocatedPlace,
   LocateRequest,
   NearbyArticle,
+  NearbyPointRequest,
   NearbyRequest,
   NotabilityRequest,
   TravelEstimate,
@@ -136,6 +137,16 @@ export class FixtureGroundingProvider implements GroundingProvider {
    * default with no map data behind it should say.
    */
   async nearby(request: NearbyRequest): Promise<Find[]> {
+    throwIfAborted(request.signal);
+    return [];
+  }
+
+  /**
+   * Nothing, for `nearby`'s reason: no map is behind these fixtures, so no
+   * town has anything to sleep in here, and a run on the default says so in its
+   * `coverage` rather than inventing a hotel (pl-60).
+   */
+  async nearbyPoint(request: NearbyPointRequest): Promise<Find[]> {
     throwIfAborted(request.signal);
     return [];
   }

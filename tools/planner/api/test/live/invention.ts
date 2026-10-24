@@ -43,12 +43,13 @@
  * - **Population.** With no argument: the 111 record files listed in
  *   `invention/population-pl57.json`, the manifest, and nothing else — a record
  *   planted under any other `claude-*` directory is not read. With
- *   `--after pl58-<date>`: every `.json` under the `claude-*-pl58-<date>`
- *   directories, which are the new run's, and nothing in the manifest.
+ *   `--after pl<n>-<date>` (`pl58-…` for pl-58, `pl60-…` for pl-60): every
+ *   `.json` under the `claude-*-pl<n>-<date>` directories, which are that
+ *   run's, and nothing in the manifest.
  * - **Files.** With no argument: pl-57's `invention/classification.json`,
  *   `verdicts.json` and `2026-10-17.json`. With the argument: the same three
- *   names under `invention/pl58-<date>/`, the record being `<date>.json`, and
- *   the record says `ticket: "pl-58"`. `--after` never writes pl-57's record.
+ *   names under `invention/pl<n>-<date>/`, the record being `<date>.json`, and
+ *   the record says `ticket: "pl-<n>"`. `--after` never writes pl-57's record.
  * - **Draw.** With no argument: pl-57's 50 per family. With the argument:
  *   a seeded order over the new run's `lodging`-or-`food` named-premises keys,
  *   taken in that order until 40 distinct objects (first queries) have a
@@ -117,8 +118,24 @@ export const MIN_QUERIES_FOR_NOT_FOUND = 3;
 export const STRATUM_SEED = 20261020;
 /** pl-58: distinct objects (first queries) the ordered stratum keys are checked to. */
 export const STRATUM_TARGET_OBJECTS = 40;
-/** The name every pl-58 run directory ends in: `claude-<family>-5-5-<effort>-pl58-<date>`. */
-export const RUN_PATTERN = /^pl58-\d{4}-\d{2}-\d{2}$/;
+/**
+ * The name a re-measured run's directories end in: `claude-<family>-5-5-<effort>-pl<n>-<date>`.
+ *
+ * `pl<n>` rather than `pl58` since pl-60, which re-measures with this harness
+ * after pl-58 did: pl-58's gate recorded that the next re-measure would have to
+ * edit it, and generalising the ticket number once costs less than widening the
+ * pattern by one ticket each time. The number becomes the record's `ticket`.
+ */
+export const RUN_PATTERN = /^pl([1-9]\d*)-(\d{4}-\d{2}-\d{2})$/;
+
+/** A label's ticket and date: `pl60-2026-10-24` is `pl-60` and `2026-10-24`. */
+export function runLabel(run: string): { ticket: `pl-${string}`; date: string } {
+  const match = RUN_PATTERN.exec(run);
+  if (match === null) {
+    throw new Error(`--after takes a label like pl60-2026-10-24, got ${run}`);
+  }
+  return { ticket: `pl-${match[1] ?? ""}`, date: match[2] ?? "" };
+}
 
 export interface NamedPlace {
   key: string;
@@ -196,7 +213,7 @@ const LIVE_DIR = fileURLToPath(new URL("../fixtures/live/", import.meta.url));
 /** The files one invocation reads and writes, and the live directory it reads from. */
 export interface Layout {
   liveDir: string;
-  /** `undefined` is pl-57's population; a `pl58-<date>` label is the new run. */
+  /** `undefined` is pl-57's population; a `pl<n>-<date>` label is the new run. */
   run: string | undefined;
   recordFile: string;
   classificationFile: string;
@@ -217,14 +234,12 @@ export function layoutFor(liveDir: string, run: string | undefined): Layout {
       hoursRecord,
     };
   }
-  if (!RUN_PATTERN.test(run)) {
-    throw new Error(`--after takes a label like pl58-2026-10-20, got ${run}`);
-  }
+  const { date } = runLabel(run);
   const own = path.join(recordDir, run);
   return {
     liveDir,
     run,
-    recordFile: path.join(own, `${run.slice("pl58-".length)}.json`),
+    recordFile: path.join(own, `${date}.json`),
     classificationFile: path.join(own, "classification.json"),
     verdictsFile: path.join(own, "verdicts.json"),
     hoursRecord,
@@ -245,7 +260,7 @@ export function parseInventionCli(argv: readonly string[]): { run: string | unde
     } else if (token.startsWith("--after=")) {
       run = token.slice("--after=".length);
     } else {
-      throw new Error(`unknown argument ${token}. Usage: invention.ts [--after pl58-<date>]`);
+      throw new Error(`unknown argument ${token}. Usage: invention.ts [--after pl<n>-<date>]`);
     }
   }
   return { run };
@@ -422,17 +437,42 @@ export function seededOrder(eligible: string[], seed: number): string[] {
   return pool;
 }
 
-/** pl-58: the new run's `lodging` or `food` named-premises keys, in one seeded order. */
+/**
+ * Whose named premises a re-measure's stratum draws from, by the label's ticket.
+ *
+ * pl-58 changed `lodging`'s and `food`'s prompts, so its stratum is both. pl-60
+ * changed `lodging`'s alone (its Build 7: "web-check `lodging`'s named
+ * premises"), so a `food` key would spend the web check's budget on a
+ * specialist the change never touched. A ticket missing here is refused rather
+ * than given a default: which specialists a re-measure is about is a decision
+ * the ticket makes, not this harness.
+ */
+const STRATUM_SPECIALISTS: Readonly<Record<string, readonly string[]>> = {
+  "pl-58": ["lodging", "food"],
+  "pl-60": ["lodging"],
+};
+
+export function stratumSpecialists(run: string): readonly string[] {
+  const { ticket } = runLabel(run);
+  const specialists = STRATUM_SPECIALISTS[ticket];
+  if (specialists === undefined) {
+    throw new Error(`no stratum is defined for ${ticket}; add it to STRATUM_SPECIALISTS`);
+  }
+  return specialists;
+}
+
+/** A re-measure's named-premises keys from `specialists` (pl-58's two by default), in one seeded order. */
 export function stratumOrder(
   places: NamedPlace[],
   classification: ClassificationFile,
   seed: number,
+  specialists: readonly string[] = ["lodging", "food"],
 ): string[] {
   const eligible = places
     .filter(
       (place) =>
         classification.classes[place.key]?.class === "named-premises" &&
-        ("lodging" in place.specialists || "food" in place.specialists),
+        specialists.some((specialist) => specialist in place.specialists),
     )
     .map((place) => place.key);
   return seededOrder(eligible, seed);
@@ -712,7 +752,8 @@ export function assertChecks(checks: Record<string, Check>, sampled: Set<string>
 }
 
 export interface InventionRecord {
-  ticket: "pl-57" | "pl-58";
+  /** `pl-57` for the default population; under `--after`, the label's own ticket. */
+  ticket: `pl-${string}`;
   runDate: string;
   seed: number;
   /** `null` under `--after`: the new run is drawn as one stratum, not per family. */
@@ -864,7 +905,7 @@ export function buildRecord(inputs: {
   classification: ClassificationFile;
   verdicts: VerdictsFile;
   hoursRows: PlHoursRow[];
-  /** `undefined` is pl-57's population and draw; a `pl58-<date>` label is the new run. */
+  /** `undefined` is pl-57's population and draw; a `pl<n>-<date>` label is the new run. */
   run?: string | undefined;
   /** Objects the ordered stratum is taken to; only `--after` reads it. */
   target?: number;
@@ -872,7 +913,10 @@ export function buildRecord(inputs: {
   const { places, files, classification, verdicts, hoursRows, run } = inputs;
   const target = inputs.target ?? STRATUM_TARGET_OBJECTS;
   assertClassified(places, classification);
-  const order = run === undefined ? [] : stratumOrder(places, classification, STRATUM_SEED);
+  const order =
+    run === undefined
+      ? []
+      : stratumOrder(places, classification, STRATUM_SEED, stratumSpecialists(run));
   const walk = run === undefined ? undefined : walkStratum(order, verdicts.checks, target);
   const sample: Record<string, string[]> =
     walk === undefined ? sampleByFamily(places, classification) : { stratum: walk.checked };
@@ -923,7 +967,7 @@ export function buildRecord(inputs: {
       ? hoursRows
       : hoursRows.filter((row) => classification.classes[row.key] !== undefined);
   return {
-    ticket: run === undefined ? "pl-57" : "pl-58",
+    ticket: run === undefined ? "pl-57" : runLabel(run).ticket,
     runDate: verdicts.runDate,
     seed: run === undefined ? SAMPLE_SEED : STRATUM_SEED,
     samplePerFamily: run === undefined ? SAMPLE_PER_FAMILY : null,

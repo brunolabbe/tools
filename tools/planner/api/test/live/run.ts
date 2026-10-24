@@ -22,7 +22,9 @@
  * A — every shape, once, no finds. B — the corpus: `road-trip`, with finds
  * parsed offline from the one real Overpass capture this repo has, through
  * `ValhallaGroundingProvider`'s own parser and `discoverAlongCorridor`'s own
- * cap (pl-41), never from a live Overpass. C — B's shape plus one hostile
+ * cap (pl-41), never from a live Overpass; since pl-60 also `lodging`'s places
+ * to stay, from pl-60's town capture through `nearbyPoint` and
+ * `discoverLodging` (`lodgingFinds`). C — B's shape plus one hostile
  * find, pl-29's injection string verbatim. D — B's shape at
  * `MAX_OUTPUT_TOKENS=512`, so every attempt hits `length` and every specialist
  * is re-asked.
@@ -79,6 +81,7 @@ import { createModelProvider } from "../../src/server.ts";
 import { answered, UNKNOWN, type RunGrounding } from "../../src/grounding/cache.ts";
 import { ValhallaGroundingProvider } from "../../src/grounding/valhalla.ts";
 import { discoverAlongCorridor, MAX_DISCOVERY_FINDS } from "../../src/runs/discovery.ts";
+import { discoverLodging } from "../../src/runs/lodging.ts";
 import { runBudgetFor } from "../../src/runs/orchestrator.ts";
 
 // ---------------------------------------------------------------------------
@@ -415,6 +418,8 @@ async function buildDiscoveryFinds(logger: AppLogger): Promise<readonly Find[]> 
         },
       }),
     nearby: async (request) => answered(await adapter.nearby(request)),
+    // The corridor pass never asks a town query; `lodgingFinds` below does.
+    nearbyPoint: async () => answered([]),
     articlesNear: async () => answered([]),
     travel: async (request) => request.origins.map(() => request.destinations.map(() => UNKNOWN)),
   };
@@ -431,6 +436,99 @@ async function buildDiscoveryFinds(logger: AppLogger): Promise<readonly Find[]> 
     finds: result.finds.length,
     cappedAt: MAX_DISCOVERY_FINDS,
     coverage: result.coverage.length,
+  });
+
+  const lodging = await lodgingFinds(brief, logger);
+  return [...result.finds, ...lodging];
+}
+
+/**
+ * Which capture answers for each town `road-trip.json` names — pl-60, Build 6.
+ *
+ * The town pass asks about the brief's `mustSee` and its destination, and
+ * `overpass-lodging-towns.json` holds pl-60's nine Build 1 towns. `Percé Rock`
+ * stands in Percé, a kilometre from the rock; the other two are captured under
+ * their own names. `Gaspésie`'s capture is empty, as the map is at that point.
+ */
+const LODGING_STANDS_IN: Readonly<Record<string, string>> = {
+  "Percé Rock": "Percé",
+  "Forillon National Park": "Forillon National Park",
+  Gaspésie: "Gaspésie",
+};
+
+interface LodgingCapture {
+  towns: { locality: string; point: { latitude: number; longitude: number }; reply: unknown }[];
+}
+
+/**
+ * The places to stay `road-trip`'s `lodging` reads, from pl-60's checked-in town
+ * capture through `ValhallaGroundingProvider.nearbyPoint` and `discoverLodging`'s
+ * own caps — offline, the same way the corridor's come from pl-29's.
+ *
+ * Its own `locate`, separate from the corridor's above: the corridor stands
+ * `Gaspésie` at Québec City so pl-40's corridor capture applies, and the town
+ * pass must ask about Gaspésie where its capture is. Keeping them apart leaves
+ * sets B to D's corridor finds exactly what they were for pl-58.
+ */
+async function lodgingFinds(brief: TripBrief, logger: AppLogger): Promise<readonly Find[]> {
+  const url = new URL("../fixtures/overpass-lodging-towns.json", import.meta.url);
+  const capture = JSON.parse(readFileSync(fileURLToPath(url), "utf8")) as LodgingCapture;
+  const byLocality = new Map(capture.towns.map((town) => [town.locality, town]));
+
+  const fetchStub = (async (_input: unknown, init?: RequestInit) => {
+    const query = typeof init?.body === "string" ? init.body : "";
+    const town = capture.towns.find((each) =>
+      query.includes(`,${String(each.point.latitude)},${String(each.point.longitude)});`),
+    );
+    return new Response(JSON.stringify(town?.reply ?? { elements: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown as typeof globalThis.fetch;
+
+  const adapter = new ValhallaGroundingProvider({
+    routingUrl: "http://valhalla.invalid",
+    geocoderUrl: "http://nominatim.invalid",
+    overpassUrl: "http://overpass.invalid",
+    timeoutMs: 5_000,
+    now: () => new Date("2027-01-01T00:00:00.000Z"),
+    fetch: fetchStub,
+  });
+
+  const grounding: RunGrounding = {
+    name: "pl-60-offline-town-capture",
+    refused: 0,
+    locate: async (request) => {
+      const stands = LODGING_STANDS_IN[request.place.name];
+      const town = stands === undefined ? undefined : byLocality.get(stands);
+      if (town === undefined) return UNKNOWN;
+      return answered({
+        coordinates: town.point,
+        source: {
+          url: "https://fixtures.invalid/nominatim",
+          title: null,
+          fetchedAt: "2027-01-01T00:00:00.000Z",
+        },
+      });
+    },
+    nearby: async () => answered([]),
+    nearbyPoint: async (request) => answered(await adapter.nearbyPoint(request)),
+    articlesNear: async () => answered([]),
+    travel: async (request) => request.origins.map(() => request.destinations.map(() => UNKNOWN)),
+  };
+
+  const result = await discoverLodging({
+    brief,
+    provider: grounding,
+    trip: undefined,
+    logger,
+    signal: new AbortController().signal,
+    onStep: () => {},
+  });
+
+  logger.info("pl-60: offline town capture", {
+    finds: result.finds.length,
+    coverage: result.coverage.map((entry) => entry.detail),
   });
 
   return result.finds;
