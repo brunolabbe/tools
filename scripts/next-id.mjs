@@ -188,7 +188,7 @@ export function clashes(rows) {
  *
  * **`--diff-filter=A`**: a branch that only *edits* a merged ticket — a Log
  * entry, a gate record, a corrected premise — is not a second claimant of its
- * id, and without the filter every such edit printed as a clash with `merged`.
+ * id, and without the filter every such edit printed as a clash with `on main`.
  * Measured on a `pl` sweep, 2026-09-19: 11 of 14 clash lines were `M` alone.
  *
  * **`--no-renames`, which the filter is unsafe without.** `git diff` detects
@@ -222,7 +222,7 @@ const ADDED = /** @type {const} */ (["diff", "--no-renames", "--diff-filter=A", 
  * **A diff, not an `ls-tree` — the same reason `gh pr diff` is a diff.** A tree
  * listing returns every ticket file a branch *contains*, so `main` itself and
  * any long-lived branch cut from it would each re-report the whole merged set
- * and clash with `merged` on every id. A three-dot diff is the branch's own
+ * and clash with `on main` on every id. A three-dot diff is the branch's own
  * contribution, which makes the trunk head self-excluding with no special case.
  *
  * **The branch name counts too**, as a floor. It is the weaker kind of claim —
@@ -238,7 +238,7 @@ const ADDED = /** @type {const} */ (["diff", "--no-renames", "--diff-filter=A", 
  * **What it over-reports, knowingly — repo-49's shape 2.** A branch whose work
  * already squash-merged, and which nobody deleted, still has its pre-squash
  * merge base, so a ticket file it filed is reported `A` and clashes with the
- * `merged` copy of the same file. Only a content comparison against `rev`'s
+ * `on main` copy of the same file. Only a content comparison against `rev`'s
  * tree tells that apart from a genuine second ticket under a taken id, and the
  * owner chose to leave it (2026-09-28): it is rare, and an extra clash line
  * costs a glance where a missing one costs a collision.
@@ -298,7 +298,7 @@ export function branchSources(options = {}) {
       // `rev` lacks, not just the ones it added) — and per `idsIn` above,
       // over-reporting is the cheap error here and under-reporting is the
       // expensive one. Filtered to additions like the three-dot diff: a file
-      // only `rev` holds is `merged`'s claim, not this branch's, and a file
+      // only `rev` holds is `on main`'s claim, not this branch's, and a file
       // both hold is already taken, so neither is a claim lost.
       if (!/no merge base/iu.test(failure.message)) throw failure;
       paths.push(...lines(run("git", [...ADDED, rev, sha], { cwd })));
@@ -433,7 +433,7 @@ export function collect(prefix, options = {}) {
     // stands for both, under the PR's label so the number is still on the
     // line, because its diff takes the added-only filter and `gh pr diff` takes
     // none — with the PR's diff kept, a PR that only edits a merged ticket would
-    // still clash with `merged`.
+    // still clash with `on main`.
     const at = head === undefined ? undefined : byHead.get(head);
     const branch = at === undefined ? undefined : branches[at];
     // Two pull requests on one head share its source, and both numbers stay on it.
