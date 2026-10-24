@@ -140,7 +140,7 @@ test("the merged half reads both ticket roots, not just the tool one", () => {
     work: ["docs/work/repo-29-a.md", "docs/work/repo-30-b.md"],
     tools: ["tools/downloader/docs/work/dl-45-x.md", "tools/downloader/README.md"],
   });
-  expect(rows(result)).toEqual(["merged repo-29", "merged repo-30"]);
+  expect(rows(result)).toEqual(["on main repo-29", "on main repo-30"]);
 
   // The same board under a tool prefix has to come back out of the other root,
   // or "reads both" is only half-proven.
@@ -153,7 +153,7 @@ test("the merged half reads both ticket roots, not just the tool one", () => {
     }),
     "dl",
   );
-  expect(dl).toEqual([{ source: "merged", id: 45 }]);
+  expect(dl).toEqual([{ source: "on main", id: 45 }]);
 });
 
 /** A path outside a `work/` directory is not a ticket file and must not count. */
@@ -178,7 +178,7 @@ test("a pull request touching no ticket file does not truncate the sweep", () =>
       "901": ["docs/work/repo-99-held.md"],
     },
   });
-  expect(rows(result)).toEqual(["merged repo-30", "PR#901 repo-99"]);
+  expect(rows(result)).toEqual(["on main repo-30", "PR#901 repo-99"]);
 });
 
 /**
@@ -198,12 +198,12 @@ test("two sources holding one id both survive, and are named as a clash", () => 
   });
   expect(rows(result)).toEqual([
     "PR#902 repo-30",
-    "merged repo-30",
+    "on main repo-30",
     "PR#901 repo-99",
     "PR#903 repo-99",
   ]);
   expect(clashes(result)).toEqual([
-    { id: 30, sources: ["PR#902", "merged"] },
+    { id: 30, sources: ["PR#902", "on main"] },
     { id: 99, sources: ["PR#901", "PR#903"] },
   ]);
   expect(render(result, "repo")).toContain("clash: repo-99 is claimed by PR#901, PR#903");
@@ -261,16 +261,16 @@ test("a pushed branch with no pull request claims the ids in its diff, not just 
       ],
       // `main` is a head like any other, and its diff against `rev` is empty —
       // which is why the source is a diff and not an `ls-tree`. A tree listing
-      // would re-report every merged id here and clash with `merged` on all of
+      // would re-report every merged id here and clash with `on main` on all of
       // them.
       main: [],
     },
   });
   expect(rows(result)).toEqual([
     // Not the name's `repo-37` since repo-49: a merged id in a name is no claim.
-    "merged repo-37",
+    "on main repo-37",
     "PR#197 repo-38",
-    "merged repo-38",
+    "on main repo-38",
     "branch/repo-37-anchor-planner-review-corpus repo-39",
   ]);
   // The `Done when` line: 39 was the answer before, and it was taken.
@@ -302,7 +302,7 @@ test("a branch the remote names but this checkout has not fetched is reported, n
   expect(branch?.note).toMatch(/git fetch origin/u);
 
   const result = claims(sources, "repo");
-  expect(rows(result)).toEqual(["merged repo-30", "branch/repo-44-a-peer-just-pushed repo-44"]);
+  expect(rows(result)).toEqual(["on main repo-30", "branch/repo-44-a-peer-just-pushed repo-44"]);
   expect(nextFree(result)).toBe(45);
 });
 
@@ -721,7 +721,7 @@ test("a branch sharing no history with the rev over-claims rather than killing t
   expect(orphan?.paths).toContain("docs/work/repo-77-orphan.md");
   // Until repo-49 the two-dot diff also claimed `repo-1`, a file the orphan
   // *deletes*. Filtered to additions it no longer does, and nothing is lost by
-  // that: a file only `rev` holds is `merged`'s claim, which the sweep reads
+  // that: a file only `rev` holds is `on main`'s claim, which the sweep reads
   // anyway. What the fallback still over-reports is the note's business.
   expect(claims(sources, "repo")).toEqual([{ source: "branch/orphan-pages", id: 77 }]);
 });
@@ -793,7 +793,7 @@ const withGh =
  * The two branches of repo-49's reproduction, file for file: on 2026-09-19
  * `pl-50-count-thinking-tokens` modified `pl-40`, `pl-49` and `pl-50`, and
  * `pl-47-edit-dates-and-budget` modified `pl-42`, `pl-43`, `pl-44`, `pl-47` and
- * `pl-49` — every one `M`, and every one printed as a clash with `merged`.
+ * `pl-49` — every one `M`, and every one printed as a clash with `on main`.
  *
  * **Each branch's *name* carries an id too** (`pl-50`, `pl-47`), and the name is
  * a claim floor, so the filter alone left both clashing. repo-49's first gate
@@ -854,7 +854,7 @@ test("a renamed ticket file is still claimed under its new id", () => {
  *
  * Both were swept — `gh pr diff` for the one, `git diff` for the other — so one
  * real claim printed as two, and a PR that only edited a merged ticket clashed
- * with `merged` through its `gh pr diff` even once the branch's diff was
+ * with `on main` through its `gh pr diff` even once the branch's diff was
  * filtered, since `gh pr diff` takes no status filter. So the branch source,
  * which can take the filter, stands for both, under the PR's label.
  */
@@ -870,7 +870,7 @@ test("a pull request and its head branch are one source, and an edit through the
     { number: "274", head: "file-a-new-ticket", files: ["docs/work/repo-52-new.md"] },
   ]);
   const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
-  expect(rows(result)).toEqual(["merged repo-5", "PR#274 repo-52"]);
+  expect(rows(result)).toEqual(["at origin/trunk repo-5", "PR#274 repo-52"]);
   expect(clashes(result)).toEqual([]);
 });
 
@@ -905,7 +905,7 @@ test("a PR whose head branch is unread keeps its own diff, and a fork's PR is no
     "PR#310",
     "PR#311",
     "branch/main",
-    "merged",
+    "on main",
   ]);
   expect(sources.find((source) => source.source === "PR#310")?.paths).toEqual([
     "peer-just-opened",
@@ -915,7 +915,7 @@ test("a PR whose head branch is unread keeps its own diff, and a fork's PR is no
   // would now be false.
   expect(sources.flatMap((source) => (source.note ? [source.note] : []))).toEqual([]);
   expect(rows(claims(sources, "repo"))).toEqual([
-    "merged repo-30",
+    "on main repo-30",
     "PR#310 repo-45",
     "PR#311 repo-46",
   ]);
@@ -954,7 +954,7 @@ test("an orphan branch holding a merged ticket's body under a new id still claim
  * against another base — both fold into that branch, and neither keeps its
  * unfilterable `gh pr diff`. Found by repo-49's first gate: the fold used to
  * look the branch up by its label, which the first PR had already replaced
- * with its own, so the second found nothing and clashed with `merged`.
+ * with its own, so the second found nothing and clashed with `on main`.
  */
 test("two pull requests on one head branch both fold into it", () => {
   const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
@@ -971,8 +971,8 @@ test("two pull requests on one head branch both fold into it", () => {
   // from the output.
   expect(sources.map((source) => source.source).toSorted()).toEqual([
     "PR#276+PR#277",
+    "at origin/trunk",
     "branch/trunk",
-    "merged",
   ]);
 });
 
@@ -1016,7 +1016,228 @@ test("a name naming a merged id is no claim, but a second ticket filed under it 
       "repo-32-not-filed-yet": [],
     },
   });
-  expect(clashes(result)).toEqual([{ id: 31, sources: ["branch/repo-31-and-refile", "merged"] }]);
+  expect(clashes(result)).toEqual([{ id: 31, sources: ["branch/repo-31-and-refile", "on main"] }]);
   expect(rows(result)).toContain("branch/repo-32-not-filed-yet repo-32");
   expect(rows(result)).not.toContain("branch/repo-30-build-it repo-30");
+});
+
+/**
+ * repo-118, Done when 1: a ticket file on `main` is labelled `on main`, and no
+ * row reads `merged`. The label is what a builder reads, and `merged` read as
+ * "its work has merged" while the pull request was still open (lg-40, #548).
+ *
+ * The `--rev` case is the same rule for another ref: the label names where the
+ * files were read from, so a sweep of `HEAD` says `at HEAD`.
+ */
+test("a ticket file on main is labelled on main, and no row says merged", () => {
+  const board = {
+    work: ["docs/work/repo-40-filed-on-main.md"],
+    prs: { "548": ["docs/work/repo-41-open-pull-request.md"] },
+  };
+  const result = sweep(board);
+  expect(rows(result)).toEqual(["on main repo-40", "PR#548 repo-41"]);
+  expect(result.some((row) => row.source === "merged")).toBe(false);
+
+  const elsewhere = claims(collect("repo", { run: runner(board), rev: "HEAD" }), "repo");
+  expect(elsewhere.map((row) => row.source)).toEqual(["at HEAD", "PR#548"]);
+});
+
+/**
+ * repo-118, Done when 2: the answer is the first line, and the notes sit
+ * directly under it. The board is fifty tickets deep, which is the case the
+ * ticket was filed for: the answer was the last of some fifty `merged` rows.
+ *
+ * Asserted on `render` and not on the CLI, because the CLI needs `gh` on the
+ * board and this checkout's `gh` answers for the real repository. The notes are
+ * the real ones `collect` returns for an unfetched branch.
+ */
+test("the next free answer is the first line, and a note sits directly under it", () => {
+  const work = Array.from({ length: 50 }, (_, at) => `docs/work/repo-${at + 1}-filed.md`);
+  const sources = collect("repo", {
+    run: runner({
+      work,
+      branches: { "wip-no-id-in-the-name": ["docs/work/repo-90-invisible.md"] },
+      unfetched: ["wip-no-id-in-the-name"],
+    }),
+  });
+  const notes = sources.flatMap((source) => (source.note ? [source.note] : []));
+  const lines = render(claims(sources, "repo"), "repo", notes).split("\n");
+
+  expect(lines[0]).toBe("next free: repo-51");
+  expect(lines[1]).toMatch(/^unread: branch wip-no-id-in-the-name /u);
+  expect(lines[2]).toBe("on main repo-1");
+  expect(lines.at(-1)).toBe("on main repo-50");
+  expect(lines).toHaveLength(2 + 50);
+});
+
+/**
+ * repo-118, Done when 3, and the test that goes red when the ancestor check is
+ * removed (`isAncestor` in `scripts/next-id.mjs`, the `git merge-base
+ * --is-ancestor` it wraps).
+ *
+ * `stacked-child` is cut from `parent-branch`'s head, so its diff against trunk
+ * carries the parent's ticket file as well as its own. Without the check the
+ * parent's id is claimed by both pull requests and printed as a clash — the
+ * `lg-66 in #623 and #625` shape. With it the child is labelled as stacked and
+ * the parent's file comes off its claim, so the id is the parent's alone.
+ *
+ * The fake `gh` gives each pull request the files its diff would list, the
+ * parent's included in the child's, as `gh pr diff` does.
+ */
+test("a pull request stacked on another's head reports no clash for the parent's ticket", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("parent-branch", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  runGit(peer, ["checkout", "-q", "-b", "stacked-child", "parent-branch"]);
+  fs.writeFileSync(path.join(peer, "docs/work/repo-67-child.md"), "the child\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", "stacked-child"]);
+  runGit(peer, ["push", "-q", "origin", "stacked-child"]);
+
+  const run = withGh([
+    { number: "623", head: "parent-branch", files: ["docs/work/repo-66-parent.md"] },
+    {
+      number: "625",
+      head: "stacked-child",
+      files: ["docs/work/repo-66-parent.md", "docs/work/repo-67-child.md"],
+    },
+  ]);
+  const sources = collect("repo", { run, cwd: peer, rev: "origin/trunk" });
+  const result = claims(sources, "repo");
+  // The assertion that goes red without the check comes first, so the failure
+  // names the clash and not a label.
+  expect(clashes(result)).toEqual([]);
+  expect(rows(result)).toEqual([
+    "at origin/trunk repo-5",
+    "PR#623 repo-66",
+    "PR#625 (stacked on PR#623) repo-67",
+  ]);
+  expect(nextFree(result)).toBe(68);
+  expect(sources.map((source) => source.source).toSorted()).toEqual([
+    "PR#623",
+    "PR#625 (stacked on PR#623)",
+    "at origin/trunk",
+    // The trunk's own head, which claims nothing: its diff against itself is empty.
+    "branch/trunk",
+  ]);
+});
+
+/**
+ * The other half of the ancestor check, and why it is a check and not a rule
+ * about paths. Two pull requests that file the same file under the same id do
+ * not contain one another, so neither is stacked and both still clash — that is
+ * a real collision, and dropping shared paths regardless of history would hide
+ * it.
+ */
+test("two unrelated pull requests that file one id still clash", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("first-filer", ({ write }) => write("docs/work/repo-70-same.md", "one\n"));
+  branch("second-filer", ({ write }) => write("docs/work/repo-70-same.md", "two\n"));
+  const run = withGh([
+    { number: "801", head: "first-filer", files: ["docs/work/repo-70-same.md"] },
+    { number: "802", head: "second-filer", files: ["docs/work/repo-70-same.md"] },
+  ]);
+  const sources = collect("repo", { run, cwd: peer, rev: "origin/trunk" });
+  expect(sources.map((source) => source.source).toSorted()).toEqual([
+    "PR#801",
+    "PR#802",
+    "at origin/trunk",
+    "branch/trunk",
+  ]);
+  expect(clashes(claims(sources, "repo"))).toEqual([{ id: 70, sources: ["PR#801", "PR#802"] }]);
+});
+
+/**
+ * repo-118's Q2, the name floor under stacking: a branch named for a ticket
+ * claims that ticket through its name, and a branch stacked on a parent that
+ * holds the same id is claiming the parent's ticket by name as well.
+ *
+ * `repo-66-followup` is cut from `repo-66-parent`, and files `repo-67`. Without
+ * the name being taken off the child, the child claims 66 by name and clashes
+ * with its parent on it — the same clash the diff-level check removes.
+ */
+test("a stacked child whose branch name carries its parent's id reports no clash for it", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("repo-66-parent", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  runGit(peer, ["checkout", "-q", "-b", "repo-66-followup", "repo-66-parent"]);
+  fs.writeFileSync(path.join(peer, "docs/work/repo-67-child.md"), "the child\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", "repo-66-followup"]);
+  runGit(peer, ["push", "-q", "origin", "repo-66-followup"]);
+
+  const run = withGh([
+    { number: "623", head: "repo-66-parent", files: ["docs/work/repo-66-parent.md"] },
+    {
+      number: "625",
+      head: "repo-66-followup",
+      files: ["docs/work/repo-66-parent.md", "docs/work/repo-67-child.md"],
+    },
+  ]);
+  const sources = collect("repo", { run, cwd: peer, rev: "origin/trunk" });
+  const result = claims(sources, "repo");
+  expect(clashes(result)).toEqual([]);
+  expect(rows(result)).toEqual([
+    "at origin/trunk repo-5",
+    "PR#623 repo-66",
+    "PR#625 (stacked on PR#623) repo-67",
+  ]);
+  expect(sources.map((source) => source.source).toSorted()).toEqual([
+    "PR#623",
+    "PR#625 (stacked on PR#623)",
+    "at origin/trunk",
+    "branch/trunk",
+  ]);
+});
+
+/**
+ * The partial case of the same rule: a stacked child whose name names two ids,
+ * one of them the parent's, keeps the other. `repo-68` is not held by the
+ * parent, so it stays claimed by the child, by its name, and the parent's 66 is
+ * the only id taken off.
+ */
+test("a stacked child's name keeps the ids its parent does not hold", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("repo-66-parent", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  // The second id is spelled with the prefix, because that is the only form
+  // `idsIn` reads as a claim: `repo-66-and-68` names 66 alone.
+  const name = "repo-66-and-repo-68-followup";
+  runGit(peer, ["checkout", "-q", "-b", name, "repo-66-parent"]);
+  fs.writeFileSync(path.join(peer, "docs/work/repo-67-child.md"), "the child\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", name]);
+  runGit(peer, ["push", "-q", "origin", name]);
+
+  const run = withGh([
+    { number: "623", head: "repo-66-parent", files: ["docs/work/repo-66-parent.md"] },
+    {
+      number: "625",
+      head: name,
+      files: ["docs/work/repo-66-parent.md", "docs/work/repo-67-child.md"],
+    },
+  ]);
+  const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
+  expect(clashes(result)).toEqual([]);
+  expect(rows(result)).toEqual([
+    "at origin/trunk repo-5",
+    "PR#623 repo-66",
+    "PR#625 (stacked on PR#623) repo-67",
+    "PR#625 (stacked on PR#623) repo-68",
+  ]);
+});
+
+/**
+ * The reverse of the stacked name case, and the one that keeps the name floor
+ * honest: two pull requests that are not stacked, whose branch names both carry
+ * id 70, still clash on it. Neither contains the other, so neither name is taken
+ * off anything.
+ */
+test("two unrelated pull requests whose branch names share an id still clash", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("repo-70-first-filer", ({ write }) => write("notes-first.txt", "first\n"));
+  branch("repo-70-second-filer", ({ write }) => write("notes-second.txt", "second\n"));
+  const run = withGh([
+    { number: "801", head: "repo-70-first-filer", files: ["notes-first.txt"] },
+    { number: "802", head: "repo-70-second-filer", files: ["notes-second.txt"] },
+  ]);
+  const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
+  expect(clashes(result)).toEqual([{ id: 70, sources: ["PR#801", "PR#802"] }]);
 });
