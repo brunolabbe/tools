@@ -21,6 +21,7 @@ import {
   populationFiles,
   runLabel,
   stratumOrder,
+  stratumSpecialists,
   walkStratum,
   type Check,
   type ClassificationFile,
@@ -433,5 +434,46 @@ describe("a label for any ticket's re-measure, pl-60's included (pl-60, Build 7)
     });
 
     expect(record.ticket).toBe("pl-60");
+  });
+
+  test("pl-60's stratum is lodging's named premises alone; pl-58's stays lodging's and food's", () => {
+    expect(stratumSpecialists("pl58-2026-10-21")).toEqual(["lodging", "food"]);
+    expect(stratumSpecialists("pl60-2026-10-24")).toEqual(["lodging"]);
+    expect(() => stratumSpecialists("pl61-2026-10-24")).toThrow(/no stratum is defined for pl-61/);
+
+    const live = liveDir();
+    writeRecord(live, "claude-opus-5-5-low-pl60-2026-10-24/set-b-run-1.json", [
+      ["lodging", "Hotel One", "Percé"],
+      ["food", "Bistro Three", "Gaspé"],
+      ["lodging", "Bistro Three", "Gaspé"],
+      ["food", "Fumoir Four", "Gaspé"],
+    ]);
+    const { places } = collectPlaces(live, populationFiles(layoutFor(live, "pl60-2026-10-24")));
+    const classification: ClassificationFile = {
+      rubric: {
+        written: "test",
+        classes: {
+          "named-premises": { definition: "d", example: "e" },
+          "kind-of-place": { definition: "d", example: "e" },
+          "settlement-or-area": { definition: "d", example: "e" },
+          "route-or-transit": { definition: "d", example: "e" },
+        },
+        edgeRules: {},
+      },
+      classes: {
+        "hotel one|percé": { class: "named-premises", edge: [] },
+        "bistro three|gaspé": { class: "named-premises", edge: [] },
+        "fumoir four|gaspé": { class: "named-premises", edge: [] },
+      },
+    };
+
+    expect(
+      stratumOrder(places, classification, 1, stratumSpecialists("pl60-2026-10-24")).toSorted(),
+    ).toEqual(["bistro three|gaspé", "hotel one|percé"]);
+    expect(stratumOrder(places, classification, 1).toSorted()).toEqual([
+      "bistro three|gaspé",
+      "fumoir four|gaspé",
+      "hotel one|percé",
+    ]);
   });
 });

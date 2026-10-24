@@ -1094,3 +1094,194 @@ tools/planner/api/test/live/invention.ts`: exit 0, "check: the committed
 - **Checks at `e036ef77`:** `npm run check` exits 0. `npm test -- --project planner`
   passes 81 of 81 files and 1662 of 1662 tests. The later commits are
   `test/live/run.ts`, which `npm run check` typechecks, and this Log.
+
+**2026-10-24 — The owner's answers for the paid run (relayed by the orchestrator to
+the builder, the same day).**
+
+5. **The key.** The owner placed it at `/home/pwuser/.planner-live-key` on 2026-10-24.
+   The orchestrator checked it with `stat` (mode 600, 106 bytes, owner `pwuser`) and
+   did not read it. The builder did not read it either: it is passed by path to the
+   wrapper, which hands it to each child's environment.
+6. **The rules file.** Question: should pl-60 reword
+   `.claude/rules/planner-unchecked-constraints.md`'s `coverage` paragraph, which still
+   says "a thin corridor"? Options: (a) reword it in pl-60; (b) leave it; (c) file it
+   separately. **Chosen: (a)**, the builder's recommendation, under Build 8's bound
+   that the diff adds no new rule.
+
+**2026-10-24 — Build 6, the live run; Build 7, the re-measure; and the web check's
+pre-registration (builder, Opus 5.5).** The authorisation is answer 3 above (shape (a),
+dated 2026-10-24, a $10 total bound).
+
+- **The rules file (answer 6).** In `.claude/rules/planner-unchecked-constraints.md`,
+  "A thin corridor is not a function of the brief" now reads "A thin corridor, or a
+  town the map had nowhere to sleep in (pl-60), is not a function of the brief". That
+  is one line removed and two added (`git diff -U0`). `grep -c '^\*\*'` counts 5
+  bold-led lines before and 5 after, so no rule was added.
+- **The run.** It was started at 03:40Z (its first session's log was created at
+  03:40:18Z, and its exit file was written at 04:07:56Z) from the worktree with
+  `setsid nohup`, pid
+  237458 (also its process group), through a scratch launcher (`launch-live.sh`). The
+  command was `node run-pl60.mjs 2026-10-24 /home/pwuser/.planner-live-key
+tools/planner/api/test/fixtures/live <scratch>/live-logs 10`. The key reached only
+  the children's environment, and nothing printed or logged it. The wrapper exited
+  0, every session exited 0, and the spend stop never tripped. The run date is the
+  run's real date (03:39Z, 2026-10-24 UTC).
+
+  | Session (`fixtures/live/`)                | `--max-usd` | Records | A   | B                       | C   | D   | Observed |
+  | ----------------------------------------- | ----------- | ------- | --- | ----------------------- | --- | --- | -------- |
+  | `claude-haiku-5-5-low-pl60-2026-10-24`    | 1.00        | 25      | 6   | 15 (cap, 65 candidates) | 3   | 1   | $0.1558  |
+  | `claude-haiku-5-5-medium-pl60-2026-10-24` | 1.00        | 25      | 6   | 15 (cap, 84)            | 3   | 1   | $0.1836  |
+  | `claude-haiku-5-5-high-pl60-2026-10-24`   | 1.00        | 23      | 6   | 13 (106)                | 3   | 1   | $0.2348  |
+  | `claude-sonnet-5-5-low-pl60-2026-10-24`   | 5.00        | 19      | 6   | 9 (105)                 | 3   | 1   | $2.2501  |
+  | `claude-opus-5-5-low-pl60-2026-10-24`     | 7.18        | 18      | 6   | 8 (104)                 | 3   | 1   | $4.3891  |
+
+  **Total: 110 records, $7.2134 observed against the $10 bound**, inside the
+  $7.4–7.8 estimate's lower side (pl-58: 112 records, $7.08). Set B's candidates are
+  `activities` plus `food`, set B's stopping rule. `servedModels` equals the requested
+  model in every record (`sessions.mjs`).
+
+- **Credentials.** `grep -ril -E 'sk-ant|x-api-key|authorization'` over the five
+  directories (110 files) printed nothing (exit 1). The same command over a planted
+  control file (`{"headers":{"x-api-key":"planted"}}`) printed it (exit 0). Records
+  committed at `5d835d32`.
+- **The join, `matched of written`** (`join.mjs`: a candidate matches when any
+  `place.name` equals a find's `name` in the same record, after NFD diacritic and case
+  folding; sets B to D records that carry finds):
+  - Over the `activities` and `food` candidates of the existing records, the ten
+    directories before pl-60 (pl-40/pl-57's five and pl-58's five), compared with the
+    corridor finds they were shown: **8 of 1,165**, over 163 records. Every match is a
+    Québec City landmark (`Observatoire de la Capitale` 5, `Plaines d'Abraham` 2,
+    `Porte Saint-Louis` 1). The new run's `activities` and `food` gave 12 of 606, the
+    same three names.
+  - Over the new run's `lodging` candidates in sets B to D, compared with the lodging
+    finds they were shown: **333 of 360**, over 80 records. By family: Haiku 225 of 225,
+    Opus 55 of 66, Sonnet 53 of 69.
+  - pl-36's join, scored at last: a specialist that reads corridor finds almost never
+    writes one by name (0.7%), and `lodging` reading town finds almost always does
+    (92.5%). **Provenance is not changed on this count.** pl-36 says what must be shown
+    first, and a change is a new ticket.
+- **The hand classification.** `invention/pl60-2026-10-24/classification.json` copies
+  pl-57's rubric object byte for byte. The new run has 700 places, through
+  `collectPlaces`.
+  - **334 carried** with their class and tags: 289 from pl-58's file and 45 found only
+    in pl-57's.
+  - **366 new, classified by hand.** I read each `name|locality`, its use (`at` or
+    `between`) and its specialists, with no web lookup, and followed pl-57's and
+    pl-58's own cases for the same strings (looked up with `lookup.mjs`). One line per
+    key is in the scratch `classify/assign.txt`. New: 76 `named-premises`, 227
+    `kind-of-place`, 37 `settlement-or-area`, 26 `route-or-transit`.
+  - **One carried park key was re-judged by the park rules:** `forillon national
+park|gaspé peninsula, québec` is only a `between` endpoint in this run, so
+    `settlement-or-area` with `park-area`.
+  - Totals: 207 `named-premises`, 351 `kind-of-place`, 102 `settlement-or-area`, 40
+    `route-or-transit`.
+  - **Judgement cases a reader may reverse.** The three campgrounds the run named from
+    finds (`camping parc nature gaspé|gaspé` 16 lodging mentions, `camping de la baie de
+percé|percé` 9, `camping baie de gaspé|gaspé` 8) are `kind-of-place` with
+    `locality-plus-category`, because each name restates its locality plus a category,
+    the rubric's own `Camping de Carleton-sur-Mer` case. `auberge internationale de
+forillon|gaspé` (43, plus 4 under `gaspé (cap-aux-os)`) is `named-premises`,
+    because Forillon is not the candidate's locality, the way pl-58 took `camping
+des-rosiers|forillon national park`. `central market (centralna tržnica)|ljubljana`
+    is `named-premises`, because it carries the established Slovene name; pl-58 took the
+    bare `central market|ljubljana` as a kind.
+- **The re-measure** (`PLANNER_LIVE_RUN=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl60-2026-10-24`, which makes no
+  request). The after population is the new run's 110 records alone: 700 places and
+  2,693 mentions, by the same rubric. The before population is pl-58's, read from its
+  Log:
+
+  |                          | pl-58 (mentions)  | **pl-60 (mentions)**   | pl-58 (places)    | pl-60 (places)    |
+  | ------------------------ | ----------------- | ---------------------- | ----------------- | ----------------- |
+  | `lodging` named-premises | 33 of 418 (7.9%)  | **301 of 443 (67.9%)** | 25 of 162 (15.4%) | 17 of 76 (22.4%)  |
+  | `food` named-premises    | 43 of 407 (10.6%) | 41 of 395 (10.4%)      | 26 of 186 (14.0%) | 30 of 170 (17.6%) |
+  - **Split by set** (`sensitivity.mts`, the same keys and classes). The rise is
+    entirely where finds were given:
+    - pl-60: set A, which has no finds by design, **1 of 83 (1.2%)**; sets B to D,
+      which have finds, **300 of 360 (83.3%)**.
+    - pl-58, read the same way: set A 11 of 95 (11.6%); sets B to D 22 of 323 (6.8%).
+  - **Set A fell, from 11 of 95 to 1 of 83.** With no list, Build 4's role points
+    `lodging` at the kind-of-place fallback, which is the behaviour question 2 (a)
+    chose.
+  - `food`, which pl-60 did not touch, is flat on mentions, as a control should be.
+  - **Sensitivity on the judgement cases:**
+    - With the three `locality-plus-category` campgrounds moved to `named-premises`,
+      `lodging` is 334 of 443 (75.4%).
+    - With the Auberge internationale's two keys moved to `kind-of-place`, it is 254 of
+      443 (57.3%).
+  - Not claimed: that this is caused by more than the finds and the role together. The
+    finds come from one checked-in capture, so sets B to D see the same 20 lodging
+    finds every time.
+
+- **The checks after it, read directly, with no pipe** (`remeasure.sh`):
+  - `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts` (the default): exit 0.
+  - The same with `--after pl58-2026-10-21`: exit 0.
+
+  So pl-57's and pl-58's records still regenerate with the new run's directories on
+  disk.
+
+- **The harness change this step needed.** `stratumOrder` takes the specialists whose
+  named premises form the stratum, and `STRATUM_SPECIALISTS` in `invention.ts` maps
+  each ticket to them: `pl-58` to `lodging` and `food`, as before, and `pl-60` to
+  `lodging` alone, since Build 7 web-checks `lodging`'s named premises. A ticket with
+  no entry is refused. Test: `invention-population.test.ts`, "pl-60's stratum is
+  lodging's named premises alone; pl-58's stays lodging's and food's".
+  - Not renamed: the record's field `sampleByObject.lodgingOrFood` and the printed
+    label "lodging-or-food". Renaming them would change pl-58's committed record. Under
+    `pl60` every key in that stratum is `lodging`'s.
+- **pl-58's `lodging`-only not-confirmed rate** (`pl58-lodging-rate.mts`, over its
+  committed `verdicts.json`: an object is `lodging`'s when `lodging` proposed any of
+  its checked keys). **2 of 19 objects (10.5%, 95% Wilson 2.9–31.4)**. Both are Forillon
+  campgrounds, `not-found`: `Camping des Rivières` and `Des-a-Gauche campground`. None
+  of `lodging`'s 19 objects was also `food`'s.
+
+**The web check's pre-registration (Build 7).** It is committed and pushed before any
+search runs; this commit is the pre-registration, as pl-58's `d3ca4190` was. The
+search itself runs later, in a separate general-purpose agent with WebSearch, after
+the owner opens the firewall. The builder runs none.
+
+- **Budget:** `invention/pl60-2026-10-24/verdicts.json`'s `budget`, with no checks.
+  It is pl-58's budget, adapted: up to 40 objects or all of them, one first query per
+  object, up to two more for a key whose own locality the object leaves open, the
+  three queries before `not-found`, and a cap of 90 queries and 20 page fetches.
+- **The stratum:** `lodging`'s named-premises keys, **17 keys**, in the harness's seeded
+  order (seed 20261020, from the worksheet above). Keys that name one premises share
+  one first query, so **17 keys make 9 objects**. That is fewer than 40, so the walk is
+  planned to take every key and stop `exhausted`. Petit-Gaspé's first query is pl-58's,
+  verbatim; every other one is query 1 of the budget, the name with its locality as
+  written (Gaspé added for the key with no locality).
+
+| #   | key                                                       | planned first query                                        | object            |
+| --- | --------------------------------------------------------- | ---------------------------------------------------------- | ----------------- |
+| 1   | `le loup marin\|`                                         | Le Loup Marin Gaspé                                        | object 1          |
+| 2   | `la rêvasse\|cap-des-rosiers, gaspé`                      | La Rêvasse Cap-des-Rosiers                                 | object 2          |
+| 3   | `la rêvasse\|cap-des-rosiers`                             | La Rêvasse Cap-des-Rosiers                                 | object 2 (repeat) |
+| 4   | `auberge internationale de forillon\|gaspé (cap-aux-os)`  | Auberge internationale de Forillon Cap-aux-Os              | object 3          |
+| 5   | `motel l'eglantier\|percé`                                | Motel L'Eglantier Percé                                    | object 4          |
+| 6   | `le loup marin\|gaspé`                                    | Le Loup Marin Gaspé                                        | object 1 (repeat) |
+| 7   | `motel et chalets natabel\|percé`                         | Motel et Chalets Natabel Percé                             | object 5          |
+| 8   | `motel bellevue\|percé`                                   | Motel Bellevue Percé                                       | object 6          |
+| 9   | `auberge internationale de forillon\|gaspé`               | Auberge internationale de Forillon Cap-aux-Os              | object 3 (repeat) |
+| 10  | `auberge la petite école de forillon\|`                   | Auberge La Petite École de Forillon Gaspé                  | object 7          |
+| 11  | `petit-gaspé campground, forillon national park\|gaspé`   | Petit-Gaspé campground Forillon National Park Parks Canada | object 8          |
+| 12  | `auberge la petite école de forillon\|gaspé (forillon)`   | Auberge La Petite École de Forillon Gaspé                  | object 7 (repeat) |
+| 13  | `auberge la petite école de forillon\|gaspé (cap-aux-os)` | Auberge La Petite École de Forillon Gaspé                  | object 7 (repeat) |
+| 14  | `la rêvasse\|cap des rosiers`                             | La Rêvasse Cap-des-Rosiers                                 | object 2 (repeat) |
+| 15  | `manoir de percé\|percé`                                  | Manoir de Percé Percé                                      | object 9          |
+| 16  | `auberge la petite école de forillon\|forillon`           | Auberge La Petite École de Forillon Gaspé                  | object 7 (repeat) |
+| 17  | `auberge la petite école de forillon\|gaspé`              | Auberge La Petite École de Forillon Gaspé                  | object 7 (repeat) |
+
+- **For the agent that runs it:** fill `verdicts.json`'s `checks` in this order, each
+  key's `queries[0]` the planned first query above. Then write the record with
+  `PLANNER_INVENTION_OFFLINE=1 node --import tsx tools/planner/api/test/live/invention.ts
+--after pl60-2026-10-24`. The check is the same command with
+  `PLANNER_INVENTION_CHECK=1`, its exit code taken without a pipe. Report the
+  not-confirmed rate per object with a 95% Wilson interval, beside pl-58's 2 of 19
+  above.
+- **Expect most of these to exist.** Every one of the 9 objects is a name the run
+  handed `lodging` from the town capture. The check still matters: a map entry is not
+  proof that the premises is open, and the 27 `lodging` candidates that did not match
+  a find are not in the stratum unless they are named premises.
+- **Not done here:** the searches, the verdicts and the per-object rate (Done when 9's
+  second half).

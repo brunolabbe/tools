@@ -1,0 +1,3134 @@
+{
+  "rubric": {
+    "written": "2026-10-17. The rules were written down while the list of places was being read for the first time, one rule as each case first arrived; the class of each place was then written to this file after the whole list had been read. The rubric was not fixed before any place was seen. The sample is drawn from this file, so it came after the classification. The classification uses only the string the specialist wrote (name and locality) and general knowledge; it never uses a web lookup, because whether the place is real is what the sample measures.",
+    "classes": {
+      "named-premises": {
+        "definition": "A proper name that picks out one establishment, site or attraction: something with a door, a gate or a visit. Includes a named natural feature visited as an attraction (a rock, a mountain, a lake, a cape), a named square, a trail or wharf with its own name, and a national park when the candidate is a visit.",
+        "example": "Exploramer; Musée de la Gaspésie; Roscioli; Hotel Raphael; Percé Rock"
+      },
+      "kind-of-place": {
+        "definition": "A category at a locality, or a description that does not name its object: nothing in the string tells two premises of that kind apart. Includes a placeholder ('to be chosen', 'specific property not yet chosen', 'e.g.'), a plural ('motels'), an either/or, a tour or service, an organisation or an online service, and a branded accommodation type.",
+        "example": "Motel in Percé; Local cheese producer; Resort kids' club (resort not named)"
+      },
+      "settlement-or-area": {
+        "definition": "A town, village, region, island or district as an area, a neighbourhood, or a national park named as the region a route passes through (a `between` endpoint). Whatever specialist proposed it and whether it is used as a stop, a settlement is this class.",
+        "example": "Percé; Prati district; Gaspésie; Québec City"
+      },
+      "route-or-transit": {
+        "definition": "A road, a crossing, or a node on a movement: a station, a terminal, an airport, a bus stop, a trailhead, a ferry or boat departure point, a park entrance or gateway.",
+        "example": "Wien Hauptbahnhof; Rivière-du-Loup ferry terminal; Mont-Albert trailhead"
+      }
+    },
+    "edgeRules": {
+      "park-visit": "A national park is named-premises when it is proposed as a visit (an `at` location, or any occurrence of the key that is an `at`), including a named sector of it. One key that is a `between` endpoint in some records and an `at` in others takes named-premises.",
+      "park-area": "A national park is settlement-or-area when the only use of the key is as an endpoint of a `between`, a region a route passes through.",
+      "established-descriptive-name": "A string built from a locality and a category is named-premises only when it is the established name of one landmark that a reader would know without a map (Ljubljana Castle, Percé Rock, Cap-des-Rosiers lighthouse, the English form of Phare de Cap-des-Rosiers). This is judged from general knowledge, not a lookup.",
+      "locality-plus-category": "Every other string built from a locality and a singular category (Gaspé aquarium, Percé wharf, Camping de Carleton-sur-Mer) is kind-of-place even when only one such object plausibly exists, because the string does not name it. These are the rows most likely to move to named-premises under a looser reading; the Log gives the count with and without them.",
+      "natural-feature": "A named natural feature visited as an attraction (mountain, lake, ridge, cape, plateau) is named-premises: it is a site with a visit.",
+      "two-sites": "A string naming two sites joined by 'and', '/' or a comma is named-premises when each half would be, and counts once.",
+      "square": "A named piazza or square is named-premises: a site, not a district.",
+      "landmark-as-route-stop": "A landmark used as a `between` endpoint keeps its own class (named-premises); only settlements and parks-as-regions change class by use.",
+      "transit-node": "Airports, stations, terminals, bus stops, trailheads, boat or ferry departure points, park entrances and gateways are route-or-transit, even when they carry a proper name, because the candidate is a stop on a movement.",
+      "branded-category": "A product or brand name for a kind of accommodation at a park (oTENTik) names a type, not one premises: kind-of-place.",
+      "placeholder": "A string that says in its own words that the premises is not chosen is kind-of-place whatever else it names."
+    }
+  },
+  "classes": {
+    "all-inclusive beach resort|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "all-inclusive family beach resort|cancún": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "all-inclusive family beach resort|punta cana": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "all-inclusive family beach resort|varadero": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "alma club trail network|alma, lac-saint-jean": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "alma|alma, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "alma|lac-saint-jean, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "amqui|amqui, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "amqui|la matapédia": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "amqui|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "antico forno roscioli|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "aquarium de gaspésie|gaspé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "aquarium de gaspé|gaspé": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "arranged from home before departure|toronto": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "atkins et frères|mont-louis": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "auberge internationale de forillon|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "auberge internationale de forillon|gaspé (cap-aux-os)": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "auberge la petite école de forillon|": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "auberge la petite école de forillon|forillon": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "auberge la petite école de forillon|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "auberge la petite école de forillon|gaspé (cap-aux-os)": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "auberge la petite école de forillon|gaspé (forillon)": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "auberge|roberval": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "backcountry campsite|parc national de la gaspésie": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "backcountry hut|mont-louis": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "backcountry hut|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "backcountry refuge|parc national de la gaspésie": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|amqui": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|cap-des-rosiers": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|kamouraska": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|matane": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|rivière-du-loup": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|rome": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bakery|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "banc de carleton|carleton-sur-mer": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "banc-de-pêche de paspébiac|paspébiac, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "banc-de-pêche-de-paspébiac|paspébiac": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "banc-de-pêche-de-paspébiac|paspébiac, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "baths of caracalla|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "bioparc de la gaspésie|bonaventure": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "bonaventure island and percé rock national park|percé, québec": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit",
+        "two-sites"
+      ]
+    },
+    "bonaventure island boat departure, percé harbour|percé, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "bonaventure island boat departure|percé": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "bonaventure island boat departure|percé, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "bonaventure island boat tours|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bonaventure island boat tour|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "bonaventure island|bonaventure": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "bonaventure island|bonaventure, gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "bonaventure island|bonaventure, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "bonaventure island|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "bonaventure island|percé, gaspésie": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "bonaventure island|percé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "bonaventure|bonaventure": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "boulangerie niemand|kamouraska": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "brise-bise|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "bufet (traditional triestine buffet)|trieste": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "buffet|trieste": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cabin rental|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cabin|gaspé peninsula, near forillon national park": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "caffè san marco|trieste": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "café central|vienna": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "café de l'anse|forillon national park": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "café|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "café|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "café|rome": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "café|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "campground cabin with showers|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "campground cabin with showers|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "campground in forillon national park|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "campground near forillon national park|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "campground with showers near percé|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "campground with showers|cap-des-rosiers": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "campground with showers|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "campground|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "camping baie de gaspé|gaspé": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "camping de la baie de percé|percé": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "camping parc nature gaspé|gaspé": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "campo de' fiori food market|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "campo de' fiori market|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "campo de' fiori|rome": {
+      "class": "named-premises",
+      "edge": [
+        "square"
+      ]
+    },
+    "cancún hotel-zone beach all-inclusive resort (family rooms, property to be chosen)|cancún": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "cap-bon-ami, forillon national park|gaspé": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "cap-bon-ami|forillon national park": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "cap-bon-ami|forillon national park, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "cap-des-rosiers / forillon|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cap-des-rosiers lighthouse|cap-des-rosiers": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "cap-des-rosiers lighthouse|forillon": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "cap-des-rosiers lighthouse|gaspé": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "cap-des-rosiers lighthouse|gaspé, québec": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "cap-des-rosiers or forillon wharf|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cap-des-rosiers or grande-grave area|forillon, gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cap-des-rosiers, forillon national park|cap-des-rosiers, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "cap-des-rosiers|cap-des-rosiers, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "cap-des-rosiers|gaspé, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "cap-des-rosiers|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "cap-gaspé, forillon national park|gaspé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "cap-gaspé|forillon national park, québec": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "capitoline museums|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "capitoline museums|rome, capitoline hill": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "car, montréal to gaspésie loop|québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "carleton-sur-mer|baie-des-chaleurs": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "carleton-sur-mer|carleton-sur-mer, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "carleton-sur-mer|gaspésie": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "carleton-sur-mer|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "carrier or esim provider, set up before departure|ottawa": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "casse-croûte|amqui": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "casse-croûte|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "casse-croûte|kamouraska": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "casse-croûte|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "castello di miramare|trieste": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "casual family restaurant|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "casual restaurant|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "casual seafood restaurant|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "casual seafood restaurant|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "causapscal|causapscal, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "central market (centralna tržnica)|ljubljana": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "central market|ljubljana": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "centrale montemartini|ostiense, rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "centre de découverte et de services, parc national de la gaspésie|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "centre de découverte et de services|parc national de la gaspésie": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "chalet|lac-saint-jean region": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "charlevoix groomed trail network|baie-saint-paul, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cheese and charcuterie shop|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cheese and farm-produce shop|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cheese and grocery shop|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "chic-chocs forest trails, parc national de la gaspésie|sainte-anne-des-monts, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "chic-chocs hut circuit, parc national de la gaspésie|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "chic-chocs hut network|parc national de la gaspésie": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "chicoutimi|saguenay, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "coastal motel or cabin, gaspé peninsula|gaspésie, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "coffee house|trieste": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "coffeehouse|vienna": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cottage or motel|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "cottage|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "covered market (mercato trionfale)|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "creperie|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "crêperie|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "crêperie|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "da enzo al 29|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "des-rosiers campground, forillon|gaspé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "destination airport arrivals|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "destination airport to resort transfer (destination to be chosen)|": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "destination not yet chosen (beach all-inclusive resort)|": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "dog-sled operator near saguenay|saguenay": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "enoteca|rome": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "etias official application (eu)|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "exploramer|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "exploramer|sainte-anne-des-monts, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "family all-inclusive beach resort, montego bay (property not chosen)|montego bay, saint james, jamaica": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "family all-inclusive beach resort, punta cana (property not chosen)|punta cana, la altagracia, dominican republic": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "family all-inclusive beach resort, riviera maya (property not chosen)|riviera maya, quintana roo, mexico": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "family all-inclusive beach resort|cancún": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "family all-inclusive beach resort|punta cana": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "family all-inclusive beach resort|varadero": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "family restaurant|cap-des-rosiers": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "family restaurant|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "family-friendly all-inclusive beach resort (destination to be chosen)|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "family-style restaurant|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "family-style restaurant|rivière-au-renard": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "farm cheese producer|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "farm market|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "farm shop|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "farm stand|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fcmq trail network, saguenay–lac-saint-jean|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "figlmüller|vienna": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "first chic-chocs hut on the traverse|parc national de la gaspésie": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish and chips stand|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish and chips takeaway|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish market or smokehouse|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish market or smokehouse|rivière-au-renard": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish market with prepared seafood|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish market with prepared takeout|rivière-au-renard": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish market|cap-des-rosiers": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish market|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish market|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish market|rivière-au-renard": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish market|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish shack|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish smokehouse (fumoir)|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish smokehouse|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish smokehouse|gaspésie coast": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fish smokehouse|rivière-au-renard": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fishmonger or smokehouse|gaspésie": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fishmonger|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "flavio al velavevodetto|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "forillon national park (cap-des-rosiers)|québec": {
+      "class": "settlement-or-area",
+      "edge": [
+        "park-area"
+      ]
+    },
+    "forillon national park campground|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "forillon national park coastal trails|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "forillon national park coastal trails|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "forillon national park picnic area|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "forillon national park wharf area|cap-des-rosiers, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "forillon national park – cap-bon-ami / cap gaspé area|gaspé": {
+      "class": "named-premises",
+      "edge": [
+        "two-sites"
+      ]
+    },
+    "forillon national park – cap-gaspé trail|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "forillon national park – cap-gaspé|gaspé": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "forillon national park, anse-aux-amérindiens trailhead|gaspé": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "forillon national park, cap-bon-ami entrance|gaspé, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "forillon national park, cap-des-rosiers|cap-des-rosiers, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "forillon national park, cap-des-rosiers|gaspé, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "forillon national park, cap-gaspé sector|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "forillon national park, cap-gaspé trail|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "forillon national park, cap-gaspé|gaspé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "forillon national park, les graves trail|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "forillon national park|": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "forillon national park|cap-des-rosiers, québec": {
+      "class": "settlement-or-area",
+      "edge": [
+        "park-area"
+      ]
+    },
+    "forillon national park|gaspé": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "forillon national park|gaspé peninsula": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "forillon national park|gaspé peninsula, québec": {
+      "class": "settlement-or-area",
+      "edge": [
+        "park-area"
+      ]
+    },
+    "forillon national park|gaspé, gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "forillon national park|gaspé, québec": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "forillon national park|gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "forillon national park|québec": {
+      "class": "settlement-or-area",
+      "edge": [
+        "park-area"
+      ]
+    },
+    "forillon-area campground with showers|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fromagerie|amqui": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fumoir d'antan|rivière-au-renard": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "fumoir monsieur émile cassivi|rivière-au-renard": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "fumoir monsieur émile|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "fumoir monsieur émile|gaspé (anse-au-griffon)": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "fumoir monsieur émile|l'anse-au-griffon": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "fédération des clubs de motoneigistes du québec (fcmq)|québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "fédération des clubs de motoneigistes du québec|québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "galleria borghese|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "galleria borghese|rome, villa borghese": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "galleria doria pamphilj|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "gallerie nazionali d'arte antica, palazzo barberini|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "gare du palais (québec city)|québec city": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "gare du palais bus terminal|québec, qc": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "gaspé aquarium|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "gaspé area lodging|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "gaspé bay shoreline|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "gaspé campground with showers|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "gaspé peninsula lodging|gaspésie, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "gaspé peninsula loop (route 132)|": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "gaspé peninsula loop, overnight stops|gaspésie, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "gaspé peninsula south shore|gaspé, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "gaspé peninsula|": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "gaspésie loop (route 132)|": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "gaspésie loop (route 132)|gaspésie": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "gaspésie national park|sainte-anne-des-monts, québec": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "gaspésie outdoor navigation courses|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "gaspé|côte-de-gaspé": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "gaspé|gaspé, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "gaspé|gaspésie": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "gaspé|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "gelateria|rome": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "gostilna|ljubljana": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grande-grave / cap-des-rosiers area|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grande-grave harbour|grande-grave": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "grande-grave heritage site, forillon national park|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "grande-grave heritage site|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "grande-grave wharf, forillon|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "grande-grave, forillon national park|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "grande-grave, forillon national park|grande-grave": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "grande-grave|forillon national park": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "grande-grave|forillon national park, gaspé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "graz hauptbahnhof|graz": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "grocery and picnic supplies|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery market|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery or farm stand|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery or farmers market|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery store en route|gaspésie, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery store|caplan": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery store|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery store|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery store|rivière-au-renard": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery store|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "grocery|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "groomed snowmobile trail network near saguenay|saguenay": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "groomed snowmobile trail network, saguenay–lac-saint-jean|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "groomed trail staging area near chicoutimi|chicoutimi, saguenay": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "groomed trans-québec trail near saguenay|saguenay, québec": {
+      "class": "route-or-transit",
+      "edge": []
+    },
+    "guesthouse with family room|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "guesthouse|rome": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "guesthouse|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "géoparc de percé|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "géoparc mondial unesco de percé|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "gîte du mont-albert area|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "gîte du mont-albert, parc national de la gaspésie|sainte-anne-des-monts, qc": {
+      "class": "named-premises",
+      "edge": [
+        "landmark-as-route-stop"
+      ]
+    },
+    "gîte near snowmobile trail hub|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "halifax departure|halifax, nova scotia": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "halifax insurance broker or provider|halifax, nova scotia": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "halifax passport office or document check|halifax, nova scotia": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "halifax, nova scotia (arranged before departure)|halifax": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "halifax|nova scotia": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "heated cabin|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "heuriger wine tavern|vienna": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "heuriger|vienna": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "historic café|trieste": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "home preparation, no venue needed|ottawa": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "home, or a notary if the destination asks for a witnessed letter|ottawa": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "hotel|ljubljana": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "hotel|rome": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "hotel|rome, centro storico": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "hotel|rome, esquilino": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "hotel|rome, monti": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "hotel|rome, pinciano": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "hotel|trieste": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "hotel|vienna": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "hut at end of third night|parc national de la gaspésie": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream shop|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream shop|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream shop|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream shop|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream stand|bonaventure": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream stand|cap-des-rosiers": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream stand|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream stand|forillon area": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream stand|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream stand|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice cream stand|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ice fishing village|la baie, saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "inn|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "inn|saguenay": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "insurance review with your insurer and the outfitter|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "insurer or broker (online/phone)|toronto": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "jardins de métis (reford gardens)|grand-métis": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "jardins de métis|grand-métis": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "jardins de métis|grand-métis, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "kunsthistorisches museum|vienna": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "la maison du pêcheur|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "la rêvasse|cap des rosiers": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "la rêvasse|cap-des-rosiers": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "la rêvasse|cap-des-rosiers, gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "lac aux américains|parc national de la gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "lac saint-jean ice|lac-saint-jean, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "lac saint-jean marked crossings|lac-saint-jean, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "lac-saint-jean groomed lake trails|lac-saint-jean, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "lac-saint-jean groomed snowmobile trail network|lac-saint-jean, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "lac-saint-jean groomed trail network|lac-saint-jean, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "lac-saint-jean snowmobile trails|lac-saint-jean, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "lac-saint-jean trail network|alma, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "lac-saint-jean trail network|roberval, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "lake bled|bled": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "last chic-chocs hut on the traverse|parc national de la gaspésie": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "le loup marin|": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "le loup marin|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "leonardo da vinci fiumicino airport|fiumicino, rome": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "lipica stud farm|sežana": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "ljubljana castle|ljubljana": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "ljubljana city centre mobile shop|ljubljana": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ljubljana old town|ljubljana": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "ljubljana railway station|ljubljana": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "ljubljana railway station|ljubljana, slovenia": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "ljubljana|ljubljana, slovenia": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "local food market or fromagerie|rimouski": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "local market or grocery|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "local market|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "local snowmobile rental operator|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "lodge or inn|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "lodge|saint-david-de-falardeau": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "manoir de percé|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "market|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "market|vienna": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "matane river salmon viewing area|matane, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "matane|gaspésie": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "matane|matane, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "matane|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "matapédia valley|amqui, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "matapédia valley|matapédia, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "matapédia|gaspésie": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "matapédia|matapédia, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "mercato centrale roma|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "mercato di testaccio|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "mercato di testaccio|testaccio, rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "mercato testaccio|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "mercato testaccio|rome, testaccio": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "mercato testaccio|testaccio, rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "mercato trionfale|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "microbrasserie le malbord|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "microbrasserie le naufrageur|carleton-sur-mer": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "microbrewery pub|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "microbrewery pub|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "microbrewery restaurant|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "microbrewery restaurant|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "microbrewery with kitchen|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "microbrewery with kitchen|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "microbrewery|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "microbrewery|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "miguasha national park|nouvelle": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "miguasha national park|nouvelle, québec": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "miramare castle|trieste": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "mobile carrier or esim provider (online)|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "mobile carrier or esim provider|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "mont albert, parc national de la gaspésie|": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "mont albert, parc national de la gaspésie|sainte-anne-des-monts, québec": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "mont albert|parc national de la gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "mont albert|parc national de la gaspésie, sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "mont ernest-laforce|parc national de la gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "mont jacques-cartier, parc national de la gaspésie|": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "mont jacques-cartier, parc national de la gaspésie|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "mont jacques-cartier, parc national de la gaspésie|sainte-anne-des-monts, québec": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "mont jacques-cartier|parc national de la gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "mont-albert trailhead, parc national de la gaspésie|sainte-anne-des-monts": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "mont-joli|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "mont-saint-pierre|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "mont-sainte-anne trailhead|percé, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "montréal departure and return loop|montréal, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "montréal departure point|montréal, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "montréal, pont jacques-cartier|montréal, québec": {
+      "class": "route-or-transit",
+      "edge": []
+    },
+    "montréal|montréal, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "montréal|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "monts-valin|saint-david-de-falardeau, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "motel bellevue|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "motel et chalets natabel|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "motel l'eglantier|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "motel or cabin along route 132|gaspésie, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|alma": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|amqui": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|bonaventure": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|lac-saint-jean region": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|matane": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|rimouski": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|rivière-du-loup": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|saint-félicien": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "motel|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "musei capitolini|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "museo nazionale romano - palazzo massimo|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "museo nazionale romano, palazzo massimo alle terme|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "musée de la gaspésie|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "musée de la gaspésie|gaspé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "métabetchouan-lac-à-la-croix|métabetchouan-lac-à-la-croix, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "naschmarkt|vienna": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "nordic spa near saguenay|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "observatoire de la capitale|québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "odprta kuhna|ljubljana": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "official eu and government of canada travel advice (online)|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "official eu etias website (online)|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "official government travel advisory and italian embassy information|toronto": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "online or broker purchase from ottawa|ottawa": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "online purchase before departure|halifax": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "ostia antica|ostia antica, near rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "ottawa macdonald-cartier international airport|ottawa": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "ottawa, before departure|ottawa": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "ottawa|ontario, canada": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "ottawa|ottawa, ontario": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "outdoor gear rental shop|québec city": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "outdoor gear rental shop|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "palazzo altemps|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "palazzo barberini|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "palazzo massimo alle terme|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "parc national de l'île-bonaventure-et-du-rocher-percé|percé": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de l'île-bonaventure-et-du-rocher-percé|percé, québec": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de la gaspésie (mont albert)|sainte-anne-des-monts, gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de la gaspésie backcountry hut reservations|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "parc national de la gaspésie backcountry huts|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "parc national de la gaspésie campgrounds|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "parc national de la gaspésie campground|sainte-anne-des-monts, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "parc national de la gaspésie discovery and visitors centre|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "parc national de la gaspésie discovery centre|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name",
+        "landmark-as-route-stop"
+      ]
+    },
+    "parc national de la gaspésie entrance|sainte-anne-des-monts": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "parc national de la gaspésie hut network|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "parc national de la gaspésie hut-route trailhead|parc national de la gaspésie, qc": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "parc national de la gaspésie southern gate|parc national de la gaspésie, qc": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "parc national de la gaspésie trail network|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "parc national de la gaspésie visitor centre|sainte-anne-des-monts, québec": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "parc national de la gaspésie, chic-chocs hut circuit|sainte-anne-des-monts, qc": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "parc national de la gaspésie, chic-chocs|sainte-anne-des-monts, qc": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de la gaspésie, discovery and visitors centre|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "parc national de la gaspésie, discovery and visitors centre|sainte-anne-des-monts, québec": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "parc national de la gaspésie, mont-albert sector|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de la gaspésie, mont-albert|sainte-anne-des-monts, québec": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de la gaspésie|": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de la gaspésie|sainte-anne-des-monts": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de la gaspésie|sainte-anne-des-monts, québec": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de miguasha|nouvelle": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "parc national de miguasha|nouvelle, gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national de miguasha|nouvelle, québec": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national du bic|le bic, québec": {
+      "class": "settlement-or-area",
+      "edge": [
+        "park-area"
+      ]
+    },
+    "parc national du bic|rimouski": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national du bic|rimouski, québec": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national du bic|saint-fabien, québec": {
+      "class": "settlement-or-area",
+      "edge": [
+        "park-area"
+      ]
+    },
+    "parc national du fjord-du-saguenay|sainte-rose-du-nord": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national forillon|gaspé": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "parc national forillon|gaspé, gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "park gateway trailhead|parc national de la gaspésie": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "passport canada / ircc passport services|ottawa": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "passport services, ottawa|ottawa, ontario": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé campground with showers|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé harbour, boat departure|percé, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "percé harbour|percé": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "percé harbour|percé, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "percé rock and bonaventure island|percé": {
+      "class": "named-premises",
+      "edge": [
+        "two-sites"
+      ]
+    },
+    "percé rock and bonaventure island|percé, québec": {
+      "class": "named-premises",
+      "edge": [
+        "two-sites"
+      ]
+    },
+    "percé rock beach|percé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé rock boat tours|percé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé rock boat tour|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé rock shoreline|percé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé rock viewpoint, percé beach|percé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé rock viewpoints|percé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé rock viewpoint|percé": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "percé rock viewpoint|percé, québec": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "percé rock waterfront|percé": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "percé rock waterfront|percé, québec": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "percé rock|percé": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "percé rock|percé, gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "percé rock|percé, gaspésie, québec": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name",
+        "landmark-as-route-stop"
+      ]
+    },
+    "percé rock|percé, québec": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "percé whale-watching boat tour|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé wharf (île-bonaventure-et-du-rocher-percé)|percé, québec": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "percé wharf / parc national de l'île-bonaventure-et-du-rocher-percé|percé": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit",
+        "two-sites"
+      ]
+    },
+    "percé wharf and bonaventure island|percé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé wharf|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "percé wharf|percé, québec": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "percé|gaspésie": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "percé|gaspésie, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "percé|percé, gaspésie": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "percé|percé, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "percé|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "percé|rocher-percé": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "petit-gaspé campground, forillon national park|gaspé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "petit-gaspé campground, forillon national park|gaspé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "petit-gaspé campground|forillon national park": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "petit-gaspé campground|forillon national park, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "petit-gaspé campground|gaspé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "phare de cap-des-rosiers|cap-des-rosiers": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "phare de cap-des-rosiers|gaspé": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "piazza unità d'italia|trieste": {
+      "class": "named-premises",
+      "edge": [
+        "square"
+      ]
+    },
+    "picnic area at park trailhead|cap-des-rosiers": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "picnic area in forillon national park|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "picnic area|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "picnic grounds|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "picnic site|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "pit caribou|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "pizza al taglio counter|rome": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "plage de percé|percé": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "plage de percé|percé, québec": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "plaines d'abraham|québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "plaines d'abraham|québec, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "pointe-de-l'estuaire lighthouse area|gaspé": {
+      "class": "kind-of-place",
+      "edge": [
+        "locality-plus-category"
+      ]
+    },
+    "poissonnerie|rivière-au-renard": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "porte saint-louis|québec city, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "porte saint-louis|québec, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "postojna cave|postojna": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "pre-departure document and communications check|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "public market|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "punta cana / bávaro all-inclusive resort zone|la altagracia, dominican republic": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "punta cana beach all-inclusive resort (family suites, property to be chosen)|punta cana": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "péribonka|lac-saint-jean, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "péribonka|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "québec city (purchase before departure)|québec city, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "québec city departure point|québec city, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "québec city outfitter rental counter|québec city": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "québec city rental shops for satellite messengers|québec city": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "québec city|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "québec city|québec city": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "québec city|québec city, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "québec city|québec, qc": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "québec city|québec, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "reford gardens|grand-métis": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "rental operator outfitting in saguenay|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "rental outfitter (to be chosen)|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "rental outfitter counter|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "rental outfitter, la baie|la baie, saguenay": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "resort activities programme|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "resort beach (destination not answered)|": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "resort beach (name not given)|": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "resort beachfront|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "resort beach|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "resort kids' club|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "resort property (destination not answered)|": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "resort property (name not given)|": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "resort shallow family pool|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "resort shallow pool|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "resort theatre or main stage|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "resort water sports hut|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "resort water-sports hut|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "restaurant|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "restaurant|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "restaurant|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "restaurant|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "rimouski bus station|rimouski": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "rimouski|bas-saint-laurent": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rimouski|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rimouski|rimouski": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rimouski|rimouski, qc": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rimouski|rimouski, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "riviera maya all-inclusive resort zone|quintana roo, mexico": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rivière-au-renard|gaspé, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rivière-du-loup|bas-saint-laurent": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rivière-du-loup|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rivière-du-loup|rivière-du-loup, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "roberval lakeshore trail|roberval, lac-saint-jean": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "roberval|lac-saint-jean, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "roberval|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rocher percé|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "rocher percé|percé, gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "rocher percé|percé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "roman forum and palatine hill|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "roman forum|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "rome|lazio": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "rome|lazio, italy": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "roscioli salumeria con cucina|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "route 132 coastal lookout|gaspésie, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "route 132 gaspé loop|gaspésie, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "route 132 gaspésie loop|québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "route 132 loop|gaspésie, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "rustic cabin on groomed snowmobile trail|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "rustic cabin or campsite|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "saguenay area snowmobile training ground|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "saguenay fjord groomed snowmobile trails|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "saguenay fjord groomed trail network|saguenay–lac-saint-jean, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "saguenay groomed trail access|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "saguenay regional groomed snowmobile network|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "saguenay rental operator|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "saguenay, québec departure point|saguenay, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "saguenay-area snowmobile rental outfitter (unverified)|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "saguenay-bagotville airport area (ybg)|saguenay, québec": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "saguenay|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "saguenay|saguenay, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "saint-félicien|lac-saint-jean, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-anne-des-monts|gaspésie": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-anne-des-monts|haute-gaspésie": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-anne-des-monts|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-anne-des-monts|sainte-anne-des-monts": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-anne-des-monts|sainte-anne-des-monts, qc": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-anne-des-monts|sainte-anne-des-monts, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-flavie|bas-saint-laurent": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-flavie|la mitis": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-flavie|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "sainte-flavie|sainte-flavie, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "san luigi dei francesi|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "schönbrunn palace|vienna": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "seafood casse-croûte|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood counter|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood market|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood restaurant on the wharf|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood restaurant or lobster shack|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood restaurant with harbour terrace|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood restaurant|bonaventure": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood restaurant|carleton-sur-mer": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood restaurant|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood restaurant|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood shack (casse-croûte / poissonnerie)|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood shack (casse-croûte de fruits de mer)|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood shack|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood takeaway shack|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood takeaway|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood takeout shack|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seafood takeout shack|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "seasonal seafood stand|gaspé peninsula coast": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "service canada passport office|ottawa": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "serviced campground (to be chosen)|gaspé peninsula, québec": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "serviced campground near gaspé|gaspé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "serviced campground with showers|gaspésie, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "set up before departure, active on arrival|rome": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "sit-down restaurant|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "site historique du banc-de-pêche-de-paspébiac|paspébiac": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "site historique du banc-de-pêche-de-paspébiac|paspébiac, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "site historique maritime de la pointe-au-père|rimouski": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "slovenian restaurant|ljubljana": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "smokehouse and cheese shop|percé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "smokehouse|gaspé": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "smokehouse|sainte-anne-des-monts": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "snowmobile rental base|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "snowmobile rental outfitter near saguenay|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "snowmobile rental outfitter, saguenay–lac-saint-jean|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "snowmobile rental outfitter|saguenay, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "tadoussac|côte-nord, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "terme di caracalla|rome": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "testaccio market|rome": {
+      "class": "named-premises",
+      "edge": [
+        "established-descriptive-name"
+      ]
+    },
+    "toronto, ontario|toronto": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "traditional slovene restaurant|ljubljana": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "traditional slovenian gostilna|ljubljana": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "trail-side inns near dolbeau-mistassini|dolbeau-mistassini, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "trailside lodge|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "trailside relais on the groomed network|saguenay–lac-saint-jean, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "trattoria|trastevere, rome": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "travel insurer (online or broker)|ottawa": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "trieste centrale railway station|trieste": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "trieste centrale railway station|trieste, italy": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "trieste centrale|trieste": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "trois-rivières|québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "trois-rivières|trois-rivières, québec": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "varadero beach all-inclusive resort (family rooms, property to be chosen)|varadero": {
+      "class": "kind-of-place",
+      "edge": [
+        "placeholder"
+      ]
+    },
+    "venezia santa lucia|venice": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "vienna international airport or online|vienna": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "vienna public transport network|vienna": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "vienna state opera|vienna": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "vienna|vienna, austria": {
+      "class": "settlement-or-area",
+      "edge": []
+    },
+    "villach hauptbahnhof|villach": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "wien hauptbahnhof|vienna": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "wien hauptbahnhof|vienna, austria": {
+      "class": "route-or-transit",
+      "edge": [
+        "transit-node"
+      ]
+    },
+    "wiener prater|vienna": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "wiener staatsoper|vienna": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "wine tavern|vienna": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "your insurer (remote)|": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "île bonaventure and rocher percé|percé": {
+      "class": "named-premises",
+      "edge": [
+        "two-sites"
+      ]
+    },
+    "île bonaventure boat trip from percé|percé, québec": {
+      "class": "kind-of-place",
+      "edge": []
+    },
+    "île bonaventure et du rocher-percé|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "île bonaventure|percé": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "île bonaventure|percé, gaspésie": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    },
+    "île bonaventure|percé, québec": {
+      "class": "named-premises",
+      "edge": []
+    },
+    "île-bonaventure-et-du-rocher-percé national park|percé": {
+      "class": "named-premises",
+      "edge": [
+        "park-visit"
+      ]
+    },
+    "škocjan caves regional park|divača": {
+      "class": "named-premises",
+      "edge": [
+        "natural-feature"
+      ]
+    }
+  }
+}

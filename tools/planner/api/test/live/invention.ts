@@ -437,17 +437,42 @@ export function seededOrder(eligible: string[], seed: number): string[] {
   return pool;
 }
 
-/** pl-58: the new run's `lodging` or `food` named-premises keys, in one seeded order. */
+/**
+ * Whose named premises a re-measure's stratum draws from, by the label's ticket.
+ *
+ * pl-58 changed `lodging`'s and `food`'s prompts, so its stratum is both. pl-60
+ * changed `lodging`'s alone (its Build 7: "web-check `lodging`'s named
+ * premises"), so a `food` key would spend the web check's budget on a
+ * specialist the change never touched. A ticket missing here is refused rather
+ * than given a default: which specialists a re-measure is about is a decision
+ * the ticket makes, not this harness.
+ */
+const STRATUM_SPECIALISTS: Readonly<Record<string, readonly string[]>> = {
+  "pl-58": ["lodging", "food"],
+  "pl-60": ["lodging"],
+};
+
+export function stratumSpecialists(run: string): readonly string[] {
+  const { ticket } = runLabel(run);
+  const specialists = STRATUM_SPECIALISTS[ticket];
+  if (specialists === undefined) {
+    throw new Error(`no stratum is defined for ${ticket}; add it to STRATUM_SPECIALISTS`);
+  }
+  return specialists;
+}
+
+/** A re-measure's named-premises keys from `specialists` (pl-58's two by default), in one seeded order. */
 export function stratumOrder(
   places: NamedPlace[],
   classification: ClassificationFile,
   seed: number,
+  specialists: readonly string[] = ["lodging", "food"],
 ): string[] {
   const eligible = places
     .filter(
       (place) =>
         classification.classes[place.key]?.class === "named-premises" &&
-        ("lodging" in place.specialists || "food" in place.specialists),
+        specialists.some((specialist) => specialist in place.specialists),
     )
     .map((place) => place.key);
   return seededOrder(eligible, seed);
@@ -888,7 +913,10 @@ export function buildRecord(inputs: {
   const { places, files, classification, verdicts, hoursRows, run } = inputs;
   const target = inputs.target ?? STRATUM_TARGET_OBJECTS;
   assertClassified(places, classification);
-  const order = run === undefined ? [] : stratumOrder(places, classification, STRATUM_SEED);
+  const order =
+    run === undefined
+      ? []
+      : stratumOrder(places, classification, STRATUM_SEED, stratumSpecialists(run));
   const walk = run === undefined ? undefined : walkStratum(order, verdicts.checks, target);
   const sample: Record<string, string[]> =
     walk === undefined ? sampleByFamily(places, classification) : { stratum: walk.checked };
