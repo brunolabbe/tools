@@ -746,3 +746,28 @@ are 16.8 to 19.1 km from Gaspé's point.
 - **Checks:** `npx oxfmt` on this file, `npm run check`, and preflight's fast
   checks; the dispatch's report carries their results. No test was added, so no
   spec ran.
+
+**2026-10-24 — The owner's answers to Build 1's four open decisions (relayed by
+the orchestrator to the builder, the same day).** The owner answered all four on
+2026-10-24, through the orchestrator's question. This answers Build 2's stop
+condition (`Done when` 4).
+
+1. **The zero-find counts (Build 1's stop).** Options: (1) proceed to Build 2 on
+   this capture; (2) set a threshold and first capture towns from the other five
+   set A shapes; (3) stop pl-60. **Chosen: (1)**, the builder's recommendation.
+2. **How a town goes through the seam (Build 2's stop condition).** Options: (b) a
+   sibling `nearby`-for-a-point method on `GroundingProvider`; (c) widen
+   `NearbyRequest` additively, keeping `corridor`; (a) a degenerate corridor, the
+   town's point twice. **Chosen: (b)**, the builder's recommendation.
+3. **The town pass's radius.** Options: 10 km; 6 km, the corridor's
+   `DISCOVERY_RADIUS_METRES`; the builder proposes one; 25 km. **Chosen: 10 km**,
+   by the owner directly; the builder had recommended none. At 10 km Build 1's
+   capture gives 141 finds over the 9 localities, Gaspé 24 and Percé 40, and
+   Forillon's three campgrounds are reached from the park's point and not from
+   Gaspé's.
+4. **The adapter's missing Overpass user agent.** Options: (1) file a defect
+   ticket; (2) fold it into Build 2; (3) leave it. **Chosen: (1)**, the builder's
+   recommendation. The orchestrator files it separately, so this branch does not
+   change the user agent. The checked-in payload is still captured through the
+   built `overpassQuery` text, sent from a capture script with an identifying user
+   agent.
