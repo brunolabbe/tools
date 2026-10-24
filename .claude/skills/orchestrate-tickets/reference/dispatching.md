@@ -44,6 +44,12 @@ the first dispatch with `node scripts/agent-cost.mjs --agent <id>`.
   request, stop. Authority to land goes in the agent's own dispatch or a direct
   message from you, never through a gate.
 - **"Maintenance"**, when it is one, so the builder stops on a judgement call.
+- **That it continues another agent's branch**, with that branch's head sha,
+  when it does (`roles/builder.md`, _Set up_: pl-58's web check, lg-65's
+  build).
+- **On a dispatch with several stops, which later Build steps are independent
+  of each stop**: pl-62's builder stopped at Build 8's stop with an independent
+  Build 9 unbuilt.
 - **The fold-in exception**, out loud: if the work makes some other small,
   already-specified piece free, fold it in, or say in the Log why not.
 - **The narrowest thing that can fail**, for verification runs.
@@ -66,7 +72,15 @@ Gate yield tracks prompt specificity, not gate count or runtime.
   and `records.md` use. A prompt that says `gate-1.md` made every gate in three
   batches flag the conflict, and some wrote both.
 - **What to attack**: the riskiest decision, the seam with the longest reach,
-  the claim you least believe. Name the real input to run first.
+  the claim you least believe. Name the real input to run first. The attack
+  list bounds the hunt, never the acceptance table: every `Done when` line is
+  traced whatever the attacks name (lg-61's gate 1 left Done when 3 unrun, and
+  a narrow gate 2 cost $1.22 to close it).
+- **How many gate sections the ticket already holds**, so the gate numbers its
+  file `### Gate <k+1>` (lg-56's second slice; `records.md`).
+- **A status read as `npm run -s status -- --json > <file>`**: without `-s`
+  npm's banner precedes the JSON and a `require()` of the file fails (pl-60's
+  gate 2).
 - **A population for each probe, and one sweep budget.** Every probe you ask
   for names its population — the alphabet, or the seed and the count — and
   the prompt names one time budget for all the gate's sweeps, 15 minutes
@@ -141,9 +155,12 @@ which cannot reach `origin` without a force-push
 `SKILL.md` step 6 has the table and the severity floor.
 
 - **The builder, resumed** with `SendMessage` to its agent id (never a type
-  name), when any finding needs judgement: every finding of the round in one
+  name), when any finding needs judgement and `SKILL.md` step 6's bound — one
+  round, one owner stop — is not spent: every finding of the round in one
   message, pasted; any decision already answered, with how it was taken; and
-  whether it has ship authority.
+  whether it has ship authority. When a dispatch names `--only` checks for the
+  round's preflight, that list wins over `roles/builder.md`'s full run; say
+  which (lg-68's builder asked).
 - **A fresh `fixer`**, when every finding is mechanical or only the landing is
   left: the branch, the base, the findings pasted, the scratch directory, the
   gate files to land, each gate's `.full.md` report file beside them, the pull request number and title, and every model's name for
@@ -171,9 +188,13 @@ prompt carries, beside the gate-1 items above:
   `git log --first-parent --no-merges <gated sha>..<new sha>`.
 - **Gate 1's section file and its `.full.md` report**, by path, and its
   findings pasted as it wrote them.
-- **Gate 1's probe scripts**, by path in `<scratch>/<id>/gate-1/`, to re-run on
-  the new head rather than re-derive; they take the tree and the output
-  directory as arguments (`roles/common.md`).
+- **Gate 1's probe scripts**, each by its full path in
+  `<scratch>/<id>/gate-1/` — never a directory, which shows the gate a
+  builder's files beside them (lg-67's gate 1 saw `build.log` and
+  `pr-body.md`) — to re-run on the new head rather than re-derive; they take
+  the tree and the output directory as arguments (`roles/common.md`), wrappers
+  included (lg-67's `setup.sh`, `run-probes.sh` and `control.sh` each
+  hard-coded gate 1's worktree).
 - **Each refutation as a command and its output.** Not the builder's or the
   fixer's account.
 

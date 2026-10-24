@@ -89,6 +89,12 @@ exit 0).
 - **A gate that runs after the records are committed** — a narrow check on a
   post-PR fix — lands its own file alone with the same command. Do not pass the
   already-committed files again: that adds a second `## Review`.
+- **A ticket that already holds `## Review`** — the second slice of an
+  `in-flight` ticket, a filing pull request that closes a ticket gated before —
+  continues the numbering: the gate dispatch names the count `k`, the gates
+  write `### Gate <k+1>` and on, and `--land` splices those files. A file
+  starting `## Review` on such a ticket is refused (lg-56, 2026-10-24: both
+  gates re-emitted their files as Gates 3 and 4 after the refusal).
 - **A branch parked without landing still commits what it holds**, as
   `in-flight`: the scratch directory does not survive a container rebuild.
 
@@ -110,20 +116,47 @@ refuses a ticket dirty against `HEAD` (every lander since 2026-10-15 committed
 it so: repo-104's `ba703486`, lg-26's `611e7547`):
 
 ```markdown
-- 2026-10-14 — Fixed at landing by owner choice: gate 2, N1 — "<the gate's
-  sentence>". `<the command that shows it fixed>` → <its output>.
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, N1 — "<the gate's
+  sentence, or the clause of it that fits one line>". <the proof>.
 ```
 
-It names the finding, not the commit: a commit cannot carry its own sha (lg-19
-spent two commits on one line), and the fix is the commit before the records
-whose subject names the finding. **Scope the command above `## Log`** when the
-fix is a wording change — `awk '/^## Log/{exit} {print}' <ticket> | grep -c
-"<phrase>"` — because the entry quotes the phrase it removed, and an unscoped
-`grep -c` counts the entry (dl-127: `2` for one fixed line; pl-56: `3`, every
-hit in the landing's own entries). When the fix touched anything but the ticket file, the
-orchestrator reads the landing head's `CodeQL` check before the merge
-(`SKILL.md` step 10): repo-103's landing fix raised a new `high` alert that the
-gated sha's run had not seen.
+**Name the finding as the gate did** — `F2`, `N1` — or, when the section's
+bullets carry no ids, by severity and ordinal ("gate 1, the first low";
+dl-129). One entry per finding, even when one commit fixes two (lg-55, lg-61,
+lg-63). It names the finding, not the commit: a commit cannot carry its own sha
+(lg-19 spent two commits on one line), and the fix is the commit before the
+records whose subject names the finding. **The proof depends on what was
+fixed:**
+
+- a code fix: the command that failed before and passes after, or the test by
+  file and name;
+- a wording fix — in the ticket or any other file, in the brief or in the Log:
+  `git diff <gated sha> HEAD -- <path> | grep -c '^-.*<a fragment of the
+  removed text that sits on one line>'` → `1`. It reads the removed line, so
+  the entry's own quotation cannot count (dl-127: `2` for one fixed line and
+  pl-56: `3`, under an unscoped `grep -c`), and it reaches a Log sentence, a
+  source comment or `tokens.css`, where a count scoped above `## Log` could
+  not: fourteen landers between 2026-10-17 and 2026-10-24 each improvised a
+  scope of their own;
+- a figure the finding states against its own arithmetic (repo-106: "245
+  spawns" beside 30 × 5 + 18 × 5): apply the arithmetic, quote both in the
+  entry, and say which you took.
+
+**Write the quotation so the formatter cannot break it**: the markdown hook
+re-wraps the ticket on every edit, and a backtick span or a quoted phrase
+wrapped across a line end is dedented out of the bullet (repo-108's lander
+rewrote its entry). Quote a fragment that fits one line, and re-read the entry
+after you write it. **A fix made after `--land` has run** — an owner's edit on
+the lander's open decision (pl-57's Forillon) — gets the same entry, worded for
+whose decision it was, in its own commit, with
+`node scripts/preflight.mjs --only check,review,title --base origin/<base> --title "<title>"`
+in place of the `--land` that will not run again. **A committed Log claim the
+fix shows false** is withdrawn in place (_Rules for what the record says_),
+never deleted (lg-32's lander found that rule itself; repo-114's L1). When the
+fix touched anything but the ticket file, run `npm run check` before `--land`
+(`roles/fixer.md`), and the orchestrator reads the landing head's `CodeQL`
+check before the merge (`SKILL.md` step 10): repo-103's landing fix raised a
+new `high` alert that the gated sha's run had not seen.
 
 ## Rules for what the record says
 
@@ -145,6 +178,9 @@ gated sha's run had not seen.
 
 A skill correction, a close-out, anything the loop produces about itself has no
 ticket to commit a section to. **The pull request thread is the record**, in
-full, and the body says so in a sentence. A gate row `awaiting` has no
+full, and the body says so in a sentence. A pull request that only files a
+ticket is the same case, and **its fixes at the landing** (`SKILL.md` step 6)
+are committed on the branch with _Fixed at landing_ entries in the filed
+ticket's Log, no `--land`, the ticket left `ready` (lg-52, pl-59, lg-64). A gate row `awaiting` has no
 `awaiting:` field to go in here: the body names the event and the reading, and
 nothing else in the repo tracks them after the merge.

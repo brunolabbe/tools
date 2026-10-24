@@ -27,7 +27,12 @@ re-read its whole transcript on every turn.
   report it. The orchestrator sends it to the builder.
 - **Before you narrow or delete a test, name what it asserted and where each
   assertion went.**
-- Run the checks your fixes touch, narrowest first, then `git fetch origin`.
+- Run the checks your fixes touch, narrowest first, **and `npm run check`
+  before `--land` whenever a fix at the landing touched anything but the
+  ticket file**: `--land`'s preflight runs after the push, so a lint or type
+  error in your own new test lands a repair commit on top of the gate records
+  (lg-32's `680b2155`, lg-30's `de159b5f`, lg-40's `deef575a`). Then
+  `git fetch origin`.
   **Merge `origin/<base>` only when your dispatch asks for it or preflight's
   merge-tree probe fails against it** — with no `-m`, since the hook accepts
   only git's own merge subject, and never a rebase, which cannot reach `origin`
@@ -54,7 +59,10 @@ re-read its whole transcript on every turn.
   script with your tree and an output directory of your own as its arguments —
   never as the gate ran it, whose copies point at the gate's scratch (dl-106) —
   and restore with `git checkout <sha> -- <path>`, never `git checkout --
-  <path>` while the ticket's Log edit sits uncommitted under it (dl-105).
+  <path>` while the ticket's Log edit sits uncommitted under it (dl-105). A
+  gate script that takes neither — one that writes in place and restores to a
+  hard-coded sha (lg-65's `mutate.mjs`) — is wrapped by a script of your own
+  that passes the sha, named in your report; never edited.
 - Commit with `git commit -F <file>`, a conventional subject under 100
   characters, then `git push origin HEAD:refs/heads/<branch>`. A push rejected
   as non-fast-forward means someone else moved the branch: stop and report,
@@ -78,11 +86,18 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
 - **`--land` refuses a tree that is not clean**: commit your fixes first. And
   re-read the pull request body before `gh pr ready`: a Summary written before
   the round may still say "open decision" or "gate pending".
-- `--status in-flight` when the work lands partial, as your dispatch says.
+- `--status in-flight` when the work lands partial, as your dispatch says. A
+  ticket that already holds `## Review` — a second slice, a filing that closes
+  a gated ticket — takes its new gates as `### Gate <k+1>` files, which
+  `--land` splices with no further flag; a file starting `## Review` on such a
+  ticket is refused (lg-56, 2026-10-24).
 - **A pull request that only files a ticket, or only records a decision, gets no
   `--land`** (records.md): it leaves the ticket `ready` or `needs-decision`, its
   gate's full report goes on the thread, the body says so, and the ticket's Log
-  names the thread. Ship authority on one is `gh pr ready` after that.
+  names the thread. Fixes the owner chose at that landing are committed on the
+  branch with the _Fixed at landing_ Log entries all the same (lg-52, pl-59,
+  lg-64); the ticket stays `ready`. Ship authority on one is `gh pr ready`
+  after that.
 - **A fix applied at the landing by owner choice** is applied as the finding
   states it and marked as records.md's _Fixed at landing_ says.
 - **A ticket you are told to file during a landing** follows
@@ -90,9 +105,12 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
   row, no status move (lg-23).
 - Then post each gate's full report to the pull request thread
   (`gh pr comment <n> --body-file <f>`, the `gate-<n>@<sha>.full.md` your
-  dispatch names beside each gate file — the gate wrote it), make sure the
-  body's Summary describes
-  the ticket's whole change and names every model as your dispatch states them,
+  dispatch names beside each gate file — the gate wrote it). If the auto-mode
+  classifier denies the comment ("External System Writes": one of eight
+  landers on 2026-10-18), stop and report it; the orchestrator posts the
+  file. Make sure the body's Summary describes
+  the ticket's whole change and names every model as your dispatch states them —
+  your own included, which a dispatch may omit; your agent definition pins it —
   and run `gh pr ready <n>` unless the dispatch says to hold the draft.
 
 ## Your report

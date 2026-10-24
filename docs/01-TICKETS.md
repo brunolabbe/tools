@@ -86,7 +86,11 @@ their costs. Once settled the heading reads
 `## Decision — answered <date> by <who>`, and the answer, with the options it
 was chosen from, stays under it. `npm run status` fails this heading on a
 ticket whose `status` is not `needs-decision`, so the heading and the frontmatter
-cannot disagree.
+cannot disagree. A ticket with several questions keeps one heading and marks
+each question `open` or `answered <date> by <who>` on its own line, so a reader
+searching for what is still open finds it under either heading (pl-62 held two
+open under `— answered`, and an intake search for the open heading missed
+them).
 
 ## Done when
 
@@ -192,7 +196,10 @@ badly in a table column is usually a title worth fixing.
 ticket rather than computed by the orchestrator because **the author has read the
 work and the orchestrator deliberately has not** — its intake reads a seam map,
 not the briefs. Rate the _judgement_ the work needs, never the size of the diff:
-a one-line change to a contract is `hard`, a forty-file rename is `mechanical`.
+a one-line change to a contract is `hard`, a forty-file rename is `mechanical`,
+and a measurement with its method stated, a test clean-up inside one package or
+a new route behind an existing contract is `standard` (three filers in one batch
+asked, with no example to check against).
 Absent builds as `hard` — on the strongest builder, which is what inheriting
 an Opus orchestrator's model already produced — so leaving it off costs nothing
 in quality; `standard` says somebody looked and it is ordinary, which is not the
