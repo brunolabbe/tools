@@ -99,6 +99,16 @@ this request is unknown.
    stubbed `fetch`, with a spy `AppLogger` whose `warn` records its fields. Put it in
    `tools/planner/api/test/lodging-pass.test.ts`, which already drives `discoverLodging` (its
    existing cases use a fixture provider and a silent logger).
+8. Owner's decision, 2026-10-24, folded in (see the Log): four more `warn` calls in
+   `tools/planner/api/src/runs/discovery.ts` drop the HTTP status the same way step 6
+   describes. They are `a notability lookup failed, continuing with the rest` (`notability`),
+   `a corridor reading lookup failed, continuing` (`corridorReading`), `discovery could not
+locate a corridor endpoint` (`locate`) and `a detour cost could not be measured`
+   (`detourCosts`). Each gets step 6's field: `status` read from `AppError.from(error).details`
+   when it is a numeric `status`, omitted otherwise. Keep `code`, every return and the
+   no-URL rule. Each catch wraps a call that goes through `#json`, which is where the status
+   is set. One test each goes at the end of `tools/planner/api/test/discovery-pass.test.ts`,
+   which drives all four paths through `discoverAlongCorridor`.
 
 ## Done when
 
@@ -110,14 +120,22 @@ this request is unknown.
    a spy logger, and the recorded `warn` for `the corridor could not be queried` carries
    `status: 406`. It fails on the base, where the field is absent, and passes after the
    change. Offline.
-3. A stubbed `fetch` answers the town pass's requests with HTTP 406: the Overpass `POST` behind
-   `queryTown`, and the Nominatim request behind `locateTown`. `discoverLodging` runs over a
+3. A stubbed `fetch` that refuses one town's geocoder query and another town's Overpass query,
+   both with HTTP 406, so that both warns fire in one run. `discoverLodging` runs over a
    `ValhallaGroundingProvider` built on that stub with a spy logger, and the recorded `warn`s
    for `the town pass could not query a town` and `the town pass could not locate a town` each
    carry `status: 406`. They fail on the base, where the field is absent, and pass after the
    change. Offline.
-4. `npx vitest run` on each spec file that Build steps 2, 6 and 7 name passes in full.
+4. `npx vitest run` on each spec file that Build steps 2, 6, 7 and 8 name passes in full.
 5. `npm run check` passes.
+6. A stubbed `fetch` that refuses, with HTTP 406, the request each of the four lookups named by
+   Build step 8 makes: the article queries behind `a notability lookup failed, continuing with
+the rest` and `a corridor reading lookup failed, continuing`, the geocoder query behind
+   `discovery could not locate a corridor endpoint`, and the routing `POST` behind `a detour cost
+could not be measured`. `discoverAlongCorridor` runs over a `ValhallaGroundingProvider` built
+   on that stub, once per lookup, with a spy logger, and each recorded `warn` carries
+   `status: 406`. Each fails on the base, where the field is absent, and passes after the
+   change. Offline.
 
 ## Log
 
@@ -272,3 +290,54 @@ The base reading for this query is the 406 in the curl entry above, from the sam
 - Four more warns in `discovery.ts` drop the status in the same way: `a notability lookup failed, continuing with the rest`, `a corridor reading lookup failed, continuing`, `discovery could not locate a corridor endpoint` and `a detour cost could not be measured`. The Build names only the corridor warn, and the owner's answer covered the two lodging warns. Folding the four in would be the same one-line change, but it is not already specified, so it was not folded in. Nothing was filed. This is an open decision for the orchestrator: fold them into pl-61, or file a follow-up.
 
 Status stays `ready`; the lander sets it with the gate record.
+
+### 2026-10-24 — two owner answers applied on the same branch (builder, follow-up round)
+
+**Question 1: four more warns in `discovery.ts`.** Four warns drop the status the way the
+corridor warn did: `a notability lookup failed, continuing with the rest`, `a corridor reading
+lookup failed, continuing`, `discovery could not locate a corridor endpoint` and `a detour cost
+could not be measured`. Options: (1) fold them into pl-61; (2) file a follow-up ticket; (3)
+leave them. The builder recommended (2). **The owner chose (1), fold in. That overrode the
+builder's recommendation of (2).** Recorded as Build step 8 and Done when 6, with the same
+`status` field as step 6 and one test each at the end of `discovery-pass.test.ts`.
+
+None of the four can never carry an HTTP status. Each catch wraps a call that goes through
+`#json` (`articlesNear`, `locate` and `travel` all do, in `valhalla.ts`), and `#json` is the path
+that sets `details.status` on a non-2xx. A timeout or a cancel has no status, so the field is
+omitted there, as the step says. The tests drive a 406 for each.
+
+Red, then green. On the base source, `npx vitest run tools/planner/api/test/discovery-pass.test.ts`:
+
+```
+× a refused notability lookup reaches its warn with the status
+× a refused corridor-reading lookup reaches its warn with the status
+× a refused endpoint lookup reaches its warn with the status
+× a refused routing matrix reaches its warn with the status
+Tests  4 failed | 32 passed (36)
+```
+
+Each failure reads `expected { provider: 'valhalla', …(1) } to match object { code: 'UNREACHABLE', status: 406 }`.
+After the four warns were given the field: `npx vitest run` on the three touched spec files,
+`Test Files  3 passed (3)`, `Tests  166 passed (166)` (162 before, plus four).
+
+Test-design note. The first draft of the test stub answered `articlesNear` with `[]` and
+`travel` with all-`UNKNOWN`. Under that stub the notability, reading and detour warns never fired,
+and the base read `expected 0 to be greater than 0`. That was the stub's fault, not the defect. The
+stub now delegates `articlesNear` and `travel` to the real provider, and the base then fails on
+the missing field, as above.
+
+**Question 2: Done when 3's single 406 stub.** Options: (1) reword it to a two-stub form; (2) keep
+the wording. The builder's view was that (2) cannot be satisfied. **The owner chose (1).** The
+wording is now "a stubbed `fetch` that refuses one town's geocoder query and another town's
+Overpass query, both with HTTP 406, so that both warns fire in one run."
+
+Why the old wording cannot pass. A single stub that answers every request with 406 fires only
+`the town pass could not locate a town`. `locateTown`'s `catch` returns `null`, and `discoverLodging`
+then takes the `located === null` branch of its town loop (`if (located === "refused" || located ===
+null) { … continue; }`), so `queryTown` never runs for that town and its warn never fires. The
+test uses one stub that refuses Percé's geocoder query and Gaspé's Overpass query, so both warns
+fire in one run.
+
+Done when 4 now names Build step 8 as well, and Done when 6 covers the four warns.
+
+Commit and push: the change is a second commit on `pl-61-overpass-user-agent`. Status stays `ready`.

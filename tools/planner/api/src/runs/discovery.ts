@@ -503,9 +503,11 @@ async function notability(
       // One tile failing is not the pass failing: the rest of the corridor is
       // still worth asking about, and a find nobody reached keeps the same
       // empty `notability` a find nobody wrote about has.
+      const status = AppError.from(error).details?.status;
       logger.warn("a notability lookup failed, continuing with the rest", {
         provider: provider.name,
         code: AppError.from(error).code,
+        ...(typeof status === "number" ? { status } : {}),
       });
       continue;
     }
@@ -572,9 +574,11 @@ async function corridorReading(
       });
     } catch (error: unknown) {
       if (isCancellation(error, signal)) throw error;
+      const status = AppError.from(error).details?.status;
       logger.warn("a corridor reading lookup failed, continuing", {
         provider: provider.name,
         code: AppError.from(error).code,
+        ...(typeof status === "number" ? { status } : {}),
       });
       continue;
     }
@@ -674,9 +678,11 @@ async function locate(
     return { ...place, coordinates: outcome.value.coordinates };
   } catch (error: unknown) {
     if (isCancellation(error, signal)) throw error;
+    const status = AppError.from(error).details?.status;
     logger.warn("discovery could not locate a corridor endpoint", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
     return null;
   }
@@ -880,9 +886,11 @@ async function detourCosts(
     matrix = outcome;
   } catch (error: unknown) {
     if (isCancellation(error, signal)) throw error;
+    const status = AppError.from(error).details?.status;
     logger.warn("a detour cost could not be measured", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
   }
 

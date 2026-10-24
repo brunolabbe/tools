@@ -1108,7 +1108,11 @@ describe("discoverAlongCorridor, when the Overpass request is refused (pl-61)", 
  * A `RunGrounding` whose locate and nearby go to a real `ValhallaGroundingProvider`,
  * so a refusal thrown by its `#overpassJson` reaches the pass as it would in a run.
  */
-function overValhalla(valhalla: ValhallaGroundingProvider): RunGrounding {
+function overValhalla(
+  valhalla: ValhallaGroundingProvider,
+  nearby: (request: NearbyRequest) => Promise<GroundingOutcome<Find[]>> = async (request) =>
+    answered(await valhalla.nearby(request)),
+): RunGrounding {
   return {
     name: "valhalla",
     refused: 0,
@@ -1116,9 +1120,169 @@ function overValhalla(valhalla: ValhallaGroundingProvider): RunGrounding {
       const located = await valhalla.locate(request);
       return located === null ? UNKNOWN : answered(located);
     },
-    nearby: async (request) => answered(await valhalla.nearby(request)),
+    nearby,
     nearbyPoint: async (request) => answered(await valhalla.nearbyPoint(request)),
-    travel: async (request) => request.origins.map(() => request.destinations.map(() => UNKNOWN)),
-    articlesNear: async () => answered([]),
+    travel: async (request) =>
+      (await valhalla.travel(request)).map((row) =>
+        row.map((cell) => (cell === null ? UNKNOWN : answered(cell))),
+      ),
+    articlesNear: async (request) => answered(await valhalla.articlesNear(request)),
   };
 }
+
+/** A recorder for the warns a test reads back, in the order they were logged. */
+function recordingLogger(): {
+  logger: AppLogger;
+  warnings: { message: string; fields: Record<string, unknown> | undefined }[];
+} {
+  const warnings: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+  const spy: AppLogger = {
+    debug: () => {},
+    info: () => {},
+    warn: (message, fields) => {
+      warnings.push({ message, fields });
+    },
+    error: () => {},
+    child: () => spy,
+  };
+  return { logger: spy, warnings };
+}
+
+/**
+ * A `fetch` that answers the geocoder with one row per named place, and
+ * refuses with HTTP 406 every URL `refused` names. Anything else is an empty
+ * 200, which the adapter reads as an answer with nothing in it.
+ */
+function refusing(refused: (url: URL) => boolean): typeof globalThis.fetch {
+  return (async (input: unknown) => {
+    const url = new URL(String(input));
+    if (refused(url)) return new Response("refused", { status: 406 });
+    if (url.hostname !== "nominatim.internal") {
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }
+    const named = url.searchParams.get("q") === "Montréal";
+    const row = named
+      ? { lat: "45.5019", lon: "-73.5674", display_name: "Montréal", addresstype: "city" }
+      : { lat: "46.8139", lon: "-71.208", display_name: "Québec City", addresstype: "city" };
+    return new Response(JSON.stringify([row]), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown as typeof globalThis.fetch;
+}
+
+describe("discoverAlongCorridor, when a backend refuses a lookup (pl-61)", () => {
+  // Every refusal here is a `#json` or `#overpassJson` failure, which is the
+  // path that sets `details.status`, so each warn can carry the 406.
+
+  function refusingProvider(refused: (url: URL) => boolean): ValhallaGroundingProvider {
+    return new ValhallaGroundingProvider({
+      routingUrl: "http://valhalla.internal:8002",
+      geocoderUrl: "http://nominatim.internal:8080",
+      overpassUrl: "http://overpass.internal:8090",
+      timeoutMs: 5_000,
+      now: () => new Date("2027-01-01T00:00:00.000Z"),
+      fetch: refusing(refused),
+    });
+  }
+
+  /** A corridor find with a French article about it, so the pass has a language to ask in. */
+  function frenchFind(name: string): Find {
+    return find({
+      name,
+      notability: [
+        {
+          url: `https://fr.wikipedia.org/wiki/${name}`,
+          title: name,
+          fetchedAt: "2027-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+  }
+
+  test("a refused notability lookup reaches its warn with the status", async () => {
+    const { logger: spy, warnings } = recordingLogger();
+    await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: overValhalla(
+        refusingProvider((url) => url.hostname.endsWith(".wikipedia.org")),
+        async () => answered([frenchFind("Belvédère")]),
+      ),
+      logger: spy,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    const lookups = warnings.filter(
+      (entry) => entry.message === "a notability lookup failed, continuing with the rest",
+    );
+    expect(lookups.length).toBeGreaterThan(0);
+    for (const entry of lookups) {
+      expect(entry.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
+    }
+  });
+
+  test("a refused corridor-reading lookup reaches its warn with the status", async () => {
+    const { logger: spy, warnings } = recordingLogger();
+    await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: overValhalla(
+        refusingProvider((url) => url.hostname.endsWith(".wikivoyage.org")),
+        async () => answered([frenchFind("Belvédère")]),
+      ),
+      logger: spy,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    const readings = warnings.filter(
+      (entry) => entry.message === "a corridor reading lookup failed, continuing",
+    );
+    expect(readings.length).toBeGreaterThan(0);
+    for (const entry of readings) {
+      expect(entry.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
+    }
+  });
+
+  test("a refused endpoint lookup reaches its warn with the status", async () => {
+    const { logger: spy, warnings } = recordingLogger();
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: overValhalla(refusingProvider((url) => url.hostname === "nominatim.internal")),
+      logger: spy,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    expect(result.finds).toEqual([]);
+    const endpoints = warnings.filter(
+      (entry) => entry.message === "discovery could not locate a corridor endpoint",
+    );
+    expect(endpoints.length).toBeGreaterThan(0);
+    for (const entry of endpoints) {
+      expect(entry.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
+    }
+  });
+
+  test("a refused routing matrix reaches its warn with the status", async () => {
+    const { logger: spy, warnings } = recordingLogger();
+    await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: overValhalla(
+        refusingProvider((url) => url.hostname === "valhalla.internal"),
+        async () => answered([find({ name: "Belvédère" })]),
+      ),
+      logger: spy,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    const detours = warnings.filter(
+      (entry) => entry.message === "a detour cost could not be measured",
+    );
+    expect(detours.length).toBeGreaterThan(0);
+    for (const entry of detours) {
+      expect(entry.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
+    }
+  });
+});
