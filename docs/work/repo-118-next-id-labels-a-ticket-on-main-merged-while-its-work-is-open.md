@@ -98,11 +98,37 @@ on PR#<m>)`, and the parent's paths come off its claim. Done when 3 is "a pull r
     are reworded. No other page under `.claude/skills/` is edited. The guard table gains a row
     for the ancestor check. Nothing else on the ready list is made free by this work
     (`repo-117` shares no file), so there is no other fold-in.
-  - **Not covered, and why.** A stacked branch with no pull request is not checked against its
-    parent. It still reads as a clash with the parent's pull request. The brief scopes Build 3 to
-    two pull requests, and widening it is a decision for the owner. A stacked child whose
-    _branch name_ carries its parent's id still clashes through the name floor. Read from the
-    code, not run.
+  - **Two open decisions, answered by the owner through the coordinator (2026-10-24,
+    relayed; the coordinator put both to the owner that day).** Each question, its options,
+    the choice, and whose recommendation it overrode:
+    - **Q1, a stacked branch with no pull request.** Options: keep the pull-request scope and
+      note the gap in `concurrency.md` (the coordinator's recommendation, which overrode the
+      builder's); file a follow-up ticket (the builder's recommendation); widen Build 3 now.
+      **Chosen: file a follow-up ticket**, which is the builder's recommendation, so it
+      overrode the coordinator's. Filed as `repo-124`, `depends_on: [repo-118]`, `ready`.
+    - **Q2, a stacked child whose branch name carries its parent's id.** Options: leave it and
+      record it in `concurrency.md` (the coordinator's and the builder's recommendation, both
+      the same); fix it now. **Chosen: fix it now**, which overrode both recommendations.
+      Built in `e8216ac6` (`fix(repo): take a stacked child's name-derived ids off its
+claim`), which adds `unheldName`. The `concurrency.md` paragraph is updated to say so.
+  - **Q2 fix and its removal.** `unheldName` takes the ids a parent holds off a stacked
+    child's branch name. An id the parent does not hold stays, restated on its own. Tests:
+    "a stacked child whose branch name carries its parent's id reports no clash for it",
+    "a stacked child's name keeps the ids its parent does not hold", and "two unrelated pull
+    requests whose branch names share an id still clash". With the name rule removed
+    (`paths: child.paths.filter(...)` in place of `unheldName(...)`), the first test went red
+    on `expected [ { id: 66, sources: [ …(2) ] } ] to deeply equal []` with `PR#623` and
+    `PR#625 (stacked on PR#623)` in the sources; the other two stayed green. Restored from
+    the fix's sha; `scripts/test/next-id.test.ts` 36 of 36.
+  - **Still not covered.** A stacked branch with no pull request is not checked against its
+    parent. That is repo-124, filed in this branch. Its reproduction is a fixture, not a live
+    case; the output is in repo-124's _Why_.
+  - **Blind spot, reported and not filed.** `next-id` cannot see a peer's unpushed worktree:
+    per the coordinator, `node scripts/next-id.mjs repo` printed `next free: repo-119` on main
+    while worktree `deps-2026-10-24` held repo-119 to repo-123 as files. This builder did not
+    check that worktree. The gap is already recorded in `docs/01-TICKETS.md` (the 2026-09-30
+    note) and `concurrency.md`, and no open ticket covers it. The coordinator asked for it to
+    be reported, not filed.
   - **Live, not a test:** `node scripts/next-id.mjs repo` on this checkout prints
     `clash: repo-93 is claimed by branch/repo-93-sqlite-file-tests-windows-timeout, on main`.
     That is a branch with no pull request, so the stacking check does not reach it. Its cause
