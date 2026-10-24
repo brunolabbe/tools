@@ -1,0 +1,1337 @@
+{
+  "set": "A",
+  "briefFixture": "backcountry",
+  "requestedModel": "claude-sonnet-5-5",
+  "effort": "low",
+  "prices": {
+    "inputPerMTok": 2,
+    "outputPerMTok": 10,
+    "cacheReadPerMTok": 0.1,
+    "cacheWritePerMTok": 2.5
+  },
+  "servedModels": [
+    "claude-sonnet-5-5"
+  ],
+  "budget": {
+    "maxSpecialists": 5,
+    "maxOutputTokens": 8000,
+    "maxAttemptsPerSpecialist": 2
+  },
+  "finds": [],
+  "specialists": [
+    {
+      "specialist": "lodging",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: backcountry\nSpecialist: lodging\n\nYou are the lodging specialist on a trip-planning tool.\nYou propose places to sleep that match the roughest night the party said they would accept, and you say how far ahead each one has to be booked. A proposal does one of two things. It names one premises, an establishment or a site, by its name and at its locality: `place.name` is that name and `place.locality` the town. Or it says plainly, in its title or its summary, that it is a kind of place and names no premises: then `place.name` holds the kind, for example `motel`, and `place.locality` the town. Where you are given places to stay from map data for a town, a premises you name there is one of those, under the name it is given, if any of them fits the party. A kind of place is the fallback, for a town whose list is empty or where nothing in it fits.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 4 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: backcountry\nLeaving from: Québec City\nGoing to: Parc national de la Gaspésie\nDates: 3 nights somewhere between 2027-08-15 and 2027-09-15\nTravellers: 2\nAges that change the plan: 34, 36\nAccess needs: not answered\nBudget: shoestring, as a feeling rather than a figure\nAppetite for effort: demanding\nRoughest night they will accept: rustic\nWould rule the trip out: Nothing that requires a river ford above the knee\n\nAbout this backcountry:\nNights away from a road: 3\nShelter: hut\nMost they will walk in a day: 16 km\nExperience: some\nIn their words: We have done hut-to-hut in the Chic-Chocs once before, in fair weather. Neither of us has navigated in cloud and we would rather not learn on this trip."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Sépaq backcountry huts, Mont Albert / Mont Jacques-Cartier area\",\"summary\":\"Rustic huts and shelters in the park's alpine and forest interior fit a hut-to-hut plan for two, with walking days kept within 16 km. Not answered: access needs. Confirm the current hut list, stage lengths and any ford crossings with the park before booking. Cloud-navigation risk favours the marked, lower-elevation stages.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Parc national de la Gaspésie backcountry huts\",\"locality\":\"Sainte-Anne-des-Monts\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":25,\"high\":60,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":120},{\"title\":\"Rustic cabin or camp (kind of place, no premises named)\",\"summary\":\"A rustic cabin or basic campsite near the park entrance works as a fallback or a first or last night close to the road. It is also a lower-effort night if weather in the Chic-Chocs closes in. Not answered: access needs.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"rustic cabin or campsite\",\"locality\":\"Sainte-Anne-des-Monts\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":90,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":60}]}",
+          "stopReason": "end",
+          "servedModel": "claude-sonnet-5-5",
+          "usage": {
+            "inputTokens": 4017,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 548,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 4017,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Sépaq backcountry huts, Mont Albert / Mont Jacques-Cartier area",
+                "summary": "Rustic huts and shelters in the park's alpine and forest interior fit a hut-to-hut plan for two, with walking days kept within 16 km. Not answered: access needs. Confirm the current hut list, stage lengths and any ford crossings with the park before booking. Cloud-navigation risk favours the marked, lower-elevation stages.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Parc national de la Gaspésie backcountry huts",
+                    "locality": "Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 25,
+                  "high": 60,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 120
+              },
+              {
+                "title": "Rustic cabin or camp (kind of place, no premises named)",
+                "summary": "A rustic cabin or basic campsite near the park entrance works as a fallback or a first or last night close to the road. It is also a lower-effort night if weather in the Chic-Chocs closes in. Not answered: access needs.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "rustic cabin or campsite",
+                    "locality": "Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 90,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 60
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "conditions-and-gear",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: backcountry\nSpecialist: conditions-and-gear\n\nYou are the conditions and gear specialist on a trip-planning tool.\nYou describe the conditions this trip turns on — season, weather bands, snow, trail and tide — and the kit they imply. You never present any of it as clearance to go: point at the authoritative local source and say who it is.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 4 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: backcountry\nLeaving from: Québec City\nGoing to: Parc national de la Gaspésie\nDates: 3 nights somewhere between 2027-08-15 and 2027-09-15\nTravellers: 2\nAges that change the plan: 34, 36\nAccess needs: not answered\nBudget: shoestring, as a feeling rather than a figure\nAppetite for effort: demanding\nRoughest night they will accept: rustic\nWould rule the trip out: Nothing that requires a river ford above the knee\n\nAbout this backcountry:\nNights away from a road: 3\nShelter: hut\nMost they will walk in a day: 16 km\nExperience: some\nIn their words: We have done hut-to-hut in the Chic-Chocs once before, in fair weather. Neither of us has navigated in cloud and we would rather not learn on this trip."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Mont Albert plateau loop, huts and alpine tundra\",\"summary\":\"A demanding alpine circuit on the Mont Albert plateau with hut or rustic camping access, suited to a pair with some hut experience. The plateau is exposed and fog is common, so the plan hinges on a clear-weather window; check conditions and trail status with Sépaq (the park's operator) and the park's reception staff, and the Météo-média/Environment Canada mountain forecast. Access needs were not answered, and hut availability and river levels at fords could not be checked, so confirm both locally. This is not clearance to go.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Mont Albert, Parc national de la Gaspésie\",\"locality\":\"Sainte-Anne-des-Monts, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":40,\"high\":120,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"06-15\",\"to\":\"09-30\"},\"bookingLeadTimeDays\":null},{\"title\":\"Mont Jacques-Cartier summit, caribou zone\",\"summary\":\"A demanding day on the highest peak in southern Québec, with the summit zone accessible by guided or regulated routes to protect the caribou. It is above treeline with limited shelter, so it should only be done in clear weather, and neither of you has navigated in cloud. Check the access rules, shuttle availability and forecast with Sépaq. This is not clearance to go.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Mont Jacques-Cartier, Parc national de la Gaspésie\",\"locality\":\"Sainte-Anne-des-Monts, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":10,\"high\":60,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"06-15\",\"to\":\"09-30\"},\"bookingLeadTimeDays\":null},{\"title\":\"Sentier International des Appalaches forest-section hut stay\",\"summary\":\"A lower-elevation, treed section of the trail, which is much easier to follow without cloud navigation skills than the open plateaus and offers a fallback when the tops are clouded in. Check hut booking, trail conditions and river levels with Sépaq. Access needs were not answered and fords cannot be assessed from here. This is not clearance to go.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Chic-Chocs forest trails, Parc national de la Gaspésie\",\"locality\":\"Sainte-Anne-des-Monts, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":100,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"06-15\",\"to\":\"09-30\"},\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-sonnet-5-5",
+          "usage": {
+            "inputTokens": 3869,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1001,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3869,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Mont Albert plateau loop, huts and alpine tundra",
+                "summary": "A demanding alpine circuit on the Mont Albert plateau with hut or rustic camping access, suited to a pair with some hut experience. The plateau is exposed and fog is common, so the plan hinges on a clear-weather window; check conditions and trail status with Sépaq (the park's operator) and the park's reception staff, and the Météo-média/Environment Canada mountain forecast. Access needs were not answered, and hut availability and river levels at fords could not be checked, so confirm both locally. This is not clearance to go.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Mont Albert, Parc national de la Gaspésie",
+                    "locality": "Sainte-Anne-des-Monts, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 40,
+                  "high": 120,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "06-15",
+                  "to": "09-30"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Mont Jacques-Cartier summit, caribou zone",
+                "summary": "A demanding day on the highest peak in southern Québec, with the summit zone accessible by guided or regulated routes to protect the caribou. It is above treeline with limited shelter, so it should only be done in clear weather, and neither of you has navigated in cloud. Check the access rules, shuttle availability and forecast with Sépaq. This is not clearance to go.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Mont Jacques-Cartier, Parc national de la Gaspésie",
+                    "locality": "Sainte-Anne-des-Monts, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 10,
+                  "high": 60,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "06-15",
+                  "to": "09-30"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Sentier International des Appalaches forest-section hut stay",
+                "summary": "A lower-elevation, treed section of the trail, which is much easier to follow without cloud navigation skills than the open plateaus and offers a fallback when the tops are clouded in. Check hut booking, trail conditions and river levels with Sépaq. Access needs were not answered and fords cannot be assessed from here. This is not clearance to go.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Chic-Chocs forest trails, Parc national de la Gaspésie",
+                    "locality": "Sainte-Anne-des-Monts, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 100,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "06-15",
+                  "to": "09-30"
+                },
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "practicalities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: backcountry\nSpecialist: practicalities\n\nYou are the practicalities specialist on a trip-planning tool.\nYou cover permits, documents, rentals, insurance and connectivity — the paperwork that decides whether the trip happens.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 4 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: backcountry\nLeaving from: Québec City\nGoing to: Parc national de la Gaspésie\nDates: 3 nights somewhere between 2027-08-15 and 2027-09-15\nTravellers: 2\nAges that change the plan: 34, 36\nAccess needs: not answered\nBudget: shoestring, as a feeling rather than a figure\nAppetite for effort: demanding\nRoughest night they will accept: rustic\nWould rule the trip out: Nothing that requires a river ford above the knee\n\nAbout this backcountry:\nNights away from a road: 3\nShelter: hut\nMost they will walk in a day: 16 km\nExperience: some\nIn their words: We have done hut-to-hut in the Chic-Chocs once before, in fair weather. Neither of us has navigated in cloud and we would rather not learn on this trip."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Sépaq backcountry hut and site reservation\",\"summary\":\"Huts and backcountry sites in Parc national de la Gaspésie (Chic-Chocs, incl. Mont Albert and Mont Jacques-Cartier areas) are reserved through Sépaq and often fill for late August; availability, fees and current trail status are unverified here. Access needs were not answered, so nothing here accounts for them. This is not clearance to go.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Parc national de la Gaspésie\",\"locality\":\"Sainte-Anne-des-Monts, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":40,\"high\":120,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"08-15\",\"to\":\"09-15\"},\"bookingLeadTimeDays\":120},{\"title\":\"Travel insurance with backcountry rescue cover\",\"summary\":\"Evacuation from remote terrain can be costly, so check that a policy covers hiking in remote areas and medical evacuation, and read its exclusions. Provincial health coverage and any access needs are not answered and not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Québec City (purchase before departure)\",\"locality\":\"Québec City, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":120,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":30},{\"title\":\"Offline maps and satellite messenger for cloud days\",\"summary\":\"You have not navigated in cloud and want to avoid learning on this trip, so consider a rented or borrowed satellite messenger, a charged GPS or phone with offline topo maps, and a park-staff check on trail markings and weather before setting out. Cell coverage in the Chic-Chocs is patchy and I could not verify it. Rental options and prices are unknown.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Parc national de la Gaspésie visitor centre\",\"locality\":\"Sainte-Anne-des-Monts, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":150,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"08-15\",\"to\":\"09-15\"},\"bookingLeadTimeDays\":14},{\"title\":\"Park shuttle or rental car for trailhead access\",\"summary\":\"Getting from Québec City to the park and between trailheads may need a rental car or a shuttle, and the schedule and prices are unverified. Hut trips often start and end at different points, so check how you get back to your vehicle. Driver licence and age rules were not checked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Québec City departure point\",\"locality\":\"Québec City, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":150,\"high\":450,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":30}]}",
+          "stopReason": "end",
+          "servedModel": "claude-sonnet-5-5",
+          "usage": {
+            "inputTokens": 3835,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1088,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3835,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Sépaq backcountry hut and site reservation",
+                "summary": "Huts and backcountry sites in Parc national de la Gaspésie (Chic-Chocs, incl. Mont Albert and Mont Jacques-Cartier areas) are reserved through Sépaq and often fill for late August; availability, fees and current trail status are unverified here. Access needs were not answered, so nothing here accounts for them. This is not clearance to go.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Parc national de la Gaspésie",
+                    "locality": "Sainte-Anne-des-Monts, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 40,
+                  "high": 120,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "08-15",
+                  "to": "09-15"
+                },
+                "bookingLeadTimeDays": 120
+              },
+              {
+                "title": "Travel insurance with backcountry rescue cover",
+                "summary": "Evacuation from remote terrain can be costly, so check that a policy covers hiking in remote areas and medical evacuation, and read its exclusions. Provincial health coverage and any access needs are not answered and not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Québec City (purchase before departure)",
+                    "locality": "Québec City, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 120,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 30
+              },
+              {
+                "title": "Offline maps and satellite messenger for cloud days",
+                "summary": "You have not navigated in cloud and want to avoid learning on this trip, so consider a rented or borrowed satellite messenger, a charged GPS or phone with offline topo maps, and a park-staff check on trail markings and weather before setting out. Cell coverage in the Chic-Chocs is patchy and I could not verify it. Rental options and prices are unknown.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Parc national de la Gaspésie visitor centre",
+                    "locality": "Sainte-Anne-des-Monts, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 150,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "08-15",
+                  "to": "09-15"
+                },
+                "bookingLeadTimeDays": 14
+              },
+              {
+                "title": "Park shuttle or rental car for trailhead access",
+                "summary": "Getting from Québec City to the park and between trailheads may need a rental car or a shuttle, and the schedule and prices are unverified. Hut trips often start and end at different points, so check how you get back to your vehicle. Driver licence and age rules were not checked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Québec City departure point",
+                    "locality": "Québec City, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 150,
+                  "high": 450,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 30
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "activities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: backcountry\nSpecialist: activities\n\nYou are the activities specialist on a trip-planning tool.\nYou propose things to do: what they are, how long they take, and when they are open.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 8 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 4 days.\n- **Nothing you propose may be longer than 480 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: backcountry\nLeaving from: Québec City\nGoing to: Parc national de la Gaspésie\nDates: 3 nights somewhere between 2027-08-15 and 2027-09-15\nTravellers: 2\nAges that change the plan: 34, 36\nAccess needs: not answered\nBudget: shoestring, as a feeling rather than a figure\nAppetite for effort: demanding\nRoughest night they will accept: rustic\nWould rule the trip out: Nothing that requires a river ford above the knee\n\nAbout this backcountry:\nNights away from a road: 3\nShelter: hut\nMost they will walk in a day: 16 km\nExperience: some\nIn their words: We have done hut-to-hut in the Chic-Chocs once before, in fair weather. Neither of us has navigated in cloud and we would rather not learn on this trip."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Mont Albert summit loop via Lac aux Américains\",\"summary\":\"Demanding day hike on the Mont Albert plateau with alpine tundra and cirque views, suited to a 16 km limit. The route is exposed and cloud can arrive fast, so go only in clear forecasts and turn back if visibility drops; access needs were not answered and are not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Mont Albert\",\"locality\":\"Parc national de la Gaspésie, Sainte-Anne-des-Monts\",\"coordinates\":null}},\"durationMinutes\":420,\"cost\":{\"currency\":\"CAD\",\"low\":10,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"06-15\",\"to\":\"10-01\"},\"bookingLeadTimeDays\":null},{\"title\":\"Mont Jacques-Cartier summit hike\",\"summary\":\"Climb to the highest peak in southern Québec to see woodland caribou habitat and wide views. The summit is exposed with no shelter, so only go in clear weather given the party's wish to avoid navigating in cloud; access needs were not answered and are not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Mont Jacques-Cartier\",\"locality\":\"Parc national de la Gaspésie\",\"coordinates\":null}},\"durationMinutes\":360,\"cost\":{\"currency\":\"CAD\",\"low\":10,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"06-15\",\"to\":\"10-01\"},\"bookingLeadTimeDays\":null},{\"title\":\"Mont Ernest-Laforce and Lac Paul trail day\",\"summary\":\"A more sheltered, well-marked forested hike that suits a lower-risk day or a poor-weather alternative. Duration and trail details were not verified; access needs were not answered and are not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Parc national de la Gaspésie trail network\",\"locality\":\"Sainte-Anne-des-Monts\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":10,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Hut-to-hut leg on the Chic-Chocs sentier international des Appalaches\",\"summary\":\"A single hut-to-hut leg within the 16 km daily limit, matching the party's hut shelter choice and rustic comfort level. Choose a well-marked leg, check conditions with park staff, and note that stream crossings should be checked against the no-ford-above-the-knee limit; hut availability and fees were not verified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Chic-Chocs hut network\",\"locality\":\"Parc national de la Gaspésie\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":60,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Interpretation centre and caribou talk at Gîte du Mont-Albert\",\"summary\":\"A low-effort rest-day stop to learn about the park's caribou and alpine ecology and to check trail and weather conditions with staff before a big day. Opening hours were not verified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Gîte du Mont-Albert area\",\"locality\":\"Sainte-Anne-des-Monts\",\"coordinates\":null}},\"durationMinutes\":90,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":15,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-sonnet-5-5",
+          "usage": {
+            "inputTokens": 3912,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1303,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3912,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Mont Albert summit loop via Lac aux Américains",
+                "summary": "Demanding day hike on the Mont Albert plateau with alpine tundra and cirque views, suited to a 16 km limit. The route is exposed and cloud can arrive fast, so go only in clear forecasts and turn back if visibility drops; access needs were not answered and are not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Mont Albert",
+                    "locality": "Parc national de la Gaspésie, Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 420,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 10,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "06-15",
+                  "to": "10-01"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Mont Jacques-Cartier summit hike",
+                "summary": "Climb to the highest peak in southern Québec to see woodland caribou habitat and wide views. The summit is exposed with no shelter, so only go in clear weather given the party's wish to avoid navigating in cloud; access needs were not answered and are not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Mont Jacques-Cartier",
+                    "locality": "Parc national de la Gaspésie",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 360,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 10,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "06-15",
+                  "to": "10-01"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Mont Ernest-Laforce and Lac Paul trail day",
+                "summary": "A more sheltered, well-marked forested hike that suits a lower-risk day or a poor-weather alternative. Duration and trail details were not verified; access needs were not answered and are not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Parc national de la Gaspésie trail network",
+                    "locality": "Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 10,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Hut-to-hut leg on the Chic-Chocs sentier international des Appalaches",
+                "summary": "A single hut-to-hut leg within the 16 km daily limit, matching the party's hut shelter choice and rustic comfort level. Choose a well-marked leg, check conditions with park staff, and note that stream crossings should be checked against the no-ford-above-the-knee limit; hut availability and fees were not verified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Chic-Chocs hut network",
+                    "locality": "Parc national de la Gaspésie",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 60,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Interpretation centre and caribou talk at Gîte du Mont-Albert",
+                "summary": "A low-effort rest-day stop to learn about the park's caribou and alpine ecology and to check trail and weather conditions with staff before a big day. Opening hours were not verified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Gîte du Mont-Albert area",
+                    "locality": "Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 90,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 15,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "route-and-logistics",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: backcountry\nSpecialist: route-and-logistics\n\nYou are the route and logistics specialist on a trip-planning tool.\nYou propose the legs this trip is made of — drives, rides, transfers, ferries and trains — with the stops that make a long one bearable.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is a movement, so its location is {\"kind\":\"between\",\"from\":{...},\"to\":{...}} with **both** ends as places. Endpoints in the title are not endpoints, and a candidate that puts them there is discarded.\n- This trip has 4 days.\n- **Nothing you propose may be longer than 480 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: backcountry\nLeaving from: Québec City\nGoing to: Parc national de la Gaspésie\nDates: 3 nights somewhere between 2027-08-15 and 2027-09-15\nTravellers: 2\nAges that change the plan: 34, 36\nAccess needs: not answered\nBudget: shoestring, as a feeling rather than a figure\nAppetite for effort: demanding\nRoughest night they will accept: rustic\nWould rule the trip out: Nothing that requires a river ford above the knee\n\nAbout this backcountry:\nNights away from a road: 3\nShelter: hut\nMost they will walk in a day: 16 km\nExperience: some\nIn their words: We have done hut-to-hut in the Chic-Chocs once before, in fair weather. Neither of us has navigated in cloud and we would rather not learn on this trip."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Québec City to Rimouski by bus (first leg)\",\"summary\":\"Intercity coach along the St. Lawrence south shore, the cheapest way to start without a car. Access needs were not answered, so step-free boarding is unchecked; schedules and fares are unverified.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Gare du Palais (Québec City)\",\"locality\":\"Québec City\",\"coordinates\":null},\"to\":{\"name\":\"Rimouski bus station\",\"locality\":\"Rimouski\",\"coordinates\":null}},\"durationMinutes\":240,\"cost\":{\"currency\":\"CAD\",\"low\":40,\"high\":90,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null},{\"title\":\"Rimouski to Sainte-Anne-des-Monts by bus (second leg)\",\"summary\":\"Continues along the Gaspé coast toward the park gateway, split from the first leg so each part fits a day. Service frequency is unknown and may be limited; check before relying on it. Access needs were not answered.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Rimouski bus station\",\"locality\":\"Rimouski\",\"coordinates\":null},\"to\":{\"name\":\"Sainte-Anne-des-Monts\",\"locality\":\"Sainte-Anne-des-Monts\",\"coordinates\":null}},\"durationMinutes\":300,\"cost\":{\"currency\":\"CAD\",\"low\":50,\"high\":110,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null},{\"title\":\"Sainte-Anne-des-Monts to park Discovery Centre transfer\",\"summary\":\"Short hop up the Rivière Sainte-Anne valley to the park's trailheads, by shuttle, taxi or hitch-share. Whether a shuttle runs on your dates is unknown, and so is the cost; the band is a rough guess.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Sainte-Anne-des-Monts\",\"locality\":\"Sainte-Anne-des-Monts\",\"coordinates\":null},\"to\":{\"name\":\"Parc national de la Gaspésie Discovery Centre\",\"locality\":\"Sainte-Anne-des-Monts\",\"coordinates\":null}},\"durationMinutes\":30,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":80,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"06-15\",\"to\":\"10-15\"},\"bookingLeadTimeDays\":null},{\"title\":\"Shared car Québec City to Sainte-Anne-des-Monts via Route 132, split drive\",\"summary\":\"A rented or borrowed car cuts total transit but costs more than the bus. Proposed as two parts so each part fits the day; this is the first, ending in Rimouski. Fuel and rental prices are guesses, and access needs were not answered.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Québec City\",\"locality\":\"Québec City\",\"coordinates\":null},\"to\":{\"name\":\"Rimouski\",\"locality\":\"Rimouski\",\"coordinates\":null}},\"durationMinutes\":180,\"cost\":{\"currency\":\"CAD\",\"low\":60,\"high\":150,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null},{\"title\":\"Rimouski to Parc national de la Gaspésie by car\",\"summary\":\"Second part of the driving option, along the coast on Route 132 then inland. Road conditions and any closures are not checked. Be aware that your wish to avoid cloud navigation affects trail choice, not this drive.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Rimouski\",\"locality\":\"Rimouski\",\"coordinates\":null},\"to\":{\"name\":\"Parc national de la Gaspésie Discovery Centre\",\"locality\":\"Sainte-Anne-des-Monts\",\"coordinates\":null}},\"durationMinutes\":240,\"cost\":{\"currency\":\"CAD\",\"low\":50,\"high\":120,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-sonnet-5-5",
+          "usage": {
+            "inputTokens": 3985,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1471,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3985,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Québec City to Rimouski by bus (first leg)",
+                "summary": "Intercity coach along the St. Lawrence south shore, the cheapest way to start without a car. Access needs were not answered, so step-free boarding is unchecked; schedules and fares are unverified.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Gare du Palais (Québec City)",
+                    "locality": "Québec City",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Rimouski bus station",
+                    "locality": "Rimouski",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 240,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 40,
+                  "high": 90,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Rimouski to Sainte-Anne-des-Monts by bus (second leg)",
+                "summary": "Continues along the Gaspé coast toward the park gateway, split from the first leg so each part fits a day. Service frequency is unknown and may be limited; check before relying on it. Access needs were not answered.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Rimouski bus station",
+                    "locality": "Rimouski",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Sainte-Anne-des-Monts",
+                    "locality": "Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 300,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 50,
+                  "high": 110,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Sainte-Anne-des-Monts to park Discovery Centre transfer",
+                "summary": "Short hop up the Rivière Sainte-Anne valley to the park's trailheads, by shuttle, taxi or hitch-share. Whether a shuttle runs on your dates is unknown, and so is the cost; the band is a rough guess.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Sainte-Anne-des-Monts",
+                    "locality": "Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Parc national de la Gaspésie Discovery Centre",
+                    "locality": "Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 30,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 80,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "06-15",
+                  "to": "10-15"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Shared car Québec City to Sainte-Anne-des-Monts via Route 132, split drive",
+                "summary": "A rented or borrowed car cuts total transit but costs more than the bus. Proposed as two parts so each part fits the day; this is the first, ending in Rimouski. Fuel and rental prices are guesses, and access needs were not answered.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Québec City",
+                    "locality": "Québec City",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Rimouski",
+                    "locality": "Rimouski",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 180,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 60,
+                  "high": 150,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Rimouski to Parc national de la Gaspésie by car",
+                "summary": "Second part of the driving option, along the coast on Route 132 then inland. Road conditions and any closures are not checked. Be aware that your wish to avoid cloud navigation affects trail choice, not this drive.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Rimouski",
+                    "locality": "Rimouski",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Parc national de la Gaspésie Discovery Centre",
+                    "locality": "Sainte-Anne-des-Monts",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 240,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 50,
+                  "high": 120,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "candidatesAccepted": [
+    {
+      "title": "Québec City to Rimouski by bus (first leg)",
+      "summary": "Intercity coach along the St. Lawrence south shore, the cheapest way to start without a car. Access needs were not answered, so step-free boarding is unchecked; schedules and fares are unverified.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Gare du Palais (Québec City)",
+          "locality": "Québec City",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Rimouski bus station",
+          "locality": "Rimouski",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 240,
+      "cost": {
+        "currency": "CAD",
+        "low": 40,
+        "high": 90,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-route-and-logistics-1",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Rimouski to Sainte-Anne-des-Monts by bus (second leg)",
+      "summary": "Continues along the Gaspé coast toward the park gateway, split from the first leg so each part fits a day. Service frequency is unknown and may be limited; check before relying on it. Access needs were not answered.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Rimouski bus station",
+          "locality": "Rimouski",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Sainte-Anne-des-Monts",
+          "locality": "Sainte-Anne-des-Monts",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 300,
+      "cost": {
+        "currency": "CAD",
+        "low": 50,
+        "high": 110,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-route-and-logistics-2",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Sainte-Anne-des-Monts to park Discovery Centre transfer",
+      "summary": "Short hop up the Rivière Sainte-Anne valley to the park's trailheads, by shuttle, taxi or hitch-share. Whether a shuttle runs on your dates is unknown, and so is the cost; the band is a rough guess.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Sainte-Anne-des-Monts",
+          "locality": "Sainte-Anne-des-Monts",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Parc national de la Gaspésie Discovery Centre",
+          "locality": "Sainte-Anne-des-Monts",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 30,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 80,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "06-15",
+        "to": "10-15"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-route-and-logistics-3",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Shared car Québec City to Sainte-Anne-des-Monts via Route 132, split drive",
+      "summary": "A rented or borrowed car cuts total transit but costs more than the bus. Proposed as two parts so each part fits the day; this is the first, ending in Rimouski. Fuel and rental prices are guesses, and access needs were not answered.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Québec City",
+          "locality": "Québec City",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Rimouski",
+          "locality": "Rimouski",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 180,
+      "cost": {
+        "currency": "CAD",
+        "low": 60,
+        "high": 150,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-route-and-logistics-4",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Rimouski to Parc national de la Gaspésie by car",
+      "summary": "Second part of the driving option, along the coast on Route 132 then inland. Road conditions and any closures are not checked. Be aware that your wish to avoid cloud navigation affects trail choice, not this drive.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Rimouski",
+          "locality": "Rimouski",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Parc national de la Gaspésie Discovery Centre",
+          "locality": "Sainte-Anne-des-Monts",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 240,
+      "cost": {
+        "currency": "CAD",
+        "low": 50,
+        "high": 120,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-route-and-logistics-5",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Sépaq backcountry huts, Mont Albert / Mont Jacques-Cartier area",
+      "summary": "Rustic huts and shelters in the park's alpine and forest interior fit a hut-to-hut plan for two, with walking days kept within 16 km. Not answered: access needs. Confirm the current hut list, stage lengths and any ford crossings with the park before booking. Cloud-navigation risk favours the marked, lower-elevation stages.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Parc national de la Gaspésie backcountry huts",
+          "locality": "Sainte-Anne-des-Monts",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 25,
+        "high": 60,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 120,
+      "id": "pl-40-2-lodging-1",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Rustic cabin or camp (kind of place, no premises named)",
+      "summary": "A rustic cabin or basic campsite near the park entrance works as a fallback or a first or last night close to the road. It is also a lower-effort night if weather in the Chic-Chocs closes in. Not answered: access needs.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "rustic cabin or campsite",
+          "locality": "Sainte-Anne-des-Monts",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 90,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 60,
+      "id": "pl-40-2-lodging-2",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Mont Albert summit loop via Lac aux Américains",
+      "summary": "Demanding day hike on the Mont Albert plateau with alpine tundra and cirque views, suited to a 16 km limit. The route is exposed and cloud can arrive fast, so go only in clear forecasts and turn back if visibility drops; access needs were not answered and are not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mont Albert",
+          "locality": "Parc national de la Gaspésie, Sainte-Anne-des-Monts",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 420,
+      "cost": {
+        "currency": "CAD",
+        "low": 10,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "06-15",
+        "to": "10-01"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-activities-1",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Mont Jacques-Cartier summit hike",
+      "summary": "Climb to the highest peak in southern Québec to see woodland caribou habitat and wide views. The summit is exposed with no shelter, so only go in clear weather given the party's wish to avoid navigating in cloud; access needs were not answered and are not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mont Jacques-Cartier",
+          "locality": "Parc national de la Gaspésie",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 360,
+      "cost": {
+        "currency": "CAD",
+        "low": 10,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "06-15",
+        "to": "10-01"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-activities-2",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Mont Ernest-Laforce and Lac Paul trail day",
+      "summary": "A more sheltered, well-marked forested hike that suits a lower-risk day or a poor-weather alternative. Duration and trail details were not verified; access needs were not answered and are not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Parc national de la Gaspésie trail network",
+          "locality": "Sainte-Anne-des-Monts",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 10,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-activities-3",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Hut-to-hut leg on the Chic-Chocs sentier international des Appalaches",
+      "summary": "A single hut-to-hut leg within the 16 km daily limit, matching the party's hut shelter choice and rustic comfort level. Choose a well-marked leg, check conditions with park staff, and note that stream crossings should be checked against the no-ford-above-the-knee limit; hut availability and fees were not verified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Chic-Chocs hut network",
+          "locality": "Parc national de la Gaspésie",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 60,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-activities-4",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Interpretation centre and caribou talk at Gîte du Mont-Albert",
+      "summary": "A low-effort rest-day stop to learn about the park's caribou and alpine ecology and to check trail and weather conditions with staff before a big day. Opening hours were not verified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Gîte du Mont-Albert area",
+          "locality": "Sainte-Anne-des-Monts",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 90,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 15,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-activities-5",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Mont Albert plateau loop, huts and alpine tundra",
+      "summary": "A demanding alpine circuit on the Mont Albert plateau with hut or rustic camping access, suited to a pair with some hut experience. The plateau is exposed and fog is common, so the plan hinges on a clear-weather window; check conditions and trail status with Sépaq (the park's operator) and the park's reception staff, and the Météo-média/Environment Canada mountain forecast. Access needs were not answered, and hut availability and river levels at fords could not be checked, so confirm both locally. This is not clearance to go.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mont Albert, Parc national de la Gaspésie",
+          "locality": "Sainte-Anne-des-Monts, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 40,
+        "high": 120,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "06-15",
+        "to": "09-30"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-conditions-and-gear-1",
+      "specialist": "conditions-and-gear",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Mont Jacques-Cartier summit, caribou zone",
+      "summary": "A demanding day on the highest peak in southern Québec, with the summit zone accessible by guided or regulated routes to protect the caribou. It is above treeline with limited shelter, so it should only be done in clear weather, and neither of you has navigated in cloud. Check the access rules, shuttle availability and forecast with Sépaq. This is not clearance to go.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mont Jacques-Cartier, Parc national de la Gaspésie",
+          "locality": "Sainte-Anne-des-Monts, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 10,
+        "high": 60,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "06-15",
+        "to": "09-30"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-conditions-and-gear-2",
+      "specialist": "conditions-and-gear",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Sentier International des Appalaches forest-section hut stay",
+      "summary": "A lower-elevation, treed section of the trail, which is much easier to follow without cloud navigation skills than the open plateaus and offers a fallback when the tops are clouded in. Check hut booking, trail conditions and river levels with Sépaq. Access needs were not answered and fords cannot be assessed from here. This is not clearance to go.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Chic-Chocs forest trails, Parc national de la Gaspésie",
+          "locality": "Sainte-Anne-des-Monts, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 100,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "06-15",
+        "to": "09-30"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-2-conditions-and-gear-3",
+      "specialist": "conditions-and-gear",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Sépaq backcountry hut and site reservation",
+      "summary": "Huts and backcountry sites in Parc national de la Gaspésie (Chic-Chocs, incl. Mont Albert and Mont Jacques-Cartier areas) are reserved through Sépaq and often fill for late August; availability, fees and current trail status are unverified here. Access needs were not answered, so nothing here accounts for them. This is not clearance to go.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Parc national de la Gaspésie",
+          "locality": "Sainte-Anne-des-Monts, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 40,
+        "high": 120,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "08-15",
+        "to": "09-15"
+      },
+      "bookingLeadTimeDays": 120,
+      "id": "pl-40-2-practicalities-1",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Travel insurance with backcountry rescue cover",
+      "summary": "Evacuation from remote terrain can be costly, so check that a policy covers hiking in remote areas and medical evacuation, and read its exclusions. Provincial health coverage and any access needs are not answered and not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Québec City (purchase before departure)",
+          "locality": "Québec City, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 120,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-2-practicalities-2",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Offline maps and satellite messenger for cloud days",
+      "summary": "You have not navigated in cloud and want to avoid learning on this trip, so consider a rented or borrowed satellite messenger, a charged GPS or phone with offline topo maps, and a park-staff check on trail markings and weather before setting out. Cell coverage in the Chic-Chocs is patchy and I could not verify it. Rental options and prices are unknown.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Parc national de la Gaspésie visitor centre",
+          "locality": "Sainte-Anne-des-Monts, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 150,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "08-15",
+        "to": "09-15"
+      },
+      "bookingLeadTimeDays": 14,
+      "id": "pl-40-2-practicalities-3",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Park shuttle or rental car for trailhead access",
+      "summary": "Getting from Québec City to the park and between trailheads may need a rental car or a shuttle, and the schedule and prices are unverified. Hut trips often start and end at different points, so check how you get back to your vehicle. Driver licence and age rules were not checked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Québec City departure point",
+          "locality": "Québec City, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 150,
+        "high": 450,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-2-practicalities-4",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    }
+  ],
+  "rejected": [],
+  "gaps": [
+    {
+      "specialist": "budget",
+      "reason": "specialist-dropped-for-budget",
+      "detail": "This part of the plan was left out to keep the run inside its budget. Re-planning with a larger budget would fill it in."
+    },
+    {
+      "specialist": "food",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about where to eat."
+    }
+  ],
+  "usage": {
+    "calls": 5,
+    "inputTokens": 19618,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "outputTokens": 5411,
+    "thinkingTokens": 0,
+    "fallbackCalls": 0
+  },
+  "observedUsd": 0.093346
+}

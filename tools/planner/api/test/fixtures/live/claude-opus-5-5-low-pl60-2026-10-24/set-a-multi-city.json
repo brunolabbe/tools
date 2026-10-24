@@ -1,0 +1,1684 @@
+{
+  "set": "A",
+  "briefFixture": "multi-city",
+  "requestedModel": "claude-opus-5-5",
+  "effort": "low",
+  "prices": {
+    "inputPerMTok": 4,
+    "outputPerMTok": 20,
+    "cacheReadPerMTok": 0.2,
+    "cacheWritePerMTok": 5
+  },
+  "servedModels": [
+    "claude-opus-5-5"
+  ],
+  "budget": {
+    "maxSpecialists": 5,
+    "maxOutputTokens": 8000,
+    "maxAttemptsPerSpecialist": 2
+  },
+  "finds": [],
+  "specialists": [
+    {
+      "specialist": "lodging",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: multi-city\nSpecialist: lodging\n\nYou are the lodging specialist on a trip-planning tool.\nYou propose places to sleep that match the roughest night the party said they would accept, and you say how far ahead each one has to be booked. A proposal does one of two things. It names one premises, an establishment or a site, by its name and at its locality: `place.name` is that name and `place.locality` the town. Or it says plainly, in its title or its summary, that it is a kind of place and names no premises: then `place.name` holds the kind, for example `motel`, and `place.locality` the town. Where you are given places to stay from map data for a town, a premises you name there is one of those, under the name it is given, if any of them fits the party. A kind of place is the fallback, for a town whose list is empty or where nothing in it fits.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 13 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: multi-city\nLeaving from: Halifax\nGoing to: Central Europe\nDates: 12 nights somewhere between 2027-05-01 and 2027-06-15\nTravellers: 2\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: comfortable, as a feeling rather than a figure\nAppetite for effort: moderate\nRoughest night they will accept: hotel\nWould rule the trip out: No internal flights\n\nAbout this multi-city:\nCities: Vienna, Ljubljana, Trieste\nTransport between them: train\nFewest nights in any one: 3\nIn their words: The order is not fixed — we picked those three because the trains between them looked reasonable, and we would drop one rather than rush all three."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Comfortable hotel in central Vienna\",\"summary\":\"A hotel in a central district such as the Innere Stadt or near the Hauptbahnhof keeps the train connections to Ljubljana easy and keeps the city walkable at a moderate pace. No map data on named places was given, so this names a kind of place, not a specific premises. Ages and access needs were not answered, so step-free access and room layout are not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"hotel\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":140,\"high\":260,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":60},{\"title\":\"Comfortable hotel in Ljubljana old town\",\"summary\":\"Ljubljana's compact centre is small and walkable, and a hotel near the river or the train station suits a stay of at least three nights. This names a kind of place, because no named premises were provided. Ages and access needs were not answered and are not accounted for. Late spring is busy and supply is smaller than in Vienna.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"hotel\",\"locality\":\"Ljubljana\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":110,\"high\":220,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":75},{\"title\":\"Comfortable hotel near Trieste's waterfront\",\"summary\":\"A hotel near Piazza Unità or the Borgo Teresiano puts the seafront and the station within walking distance. This names a kind of place, because no named premises were provided. Ages and access needs were not answered: the city is hilly, so step-free access was not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"hotel\",\"locality\":\"Trieste\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":110,\"high\":220,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":60}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3985,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 750,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3985,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Comfortable hotel in central Vienna",
+                "summary": "A hotel in a central district such as the Innere Stadt or near the Hauptbahnhof keeps the train connections to Ljubljana easy and keeps the city walkable at a moderate pace. No map data on named places was given, so this names a kind of place, not a specific premises. Ages and access needs were not answered, so step-free access and room layout are not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "hotel",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 140,
+                  "high": 260,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 60
+              },
+              {
+                "title": "Comfortable hotel in Ljubljana old town",
+                "summary": "Ljubljana's compact centre is small and walkable, and a hotel near the river or the train station suits a stay of at least three nights. This names a kind of place, because no named premises were provided. Ages and access needs were not answered and are not accounted for. Late spring is busy and supply is smaller than in Vienna.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "hotel",
+                    "locality": "Ljubljana",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 110,
+                  "high": 220,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 75
+              },
+              {
+                "title": "Comfortable hotel near Trieste's waterfront",
+                "summary": "A hotel near Piazza Unità or the Borgo Teresiano puts the seafront and the station within walking distance. This names a kind of place, because no named premises were provided. Ages and access needs were not answered: the city is hilly, so step-free access was not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "hotel",
+                    "locality": "Trieste",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 110,
+                  "high": 220,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 60
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "food",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: multi-city\nSpecialist: food\n\nYou are the food specialist on a trip-planning tool.\nYou propose meals that are part of the trip rather than fuel for it, and you respect anything the party said they cannot eat. A proposal does one of two things. It names one premises, an establishment or a site, by its name and at its locality: `place.name` is that name and `place.locality` the town. Or it says plainly, in its title or its summary, that it is a kind of place and names no premises: then `place.name` holds the kind, for example `bakery`, and `place.locality` the town.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 13 days.\n- **Nothing you propose may be longer than 300 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: multi-city\nLeaving from: Halifax\nGoing to: Central Europe\nDates: 12 nights somewhere between 2027-05-01 and 2027-06-15\nTravellers: 2\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: comfortable, as a feeling rather than a figure\nAppetite for effort: moderate\nRoughest night they will accept: hotel\nWould rule the trip out: No internal flights\n\nAbout this multi-city:\nCities: Vienna, Ljubljana, Trieste\nTransport between them: train\nFewest nights in any one: 3\nIn their words: The order is not fixed — we picked those three because the trains between them looked reasonable, and we would drop one rather than rush all three."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Naschmarkt grazing in Vienna\",\"summary\":\"Vienna's long open-air market is a good way to eat your way through stalls and small counters on foot. Dietary restrictions and access needs were not answered, so check stall options yourselves.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Naschmarkt\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":40,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Heuriger wine tavern evening\",\"summary\":\"A Viennese heuriger serves the winemaker's own young wine with a cold buffet, often among the vineyards at the city's edge. This names a kind of place, not specific premises. Opening periods vary by tavern and were not checked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"heuriger\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":25,\"high\":50,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Traditional Viennese coffeehouse\",\"summary\":\"Coffee and cake in a classic coffeehouse is part of the city's culture rather than just a snack stop. This is a kind of place; no specific café is named.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"coffeehouse\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":10,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Odprta kuhna street-food market\",\"summary\":\"Ljubljana's Friday open-kitchen food market gathers many Slovenian cooks in one square. The season and operating days were not checked, so confirm before counting on it; dietary needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Odprta kuhna\",\"locality\":\"Ljubljana\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":35,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Slovenian gostilna meal\",\"summary\":\"A traditional gostilna serves regional dishes like štruklji and žlikrofi, a good introduction to Slovenian home cooking. This is a kind of place, not a named restaurant.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"gostilna\",\"locality\":\"Ljubljana\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":20,\"high\":45,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Trieste buffet lunch\",\"summary\":\"Trieste's buffets serve boiled pork, sausages and sauerkraut, a Habsburg legacy in an Italian port that ties the three cities together. This is a kind of place; no premises named. Dietary restrictions were not answered and these menus are meat-heavy.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"buffet\",\"locality\":\"Trieste\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":35,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 4004,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1272,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 4004,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Naschmarkt grazing in Vienna",
+                "summary": "Vienna's long open-air market is a good way to eat your way through stalls and small counters on foot. Dietary restrictions and access needs were not answered, so check stall options yourselves.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Naschmarkt",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 40,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Heuriger wine tavern evening",
+                "summary": "A Viennese heuriger serves the winemaker's own young wine with a cold buffet, often among the vineyards at the city's edge. This names a kind of place, not specific premises. Opening periods vary by tavern and were not checked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "heuriger",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 25,
+                  "high": 50,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Traditional Viennese coffeehouse",
+                "summary": "Coffee and cake in a classic coffeehouse is part of the city's culture rather than just a snack stop. This is a kind of place; no specific café is named.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "coffeehouse",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 10,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Odprta kuhna street-food market",
+                "summary": "Ljubljana's Friday open-kitchen food market gathers many Slovenian cooks in one square. The season and operating days were not checked, so confirm before counting on it; dietary needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Odprta kuhna",
+                    "locality": "Ljubljana",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 35,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Slovenian gostilna meal",
+                "summary": "A traditional gostilna serves regional dishes like štruklji and žlikrofi, a good introduction to Slovenian home cooking. This is a kind of place, not a named restaurant.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "gostilna",
+                    "locality": "Ljubljana",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 20,
+                  "high": 45,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Trieste buffet lunch",
+                "summary": "Trieste's buffets serve boiled pork, sausages and sauerkraut, a Habsburg legacy in an Italian port that ties the three cities together. This is a kind of place; no premises named. Dietary restrictions were not answered and these menus are meat-heavy.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "buffet",
+                    "locality": "Trieste",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 35,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "activities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: multi-city\nSpecialist: activities\n\nYou are the activities specialist on a trip-planning tool.\nYou propose things to do: what they are, how long they take, and when they are open.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 8 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 13 days.\n- **Nothing you propose may be longer than 300 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: multi-city\nLeaving from: Halifax\nGoing to: Central Europe\nDates: 12 nights somewhere between 2027-05-01 and 2027-06-15\nTravellers: 2\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: comfortable, as a feeling rather than a figure\nAppetite for effort: moderate\nRoughest night they will accept: hotel\nWould rule the trip out: No internal flights\n\nAbout this multi-city:\nCities: Vienna, Ljubljana, Trieste\nTransport between them: train\nFewest nights in any one: 3\nIn their words: The order is not fixed — we picked those three because the trains between them looked reasonable, and we would drop one rather than rush all three."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Kunsthistorisches Museum, Vienna\",\"summary\":\"One of Europe's great art collections (Bruegel, Vermeer, Velázquez) in a grand building; a moderate-effort indoor half day. Access needs and ages were not answered, so step-free routes and pacing are unaccounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Kunsthistorisches Museum\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":180,\"cost\":{\"currency\":\"EUR\",\"low\":20,\"high\":30,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":0},{\"title\":\"Schönbrunn Palace and gardens\",\"summary\":\"The Habsburg summer palace with state rooms and extensive gardens that are at their best in May and June. Gardens involve a fair amount of walking; access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Schönbrunn Palace\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":240,\"cost\":{\"currency\":\"EUR\",\"low\":25,\"high\":45,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":3},{\"title\":\"Evening at the Vienna State Opera\",\"summary\":\"A performance at one of the world's leading opera houses suits a comfortable budget; the season typically runs until late June. Seat prices vary widely, and accessibility was not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Wiener Staatsoper\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":210,\"cost\":{\"currency\":\"EUR\",\"low\":60,\"high\":250,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":60},{\"title\":\"Ljubljana Castle and old town\",\"summary\":\"Take the funicular up to the castle for views over the compact old town, then walk down along the Ljubljanica river and Plečnik's bridges. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Ljubljana Castle\",\"locality\":\"Ljubljana\",\"coordinates\":null}},\"durationMinutes\":180,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":0},{\"title\":\"Lake Bled from Ljubljana\",\"summary\":\"A lake with an island church and a clifftop castle, reachable by train or bus from Ljubljana. The visit alone fits the day's limit; travel time to get there is not counted, and fitness and access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Lake Bled\",\"locality\":\"Bled\",\"coordinates\":null}},\"durationMinutes\":300,\"cost\":{\"currency\":\"EUR\",\"low\":30,\"high\":60,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Postojna Cave\",\"summary\":\"A vast karst cave toured partly by underground train, close to the Ljubljana–Trieste route. It is cool inside year round. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Postojna Cave\",\"locality\":\"Postojna\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"EUR\",\"low\":30,\"high\":45,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":1},{\"title\":\"Miramare Castle and park, Trieste\",\"summary\":\"A 19th-century Habsburg castle on the sea with a seaside park, good for an unhurried visit. Access needs were not answered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Castello di Miramare\",\"locality\":\"Trieste\",\"coordinates\":null}},\"durationMinutes\":150,\"cost\":{\"currency\":\"EUR\",\"low\":10,\"high\":20,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":0},{\"title\":\"Trieste historic cafés and Piazza Unità\",\"summary\":\"Spend a slow stretch on Europe's largest sea-facing square and in the city's literary coffee houses, such as Caffè San Marco. The duration is unmeasured and depends on how long you linger.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Piazza Unità d'Italia\",\"locality\":\"Trieste\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":5,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":0}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3880,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1760,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3880,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Kunsthistorisches Museum, Vienna",
+                "summary": "One of Europe's great art collections (Bruegel, Vermeer, Velázquez) in a grand building; a moderate-effort indoor half day. Access needs and ages were not answered, so step-free routes and pacing are unaccounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Kunsthistorisches Museum",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 180,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 20,
+                  "high": 30,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Schönbrunn Palace and gardens",
+                "summary": "The Habsburg summer palace with state rooms and extensive gardens that are at their best in May and June. Gardens involve a fair amount of walking; access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Schönbrunn Palace",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 240,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 25,
+                  "high": 45,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 3
+              },
+              {
+                "title": "Evening at the Vienna State Opera",
+                "summary": "A performance at one of the world's leading opera houses suits a comfortable budget; the season typically runs until late June. Seat prices vary widely, and accessibility was not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Wiener Staatsoper",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 210,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 60,
+                  "high": 250,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 60
+              },
+              {
+                "title": "Ljubljana Castle and old town",
+                "summary": "Take the funicular up to the castle for views over the compact old town, then walk down along the Ljubljanica river and Plečnik's bridges. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Ljubljana Castle",
+                    "locality": "Ljubljana",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 180,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Lake Bled from Ljubljana",
+                "summary": "A lake with an island church and a clifftop castle, reachable by train or bus from Ljubljana. The visit alone fits the day's limit; travel time to get there is not counted, and fitness and access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Lake Bled",
+                    "locality": "Bled",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 300,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 30,
+                  "high": 60,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Postojna Cave",
+                "summary": "A vast karst cave toured partly by underground train, close to the Ljubljana–Trieste route. It is cool inside year round. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Postojna Cave",
+                    "locality": "Postojna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 30,
+                  "high": 45,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 1
+              },
+              {
+                "title": "Miramare Castle and park, Trieste",
+                "summary": "A 19th-century Habsburg castle on the sea with a seaside park, good for an unhurried visit. Access needs were not answered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Castello di Miramare",
+                    "locality": "Trieste",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 150,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 10,
+                  "high": 20,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Trieste historic cafés and Piazza Unità",
+                "summary": "Spend a slow stretch on Europe's largest sea-facing square and in the city's literary coffee houses, such as Caffè San Marco. The duration is unmeasured and depends on how long you linger.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Piazza Unità d'Italia",
+                    "locality": "Trieste",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 5,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "practicalities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: multi-city\nSpecialist: practicalities\n\nYou are the practicalities specialist on a trip-planning tool.\nYou cover permits, documents, rentals, insurance and connectivity — the paperwork that decides whether the trip happens.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 13 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: multi-city\nLeaving from: Halifax\nGoing to: Central Europe\nDates: 12 nights somewhere between 2027-05-01 and 2027-06-15\nTravellers: 2\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: comfortable, as a feeling rather than a figure\nAppetite for effort: moderate\nRoughest night they will accept: hotel\nWould rule the trip out: No internal flights\n\nAbout this multi-city:\nCities: Vienna, Ljubljana, Trieste\nTransport between them: train\nFewest nights in any one: 3\nIn their words: The order is not fixed — we picked those three because the trains between them looked reasonable, and we would drop one rather than rush all three."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"ETIAS travel authorisation and passport validity check\",\"summary\":\"Schengen entry for visa-exempt visitors, Canadians included, is expected to need an ETIAS authorisation by 2027, plus a passport valid at least 3 months past departure. Nationality was not given, so confirm the rules for each passport on official EU sites. The fee and launch timing may change.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"ETIAS official application (EU)\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":7,\"high\":20,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":30},{\"title\":\"Travel medical insurance covering Austria, Slovenia and Italy\",\"summary\":\"Provincial health plans pay little abroad, so out-of-country medical cover is worth arranging for two travellers. Ages and access needs were not given, and both can change premiums and what the policy covers.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Halifax\",\"locality\":\"Nova Scotia\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":80,\"high\":300,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Advance train tickets: Vienna–Ljubljana and Ljubljana–Trieste\",\"summary\":\"A direct daytime train runs between Vienna and Ljubljana, and ÖBB's cheaper Sparschiene fares sell out early. Ljubljana–Trieste rail links are sparse and sometimes seasonal, so check current timetables and be ready to use a bus or a change of train. Those timetables may decide which city you drop.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Wien Hauptbahnhof\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":20,\"high\":90,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":60},{\"title\":\"EU data eSIM or roaming plan\",\"summary\":\"One EU-wide eSIM covers Austria, Slovenia and Italy, which keeps train apps and e-tickets working. First check your phones are unlocked and support eSIM.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Vienna International Airport or online\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":10,\"high\":35,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3803,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1516,
+            "thinkingTokens": 524
+          },
+          "countedInputTokens": 3803,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "ETIAS travel authorisation and passport validity check",
+                "summary": "Schengen entry for visa-exempt visitors, Canadians included, is expected to need an ETIAS authorisation by 2027, plus a passport valid at least 3 months past departure. Nationality was not given, so confirm the rules for each passport on official EU sites. The fee and launch timing may change.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "ETIAS official application (EU)",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 7,
+                  "high": 20,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 30
+              },
+              {
+                "title": "Travel medical insurance covering Austria, Slovenia and Italy",
+                "summary": "Provincial health plans pay little abroad, so out-of-country medical cover is worth arranging for two travellers. Ages and access needs were not given, and both can change premiums and what the policy covers.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Halifax",
+                    "locality": "Nova Scotia",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 80,
+                  "high": 300,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Advance train tickets: Vienna–Ljubljana and Ljubljana–Trieste",
+                "summary": "A direct daytime train runs between Vienna and Ljubljana, and ÖBB's cheaper Sparschiene fares sell out early. Ljubljana–Trieste rail links are sparse and sometimes seasonal, so check current timetables and be ready to use a bus or a change of train. Those timetables may decide which city you drop.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Wien Hauptbahnhof",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 20,
+                  "high": 90,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 60
+              },
+              {
+                "title": "EU data eSIM or roaming plan",
+                "summary": "One EU-wide eSIM covers Austria, Slovenia and Italy, which keeps train apps and e-tickets working. First check your phones are unlocked and support eSIM.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Vienna International Airport or online",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 10,
+                  "high": 35,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "route-and-logistics",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: multi-city\nSpecialist: route-and-logistics\n\nYou are the route and logistics specialist on a trip-planning tool.\nYou propose the legs this trip is made of — drives, rides, transfers, ferries and trains — with the stops that make a long one bearable.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is a movement, so its location is {\"kind\":\"between\",\"from\":{...},\"to\":{...}} with **both** ends as places. Endpoints in the title are not endpoints, and a candidate that puts them there is discarded.\n- This trip has 13 days.\n- **Nothing you propose may be longer than 300 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: multi-city\nLeaving from: Halifax\nGoing to: Central Europe\nDates: 12 nights somewhere between 2027-05-01 and 2027-06-15\nTravellers: 2\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: comfortable, as a feeling rather than a figure\nAppetite for effort: moderate\nRoughest night they will accept: hotel\nWould rule the trip out: No internal flights\n\nAbout this multi-city:\nCities: Vienna, Ljubljana, Trieste\nTransport between them: train\nFewest nights in any one: 3\nIn their words: The order is not fixed — we picked those three because the trains between them looked reasonable, and we would drop one rather than rush all three."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Railjet over the Semmering line\",\"summary\":\"The Vienna–Ljubljana direct train runs well past a day's ceiling, so this is the first half, with Graz as a natural break or overnight. Access needs were not answered, so step-free boarding and luggage help are not accounted for.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Wien Hauptbahnhof\",\"locality\":\"Vienna\",\"coordinates\":null},\"to\":{\"name\":\"Graz Hauptbahnhof\",\"locality\":\"Graz\",\"coordinates\":null}},\"durationMinutes\":160,\"cost\":{\"currency\":\"EUR\",\"low\":20,\"high\":70,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":14},{\"title\":\"Cross-border train via Maribor\",\"summary\":\"The second half of the Vienna–Ljubljana journey, through Styrian wine country into Slovenia. Run times vary by service and were not checked. Access needs were not answered.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Graz Hauptbahnhof\",\"locality\":\"Graz\",\"coordinates\":null},\"to\":{\"name\":\"Ljubljana railway station\",\"locality\":\"Ljubljana\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":50,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":7},{\"title\":\"Karst rail line to the Adriatic\",\"summary\":\"The rail link from Ljubljana to Trieste is thin and service patterns change seasonally, so timetables for May–June 2027 need checking; a change at the border may be required. Access needs were not answered.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Ljubljana railway station\",\"locality\":\"Ljubljana\",\"coordinates\":null},\"to\":{\"name\":\"Trieste Centrale\",\"locality\":\"Trieste\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":10,\"high\":40,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":3},{\"title\":\"Cross-border train through Udine into Carinthia\",\"summary\":\"A route north from Trieste toward Austria if the order runs Trieste first or Vienna last; Villach would be a break point before continuing to Vienna on a separate leg. Run time and service frequency were not checked; access needs were not answered.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Trieste Centrale\",\"locality\":\"Trieste\",\"coordinates\":null},\"to\":{\"name\":\"Villach Hauptbahnhof\",\"locality\":\"Villach\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":50,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":7},{\"title\":\"Railjet north via the Koralm line\",\"summary\":\"Completes a Trieste–Vienna journey in parts that each fit the day, via Klagenfurt and Graz. Run time on the newer routing was not checked, so it is left unknown; access needs were not answered.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Villach Hauptbahnhof\",\"locality\":\"Villach\",\"coordinates\":null},\"to\":{\"name\":\"Wien Hauptbahnhof\",\"locality\":\"Vienna\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":25,\"high\":80,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":14}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3953,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1847,
+            "thinkingTokens": 573
+          },
+          "countedInputTokens": 3953,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Railjet over the Semmering line",
+                "summary": "The Vienna–Ljubljana direct train runs well past a day's ceiling, so this is the first half, with Graz as a natural break or overnight. Access needs were not answered, so step-free boarding and luggage help are not accounted for.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Wien Hauptbahnhof",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Graz Hauptbahnhof",
+                    "locality": "Graz",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 160,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 20,
+                  "high": 70,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 14
+              },
+              {
+                "title": "Cross-border train via Maribor",
+                "summary": "The second half of the Vienna–Ljubljana journey, through Styrian wine country into Slovenia. Run times vary by service and were not checked. Access needs were not answered.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Graz Hauptbahnhof",
+                    "locality": "Graz",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Ljubljana railway station",
+                    "locality": "Ljubljana",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 50,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 7
+              },
+              {
+                "title": "Karst rail line to the Adriatic",
+                "summary": "The rail link from Ljubljana to Trieste is thin and service patterns change seasonally, so timetables for May–June 2027 need checking; a change at the border may be required. Access needs were not answered.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Ljubljana railway station",
+                    "locality": "Ljubljana",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Trieste Centrale",
+                    "locality": "Trieste",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 10,
+                  "high": 40,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 3
+              },
+              {
+                "title": "Cross-border train through Udine into Carinthia",
+                "summary": "A route north from Trieste toward Austria if the order runs Trieste first or Vienna last; Villach would be a break point before continuing to Vienna on a separate leg. Run time and service frequency were not checked; access needs were not answered.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Trieste Centrale",
+                    "locality": "Trieste",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Villach Hauptbahnhof",
+                    "locality": "Villach",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 50,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 7
+              },
+              {
+                "title": "Railjet north via the Koralm line",
+                "summary": "Completes a Trieste–Vienna journey in parts that each fit the day, via Klagenfurt and Graz. Run time on the newer routing was not checked, so it is left unknown; access needs were not answered.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Villach Hauptbahnhof",
+                    "locality": "Villach",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Wien Hauptbahnhof",
+                    "locality": "Vienna",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 25,
+                  "high": 80,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 14
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "candidatesAccepted": [
+    {
+      "title": "Railjet over the Semmering line",
+      "summary": "The Vienna–Ljubljana direct train runs well past a day's ceiling, so this is the first half, with Graz as a natural break or overnight. Access needs were not answered, so step-free boarding and luggage help are not accounted for.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Wien Hauptbahnhof",
+          "locality": "Vienna",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Graz Hauptbahnhof",
+          "locality": "Graz",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 160,
+      "cost": {
+        "currency": "EUR",
+        "low": 20,
+        "high": 70,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 14,
+      "id": "pl-40-6-route-and-logistics-1",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Cross-border train via Maribor",
+      "summary": "The second half of the Vienna–Ljubljana journey, through Styrian wine country into Slovenia. Run times vary by service and were not checked. Access needs were not answered.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Graz Hauptbahnhof",
+          "locality": "Graz",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Ljubljana railway station",
+          "locality": "Ljubljana",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 50,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 7,
+      "id": "pl-40-6-route-and-logistics-2",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Karst rail line to the Adriatic",
+      "summary": "The rail link from Ljubljana to Trieste is thin and service patterns change seasonally, so timetables for May–June 2027 need checking; a change at the border may be required. Access needs were not answered.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Ljubljana railway station",
+          "locality": "Ljubljana",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Trieste Centrale",
+          "locality": "Trieste",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 10,
+        "high": 40,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 3,
+      "id": "pl-40-6-route-and-logistics-3",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Cross-border train through Udine into Carinthia",
+      "summary": "A route north from Trieste toward Austria if the order runs Trieste first or Vienna last; Villach would be a break point before continuing to Vienna on a separate leg. Run time and service frequency were not checked; access needs were not answered.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Trieste Centrale",
+          "locality": "Trieste",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Villach Hauptbahnhof",
+          "locality": "Villach",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 50,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 7,
+      "id": "pl-40-6-route-and-logistics-4",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Railjet north via the Koralm line",
+      "summary": "Completes a Trieste–Vienna journey in parts that each fit the day, via Klagenfurt and Graz. Run time on the newer routing was not checked, so it is left unknown; access needs were not answered.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Villach Hauptbahnhof",
+          "locality": "Villach",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Wien Hauptbahnhof",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 25,
+        "high": 80,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 14,
+      "id": "pl-40-6-route-and-logistics-5",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Comfortable hotel in central Vienna",
+      "summary": "A hotel in a central district such as the Innere Stadt or near the Hauptbahnhof keeps the train connections to Ljubljana easy and keeps the city walkable at a moderate pace. No map data on named places was given, so this names a kind of place, not a specific premises. Ages and access needs were not answered, so step-free access and room layout are not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "hotel",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 140,
+        "high": 260,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 60,
+      "id": "pl-40-6-lodging-1",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Comfortable hotel in Ljubljana old town",
+      "summary": "Ljubljana's compact centre is small and walkable, and a hotel near the river or the train station suits a stay of at least three nights. This names a kind of place, because no named premises were provided. Ages and access needs were not answered and are not accounted for. Late spring is busy and supply is smaller than in Vienna.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "hotel",
+          "locality": "Ljubljana",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 110,
+        "high": 220,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 75,
+      "id": "pl-40-6-lodging-2",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Comfortable hotel near Trieste's waterfront",
+      "summary": "A hotel near Piazza Unità or the Borgo Teresiano puts the seafront and the station within walking distance. This names a kind of place, because no named premises were provided. Ages and access needs were not answered: the city is hilly, so step-free access was not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "hotel",
+          "locality": "Trieste",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 110,
+        "high": 220,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 60,
+      "id": "pl-40-6-lodging-3",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Kunsthistorisches Museum, Vienna",
+      "summary": "One of Europe's great art collections (Bruegel, Vermeer, Velázquez) in a grand building; a moderate-effort indoor half day. Access needs and ages were not answered, so step-free routes and pacing are unaccounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Kunsthistorisches Museum",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 180,
+      "cost": {
+        "currency": "EUR",
+        "low": 20,
+        "high": 30,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-6-activities-1",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Schönbrunn Palace and gardens",
+      "summary": "The Habsburg summer palace with state rooms and extensive gardens that are at their best in May and June. Gardens involve a fair amount of walking; access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Schönbrunn Palace",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 240,
+      "cost": {
+        "currency": "EUR",
+        "low": 25,
+        "high": 45,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 3,
+      "id": "pl-40-6-activities-2",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Evening at the Vienna State Opera",
+      "summary": "A performance at one of the world's leading opera houses suits a comfortable budget; the season typically runs until late June. Seat prices vary widely, and accessibility was not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Wiener Staatsoper",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 210,
+      "cost": {
+        "currency": "EUR",
+        "low": 60,
+        "high": 250,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 60,
+      "id": "pl-40-6-activities-3",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Ljubljana Castle and old town",
+      "summary": "Take the funicular up to the castle for views over the compact old town, then walk down along the Ljubljanica river and Plečnik's bridges. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Ljubljana Castle",
+          "locality": "Ljubljana",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 180,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-6-activities-4",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Lake Bled from Ljubljana",
+      "summary": "A lake with an island church and a clifftop castle, reachable by train or bus from Ljubljana. The visit alone fits the day's limit; travel time to get there is not counted, and fitness and access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Lake Bled",
+          "locality": "Bled",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 300,
+      "cost": {
+        "currency": "EUR",
+        "low": 30,
+        "high": 60,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-6-activities-5",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Postojna Cave",
+      "summary": "A vast karst cave toured partly by underground train, close to the Ljubljana–Trieste route. It is cool inside year round. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Postojna Cave",
+          "locality": "Postojna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 30,
+        "high": 45,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 1,
+      "id": "pl-40-6-activities-6",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Miramare Castle and park, Trieste",
+      "summary": "A 19th-century Habsburg castle on the sea with a seaside park, good for an unhurried visit. Access needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Castello di Miramare",
+          "locality": "Trieste",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 150,
+      "cost": {
+        "currency": "EUR",
+        "low": 10,
+        "high": 20,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-6-activities-7",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Trieste historic cafés and Piazza Unità",
+      "summary": "Spend a slow stretch on Europe's largest sea-facing square and in the city's literary coffee houses, such as Caffè San Marco. The duration is unmeasured and depends on how long you linger.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Piazza Unità d'Italia",
+          "locality": "Trieste",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 5,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-6-activities-8",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Naschmarkt grazing in Vienna",
+      "summary": "Vienna's long open-air market is a good way to eat your way through stalls and small counters on foot. Dietary restrictions and access needs were not answered, so check stall options yourselves.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Naschmarkt",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 40,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-6-food-1",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Heuriger wine tavern evening",
+      "summary": "A Viennese heuriger serves the winemaker's own young wine with a cold buffet, often among the vineyards at the city's edge. This names a kind of place, not specific premises. Opening periods vary by tavern and were not checked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "heuriger",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 25,
+        "high": 50,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-6-food-2",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Traditional Viennese coffeehouse",
+      "summary": "Coffee and cake in a classic coffeehouse is part of the city's culture rather than just a snack stop. This is a kind of place; no specific café is named.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "coffeehouse",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 10,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-6-food-3",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Odprta kuhna street-food market",
+      "summary": "Ljubljana's Friday open-kitchen food market gathers many Slovenian cooks in one square. The season and operating days were not checked, so confirm before counting on it; dietary needs were not answered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Odprta kuhna",
+          "locality": "Ljubljana",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 35,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-6-food-4",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Slovenian gostilna meal",
+      "summary": "A traditional gostilna serves regional dishes like štruklji and žlikrofi, a good introduction to Slovenian home cooking. This is a kind of place, not a named restaurant.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "gostilna",
+          "locality": "Ljubljana",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 20,
+        "high": 45,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-6-food-5",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Trieste buffet lunch",
+      "summary": "Trieste's buffets serve boiled pork, sausages and sauerkraut, a Habsburg legacy in an Italian port that ties the three cities together. This is a kind of place; no premises named. Dietary restrictions were not answered and these menus are meat-heavy.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "buffet",
+          "locality": "Trieste",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 35,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-6-food-6",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "ETIAS travel authorisation and passport validity check",
+      "summary": "Schengen entry for visa-exempt visitors, Canadians included, is expected to need an ETIAS authorisation by 2027, plus a passport valid at least 3 months past departure. Nationality was not given, so confirm the rules for each passport on official EU sites. The fee and launch timing may change.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "ETIAS official application (EU)",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 7,
+        "high": 20,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-6-practicalities-1",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Travel medical insurance covering Austria, Slovenia and Italy",
+      "summary": "Provincial health plans pay little abroad, so out-of-country medical cover is worth arranging for two travellers. Ages and access needs were not given, and both can change premiums and what the policy covers.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Halifax",
+          "locality": "Nova Scotia",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 80,
+        "high": 300,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-6-practicalities-2",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Advance train tickets: Vienna–Ljubljana and Ljubljana–Trieste",
+      "summary": "A direct daytime train runs between Vienna and Ljubljana, and ÖBB's cheaper Sparschiene fares sell out early. Ljubljana–Trieste rail links are sparse and sometimes seasonal, so check current timetables and be ready to use a bus or a change of train. Those timetables may decide which city you drop.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Wien Hauptbahnhof",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 20,
+        "high": 90,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 60,
+      "id": "pl-40-6-practicalities-3",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "EU data eSIM or roaming plan",
+      "summary": "One EU-wide eSIM covers Austria, Slovenia and Italy, which keeps train apps and e-tickets working. First check your phones are unlocked and support eSIM.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Vienna International Airport or online",
+          "locality": "Vienna",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 10,
+        "high": 35,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-6-practicalities-4",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    }
+  ],
+  "rejected": [],
+  "gaps": [
+    {
+      "specialist": "budget",
+      "reason": "specialist-dropped-for-budget",
+      "detail": "This part of the plan was left out to keep the run inside its budget. Re-planning with a larger budget would fill it in."
+    },
+    {
+      "specialist": "conditions-and-gear",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about conditions or kit: this trip does not turn on them."
+    }
+  ],
+  "usage": {
+    "calls": 5,
+    "inputTokens": 19625,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "outputTokens": 7145,
+    "thinkingTokens": 1097,
+    "fallbackCalls": 0
+  },
+  "observedUsd": 0.2214
+}
