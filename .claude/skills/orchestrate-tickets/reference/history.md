@@ -6116,3 +6116,48 @@ Beside the agents: pl-58's paid live run, five `run.ts` sessions, 112 records, $
 - Splitting a WebSearch ticket at the step that needs the tool: builder-standard did the code, the paid run and the classification at high effort; a general-purpose agent did only the web check (pl-58).
 - Pre-registering a web check by committing its budget and its ordered first queries before the first search; gate 1 confirmed all 51 first queries matched (pl-58, d3ca4190).
 - Putting a negative headline back to the owner before spending the step it was meant to justify (pl-58's Build 5–7); the owner re-chose with the measurement in hand.
+
+### Batch 2026-10-24 (tools-62, lg-64 lg-65, repo-114 answers recorded, repo-116 filed) — base 8a6dcf9a
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | done | Sonnet 5.5 / high | a566b4762bd92552a | seam-mapper, dl-130 lg-64 lg-65 pl-60 repo-114 repo-98 | 1m25s / 1m25s | 0 | $0.3508 |
+| #604 | open, ready, green at db204337 | Sonnet 5.5 / high | ac9903a234536a66f | builder-standard, lg-64 | 6m30s / 6m30s | 0 | $0.8501 |
+| #604 | open, ready, green at db204337 | Opus 5.5 / high | a27bcfe84a6e5635b | ticket-reviewer-opus, lg-64 gate 1 | 9m14s / 9m00s | 0 | $1.8681 |
+| #604 | open, ready, green at db204337 | Sonnet 5.5 / high | a1788f330a2b19683 | fixer, lg-64 landing | 2m21s / 2m19s | 0 | $0.2180 |
+| #606 | open, ready, CI at 100f3f01 pending at writing | Sonnet 5.5 / high | a25d87e782cfd13a7 | builder-standard, lg-65 Build 1 measurement only | 6m19s / 15m09s | 0 | $0.7424 |
+| #606 | open, ready, CI at 100f3f01 pending at writing | Opus 5.5 / high | ac489acea552d21b2 | builder-hard, lg-65 option C | 45m45s / 45m42s | 0 | $8.0205 |
+| #606 | open, ready, CI at 100f3f01 pending at writing | Sonnet 5.5 / xhigh | a8ddf5bfe7b993717 | ticket-reviewer-sonnet, lg-65 gate 1 | 21m59s / 20m35s | 0 | $3.1054 |
+| #606 | open, ready, CI at 100f3f01 pending at writing | Sonnet 5.5 / high | a75e4d6b29f0d1bab | fixer, lg-65 round 1 (F1 remedy A, F2) | 7m14s / 7m03s | 0 | $0.9421 |
+| #606 | open, ready, CI at 100f3f01 pending at writing | Sonnet 5.5 / xhigh | aea167cf2cda87e26 | ticket-reviewer-sonnet, lg-65 gate 2 (narrow) | 9m42s / 8m59s | 0 | $1.4092 |
+| #606 | open, ready, CI at 100f3f01 pending at writing | Sonnet 5.5 / high | ae26eef7e0a6c5c7d | fixer, lg-65 F3 fixed at landing + landing | 5m42s / 5m00s | 0 | $0.6334 |
+| #605 | open, ready, green at 2783eae9 | Haiku 5.5 / high | a5e908e55590c7a6a | builder-mechanical, repo-114 maintenance: two owner answers recorded | 9m04s / 23m35s | 0 | $0.1815 |
+| #609 | open, ready, green at d99b9b90 | Haiku 5.5 / high | a702a59740f1cf184 | builder-mechanical, repo-116 maintenance filing | 5m32s / 5m30s | 0 | $0.0845 |
+| — | — | Opus 5.5 / high | orchestrator 52d79292 | orchestrator (floor) | 1h12m28s / 3h28m02s | 0 | $5.3120 |
+| | | | | **total** (rates read 2026-10-10) | 3h23m16s | 0 | **$23.7178** |
+
+**Tickets:**
+- lg-64 → #604: no open decisions. Gate 1 PASS (1 low, recorded unfixed: no remedy stated). Landed ticket-only. The landing head's `test (ubuntu-latest)` failed on the repo-116 flake; the owner chose a re-run, and it passed. Ready, all green at db204337.
+- lg-65 → #606: the owner chose "reproduce first, then ask" at intake. Build 1 measured on main 8a6dcf9a: 300-row alternating 30.5–33.7 s, constant 51.3–71.4 s, 1,000-row past ~277 s. Then the owner set the bound at 10 s / 30 s and chose C then A. C met it: 730 ms, 869 ms, 4.35 s. Gate 1 CONCERNS (F1 med: the pairAt tie-break barely guarded; F2 low). The owner chose remedy A, and the fixer did round 1. Gate 2 PASS (F1 and F2 fixed; F3 low, fixed at landing by owner choice). Ready; CI at 100f3f01 pending at writing.
+- repo-114 → #605: maintenance recorded the owner's "live pair + fixture" answer. Round 2 added a `--show` fixture (owner's choice); the owner accepted it being planner→repo. The third reworded line was the orchestrator's extension of the answer, and the Log says so. No gate (maintenance row). Ready, green at 2783eae9.
+- repo-116 → #609: filed from #604's flake by owner choice. Reproduction: `scripts/test/review-record.test.ts` › "a gate appended later lands inside the existing "## Review" block, after gate 1" ENOENT on `.git/objects` (cp), runs 40046099052 and 39531046583. Ready, green at d99b9b90.
+
+**Defects in the skill:**
+
+1. `roles/common.md` › _The sandbox refuses some ordinary shell shapes_. It omits several shapes four agents hit. Reproductions:
+   - `npm run e2e:ledger -- --grep "Household fits|Receipt fits"` → `…inside a construct too complex to verify … Refusing to run it` (lg-64 builder).
+   - `bash /tmp/claude-1000/…/lg-65/build/smoke.sh` → `runs bash in a plain command; … cannot be shown not to run git`; with `cd <worktree> &&` in front it ran (lg-65 Build 1).
+   - `setsid nohup bash -c "node scripts/review-record.mjs --land …" > out 2>&1 &` → `runs setsid with the text bash in a plain command … Refusing to run it` (lg-64 lander).
+   - `F=tools/ledger/docs/work/lg-65-….md && sed -n 605,608p $F` → `runs sed with a value computed at runtime (the variable F)` (lg-65 round 1).
+   - `cd /workspaces/tools/.claude/worktrees/gate-lg-65-1 && npx vitest run … ; git status --short` → `changes directory to the shared checkout (…/gate-lg-65-1) before running git. Refusing to run it` (lg-65 gate 1).
+2. `roles/common.md` › _Your worktree_ against `roles/builder.md` › _Set up_. They disagree on farm and checkout order. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -n 'after your role page'` → `19:- **Populate and build before you measure anything**, after your role page's`. `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n '^1\. Farm\|^2\. Confirm'` → `19:1. Farm and build, per \`common.md\`` and `21:2. Confirm the branch name you were given is free`.
+3. `roles/builder.md` › _Set up_ step 2 has no path for a dispatch that continues an existing branch. lg-65's build continued #606's branch; the tools-49 entry's item 3 is the detached-worktree half of this. Reproduction: `git checkout lg-65-reproduce-on-main` → `branch 'lg-65-reproduce-on-main' set up to track 'origin/lg-65-reproduce-on-main'`, a shape the page does not name.
+4. `roles/reviewer.md` › _Reproduce, do not assess_. "Run it as `node <script> <tree>`" fails from the scratch directory. Reproduction: `cd /tmp/claude-1000/…/lg-65/gate-1 && node --import tsx -e "1"` → `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'tsx' imported from …/gate-1/`.
+5. `review-ticket/gate.md` and `roles/reviewer.md` never define the depth levels a dispatch names. Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n -i -E "depth|full"` → only `36:3. **Hunt defects yourself**, … to the depth your dispatch`, `275:… depth medium`, `492:… names its depth`.
+6. `review-ticket/gate.md` › _The section_ gives no rule for which range a gate-2 header names. Reproduction: `… | grep -n -i -E "same header|header line|Name both shas|range"` → `33:2. **Establish the diff.** \`git diff <base sha>...<head sha>\`. Name both shas in`, `297:A later gate's section starts \`### Gate 2\` with the same header line`.
+7. `roles/fixer.md` › _The work_, the mutation bullet. It says to run the gate's script "with your tree and an output directory", but lg-65 gate 1's `mutate.mjs` takes a tree and an id, writes in place, and restores to a hard-coded gated sha. The round-1 fixer wrapped it in its own `controls.sh` taking a restore sha. Reproduction: `grep -n "715e4cc3" /tmp/claude-1000/…/lg-65/gate-1/mutate.mjs`.
+8. `SKILL.md` › _The loop_ step 10 ("remove the ticket's worktrees"). My clean-up `git branch --list 'worktree-agent-*' | xargs -r git branch -D` deleted every stale `worktree-agent-*` branch in the shared clone, other sessions' included. A branch checked out in a worktree is refused, so the live peers kept theirs. Checked afterwards: the deleted heads shown (`96da35c8`, `8e49523c`) are on main, and `git fsck --no-reflogs --unreachable` commits from the last 3 days are only release-please commits. The page names no safe form for that clean-up. Reproduction: the command above printed `Deleted branch worktree-agent-afb5b71d0fb534871 (was 96da35c8).` among others.
+
+**Worked, and worth keeping:**
+- Measuring before asking for a bound: lg-65's Build 1 ran alone ($0.74). The owner then set 10 s / 30 s on today's numbers, not on the filer's pre-lg-58 figures, which were off by up to 7× on the 200-row shape.
+- A gate's own probe script handed to the round's fixer as the remedy: gate 1's `gate-fuzz.test.ts` became the committed spec, and gate 2 confirmed it draw-for-draw over 150,000 cases.
