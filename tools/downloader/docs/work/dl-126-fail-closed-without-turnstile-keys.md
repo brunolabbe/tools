@@ -40,7 +40,7 @@ one host that is public.
   `docs/01-ARCHITECTURE.md` line 248 say the same.
 - `tools/downloader/Dockerfile:142` sets `ENV NODE_ENV=production`, so every
   operator who runs the image is in production by that variable's name. `git grep
-NODE_ENV` under `tools/downloader` finds that line and nothing that reads it.
+  NODE_ENV` under `tools/downloader` finds that line and nothing that reads it.
 - `compose.downloader.prod.yaml:108-109` passes both keys through as
   `"${TURNSTILE_SITE_KEY:-}"` and `"${TURNSTILE_SECRET_KEY:-}"`, so a host whose
   `.env` lacks them starts with empty strings, which the loader reads as unset.
@@ -259,10 +259,10 @@ Done when 1–4, 6 and 7 stand as gate 1 graded them. On this head: `npm run che
   "File a dl- ticket" and "Don't file", and chose to file. Measured at
   `76ce7d52` as in Why. Re-ran the gate's `widget-fails.mts` on PR #496's head
   `fa94651d`: the summary line still reads `downloader routed with no Access app
-and no widget: true`.
+  and no widget: true`.
 - 2026-10-17 — `depends_on` is empty on purpose. dl-49's step 5 removes the
   Access application, and this fix has to land before that step. `depends_on:
-[dl-49]` would block the fix until the gap is already open. dl-49's own
+  [dl-49]` would block the fix until the gap is already open. dl-49's own
   `depends_on` does not list this ticket; adding it is an edit to dl-49's file on
   PR #496, which this filing does not make.
 - 2026-10-17 — `kind: fix`, because the open default is a hole in the production
@@ -282,7 +282,7 @@ and no widget: true`.
   separate decisions commit.
   - **Code.** `config.ts`: `turnstile()` takes a third argument and, with neither
     key and the setting on, throws `AppError("INTERNAL", "REQUIRE_HUMAN_CHECK is
-set, but TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY are not.")` with a hint
+    set, but TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY are not.")` with a hint
     naming both and the opt-out. It sits on the environment branch only; the
     `"turnstile" in overrides` branch is untouched, which a test pins
     (`loadApiConfig({ turnstile: undefined }, { REQUIRE_HUMAN_CHECK: "true" })`
@@ -306,8 +306,8 @@ set, but TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY are not.")` with a hint
     `human-check.test.ts` (four, so the existing ones keep their lines). Before
     `config.ts` changed, `npx vitest run tools/downloader/api/test/human-check.test.ts`:
     `Tests 1 failed | 17 passed (18)`, the failure `REQUIRE_HUMAN_CHECK with
-neither key refuses to boot, naming the variables` with `expected
-[Function] to throw an error`. After: `human-check.test.ts`, `terms-page.test.ts`
+    neither key refuses to boot, naming the variables` with `expected
+    [Function] to throw an error`. After: `human-check.test.ts`, `terms-page.test.ts`
     (reads the compose file) and `config.test.ts` together, `Tests 32 passed (32)`.
     The other three new tests pass on the old code by design: they pin that the
     open default, the both-keys path, the override path and the no-leak rule did
@@ -341,7 +341,7 @@ neither key refuses to boot, naming the variables` with `expected
     names, and neither Cloudflare test key anywhere in stdout or stderr. Proven
     able to fail: with the one-key message mutated to print `rawSecretKey`, it
     went red (`expected '{"level":"error","time":… not to contain
-'1x0000000000000000000000000000000AA'`) along with two in-process tests.
+    '1x0000000000000000000000000000000AA'`) along with two in-process tests.
     **Cost:** green it is about 2 s for the four spawns together. Against the old
     `config.ts` the same test takes 45 s and fails, because the process starts and
     listens until the test's own kill timer fires.
@@ -351,7 +351,7 @@ neither key refuses to boot, naming the variables` with `expected
     before the pull that moves the tag), and rolling back past it reopens a
     keyless host.
   - **F3, reproduced and fixed.** `compose-matrix.sh` from gate 1, `docker compose
-config` over the three-file stack: `unset` and `blank` both give
+    config` over the three-file stack: `unset` and `blank` both give
     `REQUIRE_HUMAN_CHECK: "true"`, `false`, `false` with a trailing space, quoted
     and with a trailing comment give `"false"`, and `0` gives `"0"`. Both boot
     hints now say `REQUIRE_HUMAN_CHECK=false` and leave both keys empty, the
@@ -368,7 +368,7 @@ config` over the three-file stack: `unset` and `blank` both give
     before I added the `ture` assertion to "unset or off leaves the open
     default", and the entry above was not updated. Against the base `config.ts` the
     final spec gives, with the round's tests included, `Tests 5 failed | 15 passed
-(20)`; of round 0's four tests, two fail on the old code (the Done when 1
+    (20)`; of round 0's four tests, two fail on the old code (the Done when 1
     test, and "unset or off" on its `ture` line) and two pass (the both-keys test, and the old leak test, which is F4). Round 0's
     figure above stands as a record of the earlier state.
 - 2026-10-17 — Fixed at landing by owner choice: gate 2, F7 — "the upgrade note
@@ -376,6 +376,6 @@ config` over the three-file stack: `unset` and `blank` both give
   the outage between the pull and the edit'. `pull` does not recreate the
   container; the outage starts at the `docker compose up -d` that follows", fixed
   as "between the `up -d` and the edit". `grep -n "outage between"
-docs/02-DEPLOYMENT.md` → `685:outage between the `up -d` and the edit.` F6
+  docs/02-DEPLOYMENT.md` → `685:outage between the `up -d` and the edit.` F6
   (the spawn test's single `SIGKILL` after 45 s on its regression path) is
   recorded and left unfixed, by the same owner choice.

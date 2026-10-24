@@ -254,7 +254,7 @@ Rows 1 to 6 are not re-traced: the round touches the directory's add path and te
     member routes) and "is refused by the schema too, in each of those states,
     and taken after a return is applied" (direct SQL). Both failed before the
     fix (`expected { admin: 200, member: 409 } to deeply equal { admin: 400,
-member: 400 }`; "retiring: expected [Function add] to throw an error") and
+    member: 400 }`; "retiring: expected [Function add] to throw an error") and
     pass after: the spec is 10 of 10. Gate 1's `gate1-lg35.test.ts`, re-run on
     this tree with its output sent elsewhere, now logs the SQL add as
     "refused: an address is added under a retired person only once their
@@ -318,6 +318,6 @@ member: 400 }`; "retiring: expected [Function add] to throw an error") and
   return cancels before the close lets the add through. Red against a trigger
   that refuses the case (`memberships_not_under_retired`'s first condition
   rewritten to "a retire no close has applied exists"): `npx vitest run
-tools/ledger/api/test/retire-person.test.ts tools/ledger/api/test/directory.test.ts`
+  tools/ledger/api/test/retire-person.test.ts tools/ledger/api/test/directory.test.ts`
   → `Tests  1 failed | 95 passed (96)`, the new test failing on `expected 500 to
-be 200`; restored → `Tests  96 passed (96)`.
+  be 200`; restored → `Tests  96 passed (96)`.

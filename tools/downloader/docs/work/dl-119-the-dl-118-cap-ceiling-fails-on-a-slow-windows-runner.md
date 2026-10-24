@@ -87,7 +87,7 @@ pull request).
    against the regression, measured more than once.
 4. The three rows pass with the cap in place:
    `npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts -t
-"clickTimeoutMs caps"`.
+   "clickTimeoutMs caps"`.
 5. Nothing outside the dl-118 cap block of `provoke.test.ts` changes, other than
    this ticket.
 
@@ -161,8 +161,8 @@ pull request).
     - both play clicks uncapped: all three fail, menu 9232 and 9212, cookie
       9417, 9687, 9307, 9309.
   - Capped, three runs of `npx vitest run
-tools/downloader/resolvers/test/browser/provoke.test.ts -t "clickTimeoutMs
-caps"` on the final test: `Tests  3 passed | 238 skipped (241)`, rows at
+    tools/downloader/resolvers/test/browser/provoke.test.ts -t "clickTimeoutMs
+    caps"` on the final test: `Tests  3 passed | 238 skipped (241)`, rows at
     2034/2219/2133, 2025/2215/2163 and 2040/2321/2245 ms (the vitest per-test
     time, which includes launch).
   - What the brief had wrong: none. The "four blocked clicks at 2000 ms" of the
@@ -182,12 +182,12 @@ caps"` on the final test: `Tests  3 passed | 238 skipped (241)`, rows at
     reads it (the dl-118 `%d` trap printed `NaN ms` when the ceiling was the
     second element). The test body and the timed region are unchanged. Control,
     at efada9ee before the fix: `npx vitest run
-tools/downloader/resolvers/test/browser/provoke.test.ts -t "closable panel"`
+    tools/downloader/resolvers/test/browser/provoke.test.ts -t "closable panel"`
     gave `Tests  241 skipped (241)`, exit 0, and `-t "clickTimeoutMs caps"` gave
     the cookie rows as `'a cookie sheet\'s View our 18 partner…': the blocked
-clicks wait for the cap, not 2000 ms`, twice. After the fix: `-t "closable
-panel"` gives `Tests  1 passed | 240 skipped (241)`, and `-t
-"clickTimeoutMs caps"` prints three distinct full names, with the rows at
+    clicks wait for the cap, not 2000 ms`, twice. After the fix: `-t "closable
+    panel"` gives `Tests  1 passed | 240 skipped (241)`, and `-t
+    "clickTimeoutMs caps"` prints three distinct full names, with the rows at
     2034, 2219 and 2136 ms and `Tests  3 passed | 238 skipped (241)`:
     - `a shell's 18+ menu button: the blocked clicks wait for the cap, not 2000 ms`
     - `a cookie sheet's View our 18 partners, closable panel: the blocked clicks wait for the cap, not 2000 ms`

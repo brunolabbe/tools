@@ -716,7 +716,7 @@ mutation and green when it is reverted, verified separately.
   `thumbnailUrl` on the way out, exactly as `withoutEgressProxy` strips
   `requestContext.proxyUrl`, so exactly one of the two is ever populated on the
   wire and the UI has nothing to choose between. `grep -rn thumbnailUrl
-tools/downloader/web` returns nothing.
+  tools/downloader/web` returns nothing.
 
   For the same reason the `Job` field is spelled `thumbnailPath` rather than the
   brief's `thumbnailUrl`. The brief itself supplied the argument: it asked for a
@@ -997,7 +997,7 @@ tools/downloader/web` returns nothing.
   failure mode worth avoiding. It is already visible in one that resolves without
   help: `probe.ts:101` is cited in the Why for the verbatim "attacker-influenced"
   comment, and today resolves to `// never even learns that an internal address
-answered. mustPass only —`, because this branch rewrote that comment two lines
+  answered. mustPass only —`, because this branch rewrote that comment two lines
   up. The citation is green and wrong. The Build section is now history rather
   than instructions, so the honest state is an unresolved citation plus this
   paragraph, not a resolved one that lies.

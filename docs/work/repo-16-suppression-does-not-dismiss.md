@@ -435,7 +435,7 @@ hunt run directly by the reviewer (no `Skill`/`Agent` tool in that role), to
   `npm run check`; not a defect of this branch.
 - **findings** · defect hunt at medium returned 0; 0 carried, 0 dropped.
 - NFR: security ✓ (SHA-pinned third-party action holding `security-events:
-write`, ambient `github.token`, push+main-only gate on the mutating step) ·
+  write`, ambient `github.token`, push+main-only gate on the mutating step) ·
   performance n/a · reliability — mechanism unobserved pre-merge, named as such
   (Done-when 6) · maintainability ✓ (record-withdrawal done in-place per repo
   convention, ADR amendments annotate rather than overwrite).
@@ -478,7 +478,7 @@ afterwards through this ticket's pull request._
 > table's two self-citations resolve at `36c8b31` and **not** in the merged tree:
 > `repo-16:67-231` is lines 99-263 here, and `repo-16:365-373` is lines 397-405. Both
 > offsets were measured, not computed from the diff — `## Decision — answered
-2026-09-07, not open` and `6. **Not done, and not doable from here.**` were
+> 2026-09-07, not open` and `6. **Not done, and not doable from here.**` were
 > located by `grep -n` and the endpoints re-resolved by `awk 'NR==n'`. The
 > reviewer's numbers are left as given, per `records.md`'s answer to this exact
 > case: pin the record to the tree the gate read rather than remap it, since a

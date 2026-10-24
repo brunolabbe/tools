@@ -161,7 +161,7 @@ Reviewed `git diff 42e6405..6418f17` only, against base `2ffb72a`. `origin/main`
   either count):
   `git diff --name-only 2ffb72a bdeb210 -- docs/work | grep -v repo-77` gives
   the 12 files; per file, `git diff 2ffb72a bdeb210 -- <file> | grep '^+' |
-grep -c '@2ffb72a'` for the line count, and the same piped through
+  grep -c '@2ffb72a'` for the line count, and the same piped through
   `grep -o '@2ffb72a:[0-9]*' | wc -l` for the pin count, give lines/pins:
   repo-14 4/4, repo-29 2/2, repo-41 1/1, repo-50 15/22, repo-52 2/7, repo-60
   7/10, repo-63 2/5, repo-64 2/2, repo-67 1/1, repo-74 1/2, repo-78 3/3,

@@ -67,7 +67,7 @@ in for the replies:
 - A mean run is ~3.7k in and ~2.1k out, which at Opus 5's $5 / $25 per MTok is
   **≈ $0.07**.
 - **The ceiling is output-dominated:** `MAX_SPECIALISTS (5) × 2 attempts ×
-MAX_OUTPUT_TOKENS (8,000)` is 80k output, or $2.00. Add input, including the
+  MAX_OUTPUT_TOKENS (8,000)` is 80k output, or $2.00. Add input, including the
   re-ask, which resends the system prompt and **echoes the first reply back as
   input**, and it is ≈ $2.24 a run. `runBudgetFor` in
   `api/src/runs/orchestrator.ts` divides `RUN_TOKEN_BUDGET` by output tokens
@@ -174,7 +174,7 @@ larger again.
    specialist: attempt 1, then attempt 2 as attempt 1 plus `maxOutputTokens`
    plus the complaint. **File a `pl-` fix if any of these holds:**
    - **(a)** any single run bills more output tokens than `maxSpecialists ×
-maxAttemptsPerSpecialist × maxOutputTokens`. The bound is then false as
+     maxAttemptsPerSpecialist × maxOutputTokens`. The bound is then false as
      stated.
    - **(b)** for any set, input is **≥ 20%** of the reconstructed dollar ceiling
      at the deployed 8,000 cap. A budget counted in output tokens then
@@ -432,14 +432,14 @@ costs the same.
   client built the same way `AnthropicProvider`'s constructor does (same
   `ANTHROPIC_BASE_URL`, `ANTHROPIC_MAX_RETRIES`, both already exported from
   pl-39). `package-lock.json` picked up the new edge via `npm install
---package-lock-only` (no `node_modules` write, no postinstall) — it also
+  --package-lock-only` (no `node_modules` write, no postinstall) — it also
   synced two stale `version` fields already out of date in the committed
   lockfile (`@downloader/api` and `@planner/api`, both reading an old release
   number under `packages["tools/planner/api"]` etc.). Harmless and mechanical;
   left in rather than hand-reverted, since undoing it would mean re-introducing
   a lockfile that disagreed with the package.json files it describes.
 - `tools/planner/api/test/live/run.ts` — the harness. `node --import tsx
-tools/planner/api/test/live/run.ts --out <dir> --max-usd <n>`. `--out` has no
+  tools/planner/api/test/live/run.ts --out <dir> --max-usd <n>`. `--out` has no
   default on purpose: a scratch run and the checked-in `fixtures/live/` must
   never be reachable by the same accidental invocation.
 - `tools/planner/api/test/live-gate.test.ts` — a normal, collected vitest
@@ -523,7 +523,7 @@ and `api/test/live/run.ts`:**
 - **MED 1 — the redaction walk false-positived on the harness's own real
   records.** Reproduced exactly: 19 of 31 file-checks failed over a real
   scripted run's B/C/D records, on OSM tag values like `wikipedia:
-"fr:Observatoire de la capitale"` — `new URL()` parses a bare `fr:` scheme
+  "fr:Observatoire de la capitale"` — `new URL()` parses a bare `fr:` scheme
   with `origin === "null"`, which the old whole-string comparison against
   `redactUrl` always called "changed". **Fixing this surfaced a second,
   real false positive of the same kind, found while re-verifying against the
@@ -586,7 +586,7 @@ and `api/test/live/run.ts`:**
   filing's happy-run figure is ≈$0.07, a different number for a different
   question); the base commit's test count was given as "69 files" when
   `git ls-tree -r --name-only 20c8fd1 -- tools/planner | grep -E
-'/test/.*\.test\.(ts|tsx)$'` gives 67 (independently confirmed; the paired
+  '/test/.*\.test\.(ts|tsx)$'` gives 67 (independently confirmed; the paired
   test count, 1090, is the gate's own figure and reconciles exactly with
   today's 1126 minus this round's 36 new assertions); and the MED 2 test's
   own $2.00 claim, covered above.
@@ -723,7 +723,7 @@ the owner on 2026-09-18, each with options and a recommendation first, over
 - **D — the thinking-token breakdown pl-39 drops.** Chosen: file a ticket,
   not fold the fix into this branch or drop the Log table's column. Filed as
   [pl-50](./pl-50-thinking-tokens-are-billed-and-not-counted.md), `status:
-ready`, naming the exact SDK type line both the builder and the reviewer
+  ready`, naming the exact SDK type line both the builder and the reviewer
   independently confirmed
   (`@anthropic-ai/sdk@0.125.0`'s `resources/beta/messages/messages.d.ts:2899`,
   `BetaUsage.output_tokens_details`) and the exact line in
@@ -932,7 +932,7 @@ fills more of the output bound.
 **Rules (a)–(c): none tripped, and no `pl-` fix is filed.**
 
 - **(a)** No run billed more output than `maxSpecialists ×
-maxAttemptsPerSpecialist × maxOutputTokens`. Set D sits exactly on the bound
+  maxAttemptsPerSpecialist × maxOutputTokens`. Set D sits exactly on the bound
   for Opus and Haiku `high` (5,120 = 5 × 2 × 512), and 86 under it for
   Sonnet. **Billed output per call stayed within `max_tokens` with thinking
   on**: every `length` stop billed exactly 512. No run's dollars exceeded its

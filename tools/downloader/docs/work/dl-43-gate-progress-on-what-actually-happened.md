@@ -345,7 +345,7 @@ NFR: security ✓ (both prior gaps closed this round; redaction confirmed struct
   channel's deadline unconditionally, so a client attaching after `done` bought a
   finished probe another full TTL — caught by
   `api/test/probe-stages.test.ts:89 "reaches a subscriber that only arrives
-afterwards"`, fixed at `api/src/probe-stages.ts:223 "if (!existing.ended)"`. (2) `.progress::-webkit-progress-bar` sets
+  afterwards"`, fixed at `api/src/probe-stages.ts:223 "if (!existing.ended)"`. (2) `.progress::-webkit-progress-bar` sets
   an opaque background and that pseudo-element paints _above_ the element's own,
   so in Chromium the static barber-pole this ticket was replacing had been
   invisible all along — the animated background would have been too. Only the
@@ -373,7 +373,7 @@ afterwards"`, fixed at `api/src/probe-stages.ts:223 "if (!existing.ended)"`. (2)
     hatch covers the whole track — visibly not a determinate bar at 0%, which
     would be an empty one.
   - The download card walked `Queued → Re-analysing → Downloading → Assembling →
-Ready` (and `→ Failed` on `dlfail`) at a **constant 828 px** with five gate
+    Ready` (and `→ Failed` on `dlfail`) at a **constant 828 px** with five gate
     segments throughout, on `""`, `indeterminate`, `flaky`, `expired` and
     `dlfail`. Screenshots confirm the gated bar reads as intended: done segments
     green with a tick, the current one accented, the rest grey.

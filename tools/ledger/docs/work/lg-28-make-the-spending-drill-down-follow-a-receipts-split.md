@@ -136,7 +136,7 @@ attached to one row: chart Groceries 6 125, Alcohol 1 553, Household 574; lists
     category it was asked for, signed as `amountCents` (money out negative), set
     only for a split row in a `scope=spending` list with a `spendingCategory`.
     Everything else is listed as before. A list then sums, in `sliceCents ??
-amountCents`, to minus the slice less the card lines. `total` and `offset`
+    amountCents`, to minus the slice less the card lines. `total` and `offset`
     count entries after the expansion.
   - **Reading of Build 2 the code decides, not the ticket:** the slice-following
     list is only `scope=spending` with a category. `fetchUncategorisedRows`

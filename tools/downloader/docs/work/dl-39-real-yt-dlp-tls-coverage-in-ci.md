@@ -203,7 +203,7 @@ was chosen, so there is one line and it is met:
   references and concluded there was simply no gate to run against. The
   reviewer (`a2250d43499fa92f1`) reported that same "zero references" claim to
   the orchestrator. **The orchestrator** ran `grep -in
-'yt-dlp\|ytdlp\|YTDLP' .github/workflows/downloader.yml` directly, found the
+  'yt-dlp\|ytdlp\|YTDLP' .github/workflows/downloader.yml` directly, found the
   `INSTALL_YTDLP=false` build-arg the claim had missed, read
   `Dockerfile:90-93` for the "latency optimisation, never a dependency"
   sentence neither builder nor reviewer had surfaced, and corrected both of

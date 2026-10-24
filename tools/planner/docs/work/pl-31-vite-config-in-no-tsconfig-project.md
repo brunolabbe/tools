@@ -291,7 +291,7 @@ Spot-checks worth naming:
   `afterEach` at :28-31, `expect(server?.host).toBe(false)` at :44 with the "not
   the string `localhost`" comment at :42-43, port/`strictPort` at :50-51.
 - `vitest.config.ts:73 "tools/planner/*/test/"` — `include:
-["tools/planner/*/test/**/*.test.{ts,tsx}"]`,
+  ["tools/planner/*/test/**/*.test.{ts,tsx}"]`,
   so pl-32's "no new project file is needed" is correct.
 - `tools/planner/e2e/tsconfig.json:23 "../playwright.config.ts"` —
   `"include": ["**/*.ts", "../playwright.config.ts"]`. The comment's analogy is
@@ -303,7 +303,7 @@ Spot-checks worth naming:
   reproduced verbatim.** Adding `"vite.config.ts"` to
   `tools/planner/web/tsconfig.json`'s include yields
   `error TS6059: File '.../tools/planner/web/vite.config.ts' is not under
-'rootDir' '.../tools/planner/web/src'`, and drops `vite.config.d.ts` and
+  'rootDir' '.../tools/planner/web/src'`, and drops `vite.config.d.ts` and
   `vite.config.d.ts.map` beside the config. Both reverted.
 - **`npm run build -w @planner/web` still bundles** — **true.** From a deleted
   `dist`: `tsc --build && vite build`, 136 modules,
@@ -390,13 +390,13 @@ nothing.
      anywhere in the output. The gap is real on `567f9e5`.
   2. Probe present, fix applied: **exit 1**, with
      `tools/planner/web/vite.config.ts(55,7): error TS2322: Type 'string' is not
-assignable to type 'number'.`
+     assignable to type 'number'.`
   3. Probe reverted (`git checkout --`, then diffed against a copy taken before
      it was appended), fix applied: **exit 0**.
   4. The rejected alternative from step 3 of the brief, confirmed rather than
      taken on faith — `"vite.config.ts"` added to `tools/planner/web/tsconfig.json`:
      `error TS6059: File '…/tools/planner/web/vite.config.ts' is not under
-'rootDir' '…/tools/planner/web/src'.` It also dropped a `vite.config.d.ts`
+     'rootDir' '…/tools/planner/web/src'.` It also dropped a `vite.config.d.ts`
      and a `.d.ts.map` beside the config, exactly as the brief warned. Both
      reverted, both stray files deleted.
 
@@ -413,7 +413,7 @@ assignable to type 'number'.`
   reads `HOST` the same way", so a test might prove nothing new — but reading it
   the same way is not the same as anything asserting it. This ticket makes a
   _type_ error in the file fail the gate; a _value_ regression — `host:
-"localhost"`, `strictPort: false`, a port that is no longer the 5183
+  "localhost"`, `strictPort: false`, a port that is no longer the 5183
   `.devcontainer/devcontainer.json` forwards — still typechecks perfectly and
   still produces the silent blank page the docblock describes. repo-5 is what
   settles it: it asks whether the `HOST` resolution lifts to `packages/`, and

@@ -85,7 +85,7 @@ rest. One thing was raised and it was not a defect here:
   one sentence, "143 insertions and 0 deletions across `tools/planner/`, four
   `.md` files touched", which reads as a whole-branch claim. Both figures are
   right about different objects — `git diff --numstat origin/main HEAD --
-tools/planner/` is 143/0, and `git diff --numstat 1d420b7 HEAD` over all four
+  tools/planner/` is 143/0, and `git diff --numstat 1d420b7 HEAD` over all four
   files is 266/2, the two deletions being `status: ready` and `_Not started._`
   in this ticket's own file. Re-derived here, both. The append-only claim about
   the three planner logs was never in question. Recorded because it is the same
@@ -243,9 +243,9 @@ repo-4 is `13d9735`, merged 2026-08-29 as #98. Named in both annotations.
   is why all four still hold.
 - **The PR title's type is `hidden`, read off the config.**
   `release-please-config.json:31` is `{ "type": "docs", "section":
-"Documentation", "hidden": true }`, and `node scripts/commit-message.mjs --text
-"docs(planner): correct two stale fixture notes, and record why pl-33 cannot
-start here (repo-11)"` exits 0.
+  "Documentation", "hidden": true }`, and `node scripts/commit-message.mjs --text
+  "docs(planner): correct two stale fixture notes, and record why pl-33 cannot
+  start here (repo-11)"` exits 0.
 - **No planner release is cut** — asserted from the config above and from the
   branch touching no planner file outside `docs/work/`, not observed. Nothing
   here ran release-please, and nothing on a pre-merge branch can.

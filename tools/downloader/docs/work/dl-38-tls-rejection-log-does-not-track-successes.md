@@ -85,7 +85,7 @@ settle, not answered here:
    origin, probed twice). Whoever builds this has to show it does not
    regress that case — a test exists for it already
    (`tls-rejections.test.ts`'s `"two genuine certificate refusals on one host,
-with no other outcome, both enrich"`) and must stay green.
+   with no other outcome, both enrich"`) and must stay green.
 3. **Narrow the reattachment instead of widening the tracking**: only reattach
    when the _tier's own error_ independently suggests a connection-layer
    problem (e.g. restrict to `UNREACHABLE` and drop `NO_MEDIA_FOUND` from
@@ -108,7 +108,7 @@ with no other outcome, both enrich"`) and must stay green.
   `NO_MEDIA_FOUND` concurrently) red before the fix, green after.
 - `tls-rejections.test.ts`'s existing suite, including
   `"two genuine certificate refusals on one host, with no other outcome, both
-enrich"`, stays green — a fix here must not regress the case dl-37 built the
+  enrich"`, stays green — a fix here must not regress the case dl-37 built the
   outcome-kind split to protect.
 - `npm run check` and `npm test -- --project downloader` pass.
 
@@ -388,13 +388,13 @@ answers which question).
   broken private-root origin probed twice concurrently — records two
   certificate refusals and nothing else, so both still enrich.
   `"two genuine certificate refusals on one host, with no other outcome, both
-enrich"` is that case and was run green, by name, with its output read
+  enrich"` is that case and was run green, by name, with its output read
   (`tls-rejections.test.ts` 35/35).
 
   **Red before, green after, and one honest note about the first red.** Running
   the new tests against base `4a4cc4f`'s source, with the tip's tests kept,
   gives **10 failures in three shapes** — 6 `TypeError: log.recordSuccess is not
-a function` in `tls-rejections.test.ts`, 2 in `resolvers.test.ts` surfacing as
+  a function` in `tls-rejections.test.ts`, 2 in `resolvers.test.ts` surfacing as
   `AppError { code: 'INTERNAL' }` because the wrapper catches and wraps the same
   TypeError, and 2 plain assertion mismatches in `egress-proxy.test.ts`
   (`expected [] to deeply equal [ 'trusted.test:<port>' ]`) with no TypeError at
@@ -410,7 +410,7 @@ a function` in `tls-rejections.test.ts`, 2 in `resolvers.test.ts` surfacing as
   `#successes`: `resolvers.test.ts`'s
   `"a concurrent success on the same host blocks reattachment (dl-38)"` then
   fails with `expected AppError: TLS_VERIFICATION_FAILED to match object
-{ code: 'NO_MEDIA_FOUND' }`, which is the ticket's scenario stated as an
+  { code: 'NO_MEDIA_FOUND' }`, which is the ticket's scenario stated as an
   assertion. Both runs are in the gate record. The new `onConnectEstablished`
   proxy test was checked the same way — deleting the hook call in the terminate
   path fails it with `expected [] to deeply equal [ 'trusted.test' ]`.

@@ -224,11 +224,11 @@ This verdict becomes PASS when `test (windows-latest, informational)` runs green
   Why. Both defects reproduced before any source change (tables and outputs in
   Why); no test depends on the shared repository's loose-object count.
 - 2026-10-06 — Red and green, `npx vitest run scripts/test/review-record.test.ts
--t "repo-94"`. With all three fixes absent, the three new tests fail:
+  -t "repo-94"`. With all three fixes absent, the three new tests fail:
   `expected [ '' ] to deeply equal [ '0' ]` (the clone's `gc.auto` is unset),
   `expected [] to have a length of 1 but got +0` (no `removeDir` seam), and
   `expected 'FAIL merge-tree: conflicts with PR #3…' not to match /git reset
---hard/`. The cleanup test failing only for a missing seam proves little, so it
+  --hard/`. The cleanup test failing only for a missing seam proves little, so it
   was also run with the seam present and the warning replaced by a bare rethrow:
   `Error: ENOTEMPTY: directory not empty, rmdir '/tmp/review-record-land-IuVYJJ/.git'`
   thrown out of `land()`. With the fixes: `Tests 3 passed | 61 skipped (64)`;
@@ -242,10 +242,10 @@ This verdict becomes PASS when `test (windows-latest, informational)` runs green
   "The landing is already on origin/<branch>, so undoing it also needs a
   force-push of that branch, which this tool never does and which is the owner's
   to make." Test `land() keeps the reset command on a verify failure after the
-push, and says undoing it needs the owner's force-push (repo-94)`. Red with
+  push, and says undoing it needs the owner's force-push (repo-94)`. Red with
   `resetHintAfterPush()` swapped back to `resetHint()`:
   `AssertionError: expected 'gate1.md: the landed block is not the…' to match
-/already on origin\/feature/`. Green: whole file `Tests 65 passed (65)`.
+  /already on origin\/feature/`. Green: whole file `Tests 65 passed (65)`.
 - 2026-10-06 — `.claude/skills/orchestrate-tickets/reference/records.md`,
   _Landing_: "a failure after the commits prints the reset command and rolls
   nothing back" is no longer true of a preflight failure (nor, since the verify
@@ -267,7 +267,7 @@ push, and says undoing it needs the owner's force-push (repo-94)`. Red with
   **F2:** the injected `removeDir` now throws a message with no path; dropping
   `${scratchDir}` from the warning is red
   (`expected 'WARNING: could not remove the scratch…' to contain
-'/tmp/review-record-land-0kTDZD'`). **F3:** the failing-validation half now
+  '/tmp/review-record-land-0kTDZD'`). **F3:** the failing-validation half now
   asserts the `Validated against a scratch clone` text, no reset command, and
   that the real repository's `HEAD` did not move. **F4:** the two `land()`
   comments that called preflight a reset-advice failure are corrected. Whole

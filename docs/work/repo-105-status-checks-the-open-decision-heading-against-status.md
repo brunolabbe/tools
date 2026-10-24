@@ -84,19 +84,19 @@ nothing blocks the build; there is no ticket id to name in `depends_on`.
 
 - 2026-10-17 — Filed from the owner's review of #521 (session tools-d3), from
   the heading count above (`grep -h "^## .*[Dd]ecision" tools/*/docs/work/*.md
-docs/work/*.md`).
+  docs/work/*.md`).
 - 2026-10-18 — Built on `repo-105-status-checks-open-decision-heading`, base
   029641b4. The check is in `scripts/status.mjs` (`validate`, with
   `hasOpenDecisionHeading`), its three cases are the end of
   `scripts/test/status.test.ts`, and the template sentence is in
   `docs/01-TICKETS.md`.
   - **Premise.** The Why said this waits for #521. It is merged: `git
-merge-base --is-ancestor f7929c41 origin/main` exits 0, and
+    merge-base --is-ancestor f7929c41 origin/main` exits 0, and
     `git show origin/main:docs/01-TICKETS.md | grep -n "^## Decision — open"`
     prints `82:## Decision — open`. The sentence is corrected above. Nothing
     else in the brief rested on #521 being unmerged.
   - **Counts, re-measured on 029641b4.** `grep -l "^## .*[Dd]ecision"
-tools/*/docs/work/*.md docs/work/*.md | wc -l` is 71 files, the grep
+    tools/*/docs/work/*.md docs/work/*.md | wc -l` is 71 files, the grep
     line count is 81, and `sort -u` gives 48 distinct lines. The Why's "70
     files" is one short, and its "about 41 spellings once dates are
     normalised" reproduces once dates are normalised (my `sort -u` above did not
@@ -106,9 +106,9 @@ tools/*/docs/work/*.md docs/work/*.md | wc -l` is 71 files, the grep
     for that exact line over `work/` gives 0 files.
   - **Fail-first, Build 3.** Commit `8bc15bd2` is the baseline. With the
     `if` in `validate` replaced by `if (false && …)`, `npx vitest run
-scripts/test/status.test.ts --reporter=verbose` gave `Tests  1 failed |
-138 passed (139)`, the failure being ``a `## Decision — open` heading on a
-ready ticket fails, and names the file``. That is the only case the check
+    scripts/test/status.test.ts --reporter=verbose` gave `Tests  1 failed |
+    138 passed (139)`, the failure being ``a `## Decision — open` heading on a
+    ready ticket fails, and names the file``. That is the only case the check
     can fail, so the other two passing is by construction. Each was run against
     the mutant that would wrongly fail it: the `needs-decision` exemption
     dropped, with the template sentence also removed in the same run, gave

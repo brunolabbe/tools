@@ -203,8 +203,8 @@ ticket.** Filed as repo-77 in this pull request, with no fix.
   (`279`, `726`) that do not. Restored to ranges, at their now-current
   coordinates (`279-280`, `824-825` — repo-79's own round 2 moved
   `spawnRaw` again) — coordinate only, anchor text unchanged; `node
-scripts/citations.mjs docs/work/repo-75-spawn-safety-scan-never-reaches-scripts.md
---section Review --require-anchors --require-distinct-anchors` exit 0.
+  scripts/citations.mjs docs/work/repo-75-spawn-safety-scan-never-reaches-scripts.md
+  --section Review --require-anchors --require-distinct-anchors` exit 0.
 - 2026-09-28 — repo-79's gate 2 fixer round moved `spawnRaw` again: the range
   is now `895-896`, the same two lines (`function spawnRaw(…)` and the
   `shell: false` line beneath it) at their new coordinates — coordinate only,
@@ -215,17 +215,17 @@ scripts/citations.mjs docs/work/repo-75-spawn-safety-scan-never-reaches-scripts.
   `scripts/preflight.mjs` moved `spawnRaw` again: the range is now `908-909`,
   the same two lines at their new coordinates — coordinate only, range width
   kept, anchor text unchanged. `node scripts/citations-gate.mjs --against
-origin/main` named it `moved` at exactly this new line before the repoint.
+  origin/main` named it `moved` at exactly this new line before the repoint.
 - 2026-09-28 — repo-82's gate 1 fixer round, fixing the gate's low on
   uncaught `npm` abbreviations, moved `spawnRaw` again: the range is now
   `928-929`, the same two lines at their new coordinates — coordinate only,
   range width kept, anchor text unchanged. `node scripts/citations-gate.mjs
---against origin/main` named it `moved` at exactly this new line before the
+  --against origin/main` named it `moved` at exactly this new line before the
   repoint.
 - 2026-09-28 — the same fixer round, splitting the docblock the gate's other
   low also named (misplaced above `NPM_ALIASES`, describing `COVERED`) into
   one paragraph beside each, moved `spawnRaw` again: the range is now
   `936-937`, the same two lines at their new coordinates — coordinate only,
   range width kept, anchor text unchanged. `node scripts/citations-gate.mjs
---against origin/main` named it `moved` at exactly this new line before the
+  --against origin/main` named it `moved` at exactly this new line before the
   repoint.

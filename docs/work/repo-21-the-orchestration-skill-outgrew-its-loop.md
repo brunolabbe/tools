@@ -217,8 +217,8 @@ from a scratch copy, not from its documentation:
   **not** parse as citations, so today `SKILL.md` has effectively none.
 - Writing defect 1's own sentence as a citation reports
   `MOVED  .claude/agents/builder.md:22 "| \`mechanical\` | \`sonnet\` |"`with
-*"not in 22, and not anywhere in the file"*, exit **1**. The true wording, and`.claude/agents/ticket-reviewer.md@1bb63fa:6 "model: sonnet isolation: worktree"`, both report `ok`— exit
-**0** with`--require-anchors`. **The check would have caught defect 1 and does
+  *"not in 22, and not anywhere in the file"*, exit **1**. The true wording, and`.claude/agents/ticket-reviewer.md@1bb63fa:6 "model: sonnet isolation: worktree"`, both report `ok`— exit
+  **0** with`--require-anchors`. **The check would have caught defect 1 and does
   not fire on the corrected text.**
 - Working-tree mode uses `git ls-files`, so it needs no history: it is safe in
   `check`'s depth-1 clone with no `fetch-depth`.
@@ -1145,7 +1145,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
      `## Fallbacks and caveats` section with its measurement intact.
   4. **Build 5's `^## Review` counts have both moved.** Re-measured 2026-09-07 with
      `grep -rlE '^## Review$' --include='*.md' docs tools` and the `^#{2,3}
-(Review|Gates?)` variant over the same paths: **51 and 68**, where the ticket
+     (Review|Gates?)` variant over the same paths: **51 and 68**, where the ticket
      recorded 36 and 52. The conclusion is unchanged and the ratio is close, so the
      numbers on the page are the new ones and the discriminator is unaltered.
   5. **Build 7's `-l` transcript has drifted and the rule survives it.**
@@ -1180,7 +1180,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
   <!-- citations: evidence .claude/agents/builder.md:21-25, .claude/agents/builder.md:22 -->
 
   Reverted, and the same command exits **0** with `4 verified, 0 moved, 0
-unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
+  unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
   exact words the defect was written in. Exit codes were read from `$?` on an
   unpiped invocation redirected to a file, per Build 7's own rule.
 
@@ -1302,7 +1302,7 @@ unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
   already false on `main`.** `SKILL.md` said _"Both generalisations quoted on this
   page — 'tested it and narrated the other', and the edit-list/re-derive-list
   split — exist because a relay asked for them."_ `git grep -n narrated origin/main
--- .claude docs` returns **exactly one line: that sentence.** The generalisation
+  -- .claude docs` returns **exactly one line: that sentence.** The generalisation
   it names as quoted on the page appears nowhere in the tree, so the page was
   citing itself for a quotation it does not carry. The row now names
   `defect-shapes.md`'s re-derive-list rule, which does exist there, and claims
@@ -1324,7 +1324,7 @@ unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
   `ci.yml`'s own header comments that `check` carries no path filter on either
   `push` or `pull_request`, so a markdown-only pull request reaches it. What
   remains unmeasured is only the Actions run itself: `gh run list --branch
-repo-21-orchestration-skill-loop` returns `[]` because no pull request exists
+  repo-21-orchestration-skill-loop` returns `[]` because no pull request exists
   yet. First green run is the last piece of evidence, and it is not on this
   branch.
 
@@ -1379,7 +1379,7 @@ repo-21-orchestration-skill-loop` returns `[]` because no pull request exists
   Decision section, not here.
 
   **What it cost this page: eight lines.** `## Which model built it, and which
-gated it` gained a four-row pairing table with a gate column and lost three
+  gated it` gained a four-row pairing table with a gate column and lost three
   prose bullets that said less; loop step 4 names `standard` in one clause and
   stays at three lines. `SKILL.md` is **355** lines here, against **347** at
   `f5fe74e` — the repo-21 work alone, which is what the size bullet above reports

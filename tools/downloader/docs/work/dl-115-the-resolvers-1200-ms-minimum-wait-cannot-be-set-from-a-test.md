@@ -228,10 +228,10 @@ covers players that mount late. Faking the clock was ruled out:
     - the constant at 900: `expected 900 to be 1200` (the "default is 1200 ms"
       test only);
     - the constructor default at `600`: `expected 605.07 to be greater than or
-equal to 1200`;
+      equal to 1200`;
     - the option ignored: `expected 1223.23 to be less than 1200`.
   - **Before and after**, `npx vitest run --project downloader --reporter=verbose
-tools/downloader/resolvers/test/browser/` (15 files, 758 tests before, 761
+    tools/downloader/resolvers/test/browser/` (15 files, 758 tests before, 761
     after), two pairs, each on the same machine in turn:
 
     | Run                 | Wall    | Summed test time | `browser-resolver.test.ts` |
@@ -260,7 +260,7 @@ tools/downloader/resolvers/test/browser/` (15 files, 758 tests before, 761
   - **`npm test -- --project downloader`, three in a row**, through the test
     gate, on `cdf2e58e` (the later commits change a ticket file only): each
     `Test Files 119 passed | 1 skipped (120)`, `Tests 2564 passed | 2 skipped
-(2566)`, exit 0, at 304.4 s, 302.6 s and 299.4 s. The Windows leg is not
+    (2566)`, exit 0, at 304.4 s, 302.6 s and 299.4 s. The Windows leg is not
     measured here; the pull request's own run is the reading.
   - **Folded in, or not.** Nothing else was free. The hand-written `1200` in
     `consent-scope.test.ts`'s `emptyMinWaitMs` and the `quietMs: 1200` in the
@@ -313,17 +313,17 @@ tools/downloader/resolvers/test/browser/` (15 files, 758 tests before, 761
     fixtures make on a press is made on the click itself", in the `BASE_WAITS`
     comment and in Build 2's recorded answer.
   - **Ten runs, each its own process,** `npx vitest run
-tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
-"defaults to 1200"` at `7c79bbbc` → 10 of 10 exit 0, `Tests  3 passed | 120
-skipped (123)` each.
+    tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
+    "defaults to 1200"` at `7c79bbbc` → 10 of 10 exit 0, `Tests  3 passed | 120
+    skipped (123)` each.
   - **Gate 2's mutants, both still red** on `7c79bbbc`, the file restored from
     that sha afterwards. `options.minWaitMs ?? 2400` →
     `× a resolver given no minWaitMs hands the wait MIN_WAIT_MS, and holds it
-that long`, `AssertionError: expected 2400 to be 1200`. `minWaitMs:
-this.#minWaitMs` replaced by `minWaitMs: MIN_WAIT_MS` →
+    that long`, `AssertionError: expected 2400 to be 1200`. `minWaitMs:
+    this.#minWaitMs` replaced by `minWaitMs: MIN_WAIT_MS` →
     `× a minWaitMs below it is the one the wait is handed`, `AssertionError:
-expected 1200 to be 200`. Each: `Tests  1 failed | 2 passed | 120 skipped
-(123)`.
+    expected 1200 to be 200`. Each: `Tests  1 failed | 2 passed | 120 skipped
+    (123)`.
 
 - 2026-10-18 — Correction to gate 1's record, from dl-128. The Review's
   sentence "The lower bound `waitedMs >= MIN_WAIT_MS` cannot fail by timing,
@@ -332,7 +332,7 @@ expected 1200 to be 200`. Each: `Tests  1 failed | 2 passed | 120 skipped
   floor; and it counts its floor on `Date.now`, which the test's `performance.now`
   stopwatch does not follow, so a system-clock step during the wait moves the
   two apart. dl-126's landing saw `expected 1001.709182999999 to be greater than
-or equal to 1200` from this assertion. dl-128 measured which of the two it can
+  or equal to 1200` from this assertion. dl-128 measured which of the two it can
   be here (the deadline cannot, at the test's 25 s budget; the clock steps
   measured here run backwards and cannot shorten the wait, a forward step would,
   and none was observed) and gave the test an assertion that names each. The Review above is left as the gate wrote it.

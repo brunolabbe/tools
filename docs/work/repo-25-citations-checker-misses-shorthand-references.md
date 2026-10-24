@@ -218,7 +218,7 @@ because it is the evidence.
   that the obvious qualification is not always enough — `api/src/config.ts` and
   `api/src/db/schema.ts` each still match both `downloader` and `planner`.
 - **This ticket fails its own checker on purpose, twice.** `node
-scripts/citations.mjs` on this file reports `2/4 resolve`: `hls.ts:367` inside
+  scripts/citations.mjs` on this file reports `2/4 resolve`: `hls.ts:367` inside
   the reproduction block, and `index.ts:440` in the Build section, are both
   deliberately unqualified — they are the evidence, and qualifying them would
   destroy it. That is the second case the tool's own footer names ("a citation
@@ -236,7 +236,7 @@ scripts/citations.mjs` on this file reports `2/4 resolve`: `hls.ts:367` inside
   was filed, and the count was 6, not 4, because the Log passage quoting the two
   deliberate citations contains them a second time. Against `origin/main@cf433aa`
   the actual output was `0 verified, 0 moved, 2 unanchored, 4 unresolvable — of 6
-citations`. The _shape_ of the claim held exactly — four failures, all of them
+  citations`. The _shape_ of the claim held exactly — four failures, all of them
   deliberate — so nothing downstream of it changed.
 
   **Prose is counted and never fatal, and that is a measurement rather than a
@@ -338,8 +338,8 @@ citations`. The _shape_ of the claim held exactly — four failures, all of them
   gains `src/tls.ts:99`. `--rev <commit 1>` reported `1 unresolvable` and exited
   1, blaming a citation **the record did not contain at that sha**, with nothing
   saying which document it had read. Now the header reads `read from the working
-tree and resolved against <sha>`, and the run adds `2 reference(s) now, 1 then
-— 1 it did not have then`. Advice on stdout, so `stderr empty ⟺ exit 0` holds.
+  tree and resolved against <sha>`, and the run adds `2 reference(s) now, 1 then
+  — 1 it did not have then`. Advice on stdout, so `stderr empty ⟺ exit 0` holds.
 
   **The quiet wrong-file shorthand is real, and my last report understated it.**
   I wrote that the three wrong-file inheritances in the corpus "all surfaced
@@ -404,11 +404,11 @@ tree and resolved against <sha>`, and the run adds `2 reference(s) now, 1 then
   **What made it invisible, which is the part worth carrying.** The discrepancy
   was printed in my own terminal and I explained it away. Loosening `PROSE` to a
   bare number to prove the corpus test could fail returned `expected 122728 to be
-less than 17150` — a **17,150**-reference corpus, against the 764 I was
+  less than 17150` — a **17,150**-reference corpus, against the 764 I was
   quoting two paragraphs later. I read that line as "the loose regex explodes",
   attributing the whole difference to the variable I was manipulating and never
   looking at the constant. `npm run status` had also printed `downloader — 3 open
-of 44` and `planner — 1 open of 37` earlier in the same session; 44 + 37 + 26 is
+  of 44` and `planner — 1 open of 37` earlier in the same session; 44 + 37 + 26 is
   107, and I had every term on screen. And no `dl-` or `pl-` ticket ever appeared
   in a list captioned "records that newly fail", which is a silence that should
   have been louder than any number. **A denominator that disagrees by 22× is not
@@ -447,7 +447,7 @@ of 44` and `planner — 1 open of 37` earlier in the same session; 44 + 37 + 26 
   before accepting.** The `summarize` docblock said the suite could no longer be
   run against older source because a missing named export is a link error — **it
   is not, under vitest**: the 58-test suite against `b93e345` gives `3 failed |
-55 passed` with no `SyntaxError`, because vite degrades an absent export to
+  55 passed` with no `SyntaxError`, because vite degrades an absent export to
   `undefined`. Two of those three fail behaviourally and only the direct-call unit
   test degrades to `TypeError`, so **repo-18's red-run property is largely
   preserved rather than given up** — a better outcome than either of us first
@@ -472,7 +472,7 @@ of 44` and `planner — 1 open of 37` earlier in the same session; 44 + 37 + 26 
   Not a port and not ambiguous — a citation that simply went stale. Under the
   first version of the rule that reported `unchecked` and exited 0, where before
   the rule it failed loud and correctly. **The rule keyed on `source ===
-"shorthand"` alone**, so it excused every shorthand at every distance, including
+  "shorthand"` alone**, so it excused every shorthand at every distance, including
   the ones where nothing is guessed at all. Of 465 resolving shorthands, 180 sit
   on the same line as the citation they inherit from and 151 more within five
   lines; the unconditional version gave up detection across that majority to fix

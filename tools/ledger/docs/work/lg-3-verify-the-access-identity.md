@@ -411,7 +411,7 @@ refuted.
 - New tests were added at the end of their specs, below every line the gate
   cited.
   - On the fixed code, `npx vitest run tools/ledger/api/test/access.test.ts
-tools/ledger/api/test/config-access.test.ts` gives 2 of 2 files and 39 of 39
+    tools/ledger/api/test/config-access.test.ts` gives 2 of 2 files and 39 of 39
     tests, and `npx vitest run tools/ledger` gives 7 of 7 files and 64 of 64
     tests.
   - With the old `access.ts` swapped back in, 6 of the 29 access tests fail:

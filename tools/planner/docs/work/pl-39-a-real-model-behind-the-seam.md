@@ -107,7 +107,7 @@ an ordinary trip.
    enforced here.
 
 4. **`agent/src/providers/anthropic.ts` — `AnthropicProvider implements
-ModelProvider`.** It lives beside `scripted.ts` rather than under
+   ModelProvider`.** It lives beside `scripted.ts` rather than under
    `api/src/grounding/`'s precedent, because `agent` is "everything that talks
    to a model" and this is that. `createModelProvider` stays the only place that
    picks it by name. What it does:
@@ -117,7 +117,7 @@ ModelProvider`.** It lives beside `scripted.ts` rather than under
      the only file in the tool that may read the environment.
    - **Request:** `model`; `max_tokens` from `maxOutputTokens`; `system`;
      `messages`; `thinking: { type: "adaptive" }`; `output_config: { effort,
-format }`, with `format` from the SDK's zod helper
+     format }`, with `format` from the SDK's zod helper
      (`@anthropic-ai/sdk/helpers/zod`) when `replySchema` is set; and
      `signal`.
    - **Refusal fallbacks on**: `fallbacks: "default"` behind beta header
@@ -257,7 +257,7 @@ format }`, with `format` from the SDK's zod helper
 - An unrecognised `MODEL_PROVIDER` refuses to boot rather than running `scripted`.
 - `AnthropicProvider` against fixture responses: sends `specialistReplySchema` as
   `output_config.format`, `thinking` adaptive, the configured effort, `fallbacks:
-"default"` with its beta header, and the explicit key; maps every stop reason
+  "default"` with its beta header, and the explicit key; maps every stop reason
   and every error row in step 4's table, each by its own test.
 - A reply that passes the JSON Schema sent and fails `costEstimateSchema`'s refine is
   refused by `askSpecialist`, and re-asked exactly as before.
@@ -372,7 +372,7 @@ and the planner e2e suite ran unchanged.
   `compaction` is a stop reason too, and is malformed like the other three.
 - **The discriminated unions do survive as `anyOf`, but looser.** The helper
   rewrites each `z.literal` discriminant to `{"type":"string","description":"{const:
-\"at\"}"}`, because the API's schema subset has no `const`. So structured output
+  \"at\"}"}`, because the API's schema subset has no `const`. So structured output
   alone would accept `kind: "between"` carrying only a `place`. The snapshot pins
   it and a test names it; it is one more reason `askSpecialist`'s zod validation
   is the check that counts.
@@ -386,7 +386,7 @@ and the planner e2e suite ran unchanged.
   header** — found by the gate and reproduced here: with
   `ANTHROPIC_CUSTOM_HEADERS="x-api-key: OVERRIDE-FROM-ENV"` in the environment
   and an explicit `apiKey`, the request went out with `x-api-key:
-OVERRIDE-FROM-ENV` (a probe against a stubbed `fetch`, no network). The SDK
+  OVERRIDE-FROM-ENV` (a probe against a stubbed `fetch`, no network). The SDK
   merges env-derived default headers over its auth headers, and later keys
   overwrite earlier ones. **Now refused: the owner's decision, 2026-09-13, and
   it overrode the builder's recommendation.** The gate put two options: leave
@@ -431,7 +431,7 @@ OVERRIDE-FROM-ENV` (a probe against a stubbed `fetch`, no network). The SDK
   the stop on `contract/` for that one doc comment only, while pl-42 was
   building in the same file; nothing else there moved.
 - **The lockfile diff was not SDK-only on the first try.** `npm install
---package-lock-only` also rewrote two workspace versions the lockfile had
+  --package-lock-only` also rewrote two workspace versions the lockfile had
   fallen behind on (`@downloader/api` 0.2.0 → 0.4.0, `@planner/api` 0.4.0 →
   0.5.1). Both were reverted by hand. What is left is the SDK, its five transitive
   packages, and `@babel/runtime` losing `"dev": true`, which is correct: the

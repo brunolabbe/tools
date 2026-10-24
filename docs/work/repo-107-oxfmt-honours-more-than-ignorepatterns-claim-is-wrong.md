@@ -237,7 +237,7 @@ file inside the repo is not tested here.
   printed `Finished in 359ms on 1 files` and left the diff as written. For the rules
   page, `npx oxfmt --check .claude/rules/toolchain-config.md` exits 2 with
   `Expected at least one target file. All matched files may have been excluded by
-ignore rules.`, as the dispatch measured, so it cannot be formatted by the tool
+  ignore rules.`, as the dispatch measured, so it cannot be formatted by the tool
   and its wrapping was kept by hand to the width of the lines around it.
 
   **Fold-in.** None other. `docs/work/repo-55-...md` line 83 says oxfmt "reflows no

@@ -298,8 +298,8 @@ ends the batch, and this one keeps it moving.
   2. Path test: passes. No forbidden path, and the file was already in each
      branch's own diff against its base (dl-80: `4c194fd9`, `d956a450`; dl-83:
      `2cac7900` and five more). Run: `node conditions.mjs <repo> "04:49 on dl-80"
-056aab75 dl-80 <ticket> 76113c54` → `c2a(no forbidden path)=true
-c2b-diff(no new path)=true`, and `… 5ad7f739 dl-83 <ticket> b5e45c72` →
+     056aab75 dl-80 <ticket> 76113c54` → `c2a(no forbidden path)=true
+     c2b-diff(no new path)=true`, and `… 5ad7f739 dl-83 <ticket> b5e45c72` →
      the same. The script is the gate's, in its scratch. **Read literally, the
      brief's wording "widens no branch into a file its Build did not name"
      fails the case** (`c2b-literal(Build names file)=false` on both), because
@@ -336,7 +336,7 @@ c2b-diff(no new path)=true`, and `… 5ad7f739 dl-83 <ticket> b5e45c72` →
   **How the two rules coexist,** as the bullet words it: the rule that a
   decision arriving after the owner has signed off becomes a ticket (the owner's
   practice; no page in the skill states it, and `grep -rn -i "signed off\|sign-off"
-.claude/skills CLAUDE.md docs/01-TICKETS.md` matches only this bullet)
+  .claude/skills CLAUDE.md docs/01-TICKETS.md` matches only this bullet)
   closes a batch; this one keeps an unfinished batch moving while the owner
   says they are away. A sign-off, not an away signal, moves a decision from this
   bullet to that rule.

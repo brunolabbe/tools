@@ -254,7 +254,7 @@ run is where a real answer can be measured.
   `RecordedAttempt.usage: ModelUsage` already carries the reply's `usage`
   object verbatim. Re-ran it end to end under `MODEL_PROVIDER=scripted`
   (`PLANNER_LIVE_RUN=1 node --import tsx api/test/live/run.ts --out <dir>
---max-usd 10`, no network, no key) and confirmed every attempt's emitted
+  --max-usd 10`, no network, no key) and confirmed every attempt's emitted
   JSON now carries `"thinkingTokens": null` with no other change to the
   output shape.
 - pl-40's Done-when line and Log updated in place
@@ -280,9 +280,9 @@ folded in or done unilaterally.
 **Verification.** Narrowest specs first, then the full project suite:
 
 - `npx vitest run tools/planner/agent/test/anthropic-provider.test.ts
-tools/planner/agent/test/scripted-provider.test.ts
-tools/planner/agent/test/fan-out-usage.test.ts
-tools/planner/agent/test/ask.test.ts --project planner` — 4 files, 54 tests,
+  tools/planner/agent/test/scripted-provider.test.ts
+  tools/planner/agent/test/fan-out-usage.test.ts
+  tools/planner/agent/test/ask.test.ts --project planner` — 4 files, 54 tests,
   all passing.
 - `npx vitest run tools/planner/api/test/run-usage.test.ts --project planner`
   — 1 file, 5 tests, all passing.

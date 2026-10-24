@@ -623,7 +623,7 @@ reviewer in its own detached worktree at `faa65ee`; its record is above. One
   advice that corrupts the value: Option A's hazard reappearing inside Option B,
   delivered by a human following bad instructions instead of by a strip. The
   message now ends `— unwrap it. If these marks are not wrapping and the value
-genuinely starts and ends with one, write those terms in backticks instead.`
+  genuinely starts and ends with one, write those terms in backticks instead.`
 - **"Permanently unwritable" was the one clause of the finding that did not
   survive the repro**, and the difference matters because it is the difference
   between a loss and an inconvenience: `` `downloaded` is not `verified` ``

@@ -196,7 +196,7 @@ New in the round's lines:
   numbered-name block, the dl-79 `sniff.test.ts` arrival-order test) lists the
   expected winner first, so arrival order and the old name rule agree. Measured:
   `npx vitest run tools/downloader/resolvers`, `20 passed (20)` files, `885 passed
-(885)`, none edited. What moved is the branch's own round-1 test "a word in a
+  (885)`, none edited. What moved is the branch's own round-1 test "a word in a
   directory, or before another extension, earns nothing" (old winner and new winner
   differ: `/v/high/index.m3u8` before, `/video/a/high.m3u8`, the earlier request,
   now), which was removed with the clause it tested.
@@ -220,7 +220,7 @@ New in the round's lines:
   first, the false-positive routes later, typed `master.m3u8` first, the ad, the
   tie, a refused earlier manifest, an unanswered earlier request, a manifest above
   a progressive file. Against the base `rank.ts`, `-t "dl-92"` gives `6 failed | 10
-passed`; against this head, all pass. The browser-resolver test is unchanged and
+  passed`; against this head, all pass. The browser-resolver test is unchanged and
   passes.
 - Gate low, fixture: `extless/v/low/index.m3u8` added, so the master's second
   variant resolves.

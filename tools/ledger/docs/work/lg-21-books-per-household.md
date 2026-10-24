@@ -249,7 +249,7 @@ Nothing I found in this round is a `high`. The one reason this is not PASS is Do
     and the person…"; no `DIRECTORY_PATH` check fails "refuses a DIRECTORY_PATH
     inside households/…"; the import writing to another household's file fails
     "a --write goes to the named household's file…" (`expected { n: +0 } to
-deeply equal { n: 17 }`).
+    deeply equal { n: 17 }`).
   - `npx vitest run tools/ledger/api`: `Test Files  27 passed (27)`,
     `Tests  462 passed (462)` (443 at lg-20's landing).
   - **The image step is unmeasured here**: docker is not usable in this

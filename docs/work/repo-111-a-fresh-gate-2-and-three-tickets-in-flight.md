@@ -426,7 +426,7 @@ scripts:
   `22:57:28.037Z`: 92.8 minutes.
 - `waits.py <transcript>` (each Bash call whose command waits, with its
   duration) printed `tool calls: 167, 72.1 min inside; waits: 14, 49.5 min, 0
-at the 600 s cap`. Its match counts two non-waits (a `kill … sleep 1` of
+  at the 600 s cap`. Its match counts two non-waits (a `kill … sleep 1` of
   1.5 s and a `sleep 200; ls` of 0.0 s): 12 finished waits, 49.5 minutes, and
   a 13th still open at 22:57:28Z, which matches the relayed 13. Four of the
   finished ones, 585.4–589.4 s, are the 600 s cap (the script's 595 s

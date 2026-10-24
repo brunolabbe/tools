@@ -220,7 +220,7 @@ doc comment, a test title, one new test and lg-19.
 - 2026-10-11 — Built. The list is `PeriodRows` under the spending chart, over the
   period's own days (the range only chooses which periods are drawn, so the list is
   not cut by it), fed by `GET /api/rows?scope=spending&from&to[&spendingCategory]
-[&offset&limit]`. `countsAsSpending` in `api/src/rows.ts` is the one definition of
+  [&offset&limit]`. `countsAsSpending` in `api/src/rows.ts` is the one definition of
   "the chart counts this row"; `spendingStats` now asks `listRows` for
   `spendingOnly` instead of repeating it. The days narrow in SQL, so a period's list
   reads that period's rows; the category and the scope still narrow after each row has
@@ -235,7 +235,7 @@ doc comment, a test title, one new test and lg-19.
     Made to fail first: with `countsAsSpending` returning `true` the scope tests and
     the two existing spending-stats tests fail (6 of the file); with `reload` out of
     `useSeries`'s dependencies `a row given a category of its own is written, and the
-chart counts it under the new one` fails.
+    chart counts it under the new one` fails.
   - The brief had nothing wrong that mattered, but it did not say the chart's slice
     and a plain `spendingCategory=none` list would disagree (deposits and unfiled rows
     are uncategorised too); `scope=spending` is what the owner chose to close that.

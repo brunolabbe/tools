@@ -311,7 +311,7 @@ that now say why. `.oxfmtrc.json` names `**/test/fixtures/`; no other entry move
   returns three commits — `5ab843f` (2026-08-05, Phase 0), `786d686` (2026-08-05,
   adds `.claude/`), `2f97370` (2026-08-14, adds `**/CHANGELOG.md`, dl-10). The
   file at `5ab843f` is `{"ignorePatterns": ["dist/", "node_modules/", "storage/",
-"coverage/", "test/fixtures/"]}`, so the entry is in the repo's first
+  "coverage/", "test/fixtures/"]}`, so the entry is in the repo's first
   `.oxfmtrc.json` and its text never changed. Inert for 20 days, as claimed.
   Worth noting that `2f97370` added `**/CHANGELOG.md` **with** the `**/` prefix,
   directly below a sibling that needed it and did not have it.
@@ -533,7 +533,7 @@ before it was proposed, not assumed** — `.json` is not obviously comment-beari
 - oxfmt's own formatter _preserves_ the comment when it formats that file, so
   `npm run format` will not strip it.
 - Nothing in the repo parses `.oxfmtrc.json`. `grep -rn oxfmtrc` over `ts/mjs/js/
-json/yml/md` returns prose references only — no `JSON.parse`, so a comment
+  json/yml/md` returns prose references only — no `JSON.parse`, so a comment
   cannot break a reader.
 
 **Gate 1 found a better argument than mine, and it is the one to keep.** I

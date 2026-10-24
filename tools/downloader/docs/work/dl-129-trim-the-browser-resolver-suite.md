@@ -97,10 +97,10 @@ recovered.
 
 1. **Measure first, in one session, on a warm cache.** Run
    `npm test -- --project downloader --reporter=default --reporter=json
---outputFile.json=<scratch>/<tag>.json` three times before any change. For
+   --outputFile.json=<scratch>/<tag>.json` three times before any change. For
    each run, record the gate's `test-gate:` line, the number of other vitest
    workers on the machine at the start (`ps -eo args | grep -c
-'[w]orkers/forks.js'`) and the load average at the start and the end.
+   '[w]orkers/forks.js'`) and the load average at the start and the end.
    Throw away the first run in a fresh worktree. With no
    `node_modules/.vite/vitest/<hash>/results.json` yet, vitest orders the
    files by size, so the longest browser files start 13 to 45 s late (the Log's
@@ -109,7 +109,7 @@ recovered.
    and the after-runs** (before, after, before, after, before, after) and
    run the base in a second tree, as `common.md` describes. The figure that
    is graded is the summed file time from the JSON report (`endTime -
-startTime` per file), which load moves less than the wall clock.
+   startTime` per file), which load moves less than the wall clock.
 2. **The two fixed sleeps** (Decision A). Add two options to
    `BrowserResolverOptions`, shaped like `minWaitMs` (dl-115): one for the
    landing settle (default `LANDING_URL_SETTLE_MS`, 500, in
@@ -405,7 +405,7 @@ relocated alert.
   `gh run view 39126762378 --json jobs` (the `CI` workflow, push at
   `335efcd4`, unit matrix run) and `--job <id> --log`:
   - ubuntu: `Run npm test` 12:20:09 to 12:24:00, 231 s. `Duration 230.63s
-(... tests 726.14s)`, `Tests 6071 passed | 2 skipped (6073)`. Summed
+    (... tests 726.14s)`, `Tests 6071 passed | 2 skipped (6073)`. Summed
     file time by project: downloader 608 s, ledger 46, repo 46, planner 22,
     core 3. The seven browser files took 318.1 s (six 277.8 + consent-scope
     40.3). Slowest files: `parallel-ranges.test.ts` 72.7 s, press-targets
@@ -488,11 +488,11 @@ relocated alert.
   32 tests listed below. (c) `parallel-ranges.test.ts` is three spec files and a helper.
   (d) The F9 pair polls instead of `sleep(4_000)`.
   **Done when 1, the alternated runs** (`npm test -- --project downloader
---reporter=default --reporter=json --outputFile.json=<scratch>/<tag>.json`; every run
+  --reporter=default --reporter=json --outputFile.json=<scratch>/<tag>.json`; every run
   printed `test-gate: slot-0, 1 of 2 runs active (...): 11 workers` and exited 0; before =
   a detached tree at 00977771, after = this branch). Two warm-ups were thrown away (before
   115.02 s, after 100.18 s). "Foreign workers" is `ps -eo args | grep -c
-'[w]orkers/forks.js'` at the start, which can count a previous run's workers still
+  '[w]orkers/forks.js'` at the start, which can count a previous run's workers still
   exiting. The machine carried two peer batches throughout, so these runs are supporting
   evidence under the owner's answer C, not a graded line:
 
@@ -518,14 +518,14 @@ relocated alert.
   fixed sleeps every probe pays keep their production values (dl-129)" (4 tests). It mocks
   `sleep` in `abort.ts` to a recording pass-through and asserts the literals: a resolver
   given neither option sleeps 500 once and 900 once, and one given `landingSettleMs: 250,
-passPauseMs: 350` sleeps those and neither 500 nor 900. Mutations (committed first,
+  passPauseMs: 350` sleeps those and neither 500 nor 900. Mutations (committed first,
   restored with `git checkout <sha> -- <path>`): `LANDING_URL_SETTLE_MS` 500 to 400 fails
   "the defaults are 500 ms after load and 900 ms between the passes" (`expected 400 to be
-500`) and "a resolver given neither option sleeps 500 ms ..." (`expected [] to have a
-length of 1 but got +0`); `PROVOKE_PASS_PAUSE_MS` 900 to 800 fails the same two
+  500`) and "a resolver given neither option sleeps 500 ms ..." (`expected [] to have a
+  length of 1 but got +0`); `PROVOKE_PASS_PAUSE_MS` 900 to 800 fails the same two
   (`expected 800 to be 900`); adding `passPauseMs: 100` to the `BrowserResolver` call in
   `api/src/resolvers.ts` fails "no production source passes either option" (`expected [
-'api/src/resolvers.ts' ] to deeply equal []`). That last test scans every
+  'api/src/resolvers.ts' ] to deeply equal []`). That last test scans every
   `tools/downloader/*/src` for the two names outside the two files that own them.
   **Done when 4, the tests that take `AT_ONCE_WAITS`** (32; each expects a stream, its
   fixture has no `setTimeout`, `setInterval`, `requestAnimationFrame`, input-gated mount or
@@ -563,7 +563,7 @@ length of 1 but got +0`); `PROVOKE_PASS_PAUSE_MS` 900 to 800 fails the same two
   also assert a decoy was not pressed or a card was not requested (the open decision
   below). **Step 3:** 0 tests moved. Every test still on `BASE_WAITS`, `quietMs: 1200` or no
   waits asserts an error code or is in the floor list (`grep -n "quietMs: 1200\|BASE_WAITS\|
-quietMs: 6000\|new BrowserResolver({ pool })"` over the seven files).
+  quietMs: 6000\|new BrowserResolver({ pool })"` over the seven files).
   **Done when 5, the F9 pair.** `pausedThenRead` now polls: it waits until A has been handed
   its 200 KB, `feeder.stats().deliveredBytes` has stayed put for 400 ms, and at least 2.3 s
   have passed since A's request (the 2 s window plus 0.3 s, as the 4 s sleep outlasted it:
@@ -575,7 +575,7 @@ quietMs: 6000\|new BrowserResolver({ pool })"` over the seven files).
   10 of 10 and 10 of 10, 4.32 to 4.45 s and 4.65 to 4.72 s. Mutations after the change: the
   meter's `allPaused` test `size === members.size` to `size > 0` fails "F9: a paused request
   left open does not stop the meter for one that is reading" (`expected null not to be
-null`); a no-op `pause()` passes both F9 tests in the base tree (2 of 2) and after (2 of
+  null`); a no-op `pause()` passes both F9 tests in the base tree (2 of 2) and after (2 of
   2), so the sleep never proved it.
   **Done when 6, the split.** `engine/test/parallel-ranges.test.ts` (dl-98 progressive,
   cancel, egress proxy: 10 tests), `parallel-ranges-refusals.test.ts` (refusals, fallback,
@@ -583,12 +583,12 @@ null`); a no-op `pause()` passes both F9 tests in the base tree (2 of 2) and aft
   `helpers/parallel-ranges-fixture.ts`, whose origin, counters and helpers are module state,
   so each file's `beforeAll(startOrigin, SLOW)` starts its own. 43 tests before and after,
   and `parallel-ranges-meter.test.ts` is unchanged (15), so `vitest run
-tools/downloader/engine/test/parallel-ranges` reads `Tests 58 passed (58)`. Moved bodies:
+  tools/downloader/engine/test/parallel-ranges` reads `Tests 58 passed (58)`. Moved bodies:
   the three files and the helper were written from line slices of the original
   (`split.py`), and a multiset comparison of trimmed lines (`moved.mts`) finds in the new
   files every line of the original except imports, the `export` keyword, the three hook
   signatures, the two lines of the F9 sleep, and the `// oxlint-disable-next-line
-consistent-function-scoping` above `pausedThenRead` (its fixture is imported now, so it
+  consistent-function-scoping` above `pausedThenRead` (its fixture is imported now, so it
   captures nothing; moving it out of the describe would re-indent a body that is otherwise
   a move). No file ran longer than 56.8 s in after 1 to 3 (largest `press-targets`, 55.6,
   56.8 and 50.2 s; the new files 20.7 to 25.6 s). The project's `Tests` count is 2590 before
@@ -609,7 +609,7 @@ consistent-function-scoping` above `pausedThenRead` (its fixture is imported now
   after rebuilding `dist` (101.56 s). It failed once in an extra run, after 8:
   `api/test/tiers-on-the-terminating-proxy.test.ts` › "still refuses a certificate the proxy
   could not verify — dl-37 Done-when 2", `expected 'UNREACHABLE' to be
-'TLS_VERIFICATION_FAILED'`, at load 18. Alone, that test passed 20 of 20 in the base tree;
+  'TLS_VERIFICATION_FAILED'`, at load 18. Alone, that test passed 20 of 20 in the base tree;
   whole-project, 0 of 4 base runs failed and 1 of 12 of this branch's. The failing path is a
   navigation error, which ends before either changed sleep, so the diff does not reach it;
   the test's own comment calls the verdict a side channel. No ticket filed: there is no

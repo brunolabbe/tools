@@ -43,7 +43,7 @@ mentioned one_, and that is the decision this ticket carries.
    - **The ticket file's own diff.** A PR that finishes `X` almost always edits
      `X`'s file (the Log entry and the `status` change are the same commit). A PR
      that merely files `X` also edits it — but it _creates_ it. `git log
---diff-filter=A` distinguishes creation from modification.
+     --diff-filter=A` distinguishes creation from modification.
    - **The `## Review` section.** A finished ticket carries a gate record; a
      filed one does not. Stronger signal, and it is already required.
      **Falsified on 2026-08-30, one commit after this was written** — see the

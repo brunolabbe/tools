@@ -529,7 +529,7 @@ free: pl-60`. Docs only; no source changed.
   `npx vitest run scripts/test/status.test.ts`: 139 passed (139).
   `node scripts/commit-message.mjs --text` on the title: exit 0.
   `node scripts/preflight.mjs --only mergeTree,ciCommands,review,title --base
-origin/main`: exit 0, with `main` merged in at `aaccab20` first.
+  origin/main`: exit 0, with `main` merged in at `aaccab20` first.
 - **No `## Review` section.** A filing has no work to review, and a gate on the
   filing is recorded outside `## Review` (`docs/01-TICKETS.md`, _The review gate_).
 
@@ -554,8 +554,8 @@ options and left the seam shape, the area-aware query and the harness change in.
   sentences in each; the `Done when` line asks that the diff add no new rule instead
   of "say nothing else new".
 - **F3, low, the run label — fixed.** `git show
-origin/pl-58-name-a-premises:tools/planner/api/test/live/invention.ts | grep -n
-RUN_PATTERN` prints `121: export const RUN_PATTERN = /^pl58-\d{4}-\d{2}-\d{2}$/;`.
+  origin/pl-58-name-a-premises:tools/planner/api/test/live/invention.ts | grep -n
+  RUN_PATTERN` prints `121: export const RUN_PATTERN = /^pl58-\d{4}-\d{2}-\d{2}$/;`.
   Build 7 says so and the Packages line lists the harness. A `Done when` line grades
   the new label.
 - **F4, low, a town is one point and the seam takes a line — fixed as a stop
@@ -619,7 +619,7 @@ has no `## Review` section and no `--land`.
   'was read as the branch stood at `fce56408`'. The Log's 'Re-read, not relayed' says
   it was read 'at `6fc01891`, the branch head when it was read'." _Why_ now cites
   `6fc01891` and its commit time, `git show -s --format='%h %cI' 6fc01891` → `6fc01891
-2026-10-21T01:53:14+00:00` (it was `fce56408`, 02:14Z). The filing Log's "Re-read,
+  2026-10-21T01:53:14+00:00` (it was `fce56408`, 02:14Z). The filing Log's "Re-read,
   not relayed" entry and round 1's F5 entry are history and stay as written: they
   say `fce56408` was the head at filing time, which is the gate's reading, and the
   figures are the same at both (gate 1's diff of the two moves only `withoutParks`,
@@ -652,7 +652,7 @@ payload is checked in: `Done when` 3's payload is re-captured through the built
   localities, with mentions: Gaspé 8, Percé 6, Forillon National Park 2,
   Rivière-du-Loup 2, Amqui 1, Bonaventure 1, Carleton-sur-Mer 1, Gaspésie 1,
   Matane 1. Two are not towns: `Gaspésie` is the peninsula, and `Forillon National
-Park` a park.
+  Park` a park.
 - **Each town's point** came from one Nominatim search per town (`q=<locality>, Québec`,
   `limit=1`, an identifying user agent, 1.5 s apart). Seven are the town's
   `boundary=administrative` relation. Forillon is `boundary=national_park`
@@ -905,7 +905,7 @@ writes of the days file were byte-identical (`cmp`).
   base column is the total minus the town pass, read off the per-call log of a
   scratch dump, which is in the dispatch's scratch directory. It is not a
   measurement at the base commit. The pass never spends more than `2 ×
-MAX_LODGING_TOWNS` = 8 of `MAX_GROUNDING_CALLS`.
+  MAX_LODGING_TOWNS` = 8 of `MAX_GROUNDING_CALLS`.
 
 - **Re-plans.** `revise.ts` now re-runs discovery when the re-plan names any finds
   reader and the brief has a corridor or a town, and it re-runs **both** passes.
@@ -988,7 +988,7 @@ MAX_LODGING_TOWNS` = 8 of `MAX_GROUNDING_CALLS`.
   (`grounding-valhalla.test.ts`, "nothing in a find's tags is fetched: one request
   per call, to Overpass").
 - **Mutations, each run against the committed head and restored with `git checkout
-8098626c -- <path>`.** A hard-coded `/node/` url failed 9 tests in
+  8098626c -- <path>`.** A hard-coded `/node/` url failed 9 tests in
   `grounding-valhalla.test.ts`, and dropping the radius re-filter in `nearbyPoint`
   failed the per-town tests.
 - **`test/live/run.ts`** gained a `nearbyPoint` that answers `[]`. Build 6 wires
@@ -1006,7 +1006,7 @@ MAX_LODGING_TOWNS` = 8 of `MAX_GROUNDING_CALLS`.
   - Build 8 itself is not done, since this dispatch stops at Build 5.
 - **Checks at `8098626c`:** `npm run check` exits 0. `npm test -- --project planner`
   passes 81 of 81 files and 1644 of 1644 tests. `npx oxlint tools/planner/agent
-tools/planner/api` reports no errors; its `no-await-in-loop` warnings are on serial
+  tools/planner/api` reports no errors; its `no-await-in-loop` warnings are on serial
   loops, the corridor pass's pattern. The e2e suite and the image gate were not run
   locally.
 
@@ -1109,7 +1109,7 @@ failed against `55fd5df8`'s code. Each mutation below was run against `2aef6e2e`
   - Run directly, never through a pipe, from a script that writes each exit code
     to a file (`invention-check.sh`):
     - `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
-tools/planner/api/test/live/invention.ts`: exit 0, "check: the committed
+      tools/planner/api/test/live/invention.ts`: exit 0, "check: the committed
       record equals its regeneration; every sampled place has a verdict".
     - The same with `--after pl58-2026-10-21`: exit 0, the same line, so pl-58's
       record still regenerates.
@@ -1190,7 +1190,7 @@ dated 2026-10-24, a $10 total bound).
   `setsid nohup`, pid
   237458 (also its process group), through a scratch launcher (`launch-live.sh`). The
   command was `node run-pl60.mjs 2026-10-24 /home/pwuser/.planner-live-key
-tools/planner/api/test/fixtures/live <scratch>/live-logs 10`. The key reached only
+  tools/planner/api/test/fixtures/live <scratch>/live-logs 10`. The key reached only
   the children's environment, and nothing printed or logged it. The wrapper exited
   0, every session exited 0, and the spend stop never tripped. The run date is the
   run's real date (03:39Z, 2026-10-24 UTC).
@@ -1239,18 +1239,18 @@ tools/planner/api/test/fixtures/live <scratch>/live-logs 10`. The key reached on
     key is in the scratch `classify/assign.txt`. New: 76 `named-premises`, 227
     `kind-of-place`, 37 `settlement-or-area`, 26 `route-or-transit`.
   - **One carried park key was re-judged by the park rules:** `forillon national
-park|gaspé peninsula, québec` is only a `between` endpoint in this run, so
+    park|gaspé peninsula, québec` is only a `between` endpoint in this run, so
     `settlement-or-area` with `park-area`.
   - Totals: 207 `named-premises`, 351 `kind-of-place`, 102 `settlement-or-area`, 40
     `route-or-transit`.
   - **Judgement cases a reader may reverse.** The three campgrounds the run named from
     finds (`camping parc nature gaspé|gaspé` 16 lodging mentions, `camping de la baie de
-percé|percé` 9, `camping baie de gaspé|gaspé` 8) are `kind-of-place` with
+    percé|percé` 9, `camping baie de gaspé|gaspé` 8) are `kind-of-place` with
     `locality-plus-category`, because each name restates its locality plus a category,
     the rubric's own `Camping de Carleton-sur-Mer` case. `auberge internationale de
-forillon|gaspé` (43, plus 4 under `gaspé (cap-aux-os)`) is `named-premises`,
+    forillon|gaspé` (43, plus 4 under `gaspé (cap-aux-os)`) is `named-premises`,
     because Forillon is not the candidate's locality, the way pl-58 took `camping
-des-rosiers|forillon national park`. `central market (centralna tržnica)|ljubljana`
+    des-rosiers|forillon national park`. `central market (centralna tržnica)|ljubljana`
     is `named-premises`, because it carries the established Slovene name; pl-58 took the
     bare `central market|ljubljana` as a kind.
     `manoir de percé|percé` (36 lodging mentions, no edge tag) is `named-premises`
@@ -1258,7 +1258,7 @@ des-rosiers|forillon national park`. `central market (centralna tržnica)|ljublj
     `locality-plus-category` case that the three campgrounds were moved under; a
     reader may reverse it. (Added at landing, below.)
 - **The re-measure** (`PLANNER_LIVE_RUN=1 node --import tsx
-tools/planner/api/test/live/invention.ts --after pl60-2026-10-24`, which makes no
+  tools/planner/api/test/live/invention.ts --after pl60-2026-10-24`, which makes no
   request). The after population is the new run's 110 records alone: 700 places and
   2,693 mentions, by the same rubric. The before population is pl-58's, read from its
   Log:
@@ -1293,7 +1293,7 @@ tools/planner/api/test/live/invention.ts --after pl60-2026-10-24`, which makes n
 
 - **The checks after it, read directly, with no pipe** (`remeasure.sh`):
   - `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
-tools/planner/api/test/live/invention.ts` (the default): exit 0.
+    tools/planner/api/test/live/invention.ts` (the default): exit 0.
   - The same with `--after pl58-2026-10-21`: exit 0.
 
   So pl-57's and pl-58's records still regenerate with the new run's directories on
@@ -1353,7 +1353,7 @@ the owner opens the firewall. The builder runs none.
 - **For the agent that runs it:** fill `verdicts.json`'s `checks` in this order, each
   key's `queries[0]` the planned first query above. Then write the record with
   `PLANNER_INVENTION_OFFLINE=1 node --import tsx tools/planner/api/test/live/invention.ts
---after pl60-2026-10-24`. The check is the same command with
+  --after pl60-2026-10-24`. The check is the same command with
   `PLANNER_INVENTION_CHECK=1`, its exit code taken without a pipe. Report the
   not-confirmed rate per object with a 95% Wilson interval, beside pl-58's 2 of 19
   above.
@@ -1462,18 +1462,18 @@ in 9. Per key, the harness gives 5 of 17 not confirmed, 29.4% (13.3–53.1).
 **Checks, each exit code read from a file and never through a pipe** (`run-harness.sh`):
 
 - `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
-tools/planner/api/test/live/invention.ts` gave exit 0, `111 live records, 2594 place
-mentions, 1019 distinct places`, and "check: the committed record equals its
+  tools/planner/api/test/live/invention.ts` gave exit 0, `111 live records, 2594 place
+  mentions, 1019 distinct places`, and "check: the committed record equals its
   regeneration; every sampled place has a verdict". So pl-57's record is unchanged.
 - The same with `--after pl60-2026-10-24` gave exit 0, `110 live records, 2693 place
-mentions, 700 distinct places`, and the same check line.
+  mentions, 700 distinct places`, and the same check line.
 - The same with `--after pl58-2026-10-21` gave exit 0, with pl-58's 5 of 40 unchanged.
 - **The check can fail.** With `la rêvasse|cap-des-rosiers` flipped to `exists` in
   `verdicts.json`, the pl-60 check gave exit 1, "the committed record is not what the inputs
   regenerate". The verdicts were then regenerated from the scratch generator that wrote them
   (`gen-verdicts.py`), and the check gave exit 0 again (`mutate.sh`).
 - At `4f5bb20c`: `npx vitest run tools/planner/api/test/live-records.test.ts
-tools/planner/api/test/invention-population.test.ts` passed 391 of 391, and
+  tools/planner/api/test/invention-population.test.ts` passed 391 of 391, and
   `live-records` walks the three `pl60-2026-10-24` invention files. `npm run check` exited 0. `npm test -- --project planner` passed 81 of 81 files and 1776 of 1776 tests, exit 0.
   That is 114 more than at `e036ef77` (1662), which is before the run's 110 records were
   committed. Where the 114 come from was not itemised. The e2e suite and the image gate were
@@ -1538,10 +1538,10 @@ premise yet. The `food` ticket's own re-measure doubles that sample on the same 
   keys, which the Log does list: 218 of 443 (49.2%), below the Log's stated 57.3%."
   The two bullets are corrected where the Log makes them (the judgement cases and the
   sensitivity list of the re-measure). `node
-.../gate-2/sample.mjs <tree> <outdir>` at `2a3aa467`, then `node
-.../land/band.mjs <outdir>/lodging-named.json` →
+  .../gate-2/sample.mjs <tree> <outdir>` at `2a3aa467`, then `node
+  .../land/band.mjs <outdir>/lodging-named.json` →
   `manoir mentions 36 auberge two keys 47`, `manoir reversed 265 of 443 (59.8%)`,
   `manoir + auberge reversed 218 of 443 (49.2%)`, and the Log's own `auberge reversed
-254 of 443 (57.3%)` and `campgrounds to named-premises 334 of 443 (75.4%)` unchanged.
+  254 of 443 (57.3%)` and `campgrounds to named-premises 334 of 443 (75.4%)` unchanged.
   The band is 49.2–75.4%; the direction does not move (pl-58 is 33 of 418, 7.9%).
   Gate 2's section is untouched.

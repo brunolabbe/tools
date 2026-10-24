@@ -281,8 +281,8 @@ queued ─┬─► grounding (discover) ─► fanning-out ─┬─► groundi
      defaults both to `previous`'s ("evidence persists until something
      re-asks").
 3. **Fan out only the named specialists:** `runFanOut({ only: specialists,
-note, finds, brief: plan.brief, capacity: capacityFor(brief), budget:
-runBudgetFor(config), runId, signal, onProgress })`.
+   note, finds, brief: plan.brief, capacity: capacityFor(brief), budget:
+   runBudgetFor(config), runId, signal, onProgress })`.
    - `capacity` is the whole trip's, not the slice's. A candidate belongs to
      the plan's pool rather than to a day, and "this trip has 2 days" would be
      false.
@@ -642,7 +642,7 @@ bucket the kind selects.
 - **Migration 10, from `user_version = 9`** (pl-49 took 9; the next free
   number when pl-44 is built)**:**
   - A database holding a revision and a run reads back `operation:
-first-draft` and `kind: draft`.
+    first-draft` and `kind: draft`.
   - The append-only trigger does not fire.
   - A revision 2 written afterwards reads back its own operation.
   - pl-42's literals are gone from `toRevision` and `toRun`.

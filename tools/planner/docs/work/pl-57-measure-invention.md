@@ -34,10 +34,10 @@ filing it, and together they undercut both shapes as §5 imagined them:
    places through `locate`'s own query to the public Nominatim instance. 787
    (77.2%) came back empty, and its sample of 40 empties shows why: most are a
    kind of place at a locality (`Percé village inn, Percé`, `Local bakery and
-cheese shop, Gaspé Peninsula`), and nothing can confirm that or rule it out.
+   cheese shop, Gaspé Peninsula`), and nothing can confirm that or rule it out.
    Real places came back empty as well: `Parc national de la Gaspésie,
-Sainte-Anne-des-Monts, Québec` (34 candidates name it), `Roscioli, Campo de'
-Fiori, Rome` and `Hotel Raphael, Rome, Centro Storico`. So a map-based pass
+   Sainte-Anne-des-Monts, Québec` (34 candidates name it), `Roscioli, Campo de'
+   Fiori, Rome` and `Hotel Raphael, Rome, Centro Storico`. So a map-based pass
    could only label a candidate, never drop one, and on these numbers it would
    label about four in five as not found.
 2. **Map data hardly changes what a specialist proposes.** 81 of the 111
@@ -502,7 +502,7 @@ intervals; the sample cannot rank them.
 _Every row that is not `exists`._ Five keys, four objects.
 
 1. `Bonaventure Island | Bonaventure` and `Île Bonaventure | Bonaventure,
-Gaspésie` — **exists-elsewhere**, Haiku. Candidates: "Bonaventure Island boat
+   Gaspésie` — **exists-elsewhere**, Haiku. Candidates: "Bonaventure Island boat
    trip" (`budget`, `pl-40-7-budget-3`, `claude-haiku-5-5-low/set-b-run-1`),
    "Bonaventure Island seabird day trip" (`budget`, `pl-40-23-budget-3`,
    `claude-haiku-5-5-medium/set-c-run-2`) and "Bonaventure Island"

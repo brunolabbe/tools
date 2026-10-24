@@ -62,7 +62,7 @@ nothing near it.
    cover nothing, and a `requestIdFrom` that stopped honouring the header would
    show as that assertion and not as a flake.
 4. **Positive control.** Plant a leak in the `request` line (`remote:
-request.ip`; then only the /64 prefix; then only the interface id), confirm
+   request.ip`; then only the /64 prefix; then only the interface id), confirm
    the test fails for each, restore.
 
 ## Done when

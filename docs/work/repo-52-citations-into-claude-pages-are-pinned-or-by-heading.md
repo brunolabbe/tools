@@ -152,7 +152,7 @@ One deviation from what was asked, disclosed rather than silent: the orchestrato
   `scripts/citations.mjs`/`citations-gate.mjs` byte-identical there to
   `45fdf15`, so the pin is permanent and does not depend on this branch's own
   commits surviving a squash merge). `node scripts/citations-gate.mjs --against
-origin/main` is back to `97 enforced, 0 failing`, matching the corpus before
+  origin/main` is back to `97 enforced, 0 failing`, matching the corpus before
   any of this ticket's code changes. Also fixed a circular JSDoc type
   (`unpinnedVolatile`'s param typed against `checkCitations`'s own return
   type) that TypeScript silently resolved to `any`, surfacing as six TS7006
@@ -161,9 +161,9 @@ origin/main` is back to `97 enforced, 0 failing`, matching the corpus before
   Gates: `npm run format` (708 files, only cosmetic re-wrap of a line I added);
   `npx vitest run --project repo` 350/350; `npm run check` exit 0;
   `node scripts/citations-gate.mjs --against origin/main` exit 0 (`97
-enforced, 0 failing; 7 grandfathered, holding 2 unresolvable, 21 unanchored;
-0 raised`). A whole-corpus sweep (179 records, `node scripts/citations.mjs
-<record>` and `--rev 45fdf15`, compared) found and closed one more
+  enforced, 0 failing; 7 grandfathered, holding 2 unresolvable, 21 unanchored;
+  0 raised`). A whole-corpus sweep (179 records, `node scripts/citations.mjs
+  <record>` and `--rev 45fdf15`, compared) found and closed one more
   regression outside `## Review` scope (repo-37) that the gate itself would
   not have caught. **Correction, from gate 1: every anchored citation is
   clean, not the whole corpus** — that sweep compares printed _state_, and an
@@ -175,7 +175,7 @@ enforced, 0 failing; 7 grandfathered, holding 2 unresolvable, 21 unanchored;
 
 - 2026-09-20 (round 2) — Gate 1 (ticket-reviewer, opus) returned CONCERNS at
   `852e47f`: three `med`, two `low`, all reproducible, none blocking a `Done
-when` line. Verdicts and repairs, each reproduced before acting on it:
+  when` line. Verdicts and repairs, each reproduced before acting on it:
   - **med 1, accepted** — the unanchored-drift gap above. Own sweep (state
     comparison per citation, `--rev f9d981f` against the tip, restricted to
     citations into the two edited scripts) found **37** displaced unanchored
@@ -248,7 +248,7 @@ when` line. Verdicts and repairs, each reproduced before acting on it:
   `npm run format`; `npx vitest run --project repo` 350/350; `npm run check`
   exit 0; `node scripts/citations-gate.mjs --against origin/main` exit 0
   (`97 enforced, 0 failing; 7 grandfathered, holding 2 unresolvable, 21
-unanchored; 0 raised`, unchanged throughout). Diff stayed within
+  unanchored; 0 raised`, unchanged throughout). Diff stayed within
   `scripts/citations.mjs`, `scripts/citations-gate.mjs`, their tests, this
   ticket, and pin-only edits to seven other records (repo-14, repo-18,
   repo-20, repo-21, repo-24, repo-35, repo-43 — repo-25's own gap was
@@ -260,12 +260,12 @@ unanchored; 0 raised`, unchanged throughout). Diff stayed within
   the `## Review` section above cites, which is exactly the class of drift
   repo-50 builds a detector for. Seven anchored coordinates moved and none
   broke — `node scripts/citations.mjs docs/work/repo-52-....md --section
-Review --require-anchors --require-distinct-anchors` at the pre-edit tip
+  Review --require-anchors --require-distinct-anchors` at the pre-edit tip
   reported `0 verified, 7 moved, 0 unanchored, 0 unresolvable, 11 unchecked`;
   each anchor still resolved elsewhere in its file, so every one was
   repointed to the line the tool named rather than rewritten as prose. Same
   command after: `7 verified, 0 moved, 0 unanchored, 0 unresolvable, 11
-unchecked — exit 0`. No wording, verdict or severity changed; only the six
+  unchecked — exit 0`. No wording, verdict or severity changed; only the six
   distinct `file:line` tokens (`scripts/test/citations.test.ts` at 2354,
   2370, 2323, 2413 and `scripts/citations.mjs` at 1209 twice, 1170) moved to
   where their anchors now stand.
@@ -273,8 +273,8 @@ unchecked — exit 0`. No wording, verdict or severity changed; only the six
 - 2026-09-26 — Repointed again, by the repo-50 builder, gate 2 round:
   repo-50's own further edits to `scripts/citations.mjs` (its gate 1 and 2 fix
   rounds) shifted the same two anchors one and one line further each. `node
-scripts/citations.mjs docs/work/repo-52-....md --section Review
---require-anchors --require-distinct-anchors` reported `0 verified, 3 moved`
+  scripts/citations.mjs docs/work/repo-52-....md --section Review
+  --require-anchors --require-distinct-anchors` reported `0 verified, 3 moved`
   before this repoint and `7 verified, 0 moved — exit 0` after. Two coordinates
   moved: `scripts/citations.mjs` at 1351 (two occurrences, both
   `export const isUnpinnedVolatile`) to 1352, and at 1312 (`const CLAUDE_PAGE`)

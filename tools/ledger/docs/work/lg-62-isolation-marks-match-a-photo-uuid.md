@@ -174,15 +174,15 @@ the first step of **Build**, and the filer wrote no test code.
   `96da35c8`. All in `tools/ledger/api/test/isolation.test.ts`; no source file
   changed.
   - **Red on the base (Done when 1).** The test `the isolation sweep > does not
-take a stored photo's random name for the other household's figure` renames
+    take a stored photo's random name for the other household's figure` renames
     each household's one uploaded photo to a UUID-shaped name holding the other's
     `lineCents` and `monthlyCents` (`00003119-0000-4000-8000-000000004113.jpg`
     for away, `00002227-…-000000003227.jpg` for home), in the row and on disk. Run
     with the old `storedLeaks`: `npx vitest run
-tools/ledger/api/test/isolation.test.ts` exit 1, `Tests 1 failed | 3 passed
-(4)`, with `"home's receipts holds away's 2227, 3227"` and `"away's receipts
-holds home's 3119, 4113"`. With the fix, same command: exit 0, `Tests 4
-passed (4)`.
+    tools/ledger/api/test/isolation.test.ts` exit 1, `Tests 1 failed | 3 passed
+    (4)`, with `"home's receipts holds away's 2227, 3227"` and `"away's receipts
+    holds home's 3119, 4113"`. With the fix, same command: exit 0, `Tests 4
+    passed (4)`.
   - **Option B chosen (Done when 4).** Option A cannot work for the amount
     columns: they are integer cents, stored as JSON numbers, and every decimal
     digit is a hex character, so no digit string is a mark a name cannot hold;
@@ -195,7 +195,7 @@ passed (4)`.
     each photo by exact name against its household's directory, and the new test
     asserts it is `[]` for the planted names, so placement stays covered.
   - **Positive control (Done when 2).** `the isolation sweep > still reports the
-other household's figure held in a column it searches` writes home's
+    other household's figure held in a column it searches` writes home's
     `lineCents` into away's `receipts.uploaded_at` and expects `storedLeaks` to
     be exactly `["away's receipts holds home's 3119"]`, after first asserting it
     is `[]` without the plant. It passes on the branch (`4 passed (4)` above) and
@@ -206,17 +206,17 @@ other household's figure held in a column it searches` writes home's
     (`id`, `mediaType`, `bytes`, `uploadedAt`, `uploadedBy`), and `receipts.photo`
     is named in `api/src` only by the store and by `receipts.ts`'s own load. Not
     only read off the types: the read sweep now also fails with `<route> names a
-photo` if any read body contains either household's exact stored photo name.
+    photo` if any read body contains either household's exact stored photo name.
     That guard passes; it was not itself mutated to see it fail, so it is
     asserted by reading, not by a red run.
   - **Test shape.** The two new tests are at the end of the suite and use their
     own photo directory under `PHOTOS` (`start(photos)`, `photoLeaks(app,
-photos)` take it as an optional argument), because the sweep above leaves its
+    photos)` take it as an optional argument), because the sweep above leaves its
     files in `PHOTOS` and `photoLeaks` compares a directory with the receipts
     that name its files.
   - **Checks (Done when 3).** `npm run check` exit 0; `npx oxlint
-tools/ledger/api` exit 0; `npm test -- --project ledger` exit 0, `Test Files
-71 passed (71)`, `Tests 1529 passed (1529)`, in the branch's worktree.
+    tools/ledger/api` exit 0; `npm test -- --project ledger` exit 0, `Test Files
+    71 passed (71)`, `Tests 1529 passed (1529)`, in the branch's worktree.
   - **Folded in:** nothing. The read-body photo-name guard is the Build's own
     step 4. I did not audit the other tables for further generated text columns,
     so none is claimed absent; `receipts.photo` is the only one the ticket names.

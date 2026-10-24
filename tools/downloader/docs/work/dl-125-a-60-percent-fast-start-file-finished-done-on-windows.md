@@ -214,7 +214,7 @@ measurements; the 2026-10-17 Log entry holds this round's.
     rate is known, `max(0.25 s, 4 × 1/fps)`.
   - The rule does not apply to `audioOnly`.
   - The rule does not apply when ffmpeg logs `Estimating duration from
-bitrate`.
+    bitrate`.
 
   The cost the owner accepted: an `audioOnly` source cut at a sample boundary
   is no longer caught, and neither is a cut that loses no more than a
@@ -223,7 +223,7 @@ bitrate`.
 - **F2: the capture-limit exemption.** The builder added an exemption for runs
   with `liveDurationSec`. The question had two options:
   - Drop the exemption, and measure against `min(container Duration,
-liveDurationSec)`
+    liveDurationSec)`
   - Keep the exemption, and reword `Done when` 2
 
   The owner chose **"Drop the exemption"**. That was the gate's and the
@@ -557,7 +557,7 @@ which is dl-121's test.
   has a `FAIL` line in one: run 38355111789, the run this ticket was filed
   from. (_Corrected after gate 1:_ the case's name also appears in run
   38165406514, as a passing line, `✓ a fast-start file stored at 60% of itself
-is DOWNLOAD_FAILED 343ms`.) The other 44 failures are other tests, mostly
+  is DOWNLOAD_FAILED 343ms`.) The other 44 failures are other tests, mostly
   dl-98's `parallel-ranges.test.ts`.
 
 Two limits apply. `gh run list` shows only the latest attempt of each run, so an
@@ -819,7 +819,7 @@ The others were applied as the gate wrote them:
 - **F6.** The `Duration` condition is now worded as the code has it:
   `mediaDurationSec` null, which is `liveDurationSec ?? durationSec`. I checked
   this against `stream.ts`: `const durationSec = request.durationSec ??
-variant.durationSec ?? null`.
+  variant.durationSec ?? null`.
 - **F7.** The superseded `## Why` paragraphs are marked, and the pull request
   is retitled.
 - **F8.** The "not measured" list and the coverage limits are carried into the
@@ -831,7 +831,7 @@ variant.durationSec ?? null`.
 - **The gate's script defect.** `boundary.mjs`, `sweep.mjs` and `history.mjs`
   now take the repository tree as their first argument. Re-run:
   `node boundary.mjs <tree> <work dir>` gives `cut=620869 ->
-{"streamed":619685,"done":619685} | (no partial file, no early end)`, as
+  {"streamed":619685,"done":619685} | (no partial file, no early end)`, as
   logged.
 
 `status` stays `ready`. No source or test was changed.

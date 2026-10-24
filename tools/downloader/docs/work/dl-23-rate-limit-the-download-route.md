@@ -596,7 +596,7 @@ workspace-closure — no new workspace dependency, confirmed via `git diff --sta
 
   **The first version of that type documented the redaction without enforcing
   it, and I only found out by trying.** With `JobListResult = Omit<JobResult,
-"downloadUrl">`, TypeScript's structural typing accepts a full `Job[]` as
+  "downloadUrl">`, TypeScript's structural typing accepts a full `Job[]` as
   `JobListItem[]` — I removed the `.map(toListItem)` and the API compiled clean.
   Adding `downloadUrl?: never` makes it a real barrier: the unstripped route now
   fails to compile, and so did `mock.ts`, which is the proof it catches a second

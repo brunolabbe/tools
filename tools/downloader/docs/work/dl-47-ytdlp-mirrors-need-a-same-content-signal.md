@@ -253,7 +253,7 @@ re-measured before accepting it.** The mutation table said dropping the
   **54/55 passed**, including both balancer tests, which is the builder's claim
   that the two orders are byte-identical on those cases. The single failure was
   exactly `"deduplicating before grouping is what keeps two families from becoming
-two rows"`, on exactly the named assertion — 1 distinct URL for 2 variants. So
+  two rows"`, on exactly the named assertion — 1 distinct URL for 2 variants. So
   the order is load-bearing for the reason found here, not the reason the brief
   gave, and the test asserts the property that actually moves.
 - **Collapse producers enumerated, not sampled** — all six derived fixtures

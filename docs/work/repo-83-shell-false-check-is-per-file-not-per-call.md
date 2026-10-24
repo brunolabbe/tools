@@ -217,7 +217,7 @@ Reviewed `git diff 690acd0..bf143f4` only, against base `b7fb3fb`; `origin/main`
   needed.
 
   The per-call script (save as `percall.mjs`, run `node percall.mjs
-"$(pwd)"` from the repository root):
+  "$(pwd)"` from the repository root):
 
   ```js
   // Per-call enumeration: every call to spawn/spawnSync/execFile/execFileSync in
@@ -375,10 +375,10 @@ Reviewed `git diff 690acd0..bf143f4` only, against base `b7fb3fb`; `origin/main`
   - **The brief's population was stale, as it warned.** Re-measured by running
     the brief's own `percall.mjs` (extracted from this file's first code block)
     at `b7fb3fb`: `files scanned 493, importing child_process 31, calls 157,
-calls lacking own shell:false 12`, against the brief's 28 / 137 / 14. By
+    calls lacking own shell:false 12`, against the brief's 28 / 137 / 14. By
     file the brief's `preflight.mjs (2), review-record.mjs (7),
-preflight.test.ts (5)` is now `preflight.mjs (2), review-record.mjs (2),
-preflight.test.ts (5)` plus three in `scripts/citations-gate.mjs` that did
+    preflight.test.ts (5)` is now `preflight.mjs (2), review-record.mjs (2),
+    preflight.test.ts (5)` plus three in `scripts/citations-gate.mjs` that did
     not exist at the brief's head. Those three are a false positive of
     `percall.mjs`, not of the new check: each passes `options`, a binding that
     spreads `GIT_EXEC_OPTIONS` (`scripts/citations-gate.mjs:811`, `:362`), which
@@ -391,7 +391,7 @@ preflight.test.ts (5)` plus three in `scripts/citations-gate.mjs` that did
     `scripts/review-record.mjs:317` and `:346`, `scripts/test/preflight.test.ts:76`,
     `:704`, `:810`, `:839`, `:862`. After adding `shell: false` to each, the same
     command passes 10 of 10; `percall.mjs` over the tip reports `calls lacking
-own shell:false 3`, only the three spread-resolved ones above.
+    own shell:false 3`, only the three spread-resolved ones above.
   - **The guard fails when the call list narrows.** With `SPAWN_CALLS` in
     `packages/core/test/support/spawn-calls.ts` temporarily set to `["spawn"]`,
     the same command failed 3 of 10 — "a call lacking its own `shell: false`
@@ -413,7 +413,7 @@ own shell:false 3`, only the three spread-resolved ones above.
     brackets, regex literals and template `${}` are not understood.
   - **Citations: no record fails, and none was repointed.**
     `node scripts/citations-gate.mjs --against origin/main` exits 0 with `139
-enforced, 0 failing`. The edit still moves lines cited by merged records
+    enforced, 0 failing`. The edit still moves lines cited by merged records
     outside this branch, which repo-47 makes reported debt and not a failure:
     at `b7fb3fb` the same command prints 17 moved citations in 10 records outside the
     branch's; at the tip, 36 in 12 (39 before the three repairs below). Three of the
@@ -488,7 +488,7 @@ enforced, 0 failing`. The edit still moves lines cited by merged records
     flag is removed and the parameter renamed `run`, which keeps the call out of the
     name match and drops this branch's `+3` lines in that function.
   - `node scripts/citations-gate.mjs --against origin/main` exit 0, `139 enforced, 0
-failing`, 34 moved in 11 records outside the branch (base: 17 in 10).
+    failing`, 34 moved in 11 records outside the branch (base: 17 in 10).
 - 2026-10-02 — **Gate 2's round (PASS at `d087dc5`, three new lows), owner
   answer by `AskUserQuestion`: withdraw `shell: false` on a spread that brings in a
   `shell` the file itself declares.** Each finding reproduced against `d087dc5`'s
@@ -517,7 +517,7 @@ failing`, 34 moved in 11 records outside the branch (base: 17 in 10).
     (`expected [] to deeply equal [ 4, 5, 6 ]`, 1 of 18 failed), green at the head.
   - **3 — two rules no test held (both reproduced).**
     - Removing the declaration-count check (`if (declarations?.length !==
-bodies.length) return false` → `if (declarations === null) return false`)
+      bodies.length) return false` → `if (declarations === null) return false`)
       kept 14 of 14 at `d087dc5`. Fixture "a name declared twice, once as a literal and
       once not, is not safe": with the check removed, 1 of 18 failed
       (`expected [] to deeply equal [ 2, 3 ]`); at the head it passes.
@@ -549,7 +549,7 @@ bodies.length) return false` → `if (declarations === null) return false`)
     - The tree sentence was wrong: of the four downloader calls spreading an
       inline conditional, three spread `...(cwd ? { cwd } : {})` (`runner.ts`, and
       two ffmpeg test helpers) and one, in `ytdlp.ts`, spreads `...(extraEnv ===
-undefined ? {} : { env })`. The header now says that. (Gate 3 put the
+      undefined ? {} : { env })`. The header now says that. (Gate 3 put the
       `ytdlp.ts` spread at line 788; at this head it is at 797, and the header cites
       no line for it.)
     - "A spread of a name this file does not declare is trusted" understated it.

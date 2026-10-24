@@ -237,7 +237,7 @@ nobody charged, and nothing flags it.
     → `5 failed | 49 passed (54)` (four `books` tests in "the taxable marks (lg-26)"
     and the `web` one); restored, same command → `54 passed (54)`.
     `npm test -- --project ledger` → `Test Files 60 passed (60)`, `Tests 1123 passed
-(1123)`; `npm run check` exit 0. Done when 1 is "flags the six-pack misread as
+    (1123)`; `npm run check` exit 0. Done when 1 is "flags the six-pack misread as
     not taxable, and not the basket as printed" (and the bread's twin); 2 is "does
     not flag items all untaxed on a receipt with no tax lines"; 3 is "flags a
     taxable mark on a receipt with no tax lines, both taxes counting as zero"; 4 is

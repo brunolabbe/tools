@@ -50,7 +50,7 @@ existing `Bash(gh pr merge *)` deny does not match it.
 
 1. **Guard before install.** Add `Bash(gh stack merge*)` to the `deny` list
    in `.claude/settings.json`. Confirm it binds by running `gh stack merge
---help` and watching it be refused. This step happens first, before
+   --help` and watching it be refused. This step happens first, before
    anything can merge.
 2. **Install, durably.** `gh extension install github/gh-stack`, pinned to a
    release tag (v0.1.1 was current at repo-48). Add the same pinned install to
@@ -63,7 +63,7 @@ existing `Bash(gh pr merge *)` deny does not match it.
    seam map says must share a file. Do not build a synthetic one. Record in
    this ticket's Log, each with the command and its output:
    - whether a stack exists on this personal repository at all (`gh stack
-link <A> <B>`, then `gh pr view <B> --json baseRefName`);
+     link <A> <B>`, then `gh pr view <B> --json baseRefName`);
    - **linear history.** Builders currently `git merge origin/main` into
      their branches, and tools-79 chose merge over rebase on purpose so no
      gated commit was force-pushed. Does a merged-in `main` block the stack's
@@ -129,7 +129,7 @@ wiring), so nothing in `npm test` proves any row below; "verified" means I ran i
   Log's "v0.2.1 is newest" holds, and the asset list for v0.2.1 includes
   `linux-amd64` (WebFetch of `releases/expanded_assets/v0.2.1`). The README's
   command reference lists `init add checkout rebase modify sync push submit link
-merge view unstack(delete) up down top bottom trunk switch feedback alias`.
+  merge view unstack(delete) up down top bottom trunk switch feedback alias`.
   **`merge` is the only subcommand that merges**, with `--merge-method`,
   `--merge`/`--squash`/`--rebase` and `-y/--yes`. `submit --open` and
   `link --open` only mark drafts ready, `sync --prune` deletes local branches,
@@ -151,9 +151,9 @@ merge view unstack(delete) up down top bottom trunk switch feedback alias`.
   stripped wrappers `timeout time nice nohup stdbuf command builtin noglob`,
   leading `VAR=value` ignored by deny rules). It is a reading of the
   documentation, not the harness. On the branch's file it denies: `gh stack
-merge`, `… --help`, `… 12`, `… --squash`, `… --rebase -y`, `… --merge-method
-squash --yes 3`, `GH_TOKEN=x gh stack merge -y`, `timeout 30 gh stack merge
--y`, `cd /tmp && gh stack merge -y`, `echo y | gh stack merge` (10 of 10),
+  merge`, `… --help`, `… 12`, `… --squash`, `… --rebase -y`, `… --merge-method
+  squash --yes 3`, `GH_TOKEN=x gh stack merge -y`, `timeout 30 gh stack merge
+  -y`, `cd /tmp && gh stack merge -y`, `echo y | gh stack merge` (10 of 10),
   and passes `gh stack view`, `sync`, `submit --open`, `link a b --open`, `push`.
 - **Positive control.** The same model on a scratch copy with the entry deleted
   (`diff` shows the single line `Bash(gh stack merge*)` removed): the same 10
@@ -161,13 +161,13 @@ squash --yes 3`, `GH_TOKEN=x gh stack merge -y`, `timeout 30 gh stack merge
   print `ok deny`. The model can fail.
 - A live check of the whitespace worry: `gh  api --help` (two spaces, against
   `main`'s `Bash(gh api *)`) printed `Permission to use Bash with command gh  api
---help has been denied.` So the harness normalises a double space; `gh  stack
-merge` is covered.
+  --help has been denied.` So the harness normalises a double space; `gh  stack
+  merge` is covered.
 - **What would slip through** (the permissions page's "What a Bash rule doesn't
   match", plus `gh` itself; none of these was run, because probing another
   spelling of a deny is what the repo's CLAUDE.md says not to do):
   `gh extension exec stack merge -y` (and `gh ext exec …`), `/usr/bin/gh stack
-merge -y`, `bash -c 'gh stack merge -y'`, a quoted `gh stack 'merge'`,
+  merge -y`, `bash -c 'gh stack merge -y'`, a quoted `gh stack 'merge'`,
   `gh alias set <name> 'stack merge'` then `gh <name>`, and `gh stack alias`,
   which installs a `gs` wrapper script in `~/.local/bin` forwarding all
   arguments, so `gs merge -y`. Whether `~/.local/bin` is on `PATH` here is not
@@ -176,8 +176,8 @@ merge -y`, `bash -c 'gh stack merge -y'`, a quoted `gh stack 'merge'`,
 - **The hook layer does not cover it either.** `.claude/hooks/check-main-writes.sh`
   blocks `gh pr merge` in any spelling with a segment regex that names `pr`.
   Fed a PreToolUse payload: `gh stack merge -y` exits **0**; the control `gh pr
-merge -y` exits **2** (inputs in the scratch directory, `bash
-.claude/hooks/check-main-writes.sh < <file>`). See F1.
+  merge -y` exits **2** (inputs in the scratch directory, `bash
+  .claude/hooks/check-main-writes.sh < <file>`). See F1.
 
 **2. Parse and placement.** `node -e "JSON.parse(…)"` on the branch's
 `.claude/settings.json`: parsed, `permissions.deny` has 8 entries, the second is
@@ -191,26 +191,26 @@ tell them apart**; the `includes` check and the matcher model can.
 - `gh --version` prints `gh version 2.101.0`. Holds.
 - `gh stack merge --help` in this gate's session, with the branch's file checked
   out in the worktree: not refused; it printed `gh stack is available as an
-official extension. To install it, run: gh extension install github/gh-stack`,
+  official extension. To install it, run: gh extension install github/gh-stack`,
   exit 1. Holds.
 - `gh api --help`: `Permission to use Bash with command gh api --help has been
-denied.` Holds (it is `main`'s rule).
+  denied.` Holds (it is `main`'s rule).
 - `gh pr merge --help`: `PreToolUse:Bash hook error: … Merging a pull request is
-the owner's decision, not an agent's.` Holds, and the Log is right that this
+  the owner's decision, not an agent's.` Holds, and the Log is right that this
   probe cannot separate the hook from the deny list.
 - `origin/main:.claude/settings.json` and the shared checkout's
   `/workspaces/tools/.claude/settings.json` both have no `stack` line (grep exit
   1 on each). Holds: nothing stands between `gh stack merge` and a merge in a
   session that loaded `main`'s rules, except the extension's absence.
 - **A control the Log lacks, run by me.** The Log's non-refusal of `gh stack
-merge --help` cannot separate "the rule is not loaded" from "the pattern does
+  merge --help` cannot separate "the rule is not loaded" from "the pattern does
   not match". I added `Bash(echo worktreecontrol*)`, a pattern that trivially
   matches, to the detached worktree's file beside the new entry and ran `echo
-worktreecontrol`: it ran and printed `worktreecontrol`; `gh stack merge --help`
+  worktreecontrol`: it ran and printed `worktreecontrol`; `gh stack merge --help`
   was still not refused. A worktree-only rule that cannot fail to match does not
   fire either, so the non-refusal is the loading, not the pattern. I restored the
   file with `git checkout 13b707b5… -- .claude/settings.json`; `git status
---short` is empty. The Log's conclusion holds.
+  --short` is empty. The Log's conclusion holds.
 
 **4. Does the slice leave the ticket coherent?** Mostly. `status: ready`
 unchanged (`npm run status -- --show repo-95`: `status ready`, `awaiting —`,
@@ -221,7 +221,7 @@ unchanged (`npm run status -- --show repo-95`: `status ready`, `awaiting —`,
 - **low** · `nfr:security` · no `Done when` line depends on it · **no live call
   site until step 2 installs the extension.** F1: `check-main-writes.sh` covers
   `gh pr merge` only, so after step 2 the deny rule is the sole layer for `gh
-stack merge`, and it is the glob matcher whose measured escapes the hook was
+  stack merge`, and it is the glob matcher whose measured escapes the hook was
   written to close. **Open decision, for the step-2 builder:** (a) extend the
   hook's merge segment regex to `gh pr merge` and `gh stack merge`, with a case
   in `scripts/test/hooks.test.ts` and a control that fails without it; (b) keep
@@ -269,7 +269,7 @@ stack merge`, and it is the glob matcher whose measured escapes the hook was
 - Invariants walked: the ticket's Log was appended (CLAUDE.md, "Append to a
   ticket's Log"); the commit and title scope pass `commit-message.mjs`; no tool
   imports, errors, URLs, spawns, tests or workspaces are touched. Not run: `npm
-test` (no code changed; CI's `test` legs were still running on this head).
+  test` (no code changed; CI's `test` legs were still running on this head).
 
 ### Gate 2
 
@@ -338,15 +338,15 @@ refuses a stacked-pull-request merge as it refuses a pull request merge".
 - At this head: `npx vitest run scripts/test/hooks.test.ts` → `Tests 34 passed (34)`.
 - With the hook reverted (`git checkout 13b707b5… -- .claude/hooks/check-main-writes.sh`):
   `Tests 1 failed | 33 passed (34)`, `AssertionError: gh stack merge: expected +0 to
-be 2`. The fixer's "1 failed | 33 passed" reproduces. A hook that does nothing
+  be 2`. The fixer's "1 failed | 33 passed" reproduces. A hook that does nothing
   fails the refuse half, so the "contains no X" companion rule is met.
 - The silent half can fail too. Mutation A (regex widened to any `gh (pr|stack)`
   subcommand): the new test fails on `gh stack view: expected false to be true`
   (and `check-main-writes stays out of the way of commands that cannot push`
   fails on `gh pr list --state open`). Mutation B (the `^[[:space:]]*` anchor
   dropped): the new test fails on `echo gh stack merge: expected false to be
-true`. Each mutation made 1 or 2 tests red; I restored the hook with `git
-checkout 714a8796… -- .claude/hooks/check-main-writes.sh` after each and
+  true`. Each mutation made 1 or 2 tests red; I restored the hook with `git
+  checkout 714a8796… -- .claude/hooks/check-main-writes.sh` after each and
   `git status --short` is empty.
 - The test is the last `test(` in the file and the file ends with its closing
   brace. The round also adds one line, `const STACK_MERGE`, beside `MERGE` and
@@ -429,7 +429,7 @@ them; I ran the hooks suite myself (34 of 34).
     So deny rules do bind in this session, but only the ones on `main`.
   - `gh pr merge --help` was refused by the shared checkout's
     `check-main-writes.sh` hook (`PreToolUse:Bash hook error: … Merging a pull
-request is the owner's decision`). The hook fires before the deny list is
+    request is the owner's decision`). The hook fires before the deny list is
     consulted, so this probe cannot tell the two layers apart.
 
   So nothing stands between `gh stack merge` and a merge until the rule reaches

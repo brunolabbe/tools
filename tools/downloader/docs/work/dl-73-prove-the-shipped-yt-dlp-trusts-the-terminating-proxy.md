@@ -410,6 +410,6 @@ So the control cannot pass on a bundle that was not found, on a `TMPDIR` that di
 - **2026-10-05, `awaiting` added** — from the review of repo-88's answer (PR
   #357). The landing entry above names the first real bump pull request as the
   remaining confirmation, and nothing in the frontmatter did. `gh pr list
---state all --search "yt-dlp in:title"` showed no bump pull request today, so
+  --state all --search "yt-dlp in:title"` showed no bump pull request today, so
   the clause is still owed. Whoever reads that pull request's checks deletes
   the line.

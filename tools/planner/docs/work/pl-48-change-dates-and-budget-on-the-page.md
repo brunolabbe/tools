@@ -237,7 +237,7 @@ were already `done` on that base.
 - `web/test/plan-fixtures.ts`: `brief()` gained an optional `budget` override,
   left unknown (the ordinary "unasked" state) unless given.
 - `web/test/plan-view.test.tsx`: 7 new tests in a new `describe("changing the
-dates or budget")`, appended after the file's last existing test so nothing
+  dates or budget")`, appended after the file's last existing test so nothing
   before it moved.
 
 **What the brief had wrong.**
@@ -278,7 +278,7 @@ already-free work surfaced.
 - `npx vitest run tools/planner/web/test/plan-view.test.tsx`: 52 tests, all
   passing (45 baseline + 7 new).
 - `npx vitest run tools/planner/web/test/controls.test.tsx
-tools/planner/web/test/wizard.test.tsx tools/planner/web/test/app.test.tsx`:
+  tools/planner/web/test/wizard.test.tsx tools/planner/web/test/app.test.tsx`:
   27 tests, all passing, unchanged from baseline — the wizard's tests pass
   unchanged, per Done-when.
 - `npx vitest run --project planner`: 75 files, 1,280 tests, all passing.
@@ -318,7 +318,7 @@ taking the gate's own recommendation:
 gate's exact mutation, then restored and re-verified green:**
 
 - Replacing `!budgetEqual(draftBudget, seededBudget)` with `draftBudget !==
-null` reddened a new test (a budget clicked to another band and back beside
+  null` reddened a new test (a budget clicked to another band and back beside
   a real dates change) before the mutation was reverted.
 - Rendering `"not given"` unconditionally in the caption's from-branch
   reddened a new test (an **answered** `from` budget, "Budget: shoestring →
@@ -422,7 +422,7 @@ own recommendation to file rather than fold in:
   narrowest change that holds for every finding kind `ActionErrorDetails`
   renders: a new `findingLine` helper skips the `Day N:` prefix when a
   finding's own `detail` already names that day (a case-insensitive `\bday
-N\b` test), which is true today only of `pin-on-dropped-day`'s detail — the
+  N\b` test), which is true today only of `pin-on-dropped-day`'s detail — the
   critic's own findings (`itinerary/src/critic.ts`) never name their day in
   prose, trusting the wrapper for it, and keep the prefix unchanged. Checked
   by content rather than by `kind`, so a future finding that also names its
@@ -460,7 +460,7 @@ N\b` test), which is true today only of `pin-on-dropped-day`'s detail — the
   after `npm run format`.
 - `npx vitest run tools/planner/web/test/plan-view.test.tsx`: 63 tests, all
   passing (59 prior + 4 new, all in `describe("an unanswered budget that
-gets stuck (gate 2)")`).
+  gets stuck (gate 2)")`).
 - `npx vitest run --project planner`: 75 files, 1,291 tests, all passing.
 - `npx playwright test -c tools/planner/playwright.config.ts`: 5 specs, all
   passing.
@@ -533,7 +533,7 @@ no anchor text and no word touched, per this round's own instruction.
 - `npx playwright test -c tools/planner/playwright.config.ts`: 5 of 5.
 - `node scripts/citations-gate.mjs --against origin/main`: exit 0.
 - `node scripts/citations.mjs <this ticket> --section Review
---require-anchors --require-distinct-anchors`: exit 0, 0 unanchored (4
+  --require-anchors --require-distinct-anchors`: exit 0, 0 unanchored (4
   unchecked: gate 1's own Done-when row and its day-doubling low each carry
   one prose line reference, and gate 2's stuck-budget med and pl-53 low each
   carry the other one).
@@ -541,7 +541,7 @@ no anchor text and no word touched, per this round's own instruction.
   latter pre-existing from pl-46's own merged record) passes
   `git merge-base --is-ancestor <sha> origin/main`.
 - `node scripts/preflight.mjs --base origin/main --title "feat(planner):
-change a plan's dates or budget from the plan page (pl-48)"`: exit 0.
+  change a plan's dates or budget from the plan page (pl-48)"`: exit 0.
 - `git diff --stat 4cb75e3 HEAD`: touches only `PlanView.tsx`,
   `plan-view.test.tsx` and this ticket.
 

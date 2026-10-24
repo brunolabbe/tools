@@ -56,7 +56,7 @@ amendment).
    - **A behaviour change, not only an addition.** Today a row matching one
      rule exactly is classified by it even when another rule's pattern matches
      and its fixed amount does not (`classify` returns on `matching.length ===
-1` and never looks at the `differs` candidates). With no broad rules that
+     1` and never looks at the `differs` candidates). With no broad rules that
      is harmless; with the broad rules this ticket makes useful, a mortgage
      transfer at an unusual amount would be filed by the broad rule in silence
      — exactly what §3 asks about. So: a `differs` candidate that would
@@ -242,7 +242,7 @@ New in this round's lines:
   - **Lows fixed.** History reads only the standing classification, and now a
     test pins it ("a row answered twice counts once, by the answer that
     stands"); changing `FROM current_classifications c` to `FROM classifications
-c` fails 1 of 30, and `history-probe.mjs` S3 still reads `times: 2`. lg-17's
+    c` fails 1 of 30, and `history-probe.mjs` S3 still reads `times: 2`. lg-17's
     Build 8 no longer says the agreeing case has a "Use this answer"; it says
     what each case shows and stores. lg-15 and lg-17's other additions say
     nothing about which rows outrank, so they stand.

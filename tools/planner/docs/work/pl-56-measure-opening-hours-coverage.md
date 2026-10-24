@@ -332,7 +332,7 @@ is made per distinct query.
   judged under the brief that named it most; for the 8 that have another,
   **0 chose a different row under the other brief's context** (`briefsThatChooseDifferently`).
 - Pause 1.1 s between request starts, one at a time, `User-Agent:
-webtools-planner/1.0 (+https://github.com/webtools; pl-56 opening-hours coverage measurement)`.
+  webtools-planner/1.0 (+https://github.com/webtools; pl-56 opening-hours coverage measurement)`.
   Every reply was written to disk as it arrived (scratch `raw/`, not committed),
   so the run resumes; the regeneration of the record after the exclusion list
   was written ran with `PLANNER_HOURS_OFFLINE=1` and made 0 requests
@@ -345,7 +345,7 @@ webtools-planner/1.0 (+https://github.com/webtools; pl-56 opening-hours coverage
   `rowFor` over a `tourism=museum` row with
   `opening_hours=Jun 01-Aug 31 Mo-Su 09:00-17:00` and
   `check_date:opening_hours=2025-06-01` gives `season: true`, `checkDateWithinTwoYears:
-true`; the same with `Mo-Fr 09:00-17:00` and `2019-05-05` gives `season: false`,
+  true`; the same with `Mo-Fr 09:00-17:00` and `2019-05-05` gives `season: false`,
   `false`; no hours and a null `extratags` both give no hours. The full run's
   15 real hits are the other half of that proof.
 - Full run: 1,013 requests, **every one HTTP 200** (`grep -vc " 200 q=" run.log`
@@ -572,8 +572,8 @@ does not reach.
    starts from an OSM id is capped by `locate`'s 200.
 2. **Most of the empties are not places.** A sample of 40 empty queries is
    `Percé village inn, Percé`, `Gaspé guesthouse or inn, Gaspé`, `Local bakery
-and cheese shop, Gaspé Peninsula`, `Snowmobile rental outfitter near the
-chosen trail region`: specialists propose a kind of place at a locality
+   and cheese shop, Gaspé Peninsula`, `Snowmobile rental outfitter near the
+   chosen trail region`: specialists propose a kind of place at a locality
    about as often as a named premises. 320 of the 1,019 places are named by
    `lodging`, and 34 of them locate. That is not a Nominatim failure.
 3. **Some are real places the query shape misses.** Control, by hand, one
@@ -625,10 +625,10 @@ chosen trail region`: specialists propose a kind of place at a locality
    city briefs). Re-choosing the same replies with the locality's endonym
    (Rome → Roma, Vienna → Wien, and the same for the trip destination; the same
    chooser, changed input; a scratch script, not committed) gives `{ declined:
-32, located: 26, withHours: 12, seasonal: 3 }`. The seasonal three are
+   32, located: 26, withHours: 12, seasonal: 3 }`. The seasonal three are
    Schönbrunn (`Apr 1-Jun 30,Sep 1-Oct 31 08:00-17:30; Jul 1-Aug 31 …`), Musei
    Capitolini and Centrale Montemartini (dated closures). `node --import tsx
-…/gate-1/alias.mts <tree> <raw>` reproduces the first four:
+   …/gate-1/alias.mts <tree> <raw>` reproduces the first four:
    `Galleria Borghese: locality "Rome" -> declined | "Roma" -> tourism=museum oh=Tu-Su 09:00-19:00`.
    This is the **measured** lever. Round 1's claim that a bare-name fallback is
    "the largest lever" was not measured and is withdrawn. What was measured of

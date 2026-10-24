@@ -262,7 +262,7 @@ to stop for `srt`, still live today.
 - **Gate verified by making it fail first.** Baseline
   `node scripts/status.mjs --json > /dev/null` -> **0**. Injected
   `depends_on: [dl-999]` -> **exit 1**, `depends_on "dl-999", which is not a
-ticket`. Restored -> **0**.
+  ticket`. Restored -> **0**.
 
 #### 7. Citations
 

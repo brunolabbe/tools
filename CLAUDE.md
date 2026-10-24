@@ -73,10 +73,14 @@ header is the full account.
 
 Per-tool commands (`dev`, `e2e`) live in that tool's `CLAUDE.md`.
 
+**A dependency release waits seven days before it enters the lockfile**, unless it
+fixes an advisory against this tree; how, and why npm 10.9.9 cannot do the update,
+is in [`.claude/rules/dependency-updates.md`](./.claude/rules/dependency-updates.md).
+
 Tooling: **oxlint** and **oxfmt** (not eslint/prettier). Config in
 `.oxlintrc.json` and `.oxfmtrc.json`.
 
-Both config files are **JSONC despite the `.json` extension**, and `oxfmt` 0.62.0
+Both config files are **JSONC despite the `.json` extension**, and `oxfmt` 0.74.0
 (the pinned version) honours `ignorePatterns`, `printWidth`, `proseWrap`,
 `singleQuote` and `tabWidth`, among others (the `configuration_schema.json` shipped
 with oxfmt is the full list), but silently ignores `lineWidth` and `quoteStyle`. This

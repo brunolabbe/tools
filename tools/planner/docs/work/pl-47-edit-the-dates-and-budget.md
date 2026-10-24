@@ -162,7 +162,7 @@ recommendation:
      not an edit this ticket offers.
 
 3. **`ReviseRequest` gains `{ kind: "brief"; baseRevisionId; dates?: TripDates;
-budget?: TripBudget }`**, with a refine that at least one is present. The
+   budget?: TripBudget }`**, with a refine that at least one is present. The
    response is `{ kind: "run"; run }`, 202. An edit whose values equal the
    current ones is legal and gives an empty diff, as restoring the latest
    revision does (pl-44 step 2).
@@ -221,7 +221,7 @@ budget?: TripBudget }`**, with a refine that at least one is present. The
 3. **`droppedPins(previous, dayCount)`** returns the pinned items on days at or
    above `dayCount`, and **`droppedPinsRefusal(items)`** returns the
    `PLAN_INFEASIBLE` error, with `details: { findings: [{ kind:
-"pin-on-dropped-day", dayIndex, detail }] }`. That is `compose`'s shape, so
+   "pin-on-dropped-day", dayIndex, detail }] }`. That is `compose`'s shape, so
    pl-45's rendering path needs nothing new. The kind is not a
    `CriticFindingKind` and must not be added to `CRITIC_FINDINGS`, because no
    critic produced it.
@@ -272,7 +272,7 @@ budget?: TripBudget }`**, with a refine that at least one is present. The
 3. **The route: kind `brief`**, after pl-44's checks 1–6, in this order:
    1. **Dates, when present**, go through `validateAnswer` from
       `@planner/intake`, with the tree node whose `fills` is `{ scope: "core",
-slot: "dates" }` looked up from `QUESTION_TREE`, and the API's clock. That
+      slot: "dates" }` looked up from `QUESTION_TREE`, and the API's clock. That
       is `INVALID_DATES` for a past departure, a trip past `MAX_TRIP_NIGHTS`, or
       a window too short for its nights. Look the node up by what it fills,
       never by its id: the tree is content, and an id is not the thing this
@@ -503,18 +503,18 @@ with the shapes this brief names, so nothing here follows a different landing.
 
 - **Step 3.5's per-day row says "Changed the budget" for a change nobody made.**
   "Budget, or day count under a per-day one → `Changed the budget, and re-packed
-every day.`" would caption a dates-only edit under a `per-day` budget as a
+  every day.`" would caption a dates-only edit under a `per-day` budget as a
   budget change. I built the rule the other rows follow: the subject is what the
   user changed, the action is what the tool did. That case reads `Changed the
-dates, and re-packed every day.`, or `…, dropped days 7–8, and re-packed the
-rest.` when it is shorter. Every other row of the table is reproduced word for
+  dates, and re-packed every day.`, or `…, dropped days 7–8, and re-packed the
+  rest.` when it is shorter. Every other row of the table is reproduced word for
   word, and `reason.test.ts` says why the one differs.
 - **`droppedPinsRefusal(items)` cannot name an item from a pin alone.** A
   `PinnedPlacement` carries a candidate id, and pl-48 renders each finding's
   `detail` as the sentence naming the item. So it takes the candidates too,
   `droppedPinsRefusal(dropped, candidates)`, and `briefEditSlice` takes
   `candidates` for the same reason. The detail reads `“<title>” is pinned to day
-4, which the new dates drop. Unpin it to shorten the trip.`, one finding per
+  4, which the new dates drop. Unpin it to shorten the trip.`, one finding per
   pin. `PLAN_INFEASIBLE`'s own copy needed no re-wording.
 - **An empty slice would still have measured.** `replanPool` over no days
   returns every unplaced candidate, because nothing is frozen away from it. A

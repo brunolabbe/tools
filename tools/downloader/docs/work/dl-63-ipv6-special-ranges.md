@@ -312,7 +312,7 @@ carve-outs, per (c):
     over the tool docs, `docs/` and `.claude/` came back empty), so there was
     no prose to bring up to date.
   - **One citation moved, and was re-pointed:** `scripts/citations-gate.mjs
---against origin/main` failed dl-57's gate record, whose citation of
+    --against origin/main` failed dl-57's gate record, whose citation of
     `ssrf.ts:306 "That address could not be resolved."` now sits at line 338
     because the table was inserted above it. The line number in dl-57 was
     updated and nothing else was touched. After that the gate reported

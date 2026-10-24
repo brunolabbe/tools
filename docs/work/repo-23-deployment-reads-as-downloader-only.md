@@ -85,7 +85,7 @@ ticket does not pose a decision.
   the planner section and to `## Adding the second tool`. Pure addition. Makes a
   third file agree with two that already say it, in their words.
 - **Reorder, bringing the two-tool framing first (rejected).** `## Adding the
-second tool` is written as a _delta on steps already taken_ — it says "the
+  second tool` is written as a _delta on steps already taken_ — it says "the
   tunnel does not change" and refers back to "step 1". Moved above step 1 it is
   incoherent, and it would rewrite line numbers across the whole file, which
   `scripts/citations.mjs` resolves against for every gate record that cites it.
@@ -349,7 +349,7 @@ Reviewer: Sonnet 5 (`claude-sonnet-5`). Builder ran Opus (explicit `model: "opus
   and that the note moved to `docs/02-DEPLOYMENT.md:271`. Measured instead: that
   citation was written at `022dfff`, when `02-DEPLOYMENT.md` was 336 lines and
   its line 256 read `replicas grant two allowances and a redeploy resets every
-bucket. The scope of` — inside the Cloudflare WAF bullet that ends by linking
+  bucket. The scope of` — inside the Cloudflare WAF bullet that ends by linking
   `dl-6`'s Log, which is exactly what the finding says ("still cited the page
   for the limiter's scope", "links `dl-6`'s Log"). The file then grew to 530
   lines on `main` and that bullet moved to 260–265, so by `origin/main` line 256

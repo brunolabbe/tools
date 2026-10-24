@@ -48,7 +48,7 @@ should reflect what that run found, not guess ahead of it.
 2. **`updateRunUsage`** in `api/src/db/runs.ts` writes `record.usage.thinkingTokens`
    into the new column, alongside the five it already writes.
 3. **`RunUsageRow`** in `api/src/cost-report.ts` gains `thinking_tokens: number
-| null`, and `selectFinishedRuns`'s query selects it.
+   | null`, and `selectFinishedRuns`'s query selects it.
 4. **The report prints a thinking-token line, priced never** —
    `thinkingTokens` is a subset of `outputTokens`, already billed at the
    output rate (`ModelUsage`'s own doc comment, `agent/src/provider.ts`), so
@@ -204,7 +204,7 @@ should reflect what that run found, not guess ahead of it.
   gate 1's check.
 - **low** · new, in the round's Log commit · The Log's "Med, fixed" paragraph
   says the report prints `share 31.3% of output … over the 2 runs that reported
-both`. No fixture or test produces 31.3%: `grep -rn "31.3"` over the test and
+  both`. No fixture or test produces 31.3%: `grep -rn "31.3"` over the test and
   the source finds nothing, and the tests pin 20.6%, 90.0%, 0.2% and 0.0%. The
   line is illustrative but reads as measured output. Fixing it at landing means
   quoting a figure a test pins, e.g. 20.6% over 3 runs.

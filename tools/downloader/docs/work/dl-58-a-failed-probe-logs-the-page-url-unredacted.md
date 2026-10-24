@@ -324,16 +324,16 @@ committed `## Review` transcription
   `origin/main`, and no archival ref holds them. Measured in a fresh
   single-branch copy of `main` with this ticket placed in it:
   `citations.mjs --section Review` reports `rev b63d8c6 not in this
-repository` twice and `rev 31ba6c9 not in this repository` once. After
+  repository` twice and `rev 31ba6c9 not in this repository` once. After
   merge that fails `citations-gate` for every later pull request. The
   section preamble saying the pins stay reachable through the pull request is
   false for the same reason. How to repair it is an **open decision** (D4).
 - **med** · the transcription is not verbatim and carries no disclosure note.
   Against the text the reviewer sent, the committed gates change tense
   throughout (`has` to `had`, `loses` to `would have lost`), add `Fixed in
-the Log below` twice, `Fixed by this commit`, a `dl-67` link, a
+  the Log below` twice, `Fixed by this commit`, a `dl-67` link, a
   parenthetical calling the gate 1 recursion clause stale and `(D3, for the
-orchestrator)`, and add a preamble paragraph. The Log says gate 1 is
+  orchestrator)`, and add a preamble paragraph. The Log says gate 1 is
   unchanged except the H3 bullet. The two pins are the only necessary
   edits.
 - **dropped** · `ancestors` is a `Set`, not a `WeakSet`: it is created per
@@ -370,8 +370,8 @@ re-transcribed `## Review`
   builder left the pins in place rather than choose, which is right.
 - **low** · the transcription is verbatim apart from the disclosed pins and
   one undisclosed word: gate 3 quotes the builder Log as `unchanged except
-the H3 bullet` and the committed text reads `unchanged apart from the H3
-bullet`, while the preamble says nothing else was altered. Word-diffed
+  the H3 bullet` and the committed text reads `unchanged apart from the H3
+  bullet`, while the preamble says nothing else was altered. Word-diffed
   against the sent text.
 - **low** · both cycle tests assert only that the secret is absent and one
   line exists; a line written as `fieldsDropped: true` would also pass them.
@@ -466,7 +466,7 @@ the round count and the repointed citation
   Recorded rather than repaired: another commit to fix two words would cost
   more than it buys.
 - **verified** · the med from gate 5 is closed: `### Gate 4` and `### Gate
-5` are both in the record, the preamble says five rounds, and gates 4 and
+  5` are both in the record, the preamble says five rounds, and gates 4 and
   5 are otherwise the text of the reviewer word for word (word-diffed).
 - **verified** · the low from gate 5 is closed by the second of the two
   offered remedies, and the reasoning for not using the declaration is
@@ -842,7 +842,7 @@ unchanged, has nothing left to review.**
   object still on the current path) apart from a shared reference (revisits
   one whose subtree already finished). Re-run of the reviewer's exact repro
   after the fix: both `a` and `b` redacted, and a `{ details: shared, again:
-[shared] }` shape redacts in both places too. A genuine self-reference
+  [shared] }` shape redacts in both places too. A genuine self-reference
   still does not hang — verified live, and pinned as a unit test — though a
   URL reachable _only_ by re-entering the cycle is still not redacted on that
   second visit (documented as a known limitation in `logger.ts`, matching how
@@ -868,7 +868,7 @@ unchanged, has nothing left to review.**
   go stale the moment a gate 3 touches those lines again.
 
   Command: `node scripts/citations.mjs <this ticket> --section Review
---require-anchors --require-distinct-anchors` — exit 0, 18 verified, 3
+  --require-anchors --require-distinct-anchors` — exit 0, 18 verified, 3
   unchecked (bare `line N` mentions in the gate-1 low bullet about the
   ticket's own now-fixed stale citations, which name no file on purpose and
   are not meant to resolve).
@@ -903,7 +903,7 @@ unchanged, has nothing left to review.**
   and pino serialises that object's own fields before turning the back edge
   itself into `"[Circular]"` one level further out — so an object holding
   `{ url: "…CYCLE", self: <itself> }` logged `self: { self: "[Circular]",
-url: "…CYCLE" }`, the secret sitting in the object pino marks circular, not
+  url: "…CYCLE" }`, the secret sitting in the object pino marks circular, not
   past it. My own first cycle test only asserted the line survived, which
   passed with the secret still in it — a real gap in what I'd pinned, not
   just in the source. Reproduced exactly as the reviewer measured it,
@@ -924,7 +924,7 @@ url: "…CYCLE" }`, the secret sitting in the object pino marks circular, not
   its ref deleted — reproduced exactly as the reviewer measured it, in a
   fresh single-branch clone of `main` with this ticket copied in:
   `citations.mjs --section Review` reports `rev b63d8c6 not in this
-repository` (twice) and `rev 31ba6c9 not in this repository` (once). This
+  repository` (twice) and `rev 31ba6c9 not in this repository` (once). This
   is a repo-wide question about how this branch's gate records survive a
   squash merge, not something settled inside a diff — passed to the
   orchestrator as D4, with the reviewer's two options (archival tags, or
@@ -937,7 +937,7 @@ repository` (twice) and `rev 31ba6c9 not in this repository` (once). This
   own context), the reviewer's finding is accurate: I had changed tense
   throughout (`cites`→`cited`, `reports`→`reported`, `points`→`pointed`,
   `says`→`said`, `adds`→`added`, `is`/`has`→`was`/`had`, `loses`→`would have
-lost`), added "Fixed in the Log below." twice, added "Fixed by this
+  lost`), added "Fixed in the Log below." twice, added "Fixed by this
   commit — both gates are now above, under their own headings.", added the
   `dl-67` markdown link into gate 1's dropped bullet, added a parenthetical
   calling part of gate 1's DoS bullet stale, added "(D3, for the
@@ -969,7 +969,7 @@ lost`), added "Fixed in the Log below." twice, added "Fixed by this
     `d81cfce`, plus this round's net +1 — the cycle test was rewritten in
     place, not added, and one new two-object-cycle test was added).
   - `node scripts/citations.mjs <this ticket> --section Review
---require-anchors --require-distinct-anchors` — exit 0, 21 verified, 3
+    --require-anchors --require-distinct-anchors` — exit 0, 21 verified, 3
     unchecked (the same gate-1 bare `line N` mentions as before), 5 pinned.
   - `node scripts/citations-gate.mjs --against origin/main` — exit 0, 85
     enforced, 0 failing.
@@ -1003,7 +1003,7 @@ lost`), added "Fixed in the Log below." twice, added "Fixed by this
   `onStderrLine` callback, not just the direct function. Both red at the
   pre-D3 flags (`gu`), green after — verified by toggling the regex's flags
   in place and re-running, then restoring. `npx vitest run
-tools/downloader/engine` — 174 passed (the full engine project, not just
+  tools/downloader/engine` — 174 passed (the full engine project, not just
   the two new/touched files, since D3 explicitly asked to prove the second
   consumer was not broken or weakened). Reworded the widened Done-when line
   to say what the matcher covers after the flag (case-insensitive, still
@@ -1056,7 +1056,7 @@ tools/downloader/engine` — 174 passed (the full engine project, not just
   moment, for every future `citations-gate` run touching this file — which
   is exactly what gate 3 measured happening to the five pins the previous
   round added. `node scripts/citations.mjs <this ticket> --section Review
---require-anchors --require-distinct-anchors` — exit 0, 4 declared
+  --require-anchors --require-distinct-anchors` — exit 0, 4 declared
   evidence, 0 pinned (down from 5).
 
   **First pass at the declaration broke on an ambiguous bare filename** —
@@ -1074,7 +1074,7 @@ tools/downloader/engine` — 174 passed (the full engine project, not just
   **The orchestrator asked whether a fresh single-branch clone of `main`,
   with this ticket copied in, now passes `citations.mjs` the way gate 3
   measured the pin failure.** Literally, no — `exit 3, 9 unresolvable, 1
-moved` — but not for the reason that check was designed to catch. Every
+  moved` — but not for the reason that check was designed to catch. Every
   one of those failures is a citation into `logging.test.ts` or
   `egress-proxy.test.ts` content this _branch_ added (new tests, new
   describe blocks); `main` does not have them yet because this branch has
@@ -1082,12 +1082,12 @@ moved` — but not for the reason that check was designed to catch. Every
   pinned or not, and resolves itself the moment the branch lands. That is a
   different failure mode from gate 3's, which was specifically about a
   pin naming a commit no tree will ever contain again — `git merge-base
---is-ancestor b63d8c6 origin/main` will still fail after this branch
+  --is-ancestor b63d8c6 origin/main` will still fail after this branch
   merges, since squash-merge never places the individual branch commits
   onto `main`, only their combined diff as one new commit. The question a
   fresh clone can answer is "are there any surviving pins", and in this
   ticket's own `## Review` section there are none: `grep -n
-'@[0-9a-f]\{7,40\}' <this ticket>` matches only inside the Log, as
+  '@[0-9a-f]\{7,40\}' <this ticket>` matches only inside the Log, as
   historical narrative about pins that were since removed, never inside a
   gate record. The two `@20c8fd1` pins this round actually added live in the
   _foreign_ tickets it repaired, `repo-34` and `dl-19` — and `20c8fd1` is on
@@ -1102,10 +1102,10 @@ moved` — but not for the reason that check was designed to catch. Every
 
   **Gates, at the final state:**
   - `npx vitest run tools/downloader/engine/test/redact-urls-in-text.test.ts
-tools/downloader/engine/test/ffmpeg-runner.test.ts` — 12 passed.
+    tools/downloader/engine/test/ffmpeg-runner.test.ts` — 12 passed.
   - `npx vitest run tools/downloader/engine` — 174 passed (full project).
   - `npx vitest run tools/downloader/api/test/logging.test.ts
-tools/downloader/api/test/egress-proxy.test.ts` — 85 passed.
+    tools/downloader/api/test/egress-proxy.test.ts` — 85 passed.
   - `npm run check` — exit 0.
   - `npm test -- --project downloader` — 86 test files, 1450 passed (1442 at
     `29aaacd`, plus this round's 8 new engine tests). One run mid-round
@@ -1115,7 +1115,7 @@ tools/downloader/api/test/egress-proxy.test.ts` — 85 passed.
     full-suite parallel load, not a regression. The clean full run recorded
     here is the one that counts.
   - `node scripts/citations.mjs <this ticket> --section Review
---require-anchors --require-distinct-anchors` — exit 0, 21 verified, 3
+    --require-anchors --require-distinct-anchors` — exit 0, 21 verified, 3
     unchecked, 4 evidence, 0 pinned.
   - `node scripts/citations-gate.mjs --against origin/main` — exit 0, 85
     enforced, 0 failing (includes the `repo-34` and `dl-19` repairs).
@@ -1154,7 +1154,7 @@ tools/downloader/api/test/egress-proxy.test.ts` — 85 passed.
   **Med, and it is the same mistake gate 2 caught for gate 1, on me a second
   time: Gate 4's text was never committed.** I had drafted it, referenced it
   in the round-4 Log entry, and then genuinely never appended the `### Gate
-4` block itself — the preamble still said "four rounds… all four
+  4` block itself — the preamble still said "four rounds… all four
   subsections below" while `grep -n "^### Gate"` returned only 1, 2 and 3.
   Fixed: `### Gate 4` is now committed verbatim (the text quoted in this
   ticket's own round-4 exchange), `### Gate 5` follows it, and the preamble
@@ -1176,7 +1176,7 @@ tools/downloader/api/test/egress-proxy.test.ts` — 85 passed.
   citation now passes"). Took the reviewer's second offered remedy: left
   gate 3's coordinate exactly as sent, and added one bracketed sentence
   after it, explicitly marked `[Gate 5 note, not in the reviewer's original
-text: …]`, saying what changed and why the citation still resolves. This
+  text: …]`, saying what changed and why the citation still resolves. This
   is the same category of edit the disclosure at the top of `## Review`
   already covers in spirit (declarations correcting drift) but is a new
   mechanism — a marked inline correction — so it is named here rather than
@@ -1197,13 +1197,13 @@ text: …]`, saying what changed and why the citation still resolves. This
   mechanics — so the fix was mechanical too: reworded the sentence to
   reuse the fully qualified citation already sitting a few lines above in
   the same bullet ("the same `tools/downloader/…/logging.test.ts:1003
-"sig=CYCLE"` quoted above") rather than repeating it at a width that
+  "sig=CYCLE"` quoted above") rather than repeating it at a width that
   wraps badly. Re-ran `citations.mjs` after every attempt rather than
   guessing which fix would hold.
 
   **Gates, at the final state:**
   - `node scripts/citations.mjs <this ticket> --section Review
---require-anchors --require-distinct-anchors` — exit 0, 23 verified, 7
+    --require-anchors --require-distinct-anchors` — exit 0, 23 verified, 7
     unchecked, 4 evidence, 0 pinned, 0 unanchored, 0 moved, 0 unresolvable.
   - `node scripts/citations-gate.mjs --against origin/main` — exit 0, 85
     enforced, 0 failing.

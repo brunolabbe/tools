@@ -238,7 +238,7 @@ Add one or two sentences to `.claude/agents/builder.md` right after the "Never t
 
 - **2026-09-09** — Filed on branch `repo-43-worktree-path-shadowing`, base
   `origin/main` at fetch time. `node scripts/next-id.mjs repo` reported `next
-free: repo-43` (clashes on `repo-16`, `repo-29`, `repo-32` — each claimed by
+  free: repo-43` (clashes on `repo-16`, `repo-29`, `repo-32` — each claimed by
   merged PR#204 — resolved by the script itself, not by me).
 
   **The general mechanism was reproduced independently, on `CLAUDE.md`, in
@@ -258,7 +258,7 @@ free: repo-43` (clashes on `repo-16`, `repo-29`, `repo-32` — each claimed by
   section stands on `CLAUDE.md` rather than on repo-42's files.
 
   **Two things checked rather than assumed:** `git ls-remote --heads origin
-repo-43-worktree-path-shadowing` returned nothing before this branch was
+  repo-43-worktree-path-shadowing` returned nothing before this branch was
   pushed, and `.claude/agents/builder.md` / `.claude/agents/ticket-reviewer.md`
   currently say nothing about absolute-path shadowing under any spelling
   (`grep -n "shadow" .claude/agents/builder.md .claude/agents/ticket-reviewer.md`

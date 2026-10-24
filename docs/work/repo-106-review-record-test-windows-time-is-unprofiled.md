@@ -151,7 +151,7 @@ A measurement ticket: every acceptance line is a Log claim, checked by re-readin
   nothing was fixed here.
 
   **The probe.** Draft PR #577, `chore(repo): DO NOT MERGE time review-record's
-tests on the Windows leg (repo-106)`, head `17277b4f`, two new files only
+  tests on the Windows leg (repo-106)`, head `17277b4f`, two new files only
   (`.github/workflows/repo-106-probe.yml` and
   `scripts/probe/repo-106-spawn-timing.mjs`). Run `39344302919`; jobs
   `118373087447` (ubuntu-latest) and `118373087677` (windows-latest), all steps
@@ -160,17 +160,17 @@ tests on the Windows leg (repo-106)`, head `17277b4f`, two new files only
   read it with `gh run view 39344302919 --job <id> --log` and parsed it with
   `python3 -I`, ANSI codes stripped. **Closed as the next action after the reading
   was captured:** `gh pr close 577` printed `Closed pull request
-brunolabbe/tools#577`; `git push origin --delete repo-106-probe` printed
+  brunolabbe/tools#577`; `git push origin --delete repo-106-probe` printed
   `[deleted] repo-106-probe`; `git ls-remote --heads origin repo-106-probe | wc -l`
   printed `0`.
 
   Its three steps ran on both legs. (1) `npx vitest run
-scripts/test/review-record.test.ts --reporter=verbose --slowTestThreshold=0`,
+  scripts/test/review-record.test.ts --reporter=verbose --slowTestThreshold=0`,
   no instrumentation: the per-test reading. `slowTestThreshold=0` was dry-run
   locally first and printed a duration for 64 of 64 tests, the 0 ms ones
   included. (2) `node scripts/probe/repo-106-spawn-timing.mjs timing`: ten
   readings of each spawn in the table below. (3) `node
-scripts/probe/repo-106-spawn-timing.mjs trace scripts/test/review-record.test.ts`:
+  scripts/probe/repo-106-spawn-timing.mjs trace scripts/test/review-record.test.ts`:
   the same spec again, with the probe file preloaded into every node process
   (`NODE_OPTIONS=--import <file url>`) to wrap `spawnSync` and `execFileSync`
   and append one line per spawn to a file. That is the only way to see the
@@ -194,7 +194,7 @@ scripts/probe/repo-106-spawn-timing.mjs trace scripts/test/review-record.test.ts
   the 86 s alone: there the file shares four vCPUs with other test files. That
   contention is named, not measured, because this probe ran the file by itself.
   The matrix line, ANSI codes removed: `test (windows-latest, informational)  Run
-npm test  ✓ repo scripts/test/review-record.test.ts (64 tests) 112084ms`. In
+  npm test  ✓ repo scripts/test/review-record.test.ts (64 tests) 112084ms`. In
   that run it is the longest of 292 timed test files on the Windows leg (next:
   `tools/downloader/engine/test/parallel-ranges.test.ts`, 75,288 ms) inside a
   vitest `Duration` of 407.24 s; on ubuntu it is 25 s and outside the top six.
@@ -206,7 +206,7 @@ npm test  ✓ repo scripts/test/review-record.test.ts (64 tests) 112084ms`. In
   **Done when 3 — one spawn each, measured on windows-latest (step 2, ten readings
   each, the median with the range, ms).** A git spawn: **37.7 ms** (36.2 to 43.3,
   `git --version`). An `oxfmt` spawn: **340.9 ms** (324.6 to 361.6, `node
-<oxfmt bin> <file.md>`, in place, the invocation `review-record.mjs` uses).
+  <oxfmt bin> <file.md>`, in place, the invocation `review-record.mjs` uses).
   The runner CPUs differ: ubuntu was a 4-vCPU Xeon Platinum 8573C, windows a
   4-vCPU AMD EPYC 7763.
 
@@ -398,7 +398,7 @@ npm test  ✓ repo scripts/test/review-record.test.ts (64 tests) 112084ms`. In
   18 `withLandRepo` runs x 5) is 240, its own subtraction (299 - 131 = 168 in
   row, plus 72 outside) is 240, and its price (about 19.3 s, 21.9 %) is the
   price of 240; 240 is what is written. Before, at `709475f6`: `git show
-709475f6:<repo-106> | grep -c "that is an \*\*uppe[r]"` → 1, and the same
+  709475f6:<repo-106> | grep -c "that is an \*\*uppe[r]"` → 1, and the same
   pattern for `21,64[8]` on repo-113 → 2. After: `bash <scratch>/land/prove.sh` →
   `fixture setup is 24[0] spawns => 1 ; 1` (repo-106 whole file ; repo-113 above
   its `## Log`), `estimate of up to about 10.[6] s => 0 ; 1` (the 0 is that
@@ -406,7 +406,7 @@ npm test  ✓ repo scripts/test/review-record.test.ts (64 tests) 112084ms`. In
   first Fixed-at-landing entry, `an upper bound => 0 ; 0` and `upper bound => 0 ; 0`.
 - 2026-10-20 — Fixed at landing by owner choice: gate 1, F2 — "row 5 ... double-counts.
   The 7 spawns that `preflight.mjs` makes ... sit inside the cli-side `node
-preflight.mjs` record, and that record is counted whole. The windows trace's
+  preflight.mjs` record, and that record is counted whole. The windows trace's
   first record, `node -p` ..., starts before any test". Row 5 and the
   not-a-spawn row are corrected in the table to the finding's figures, the rows
   still add to 88,320 ms and 23,732 ms, and a bullet under the table says what
@@ -423,9 +423,9 @@ preflight.mjs` record, and that record is counted whole. The windows trace's
   the old text above this entry, `longest of 285 => 0 ; 0`. The patterns that
   find the new text carry a bracket so this entry does not match itself; the
   old-text counts stop at the first Fixed-at-landing entry with `awk
-'/Fixed at landing by owner choice/{exit} {print}'`, because these entries
+  '/Fixed at landing by owner choice/{exit} {print}'`, because these entries
   quote what they removed; repo-113's are taken above its `## Log` with `awk
-'/^## Log/{exit} {print}'`.
+  '/^## Log/{exit} {print}'`.
 - 2026-10-20 — Owner's answer on repo-113, asked with the options "keep it ready
   (Recommended, the builder's) / drop it / keep but park it": **keep it ready**.
   repo-113's status stays `ready`.

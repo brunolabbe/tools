@@ -66,7 +66,7 @@ the subject.
 
 - 2026-10-03 — Filed and built together. The analysis is in Why, from
   `gh run view --log-failed` on the three jobs and `gh run view --job <id>
---log` on 14 passing ones. **Where to look next:** the planner or ledger
+  --log` on 14 passing ones. **Where to look next:** the planner or ledger
   files on a red Windows leg, for `SQLITE_BUSY` or a case slower than 5 s that
   passed. Either one answers the hypothesis; nothing else will.
   Same run, for `repo-89`: its `--land` CLI case passed in 4209 ms against

@@ -313,7 +313,7 @@ Seven kills reproduced with identical counts. Every source restored via `cp` + `
   first: with that fold replaced by a no-op the tree as committed at the time ran
   16 files / 190 tests green and 48 files / 675 tests green. `app.test.tsx` gains
   `a job started in this tab, never refetched, gets its mark from the frames
-alone`, which drives `start()` — the journey that never calls `mergeJob` — and
+  alone`, which drives `start()` — the journey that never calls `mergeJob` — and
   is the only test in the repo that dies when the fold is removed (1 failed /
   190 passed).
 - **#2 (high), the branch asserting the opposite — FIXED.** The restore test is
@@ -489,7 +489,7 @@ mutation that only the other's test catches:
   created job and attaches the stream without ever calling `mergeJob`. **Gate 1
   found this line covered by no test at all**; it is now covered by exactly one,
   `app.test.tsx`'s `a job started in this tab, never refetched, gets its mark
-from the frames alone`, and by nothing else in the repo.
+  from the frames alone`, and by nothing else in the repo.
 - `mergeJob` folds the _reconciled remote_, before `reconcileJob` chooses. This
   is the race, below.
 

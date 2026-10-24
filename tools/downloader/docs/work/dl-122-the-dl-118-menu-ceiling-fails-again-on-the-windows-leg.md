@@ -156,7 +156,7 @@ Whichever option is chosen, the work is:
    play click uncapped, and both, fails the menu row.
 4. The three rows pass with the cap in place:
    `npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts -t
-"clickTimeoutMs caps"` reports `Tests 3 passed`.
+   "clickTimeoutMs caps"` reports `Tests 3 passed`.
 5. Nothing outside the dl-118 cap block of `provoke.test.ts` changes, other than
    this ticket.
 
@@ -183,16 +183,16 @@ Whichever option is chosen, the work is:
   `grep -nE "\.click\(" tools/downloader/resolvers/src/browser/provoke.ts`).
   Reproduction:
   `sed -i 's|^        await target.click({ timeout: options.timeoutMs });$|        await frame.click(\`${visibleQuery(selectors)} >> nth=${index}\`, { timeout: 2000 });|' tools/downloader/resolvers/src/browser/provoke.ts`,
-then the cap block. Result: `Tests 2 failed | 1 passed`. **The menu row passes,
-at 5464 ms**, with only 2 rejected clicks recorded, both at 200. The cookie rows
-fail only on their clock (`expected 5707 to be less than 3200`). Before this
-branch, the 4000 ms ceiling would have caught that run. Remedy, measured: wrap
-`Object.getPrototypeOf(page.mainFrame()).click`, with the signature
-`(selector, options)`. Every locator, frame and page click goes through it, and
-the class is just as internal, so the cost is unchanged. With that wrapper, the
-same plant fails all 3 rows (`Tests 3 failed`; menu: 4 rejected, two at 2000),
-and the capped run still reports `Tests 3 passed`. `ElementHandle.click`would
-still escape. — _fixed at landing_ (owner, 2026-10-13), commit`36383710b1368274400ffc582086574dfd4455d6`.
+  then the cap block. Result: `Tests 2 failed | 1 passed`. **The menu row passes,
+  at 5464 ms**, with only 2 rejected clicks recorded, both at 200. The cookie rows
+  fail only on their clock (`expected 5707 to be less than 3200`). Before this
+  branch, the 4000 ms ceiling would have caught that run. Remedy, measured: wrap
+  `Object.getPrototypeOf(page.mainFrame()).click`, with the signature
+  `(selector, options)`. Every locator, frame and page click goes through it, and
+  the class is just as internal, so the cost is unchanged. With that wrapper, the
+  same plant fails all 3 rows (`Tests 3 failed`; menu: 4 rejected, two at 2000),
+  and the capped run still reports `Tests 3 passed`. `ElementHandle.click`would
+  still escape. — _fixed at landing_ (owner, 2026-10-13), commit`36383710b1368274400ffc582086574dfd4455d6`.
 - **low · open decision** · no `Done when` line depends on it · **The cookie rows
   keep the same wall-clock shape that failed on the menu row.** The ticket does not
   require changing them: its Why, its Decision ("the form of the menu row's bound")
@@ -351,12 +351,12 @@ still escape. — _fixed at landing_ (owner, 2026-10-13), commit`36383710b136827
     `(selector, options)`; every locator, frame and page click goes through it.
     `ElementHandle.click` still escapes, and the comment says so. Plant, the gate's:
     `sed -i 's|^        await target.click({ timeout: options.timeoutMs });$|        await frame.click(\`${visibleQuery(selectors)} >> nth=${index}\`, { timeout: 2000 });|' tools/downloader/resolvers/src/browser/provoke.ts`,
-then `npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts -t "clickTimeoutMs caps"`:
-`Tests 3 failed | 261 skipped (264)`, each row on `expected [ …(2) ] to deeply
+    then `npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts -t "clickTimeoutMs caps"`:
+    `Tests 3 failed | 261 skipped (264)`, each row on `expected [ …(2) ] to deeply
     equal []`(two rejected clicks at`timeout: 2000`). After
-`git checkout -- tools/downloader/resolvers/src/browser/provoke.ts`, the same
-command: `Tests 3 passed | 261 skipped (264)`. Against the unfixed wrapper the
-gate measured `Tests 2 failed | 1 passed` and the menu row passing at 5464 ms.
+    `git checkout -- tools/downloader/resolvers/src/browser/provoke.ts`, the same
+    command: `Tests 3 passed | 261 skipped (264)`. Against the unfixed wrapper the
+    gate measured `Tests 2 failed | 1 passed` and the menu row passing at 5464 ms.
   - **Comment, fixed.** The block comment now says the cookie rows keep the clock as
     a backstop and that the menu row lacks one because the decision was about the
     menu row, not because its clicks differ: on the cookie sheets too every blocked
