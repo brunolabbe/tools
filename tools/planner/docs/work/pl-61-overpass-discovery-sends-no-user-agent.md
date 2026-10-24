@@ -20,14 +20,14 @@ public instance `overpass-api.de` answers **HTTP 406 Not Acceptable**. The adapt
 turns that into `UNREACHABLE` with `details: { status: 406 }`.
 
 The sibling `locate` request in the same file already sends `USER_AGENT`
-(`webtools-planner/1.0 (+https://github.com/webtools)`, line 112). Overpass was
-never given one.
+(the `USER_AGENT` constant, `webtools-planner/1.0 (+https://github.com/webtools)`).
+Overpass was never given one.
 
 What the plan shows for it. `discoverAlongCorridor` in
-`tools/planner/api/src/runs/discovery.ts` calls `nearby()` (around line 736), whose
+`tools/planner/api/src/runs/discovery.ts` calls the `nearby()` helper in that file, whose
 `catch` logs only `code` (`UNREACHABLE`), drops the status, and returns an answer of
 no finds. The pass then emits the coverage sentence "There is very little on the map
-along this route." (around line 322). So a refused backend reads to the traveller as
+along this route." So a refused backend reads to the traveller as
 a thin map. An unset `OVERPASS_URL` gets the same sentence, because `nearby()`
 returns `[]` before any request is made. The sentence cannot tell the two apart.
 
@@ -44,8 +44,10 @@ this request is unknown.
    existing `USER_AGENT` constant. Do not add a second string. The constant has not
    been sent to Overpass; see step 4.
 2. `tools/planner/api/test/grounding-valhalla.test.ts`: add one `nearby` case at the
-   end of the file. Use the existing `answering()` and `discoveryProvider()` helpers
-   (around lines 1420–1445) and the `calls[0]?.init?.headers` read at line 544. The
+   end of the file. Use the existing `answering()` helper (near the top of the file) and
+   `discoveryProvider()` (`function discoveryProvider(`, beside the `nearby` cases), and
+   read the header the way the Nominatim `User-Agent` case does:
+   `const headers = calls[0]?.init?.headers as Record<string, string> | undefined;`. The
    case asserts the outgoing POST carries a non-empty `user-agent`. Run it on the base
    first and confirm it fails with the header absent, then apply the change and confirm
    it passes.
@@ -75,6 +77,28 @@ this request is unknown.
    built on a stubbed `fetch`, with a spy `AppLogger` (the interface in
    `packages/core/src/logger.ts`) whose `warn` records its fields. Put it in the file step 2
    names, or in a planner api test that already drives `discoverAlongCorridor`.
+7. `tools/planner/api/src/runs/lodging.ts`, the two warns in the town pass: `locateTown`'s
+   `catch` and `queryTown`'s `catch`. The warn calls read:
+   ```
+   input.logger.warn("the town pass could not locate a town", {
+     provider: input.provider.name,
+     code: AppError.from(error).code,
+   });
+   ```
+   and
+   ```
+   input.logger.warn("the town pass could not query a town", {
+     provider: input.provider.name,
+     code: AppError.from(error).code,
+   });
+   ```
+   Add `status` to both, read from `AppError.from(error).details` when that carries a numeric
+   `status`, the same way step 6 does for the corridor warn; omit the field when there is none.
+   Keep `code` as it is. Do not log the URL. Do not change what either `catch` returns (`null`
+   and `[]`). The test drives `discoverLodging` over a `ValhallaGroundingProvider` built on a
+   stubbed `fetch`, with a spy `AppLogger` whose `warn` records its fields. Put it in
+   `tools/planner/api/test/lodging-pass.test.ts`, which already drives `discoverLodging` (its
+   existing cases use a fixture provider and a silent logger).
 
 ## Done when
 
@@ -86,8 +110,14 @@ this request is unknown.
    a spy logger, and the recorded `warn` for `the corridor could not be queried` carries
    `status: 406`. It fails on the base, where the field is absent, and passes after the
    change. Offline.
-3. `npx vitest run` on each spec file that Build steps 2 and 6 name passes in full.
-4. `npm run check` passes.
+3. A stubbed `fetch` answers the town pass's requests with HTTP 406: the Overpass `POST` behind
+   `queryTown`, and the Nominatim request behind `locateTown`. `discoverLodging` runs over a
+   `ValhallaGroundingProvider` built on that stub with a spy logger, and the recorded `warn`s
+   for `the town pass could not query a town` and `the town pass could not locate a town` each
+   carry `status: 406`. They fail on the base, where the field is absent, and pass after the
+   change. Offline.
+4. `npx vitest run` on each spec file that Build steps 2, 6 and 7 name passes in full.
+5. `npm run check` passes.
 
 ## Log
 
@@ -156,3 +186,40 @@ next agent should not re-raise it unless a measurement changes the premise.
 
 Difficulty: `mechanical`, unchanged by the addition. The warn change is one field read with
 a type narrow, and the test follows the stub pattern step 2 already names.
+
+### 2026-10-24 — scope answer recorded: lodging.ts's two town-pass warns folded in (builder, maintenance dispatch)
+
+Owner's answer, given at an intake checkpoint on 2026-10-24 and relayed to this branch by the
+orchestrator. Question: "pl-61 fixes only the corridor nearby() warn. pl-60's town pass in
+lodging.ts (lines 203 and 228) drops the 406 status in the same way. Should pl-61 cover it?"
+Options: (1) "Fold lodging.ts in (Recommended)": same defect, same fix, two more warn sites, and
+one added Done-when line naming lodging.ts's two warns; otherwise pl-62 extends the town pass
+and inherits the gap. (2) "Corridor only, as filed": the lodging.ts warns stay, recorded as a
+known gap. (3) "File it separately": a new planner ticket. Chosen: (1). The orchestrator
+recommended (1); nothing was overridden.
+
+Checked against `origin/main` at `aa834403`. Both warns are in `tools/planner/api/src/runs/lodging.ts`.
+The one at line 228 reads `the town pass could not query a town`. The one at line 203 is not the
+text the intake note gave for it: it reads `the town pass could not locate a town`, and sits in
+`locateTown`, not `queryTown`. Both are in Build step 7 and in the one added Done-when line,
+because the answer covers both. Both drop the status the same way the corridor warn does
+(`code` alone).
+
+The locate request already sends `USER_AGENT` (the `locate` request in `valhalla.ts`, with
+`headers: { "user-agent": USER_AGENT, accept: "application/json" }`). A 406 from it is therefore not
+the Overpass cause this ticket fixes. The `locate` warn gets the same log-field change for
+consistency, and its Done-when case is driven by a stub, not by a measured 406 from that backend.
+
+Line references that went stale when pl-60 landed, and that this branch touches, are replaced with
+the content they point at: `USER_AGENT` (now `valhalla.ts` line 113, not 112), `nearby()` (now
+about line 809, not 736), the coverage sentence (`discovery.ts` line 393, not about 322), and the
+`answering()`, `discoveryProvider()` and headers-read references (lines 220, 1426 and 548 of
+`grounding-valhalla.test.ts`, not 1420–1445 and 544). Not touched, and still stale: Build step 5's
+`sources_to_targets` call, which is at `valhalla.ts` line 356, not about 358.
+
+Difficulty left as `mechanical`. The builder's view is that the addition stays mechanical: two
+more field reads with the same narrow, and one more stub test. The lodging test also needs a
+Nominatim stub, not only an Overpass one; if the owner reads that as more than mechanical, it is
+the owner's call to change the field.
+
+Ticket edited only. No source changed. `status` is still `ready`.
