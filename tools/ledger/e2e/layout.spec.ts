@@ -30,7 +30,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext, Page, PlaywrightWorkerArgs, TestInfo } from "@playwright/test";
+import type {
+  APIRequestContext,
+  Locator,
+  Page,
+  PlaywrightWorkerArgs,
+  TestInfo,
+} from "@playwright/test";
 
 /** A phone at its narrowest worth supporting, and a desktop window. */
 const WIDTHS = [
@@ -54,12 +60,19 @@ test.use({ isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
  * `expect.soft`, so one screen failing at both widths says so twice rather than
  * hiding the second.
  */
-async function fitsBothWidths(page: Page, testInfo: TestInfo, screen: string): Promise<void> {
+async function fitsBothWidths(
+  page: Page,
+  testInfo: TestInfo,
+  screen: string,
+  /** What else is true of the screen at this width: a measure `scrollWidth` cannot make (lg-64). */
+  also?: (page: Page, width: number) => Promise<void>,
+): Promise<void> {
   for (const { width, height } of WIDTHS) {
     await page.setViewportSize({ width, height });
     // A frame for the layout to settle after the resize, and for a chart that
     // measures its container to draw at the new width.
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    await also?.(page, width);
     const measured = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       innerWidth: window.innerWidth,
@@ -264,13 +277,93 @@ const TABS: readonly (readonly [tab: string, arrived: readonly RegExp[]])[] = [
   ["Admin", [/Test household/u, /sam@example\.test/u]],
 ];
 
+/**
+ * lg-64: a radio sits beside its own label, and is the size of a radio.
+ *
+ * `scrollWidth` cannot see either failure: the global `input` rule gave a radio
+ * `width: 100%`, so it drew a box a row wide (Household, where the label was
+ * squeezed beside it) or a box with its label on the line below (Salaries,
+ * where `.choice` is not a flex row). Each radio is read for three things:
+ * its box is no wider than it is tall, its label's text starts on the radio's
+ * own line and to its right, and the labels of its group are one to a row.
+ * `count` is how many the screen draws, so a screen that rendered none does
+ * not pass for one with the right layout.
+ */
+function radiosBesideTheirLabels(count: number, screen: string) {
+  return async (page: Page, width: number): Promise<void> => {
+    const at = `${screen} at ${String(width)} px`;
+    await expect(page.getByRole("radio"), `${at}: the radios`).toHaveCount(count);
+    const boxes = await page.getByRole("radio").evaluateAll((radios) =>
+      radios.map((radio) => {
+        const own = radio.getBoundingClientRect();
+        const label = radio.closest("label");
+        const text = [...(label?.childNodes ?? [])].find(
+          (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "",
+        );
+        const range = document.createRange();
+        if (text !== undefined) range.selectNodeContents(text);
+        const first = range.getClientRects()[0];
+        const row = label?.getBoundingClientRect();
+        return {
+          width: own.width,
+          height: own.height,
+          right: own.right,
+          bottom: own.bottom,
+          textLeft: first?.left ?? null,
+          textTop: first?.top ?? null,
+          rowTop: row?.top ?? null,
+          rowBottom: row?.bottom ?? null,
+        };
+      }),
+    );
+    boxes.forEach((box, index) => {
+      const one = `${at}: radio ${String(index + 1)}`;
+      expect
+        .soft(box.width, `${one} is ${String(box.width)} px wide, ${String(box.height)} tall`)
+        .toBeLessThanOrEqual(box.height);
+      // Beside it: the text starts to the right of the radio and above its bottom edge.
+      expect.soft(box.textLeft, `${one} has a label`).not.toBeNull();
+      expect
+        .soft(
+          box.textLeft ?? 0,
+          `${one}'s label starts at ${String(box.textLeft)}, the radio ends at ${String(box.right)}`,
+        )
+        .toBeGreaterThanOrEqual(box.right);
+      expect
+        .soft(box.textTop ?? Infinity, `${one}'s label starts on a line below the radio`)
+        .toBeLessThan(box.bottom);
+      // One to a row: this label starts where the one before it ended.
+      const before = boxes[index - 1];
+      if (before !== undefined) {
+        expect
+          .soft(box.rowTop ?? 0, `${one}'s label shares a row with the one before it`)
+          .toBeGreaterThanOrEqual(before.rowBottom ?? 0);
+      }
+    });
+  };
+}
+
+/** The tabs whose screens carry a radio group, with how many radios each draws. */
+const RADIOS: Readonly<Record<string, number>> = {
+  // MORTGAGE_STATES: live, ended, none.
+  Household: 3,
+  // MORTGAGE_SPLIT_MODES: shares, equal, ratio.
+  Salaries: 3,
+};
+
 for (const [tab, arrived] of TABS) {
   test(`${tab} fits a phone and a desktop`, async ({ page }, testInfo) => {
     await openTab(page, tab);
     for (const text of arrived) {
       await expect(page.getByRole("main")).toContainText(text);
     }
-    await fitsBothWidths(page, testInfo, tab);
+    const radios = RADIOS[tab];
+    await fitsBothWidths(
+      page,
+      testInfo,
+      tab,
+      radios === undefined ? undefined : radiosBesideTheirLabels(radios, tab),
+    );
   });
 }
 
@@ -302,5 +395,62 @@ test("Receipt fits a phone and a desktop, with a photo kept and an item typed", 
   const items = page.getByRole("list", { name: "The items" });
   await items.getByRole("textbox").nth(0).fill("Organic rolled oats, the large two-kilogram bag");
   await items.getByRole("textbox").nth(1).fill("12.99");
-  await fitsBothWidths(page, testInfo, "Receipt");
+  await fitsBothWidths(page, testInfo, "Receipt", async (_page, width) => {
+    const at = `Receipt at ${String(width)} px`;
+    // lg-64: a field that shows the start of its entry and cuts the rest off
+    // overflows nothing, so `scrollWidth` passes it. The text is set in the
+    // field's own font and compared with its content box, in the browser.
+    const name = await fits(items.getByRole("textbox").nth(0), "Organic rolled oats");
+    expect
+      .soft(
+        name.text,
+        `${at}: the item's name field is ${String(name.box)} px for ${String(name.text)} px of text`,
+      )
+      .toBeLessThanOrEqual(name.box);
+    const price = await fits(items.getByRole("textbox").nth(1), "12.99");
+    expect
+      .soft(
+        price.text,
+        `${at}: the item's price field is ${String(price.box)} px for ${String(price.text)} px of text`,
+      )
+      .toBeLessThanOrEqual(price.box);
+    // Every control of the row can be reached without scrolling the page sideways.
+    const controls = [
+      items.getByRole("button", { name: /, Shared$/u }),
+      items.getByRole("checkbox"),
+      items.getByRole("button", { name: /^Remove /u }),
+    ];
+    for (const control of controls) {
+      await expect(control, `${at}: one control`).toHaveCount(1);
+      const edge = await control.evaluate((element) => {
+        const { left, right } = element.getBoundingClientRect();
+        return { left, right, inner: window.innerWidth };
+      });
+      expect
+        .soft(edge.left, `${at}: a control starts at ${String(edge.left)}`)
+        .toBeGreaterThanOrEqual(0);
+      expect
+        .soft(edge.right, `${at}: a control ends at ${String(edge.right)} in ${String(edge.inner)}`)
+        .toBeLessThanOrEqual(edge.inner);
+    }
+  });
 });
+
+/**
+ * How wide `text` is when set in the field's own font, beside the width of the
+ * field's content box (its width less padding and border), both in the browser.
+ */
+async function fits(field: Locator, text: string): Promise<{ text: number; box: number }> {
+  return field.evaluate((element, sample) => {
+    const style = getComputedStyle(element);
+    const context = document.createElement("canvas").getContext("2d");
+    if (context === null) throw new Error("no canvas");
+    context.font = style.font;
+    const sides = ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"] as const;
+    const spent = sides.reduce((sum, side) => sum + Number.parseFloat(style[side]), 0);
+    return {
+      text: context.measureText(sample).width,
+      box: element.getBoundingClientRect().width - spent,
+    };
+  }, text);
+}

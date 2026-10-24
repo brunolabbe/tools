@@ -286,10 +286,22 @@ select {
   gap: 0.5rem;
 }
 
-.mortgage-form .choice {
+/* lg-64: a radio choice, wherever it is drawn: the household's mortgage setting
+   and the salaries screen's mortgage split both use it. The label is the tap
+   target, so it keeps the height the radio's old 100%-wide box gave it. */
+.choice {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-height: 2.75rem;
+}
+
+/* The global `input` rule is for fields; a radio is sized as a radio, the way
+   `label.check input` sizes a checkbox. */
+input[type="radio"] {
+  width: 1.25rem;
+  min-height: 1.25rem;
+  padding: 0;
 }
 
 .hint {
@@ -741,6 +753,13 @@ svg.chart .selected-band {
 .items .item > input {
   flex: 1 1 6rem;
   min-width: 0;
+}
+
+/* lg-64: the name is the one field whose entry is a sentence, so it takes a row
+   of its own and the price, deposit and controls wrap beneath it. At the 6rem
+   basis above it showed 8 to 13 characters of "Organic rolled oats, …". */
+.items .item > input:first-child {
+  flex-basis: 100%;
 }
 
 .items .item.not-shared > input {
