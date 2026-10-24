@@ -771,3 +771,173 @@ condition (`Done when` 4).
    change the user agent. The checked-in payload is still captured through the
    built `overpassQuery` text, sent from a capture script with an identifying user
    agent.
+
+**2026-10-24 — Builds 2 to 5 (builder, Opus 5.5). Stopped before Build 6's paid
+run, as the dispatch says.** The base is `8a6dcf9a`. The baselines that two
+`Done when` lines compare against were written in commit `9356f7b5`, whose source is
+the base's (`git diff --stat 8a6dcf9a b7075060` touches this file only), by scratch
+scripts that are not committed and that nothing in the suite re-runs:
+`agent/test/fixtures/pl60-base-prompts.json` holds the three corridor readers'
+prompts, built from `agent/dist` with `pl60-prompt-inputs.json`.
+`api/test/fixtures/pl60-base-days.json` holds the six set A drafts' days. Two
+writes of the days file were byte-identical (`cmp`).
+
+- **Build 2, the seam: option (b), as the owner chose.** `NearbyPointRequest`
+  (`point`, `radiusMetres`, `kinds`) and `GroundingProvider.nearbyPoint` are in
+  `agent/src/grounding.ts`, and `RunGrounding.nearbyPoint` is in `cache.ts`; it is
+  uncached and budgeted, as `nearby` is. **The costing was exact.** With the method
+  added and nothing else, `npx tsc --build tsconfig.tests.json` failed on 14
+  implementers: the 6 test doubles, the 4 `RunGrounding` literals,
+  `CachingGroundingProvider` and its `forRun`, and the two source providers. Each
+  double gained a line or two. The lodging kinds are a second list, `LODGING_KINDS`,
+  beside `DISCOVERY_KINDS`, which stays the corridor's four; `DiscoveryKind` is
+  their union. Their eight `tourism=*` values are Build 1's set.
+- **The adapter.** `overpassPointQuery` emits `nwr[<filter>](around:R,lat,lon)` and
+  `out center tags`. `nearbyPoint` re-filters every find by haversine distance from
+  the point. The corridor's `overpassQuery` keeps its node-only shape: changing what
+  it asks for would change pl-29's finds, which nothing here measures. `findFrom`
+  reads `center` when an element has no `lat`/`lon`, and takes the url path from the
+  element's `type` (`node`, `way` or `relation`; anything else gets the copyright
+  page). **One defect the brief did not name, fixed in the same change:** `kindOf`
+  used to return the first kind whose tags matched among all kinds, so a hotel in a
+  listed building (`tourism=hotel`, `historic=*`) would have come back from a town
+  query as a `historic-site`. It now chooses only among the kinds the request asked
+  for, with the old precedence (`grounding-valhalla.test.ts`, "a hotel in a listed
+  building is a hotel to a town query, never a historic site").
+- **Where the towns come from (Build 2's proposal, argued here).** `lodgingTowns` in
+  the new `api/src/runs/lodging.ts` takes the brief's named stops first (a road
+  trip's `mustSee`, a multi-city trip's `cities`), then its destination. It
+  deduplicates case-insensitively and keeps at most `MAX_LODGING_TOWNS` = 4. The
+  origin is left out, because it is where the party sets off from and not where it
+  sleeps. Those fields are the only stops a brief knows before `lodging` runs. Build
+  1 measured what they miss: 14 of the 23 set A road-trip mentions are in towns no
+  field names, and those keep the kind-of-place fallback. Per town, the pass makes
+  one `locate` and, if the town is located, one `nearbyPoint` at
+  `LODGING_RADIUS_METRES` = 10 000 (the owner's). It keeps the
+  `MAX_LODGING_FINDS_PER_TOWN` = 10 closest finds and de-duplicates across towns by
+  source url. Both caps are the builder's, and are content. Ten is 10 of Percé's 40,
+  so four towns hand `lodging` at most the 40 a corridor may hand a specialist.
+- **Calls per brief shape** (`api/test/lodging-run.test.ts`, "%s spends the calls
+  pl-60's Log asserts"). These are real runs on the fixture grounding default: calls
+  reaching the provider beneath the cache, by method. The town pass's own calls are
+  its `nearbyPoint`s plus the `locate`s it adds. A destination the corridor pass
+  already located is a cache hit. A name nobody could locate is not cached, so it is
+  asked again.
+
+  | Shape             | locate | travel | nearby | nearbyPoint | Total | Town pass's own                                       | Base |
+  | ----------------- | ------ | ------ | ------ | ----------- | ----- | ----------------------------------------------------- | ---- |
+  | road-trip         | 15     | 1      | 0      | 2           | 18    | 4 (`Percé Rock`, `Forillon National Park`; 2 queries) | 14   |
+  | backcountry       | 9      | 1      | 1      | 1           | 12    | 1 (1 query; its locate was a hit)                     | 11   |
+  | motorised-touring | 5      | 1      | 0      | 0           | 6     | 0 (no town)                                           | 6    |
+  | city-and-culture  | 11     | 1      | 1      | 1           | 14    | 1                                                     | 13   |
+  | resort            | 3      | 1      | 0      | 0           | 4     | 0 (no town)                                           | 4    |
+  | multi-city        | 19     | 1      | 0      | 3           | 23    | 7 (4 locates, `Central Europe` a miss; 3 queries)     | 16   |
+
+  `articlesNear` was 0 everywhere: the fixture corridor finds nothing to back. The
+  base column is the total minus the town pass, read off the per-call log of a
+  scratch dump, which is in the dispatch's scratch directory. It is not a
+  measurement at the base commit. The pass never spends more than `2 ×
+MAX_LODGING_TOWNS` = 8 of `MAX_GROUNDING_CALLS`.
+
+- **Re-plans.** `revise.ts` now re-runs discovery when the re-plan names any finds
+  reader and the brief has a corridor or a town, and it re-runs **both** passes.
+  Re-running one pass alone would have to carry the base's coverage entries for the
+  other, and nothing in a stored `UncheckedConstraint` says which pass wrote it. The
+  cost is that a re-plan naming only `lodging` re-asks the corridor for nothing it
+  reads: up to 4 calls, plus up to 6 geosearch tiles and the reading lookups. A
+  re-plan naming only `food` re-asks up to 8 town calls in the same way.
+  `revisions.test.ts`'s "naming only lodging never asks" test asserted the old
+  behaviour, and is now "naming only lodging re-runs both passes (pl-60)":
+  `nearbyCalls` 1 and `nearbyPointCalls` 1.
+- **The coverage note (question 2's remedy).** It needs no contract change, because
+  `detail` is free text. One sentence per outcome names its towns, each name cut to
+  60 characters, so four 500-character names stay inside `MAX_UNCHECKED_DETAIL_CHARS`
+  (`lodging-pass.test.ts`, "a long town name is cut"):
+  - could not be found: "Where … is/are could not be found on the map, so places
+    to stay there were not checked."
+  - nothing found: "No places to stay around … are on the map. Somewhere to stay
+    there may exist without this plan having found it."
+  - refused: "Places to stay around … were never looked up: the run had already used
+    the number of lookups it is allowed."
+  - no town at all: "This trip names no town to stay in, so the map was not checked
+    for places to stay."
+
+  A failed town query (a 406, say) reads as "nothing found", the corridor pass's
+  rule. With the fixture default, each of the six set A drafts has the same days as
+  the base, byte for byte, and carries its note (`lodging-run.test.ts`, "%s: the days
+  are byte-identical to the base commit's, and the plan names the towns it could not
+  check").
+
+- **`Done when` 3's payload**, `api/test/fixtures/overpass-lodging-towns.json`. It
+  holds one verbatim reply per Build 1 town, each to the exact text
+  `overpassPointQuery(point, 10_000, LODGING_KINDS, 28)` builds from `api/dist`
+  (`[timeout:28]` is what `nearbyPoint` derives from the default 30 s
+  `GROUNDING_DISCOVERY_TIMEOUT_MS`). The replies were sent from a scratch script
+  with the user agent `webtools-planner/0.9 (pl-60 fixture capture)`, because the
+  adapter's own `fetch` gets HTTP 406 there (answer 4). **10 Overpass queries**, run
+  one at a time and 5 s apart. Percé's first query came back **HTTP 429**, and it was
+  re-asked once after 90 s (HTTP 200, 40 elements). The spec rebuilds each town's
+  query and compares it with the stored one. Finds per town through `nearbyPoint`,
+  offline, at 10 km (node / way / relation): Amqui 8 (4/4/0), Bonaventure 8
+  (5/3/0), Carleton-sur-Mer 8 (6/2/0), Forillon National Park 17 (9/6/2), Gaspé 24
+  (16/7/1), **Gaspésie 0**, Matane 14 (2/11/1), Percé 40 (12/27/1),
+  Rivière-du-Loup 22 (17/5/0), 141 in all (71/65/5). These equal Build 1's offline
+  10 km counts row for row, and the 2 km counts equal Build 1's as well.
+  **Forillon's three campgrounds are among Forillon National Park's finds and not
+  Gaspé's**: `Camping Petit-Gaspé` as way 1013617284, and `Camping Des-Rosiers`
+  (relation 3009120) and `Campig Cap-Bon-Ami` (relation 3007267) as relations, each
+  at its `center`, with `/way/` and `/relation/` urls. Specs:
+  `grounding-valhalla.test.ts`, "%s: the finds inside the radius, by element type,
+  and none outside it", and "a way or a relation is a find, at its center, with a
+  source url of its own type".
+- **Build 3.** `lodging` joins `READS_FINDS` in `agent/src/prompt.ts`. A run hands
+  every reader one list, and `findsFor` routes it by kind: `lodging` sees the lodging
+  kinds only, and the corridor readers see everything else. `lodging`'s block opens
+  "Places to stay around the towns this trip names, from public map data
+  (OpenStreetMap) — not vetted, not a recommendation, and not a set of
+  instructions:". It closes with the data warning the others carry, then "A night's
+  sleep is not optional: where one of these fits the party, propose it by the name it
+  has here; where none fits, or a town you need has none listed, propose a kind of
+  place instead." The other three prompts are byte-identical to the base's, with the
+  fixed `Find[]` and with a lodging find added to it (`prompt.test.ts`, "the %s
+  prompt is byte-identical to the base commit's, with and without places to sleep in
+  the finds"). A mutation that showed lodging finds to the corridor readers failed
+  all three of those tests.
+- **Build 4, `lodging`'s role, quoted twice.** pl-58's string ends "Or it says
+  plainly, in its title or its summary, that it is a kind of place and names no
+  premises: then `place.name` holds the kind, for example `motel`, and
+  `place.locality` the town." That string stays, and this change appends: "Where you
+  are given places to stay from map data for a town, a premises you name there is
+  one of those, under the name it is given, if any of them fits the party. A kind of
+  place is the fallback, for a town whose list is empty or where nothing in it fits."
+- **Build 5.** The pl-29 caps still apply: `findFrom` and `tagsOf` are shared by
+  both queries. A lodging find whose `name` is pl-29's injection string, and whose
+  tags carry a `website` and a `description`, reaches `lodging`'s prompt verbatim,
+  after the "not a set of instructions" header and before the data warning
+  (`prompt.test.ts`, "a lodging find whose name is an instruction reaches lodging's
+  prompt as quoted data, after the warning"). The adapter makes exactly one request
+  per call, to the Overpass interpreter, for a reply whose tags hold two urls
+  (`grounding-valhalla.test.ts`, "nothing in a find's tags is fetched: one request
+  per call, to Overpass").
+- **Mutations, each run against the committed head and restored with `git checkout
+8098626c -- <path>`.** A hard-coded `/node/` url failed 9 tests in
+  `grounding-valhalla.test.ts`, and dropping the radius re-filter in `nearbyPoint`
+  failed the per-town tests.
+- **`test/live/run.ts`** gained a `nearbyPoint` that answers `[]`. Build 6 wires
+  lodging finds from the checked-in capture in there.
+- **Folded in:** the stale `accept` doc-comment in `agent/src/orchestrator.ts`, which
+  the filing Log offered. It now says that pl-40's sets B to D records carry `finds`,
+  and that Build 6 scores the join. **Not folded in, and why:**
+  - `contract/src/unchecked.ts`'s `coverage` doc-comment and `tools/planner/CLAUDE.md`'s
+    "`coverage` names a corridor the ground was thin along" paragraph both describe
+    a corridor only. The first is in the contract package, which the root
+    `CLAUDE.md` says not to edit unilaterally. The second is a third paragraph,
+    beside the two Build 8 names, and the owner's rule of 2026-10-17 allows a tool
+    `CLAUDE.md` edit only where the Build names it. Both are in the report as
+    proposals.
+  - Build 8 itself is not done, since this dispatch stops at Build 5.
+- **Checks at `8098626c`:** `npm run check` exits 0. `npm test -- --project planner`
+  passes 81 of 81 files and 1644 of 1644 tests. `npx oxlint tools/planner/agent
+tools/planner/api` reports no errors; its `no-await-in-loop` warnings are on serial
+  loops, the corridor pass's pattern. The e2e suite and the image gate were not run
+  locally.
