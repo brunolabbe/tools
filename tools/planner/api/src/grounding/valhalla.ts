@@ -103,7 +103,9 @@ const ROUTED_BY = "OpenStreetMap, routed by Valhalla";
 const GEOCODED_BY = "OpenStreetMap, geocoded by Nominatim";
 
 /**
- * Sent on every geocoder request.
+ * Sent on every geocoder request and on every Overpass request. The public
+ * Overpass instance answers HTTP 406 to Node's default `user-agent: node`
+ * (pl-61), so the Overpass `POST` names this client the same way.
  *
  * Nominatim's usage policy asks for an identifying `User-Agent` and refuses
  * requests without one. A self-hosted instance does not enforce it, but the

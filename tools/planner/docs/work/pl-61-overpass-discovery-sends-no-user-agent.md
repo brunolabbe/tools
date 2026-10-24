@@ -109,6 +109,13 @@ locate a corridor endpoint` (`locate`) and `a detour cost could not be measured`
    no-URL rule. Each catch wraps a call that goes through `#json`, which is where the status
    is set. One test each goes at the end of `tools/planner/api/test/discovery-pass.test.ts`,
    which drives all four paths through `discoverAlongCorridor`.
+9. Owner's decision, 2026-10-24, folded in (see the Log): two more `warn` calls in
+   `tools/planner/api/src/runs/travel.ts` drop the HTTP status the same way step 6 describes.
+   They are `a place could not be located` (the locate loop in `measureTravel`) and
+   `the travel matrix could not be measured` (its matrix call). Each gets step 6's field, and
+   each catch wraps a `#json` call (`locate` and `travel`), so each can carry a status. Keep
+   `code` and every return. One test each goes at the end of
+   `tools/planner/api/test/travel-measure.test.ts`, which drives `measureTravel`.
 
 ## Done when
 
@@ -126,7 +133,7 @@ locate a corridor endpoint` (`locate`) and `a detour cost could not be measured`
    for `the town pass could not query a town` and `the town pass could not locate a town` each
    carry `status: 406`. They fail on the base, where the field is absent, and pass after the
    change. Offline.
-4. `npx vitest run` on each spec file that Build steps 2, 6, 7 and 8 name passes in full.
+4. `npx vitest run` on each spec file that Build steps 2, 6, 7, 8 and 9 name passes in full.
 5. `npm run check` passes.
 6. A stubbed `fetch` that refuses, with HTTP 406, the request each of the four lookups named by
    Build step 8 makes: the article queries behind `a notability lookup failed, continuing with
@@ -136,6 +143,11 @@ could not be measured`. `discoverAlongCorridor` runs over a `ValhallaGroundingPr
    on that stub, once per lookup, with a spy logger, and each recorded `warn` carries
    `status: 406`. Each fails on the base, where the field is absent, and passes after the
    change. Offline.
+7. A stubbed `fetch` that refuses, with HTTP 406, the geocoder query behind `a place could not
+be located` and the routing `POST` behind `the travel matrix could not be measured`.
+   `measureTravel` runs over a `ValhallaGroundingProvider` built on that stub, with a spy logger,
+   and each recorded `warn` for those two messages carries `status: 406`. Each fails on the
+   base, where the field is absent, and passes after the change. Offline.
 
 ## Log
 
@@ -341,3 +353,57 @@ fire in one run.
 Done when 4 now names Build step 8 as well, and Done when 6 covers the four warns.
 
 Commit and push: the change is a second commit on `pl-61-overpass-user-agent`. Status stays `ready`.
+
+### 2026-10-24 — gate 1's two lows, applied on the same branch (builder, round 1 follow-up)
+
+Gate 1 (the narrow Sonnet gate) graded `a8954049` PASS and recorded three lows. The owner answered
+two of them on 2026-10-24. The third stays recorded and is not applied.
+
+**Finding 1: two more warns in `travel.ts`.** Gate 1 found that `measureTravel` in
+`tools/planner/api/src/runs/travel.ts` has two warns with the same shape the ticket fixes: `a place
+could not be located` (the locate loop) and `the travel matrix could not be measured` (the matrix
+call). Each logs `code` alone for a refusal that went through `#json`, where `details.status` is set.
+Options: (a) leave them and record it; (b) fold both into pl-61, with a test each; (c) file a
+ticket. Gate 1 recommended (b). **The owner chose (b), fold in, which is the gate's recommendation.**
+Recorded as Build step 9 and Done when 7. Neither catch is a path that can never carry a status:
+both wrap `provider.locate` and `provider.travel`, which go through `#json`. The same narrow `status`
+field as the other warns, one test each at the end of `travel-measure.test.ts` (the spec that drives
+`measureTravel`), with the spy logger and a `ValhallaGroundingProvider` on a refusing stub.
+
+Red on the base, before the fix: `npx vitest run tools/planner/api/test/travel-measure.test.ts`,
+with `travel.ts` as committed at `a8954049`:
+
+```
+× a refused locate reaches the place warn with its status
+× a refused routing matrix reaches the matrix warn with its status
+Tests  2 failed | 12 passed (14)
+```
+
+Both read `expected { provider: 'valhalla', …(1) } to match object { code: 'UNREACHABLE', status: 406 }`.
+Both warns fired, so the failures are the missing field and nothing else. After the fix, the same
+file: `Test Files  1 passed (1)`, `Tests  14 passed (14)`.
+
+**Finding 2: the `USER_AGENT` comment.** After this change two adapter requests still go out with
+Node's default `user-agent: node`: the `sources_to_targets` `POST` in `#json` (Build step 5, unmeasured
+by design) and `articlesNear`'s Wikipedia and Wikivoyage geosearch `GET`, which the ticket names
+nowhere. Gate 1 also noted that the `USER_AGENT` doc comment in `valhalla.ts` still read "Sent on every
+geocoder request", which is true but no longer says Overpass sends it too. The question was whether to
+send the header from `#json` as well, or to correct the comment. **The owner chose the comment only.**
+The header is not added to `#json`. The comment now reads "Sent on every geocoder request and on every
+Overpass request", with the 406 reason.
+
+Context, recorded and not acted on in this branch. On 2026-10-24 the orchestrator measured
+fr.wikipedia.org's geosearch with three user agents, using this command:
+
+```
+curl -s -o /dev/null -w '%{http_code}' -A node 'https://fr.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=48.83%7C-64.48&gsradius=2000&format=json'
+```
+
+It gave 200 for `user-agent: node` and 200 for the planner's own agent, and 403 with no user agent.
+This branch did not re-run it. So the Wikipedia `GET` is not refused by Node's default, at least on
+that measurement, and the `sources_to_targets` `POST` remains unmeasured.
+
+**The third low, not applied.** Gate 1 also noted that the seven narrowings across these files could
+share one helper. The owner did not ask for it, so it stays recorded here and is not applied.
+
+`status` stays `ready`.
