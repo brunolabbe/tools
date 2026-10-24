@@ -209,6 +209,21 @@ function setIdentity(dir: string, email: string, name: string): void {
   );
 }
 
+/**
+ * In git 2.55.0 (the CI runner's; 2.43.0 does not), `git commit` ends by running
+ * `git maintenance run --auto --detach`, which takes `objects/maintenance.lock`,
+ * forks into the background and removes the lock only when that child gets the
+ * CPU. So `git commit` can return with a regular file in `.git/objects` that is
+ * gone a moment later, and `fs.cpSync` of the template, which lists `objects`
+ * and then copies each file, fails with `ENOENT` naming the destination's
+ * `.git/objects` (repo-116). It is written to the repository's own config for
+ * the reason `setIdentity` is: a copy of the template carries it, so a commit a
+ * test makes in a copy starts no background process either.
+ */
+function disableAutoMaintenance(dir: string): void {
+  fs.appendFileSync(path.join(dir, ".git", "config"), "[maintenance]\n\tauto = false\n");
+}
+
 const TICKET_PATH = "docs/work/zz-1-test-ticket.md";
 
 /** A minimal but real ticket, with a real cited file beside it. */
@@ -255,6 +270,7 @@ const DEFAULT_WHY = "Reasons.";
 function buildTicketRepo(dir: string, whyProse: string): void {
   gitIn(dir, "init", "-q", "-b", "main");
   setIdentity(dir, "review-record@example.test", "review-record test");
+  disableAutoMaintenance(dir);
 
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(

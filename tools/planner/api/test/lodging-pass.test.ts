@@ -29,6 +29,7 @@ import {
   type RunGrounding,
 } from "../src/grounding/cache.ts";
 import { FixtureGroundingProvider } from "../src/grounding/fixtures.ts";
+import { ValhallaGroundingProvider } from "../src/grounding/valhalla.ts";
 import { migrate } from "../src/db/schema.ts";
 import type { AppLogger } from "../src/logger.ts";
 import { discover } from "../src/runs/discovery.ts";
@@ -420,3 +421,79 @@ describe("gate 1's findings on the town pass (pl-60, round 1)", () => {
     }
   });
 });
+
+describe("the town pass, when the backend refuses (pl-61)", () => {
+  test("a 406 from the geocoder and from Overpass reaches each town-pass warn with its status", async () => {
+    const warnings: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+    const spy: AppLogger = {
+      debug: () => {},
+      info: () => {},
+      warn: (message, fields) => {
+        warnings.push({ message, fields });
+      },
+      error: () => {},
+      child: () => spy,
+    };
+    // One stub, both refusals: Percé's geocoder query is refused (the locate
+    // warn), Gaspé is found and its Overpass query is refused (the query warn).
+    const valhalla = new ValhallaGroundingProvider({
+      routingUrl: "http://valhalla.internal:8002",
+      geocoderUrl: "http://nominatim.internal:8080",
+      overpassUrl: "http://overpass.internal:8090",
+      timeoutMs: 5_000,
+      now: () => new Date("2027-01-01T00:00:00.000Z"),
+      fetch: (async (input: unknown) => {
+        const url = new URL(String(input));
+        if (url.origin === "http://overpass.internal:8090") {
+          return new Response("refused", { status: 406 });
+        }
+        if (url.searchParams.get("q") === "Percé") {
+          return new Response("refused", { status: 406 });
+        }
+        return new Response(
+          JSON.stringify([
+            { lat: "48.8317", lon: "-64.4838", display_name: "Gaspé, Québec", addresstype: "town" },
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as unknown as typeof globalThis.fetch,
+    });
+
+    const result = await discoverLodging({
+      brief: roadTrip(["Percé", "Gaspé"], null),
+      provider: overValhalla(valhalla),
+      trip: undefined,
+      logger: spy,
+      signal: new AbortController().signal,
+      onStep: () => {},
+    });
+
+    expect(result.finds).toEqual([]);
+    const located = warnings.filter(
+      (entry) => entry.message === "the town pass could not locate a town",
+    );
+    const queried = warnings.filter(
+      (entry) => entry.message === "the town pass could not query a town",
+    );
+    expect(located).toHaveLength(1);
+    expect(located[0]?.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
+    expect(queried).toHaveLength(1);
+    expect(queried[0]?.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
+  });
+});
+
+/** A `RunGrounding` over a real `ValhallaGroundingProvider`, so its refusals reach the pass. */
+function overValhalla(valhalla: ValhallaGroundingProvider): RunGrounding {
+  return {
+    name: "valhalla",
+    refused: 0,
+    locate: async (request) => {
+      const located = await valhalla.locate(request);
+      return located === null ? UNKNOWN : answered(located);
+    },
+    nearby: async () => answered([]),
+    nearbyPoint: async (request) => answered(await valhalla.nearbyPoint(request)),
+    travel: async (request) => request.origins.map(() => request.destinations.map(() => UNKNOWN)),
+    articlesNear: async () => answered([]),
+  };
+}

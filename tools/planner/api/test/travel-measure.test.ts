@@ -27,7 +27,8 @@ import {
   type TravelOutcomeMatrix,
 } from "../src/grounding/cache.ts";
 import { placeIdentity } from "../src/grounding/place-key.ts";
-import { createLogger } from "../src/logger.ts";
+import { ValhallaGroundingProvider } from "../src/grounding/valhalla.ts";
+import { createLogger, type AppLogger } from "../src/logger.ts";
 import { measureTravel, runPlaces } from "../src/runs/travel.ts";
 
 const logger = createLogger({ level: "silent" });
@@ -460,5 +461,118 @@ describe("what the pass tells `locate` about the trip", () => {
     const result = await measure([nowhere], gazetteer({}), { destination: "Québec, Canada" });
 
     expect(coordinatesOf(result.candidates[0] as Candidate)).toEqual([null]);
+  });
+});
+
+/** A `fetch` that answers the geocoder with one row, and refuses with HTTP 406 every URL `refused` names. */
+function refusingFetch(refused: (url: URL) => boolean): typeof globalThis.fetch {
+  return (async (input: unknown) => {
+    const url = new URL(String(input));
+    if (refused(url)) return new Response("refused", { status: 406 });
+    return new Response(
+      JSON.stringify([
+        { lat: "48.5223", lon: "-64.2136", display_name: "Percé, Québec", addresstype: "town" },
+      ]),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as unknown as typeof globalThis.fetch;
+}
+
+/** A `RunGrounding` whose locate and travel go to a real `ValhallaGroundingProvider`, so its refusals reach the pass. */
+function overValhalla(valhalla: ValhallaGroundingProvider): RunGrounding {
+  return {
+    name: "valhalla",
+    refused: 0,
+    locate: async (request) => {
+      const located = await valhalla.locate(request);
+      return located === null ? UNKNOWN : answered(located);
+    },
+    travel: async (request) =>
+      (await valhalla.travel(request)).map((row) =>
+        row.map((cell) => (cell === null ? UNKNOWN : answered(cell))),
+      ),
+    nearby: async () => answered([]),
+    nearbyPoint: async () => answered([]),
+    articlesNear: async () => answered([]),
+  };
+}
+
+/** The warns a test reads back, in the order they were logged. */
+function recordingLogger(): {
+  logger: AppLogger;
+  warnings: { message: string; fields: Record<string, unknown> | undefined }[];
+} {
+  const warnings: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+  const spy: AppLogger = {
+    debug: () => {},
+    info: () => {},
+    warn: (message, fields) => {
+      warnings.push({ message, fields });
+    },
+    error: () => {},
+    child: () => spy,
+  };
+  return { logger: spy, warnings };
+}
+
+describe("the measuring pass, when the backend refuses (pl-61)", () => {
+  // Both refusals are `#json` failures, which set `details.status`, so each
+  // warn can carry the 406. Each test drives one site.
+
+  test("a refused locate reaches the place warn with its status", async () => {
+    const { logger: spy, warnings } = recordingLogger();
+    const here = at("Rimouski", null);
+    const there = at("Percé", null);
+    const valhalla = new ValhallaGroundingProvider({
+      routingUrl: "http://valhalla.internal:8002",
+      geocoderUrl: "http://nominatim.internal:8080",
+      timeoutMs: 5_000,
+      now: () => new Date("2027-01-01T00:00:00.000Z"),
+      fetch: refusingFetch((url) => url.hostname === "nominatim.internal"),
+    });
+
+    const result = await measureTravel({
+      candidates: [here, there],
+      places: runPlaces([here, there]),
+      provider: overValhalla(valhalla),
+      logger: spy,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    expect(result.travel.between(here, there)).toEqual({ kind: "not-established" });
+    const located = warnings.filter((entry) => entry.message === "a place could not be located");
+    expect(located.length).toBeGreaterThan(0);
+    for (const entry of located) {
+      expect(entry.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
+    }
+  });
+
+  test("a refused routing matrix reaches the matrix warn with its status", async () => {
+    const { logger: spy, warnings } = recordingLogger();
+    const here = at("Rimouski", null);
+    const there = at("Percé", null);
+    const valhalla = new ValhallaGroundingProvider({
+      routingUrl: "http://valhalla.internal:8002",
+      geocoderUrl: "http://nominatim.internal:8080",
+      timeoutMs: 5_000,
+      now: () => new Date("2027-01-01T00:00:00.000Z"),
+      fetch: refusingFetch((url) => url.hostname === "valhalla.internal"),
+    });
+
+    await measureTravel({
+      candidates: [here, there],
+      places: runPlaces([here, there]),
+      provider: overValhalla(valhalla),
+      logger: spy,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    const matrix = warnings.filter(
+      (entry) => entry.message === "the travel matrix could not be measured",
+    );
+    expect(matrix).toHaveLength(1);
+    expect(matrix[0]?.fields).toMatchObject({ code: "UNREACHABLE", status: 406 });
   });
 });
