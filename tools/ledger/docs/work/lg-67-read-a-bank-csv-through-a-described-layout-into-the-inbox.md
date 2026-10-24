@@ -59,11 +59,11 @@ What the two measurements (lg-38, lg-56) show about CSVs, and no more:
 Nothing here speaks for a real bank's export, for a model, effort or prompt
 other than the ones lg-56 measured, or for more than 13 invented fixtures.
 
-**The build edits those seven fixtures' text** (Build 1, on the owner's answer
-of round 1, Log): each gains a non-ASCII character, so that a file not in UTF-8
-can be told from one that is. After that edit the 150 records measure the old
-text, not the fixtures as they then stand, and 7 of lg-66's 13 `layoutRequest`
-pins move.
+**The build edits no fixture's text** (Build 1, on the owner's answer at the
+landing, Log): the 7 CSV fixtures stay as lg-56 measured them, so the 150 records
+still describe them and lg-66's 13 `layoutRequest` pins stand. A file not in
+UTF-8 is tested with `csv-balance` re-encoded and one synthetic file (Done when
+3).
 
 **Two defects found while writing this**, both reproduced at lg-66's base
 (`834006f0`), the first also on `main` (`7a2a0f61`):
@@ -74,10 +74,12 @@ pins move.
   is the number 42 imports with exit 0, the same report as the text control, and
   stores `description` `""` (Log, round 1). Per the owner (Log, round 1) it is
   filed as lg-68 and built on its own pull request from `main`, branch
-  `lg-68-numeric-detail-cell`, which fixes `textOf` for the `.xlsx` path. It is
-  not this ticket's, and this ticket depends on it **in prose only** (lg-68 is
-  not on this branch's base, so there is no `depends_on`): the CSV path of this
-  ticket must not be built before lg-68 has landed.
+  `lg-68-numeric-detail-cell`, which adds `detailOf` to the books reader
+  (`books/src/workbook.ts`) and leaves `textOf` as it is; lg-68's final scope is
+  not claimed here. It is not this ticket's, and this ticket depends on it **in
+  prose only** (lg-68 is not on this branch's base, so there is no
+  `depends_on`; `lg-68` goes into `depends_on` once it is on `main`): the CSV
+  path of this ticket must not be built before lg-68 has landed.
 - **`api/test/layout/csv.ts` reads a field of plain digits as a number**, so
   `007` becomes the number 7 and its leading zeros are gone before any detail
   role reads it. Nothing at the base calls that reader outside the test
@@ -190,23 +192,35 @@ Measured offline (Log), 8 invented rows stored and then a paste of rows 5 to 9
   overlaps stored rows double-books them; with a balance column the chain
   would break at the seam and nothing would say so. Not recommended.
 - **(e) (a), plus a `source` value for CSV rows that a later paste compares day
-  by day, as it compares the workbook's.** This is the only option that
-  addresses the later-paste direction. Costs: a table rebuild
+  by day, as it compares the workbook's.** It addresses the later-paste
+  direction. Costs: a table rebuild
   (`statement_imports.source` is a `CHECK`, which SQLite cannot alter in place),
   and the matcher of `workbook-days.ts` and `statements.ts` taught a third
   source, in the code lg-40, lg-59 and lg-61 tuned, for a case (a CSV, then a
   paste over it) not yet seen and with no real example to tune on.
+- **(f) (a), with CSV rows stored under the existing `workbook` source.** It
+  addresses the later-paste direction with no migration. Measured by gate 2
+  (offline, its report on the pull request thread): rows stored in another
+  bank's wording with their import's `source` set to the existing `'workbook'`,
+  then an AccèsD paste of rows 5 to 9, gives `stored 2, already present 3`, and a
+  companion paste with one amount 1.00 $ off is still refused. **Its costs are
+  unmeasured:** the refusal wording says "rows imported from the workbook", so a
+  person told that of CSV rows is told something untrue; nobody has checked how
+  code that reads `source = 'workbook'` treats CSV rows; and the rows'
+  categories are empty (as under (a)).
 
 **Why (a) is still first.** The later-paste cost is shared by (a), (b), (c) and
-(d), and only (e) removes it, at the price above. What changed with the
-measurement is what (a) is said to cost: not "a conflict the person can read"
-but a refusal whose own advice cannot be followed, with a way out (paste only the
-rows after the tail). If the owner expects households to paste AccèsD rows over
-CSV rows, (e) is the option to take.
+(d), and (e) and (f) remove it, (e) at the price above and (f) at the unmeasured
+costs above. What changed with the measurement is what (a) is said to cost: not
+"a conflict the person can read" but a refusal whose own advice cannot be
+followed, with a way out (paste only the rows after the tail). If the owner
+expects households to paste AccèsD rows over CSV rows, (e) or (f) is the option
+to take.
 
 Under (b), (c), (d) or (e), Build 4's third bullet, Build 5, Build 6.2's report
 line and Done when 8 are rewritten; (b), (c) and (e) also change
-`statements.ts`.
+`statements.ts`. Under (f), only Build 5's third bullet changes: the source it
+names is `workbook`, not `paste`.
 
 ### 3. The shapes the reader does not read
 
@@ -223,7 +237,8 @@ the rest reported at least one problem (21 of 21; a thousands-comma
 among them). What the **model** answers on such a file is unmeasured, and so is
 a tab-delimited file and a file that is not UTF-8 (a sixth and a seventh shape,
 not among the 35; and 6 of the 7 fixtures hold no non-ASCII character, so a
-re-encoding of them is the same bytes, which Build 1 and Done when 3 address).
+re-encoding of them is the same bytes, which is why Done when 3 re-encodes only
+`csv-balance` and one synthetic file).
 
 - **(a) Recommended: refuse them in plain words, naming the shape.** Before
   anything is sent, whole-field patterns find a semicolon or tab delimiter, a
@@ -284,25 +299,26 @@ name** (`names`), the 70th by `prefix`.
 - **(a) Recommended: a fixed name, `statement.csv`.** Nothing about the uploaded
   file's name goes to Anthropic or into a log. Costs: the request for a CSV then
   differs from the measured one by that string, so the seven CSV fixtures get
-  seven new `layoutRequest` pins beside the seven that Build 1's edit of their
-  text moves, and the effect of the new name on what Haiku answers is
-  unmeasured. Re-measuring the 70 Haiku shown runs on the 7 fixtures would cost
-  about $0.053 (the 70 old records' `costUsd` sum to $0.0532; the edited text's
-  is unmeasured), with the owner's key; Done when 13 is that, awaiting.
+  seven new `layoutRequest` pins beside lg-66's seven, which stand, and the
+  effect of the new name on what Haiku answers is unmeasured. Re-measuring the
+  70 Haiku shown runs on the 7 fixtures would cost about $0.053 (the 70 old
+  records' `costUsd` sum to $0.0532), with the owner's key; Done when 13 is that,
+  awaiting.
 - **(b) The uploaded file's name, cut and cleaned.** Costs: whatever the bank
   or the person put in the name leaves the house, so lg-66 Build 4.1's statement
   must name it; it reaches the request, so it needs the same cleaning as a cell's
   text; and no log line may hold it (lg-66 Build 3.6). The request is the
-  measured kind, so the pins as Build 1 moves them stand.
+  measured kind, so lg-66's pins stand.
 
 Under (b), Build 3, Build 6.1 and Done when 10 are rewritten, and Done when 13's
-clause "under Decision 5 (a), with the fixed sheet name" goes (the repeat of the
-70 runs on the edited text, and the live read, stay).
+clause "under Decision 5 (a), with the fixed sheet name" goes, and with it the
+repeat of the 70 runs, since the request is then the measured one (the live read
+stays).
 
 ### 6. What the CSV reader does with a field of digits that starts with a zero
 
-Only the CSV half of the digits-only detail defect is open here; the `textOf`
-half is lg-68's (Why, above). Reproduced (Log, round 1): the CSV reader turns a
+Only the CSV half of the digits-only detail defect is open here; the `.xlsx`
+half, lg-68's `detailOf` in the books reader, is lg-68's (Why, above). Reproduced (Log, round 1): the CSV reader turns a
 field of plain digits into a number cell, so `007` becomes the number 7 and its
 leading zeros are gone before the books read it. Nothing at the base calls that
 reader outside the test harness, and the 13 fixtures read 0 rows with an empty
@@ -314,10 +330,11 @@ numbers and `007` and `-007` match it too.
   with a leading zero (`007.50`) would be text and the reading would report a
   problem rather than a figure, which is a refusal and not a misreading; the
   model's view prints such a field quoted where it printed it bare, for any field
-  of that shape (whether any measured fixture holds one is settled by the pins
-  Build 1 records); and a detail of plain digits with no leading zero (`42`)
-  still becomes a number cell, which reads as the detail `"42"` only once lg-68's
-  `textOf` fix has landed, so this ticket's CSV path waits for lg-68.
+  of that shape (whether any measured fixture holds one is settled by the 13
+  pins of Done when 2, which must pass unchanged); and a detail of plain digits
+  with no leading zero (`42`) still becomes a number cell, which reads as the
+  detail `"42"` only once lg-68's `detailOf` in the books reader has landed, so
+  this ticket's CSV path waits for lg-68.
 - **(b) Leave the reader as it is.** Costs: with lg-68 landed, `007` is stored as
   `"7"`: the detail differs from the file's, silently.
 - **(c) The reader keeps every field as text and the layout says which are
@@ -377,24 +394,13 @@ until lg-67" goes with them.
    happens otherwise). The fixtures and the harness import it back, so there is
    one copy. The quoted-field rule, the number rule and the date rule are the
    ones measured; one change is made (Decision 6 (a)): a field that starts with
-   a zero followed by a digit stays text. **Two edits to the measured material,
-   deliberate:**
-   - **Each of the 7 CSV fixtures in `api/test/layout/fixtures.ts` gains at least
-     one character from U+0080 to U+00FF in a text cell the file carries** (a
-     detail or a header), so that its Latin-1 bytes differ from its UTF-8 bytes
-     and are not valid UTF-8. Only `csv-balance` has one today (`é` and `ô`; the
-     other six hold no non-ASCII character, the gate's `latin1.mts`). This was the
-     owner's choice in round 1 (Log) over adding accents to `csv-balance` and a
-     synthetic file only. It changes no column, role or row count, so the correct
-     descriptions are unchanged, and the generator's written rows
-     (`writtenRows`) move with the text.
-   - **7 of lg-66's 13 `layoutRequest` pins move**, the seven CSV fixtures' (the
-     6 workbook fixtures' pins and lg-66's schema pin stay and must pass
-     unchanged). This is a deliberate edit by this build, not a drift: lg-66's
-     Done when 1 constrains lg-66's own build. The Log gives each moved pin's old
-     and new sha256. **The fixtures' text then differs from what lg-56's 300 runs
-     measured**, so the 150 CSV records no longer measure the fixtures as they
-     stand; Done when 13 is the re-measure.
+   a zero followed by a digit stays text. **No fixture's text is edited** (the
+   owner's choice at the landing, Log): the 7 CSV fixtures in
+   `api/test/layout/fixtures.ts` stay as lg-56 measured them, and the 13
+   `layoutRequest` pins of lg-66 and its schema pin pass unchanged (Done when 2).
+   Only `csv-balance` holds a character from U+0080 to U+00FF today (`é` and `ô`;
+   the other six hold none, the gate's `latin1.mts`), which is why Done when 3
+   re-encodes `csv-balance` as Latin-1 and adds one synthetic non-UTF-8 file.
 2. **Judge a CSV from the bytes** (lg-66 Build 3.1's judgement is for an `.xlsx`).
    A file that is a workbook by lg-66's zip test is read as one. Otherwise it is
    a CSV candidate when it holds no NUL byte and its first line holds a comma, a
@@ -413,8 +419,8 @@ until lg-67" goes with them.
    upload's bytes, the rows and cells read, the length of a cell's text sent
    (cut, not refused) and the request's size estimate. The builder says in the
    Log whether the sheets bound is moot. The Log records the 7 new
-   `layoutRequest` pins (the edited CSV fixtures' text under the fixed name),
-   beside the 7 that Build 1 moves.
+   `layoutRequest` pins (the CSV fixtures' text under the fixed name), beside
+   lg-66's 7 for the same fixtures, which stand.
 4. **The describe request for a CSV** is lg-66 Build 3.1, then these refusals,
    each typed, before the dry run is shown, with the fake uncalled again:
    - the description names a part a CSV cannot have: a bucket mapping, a bucket
@@ -469,21 +475,23 @@ until lg-67" goes with them.
    `.xlsx` as a CSV. One test each.
 2. `npm test -- --project ledger` passes, with the seven CSV fixtures built from
    the moved reader (Build 1). A test fails when the sha256 of `layoutRequest`
-   for any one of the 6 workbook fixtures differs from lg-66's value, or the
-   format schema's differs from lg-66's; and another fails when it differs from
-   the value the Log gives for any one of the 7 CSV fixtures, all 7 of which
-   differ from lg-66's (the Log lists the 7 old and 7 new). `api/test/layout/csv.ts`
-   is gone and `grep -rn "layout/csv" tools/ledger/api` finds nothing.
-3. Seven unread shapes are refused. For each of the 7 CSV fixtures, the file
-   re-serialised with a semicolon delimiter, with quoted decimal commas, with a
-   semicolon and decimal commas, with quoted thousands commas, with dd/mm/yyyy
-   dates, with a tab delimiter, and re-encoded as Latin-1 (49 files), gets the
-   typed error of Build 2, naming its shape, on the describe request and on the
-   confirm request, with the fake uncalled and the books unchanged. For each of
-   the 7 Latin-1 files a test first asserts that its bytes differ from the
-   fixture's UTF-8 bytes and that decoding them as UTF-8 with `fatal` set throws,
-   so no file in the line is a vacuous case. The 7 files as written are not
-   refused for their shape.
+   for any one of lg-66's 13 fixtures (the 6 workbooks and the 7 CSVs, text
+   unedited) differs from lg-66's value, or the format schema's differs from
+   lg-66's. `api/test/layout/csv.ts` is gone, and a recursive grep for
+   `layout/csv` under `tools/ledger/api` finds nothing.
+3. Seven unread shapes are refused, in 44 files. For each of the 7 CSV fixtures,
+   the file re-serialised six ways (with a semicolon delimiter, with quoted
+   decimal commas, with a semicolon and decimal commas, with quoted thousands
+   commas, with dd/mm/yyyy dates, and with a tab delimiter: 42 files), and, as
+   the seventh shape, `csv-balance` re-encoded as Latin-1 (1 file) and one
+   synthetic non-UTF-8 file (1 file, invented text the builder writes and names
+   in the Log), get the typed error of Build 2, naming their shape, on the
+   describe request and on the confirm request, with the fake uncalled and the
+   books unchanged. For each of the 2 non-UTF-8 files a test first asserts that
+   its bytes differ from its UTF-8 bytes and that decoding them as UTF-8 with
+   `fatal` set throws, before its refusal is asserted, so neither is a vacuous
+   case. The 6 other fixtures hold no non-ASCII character, so no re-encoding is
+   asserted for them. The 7 files as written are not refused for their shape.
 4. Each of the 7 CSV fixtures as written, with a UTF-8 byte-order mark in front,
    reads as the same sheet as without it (deep-equal) and gives the same
    `layoutRequest` sha256.
@@ -492,7 +500,7 @@ until lg-67" goes with them.
    problem, and, on a base that carries lg-68, `42` in a detail column as `"42"`.
    `books/test/workbook.test.ts` and `api/test/workbook-import.test.ts` pass with
    no case edited, and the Log gives, for each of the 13 fixtures, the count of
-   rows read with an empty detail after Build 1's edits (0 of 13 at the base).
+   rows read with an empty detail after Build 1's change (0 of 13 at the base).
 6. `csv-no-balance` read through its correct description is refused on the
    describe request with the missing-balance reason in plain words, and a
    confirm request is refused; the fake is called once on the first and the books
@@ -524,8 +532,7 @@ until lg-67" goes with them.
     of the uploaded file's name: a test uploads each under a name holding a
     distinctive token and finds the token in neither the request the fake was
     given nor any line the logger received. The seven new pins are in the Log,
-    and the 6 workbook pins and the 7 moved pins of Done when 2 are unedited by
-    this line's change.
+    and the 13 pins of Done when 2 are unedited by this line's change.
 11. The web tests show, for a fake describe response on `csv-balance`: the
     statement of Build 6.1 before the button is pressed, with the fake uncalled
     until it is; the date column's letter, header text and 3 + 3 dates with
@@ -541,9 +548,9 @@ until lg-67" goes with them.
     through the web screen with the owner's key returns a description that
     confirms and stores its rows, and the Log records the request's input tokens
     and cost against the measured mean of about a tenth of a cent. The 70 Haiku
-    shown runs on the 7 edited CSV fixtures (and, under Decision 5 (a), with the
-    fixed sheet name) are repeated, and the Log gives the table beside lg-56's
-    (about $0.053 on the old text). A builder has no key.
+    shown runs on the 7 CSV fixtures, under Decision 5 (a), with the fixed sheet
+    name, are repeated, and the Log gives the table beside lg-56's (about $0.053
+    for the 70 old runs). A builder has no key.
 14. `npm run check` and `node scripts/check-lockfile-sync.mjs` exit 0, and
     `packages/core/test/image-closure.test.ts` passes.
 
@@ -551,8 +558,8 @@ until lg-67" goes with them.
 
 - **Builders have no Anthropic key.** Done when 13 is the owner's.
 - **Not before lg-68** (Why): the CSV path reads a plain-digits detail as a
-  number cell, which only reads as its digits once lg-68's `textOf` fix is on the
-  base. Merge `main` in first and check it.
+  number cell, which only reads as its digits once lg-68's `detailOf` in the books
+  reader is on the base. Merge `main` in first and check it.
 - **Real bank data never enters the repository**, including what a test or a
   fixture is modelled on (lg-38). Use the 7 synthetic CSV fixtures; add one only
   to test a repeated (date, amount) pair or a same-day pair, and name it in the
@@ -671,7 +678,9 @@ ticket.
 ### 2026-10-24 — round 1: gate 1 returned FAIL at `0b772573`; the owner's answers
 
 Gate 1 (on PR #625, `834006f0..0b772573`) returned FAIL: 3 high, 2 med, 4 low
-(F1 to F9). Its record is this ticket's `## Review`, which the lander commits. The
+(F1 to F9). Its record is this ticket's `## Review`, which the lander commits.
+[Corrected at landing: a filing pull request has no `## Review`; the record is on
+the pull request thread, see the landing entry.] The
 brief is changed above `## Log` only; no source and no fixture is touched, both
 `status:` lines are as they were, and no Decision is answered.
 
@@ -681,7 +690,9 @@ brief is changed above `## Log` only; no source and no fixture is touched, both
    build it now", "File lg-68 only" (the gate's recommendation), "Fold into
    lg-66". **The owner chose "File lg-68 and build it now."** lg-68 is filed and
    built in a separate pull request from `main`, branch
-   `lg-68-numeric-detail-cell`, and fixes `textOf` for the `.xlsx` path. In this
+   `lg-68-numeric-detail-cell`, and fixes `textOf` for the `.xlsx` path
+   [corrected at landing: lg-68's branch adds `detailOf` and leaves `textOf`, see
+   the landing entry]. In this
    ticket Decision 6 shrinks to the CSV leading-zero half, the `textOf` fix is
    lg-68's, and lg-67 depends on it in prose only (no `depends_on`, because lg-68
    is not on this branch's base).
@@ -750,7 +761,7 @@ Decision 2's costs are restated from this: the later-paste cost of (a) is a
 refusal whose advice cannot be followed, with the way out of pasting only the rows
 after the tail; (b)'s cost is now also the wording, not only the category; and an
 option (e) is added, (a) plus a CSV `source` that a later paste compares day by
-day, the only option that removes that cost. **The recommendation does not
+day, which removes that cost. **The recommendation does not
 change**: the cost is shared by (a) to (d), and (e) removes it at the price of a
 table rebuild and a third source taught to the most tuned matcher in the tool,
 for a case not yet seen; the text says so and says when (e) is the one to take.
@@ -801,3 +812,92 @@ arguments: `29 FAILED`, exit 1.
 
 **Fold-in exception.** Nothing was folded in. lg-68 is the owner's separate
 ticket; the leading-zero rule is Decision 6.
+
+### 2026-10-24 — landing: gate 2 returned CONCERNS at `8bcbc2b6`; the owner's answers
+
+Gate 2 (on PR #625, `0b772573..8bcbc2b6`) returned CONCERNS with no high: 1 med
+(N1), 3 low (N2 to N4). This pull request only files a ticket, so both gates'
+full reports are on the pull request thread (comments on #625) and not in this
+ticket; there is no `## Review` here and `review-record.mjs --land` was not run.
+The ticket stays `needs-decision`. The brief is changed above `## Log` only (plus
+the two in-place corrections marked in round 1's entry); no source and no fixture
+is touched. In the checks below, `T` is this file, and each count above `## Log`
+is scoped with `awk '/^## Log/{exit} {print}' T`.
+
+**The owner's answers at landing, 2026-10-24**, four questions from the
+orchestrator:
+
+1. **F2 re-ask, "keep the non-ASCII-in-every-fixture choice, or switch?"** In
+   round 1 the owner chose "Non-ASCII in every fixture" over gate 1's
+   recommendation, told that it moves 13 of lg-66's pins; gate 2 measured 7 of 13. The question was re-asked with that number. Options: "Keep my choice" and
+   "Switch to the gate's". **The owner chose "Switch to the gate's"**, which is
+   gate 1's direction for F2 (OD2): "use csv-balance re-encoded plus one synthetic
+   non-UTF-8 file, and assert that each re-encoded file's bytes differ from its
+   UTF-8 ones". As put: no fixture text changes and no pin moves. That is the
+   gate's recommendation, so the owner took it; the dispatch does not say which
+   option the orchestrator marked recommended in the re-ask. Applied: Build 1
+   edits no fixture's text; Done when 3 re-encodes only `csv-balance` (it already
+   holds `é` and `ô`) as Latin-1 and adds one synthetic non-UTF-8 file, asserts
+   for each of those two that its bytes differ from its UTF-8 bytes and that a
+   `fatal` UTF-8 decode throws before its refusal is asserted, and keeps the six
+   other shapes over all 7 fixtures. **Done when 3 names 44 files**: 6 shapes
+   times 7 fixtures is 42, plus `csv-balance` as Latin-1 (1) and the synthetic file
+   (1). Done when 2 now holds all 13 of lg-66's pins and its schema pin
+   unchanged; Done when 10 and 13, Decision 5 and Decision 6 lost their "7 moved
+   pins" and "edited text" lines. The one "pins move" left is Decision 6 (c), a
+   different option.
+2. **N1, "add option (f) to Decision 2?"** Options: "Add option (f) at landing"
+   (gate 2's recommendation) and "Reword only". **The owner chose "Add option
+   (f)"**, so the owner took gate 2's recommendation. Applied: Decision 2 (f), "(a),
+   with CSV rows stored under the existing `workbook` source", with gate 2's
+   measurement and its three unmeasured costs; "the only option" struck from (e)
+   and from round 1's entry; "Why (a) is still first" and the rewrite pointers
+   name (f). The recommended option, (a), is as it was.
+3. **N2 to N4, "fix the three low findings, or leave them recorded?"** Options:
+   "Fix all three" and "Leave recorded". **The owner chose "Fix all three."** The
+   dispatch does not say which was marked recommended.
+4. **lg-67's seven Decisions, "answer them now, or leave them open?"** Options:
+   "Leave them open" (the orchestrator's recommendation) and "Answer them now".
+   **The owner chose "Leave them open"**, so the owner took the recommendation.
+   They are put to the owner when lg-66 is built. None is answered here.
+
+**Gate 2's findings.** N1 (med) and N2 to N4 (low) are fixed below. The
+`depends_on` direction in N2 is not applied: lg-68 is not on this base, so a
+`depends_on: [lg-66, lg-68]` would dangle and fail `node scripts/status.mjs
+--json`. `lg-68` goes into `depends_on` once it is on `main`.
+
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, N1 — "(e) says it 'is
+  the only option that addresses the later-paste direction', at the price of a
+  table rebuild"; measured, rows stored in another bank's wording under the
+  existing `'workbook'` source take an AccèsD paste of rows 5 to 9 as `stored 2,
+already present 3`. `awk '/^## Log/{exit} {print}' T | grep -c "the only
+option"` → 0; `awk '/^### 2026-10-24 — landing/{exit} {print}' T | grep -c -F
+"the only option"` → 0 (the Log, before this entry); `awk '/^## Log/{exit}
+{print}' T | grep -c -F "(f) (a), with CSV rows stored under the existing"` → 1.
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, N2 — "Why, Decision 6
+  (a), Notes and the Log say lg-68 'fixes `textOf` for the `.xlsx` path'";
+  lg-68's Build 1 says "leave `textOf` as it is" and its branch adds `detailOf`
+  to `readYear` in `books/src/workbook.ts`. The text now says "lg-68's `detailOf`
+  in the books reader" and claims no final scope (lg-68 is still being built).
+  The Log's two round-1 sentences stand, each marked "corrected at landing".
+  `awk '/^## Log/{exit} {print}' T | grep -c "textOf. fix"` → 0; `awk
+'/^## Log/{exit} {print}' T | grep -c "fixes .textOf."` → 0; `awk
+'/^## Log/{exit} {print}' T | grep -c "detailOf"` → 4.
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, N3 — "Build 1 says one
+  character in U+0080–U+00FF makes the Latin-1 bytes 'not valid UTF-8'. That does
+  not follow in general: the Latin-1 text `Ã©` is the valid UTF-8 for `é`." The
+  sentence went with Build 1's rewrite (F2 switch); Done when 3's `fatal`-decode
+  assertion, per non-UTF-8 file, is the check and no sentence infers it.
+  `awk '/^## Log/{exit} {print}' T | grep -c "and are not valid UTF-8"` → 0.
+- 2026-10-24 — Fixed at landing by owner choice: gate 2, N4 — "the round-1 Log
+  says gate 1's record 'is this ticket's `## Review`, which the lander commits'.
+  For a filing PR the record goes on the PR thread." Round 1's entry now carries
+  a "corrected at landing" note, and both gates' full reports are posted on #625.
+  `awk '/^### 2026-10-24 — landing/{exit} {print}' T | grep -c -F "a filing pull
+request has no"` → 1.
+
+**Cross-references.** Every "Done when N" and "Build N" above `## Log` was re-read
+after the edits (no item was added, removed or renumbered): each
+reference resolves to the item it names, among them Decision 2's "Build 5's third
+bullet" (the rows' source), Decision 3's "Done when 3", and Done when 10's "the 13
+pins of Done when 2".
