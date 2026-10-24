@@ -1148,3 +1148,50 @@ describe("a detail cell that holds a number (lg-68)", () => {
     expect(stored()).toEqual([{ description: "" }]);
   });
 });
+
+describe("a free-text cell that holds a number or a date (lg-68, round 1)", () => {
+  test("a date detail, and a number or a date in either note, are stored as their text", async () => {
+    const fixture = history();
+    const [first, second] = fixture.years[0]?.rows ?? [];
+    const line = fixture.periods[0]?.lines[0];
+    if (first === undefined || second === undefined || line === undefined) {
+      throw new Error("the fixture has no 2022 rows or no period line");
+    }
+    first.detail = new Date("2022-01-05T00:00:00.000Z");
+    first.note = 42;
+    second.note = new Date("2022-01-12T00:00:00.000Z");
+    line.note = new Date("2022-05-03T00:00:00.000Z");
+
+    const ran = await run(await workbook(fixture), "--as", "alex", "--write");
+
+    expect(ran.code, ran.out).toBe(0);
+    const db = books();
+    expect(
+      db
+        .prepare(
+          "SELECT date, description, note FROM statement_rows WHERE date IN ('2022-01-05', '2022-01-12') ORDER BY date",
+        )
+        .all(),
+    ).toEqual([
+      { date: "2022-01-05", description: "2022-01-05", note: "42" },
+      { date: "2022-01-12", description: "Versement", note: "2022-01-12" },
+    ]);
+    expect(
+      db.prepare("SELECT category, note FROM period_lines WHERE category = 'Épicerie'").all(),
+    ).toEqual([{ category: "Épicerie", note: "2022-05-03" }]);
+    db.close();
+  });
+
+  test("a number in the person column refuses the import, naming the cell", async () => {
+    const fixture = history();
+    const row = fixture.years[0]?.rows[0];
+    if (row === undefined) throw new Error("the fixture has no 2022 row");
+    row.person = 42;
+
+    const ran = await run(await workbook(fixture), "--as", "alex", "--write");
+
+    expect(ran.code).toBe(1);
+    expect(ran.out).toContain(`2022!E10 names "42", who is not one of the household (alex, sam).`);
+    expect(ran.out).toContain("Refused: nothing was written.");
+  });
+});
