@@ -63,7 +63,10 @@ function fail(message, exit) {
  * into `source`, because a label prints only when its source produced a row and
  * the dangerous branch is the one that produces none.
  *
- * @typedef {{source: string, paths: string[], note?: string, unread?: boolean}} Source
+ * `sha` is set on a branch the checkout holds, and on nothing else: it is what
+ * `stackPulls` asks git about, and only a commit in hand can be asked.
+ *
+ * @typedef {{source: string, paths: string[], note?: string, unread?: boolean, sha?: string}} Source
  */
 
 /**
@@ -305,9 +308,10 @@ export function branchSources(options = {}) {
         note:
           `unrelated: branch ${name} shares no history with ${rev}, so every file it holds that ` +
           `${rev} lacks was read, not just the branch's own — expect it to over-claim`,
+        sha,
       };
     }
-    return { source, paths };
+    return { source, paths, sha };
   });
 }
 
@@ -363,6 +367,10 @@ export function collect(prefix, options = {}) {
     ),
   ];
 
+  // The label names where the files were read from. `on main` is the one a
+  // builder reads; a `--rev` names another ref, and says so.
+  const atRev = rev === "origin/main" ? "on main" : `at ${rev}`;
+
   // Its own statement before the loop, and the ancestor of this line is why:
   // in the shell version the pull request list was inlined into a `for`, where
   // a failing command substitution has its status discarded even under
@@ -417,7 +425,7 @@ export function collect(prefix, options = {}) {
   const byHead = new Map(branches.map((branch, at) => [branch.source.slice("branch/".length), at]));
 
   /** @type {Source[]} */
-  const sources = [{ source: "merged", paths: merged }];
+  const sources = [{ source: atRev, paths: merged }];
   for (const { number, head } of prs) {
     const source = `PR#${number}`;
     // repo-49's shape 3: a pull request and its own head branch read the same
@@ -449,7 +457,99 @@ export function collect(prefix, options = {}) {
   }
 
   sources.push(...branches);
-  return sources;
+  return stackPulls(sources, { run, cwd });
+}
+
+/**
+ * Whether `ancestor` is in `descendant`'s history, in this checkout.
+ *
+ * `git merge-base --is-ancestor` answers with its status: 0 is yes, 1 is no,
+ * and anything else (an object this checkout lacks, say) is not an answer, so
+ * it propagates rather than reading as "no".
+ *
+ * @param {string} ancestor
+ * @param {string} descendant
+ * @param {typeof runCommand} run
+ * @param {string | undefined} cwd
+ * @returns {boolean}
+ */
+export function isAncestor(ancestor, descendant, run, cwd) {
+  try {
+    run("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd });
+    return true;
+  } catch (error) {
+    if (/** @type {Error & {exit?: number}} */ (error).exit === 1) return false;
+    throw error;
+  }
+}
+
+/**
+ * repo-118's stacked case: a pull request whose head contains another open
+ * pull request's head is stacked on it, and must not clash with it.
+ *
+ * Its diff is taken against `main`, so it carries the parent's commits, and
+ * the parent's ticket file reads as the child's claim as well. On 2026-10-24
+ * that printed `clash: lg-66 is claimed by PR#623, PR#625` for #625, which only
+ * sits on #623. Such a child is labelled `PR#625 (stacked on PR#623)`, and the
+ * paths its parent holds come off its own claim, so the parent's id is the
+ * parent's alone.
+ *
+ * The ancestor check is what makes that safe. Two unrelated pull requests that
+ * both file the same path do not contain one another, and still clash — that
+ * is a real collision. And a stacked child's *own* different file under a
+ * parent's id still clashes, because only paths the parent holds are removed.
+ *
+ * Only a pull request whose head is read has a sha to ask git about. One whose
+ * head is unfetched, or comes from a fork, is never treated as stacked: that
+ * would hide its files, and the expensive error is the one to keep.
+ *
+ * The labels and paths are all decided before any is applied, because a parent
+ * that is itself stacked must still be named by its own label.
+ *
+ * @param {Source[]} sources
+ * @param {{run?: typeof runCommand, cwd?: string}} [options]
+ * @returns {Source[]}
+ */
+export function stackPulls(sources, options = {}) {
+  const run = options.run ?? runCommand;
+  const cwd = options.cwd;
+  const pulls = sources.filter(
+    (source) => source.sha !== undefined && !source.unread && source.source.startsWith("PR#"),
+  );
+
+  /** @type {Map<Source, Source>} */
+  const restated = new Map();
+  for (const child of pulls) {
+    const parents = pulls.filter(
+      (other) =>
+        other !== child &&
+        other.sha !== child.sha &&
+        isAncestor(/** @type {string} */ (other.sha), /** @type {string} */ (child.sha), run, cwd),
+    );
+    if (parents.length === 0) continue;
+    // The nearest parent is the one no other parent sits above, so a chain of
+    // three names its middle pull request, not the root.
+    const nearest = parents.filter(
+      (parent) =>
+        !parents.some(
+          (other) =>
+            other !== parent &&
+            isAncestor(
+              /** @type {string} */ (parent.sha),
+              /** @type {string} */ (other.sha),
+              run,
+              cwd,
+            ),
+        ),
+    );
+    const inherited = new Set(parents.flatMap((parent) => parent.paths));
+    restated.set(child, {
+      ...child,
+      source: `${child.source} (stacked on ${nearest.map((parent) => parent.source).join(", ")})`,
+      paths: child.paths.filter((entry) => !inherited.has(entry)),
+    });
+  }
+  return sources.map((source) => restated.get(source) ?? source);
 }
 
 /**
@@ -479,27 +579,28 @@ export function parseArgs(argv) {
 }
 
 /**
- * The claims, then any clash, then anything the sweep could not read, then the
- * answer.
+ * The answer, then anything the sweep could not read, then the claims and any
+ * clash.
  *
- * `notes` sits immediately above `next free` on purpose: the last two lines a
- * caller reads are what this could not see and the number it is handing out
- * anyway. A note is printed whether or not its source produced a row, which is
- * the point — a branch named `wip-x` holding `repo-50-….md`, not yet fetched,
- * claims nothing at all, and the note is the only thing standing between that
- * and silence.
+ * `next free` is the first line, and `notes` sits immediately below it, on
+ * purpose: the first two lines a caller reads are the number this is handing
+ * out and what this could not see anyway. They were the last two lines until
+ * repo-118, and after fifty claimant rows for a busy tool the answer was the
+ * one a caller could not find. A note is printed whether or not its source
+ * produced a row, which is the point — a branch named `wip-x` holding
+ * `repo-50-….md`, not yet fetched, claims nothing at all, and the note is the
+ * only thing standing between that and silence.
  *
  * @param {{source: string, id: number}[]} rows
  * @param {string} prefix
  * @param {string[]} [notes]
  */
 export function render(rows, prefix, notes = []) {
-  const out = rows.map(({ source, id }) => `${source} ${prefix}-${id}`);
+  const out = [`next free: ${prefix}-${nextFree(rows)}`, ...notes];
+  out.push(...rows.map(({ source, id }) => `${source} ${prefix}-${id}`));
   for (const { id, sources } of clashes(rows)) {
     out.push(`clash: ${prefix}-${id} is claimed by ${sources.join(", ")}`);
   }
-  out.push(...notes);
-  out.push(`next free: ${prefix}-${nextFree(rows)}`);
   return out.join("\n");
 }
 
