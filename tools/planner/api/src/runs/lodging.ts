@@ -1,6 +1,6 @@
 /**
  * The town pass: places to sleep around the towns a trip names, before the
- * fan-out runs — pl-60.
+ * fan-out runs — pl-60 — and, since pl-62, places to eat around the same towns.
  *
  * pl-29's corridor pass (`discovery.ts`) hands `activities`, `food` and
  * `conditions-and-gear` what a map holds along the way. This one hands
@@ -21,14 +21,25 @@
  * `lodging`'s 23 mentions were in towns no brief field names (Gaspé 8 of them),
  * and those keep the kind-of-place fallback.
  *
+ * ## Places to eat (pl-62)
+ *
+ * `food` reads the same towns' places to eat, from **a second `nearbyPoint` per
+ * located town**, asked for `FOOD_KINDS` alone — the owner's answer to pl-62's
+ * Decision 3. A query of its own, rather than food clauses in the lodging one,
+ * so `lodging`'s query text and reply do not change and a food query that fails
+ * does not take the places to sleep with it. The radius and the cap are
+ * `lodging`'s numbers (Decision 6, chosen from pl-62's Build 1 counts), and are
+ * named apart so either can move alone.
+ *
  * ## Calls
  *
- * Per town, one `locate` and one `nearbyPoint`. A `locate` the corridor pass
- * already made for the same name is a cache hit and costs nothing, which is the
- * destination's case on any brief with a corridor. A town that does not locate
- * costs its `locate` and no query. So the pass spends at most
- * `2 × MAX_LODGING_TOWNS` = 8 calls of `MAX_GROUNDING_CALLS`, and the shapes
- * pl-60's Log counts are asserted by `api/test/lodging-run.test.ts`.
+ * Per town, one `locate` and two `nearbyPoint`s, the lodging query and then the
+ * food query. A `locate` the corridor pass already made for the same name is a
+ * cache hit and costs nothing, which is the destination's case on any brief
+ * with a corridor. A town that does not locate costs its `locate` and no query.
+ * So the pass spends at most `3 × MAX_LODGING_TOWNS` = 12 calls of
+ * `MAX_GROUNDING_CALLS`, and the shapes pl-60's and pl-62's Logs count are
+ * asserted by `api/test/lodging-run.test.ts`.
  *
  * ## The coverage it writes
  *
@@ -48,7 +59,8 @@
 import { AppError, isAnswered } from "@planner/contract";
 import type { Coordinates, Place, TripBrief, UncheckedConstraint } from "@planner/contract";
 import type { Find, TripContext } from "@planner/agent";
-import { LODGING_KINDS } from "@planner/agent";
+import { FOOD_KINDS, LODGING_KINDS } from "@planner/agent";
+import type { DiscoveryKind } from "@planner/agent";
 import { unchecked } from "@planner/itinerary";
 import type { RunGrounding } from "../grounding/cache.ts";
 import { haversineMetres } from "../grounding/geometry.ts";
@@ -79,11 +91,30 @@ export const MAX_LODGING_TOWNS = 4;
  */
 export const MAX_LODGING_FINDS_PER_TOWN = 10;
 
+/**
+ * How far from a town's point a place to eat still counts as that town — 10 km,
+ * the owner's answer to pl-62's Decision 6 (2026-10-24), the same as
+ * `LODGING_RADIUS_METRES`. pl-62's Build 1 capture gives it: 117 food finds
+ * around the nine localities at 10 km against 108 at 6 km, so the radius moves
+ * few finds and the cap moves many.
+ */
+export const FOOD_RADIUS_METRES = 10_000;
+
+/**
+ * How many places to eat one town hands `food`, the closest first — ten, the
+ * same answer. At 10 km it shows 65 of Build 1's 117 finds: the cap binds in
+ * Gaspé, Matane, Percé and Rivière-du-Loup, and there the ten are the town's
+ * centre (the tenth within 237 m of Gaspé's point and 276 m of Percé's), which
+ * is where a party that stays in a town eats. Ten also keeps `food`'s block no
+ * longer than `lodging`'s for the same towns.
+ */
+export const MAX_FOOD_FINDS_PER_TOWN = 10;
+
 /** How much of a town's name a coverage sentence repeats — the brief allows 500 characters. */
 const MAX_TOWN_CHARS = 60;
 
-/** Steps this pass reports per town: its `locate`, then its query. */
-export const LODGING_STEPS_PER_TOWN = 2;
+/** Steps this pass reports per town: its `locate`, its lodging query, then its food query. */
+export const TOWN_STEPS_PER_TOWN = 3;
 
 /** The brief's stops and then its destination, deduplicated, at most `MAX_LODGING_TOWNS`. */
 export function lodgingTowns(brief: TripBrief): string[] {
@@ -123,7 +154,7 @@ export interface LodgingInput {
   trip: TripContext | undefined;
   logger: AppLogger;
   signal: AbortSignal;
-  /** Called once per step finished, `LODGING_STEPS_PER_TOWN` per town whatever happened. */
+  /** Called once per step finished, `TOWN_STEPS_PER_TOWN` per town whatever happened. */
   onStep: () => void;
 }
 
@@ -132,7 +163,10 @@ export interface LodgingResult {
   coverage: UncheckedConstraint[];
 }
 
-type TownOutcome = "found" | "empty" | "unlocated" | "refused" | "uncapped";
+/** What happened to a town before either query: shared by both categories. */
+type TownOutcome = "unlocated" | "uncapped";
+/** What one query answered for one town, per category. */
+type QueryOutcome = "found" | "empty" | "refused";
 
 export async function discoverLodging(input: LodgingInput): Promise<LodgingResult> {
   const named = namedTowns(input.brief);
@@ -143,14 +177,14 @@ export async function discoverLodging(input: LodgingInput): Promise<LodgingResul
       coverage: [
         unchecked(
           "coverage",
-          "This trip names no town to stay in, so the map was not checked for places to stay.",
+          "This trip names no town to stay in, so the map was not checked for places to stay or to eat.",
         ),
       ],
     };
   }
 
-  const finds: Find[] = [];
-  const seen = new Set<string>();
+  const sleep = newCategory();
+  const eat = newCategory();
   const outcomes = new Map<TownOutcome, string[]>();
   const note = (outcome: TownOutcome, town: string): void => {
     outcomes.set(outcome, [...(outcomes.get(outcome) ?? []), town]);
@@ -161,32 +195,77 @@ export async function discoverLodging(input: LodgingInput): Promise<LodgingResul
     input.onStep();
     if (located === "refused" || located === null) {
       input.onStep();
-      note(located === null ? "unlocated" : "refused", town);
+      input.onStep();
+      if (located === null) {
+        note("unlocated", town);
+      } else {
+        sleep.note("refused", town);
+        eat.note("refused", town);
+      }
       continue;
     }
 
-    const answer = await queryTown(input, located);
+    const lodging = await queryTown(input, located, LODGING_RADIUS_METRES, LODGING_KINDS);
     input.onStep();
-    if (answer === "refused") {
-      note("refused", town);
-      continue;
-    }
+    keep(sleep, lodging, town, located, MAX_LODGING_FINDS_PER_TOWN);
 
-    const kept = answer
-      .filter((find) => !seen.has(identity(find)))
-      .toSorted((a, b) => compareByDistance(a, b, located))
-      .slice(0, MAX_LODGING_FINDS_PER_TOWN);
-    for (const find of kept) seen.add(identity(find));
-    finds.push(...kept);
-    // What the map answered decides the sentence, not what was left after an
-    // earlier town claimed the same premises: a town whose finds were all
-    // handed over already has places to stay, and `lodging` sees them (gate 1).
-    note(answer.length === 0 ? "empty" : "found", town);
+    const food = await queryTown(input, located, FOOD_RADIUS_METRES, FOOD_KINDS);
+    input.onStep();
+    keep(eat, food, town, located, MAX_FOOD_FINDS_PER_TOWN);
   }
 
   for (const town of named.slice(MAX_LODGING_TOWNS)) note("uncapped", town);
 
-  return { finds, coverage: coverageFor(outcomes) };
+  return {
+    // Places to sleep first, then places to eat: each reader's filter keeps
+    // the order it is given, so `lodging`'s list is the one it had before pl-62.
+    finds: [...sleep.finds, ...eat.finds],
+    coverage: coverageFor(outcomes, sleep.outcomes, eat.outcomes),
+  };
+}
+
+/** One category's finds and outcomes across the towns, de-duplicated by element. */
+interface Category {
+  finds: Find[];
+  seen: Set<string>;
+  outcomes: Map<QueryOutcome, string[]>;
+  note: (outcome: QueryOutcome, town: string) => void;
+}
+
+function newCategory(): Category {
+  const outcomes = new Map<QueryOutcome, string[]>();
+  return {
+    finds: [],
+    seen: new Set<string>(),
+    outcomes,
+    note: (outcome, town) => {
+      outcomes.set(outcome, [...(outcomes.get(outcome) ?? []), town]);
+    },
+  };
+}
+
+/** One town's answer to one query, capped closest first and added to its category. */
+function keep(
+  category: Category,
+  answer: Find[] | "refused",
+  town: string,
+  point: Coordinates,
+  cap: number,
+): void {
+  if (answer === "refused") {
+    category.note("refused", town);
+    return;
+  }
+  const kept = answer
+    .filter((find) => !category.seen.has(identity(find)))
+    .toSorted((a, b) => compareByDistance(a, b, point))
+    .slice(0, cap);
+  for (const find of kept) category.seen.add(identity(find));
+  category.finds.push(...kept);
+  // What the map answered decides the sentence, not what was left after an
+  // earlier town claimed the same premises: a town whose finds were all
+  // handed over already has them, and the reader sees them (pl-60's gate 1).
+  category.note(answer.length === 0 ? "empty" : "found", town);
 }
 
 async function locateTown(
@@ -215,12 +294,17 @@ async function locateTown(
  * its answer: no finds, logged, and the town is named as having none — this
  * plan cannot say what is there either way.
  */
-async function queryTown(input: LodgingInput, point: Coordinates): Promise<Find[] | "refused"> {
+async function queryTown(
+  input: LodgingInput,
+  point: Coordinates,
+  radiusMetres: number,
+  kinds: readonly DiscoveryKind[],
+): Promise<Find[] | "refused"> {
   try {
     const outcome = await input.provider.nearbyPoint({
       point,
-      radiusMetres: LODGING_RADIUS_METRES,
-      kinds: LODGING_KINDS,
+      radiusMetres,
+      kinds,
       signal: input.signal,
     });
     if (outcome.kind === "refused") return "refused";
@@ -262,37 +346,41 @@ function isCancellation(error: unknown, signal: AbortSignal): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
-/** One sentence per outcome that leaves a town unchecked, naming the towns. */
-function coverageFor(outcomes: ReadonlyMap<TownOutcome, string[]>): UncheckedConstraint[] {
+/**
+ * One sentence per outcome that leaves a town unchecked, naming the towns:
+ * `lodging`'s first, as pl-60 wrote them, then `food`'s (pl-62). A town that
+ * could not be found, or fell past the cap, was checked for neither, and its
+ * one sentence says both.
+ */
+function coverageFor(
+  towns: ReadonlyMap<TownOutcome, string[]>,
+  sleep: ReadonlyMap<QueryOutcome, string[]>,
+  eat: ReadonlyMap<QueryOutcome, string[]>,
+): UncheckedConstraint[] {
   const coverage: UncheckedConstraint[] = [];
-  const unlocated = outcomes.get("unlocated");
+  const say = (detail: string): void => {
+    coverage.push(unchecked("coverage", detail));
+  };
+
+  const unlocated = towns.get("unlocated");
   if (unlocated !== undefined) {
-    coverage.push(
-      unchecked(
-        "coverage",
-        `Where ${townList(unlocated)} ${unlocated.length === 1 ? "is" : "are"} could not be found on the map, so places to stay there were not checked.`,
-      ),
+    say(
+      `Where ${townList(unlocated)} ${unlocated.length === 1 ? "is" : "are"} could not be found on the map, so places to stay and places to eat there were not checked.`,
     );
   }
-  const empty = outcomes.get("empty");
+  const empty = sleep.get("empty");
   if (empty !== undefined) {
-    coverage.push(
-      unchecked(
-        "coverage",
-        `No places to stay around ${townList(empty)} are on the map. Somewhere to stay there may exist without this plan having found it.`,
-      ),
+    say(
+      `No places to stay around ${townList(empty)} are on the map. Somewhere to stay there may exist without this plan having found it.`,
     );
   }
-  const refused = outcomes.get("refused");
+  const refused = sleep.get("refused");
   if (refused !== undefined) {
-    coverage.push(
-      unchecked(
-        "coverage",
-        `Places to stay around ${townList(refused)} were never looked up: the run had already used the number of lookups it is allowed.`,
-      ),
+    say(
+      `Places to stay around ${townList(refused)} were never looked up: the run had already used the number of lookups it is allowed.`,
     );
   }
-  const uncapped = outcomes.get("uncapped");
+  const uncapped = towns.get("uncapped");
   if (uncapped !== undefined) {
     // A brief may name twenty stops, so this list is the one that can outgrow
     // `MAX_UNCHECKED_DETAIL_CHARS`: it names the first few and counts the rest.
@@ -300,11 +388,20 @@ function coverageFor(outcomes: ReadonlyMap<TownOutcome, string[]>): UncheckedCon
     const more = uncapped.length - named.length;
     const list =
       more === 0 ? townList(named) : `${named.map(cut).join(", ")} and ${String(more)} more`;
-    coverage.push(
-      unchecked(
-        "coverage",
-        `Places to stay around ${list} were not looked up: this plan asks about at most ${String(MAX_LODGING_TOWNS)} towns, the stops it names first.`,
-      ),
+    say(
+      `Places to stay and places to eat around ${list} were not looked up: this plan asks about at most ${String(MAX_LODGING_TOWNS)} towns, the stops it names first.`,
+    );
+  }
+  const hungry = eat.get("empty");
+  if (hungry !== undefined) {
+    say(
+      `No places to eat around ${townList(hungry)} are on the map. Somewhere to eat there may exist without this plan having found it.`,
+    );
+  }
+  const unfed = eat.get("refused");
+  if (unfed !== undefined) {
+    say(
+      `Places to eat around ${townList(unfed)} were never looked up: the run had already used the number of lookups it is allowed.`,
     );
   }
   return coverage;

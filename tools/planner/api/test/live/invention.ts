@@ -43,7 +43,8 @@
  * - **Population.** With no argument: the 111 record files listed in
  *   `invention/population-pl57.json`, the manifest, and nothing else — a record
  *   planted under any other `claude-*` directory is not read. With
- *   `--after pl<n>-<date>` (`pl58-…` for pl-58, `pl60-…` for pl-60): every
+ *   `--after pl<n>-<date>` (`pl58-…` for pl-58, `pl60-…` for pl-60, `pl62-…`
+ *   for pl-62): every
  *   `.json` under the `claude-*-pl<n>-<date>` directories, which are that
  *   run's, and nothing in the manifest.
  * - **Files.** With no argument: pl-57's `invention/classification.json`,
@@ -443,13 +444,17 @@ export function seededOrder(eligible: string[], seed: number): string[] {
  * pl-58 changed `lodging`'s and `food`'s prompts, so its stratum is both. pl-60
  * changed `lodging`'s alone (its Build 7: "web-check `lodging`'s named
  * premises"), so a `food` key would spend the web check's budget on a
- * specialist the change never touched. A ticket missing here is refused rather
+ * specialist the change never touched. pl-62 changed `food`'s alone (its Build 7:
+ * the web check follows `food`'s named premises), so its stratum is the mirror
+ * of pl-60's, and `lodging` is its control in the shares and not in the web
+ * check. A ticket missing here is refused rather
  * than given a default: which specialists a re-measure is about is a decision
  * the ticket makes, not this harness.
  */
 const STRATUM_SPECIALISTS: Readonly<Record<string, readonly string[]>> = {
   "pl-58": ["lodging", "food"],
   "pl-60": ["lodging"],
+  "pl-62": ["food"],
 };
 
 export function stratumSpecialists(run: string): readonly string[] {

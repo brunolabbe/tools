@@ -442,7 +442,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
 
   /**
    * What OpenStreetMap holds within a radius of one point — pl-60, the town
-   * query `lodging`'s finds come from.
+   * query `lodging`'s finds come from, and since pl-62 `food`'s as well.
    *
    * Overpass, like `nearby` above, and through the same `#overpassJson`, so the
    * same timeout, failure mapping and `remark` check apply. What differs is the
@@ -1213,6 +1213,12 @@ const KIND_FILTERS: Record<DiscoveryKind, string> = {
   apartment: '"tourism"="apartment"',
   "camp-site": '"tourism"="camp_site"',
   "caravan-site": '"tourism"="caravan_site"',
+  // pl-62: places to eat, asked only around a town, in a query of their own.
+  restaurant: '"amenity"="restaurant"',
+  cafe: '"amenity"="cafe"',
+  bar: '"amenity"="bar"',
+  pub: '"amenity"="pub"',
+  bakery: '"shop"="bakery"',
 };
 
 /**
@@ -1235,6 +1241,11 @@ const KIND_MATCHES: ReadonlyArray<
   ["apartment", (tags) => tags.get("tourism") === "apartment"],
   ["camp-site", (tags) => tags.get("tourism") === "camp_site"],
   ["caravan-site", (tags) => tags.get("tourism") === "caravan_site"],
+  ["restaurant", (tags) => tags.get("amenity") === "restaurant"],
+  ["cafe", (tags) => tags.get("amenity") === "cafe"],
+  ["bar", (tags) => tags.get("amenity") === "bar"],
+  ["pub", (tags) => tags.get("amenity") === "pub"],
+  ["bakery", (tags) => tags.get("shop") === "bakery"],
 ];
 
 /**
