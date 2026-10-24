@@ -1394,6 +1394,12 @@ mentions, 700 distinct places`, and the same check line.
   `verdicts.json`, the pl-60 check gave exit 1, "the committed record is not what the inputs
   regenerate". The verdicts were then regenerated from the scratch generator that wrote them
   (`gen-verdicts.py`), and the check gave exit 0 again (`mutate.sh`).
+- At `4f5bb20c`: `npx vitest run tools/planner/api/test/live-records.test.ts
+tools/planner/api/test/invention-population.test.ts` passed 391 of 391, and
+  `live-records` walks the three `pl60-2026-10-24` invention files. `npm run check` exited 0. `npm test -- --project planner` passed 81 of 81 files and 1776 of 1776 tests, exit 0.
+  That is 114 more than at `e036ef77` (1662), which is before the run's 110 records were
+  committed. Where the 114 come from was not itemised. The e2e suite and the image gate were
+  not run locally.
 
 **What the brief had wrong, or left open.**
 
