@@ -19,6 +19,7 @@ import type {
   Find,
   LocateRequest,
   NearbyArticle,
+  NearbyPointRequest,
   NearbyRequest,
   NotabilityRequest,
   TravelRequest,
@@ -80,6 +81,7 @@ function provider(overrides: {
     }>
   >;
   nearby?: (request: NearbyRequest) => Promise<GroundingOutcome<Find[]>>;
+  nearbyPoint?: (request: NearbyPointRequest) => Promise<GroundingOutcome<Find[]>>;
   articlesNear?: (request: NotabilityRequest) => Promise<GroundingOutcome<NearbyArticle[]>>;
   travel?: (
     request: TravelRequest,
@@ -100,6 +102,7 @@ function provider(overrides: {
           },
         })),
     nearby: overrides.nearby ?? (async () => answered([])),
+    nearbyPoint: overrides.nearbyPoint ?? (async () => answered([])),
     // pl-33: the notability pass asks only when the finds name a language, so
     // a double that answers nothing here changes nothing for tests about
     // locate, travel and coverage.

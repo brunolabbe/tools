@@ -42,6 +42,7 @@ import type {
   ModelReply,
   ModelRequest,
   NearbyArticle,
+  NearbyPointRequest,
   NearbyRequest,
   NotabilityRequest,
   TravelMatrix,
@@ -96,6 +97,10 @@ class GatedGrounding implements GroundingProvider {
 
   async nearby(request: NearbyRequest): Promise<Find[]> {
     return await this.#inner.nearby(request);
+  }
+
+  async nearbyPoint(request: NearbyPointRequest): Promise<Find[]> {
+    return await this.#inner.nearbyPoint(request);
   }
 
   async articlesNear(request: NotabilityRequest): Promise<NearbyArticle[]> {

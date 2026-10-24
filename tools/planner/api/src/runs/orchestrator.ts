@@ -96,7 +96,7 @@ import {
 import { evictExpiredGrounding, groundingForRun } from "../grounding/cache.ts";
 import { intakeTitle } from "../intakes/title.ts";
 import { readIntake } from "../intakes/state.ts";
-import { discoverAlongCorridor, hasCorridor, tripContextFor } from "./discovery.ts";
+import { discover, hasDiscovery, tripContextFor } from "./discovery.ts";
 import { measureTravel, runPlaces } from "./travel.ts";
 
 /**
@@ -378,23 +378,24 @@ async function execute(
 
   // --- Discovery, before the fan-out (pl-29, §5's 2026-08-22 amendment).
   //
-  // Entered only when the brief actually names both ends of a corridor —
-  // the same _never fake progress_ argument `RUN_TRANSITIONS`'s note makes
-  // about the fan-out's own `grounding` edge, applied one state earlier.
-  const discovering = hasCorridor(brief);
+  // Entered only when the brief names both ends of a corridor or a town to
+  // find somewhere to sleep in (pl-60) — the same _never fake progress_
+  // argument `RUN_TRANSITIONS`'s note makes about the fan-out's own
+  // `grounding` edge, applied one state earlier. `discover` runs either way:
+  // with nothing to ask it makes no call, and its "names no town" note still
+  // belongs on the plan.
+  const discovering = hasDiscovery(brief);
   if (!moveTo(context, runId, discovering ? "grounding" : "fanning-out")) return;
 
-  const discovered = discovering
-    ? await discoverAlongCorridor({
-        brief,
-        provider: grounding,
-        logger,
-        signal,
-        onProgress: (event) => {
-          record(context, runId, event);
-        },
-      })
-    : { finds: [], coverage: [], reading: [] };
+  const discovered = await discover({
+    brief,
+    provider: grounding,
+    logger,
+    signal,
+    onProgress: (event) => {
+      record(context, runId, event);
+    },
+  });
 
   if (discovering && !moveTo(context, runId, "fanning-out")) return;
 

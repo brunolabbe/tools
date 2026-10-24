@@ -467,9 +467,11 @@ function isCancellation(error: unknown, signal: AbortSignal | undefined): boolea
  * **A candidate a specialist wrote *from* a corridor `Find` is `model-asserted`
  * too, and pl-36 settled that permanently.** Not for want of a `Source` — a
  * `Find` carries its own — but because nothing can say *which* find a proposal
- * was written from: the prompt hands a model a name and takes back prose, and no
- * run in this repo has ever been captured with `finds` in it, so the name-match
- * join it would take has never been scored against a single observation.
+ * was written from: the prompt hands a model a name and takes back prose, and
+ * the name-match join it would take has never been scored. pl-40's live records
+ * for sets B to D do carry their `finds` (`test/live/run.ts`'s `serializeFinds`),
+ * so the join can be scored on them; pl-60's Build 6 is that measurement, and
+ * until it says otherwise this stands.
  * Attributing OpenStreetMap to the wrong candidate is worse than attributing
  * nothing. `Provenance` gains no third member for the same reason pl-29's Build
  * step 6 gave. The argument, and what would have to be measured before reopening

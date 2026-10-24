@@ -91,7 +91,51 @@ export const DISCOVERY_KINDS = [
   "historic-site",
 ] as const;
 
-export type DiscoveryKind = (typeof DISCOVERY_KINDS)[number];
+/**
+ * The kinds of place to sleep a town query asks for — pl-60.
+ *
+ * A second list and not more members of the one above, because the two are
+ * asked by different passes about different things. `DISCOVERY_KINDS` is what a
+ * corridor query asks for, and `api/src/runs/discovery.ts` asks for all of it; a
+ * hotel six kilometres off the road is not a stop worth making. These are asked
+ * around a town the trip names, and only `lodging` reads them (`readsFinds` in
+ * `prompt.ts` routes by kind).
+ *
+ * Each is one `tourism=*` value, taken from iD's tagging presets
+ * (`openstreetmap/id-tagging-schema`) because the OSM wiki was unreachable when
+ * pl-60 captured. Every one can be a point or an area, so a query for them must
+ * ask for both. pl-60's Log names the values left out: `alpine_hut`,
+ * `wilderness_hut` and `camp_pitch`, and why.
+ */
+export const LODGING_KINDS = [
+  /** `tourism=hotel`. */
+  "hotel",
+  /** `tourism=motel`. */
+  "motel",
+  /** `tourism=guest_house`, which is where a B&B or a gîte is mapped. */
+  "guest-house",
+  /** `tourism=hostel`. */
+  "hostel",
+  /** `tourism=chalet`, a cottage let by the night or the week. */
+  "chalet",
+  /** `tourism=apartment`, a holiday flat. */
+  "apartment",
+  /** `tourism=camp_site`. All three of Forillon's campgrounds are mapped this way, as areas. */
+  "camp-site",
+  /** `tourism=caravan_site`, a site for a camper or an RV. */
+  "caravan-site",
+] as const;
+
+export type CorridorKind = (typeof DISCOVERY_KINDS)[number];
+export type LodgingKind = (typeof LODGING_KINDS)[number];
+export type DiscoveryKind = CorridorKind | LodgingKind;
+
+const LODGING_KIND_SET: ReadonlySet<DiscoveryKind> = new Set(LODGING_KINDS);
+
+/** Whether a find is a place to sleep, which decides which specialist reads it. */
+export function isLodgingKind(kind: DiscoveryKind): kind is LodgingKind {
+  return LODGING_KIND_SET.has(kind);
+}
 
 /** A name no adapter should keep past this length — see `Find.name`. */
 export const MAX_FIND_NAME_CHARS = 200;
@@ -164,6 +208,9 @@ export interface Find {
    * ran out, or the backend could not route to it. Measured only for finds
    * that survive the geometric filter (Build step 4); everything else would be
    * spending `MAX_GROUNDING_CALLS` on POIs nobody is going to hear about.
+   *
+   * Always `null` for a find from `nearbyPoint` (pl-60): a town has no corridor
+   * to detour from, so nothing is measured and nothing could be.
    */
   detourMinutes: number | null;
 }
@@ -171,6 +218,25 @@ export interface Find {
 export interface NearbyRequest {
   corridor: Corridor;
   /** How far off the corridor is still "on the way". Metres, always. */
+  radiusMetres: number;
+  kinds: readonly DiscoveryKind[];
+  signal?: AbortSignal | undefined;
+}
+
+/**
+ * What a database knows around one point — pl-60, a town the trip names.
+ *
+ * **A point and not a one-point `Corridor`**, which is the owner's answer of
+ * 2026-10-24 to pl-60's Build 2 stop condition. A `Corridor` is "at least two
+ * points" and every distance below it assumes a segment; a town is neither, and
+ * its finds have no detour to price. Giving it its own request and its own seam
+ * method also keeps the two passes' calls apart, so a test or a log line can
+ * say which one spent a call. `NotabilityRequest` below is the precedent: it is
+ * one point for the same reason.
+ */
+export interface NearbyPointRequest {
+  point: Coordinates;
+  /** How far from the point still counts as "in this town". Metres, always. */
   radiusMetres: number;
   kinds: readonly DiscoveryKind[];
   signal?: AbortSignal | undefined;
@@ -399,6 +465,12 @@ export interface GroundingProvider {
    * no single fact to have an opinion about, only a list that may be short.
    */
   nearby(request: NearbyRequest): Promise<Find[]>;
+  /**
+   * What a database knows within a radius of one point — pl-60, the town
+   * query `lodging`'s finds come from. One call, however many finds, and an
+   * empty array is an honest answer, exactly as `nearby`'s is.
+   */
+  nearbyPoint(request: NearbyPointRequest): Promise<Find[]>;
   /**
    * Articles an encyclopedia has near one point — pl-33, the editorial half of
    * a `Find`'s backing that the map itself does not carry.

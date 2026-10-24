@@ -415,6 +415,9 @@ async function buildDiscoveryFinds(logger: AppLogger): Promise<readonly Find[]> 
         },
       }),
     nearby: async (request) => answered(await adapter.nearby(request)),
+    // pl-60: this builds the corridor's finds only. Build 6 hands `lodging` its
+    // finds from the checked-in town capture, the same offline way.
+    nearbyPoint: async () => answered([]),
     articlesNear: async () => answered([]),
     travel: async (request) => request.origins.map(() => request.destinations.map(() => UNKNOWN)),
   };

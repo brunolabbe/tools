@@ -93,6 +93,9 @@ function gazetteer(entries: Record<string, { latitude: number; longitude: number
     async nearby(): Promise<GroundingOutcome<never[]>> {
       return answered([]);
     },
+    async nearbyPoint(): Promise<GroundingOutcome<never[]>> {
+      return answered([]);
+    },
   };
 }
 

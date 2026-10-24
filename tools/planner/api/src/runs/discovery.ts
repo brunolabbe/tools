@@ -59,12 +59,13 @@ import type {
   TripBrief,
   UncheckedConstraint,
 } from "@planner/contract";
-import type { Corridor, Find, NearbyArticle, TripContext } from "@planner/agent";
+import type { Corridor, DiscoveryKind, Find, NearbyArticle, TripContext } from "@planner/agent";
 import { DISCOVERY_KINDS } from "@planner/agent";
 import { unchecked } from "@planner/itinerary";
 import type { GroundingOutcome, RunGrounding, TravelOutcomeMatrix } from "../grounding/cache.ts";
 import { distanceToCorridorMetres, haversineMetres } from "../grounding/geometry.ts";
 import type { AppLogger } from "../logger.ts";
+import { discoverLodging, LODGING_STEPS_PER_TOWN, lodgingTowns } from "./lodging.ts";
 
 /**
  * How far off the corridor still counts as "on the way" — pl-29's own title
@@ -169,10 +170,12 @@ export interface DiscoverResult {
    */
   finds: Find[];
   /**
-   * At most one `coverage` entry — the discovery pass has one thing to say
-   * about one corridor. Empty when there was a corridor and it was not thin,
-   * or when there was no corridor to discover along at all: a trip with a
-   * declined destination has nothing this entry could honestly be about.
+   * From `discoverAlongCorridor`, at most one `coverage` entry — the corridor
+   * pass has one thing to say about one corridor. Empty when there was a
+   * corridor and it was not thin, or when there was no corridor to discover
+   * along at all: a trip with a declined destination has nothing this entry
+   * could honestly be about. From `discover`, those plus the town pass's
+   * (pl-60), one per way a town went unchecked, each naming its towns.
    */
   coverage: UncheckedConstraint[];
   /**
@@ -237,6 +240,74 @@ export function tripContextFor(brief: TripBrief): TripContext | undefined {
  */
 export function hasCorridor(brief: TripBrief): boolean {
   return corridorEndpoints(brief) !== null;
+}
+
+/**
+ * Whether either discovery pass would make a call for this brief — a corridor
+ * to query along, or a town to find somewhere to sleep in (pl-60). The
+ * orchestrator's question, asked before it enters `grounding`, for `hasCorridor`'s
+ * reason.
+ */
+export function hasDiscovery(brief: TripBrief): boolean {
+  return hasCorridor(brief) || lodgingTowns(brief).length > 0;
+}
+
+/**
+ * Both discovery passes, the corridor's and then the towns' (pl-60), as one
+ * result and one progress count.
+ *
+ * The corridor pass runs first because it locates the destination, and the
+ * town pass then finds that `locate` in the cache at no cost. Their finds go
+ * into one list, which `@planner/agent`'s `findsFor` splits by kind: `lodging`
+ * reads the places to sleep and the corridor readers read the rest. Their
+ * `coverage` entries go into one list too, each a sentence about its own pass.
+ *
+ * With nothing to discover it makes no call and reports no progress, and still
+ * returns the town pass's "names no town" note: the plan should say that the
+ * map was never asked about places to stay.
+ */
+export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
+  const towns = lodgingTowns(input.brief);
+  const corridorSteps = hasCorridor(input.brief) ? TOTAL_STEPS : 0;
+  const total = corridorSteps + towns.length * LODGING_STEPS_PER_TOWN;
+  let done = 0;
+  const report = (): void => {
+    input.onProgress({ type: "grounding", done, total });
+  };
+
+  const corridor =
+    corridorSteps === 0
+      ? NOTHING
+      : await discoverAlongCorridor({
+          ...input,
+          onProgress: (event) => {
+            if (event.type !== "grounding") {
+              input.onProgress(event);
+              return;
+            }
+            done = event.done;
+            report();
+          },
+        });
+  done = corridorSteps;
+
+  const lodging = await discoverLodging({
+    brief: input.brief,
+    provider: input.provider,
+    trip: tripContextFor(input.brief),
+    logger: input.logger,
+    signal: input.signal,
+    onStep: () => {
+      done += 1;
+      report();
+    },
+  });
+
+  return {
+    finds: [...corridor.finds, ...lodging.finds],
+    coverage: [...corridor.coverage, ...lodging.coverage],
+    reading: corridor.reading,
+  };
 }
 
 export async function discoverAlongCorridor(input: DiscoverInput): Promise<DiscoverResult> {
@@ -684,7 +755,9 @@ export const CLOSEST_RESERVED = Math.floor(MAX_DISCOVERY_FINDS / 2);
  * *process* controls, not one the host's ICU data does.
  */
 function rankFinds(finds: readonly Find[], corridor: Corridor): Find[] {
-  const kindOrder = new Map(DISCOVERY_KINDS.map((kind, index) => [kind, index]));
+  const kindOrder = new Map<DiscoveryKind, number>(
+    DISCOVERY_KINDS.map((kind, index) => [kind, index]),
+  );
 
   interface RankEntry {
     find: Find;

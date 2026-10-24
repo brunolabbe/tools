@@ -90,6 +90,7 @@ async function discovered(finds: readonly Find[]) {
         source: { url: "x", title: null, fetchedAt: "2027-01-01T00:00:00.000Z" },
       }),
     nearby: async () => answered([...finds]),
+    nearbyPoint: async () => answered([]),
     articlesNear: async () => answered([]),
     travel: async (request) => request.origins.map(() => request.destinations.map(() => UNKNOWN)),
   };

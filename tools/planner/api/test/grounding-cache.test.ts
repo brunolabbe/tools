@@ -175,6 +175,10 @@ class CountingProvider implements GroundingProvider {
   async nearby(): Promise<Find[]> {
     return [];
   }
+
+  async nearbyPoint(): Promise<Find[]> {
+    return [];
+  }
 }
 
 const TTL: GroundingCacheTtlHours = { locate: 24, travel: 12 };
@@ -846,6 +850,10 @@ describe("the trip context in the locate key (pl-37)", () => {
     }
 
     async nearby(): Promise<Find[]> {
+      return [];
+    }
+
+    async nearbyPoint(): Promise<Find[]> {
       return [];
     }
 
