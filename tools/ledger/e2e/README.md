@@ -6,7 +6,9 @@ There is one spec, and it is the layout check (repo-109):
 - `layout.spec.ts` — every screen at 360×740 and at 1280×800, asserting the page
   never scrolls sideways (`scrollWidth <= innerWidth`) and keeping a full-page
   screenshot of each in `.artifacts/layout/`. The rule it keeps is
-  `.claude/rules/responsive-layout.md`. **A screen is a tab**: the shell has no
+  `.claude/rules/responsive-layout.md`. It also measures what `scrollWidth` cannot see
+  (lg-64): each mortgage radio (Household, Salaries) is a radio's size and sits beside
+  its label, and a receipt item's name and price show their entries' first words. **A screen is a tab**: the shell has no
   router, so each of the twelve tabs in `web/src/App.tsx` (Home, Stats, Period,
   History, Receipt, Paste, Inbox, Rules, Categories, Salaries, Household, Admin)
   is a case, and Paste is measured twice — previewed, then stored — and Receipt
