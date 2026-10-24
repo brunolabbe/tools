@@ -228,15 +228,59 @@ seen directly in objects/ after commit returned: [["maintenance.lock",71]]`, so 
 
   **The hypotheses in "What the code shows".**
   1. _The template's `afterAll` removed it during the test._ **Refuted.** `grep -n
-afterAll scripts/test/review-record.test.ts`: the one hook, after the template
-     helper, and vitest runs it after the file's last test. The failure also names
-     the copy's path, not the template's.
-  2. _A remover outside the repo deleted `review-record-<random>`._ **Not
-     confirmed, and not needed.** The failure reproduces with nothing else in the
-     process tree touching `/tmp/rr-probe-*` (`micro.mjs`). Nothing in the repo
-     removes the directory either: `grep -rn "review-record-" scripts packages tools
---include=*.ts --include=*.mjs` lists only `mkdtemp` prefixes and the test's own
-     cleanup.
+afterAll scripts/test/review-record.test.ts`, run at `524d6352` (line numbers
+     differ from the `8a6dcf9a` ones in Why, which this build moved):
+
+     ```
+     20:import { afterAll, expect, test, vi } from "vitest";
+     322:afterAll(() => {
+     ```
+
+     The one hook (322) removes only `ticketRepoTemplate` (`fs.rmSync(ticketRepoTemplate,
+{ recursive: true, force: true })`, lines 323 to 325), and vitest runs it after the
+     file's last test. The failure also names the copy's path, not the template's.
+
+  2. _A remover outside the repo deleted `review-record-<random>`._ **Refuted**, as the
+     cause. Nothing in the repo removes it, and the failure reproduces with nothing
+     outside the copying process touching the directories; it stops when the fix's one
+     config line is added.
+     - `grep -rn "review-record-" scripts packages tools --include=*.ts --include=*.mjs`,
+       run at `524d6352` (14 lines; the three `scripts/review-record.mjs` lines are other
+       prefixes, `-diff-`, `-fmt-` and `-land-`; the 11 in `scripts/test/review-record.test.ts`
+       are `mkdtemp` prefixes, a prefix constant and its `startsWith`, a regex and two
+       comments):
+
+       ```
+       scripts/review-record.mjs:344:  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-diff-"));
+       scripts/review-record.mjs:738:  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-fmt-"));
+       scripts/review-record.mjs:1441:    scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-land-"));
+       scripts/test/review-record.test.ts:307:      fs.mkdtempSync(path.join(os.tmpdir(), "review-record-template-")),
+       scripts/test/review-record.test.ts:337:  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-")));
+       scripts/test/review-record.test.ts:1157:  const bareDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-origin-")));
+       scripts/test/review-record.test.ts:1394:    const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-other-"));
+       scripts/test/review-record.test.ts:1689:  // `review-record-land-*` entry there is racy the moment a second session
+       scripts/test/review-record.test.ts:1703:    fs.mkdtempSync(path.join(os.tmpdir(), "review-record-private-tmp-")),
+       scripts/test/review-record.test.ts:1712:    const prefix = "review-record-land-";
+       scripts/test/review-record.test.ts:1769:    const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-other-"));
+       scripts/test/review-record.test.ts:1899:    // The clone is identified by its name, `review-record-land-*`, never by
+       scripts/test/review-record.test.ts:1910:        if (path.basename(repo).startsWith("review-record-land-")) {
+       scripts/test/review-record.test.ts:2178:        Array.isArray(args) && args.some((a) => /review-record-fmt-.*section\.md$/.test(String(a))),
+       ```
+
+       None of them removes a `review-record-<random>` directory; the copy's own
+       `cleanup` removes it through a variable the grep cannot match.
+
+     - The refuting evidence is gate 1's reproduction (gate 1's full report, section
+       "### 1. The causal claim, with my own reproduction"; the builder's own table
+       above agrees). `node gate-1/repro.mjs driver <git 2.55.0 bin> on 8000 8 10 …`
+       builds the fixture and copies it with `fs.cpSync` in a private `TMPDIR`, in 8
+       processes under 10 busy loops, with no other process touching those
+       directories: `"builds":8000,"failures":14,…"seconds":86.204`, every failure
+       `ENOENT path=…/g1-copy-X/.git/objects syscall=cp`, the CI error's shape. The same
+       command with `[maintenance] auto = false` in `.git/config` before the commit (the
+       fix's line): `"builds":8000,"failures":0,…"seconds":71.375`. With git 2.43.0 and
+       the default: `"failures":0` of 8000. A remover outside the repo would not be
+       stopped by a config line git reads, so it is not the cause.
   3. _A `git` process still writing into the template._ **Confirmed, in a changed
      form:** not a process writing objects but the detached `git maintenance` child
      holding `objects/maintenance.lock`. The brief said neither the test nor
@@ -279,3 +323,38 @@ passed (64)`, 829 s in all. As uninformative as the sweep on `main`; the evidenc
     That needs its own reproduction before it is a ticket.
   - The setting is in `buildTicketRepo` only: the bare and `otherDir` repos the `land()`
     tests build are untouched, and nothing copies them.
+
+- **2026-10-24 — gate 1's round applied, and the owner's three answers (fixer; no ship
+  authority).** Gate 1 (`89a38d30..524d6352`, FAIL) carried one high. It is fixed in the
+  built entry above: hypothesis 2 now reads **Refuted**, with gate 1's reproduction
+  (14 of 8000 without the fix, 0 of 8000 with it) cited by command and output, and
+  hypotheses 1 and 2 carry the real output of `grep -n afterAll …` and `grep -rn
+"review-record-" …` run at `524d6352`. The second grep printed 14 lines (3 in
+  `scripts/review-record.mjs`, 11 in the test file); gate 1's finding counted "11
+  `mkdtemp`/comment hits", which is the test file's share only, and 2 of those 11 are not
+  `mkdtemp` or comment lines (the prefix constant and the `startsWith` and regex uses).
+  None removes `review-record-<random>`, as the finding said. No `Done when` line,
+  `status` or code changed.
+
+  **The owner's answers, 2026-10-24.** Each was the orchestrator's recommendation, and
+  nothing was overridden.
+  1. _Done when 1._ Gate 1's open decision. **Question:** Done when 1, read literally,
+     keeps the ticket open because the 20-run count on `main` was 0, taken on git 2.43.0,
+     which cannot fail; a 20-run sweep has about 3.4% power at the measured rate. What
+     closes it? **Options:** (a) accept the build's and gate 1's micro-reproductions
+     (14 of 8000 to 0 of 8000) in place of line 1's count, and the ticket closes; (b) land
+     `in-flight` with an `awaiting` reading of no ENOENT across the next 40 `ci.yml` runs
+     on `main`; (c) keep it open and run line 1's probe on `main` with git 2.55.0 until it
+     counts a failure (about 570 runs, about 7 h). **Chosen: (a).**
+  2. _Done when 3's "0 of 20 at the fixed head" clause_, graded `unproven (scope)` by gate
+     1 because the dispatch capped it at three whole-file runs. **Options:** accept the
+     builder's logged sweep (0 of 20, git 2.55.0 on `PATH`, 6 busy loops, 829 s),
+     corroborated by gate 1's 0 of 8000 and CI on runner git 2.55.0; or have gate 2 re-run
+     20 whole-file runs. **Chosen:** accept the builder's sweep.
+  3. _The builder's follow-up question._ Whether to file a ticket for `land()`'s `git
+clone --no-hardlinks` being exposed to the same lock. Gate 1 measured no exposure
+     (`gc.auto 0` in `land()` leaves the clone's commit with no `child_start` on git
+     2.55.0, and nothing copies the clone). **Options:** no ticket; file one anyway.
+     **Chosen:** no ticket. The probe scripts stay uncommitted in scratch. The "Not done"
+     bullet above about `land()` therefore stands as written, with gate 1's measurement
+     as its answer.
