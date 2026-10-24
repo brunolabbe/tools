@@ -133,7 +133,7 @@ rather than being locked out for a minute. Say so in the setting's comment.
   (not the new test), leaving `95c6403`'s versions in the tree. Ran
   `npx vitest run tools/downloader/api/test/zzz-dl51-repro-temp.test.ts`:
   `AssertionError: expected [ 201, 201, 201, 201, 201 ] to deeply equal
-[ 201, 201, 429, 429, 429 ]` — client A's five job creations against a slow
+  [ 201, 201, 429, 429, 429 ]` — client A's five job creations against a slow
   fixture download all succeeded, exactly the reported bug. Restored with
   `git stash apply` (not `pop`), verified `git status` matched the pre-stash
   tree, dropped the stash entry, deleted the throwaway spec. The permanent

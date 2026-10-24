@@ -213,7 +213,7 @@ New in the round's lines:
   - **A limit, not fixed:** a person whose id is literally `joint` cannot be
     filtered to, because `joint` means `personId === null`. Nothing in the
     directory refuses such a name (`grep -rni '"joint"' api/src contract/src
-books/src` finds only report strings and the new constant). Left as the brief
+    books/src` finds only report strings and the new constant). Left as the brief
     decided; it earns a ticket only if a household has such a member.
   - **Nav:** ten buttons for a member without Household, twelve for an admin. At
     360 px they wrap to three rows, with no horizontal overflow

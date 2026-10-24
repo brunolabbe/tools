@@ -193,7 +193,7 @@ is not a writer.
 5. **Narrow `directory.ts`'s header to what the schema checks.** Its header says
    every write is checked "again by the schema's triggers". The schema's
    `memberships.address` CHECK is `address = lower(trim(address)) AND address GLOB
-'?*@?*'` and the triggers check membership, not the character set, so reword the
+   '?*@?*'` and the triggers check membership, not the character set, so reword the
    claim to say so. No trigger and no migration are added. **The same claim is
    made at a second site**, the header of `api/test/directory.test.ts` ("Each
    rule is held twice … and by the schema, so that a writer which skips the
@@ -380,9 +380,9 @@ says so, and the wider set is lg-57.
   is also printed with an elision (`OR ... OR`) and is not runnable as printed."
   The query is now over `current_members` and printed whole. Run against a
   directory with one clean row and NUL, ESC and DEL rows: `rows in current_members:
-4, matched: 3`, and `clauses: 33`. Scoped above `## Log`, `grep -c "instr(address,
-char("` → `33`, `grep -c "OR \.\.\. OR"` → `0`, `grep -c "FROM memberships
-WHERE"` → `0`, `grep -c "FROM current_members WHERE"` → `1`.
+  4, matched: 3`, and `clauses: 33`. Scoped above `## Log`, `grep -c "instr(address,
+  char("` → `33`, `grep -c "OR \.\.\. OR"` → `0`, `grep -c "FROM memberships
+  WHERE"` → `0`, `grep -c "FROM current_members WHERE"` → `1`.
 - 2026-10-18 — Fixed at landing by owner choice: gate 1, F3 — "The header of
   `api/test/directory.test.ts` makes the same claim item 5 corrects." Item 5 now
   names it. `awk '/^## Log/{exit} {print}' <ticket> | grep -c "The same claim is"`
@@ -396,7 +396,7 @@ WHERE"` → `0`, `grep -c "FROM current_members WHERE"` → `1`.
   `type="email"`', where lg-34's gate wrote a colon." Scoped above `## Log`,
   `grep -c "builder's recommendation"` → `0` and `grep -c "filer's recommendation"`
   → `3`; `grep -c "hand-built request: the web input"` → `1` and `grep -c
-"hand-built request, since"` → `0`. The colon is lg-34's:
+  "hand-built request, since"` → `0`. The colon is lg-34's:
   `git show origin/lg-34-change-member-address:tools/ledger/docs/work/lg-34-change-a-members-address-in-one-step.md | grep -c "hand-built request: the web input"`
   → `1`.
 - 2026-10-18 — Fixed at landing by owner choice: gate 1, F5 — "Build item 2 leaves
@@ -405,16 +405,16 @@ WHERE"` → `0`, `grep -c "FROM current_members WHERE"` → `1`.
   set separately'." The owner chose that over widening to C1 and zero-width and
   over leaving it to the builder; the question, options and answer are under
   Decision, and the wider set is lg-57. Scoped above `## Log`, `grep -c "builder's
-to measure"` → `0`, `grep -c "does not widen it"` → `1`, `grep -c "^\*\*How wide
-the refusal is"` → `1`.
+  to measure"` → `0`, `grep -c "does not widen it"` → `1`, `grep -c "^\*\*How wide
+  the refusal is"` → `1`.
 - 2026-10-18 — Fixed at landing by owner choice: gate 1, F6 — "The reproduction says
   'the service boots with a NUL in an admin entry', but what ran was
   `loadApiConfig` on a JS string. A real process cannot carry NUL in the
   environment or in `argv` … Direction: say so in Build item 3." Item 3 now says
   it. `node -e 'require("node:child_process").spawnSync(process.execPath, ["-e", "1", "a\u0000b"])'`
   → `ERR_INVALID_ARG_VALUE The argument 'args[2]' must be a string without null
-bytes`, and with `env: { X: "a\u0000b" }` → `ERR_INVALID_ARG_VALUE The property
-'options.env['X']' must be a string without null bytes`; the same call with
+  bytes`, and with `env: { X: "a\u0000b" }` → `ERR_INVALID_ARG_VALUE The property
+  'options.env['X']' must be a string without null bytes`; the same call with
   `"a\u001bb\u007f"` in `env` is read back by the child as `"a\u001bb\u007f"`. The
   reproduction's own sentence is left as the filer wrote it.
 - 2026-10-18 — Recorded, not changed, by owner choice: gate 1, F8 — "The

@@ -123,7 +123,7 @@ Not verified here: `npm run check` and preflight as the pull request body report
   `tools/downloader/engine/test/parallel-ranges.test.ts`, "dl-98: the feeder's
   own limits", "bytes held ahead never exceed 4 x 4 MB, measured at the defaults
   with ffmpeg not reading", with `AssertionError: expected 'fallen-back' to be
-'parallel'`. The test's own comment names the mechanism: a 50 ms throughput
+  'parallel'`. The test's own comment names the mechanism: a 50 ms throughput
   window falls back when four connections are not 1.5 times one that the CPU
   already limits. Attempt 2 passed (the file took 110.9 s). Not reproduced on
   Linux. One failure in two Windows attempts at six workers; the three-worker
@@ -226,9 +226,9 @@ Not verified here: `npm run check` and preflight as the pull request body report
   2026-10-12 entry names: `tools/downloader/engine/test/parallel-ranges.test.ts`,
   "dl-98: the feeder's own limits" > "bytes held ahead never exceed 4 x 4 MB,
   measured at the defaults with ffmpeg not reading", `AssertionError: expected
-'fallen-back' to be 'parallel'`. Vitest's summary on that leg: `Test Files 1
-failed | 282 passed | 2 skipped (285)`, `Tests 1 failed | 5757 passed | 61
-skipped (5819)`. The leg is informational, so the run's conclusion reads
+  'fallen-back' to be 'parallel'`. Vitest's summary on that leg: `Test Files 1
+  failed | 282 passed | 2 skipped (285)`, `Tests 1 failed | 5757 passed | 61
+  skipped (5819)`. The leg is informational, so the run's conclusion reads
   `success`. Its `npm test` step ran 378 s (19:19:40 to 19:25:58). The ubuntu
   leg of the same run passed in 231 s (19:19:44 to 19:23:35), a third ubuntu
   sample at six workers beside 222 s and 229 s.
@@ -273,10 +273,10 @@ skipped (5819)`. The leg is informational, so the run's conclusion reads
   `gh run view --attempt <n> --json jobs`, with the vitest Duration in brackets:
   - ubuntu: 273 s (attempt 1, 21:14:19 to 21:18:52) [272.70 s]; 232 s (attempt
     2, 21:22:02 to 21:25:54) [231.91 s]. Both `Test Files 284 passed | 1 skipped
-(285)`, `Tests 5817 passed | 2 skipped (5819)`.
+    (285)`, `Tests 5817 passed | 2 skipped (5819)`.
   - Windows (informational): 363 s (attempt 1, 21:14:33 to 21:20:36) [361.53 s];
     340 s (attempt 2, 21:21:52 to 21:27:32) [338.13 s]. Both `Test Files 283
-passed | 2 skipped (285)`, `Tests 5758 passed | 61 skipped (5819)`.
+    passed | 2 skipped (285)`, `Tests 5758 passed | 61 skipped (5819)`.
   - No failure on any of the four legs. `parallel-ranges.test.ts`, the dl-98
     flake, passed on both Windows attempts (73.9 s and 72.4 s).
   - Samples per leg: two at four workers. The same `main` baseline as the
@@ -337,7 +337,7 @@ passed | 2 skipped (285)`, `Tests 5758 passed | 61 skipped (5819)`.
   and `scripts/test-gate.mjs` disagree on what counts as CI … `CI=false` and
   `CI=0` give root 4, resolved 4; `CI=""` gives null". The config's test is now
   `scripts/test-gate.mjs`'s own: `value !== undefined && value !== "" && value
-!== "false" && value !== "0"`. The gate's probe (`resolve-driver.mjs` with
+  !== "false" && value !== "0"`. The gate's probe (`resolve-driver.mjs` with
   `resolve-child.mts`, vitest 4.1.10's `createVitest`, 12 cores here), on this
   tree. Before the fix: `CI` unset root null, resolved 11; `CI=1` and `CI=true`
   root 4; `CI=""` root null; `CI=false` root 4; `CI=0` root 4. After: `CI`

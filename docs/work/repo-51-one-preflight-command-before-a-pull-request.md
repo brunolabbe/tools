@@ -187,7 +187,7 @@ Gate 1's seven findings, re-measured through the real CLI at this sha:
   against real git 2.43.0: a bad ref and a real conflict both exit 1, and only
   stdout being non-empty tells them apart — the Log above already had this
   half right) and the merge-commit title bypass (`--title "Merge branch 'main'
-into work"` printed `ok    "undefined" is hidden …`, reproduced verbatim).
+  into work"` printed `ok    "undefined" is hidden …`, reproduced verbatim).
   The orchestrator then settled both open decisions and specified all six
   fixes; none were left to this builder's judgement.
 
@@ -293,7 +293,7 @@ into work"` printed `ok    "undefined" is hidden …`, reproduced verbatim).
   reviewer wrote against `874a16d` needed re-resolving against `93f6965`.
   Fourteen of gate 2's twenty-two citations had moved; all fourteen were
   repointed to where `node scripts/citations.mjs … --section Review
---require-anchors --require-distinct-anchors` found the same anchor text,
+  --require-anchors --require-distinct-anchors` found the same anchor text,
   and one (`scripts/preflight.mjs`'s `if (type === undefined)` guard, cited at
   its old line 432) is rewritten as prose naming `874a16d`, since round 3's fix
   changed that exact line and the literal string no longer occurs anywhere in
@@ -309,7 +309,7 @@ into work"` printed `ok    "undefined" is hidden …`, reproduced verbatim).
   `npx vitest run scripts/test/preflight.test.ts` still 45 passed after the
   removal (two assertions dropped, no test dropped). Citations check:
   `node scripts/citations.mjs docs/work/repo-51-one-preflight-command-before-a-pull-request.md
---section Review --require-anchors --require-distinct-anchors` — 21
+  --section Review --require-anchors --require-distinct-anchors` — 21
   verified, 0 moved, 0 unanchored, exit 0.
 
   Disclosure: the `## Review` section committed in this round is the
@@ -319,8 +319,8 @@ into work"` printed `ok    "undefined" is hidden …`, reproduced verbatim).
   Nothing else — no wording, no finding, no proof cell.
 
   Gates re-run after both repairs: `npm run check` exit 0; `npx vitest run
---project repo` — 391 passed; `node scripts/citations-gate.mjs --against
-origin/orchestrate-skill-sweep` — clean over 104 records, 7 grandfathered,
+  --project repo` — 391 passed; `node scripts/citations-gate.mjs --against
+  origin/orchestrate-skill-sweep` — clean over 104 records, 7 grandfathered,
   0 raised, exit 0. Diff for this entry: `scripts/test/preflight.test.ts` (the
   two redundant assertions) and this ticket file only — `scripts/preflight.mjs`
   untouched.
@@ -336,5 +336,5 @@ origin/orchestrate-skill-sweep` — clean over 104 records, 7 grandfathered,
   one paragraph beside each, moved these same three citations again,
   `scripts/preflight.mjs:1440`, `:1361` and `:745` to `:1448`, `:1369` and
   `:753` — coordinate only, anchor text unchanged. `node
-scripts/citations-gate.mjs --against origin/main` named all three as
+  scripts/citations-gate.mjs --against origin/main` named all three as
   "moved" at the new line, which is what was repointed.

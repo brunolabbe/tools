@@ -45,7 +45,7 @@ Add `scripts/review-record.mjs <ticket> <section-file> [--gate <n>]` that:
    `## Review`;
 3. inserts the text unchanged, runs `npx oxfmt` on the ticket, then runs
    `citations.mjs <ticket> --section Review --require-anchors
---require-distinct-anchors` and, on a non-zero exit, restores the ticket
+   --require-distinct-anchors` and, on a non-zero exit, restores the ticket
    from `git show HEAD:<ticket>` and prints the checker's output;
 4. on success, diffs the inserted block against the section file ignoring
    table padding and rule width, and prints the diff — empty means verbatim
@@ -175,8 +175,8 @@ procedure.
   per that file's own documented convention for a plain `.mjs` under test.
 
   Gates: `npm run check` (exit 0); `npx vitest run
-scripts/test/review-record.test.ts` (20/20 passed); `npm test -- --project
-repo` (366/366 passed); full `npm test`, run because
+  scripts/test/review-record.test.ts` (20/20 passed); `npm test -- --project
+  repo` (366/366 passed); full `npm test`, run because
   `scripts/test/tsconfig.json` moved (176 files, 3172 tests, exit 0).
 
 - 2026-09-20 — Round 2, from a ticket-reviewer gate (Opus) on `ebd05d2` and the
@@ -218,8 +218,8 @@ repo` (366/366 passed); full `npm test`, run because
   `unproven` grade on that line was correct at the time it was given.
 
   Gates: `npm run check` (exit 0); `npx vitest run
-scripts/test/review-record.test.ts` (25/25 passed); `npx vitest run
---project repo` (371/371 passed, 8 files).
+  scripts/test/review-record.test.ts` (25/25 passed); `npx vitest run
+  --project repo` (371/371 passed, 8 files).
 
 - 2026-09-20 — Round 3, folding two `low` findings from gate 2 (Opus,
   `ebd05d2...7db4d52`) per the orchestrator's instruction, ahead of splicing
@@ -235,7 +235,7 @@ scripts/test/review-record.test.ts` (25/25 passed); `npx vitest run
   fix reverted.
 
   Gates: `npm run check` (exit 0); `npx vitest run
-scripts/test/review-record.test.ts` (27/27 passed).
+  scripts/test/review-record.test.ts` (27/27 passed).
 
 - 2026-09-20 — Spliced gate 1's `## Review` section with `scripts/review-record.mjs` itself (no `--gate`). Its
   first run at `7db4d52` failed exit 2, 4 moved: the reviewer's coordinates
@@ -265,7 +265,7 @@ scripts/test/review-record.test.ts` (27/27 passed).
   branch's; not actioned here.
 
   Gates: `npm run check` (exit 0); `npx vitest run
-scripts/test/review-record.test.ts` (27/27 passed).
+  scripts/test/review-record.test.ts` (27/27 passed).
 
 - 2026-09-20 — Spliced gate 3's `### Gate 3` subsection with
   `scripts/review-record.mjs --gate 3`, after gate 2 was already committed:
@@ -278,12 +278,12 @@ scripts/test/review-record.test.ts` (27/27 passed).
   directory cited a single line, `scripts/review-record.mjs@2ffb72a:431`, when I
   carried it across round 3's line drift — the stated reason then was that
   the three-line call now fit on one line unwrapped, and it does not; `cwd:
-ticketRepoRoot` sits on 432 and the call closes on 433, and the row is
+  ticketRepoRoot` sits on 432 and the call closes on 433, and the row is
   about that `cwd`. Widened the citation to `431-433`, a coordinate-only
   change to an already-committed row — the claim itself was never wrong and
   the checker was already green on the narrower citation, so this corrects
   precision rather than a defect. Re-checked: `citations.mjs --section
-Review --require-anchors --require-distinct-anchors` on the ticket, exit
+  Review --require-anchors --require-distinct-anchors` on the ticket, exit
   0, 25/25 verified.
 
   Done when 4 is now met in full: the reviewer independently re-checked

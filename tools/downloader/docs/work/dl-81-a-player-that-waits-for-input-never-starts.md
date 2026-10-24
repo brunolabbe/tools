@@ -311,7 +311,7 @@ Lines 2–4 are unchanged from gate 1, and each still dies under its mutation: E
   and none is listened for in the fixtures. Pages that wait for `keydown` or a
   touch are not reached, on purpose: Enter or Space can submit a form or follow a
   link. The box click is the largest eligible `iframe, [class*="player"],
-[id*="player"]` by `CHOOSE_VIDEO_INDEX_FN`, centred in view first, and it
+  [id*="player"]` by `CHOOSE_VIDEO_INDEX_FN`, centred in view first, and it
   refuses (a) a non-iframe box covering more than 85% of the viewport (a layout
   wrapper; `player-box-wrapper.html`), and (b) a point whose topmost element is,
   or sits inside, a link, form control or label (`player-box-link-centre.html`;
@@ -354,7 +354,7 @@ Lines 2–4 are unchanged from gate 1, and each still dies under its mutation: E
   `waitForQuiet` or its `revisit` hook, so nothing repeats while it waits.
   Measured by the dl-80 tests that probe a page with no media:
   `npx vitest run tools/downloader/resolvers` gave `Test Files 20 passed (20),
-Tests 880 passed (880)`, among them "the empty floor is overridable to allow
+  Tests 880 passed (880)`, among them "the empty floor is overridable to allow
   tests to run quickly" (NO_MEDIA_FOUND in under 3 s) and "a budget shorter than
   the floor plus page load ends TIMEOUT". `resolvers/browser.ts` is untouched.
 
@@ -440,7 +440,7 @@ Tests 880 passed (880)`, among them "the empty floor is overridable to allow
     and head both; at `a280941b` it returned the ad's master.
   - _Med, the nudge._ The 400 px `scrollBy` now follows the centring whenever
     the centring moved nothing (`scrollX`/`scrollY` compared; `behavior:
-'instant'` so a smooth-scrolling page is not misread). The gate's
+    'instant'` so a smooth-scrolling page is not misread). The gate's
     `nudge.html` returns the stream at base and head;
     `player-header-nudge.html` is the test. The frame-sized embed still gets no
     nudge, because its shell is 1500 px down and the centring moves.
@@ -520,7 +520,7 @@ Tests 880 passed (880)`, among them "the empty floor is overridable to allow
   **Fixes, by finding.**
   - _CodeQL, two high "DOM text reinterpreted as HTML" alerts_ in this branch's
     fixtures (`hover-previews-keydown-player.html:43`, `v.src =
-v.getAttribute("data-preview")`; `player-poster-related-grid.html:58`,
+    v.getAttribute("data-preview")`; `player-poster-related-grid.html:58`,
     `location.href = card.getAttribute("data-to")`), read from the CodeQL check
     page of `092fc118`. Both URLs are now built from the card's index in the
     script and the attributes are gone, so no adr/005 excuse is needed.

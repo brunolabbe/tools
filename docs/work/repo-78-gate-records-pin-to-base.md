@@ -144,8 +144,8 @@ F1 to F3 are judged against the owner's answers of 2026-09-27, each option (a), 
   hit — a line moved by an edit elsewhere in the same file — at zero
   additional cost, since pinning is already fully built (repo-35) and tested.
   So: pinned it, `CLAUDE.md@a0841701f3f764f74ce50f21aa8cd8f849942af4:259 "##
-Handing back"`, verified `ok` by `node scripts/citations.mjs
-.claude/skills/orchestrate-tickets/SKILL.md --require-anchors`.
+  Handing back"`, verified `ok` by `node scripts/citations.mjs
+  .claude/skills/orchestrate-tickets/SKILL.md --require-anchors`.
 
   **What the Build's "accept or enforce that format" turned out to mean:**
   "accept" was already true — `citations.mjs` has read `file@<rev>:line`
@@ -185,14 +185,14 @@ Handing back"`, verified `ok` by `node scripts/citations.mjs
 
   Verified: `npx vitest run scripts/test/citations.test.ts` 109/109 (108
   before this branch, +1); `node scripts/citations.mjs
-.claude/skills/orchestrate-tickets/reference/records.md
---require-claude-pins` shows the same 1 moved / 6 unresolvable as
+  .claude/skills/orchestrate-tickets/reference/records.md
+  --require-claude-pins` shows the same 1 moved / 6 unresolvable as
   `origin/main`'s copy (the page's own deliberately-broken illustrations,
   unchanged) plus the one new `verified` citation this ticket added, and no
   new `unpinned-volatile`; `node scripts/citations-gate.mjs --against
-origin/main` — `127 enforced, 0 failing; 6 grandfathered, holding 1
-unresolvable, 19 unanchored. 6 entr(y/ies) compared against origin/main: 0
-raised.`, exit 0; `npx vitest run --project repo` 526/526; `npm run check`
+  origin/main` — `127 enforced, 0 failing; 6 grandfathered, holding 1
+  unresolvable, 19 unanchored. 6 entr(y/ies) compared against origin/main: 0
+  raised.`, exit 0; `npx vitest run --project repo` 526/526; `npm run check`
   exit 0; `node scripts/preflight.mjs --base origin/main` exit 0, including a
   clean `mergeTree` probe against `#311 repo-81-rate-tickets-and-rule-gaps`,
   the one open sibling PR at the time.
@@ -222,8 +222,8 @@ raised.`, exit 0; `npx vitest run --project repo` 526/526; `npm run check`
      Reproduced the gap the finding names: one comment line inserted above
      the tests repo-60 and repo-63's own merged records cite in
      `scripts/test/citations.test.ts`, reverted after — `node
-scripts/citations-gate.mjs --against origin/main` exit 1, `127 enforced,
-2 failing` (repo-60 and repo-63 both newly `moved`; reverted, back to
+     scripts/citations-gate.mjs --against origin/main` exit 1, `127 enforced,
+     2 failing` (repo-60 and repo-63 both newly `moved`; reverted, back to
      `127 enforced, 0 failing`).
   2. **F2 (`.claude/` content the branch introduces).** Question: how to keep
      a gate from writing a record CI then refuses. Options: (a) name it by
@@ -239,7 +239,7 @@ scripts/citations-gate.mjs --against origin/main` exit 1, `127 enforced,
      not a claim that anything checks the heading. Reproduced: a one-bullet
      scratch record citing this branch's own new gap-6 line in `records.md`
      by bare coordinate, `node scripts/citations.mjs <file>
---require-claude-pins` — `1 unpinned-volatile`, exit 64.
+     --require-claude-pins` — `1 unpinned-volatile`, exit 64.
   3. **F3 (enforcement).** Question: where the "left for a ticket of its own"
      sentence in `records.md` should point. Options: (a) repo-80's `--land`,
      since landing is the one place that already knows the base; (b) file a
@@ -251,7 +251,7 @@ scripts/citations-gate.mjs --against origin/main` exit 1, `127 enforced,
      "a ticket of its own". Reproduced the gate's own measurement: a record
      with two anchored, unpinned citations of pre-existing `scripts/` lines
      passes `citations.mjs --section Review --require-anchors
---require-distinct-anchors --require-claude-pins` at exit 0 — nothing
+     --require-distinct-anchors --require-claude-pins` at exit 0 — nothing
      mechanical refuses the old convention today.
 
   **F4** — the test proves repo-35's own pin capability, not new code; said
@@ -261,7 +261,7 @@ scripts/citations-gate.mjs --against origin/main` exit 1, `127 enforced,
   **F5** — fixed a false claim: `--displaced-since` is already threaded
   through `citations-gate.mjs`'s whole corpus sweep, not a one-record tool
   run by hand — reproduced, `node scripts/citations-gate.mjs
---displaced-since a0841701` enforces 208 records in one run. What is true
+  --displaced-since a0841701` enforces 208 records in one run. What is true
   is narrower and was the actual point: it only reports a citation that is
   both unanchored _and_ unpinned, and every citation `citations-gate.mjs`
   enforces already carries an anchor, so it has nothing left to find there
@@ -277,8 +277,8 @@ scripts/citations-gate.mjs --against origin/main` exit 1, `127 enforced,
   **F7** — fixed: the `scripts/preflight.mjs:410` citation in the four-
   incidents list had no anchor; gave it one, `"if (hasGateRecord(content))"`,
   verified `ok` by `node scripts/citations.mjs
-.claude/skills/orchestrate-tickets/reference/records.md
---require-claude-pins`.
+  .claude/skills/orchestrate-tickets/reference/records.md
+  --require-claude-pins`.
 
   **F8** — fixed the two disagreements named: `roles/reviewer.md` now pins to
   "the base — or to any other `main` commit that holds it", matching
@@ -292,17 +292,17 @@ scripts/citations-gate.mjs --against origin/main` exit 1, `127 enforced,
   **F9** — the title this branch will use is not "pin every coordinate to
   the base" (the ticket's own title, which the gate is right overstates a
   branch that deliberately leaves introduced content unpinned): `docs(repo):
-pin gate-record citations of pre-existing content to the base (repo-78)`,
+  pin gate-record citations of pre-existing content to the base (repo-78)`,
   checked with `node scripts/commit-message.mjs --text "<that title>"`,
   exit 0.
 
   Verified after the round: `npx vitest run scripts/test/citations.test.ts`
   109/109; `npm run check` exit 0; `npx vitest run --project repo` 526/526;
   `node scripts/citations-gate.mjs --against origin/main` exit 0, `127
-enforced, 0 failing; 6 grandfathered, holding 1 unresolvable, 19
-unanchored. 6 entr(y/ies) compared against origin/main: 0 raised.`; `node
-scripts/preflight.mjs --base origin/main --title "docs(repo): pin
-gate-record citations of pre-existing content to the base (repo-78)"`.
+  enforced, 0 failing; 6 grandfathered, holding 1 unresolvable, 19
+  unanchored. 6 entr(y/ies) compared against origin/main: 0 raised.`; `node
+  scripts/preflight.mjs --base origin/main --title "docs(repo): pin
+  gate-record citations of pre-existing content to the base (repo-78)"`.
 
 2026-09-27 — Gate 1's record (FAIL, 3 med + 6 low, F1–F9 above) landed via
 `review-record.mjs`. The tool's own disclosure note against the section file

@@ -367,14 +367,14 @@ New in the round's lines:
     `...scopes a path that names data to that path...`,
     `checkBuild hands testPlan the repo it is checking...`, and two against this
     checkout's real manifests: `testPlan on the real downloader: an api diff plans
-api only, a contract diff plans all five` and `testPlan on the real tools: a
-leaf of planner and of ledger narrows the same way`.
+    api only, a contract diff plans all five` and `testPlan on the real tools: a
+    leaf of planner and of ledger narrows the same way`.
     `npx vitest run scripts/test/preflight.test.ts`: 86 of 86 pass (74 before).
   - **Each test watched failing.** Three one-line mutations, each reverted:
     `if (!graph.has(dir)) return [];` -> `continue` fails the fail-open test (1
     failed, 11 passed of the 12); `text = withoutComments(text)` -> `text = text`
     fails the comment test and both real-tree tests (3 failed); forcing `named =
-false` (every path edge whole-package) fails the data-scope test and the real
+    false` (every path edge whole-package) fails the data-scope test and the real
     downloader test (2 failed).
   - **Done when 3, on one real api-only change.** `e7db59c1` (dl-84), whose
     non-markdown paths are `api/src/request-log.ts`, `api/src/server.ts` and
@@ -423,25 +423,25 @@ false` (every path edge whole-package) fails the data-scope test and the real
     byte-identical before and after (`diff` printed nothing, 15 lines each). A
     block comment whose body lines carry no leading star is now kept, which can
     only add an edge. Test: `packageGraph keeps a reader whose line holds a //
-inside a string, or follows a template line starting with a slash-star`, plus
+    inside a string, or follows a template line starting with a slash-star`, plus
     `packageGraph still strips a whole-line // comment and a JSDoc block, but
-keeps an unstarred block`. The docblock now says what the code does.
+    keeps an unstarred block`. The docblock now says what the code does.
   - Low, a scope built from literal text longer than any file — _fixed_.
     `narrowedFilters` matched a changed path against a scope as `p === read ||
-p.startsWith(read + "/")`; it is now `p.startsWith(read)`, which errs wide, so
+    p.startsWith(read + "/")`; it is now `p.startsWith(read)`, which errs wide, so
     `hls-${n}.m3u8` (scope `…/manifests/hls-`) fires on `…/hls-master.m3u8`. Test:
     `packageGraph scopes a name built at run time by its literal head, and a
-changed file under that head fires the reader`.
+    changed file under that head fires the reader`.
   - Low, an extensionless code import read as data — _fixed_. A relative or
     segment path that names no code extension is now whole-package when
     `<path>.ts` (or `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`) or
     `<path>/index.<ext>` exists on disk (`namesCode`). Test: `packageGraph reads
-an extensionless specifier that resolves to a file as code, so the edge is the
-whole package`.
+    an extensionless specifier that resolves to a file as code, so the edge is the
+    whole package`.
   - Low, mutation survivors in `narrowedFilters` — _fixed_ by one test,
     `testPlan widens for a file at the tool's root whose name begins with a
-package's, and ignores a package that owns no tests`. Deleting `if (slash < 0)
-return [];` now fails it (1 failed, 16 passed of the 17 repo-102 tests), and so
+    package's, and ignores a package that owns no tests`. Deleting `if (slash < 0)
+    return [];` now fails it (1 failed, 16 passed of the 17 repo-102 tests), and so
     does ignoring `hasTests` (1 failed, 16 passed). The fixture gained `docsite`,
     a workspace with no `test/` directory that depends on `engine`.
   - Low, a computed specifier or a `..`-segment join is read by no scan —
@@ -466,7 +466,7 @@ return [];` now fails it (1 failed, 16 passed of the 17 repo-102 tests), and so
     reproduction: `export const YTDLP_VERSION = "2020.01.01";` written to
     `tools/downloader/web/src/pin-probe.ts` plans `tools/downloader/web/test/`
     only, while `npx vitest run --project downloader
-tools/downloader/api/test/ytdlp-in-the-image.test.ts` fails (1 failed, 11
+    tools/downloader/api/test/ytdlp-in-the-image.test.ts` fails (1 failed, 11
     passed of 12). I did not re-run it. The trigger is hypothetical and a change
     to engine or resolvers still runs api. Open decision, answered by the owner on
     2026-10-12 and relayed by the coordinator. Question: what to do about this
@@ -492,8 +492,8 @@ tools/downloader/api/test/ytdlp-in-the-image.test.ts` fails (1 failed, 11
     `scripts/preflight.mjs` and the file then restored with `git checkout`:
     `npx vitest run scripts/test/preflight.test.ts -t repo-102` prints
     `× packageGraph reads an extensionless specifier that resolves to a file as
-code, so the edge is the whole package (repo-102)` and `Tests 1 failed | 16
-passed | 74 skipped (91)`. Unmutated: `Tests 91 passed (91)`. One assertion
+    code, so the edge is the whole package (repo-102)` and `Tests 1 failed | 16
+    passed | 74 skipped (91)`. Unmutated: `Tests 91 passed (91)`. One assertion
     moved with it: an engine `mp4.ts` change now plans the whole tool, because
     `contract` reads `engine` in the fixture and every package depends on
     `contract`; the test says so.

@@ -125,7 +125,7 @@ record, 2 dropped before write-up (reviewer's own count, not re-derived here):
   to `tools/downloader/api/src/server.ts@95c6403:506` "trustProxy: config.trustProxy"
   (pre-existing staleness on `main`, not introduced by this branch — flagged
   by the reviewer regardless because the file was open). Repointed; `node
-scripts/citations.mjs` on this record now reports 0 moved.
+  scripts/citations.mjs` on this record now reports 0 moved.
 - **low** · `tools/planner/docs/01-ARCHITECTURE.md@8849c14:228` "CIDR the above" —
   repaired. The Configuration table omitted `TRUST_PROXY` among 13 of the
   tool's 22 env vars, not a rule violation on its own (several others were
@@ -135,7 +135,7 @@ scripts/citations.mjs` on this record now reports 0 moved.
 - **low, declined** · `02-DEPLOYMENT.md@1835657:283` "Rate limits silently" —
   undersells the malformed-value case: reviewer measured that a malformed
   `TRUST_PROXY` actually refuses the boot (`TypeError: invalid IP address:
-<x>`) rather than failing silently, only a valid-but-wrong value is silent.
+  <x>`) rather than failing silently, only a valid-but-wrong value is silent.
   Pre-existing, out of this ticket's diff; reviewer offered it as optional
   ("decline freely") and the builder accepted the decline.
 - **low, escalated then repaired** ·

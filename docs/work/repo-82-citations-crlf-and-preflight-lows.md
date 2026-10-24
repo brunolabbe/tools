@@ -66,7 +66,7 @@ where the sentinel list is actually `targets`.
    each read a CRLF-terminated record identically to its LF form.
 2. A CRLF copy of a real merged record, with a citation forced to disagree
    with its anchor, is reported `moved` by the real CLI under `--section
-Review` rather than failing to find the section at all.
+   Review` rather than failing to find the section at all.
 3. `NPM_ALIASES` covers all four of `npm ci`'s own aliases and none of the
    four is ever spawned by `deriveExtraCiCommands`.
 4. The fold-loop comment names `targets`, the actual sentinel list, not
@@ -147,18 +147,18 @@ This round:
   `` `src/thing.ts:1 "export const one = 1;"` `` under `## Review`, then
   inserted a line above the cited one so the anchor moved to line 2.
   `citations-gate.mjs`'s `checkRecord` against the **LF** record: `{ "counts":
-{ "moved": 1 }, "failing": 1, "passed": false }`. The same record converted
+  { "moved": 1 }, "failing": 1, "passed": false }`. The same record converted
   to CRLF, checked with `origin/main`'s `citations.mjs`/`citations-gate.mjs`
   (`efffb35`): `{ "skipped": true }` — the record silently drops out of the
   gate entirely, which is what "clean over 0 record(s)" means at the
   corpus level. The same CRLF record, checked with this branch's
   `citations.mjs`/`citations-gate.mjs`: `{ "counts": { "moved": 1 },
-"failing": 1, "passed": false }` — correctly caught.
+  "failing": 1, "passed": false }` — correctly caught.
 
   **Reproduction 2, `npm ci --help`, re-run**: `npm ci --help` prints
   `aliases: clean-install, ic, install-clean, isntall-clean`. Before the fix,
   `deriveExtraCiCommands` over a `ci.yml` fixture running `npm ic`, `npm
-install-clean` and `npm isntall-clean` returned all three as commands to
+  install-clean` and `npm isntall-clean` returned all three as commands to
   spawn (none matched any guard); after, `[]`.
 
   **How many places `citations.mjs` splits or matches lines, CRLF-blind**:
@@ -276,12 +276,12 @@ install-clean` and `npm isntall-clean` returned all three as commands to
   the alias-table paragraph and `@type {Record<string, "ci">}`, and the
   original `COVERED`-describing docblock moved to sit directly above
   `const COVERED = [`, with its own unchanged `@type
-{{guard: (raw: string) => boolean, exact: string}[]}`. No test: a docblock
+  {{guard: (raw: string) => boolean, exact: string}[]}`. No test: a docblock
   has none to fail, per `common.md`'s "when nothing can fail... say so."
 
   **Repoints, this round.** The npm-guard addition and the docblock split
   each moved code below them in `scripts/preflight.mjs`; `node
-scripts/citations-gate.mjs --against origin/main` was run after each
+  scripts/citations-gate.mjs --against origin/main` was run after each
   source edit and named every citation it displaced. Repointed, coordinate
   only, anchor text unchanged, range width kept: `repo-51` (3, twice — once
   per edit), `repo-64` (1, twice), `repo-67` (1, twice), `repo-75` (1,
@@ -289,7 +289,7 @@ scripts/citations-gate.mjs --against origin/main` was run after each
   line, which moved _up_ on the second edit since the split leaves less text
   above it than the misplaced docblock had). Each is named, old line to new,
   in a dated 2026-09-28 Log line of the ticket it repoints. `node
-scripts/citations-gate.mjs --against origin/main`: 0 failing after every
+  scripts/citations-gate.mjs --against origin/main`: 0 failing after every
   repoint, each time re-verified before moving to the next edit.
 
   **Commands, this round**: `npx vitest run scripts/test/citations.test.ts`
@@ -298,16 +298,16 @@ scripts/citations-gate.mjs --against origin/main`: 0 failing after every
   new); `npx vitest run scripts/test/preflight.test.ts` 82 of 82 (1 new);
   `npx vitest run --project repo` 568 of 568; `npm run check` exit 0;
   `npx vitest run packages/core/test/spawn-safety.test.ts` 5 of 5; `node
-scripts/citations-gate.mjs --against origin/main` exit 0, 130 enforced, 0
+  scripts/citations-gate.mjs --against origin/main` exit 0, 130 enforced, 0
   failing, 6 grandfathered, 0 raised (read directly, never through a pipe);
   `node scripts/preflight.mjs --base origin/main --title "fix(repo): read
-CRLF files in citations.mjs and cover every npm ci alias in preflight
-(repo-82)"` exit 0 (after `git fetch origin`, needed for `mergeTree`'s two
+  CRLF files in citations.mjs and cover every npm ci alias in preflight
+  (repo-82)"` exit 0 (after `git fetch origin`, needed for `mergeTree`'s two
   open release-please heads).
 
 - 2026-09-29 — **Main went red on this ticket's merge (`2ffb72a`, #316)**, in
   both unit legs: `the CLI finds a CRLF ## Review heading and reports a moved
-citation in it` got exit 3 where it expects 2. The gate's med ("how this
+  citation in it` got exit 3 where it expects 2. The gate's med ("how this
   test is coupled to a live record") was fixed only for the hard-coded line.
   The test still fed the CLI all 25 of repo-79's citations, and one of them
   is pinned, `.claude/skills/orchestrate-tickets/SKILL.md@a0841701:224`. CI's

@@ -376,7 +376,7 @@ No live call site reaches any of them: the routes parse the body with `addMember
   owner can overrule at the gate**: directory migration 3 (the next free number;
   lg-23 is not on `main`) adds `households_id_not_null`, a `BEFORE INSERT` trigger
   on `households` with `WHEN NEW.id IS NULL` and `RAISE(ABORT, 'a household has
-an id')`. The declared column is unchanged: `PRAGMA table_info(households)` still
+  an id')`. The declared column is unchanged: `PRAGMA table_info(households)` still
   reads `notnull: 0` for `id`, and the refusal is the trigger's, not the column's.
   No contract, error code or route changes; the message is raw SQLite, as
   migration 2's are, since no route can write a NULL id.
@@ -402,7 +402,7 @@ an id')`. The declared column is unchanged: `PRAGMA table_info(households)` stil
   - **Difficulty not re-rated** at build time, as ratings are the owner's;
     superseded in round 1, where the owner re-rated it.
   - **Tests**, at the end of `api/test/directory.test.ts`, `describe("a household
-id is never NULL")`: a plain `INSERT` with `NULL`, an `INSERT` that omits `id`,
+    id is never NULL")`: a plain `INSERT` with `NULL`, an `INSERT` that omits `id`,
     `INSERT OR REPLACE` and `REPLACE INTO` with `NULL` are each refused and the
     count is unchanged (Done when 1); a file directory at `migrateDirectory(db, 2)`
     with one household and one membership, reopened through `Directory.open`,
@@ -412,7 +412,7 @@ id is never NULL")`: a plain `INSERT` with `NULL`, an `INSERT` that omits `id`,
     asserted `user_version` 2 after a full migration; it now asserts 3.
   - **Red first**: with the trigger's `WHEN` mutated to `WHEN 0`,
     `npx vitest run tools/ledger/api/test/directory.test.ts` gave `2 failed | 16
-passed (18)`, both new tests on `expected [Function] to throw an error` for the
+    passed (18)`, both new tests on `expected [Function] to throw an error` for the
     `NULL` insert; restored from `555e86f5`, `18 passed (18)`.
   - `npm test -- --project ledger`: `60 passed (60)` files, `1047 passed (1047)`
     tests, which includes the append-only scan "no source file that writes the
@@ -426,15 +426,15 @@ passed (18)`, both new tests on `expected [Function] to throw an error` for the
   - **F1 and F2, "Keep B, re-rate standard"**, chosen from "Keep B, re-rate
     standard / Keep B, leave hard / Switch to A7". F1 reproduced before changing
     anything: gate 1's `optiona.mts` at this branch printed `A1_plain_rebuild:
-REFUSED SQLITE_CONSTRAINT_FOREIGNKEY`, `A3_defer_then_plain_rebuild: REFUSED
-SQLITE_CONSTRAINT_FOREIGNKEY`, `A4_legacy_alter_table: REFUSED
-SQLITE_CONSTRAINT_FOREIGNKEY`, and for `A7_defer_copy_aside`: `migration
-applied`, `user_version 3`, `id:notnull=1`, `households rows identical: true
-memberships identical: true`, `fk violations: 0 integrity: ok`, and three NULL
+    REFUSED SQLITE_CONSTRAINT_FOREIGNKEY`, `A3_defer_then_plain_rebuild: REFUSED
+    SQLITE_CONSTRAINT_FOREIGNKEY`, `A4_legacy_alter_table: REFUSED
+    SQLITE_CONSTRAINT_FOREIGNKEY`, and for `A7_defer_copy_aside`: `migration
+    applied`, `user_version 3`, `id:notnull=1`, `households rows identical: true
+    memberships identical: true`, `fk violations: 0 integrity: ok`, and three NULL
     inserts refused with `NOT NULL constraint failed: households.id`. B stays
     for two measured reasons: `optiona2.mts` ran A7 over a v2 directory already
     holding a NULL-id household and got `REFUSED SQLITE_CONSTRAINT_NOTNULL … |
-user_version 2`, so `Directory.open` would throw on such a file until it was
+    user_version 2`, so `Directory.open` would throw on such a file until it was
     mended by hand, where B opens it (`upgrade.mts`: `Directory.open: ok`,
     `user_version 3 records identical NULL-id rows remaining: 2`); and B rewrites
     no table on a live append-only file. The cost of B: the column stays declared
@@ -447,31 +447,31 @@ user_version 2`, so `Directory.open` would throw on such a file until it was
     `BAD_REQUEST` sentence (the ledger's `refuse`, which throws the core code)
     before `.trim()`. Reproduced first, `node --import tsx f3.mts` (build
     scratch): `null id: TypeError code=none Cannot read properties of null
-(reading 'trim')`, the same for `undefined` and `7`; after: `null id: AppError
-code=BAD_REQUEST … null is not.`. Test, at the end of `directory.test.ts`:
+    (reading 'trim')`, the same for `undefined` and `7`; after: `null id: AppError
+    code=BAD_REQUEST … null is not.`. Test, at the end of `directory.test.ts`:
     "the class refuses an id or a name that is not a string as BAD_REQUEST,
     before the schema" (renamed from "an id" when the name case below joined
     it), for `null`, `undefined` and `7`. Red with the guard line deleted:
     `1 failed | 18 passed (19)`, `expected TypeError: Cannot read properties of
-null… to be an instance of AppError`; restored from `f821a478`, `19 passed
-(19)`.
+    null… to be an instance of AppError`; restored from `f821a478`, `19 passed
+    (19)`.
   - **F4, folded in.** Migration 3's header says the refusal holds from that
     migration on: a trigger does not read the rows already there, so a household
     stored with no id before it stays (`upgrade.mts` above). Comment only, so no
     test pins it.
 - 2026-10-15 — The null name, fixed here. Round 1 left `addHousehold({ id:
-"home", name: null })` reaching `.trim()` as a `TypeError` (`f3.mts`: `null
-name: TypeError code=none Cannot read properties of null (reading 'trim')`) and
+  "home", name: null })` reaching `.trim()` as a `TypeError` (`f3.mts`: `null
+  name: TypeError code=none Cannot read properties of null (reading 'trim')`) and
   put it to the owner as an open decision. The owner chose "Fix in this branch",
   from "Fix in this branch / Leave recorded / File a ticket", on 2026-10-15.
   `addHousehold` now refuses a name that is not a string with the existing
   `BAD_REQUEST` sentence, "A household's name is 1 to 80 characters.", before
   `.trim()`; `f3.mts` after: `null name: AppError code=BAD_REQUEST A household's
-name is 1 to 80 characters.`. One more case at the end of the same test. Red
+  name is 1 to 80 characters.`. One more case at the end of the same test. Red
   with the name guard deleted, `npx vitest run
-tools/ledger/api/test/directory.test.ts`: `1 failed | 18 passed (19)`, `null
-name: expected TypeError: Cannot read properties of null… to be an instance of
-AppError`; restored from `ce65a6ab`, `19 passed (19)`. Nothing in this ticket's
+  tools/ledger/api/test/directory.test.ts`: `1 failed | 18 passed (19)`, `null
+  name: expected TypeError: Cannot read properties of null… to be an instance of
+  AppError`; restored from `ce65a6ab`, `19 passed (19)`. Nothing in this ticket's
   part (c) is left as a `TypeError` now.
 - 2026-10-15 — Fixed at landing by owner choice: gate 2, N1 — "the id guard's own
   message can throw. `notAnId(String(household.id as unknown))` stringifies the
@@ -481,23 +481,23 @@ AppError`; restored from `ce65a6ab`, `19 passed (19)`. Nothing in this ticket's
   landing tree) → every non-string id, 13 of 13, gives `AppError BAD_REQUEST` with
   no row stored, `Object.create(null)` and `{toString(){throw}}` included
   (`...nul; object is not.`). Test, `npx vitest run
-tools/ledger/api/test/directory.test.ts`, the same case at the end of the suite:
+  tools/ledger/api/test/directory.test.ts`, the same case at the end of the suite:
   `Object.create(null)`, an object whose `toString` throws and `['home']` joined
   `null`, `undefined` and `7`, each asserted `AppError` `BAD_REQUEST` echoing its
   type, with no row stored. Red with `String(household.id as unknown)` restored:
   `1 failed | 18 passed (19)`, `null: expected AppError … to match object`
   (`"; object is not."`, the echo changed); red with `String()` kept only for a
   plain object: `Object.create(null): expected TypeError: Cannot convert object to
-primi… to be an instance of AppError`; restored from the fix commit, `19 passed
-(19)`.
+  primi… to be an instance of AppError`; restored from the fix commit, `19 passed
+  (19)`.
 - 2026-10-15 — Fixed at landing by owner choice: gate 2, N2 — "the name arm of
   the new test asserts `null` only, and its title says 'an id or a name that is not
   a string'". The name arm now asserts `null`, `undefined` and `7`, each `AppError`
   `BAD_REQUEST` with "A household's name is 1 to 80 characters.". Red with the name
   guard narrowed to `household.name == null`, `npx vitest run
-tools/ledger/api/test/directory.test.ts`: `1 failed | 18 passed (19)`, `7 name:
-expected TypeError: household.name.trim is not a f… to be an instance of
-AppError`; restored from the fix commit, `19 passed (19)`.
+  tools/ledger/api/test/directory.test.ts`: `1 failed | 18 passed (19)`, `7 name:
+  expected TypeError: household.name.trim is not a f… to be an instance of
+  AppError`; restored from the fix commit, `19 passed (19)`.
 - 2026-10-15 — Gate 2's N3, the `TypeError`s a caller past the request schema
   reaches in `addMember`, `removeMember` and `membershipOf`, was put to the owner on
   2026-10-15, who chose "File one ticket"; it is being filed separately and is not

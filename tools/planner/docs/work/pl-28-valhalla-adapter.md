@@ -708,7 +708,7 @@ entitled to repeat.
 > three tests), not 698 + 4.
 
 > **Amended 2026-08-29 by pl-30: the geocoder gap is closed, and `status:
-done` follows.** Real `nominatim.openstreetmap.org/search` replies —
+> done` follows.** Real `nominatim.openstreetmap.org/search` replies —
 > a match, a no-match, and an ambiguous bare name at `limit=1` and
 > `limit=10` — were captured on a networked machine and checked in under
 > `api/test/fixtures/`. `firstCoordinates` needed no change: a no-match is a

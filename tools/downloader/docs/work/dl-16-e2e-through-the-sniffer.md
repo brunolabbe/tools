@@ -304,7 +304,7 @@ worktree rather than read back out of the Log:
 - `npm run e2e:downloader`: 3 passed (8.4s); `download.spec.ts` untouched by this diff.
 - `npm run e2e:downloader:sniffer`: 1 passed (11.8s).
 - The false green reproduced: `ENABLE_BROWSER_RESOLVER=false npm run
-e2e:downloader:sniffer` still passes.
+  e2e:downloader:sniffer` still passes.
 - The genuine red reproduced: editing `ENABLE_BROWSER_RESOLVER` to `"false"` at
   `playwright.sniffer.config.ts:71 "ENABLE_BROWSER_RESOLVER:"` fails at `mse-page.spec.ts@83618de:89` "toHaveCount(5)" with
   `expected 5, Received 0`. File restored, `git status --porcelain` clean.

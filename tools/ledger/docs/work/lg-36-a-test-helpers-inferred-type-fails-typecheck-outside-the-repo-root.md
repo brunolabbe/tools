@@ -99,7 +99,7 @@ other error. The same sha under `/workspaces/tools/.claude/worktrees/` passed
 - 2026-10-17 — Renumbered from lg-33 to lg-36: #523 filed its own lg-33 (rename a
   person) between this ticket's id check and its merge, and `main` carried two
   lg-33 files from #525's merge until this landed (`npm run status` → `"lg-33"
-is used by more than one ticket`, exit 1).
+  is used by more than one ticket`, exit 1).
 - 2026-10-18 — Built on `lg-36-annotate-test-helper-return-types` from `main`
   029641b4; the fix is `e499389e`. Reproduced first, at 029641b4, in a detached
   tree under the builder's scratch directory: farm, `npm run build` exit 0,

@@ -424,5 +424,5 @@ behaviour under the mutation above.
   what yt-dlp emits. No live DASH manifest and no real CDN were touched; the
   whole of this is the classifier, `parseDash` over checked-in fixtures, and the
   table. The Playwright e2e suite was not run; `grep -rin "subtitle\|caption"
-tools/downloader/e2e/` returns nothing, so there is no subtitle path in it to
+  tools/downloader/e2e/` returns nothing, so there is no subtitle path in it to
   exercise, but that is an argument from the specs' text and not from a run.

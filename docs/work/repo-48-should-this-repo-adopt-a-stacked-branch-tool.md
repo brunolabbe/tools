@@ -28,9 +28,9 @@ lines for a preview-frame module. Confirmed directly:
 
 - `git show origin/main:tools/downloader/engine/src/index.ts` line 711 reads
   `export { isTlsVerificationFailure, redactUrlsInText, runFfmpeg } from
-"./ffmpeg/runner.ts";`; the same line on `origin/dl-56-grab-a-preview-frame`
+  "./ffmpeg/runner.ts";`; the same line on `origin/dl-56-grab-a-preview-frame`
   reads `export { isTlsVerificationFailure, runFfmpeg } from
-"./ffmpeg/runner.ts";`, immediately followed by a new
+  "./ffmpeg/runner.ts";`, immediately followed by a new
   `export type { PreviewFrameOptions } ...` block.
 - `git merge-tree --write-tree origin/main origin/dl-56-grab-a-preview-frame`
   reports exactly one conflicting file, that same one.
@@ -1055,7 +1055,7 @@ Gate 1's findings, each reproduced before anything changed:
   this record's two `## Review` citations
   again, coordinate only, anchor text unchanged: `candidateFiles` from 843 to
   870, and `makeResolver`'s `tracked.includes(file)` from 824 to 851. `node
-scripts/citations-gate.mjs --against origin/main` named both `moved` at
+  scripts/citations-gate.mjs --against origin/main` named both `moved` at
   exactly these new lines before the repoint.
 
 - 2026-10-06 — the owner reversed part of the decision above: the pilot now uses

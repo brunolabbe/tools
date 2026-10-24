@@ -99,7 +99,7 @@ downloader's cool ones stay as they are.
    - Each `tools/<tool>/web/package.json` lists `@webtools/ui` in
      `dependencies`.
    - Each `tools/<tool>/Dockerfile` adds `COPY packages/ui/package.json
-packages/ui/` beside the `packages/core` manifest line, before `npm ci`.
+     packages/ui/` beside the `packages/core` manifest line, before `npm ci`.
      Without it `npm ci` never creates the symlink, and the Vite build in the
      image fails to resolve the import.
    - **Trap:** `packages/core/test/image-closure.test.ts` walks the graph from
@@ -250,7 +250,7 @@ packages/ui/` beside the `packages/core` manifest line, before `npm ci`.
   `./styles.css`; each `web/package.json` lists it in `dependencies`; each
   `Dockerfile` has `COPY packages/ui/package.json packages/ui/` before `npm ci`;
   `package-lock.json` has the new workspace (hand-edited, `node
-scripts/check-lockfile-sync.mjs` prints `up to date`, exit 0: no
+  scripts/check-lockfile-sync.mjs` prints `up to date`, exit 0: no
   `npm install` was run). Planner and ledger renamed `--muted` to `--text-muted`
   and `--bad` to `--danger` at every use and set the roles they lacked.
   Downloader and planner set `--font-size-base` and `--font-sans` in their
@@ -354,7 +354,7 @@ scripts/check-lockfile-sync.mjs` prints `up to date`, exit 0: no
     on `expect(job).toBeInViewport()` (`viewport ratio 0`, the dl-109
     assertion). **The same spec fails identically on the base tree**
     (`f7436872`, second worktree, `npx playwright test -c
-tools/downloader/playwright.config.ts download.spec.ts`: `1 failed`,
+    tools/downloader/playwright.config.ts download.spec.ts`: `1 failed`,
     `3 passed (1.3m)`, the same line 82 and the same message), so it is not
     this change; the draft's CI is the reading of whether it is this
     environment.
@@ -365,14 +365,14 @@ tools/downloader/playwright.config.ts download.spec.ts`: `1 failed`,
   **Done when 4 and the image-closure scan.** The ticket's Trap said
   `packages/core/test/image-closure.test.ts` "will not catch this omission",
   and that was half wrong in a way that mattered: the scan's `neither list
-ships a workspace the API does not resolve` test treats a `COPY
-packages/ui/...` line as stale, because `@webtools/ui` is in no API's
+  ships a workspace the API does not resolve` test treats a `COPY
+  packages/ui/...` line as stale, because `@webtools/ui` is in no API's
   closure, so the Dockerfile edit this ticket asks for failed
   `packages/core` until the scan was taught. It now computes each tool's web
   closure (`closureFrom("@<tool>/web")`), treats what the web needs beyond the
   API's closure as bundled-only, and has a new test, `every workspace the UI
-build resolves has its manifest copied before \`npm ci\``, which catches the
-omission the Trap describes. Shown failing: with `COPY packages/ui/...`removed from`tools/planner/Dockerfile`, `npx vitest run
+  build resolves has its manifest copied before \`npm ci\``, which catches the
+  omission the Trap describes. Shown failing: with `COPY packages/ui/...`removed from`tools/planner/Dockerfile`, `npx vitest run
   packages/core/test/image-closure.test.ts`gives`Tests 1 failed | 7 passed
   (8)`, `+ "tools/planner/Dockerfile: COPY packages/ui/package.json
   packages/ui/"`; restored, `Tests 8 passed (8)`. A scan over text still

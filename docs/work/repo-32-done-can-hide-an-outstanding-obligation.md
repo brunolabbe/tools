@@ -256,7 +256,7 @@ so it cannot go stale again; not mechanically checked as a result).
 - **No change needed · The seven repointed citations were re-resolved by hand at
   the tip** and each lands on exactly what its citing prose claims — no drift
   onto neighbouring content. `node scripts/citations-gate.mjs` → `23 enforced, 0
-failing`, and the history comparison → `0 raised`.
+  failing`, and the history comparison → `0 raised`.
 - **No change needed · The overlap with repo-38 was measured rather than
   assumed.** This branch touches `docs/01-TICKETS.md` at base lines 11–16,
   97–102, 172–180, 340–345 and 386–392; `origin/repo-38-review-writer` touches
@@ -466,7 +466,7 @@ attaches to opening it.
   abstract; what has changed is that no live instance survives to design the
   mechanism against, so answering it now would be designing against a
   hypothetical rather than the reproduction the ticket was filed with. `Done
-when` 6 is not struck: a future builder still owes an answer to "what makes
+  when` 6 is not struck: a future builder still owes an answer to "what makes
   somebody look at an informational CI failure" in general, but building the
   first case against a closed instance would mean re-deriving the scenario from
   memory, which is exactly the failure mode `01-TICKETS.md`'s "A ticket carries
@@ -568,7 +568,7 @@ when` 6 is not struck: a future builder still owes an answer to "what makes
 
   **The 17/110 run is the second one, and the first is why.** A third case was
   green before it — `the repo's own board surfaces at least one real outstanding
-obligation` (16 failed | 111 passed), which **was a false green and was
+  obligation` (16 failed | 111 passed), which **was a false green and was
   rewritten before a line of source changed**: it filtered on
   `t.awaiting !== null`, and with no such field the property is `undefined` on
   every ticket, so every ticket passed the filter and the case proved nothing. It

@@ -297,7 +297,7 @@ Re-issued at `cb37835` with words, rows and verdicts unchanged; unpinned coordin
     real ffmpeg, a local origin (scratch `origin.mjs`) that 302s `/page` to
     `/m.mp4?sig=SECRETQ`; `POST /api/probe`, `POST /api/jobs`, `GET` the link, then
     a measuring script over the bytes appended to the log. Output: `lines=7
-raw=1811 wrapped=2551` for those three calls (the gate saw 1,812 and 2,552), the
+    raw=1811 wrapped=2551` for those three calls (the gate saw 1,812 and 2,552), the
     seventh line being `engine stream complete`, which the stub engine omits. Then
     `GET /`, the stylesheet, the script, `/favicon.ico`, `/api/config`, the probe's
     and the job's event streams and `/api/thumbnail/<token>` (a miss) added nine

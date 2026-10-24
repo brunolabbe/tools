@@ -165,16 +165,16 @@ Each mutation reddens exactly its own test and no other. The worktree is clean a
   - The rename case is the one the brief asked to watch fail. Applying only the
     `.md` skip, `npx vitest run scripts/test/preflight.test.ts -t repo-101`
     fails it: `expected [ 'npm run check' ] to include 'npm test -- --project
-downloader'`. The `--no-renames` change turns it green. The brief's
+    downloader'`. The `--no-renames` change turns it green. The brief's
     description of that case as a regression test is only half true: before the
     `.md` skip, the destination `.md` still counted as the tool, so the same
     test passes on `main`. It needs the `.md` skip first to be able to fail.
   - Done when 1 and 2 are tests in `scripts/test/preflight.test.ts`, appended
     at the end: `testPlan plans no npm test for a diff of only markdown under
-tools/ (repo-101)` and `testPlan still plans the tool and core for markdown
-mixed with one code path (repo-101)`. Before the fix the first fails with
+    tools/ (repo-101)` and `testPlan still plans the tool and core for markdown
+    mixed with one code path (repo-101)`. Before the fix the first fails with
     `expected [ [ 'npm', [ 'run', 'check' ] ], …(3) ] to deeply equal [ [
-'npm', [ 'run', 'check' ] ] ]`.
+    'npm', [ 'run', 'check' ] ] ]`.
   - `npx vitest run scripts/test/preflight.test.ts`: 74 of 74 pass after the
     fix.
   - Not folded in: repo-102, which edits the same `testPlan` area and depends on
@@ -215,8 +215,8 @@ mixed with one code path (repo-101)`. Before the fix the first fails with
 
   - Done when 3, the markdown-only branch. Its diff against `036e7ac6`, the
     code commit, is this ticket file alone (`git diff --name-only
-036e7ac6...HEAD`). Run as `node scripts/preflight.mjs --base 036e7ac6
---title "fix(repo): a tool's markdown does not plan its suite (repo-101)"`,
+    036e7ac6...HEAD`). Run as `node scripts/preflight.mjs --base 036e7ac6
+    --title "fix(repo): a tool's markdown does not plan its suite (repo-101)"`,
     exit 0. The check job plans no tool suite, and the `ciCommands` check still
     runs the status suite:
 
@@ -264,7 +264,7 @@ mixed with one code path (repo-101)`. Before the fix the first fails with
     which resolve from no branch. The surviving equivalents are `a0c9d9f6`,
     `90c45ca3` and `fd7f25bd`. The markdown-only run is reproduced from the
     surviving code commit with `node scripts/preflight.mjs --base a0c9d9f6
---title "fix(repo): a tool's markdown does not plan its suite (repo-101)"`;
+    --title "fix(repo): a tool's markdown does not plan its suite (repo-101)"`;
     its diff is this ticket file alone (`git diff --name-only a0c9d9f6...HEAD`)
     and the pasted output above is its result. These shas also stop resolving
     once the squash merge deletes the branch, so the pasted outputs are the
@@ -283,6 +283,6 @@ mixed with one code path (repo-101)`. Before the fix the first fails with
   - Gate 1, not graded, `test (ubuntu-latest)` red at `Run npm ci` on the first
     run of `983a3e09`: on the re-run `gh pr checks 436` shows every check
     passing, `test (ubuntu-latest)` at 12m27s and `test (windows-latest,
-informational)` at 12m49s.
+    informational)` at 12m49s.
   - Gate 1 low, `checkTitle` changes under `--no-renames` with no test — not
     in the owner's four authorised fixes, so left as the gate recorded it.

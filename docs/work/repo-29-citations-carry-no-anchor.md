@@ -456,7 +456,7 @@ unanchored, 0 unresolvable, 3 unchecked, 0 evidence — of 39 references` at **e
   `ab5e6fa`, and the round-three commits then edited the middle of the same test
   file. Running the round-one-and-two record against the branch tip, and again
   with `--rev ab5e6fa`, gives the **identical** answer both ways — `0 verified, 0
-moved, 11 unanchored, 0 unresolvable, 2 unchecked — of 13 references`, exit 0 —
+  moved, 11 unanchored, 0 unresolvable, 2 unchecked — of 13 references`, exit 0 —
   for a set of coordinates that is right in one tree and wrong in the other. At
   the tip the five land on a docblock asterisk, a `//` comment, a statement, a
   docblock prose continuation and another `//` comment. The checker emits four
@@ -651,7 +651,7 @@ own author, and it is the narrowest possible demonstration that the thing works.
 
   **This page's own ten citations are all anchored**, and
   `node scripts/citations.mjs` over it reports `10 verified, 0 moved, 0
-unanchored, 0 unresolvable` at exit 0. Two things had to be written around to
+  unanchored, 0 unresolvable` at exit 0. Two things had to be written around to
   get there, and both are the gap itself showing through: the checker parses a
   coordinate quoted as an _illustration_, and it parses one quoted inside a
   reproduced run. `docs/01-TICKETS.md`'s example is therefore described rather
@@ -744,7 +744,7 @@ unanchored, 0 unresolvable` at exit 0. Two things had to be written around to
 
   **This page's own citations have gone stale since it was filed, and that is
   left standing on purpose.** The filing entry above records `10 verified, 0
-moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
+  moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
   moved, 1 unanchored, 5 unchecked of 16 references, exit 2** — the extra
   references are repo-25's shorthand and prose counting, and the four `moved` are
   drift in the targets, not in this record: dl-40 moved both downloader lines,
@@ -871,9 +871,9 @@ moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
     checked at both revs, and recorded because the description going stale is the
     same defect one layer up.
   - The round-one-and-two record's self-reported `10 unanchored ... of 12
-references` does not reproduce at its own commit: a fresh run there gives 11
+    references` does not reproduce at its own commit: a fresh run there gives 11
     of 13. That is the same self-counting error dl-45's gate caught in `32 of
-these 39`, uncaught in the second instance, and it is now a line in the Build
+    these 39`, uncaught in the second instance, and it is now a line in the Build
     section.
 
   **What could not be re-run, stated rather than reasoned around.** The
@@ -890,8 +890,8 @@ these 39`, uncaught in the second instance, and it is now a line in the Build
 
   `node scripts/citations.mjs docs/work/repo-29-citations-carry-no-anchor.md`
   goes from `6 verified, 4 moved, 1 unanchored, 0 unresolvable, 7 unchecked — of
-18 references` on `main` to `7 verified, 4 moved, 1 unanchored, 0 unresolvable,
-7 unchecked — of 19`, both at **exit 2**. This edit therefore adds exactly one
+  18 references` on `main` to `7 verified, 4 moved, 1 unanchored, 0 unresolvable,
+  7 unchecked — of 19`, both at **exit 2**. This edit therefore adds exactly one
   reference and it is anchored and verified, which is what the entry above
   requires of anything written into this ticket. The four `moved` are the
   deliberate demonstration the owner ruled on, and they are untouched — the
@@ -913,9 +913,9 @@ these 39`, uncaught in the second instance, and it is now a line in the Build
   **The measurement quoted above was re-run after the renumber and is unchanged.**
   At #186's new tip (`0a6bf23`, which adds the renumber's own Log entry to that
   record and so moves every line below it), `node scripts/citations.mjs
-docs/work/repo-36-citations-loses-the-record-path.md` still reports
+  docs/work/repo-36-citations-loses-the-record-path.md` still reports
   `7 verified, 0 moved, 29 unanchored, 0 unresolvable, 3 unchecked, 0 evidence —
-of 39 references` at **exit 0** — byte-identical to the figure recorded here
+  of 39 references` at **exit 0** — byte-identical to the figure recorded here
   before the rename. That is worth stating rather than assuming, because it is
   this ticket's own thesis pointed at itself: renaming the file the record
   describes is exactly the class of change that silently invalidates a
@@ -928,7 +928,7 @@ of 39 references` at **exit 0** — byte-identical to the figure recorded here
   **Observed while checking that, and pre-existing rather than caused here.**
   `node scripts/citations.mjs docs/work/repo-29-citations-carry-no-anchor.md`
   on this branch exits **2** with `7 verified, 4 moved, 1 unanchored, 0
-unresolvable, 7 unchecked, 0 evidence — of 19 references`. The renumber did not
+  unresolvable, 7 unchecked, 0 evidence — of 19 references`. The renumber did not
   cause it: the identical line and exit code come back from the file as it stood
   at `74b02fd`, checked by stashing the edit and re-running. The four sit in the downloader's
   `media.ts` contract, the web `variants.ts`, `citations.mjs` itself and
@@ -1060,15 +1060,15 @@ unresolvable, 7 unchecked, 0 evidence — of 19 references`. The renumber did no
     unanchored citation in this page, which is the dodge the filing entry at the
     top of this Log already had to take twice.)
   - Anchor replaced with text that is nowhere in the file — same record, `1
-moved, 1 verified`, and `anchor "not what that line says" is not in 147, and
-not anywhere in tools/downloader/api/src/routes/web.ts`. **Exit 1.**
+    moved, 1 verified`, and `anchor "not what that line says" is not in 147, and
+    not anywhere in tools/downloader/api/src/routes/web.ts`. **Exit 1.**
   - A passing record added to `GRANDFATHERED` —
     `STALE docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md — passes this gate now`.
     **Exit 1.** That third one is the anti-rubber-stamp rule, and it is the one
     that would otherwise have shipped never having run.
 
   Reverted after each. The gate reports `4 enforced, 0 failing; 59
-grandfathered, holding 47 unresolvable, 49 moved, 639 unanchored` at exit 0 on
+  grandfathered, holding 47 unresolvable, 49 moved, 639 unanchored` at exit 0 on
   this branch.
 
   **This branch broke six citations and repaired them, which is the tax this gate
@@ -1141,10 +1141,10 @@ grandfathered, holding 47 unresolvable, 49 moved, 639 unanchored` at exit 0 on
   **This page's own citations, re-run after writing the sentences above** — which
   is the rule the entry above this one added, applied to itself. Before these
   paragraphs: `6 verified, 5 moved, 1 unanchored, 0 unresolvable, 7 unchecked, 0
-evidence — of 19 references`, exit 2, and the identical line from `main`'s copy
+  evidence — of 19 references`, exit 2, and the identical line from `main`'s copy
   of the file in this worktree — checked by stashing rather than assumed. After
   them: `9 verified, 5 moved, 1 unanchored, 0 unresolvable, 10 unchecked, 0
-evidence — of 25 references`, still exit 2. This entry therefore adds six
+  evidence — of 25 references`, still exit 2. This entry therefore adds six
   references, three of them anchored citations that verify and three of them
   prose, and it adds nothing to any failing class. The `moved` count had already
   gone 4 → 5 since the entry above recorded it, from drift this branch did not
@@ -1163,7 +1163,7 @@ evidence — of 25 references`, still exit 2. This entry therefore adds six
   claimed both.** Reproduced: break the anchor in the one passing record that
   carries a real citation, add that record to `GRANDFATHERED` in the same
   change, run the gate — `3 enforced, 0 failing; 60 grandfathered, holding 47
-unresolvable, 50 moved, 639 unanchored`, **exit 0**, no `FAIL`, no `STALE`,
+  unresolvable, 50 moved, 639 unanchored`, **exit 0**, no `FAIL`, no `STALE`,
   no warning. repo-25's rule fires when an entry stops being needed; nothing
   fires when one is added, and nothing notices a listed record getting worse.
   The script said "the list can only shrink"; it now says which half of that is
@@ -1213,7 +1213,7 @@ unresolvable, 50 moved, 639 unanchored`, **exit 0**, no `FAIL`, no `STALE`,
   - The merge is clean; git reports no conflict in either file both branches
     touch.
   - In the merged tree `repo-31` reports `20 verified, 8 moved, 0 unanchored, 0
-unresolvable, 1 unchecked — of 29 references`, exit 2 — six of the seven
+    unresolvable, 1 unchecked — of 29 references`, exit 2 — six of the seven
     `ci.yml` coordinates repointed on this branch need a further +3. `repo-31`
     is grandfathered, so that costs nothing but debt, which is finding 1's hole
     in its live form.
@@ -1224,7 +1224,7 @@ unresolvable, 1 unchecked — of 29 references`, exit 2 — six of the seven
     lines 210 to 231 of `ci.yml` with the anchor `"The unit and integration suites"`, which
     is at line 210 on repo-34's tip and at 232 in the merged tree, because this
     branch inserted 22 lines above it. `FAIL … 2 moved, 4 unchecked, 12
-verified`.
+    verified`.
 
   **Neither branch is wrong against its own base**, and repo-34's reviewer
   explicitly checked for a collision with this one and recorded that its edit
@@ -1257,8 +1257,8 @@ verified`.
 
   **Counts for this entry, re-run after writing them.** Before it, the page
   reported `9 verified, 5 moved, 1 unanchored, 0 unresolvable, 10 unchecked, 0
-evidence — of 25 references`; after, `10 verified, 5 moved, 1 unanchored, 0
-unresolvable, 15 unchecked, 0 evidence — of 31 references`, both at exit 2. Six
+  evidence — of 25 references`; after, `10 verified, 5 moved, 1 unanchored, 0
+  unresolvable, 15 unchecked, 0 evidence — of 31 references`, both at exit 2. Six
   references added, one of them an anchored citation that verifies and five
   prose, and nothing added to any failing class. The five `moved` are still the
   deliberate demonstration the owner ruled on. Two coordinates this entry wanted
@@ -1296,7 +1296,7 @@ unresolvable, 15 unchecked, 0 evidence — of 31 references`, both at exit 2. Si
   demonstration that matters.** Repointing eight citations broken by the
   `citations.mjs` edit below took `repo-36`'s debt from 30 to 28, and the run
   answered `STALE docs/work/repo-36-citations-loses-the-record-path.md — now
-holds 28 failing reference(s), not 30 — tighten the number`, exit 1. Nobody
+  holds 28 failing reference(s), not 30 — tighten the number`, exit 1. Nobody
   arranged that.
 
   **2 · A distinct-anchor rule exists and is enforced.**
@@ -1330,7 +1330,7 @@ holds 28 failing reference(s), not 30 — tighten the number`, exit 1. Nobody
   **741 failing references** across the same 59 records: 639 unanchored, 49
   moved, 47 unresolvable, and 6 indistinct anchors the new rule found. The gate
   reports `4 enforced, 0 failing; 59 grandfathered, holding 47 unresolvable, 49
-moved, 639 unanchored, 6 indistinct` at exit 0.
+  moved, 639 unanchored, 6 indistinct` at exit 0.
 
   **3 · A fifth instance of this ticket's thesis, caused by the fix for the
   third.** Adding ~60 lines to `citations.mjs` moved every line below them and
@@ -1343,7 +1343,7 @@ moved, 639 unanchored, 6 indistinct` at exit 0.
 
   **And a sixth, in a ticket filed by this very entry.** repo-38 cited
   `repo-30`'s transcription note anchored on `"Transcription note, by the
-builder"`. That record carries three such notes — a fact repo-38's own sentence
+  builder"`. That record carries three such notes — a fact repo-38's own sentence
   states — so the anchor was ambiguous and the new flag refused it before the
   ticket was committed. The rule caught the page arguing for the rule, in the
   hour it was written.
@@ -1368,7 +1368,7 @@ builder"`. That record carries three such notes — a fact repo-38's own sentenc
     two documents are deliberately not reconciled on this branch.
 
   Ids taken from `node scripts/next-id.mjs repo`, which reported `next free:
-repo-37`. That sweep is a snapshot: repo-29's own Log records losing an id to a
+  repo-37`. That sweep is a snapshot: repo-29's own Log records losing an id to a
   peer session between the sweep and the commit, so if either number is claimed
   elsewhere these files move and the branch keeps its name.
 
@@ -1395,8 +1395,8 @@ repo-37`. That sweep is a snapshot: repo-29's own Log records losing an id to a
     coordinate to 1301, then delete a line above it, and the citation is broken
     again at a key that never existed on the base. Both diffs reported clean.
     **What caught it was the gate**: `WORSE
-docs/work/repo-36-citations-loses-the-record-path.md … 30 failing, and its
-GRANDFATHERED entry allows 28`, exit 1, naming two off-by-one repoints. A
+    docs/work/repo-36-citations-loses-the-record-path.md … 30 failing, and its
+    GRANDFATHERED entry allows 28`, exit 1, naming two off-by-one repoints. A
     third check that counts broken citations _per record_ rather than matching
     them one to one then found six more in `repo-35`, which the gate could not
     see because that record has no `## Review` section.
@@ -1419,12 +1419,12 @@ GRANDFATHERED entry allows 28`, exit 1, naming two off-by-one repoints. A
 
   - **A.** Break a citation in a passing record and add that record to
     `GRANDFATHERED` at its exact new count — `3 enforced, 0 failing; 60
-grandfathered`, **exit 0**. Silent, and silent for ever after: `STALE` fires
+    grandfathered`, **exit 0**. Silent, and silent for ever after: `STALE` fires
     only on `failing < allowed`, never on `==`, so an exact-match entry is
     permanently indistinguishable from inherited debt.
   - **B.** Break a _second_ citation in the same record, entry untouched —
     `WORSE tools/planner/docs/work/pl-2-container-image.md — 2 moved — 2 failing,
-and its GRANDFATHERED entry allows 1`, **exit 1**. This is the ratchet
+    and its GRANDFATHERED entry allows 1`, **exit 1**. This is the ratchet
     working, and it is why the change was worth making.
   - **C.** Raise that entry from 1 to 2 in the same change — **exit 0**,
     absorbed, the record gone from the output entirely.
@@ -1547,22 +1547,22 @@ and its GRANDFATHERED entry allows 1`, **exit 1**. This is the ratchet
   - **Variant A**, break a citation in the one passing record that carries a real
     one and append it at its exact new count. Without history: **exit 0**, silent.
     With history: `RAISED tools/planner/docs/work/pl-2-container-image.md — its
-GRANDFATHERED entry went from 0 to 1 against 68ee870`, then `60 entr(y/ies)
-compared against 68ee870: 1 raised.`, **exit 1**.
+    GRANDFATHERED entry went from 0 to 1 against 68ee870`, then `60 entr(y/ies)
+    compared against 68ee870: 1 raised.`, **exit 1**.
   - **Variant C**, two real regressions in that record absorbed by appending it
     at 2. Without history: `3 enforced, 0 failing; 60 grandfathered`, **exit 0**.
     With history: `RAISED … went from 0 to 2`, **exit 1**.
   - **Raising an existing entry**, `repo-31` from 4 to 5: `RAISED
-docs/work/repo-31-the-windows-leg-is-almost-all-red.md — its GRANDFATHERED
-entry went from 4 to 5 against 68ee870`, **exit 1**.
+    docs/work/repo-31-the-windows-leg-is-almost-all-red.md — its GRANDFATHERED
+    entry went from 4 to 5 against 68ee870`, **exit 1**.
 
   **And the negative controls, because a check that fires on everything is not a
   check.** Lowering `repo-31` from 4 to 3 gives `0 raised` from the history
   comparison — the `WORSE` it also prints is the in-tree jaw correctly saying the
   record really does hold 4. Deleting an entry outright gives `58 entr(y/ies)
-compared against 68ee870: 0 raised.` A ref that does not resolve is an
+  compared against 68ee870: 0 raised.` A ref that does not resolve is an
   **error**, not a skip: `--against no-such-ref: no such commit. In CI that means
-the checkout was shallow`, exit 1 — because reporting "nothing went up" after
+  the checkout was shallow`, exit 1 — because reporting "nothing went up" after
   comparing against nothing is the failure this whole ticket is about.
 
   **The CI shape is the cheap one, and this is where the branch's own late
@@ -1747,17 +1747,17 @@ the checkout was shallow`, exit 1 — because reporting "nothing went up" after
     through.**
   - **After** — against the first commit, unchanged. Against the deletion it
     throws: `scripts/citations-gate.mjs is missing there, but that branch's
-history has it — it was deleted rather than never added. Re-adding this file
-on top of a commit that dropped it would reopen the one window in which any
-GRANDFATHERED number is accepted unchecked, so this refuses instead.`
+    history has it — it was deleted rather than never added. Re-adding this file
+    on top of a commit that dropped it would reopen the one window in which any
+    GRANDFATHERED number is accepted unchecked, so this refuses instead.`
 
   **And the negative control that matters more than the attack, because failing
   it would break this branch.** A genuine first-ever bootstrap must still pass,
   and does: `No history compared — origin/main has no scripts/citations-gate.mjs
-and never did, so there is no earlier list to compare against`, **exit 0**. The
+  and never did, so there is no earlier list to compare against`, **exit 0**. The
   wording gained `and never did`, which is the whole of the new distinction
   showing up in the output. An ordinary comparison is untouched: `59 entr(y/ies)
-compared against 68ee870: 0 raised.`, exit 0. **That property — the legitimate
+  compared against 68ee870: 0 raised.`, exit 0. **That property — the legitimate
   case still passes — is exactly what separated this mechanism from the one the
   owner declined**, so it is asserted here rather than assumed, and pinned by a
   test that drives both sides.
@@ -1890,11 +1890,11 @@ compared against 68ee870: 0 raised.`, exit 0. **That property — the legitimate
 <base>`:
 
 - **Before**, at `74c85be`: `0 enforced, 0 failing; 1 grandfathered, holding 2
-unanchored.` and `No history compared — … has no scripts/citations-gate2.mjs
-and never did`. **Exit 0.** The raise from 1 to 2 absorbed in silence.
+  unanchored.` and `No history compared — … has no scripts/citations-gate2.mjs
+  and never did`. **Exit 0.** The raise from 1 to 2 absorbed in silence.
 - **After**: `no scripts/citations-gate2.mjs there, but that branch's history
-carried a file matching scripts/citations-gate*.mjs — so it was deleted, or
-this one has been renamed.` **Exit 1.**
+  carried a file matching scripts/citations-gate*.mjs — so it was deleted, or
+  this one has been renamed.` **Exit 1.**
 
 **The three controls, all held.** A genuine first-ever bootstrap still passes —
 asserted for the third time on this branch because it is the property a
@@ -1967,13 +1967,13 @@ the probe. 32 in that file, 288 in the `repo` project.
   Reproduced rather than taken from the report that raised it:
 
   - `FAIL docs/work/repo-34-the-windows-only-code-paths-nothing-asserts.md — 3
-moved, 4 unchecked, 13 verified` — **the predicted case, arriving exactly as
+    moved, 4 unchecked, 13 verified` — **the predicted case, arriving exactly as
     predicted.** That record is anchored and not on `GRANDFATHERED`, so this
     branch's own gate enforces it, and this branch's `ci.yml` insertion moved the
     lines its citations name. Both the gate and this builder had said in advance
     that this one would be a red build rather than silent debt.
   - `WORSE docs/work/repo-31-the-windows-leg-is-almost-all-red.md — 7 failing,
-and its GRANDFATHERED entry allows 4`.
+    and its GRANDFATHERED entry allows 4`.
 
   **Seven citations repointed, and the two records needed different arithmetic.**
   repo-34's three moved by a uniform **+54** — one of them a range, `210-231` to
@@ -1987,7 +1987,7 @@ and its GRANDFATHERED entry allows 4`.
   **The ratchet then did the thing it was built for, to its own author.**
   Repairing repo-31 took it from 7 failing to 3, below the 4 its entry allowed,
   and the run answered `STALE … now holds 3 failing reference(s), not 4 — tighten
-the number`, exit 1. Tightened to 3. **The number was not raised at any point**,
+  the number`, exit 1. Tightened to 3. **The number was not raised at any point**,
   and `--against origin/main` reports `59 entr(y/ies) compared … 0 raised`, which
   is the check that tells a legitimate lowering from a silencing.
 

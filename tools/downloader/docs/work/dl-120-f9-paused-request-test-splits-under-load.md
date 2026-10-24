@@ -20,10 +20,10 @@ not keep the meter paused for the next one" fails now and then with `expected
 stopped. The evidence, with where it came from:
 
 1. **dl-118's builder (2026-10-12).** It failed once in a full `npm test --
---project downloader` run under load, at dl-118's head, which touched no
+   --project downloader` run under load, at dl-118's head, which touched no
    engine code. It passed alone (`npx vitest run
-tools/downloader/engine/test/parallel-ranges.test.ts -t "F9: a paused
-request"`) and in the first full run.
+   tools/downloader/engine/test/parallel-ranges.test.ts -t "F9: a paused
+   request"`) and in the first full run.
 2. **dl-108's gate (session tools-38), relayed and not re-run here.** Run alone
    10 times on each side, it failed 1 of 10 on `origin/main` 0484ae71 (run 6,
    `expected 'parallel' to be 'single'`) and 0 of 10 on dl-108's head 5670642d.
@@ -41,8 +41,8 @@ owner chose **file and build now**.
 1. Reproduce with deliberate contention, not whatever the machine happens to be
    running. Pin the run and K busy loops to one core:
    `taskset -c 11 node -e "for(;;){}"` K times, then `taskset -c 11 npx vitest run
-tools/downloader/engine/test/parallel-ranges.test.ts -t "F9: a paused
-request"`.
+   tools/downloader/engine/test/parallel-ranges.test.ts -t "F9: a paused
+   request"`.
 2. Find out whether the meter or the test is wrong. If the meter is, stop: that
    is a design choice in `parallel-ranges.ts`, and it needs the owner's answer.
 3. If the test is wrong, fix its timing assumption. A wider tolerance is
@@ -146,7 +146,7 @@ CI on `cbdf2168`: `check`, `CodeQL`, `codeql`, `docker`, both e2e legs and `test
 
 - 2026-10-12, filed and built (branch `dl-120`, base `origin/main` 84c899e4,
   which has dl-108's #451; `git diff origin/dl-108 origin/main --
-tools/downloader/engine` prints nothing, so the measurements taken at dl-108's
+  tools/downloader/engine` prints nothing, so the measurements taken at dl-108's
   head b531355c hold here).
   - **The cause is the test's timing assumption, not the meter.** Reader A reads
     200 KB and stops. The feeder keeps writing to it until the kernel's socket
@@ -182,7 +182,7 @@ tools/downloader/engine` prints nothing, so the measurements taken at dl-108's
     full `vitest run` of another session was live in the shared checkout during
     both series, with a load average of 9 to 28:
     - base (test file at 84c899e4): **5 of 20 runs failed**, each with `expected
-'parallel' to be 'single'`. Four were the "closed" test and one was "left
+      'parallel' to be 'single'`. Four were the "closed" test and one was "left
       open". An earlier series at b531355c failed 2 of 12, and one at main
       32f8a994 with 7 loops failed 2 of 6;
     - head: **20 of 20 passed** (`Tests 2 passed | 41 skipped (43)` each).
@@ -191,8 +191,8 @@ tools/downloader/engine` prints nothing, so the measurements taken at dl-108's
     test fails only under contention, so the alone series cannot show a
     difference, and Done when 2 carries the proof.
   - **The whole file at the head:** `npx vitest run
-tools/downloader/engine/test/parallel-ranges.test.ts` gave `Tests 43 passed
-(43)` in 80.02 s.
+    tools/downloader/engine/test/parallel-ranges.test.ts` gave `Tests 43 passed
+    (43)` in 80.02 s.
   - **The tests still catch gate 2's F9** (`mutate.sh`, planted in
     `parallel-ranges.ts` and restored after each run). Each mutation gave the
     same result against the base test file and the head one:
@@ -202,7 +202,7 @@ tools/downloader/engine/test/parallel-ranges.test.ts` gave `Tests 43 passed
     - one paused request pauses the meter (`allPaused = paused.size > 0`):
       "left open" fails, "closed" passes;
     - both together, the one-flag shape gate 2 found: **both fail** (`Tests 2
-failed`).
+      failed`).
   - **What the brief had wrong.** "The meter's windows and timer ticks, the
     fixture's rate against the media rate" pointed at the right parameters. The
     missing variable was the kernel's buffer between the feeder and a stopped
@@ -279,7 +279,7 @@ failed`).
       throttle is what makes the test able to pass;
     - the change's second half alone (B at 4 MB/s, A throttled at 4 MB/s too),
       23 loops (load average 1.6 to 28.8): **7 of 10 runs fail** with `expected
-'parallel' to be 'single'`. A's unthrottling is what removes the flake.
+      'parallel' to be 'single'`. A's unthrottling is what removes the flake.
   - **Done when 2 and 3 again, uninstrumented, at the head:** 11 loops, **20 of
     20** (load average 12.2 to 20.8). Alone, "closed" passed 10 of 10 (load
     average 4.6 to 10.8). The whole file: `Tests 43 passed (43)` in 79.67 s.

@@ -133,11 +133,11 @@ items whose `travelFromPrevious` cite the identical `Source` object render
 
 - Removed the `<TravelSources days={revision.days} />` wiring line: the
   positive test failed on `findByText(/distance and travel time on this
-plan/i)` timing out, 20/21. Restored, 21/21.
+  plan/i)` timing out, 20/21. Restored, 21/21.
 - Broke deduplication (salted each source's map key with `Math.random()`
   instead of keying by `source.url`): React itself warned about a duplicate
   key, and the assertion failed with `expected [...] to have a length of 1
-but got 2`. Restored, 21/21.
+  but got 2`. Restored, 21/21.
 
 The first attempt at the positive test used only one measured leg, which
 passed whether or not deduplication existed at all — caught before trusting

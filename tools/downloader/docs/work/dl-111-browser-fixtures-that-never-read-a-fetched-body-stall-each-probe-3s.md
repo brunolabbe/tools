@@ -161,7 +161,7 @@ New, in the lines this round touched:
 - 2026-10-12 — Built. Found by timing, not by the suspect list: every browser
   test under `resolvers/test/browser` (755 tests) timed before and after, one
   run each on this machine, `npx vitest run tools/downloader/resolvers/test/browser
---reporter=json`. The signature of the defect is a playlist fetched as the
+  --reporter=json`. The signature of the defect is a playlist fetched as the
   last request and never read, so the probe waits `settle()`'s 3000 ms cap once.
   A normal probe here is about 2.8 s; the stalled ones were 5.7 to 6.4 s.
   - **Fixed**, 19 pages, one `.then(function (r) { return r.text(); })` each and

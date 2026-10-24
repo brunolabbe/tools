@@ -180,7 +180,7 @@ about that share. The tables from before are not.
     - Restored: 60 of 60 pass.
   - **Real files.** A 2.1.301 builder, `196311b6…/agent-a74f778b39702b54b`, now
     reads `output=98157 … output estimated for 87 of 102 responses, recorded
-24532`. A 2.1.296 gate, `1e178417…/agent-a001f077f5a08f22b`, prints no
+    24532`. A 2.1.296 gate, `1e178417…/agent-a001f077f5a08f22b`, prints no
     estimate note: every response there has a final record.
   - **Checks.** `npm run check`: exit 0. The seven existing `toEqual` shapes
     and one hand-built `FileTotals` gained the three new fields. What they

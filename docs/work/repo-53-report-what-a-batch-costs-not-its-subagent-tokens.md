@@ -181,7 +181,7 @@ through 3's citations are prose only (shas and file names, no
   written, for the orchestrator to use or adjust:
 
   - `SKILL.md`'s accounting table (`### End every batch with a per-agent
-accounting table`): add a **Cost** column, priced by running
+    accounting table`): add a **Cost** column, priced by running
     `node scripts/agent-cost.mjs <task-output-file>` over each agent's own
     output file rather than converting `subagent_tokens`; keep the **Tokens**
     column and its three caveats exactly as they are, but add a line saying
@@ -203,7 +203,7 @@ accounting table`): add a **Cost** column, priced by running
   `unicorn/no-array-sort` lint error and adding `agent-cost.mjs` to
   `scripts/test/tsconfig.json`'s `include`, both fixed here — the `tsconfig`
   omission is the kind next-id.mjs's own comment already warns about), `npx
-vitest run scripts/test/agent-cost.test.ts` (19/19 passed),
+  vitest run scripts/test/agent-cost.test.ts` (19/19 passed),
   `npx vitest run --project repo` (365/365 passed), full `npm test` (exit 0;
   176 files, 3171 tests, all passed — run because `scripts/test/tsconfig.json`
   is shared config).
@@ -258,8 +258,8 @@ vitest run scripts/test/agent-cost.test.ts` (19/19 passed),
   after gate 2 checked it and found it did not yet.)
 
   Gates re-run after the fix: `npm run check` exit 0; `npx vitest run
-scripts/test/agent-cost.test.ts` 24/24 passed; `npx vitest run --project
-repo` 370/370 passed. Full `npm test` not re-run a second time in this round
+  scripts/test/agent-cost.test.ts` 24/24 passed; `npx vitest run --project
+  repo` 370/370 passed. Full `npm test` not re-run a second time in this round
   — no shared config changed beyond the prior round's `tsconfig.json` entry,
   already covered.
 
@@ -269,7 +269,7 @@ repo` 370/370 passed. Full `npm test` not re-run a second time in this round
   I wrote that `orchestrate-skill-sweep` "already carries" the `SKILL.md`/
   `reference/history.md` wiring at `811b8f6` — it does not, which I
   reproduced myself with `git grep -n -i 'agent-cost'
-origin/orchestrate-skill-sweep` (one hit: this ticket's own Build line) and
+  origin/orchestrate-skill-sweep` (one hit: this ticket's own Build line) and
   `git show origin/orchestrate-skill-sweep:.claude/skills/orchestrate-tickets/reference/history.md`
   (its `cost` row still names the retired subagent-token conversion). That
   sentence is corrected above rather than left standing; the false claim
@@ -289,7 +289,7 @@ origin/orchestrate-skill-sweep` (one hit: this ticket's own Build line) and
   `reference/sizing.md:26` on `orchestrate-skill-sweep`.
 
   Gates re-run after these fixes: `npm run check` exit 0; `npx vitest run
-scripts/test/agent-cost.test.ts` (23/23 — one net fewer test, the dropped
+  scripts/test/agent-cost.test.ts` (23/23 — one net fewer test, the dropped
   real-file check); `npx vitest run --project repo` (369/369).
 
   **Resolved**: the "already carries" claim was wrong when written (the
@@ -305,7 +305,7 @@ scripts/test/agent-cost.test.ts` (23/23 — one net fewer test, the dropped
   historical floors on the old unit), and
   `.claude/skills/orchestrate-tickets/reference/sizing.md` (the third site
   gate 2 found, now marked "Retired by repo-53 on 2026-09-20"). `status:
-done` on this ticket now rests on a landed fact, not a premise — **one** of
+  done` on this ticket now rests on a landed fact, not a premise — **one** of
   the two previously-outstanding Done-when lines (the accounting table and
   history schema naming this script) is satisfied once this branch and
   `orchestrate-skill-sweep` both merge — this branch merges into
@@ -313,7 +313,7 @@ done` on this ticket now rests on a landed fact, not a premise — **one** of
   Done-when line (one real batch's table, and the difference from the
   subagent-token conversion recorded here), remains the orchestrator's to
   produce at close-out, as recorded above — gate 3 flagged that `status:
-done` still asserts it ahead of that happening, which is accurate and
+  done` still asserts it ahead of that happening, which is accurate and
   left standing rather than reverted, per the orchestrator's repeated
   direction on this line.
 
@@ -356,7 +356,7 @@ done` still asserts it ahead of that happening, which is accurate and
   synthetic records printing no skip note at all.
 
   Gates re-run: `npm run check` exit 0; `npx vitest run
-scripts/test/agent-cost.test.ts` (26/26 — three net new tests over gate
+  scripts/test/agent-cost.test.ts` (26/26 — three net new tests over gate
   3's 23); `npx vitest run --project repo` (372/372).
 
 - 2026-09-20 — Gate 4 passed at `871bbd9` (the synthetic fix verified across
@@ -381,7 +381,7 @@ scripts/test/agent-cost.test.ts` (26/26 — three net new tests over gate
   that one test before restoring the source.
 
   Gates re-run: `npm run check` exit 0; `npx vitest run
-scripts/test/agent-cost.test.ts` (27/27 — one net new test over gate 4's
+  scripts/test/agent-cost.test.ts` (27/27 — one net new test over gate 4's
   26); `npx vitest run --project repo` (373/373).
 
 - 2026-09-20 — Orchestrator, closing the fifth Done when line after the merge into `orchestrate-skill-sweep`: `node scripts/agent-cost.mjs` over the nine subagent transcripts of the batch that built this ticket gives **$195.40** (input 4,250 · cache write 8,792,557 · cache read 476,993,037 · output 1,469,529; five synthetic session-limit records skipped; rates read 2026-09-20). The same nine agents sum to about 2.75 M `subagent_tokens` as last observed, which the retired conversion priced at about $50 — the old figure was roughly a quarter of the bill, in the direction the Why predicts. One Opus gate of four rounds alone came to $32.73. The table is in #281's body.

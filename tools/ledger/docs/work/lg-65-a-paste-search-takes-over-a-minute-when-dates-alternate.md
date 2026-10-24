@@ -639,7 +639,7 @@ The medians above are `performance.now()`'s.
 - **Committed.** `api/test/lg-65-search-direct.test.ts`, "matchStretch answers every
   drawn case as main's search did (lg-65)", at `5f9514c8` (the spec) and `5daf0f83`
   (`Array#toSorted` for two lint errors, `unicorn(no-array-sort)`, found by `npm run
-check`; the draws are unchanged). It is gate 1's `gate-fuzz.test.ts` made typed:
+  check`; the draws are unchanged). It is gate 1's `gate-fuzz.test.ts` made typed:
   the same generator, so its draws are the ones gate 1 measured. It calls
   `matchStretch` and `helpers/reference-search.ts` (`main`'s search, verbatim) on the
   same rows, start, paste and tolerance, with no database, and compares the JSON.
@@ -688,12 +688,12 @@ check`; the draws are unchanged). It is gate 1's `gate-fuzz.test.ts` made typed:
 - **The head shows no difference.** At the committed count, `Tests 1 passed`, 0 of
   20,000 cases differ (`foundTotal` 14,879 read a reading). At 150,000 cases
   (`LG65_DIRECT_CASES=1-150000 npx vitest run --testTimeout=900000 …`): `Tests 1
-passed`, 20.1 s, 0 of 150,000 differ, 112,219 found a reading (gate 1's script
+  passed`, 20.1 s, 0 of 150,000 differ, 112,219 found a reading (gate 1's script
   saw 0 of 400,000 with the same generator).
 - **Checks.** `npm run check` exit 0 (after the `toSorted` commit; its first run
   failed on those two lint errors). `npx vitest run` on this spec and on
   `lg-65-search.test.ts` together: 2 of 2 passed, 3.7 s. `npm test -- --project
-ledger`: exit 0, `Test Files 81 passed (81)`, `Tests 1677 passed (1677)` (gate 1's run of the head read 80 and 1,676).
+  ledger`: exit 0, `Test Files 81 passed (81)`, `Tests 1677 passed (1677)` (gate 1's run of the head read 80 and 1,676).
 - **Done when 3 now names two tests:** `lg-65-search.test.ts` (outcomes and every
   call over the seeded population) and `lg-65-search-direct.test.ts` (every call over
   drawn inputs, which reaches the `pairAt` tie-break and the four shortcut edges).

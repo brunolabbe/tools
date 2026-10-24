@@ -47,12 +47,12 @@ the filesystem can trip it, in any tool**.
   `server.ts`, `context.ts`, `rate-limit.ts`, `thumbnails.ts` and routes
   `probe.ts` and `files.ts`) and from `tools/planner/api/src` (`server.ts`,
   `context.ts`, `rate-limit.ts`). `grep -rn "webtools/core/rate-limit"
-tools/*/api/src` lists them. The ledger imports it too, in `server.ts`,
+  tools/*/api/src` lists them. The ledger imports it too, in `server.ts`,
   `context.ts` and `rate-limit.ts`, since #345 merged (corrected 2026-10-04; see
   the Log).
 - `rate-limiter-flexible` appears in no `package.json` in the repo
   (`grep -n "rate-limiter-flexible" package.json packages/*/package.json
-tools/*/*/package.json` prints nothing), so adopting it is a new dependency.
+  tools/*/*/package.json` prints nothing), so adopting it is a new dependency.
 - Neither the downloader nor the planner has been reported by this check. That
   is **unmeasured**, not evidence they are clean: CodeQL's alert list for those
   tools was not read.
@@ -100,7 +100,7 @@ cost below is either measured (with its variant in the Log) or marked
    `RateLimiter` interface.** The interface holds, but the call sites **do move**:
    the limited routes in all three tools attach their limiter as a route option,
    `{ onRequest: ... }` (`git grep -c "onRequest" origin/main --
-'tools/*/api/src/routes/*.ts'` lists 10 route files, and no `addHook` in
+   'tools/*/api/src/routes/*.ts'` lists 10 route files, and no `addHook` in
    `tools/*/api/src` is a limiter; they are CORS, request logging, identity and
    `onSend`), and that is the shape variant B alerted on. What cleared was a
    hook added with `app.addHook`. So the option means moving every limited route
@@ -152,9 +152,9 @@ cost below is either measured (with its variant in the Log) or marked
    worse than an open alert. But the probe's own CI refused both literals: with
    the plugin installed nowhere, `npm run check` and `npm run build` failed on
    G1 (run 37257413673, `probe.ts(19,34): error TS2353: Object literal may only
-specify known properties, and 'rateLimit' does not exist in type
-'FastifyContextConfig'`) and on G2 (run 37257508695, `probe.ts(20,24):
-error TS2353: ... 'rateLimit' does not exist in type 'RouteShorthandOptions<...>'`).
+   specify known properties, and 'rateLimit' does not exist in type
+   'FastifyContextConfig'`) and on G2 (run 37257508695, `probe.ts(20,24):
+   error TS2353: ... 'rateLimit' does not exist in type 'RouteShorthandOptions<...>'`).
    So the literal forms do not get past `npm run check`. **Unmeasured:** a form
    that gets past TypeScript's excess-property check, such as an options object
    held in a variable or a cast (the class uses `flowsTo`, so CodeQL may still
@@ -367,7 +367,7 @@ into this ticket's Log. Then the option's own work.
   `import { RateLimiter } from "@webtools/core/rate-limit";`.
 
   **The commands.** The check conclusions are in `gh pr view 352 --json
-statusCheckRollup`, filtered to `CodeQL` and `codeql`, and the alert text is
+  statusCheckRollup`, filtered to `CodeQL` and `codeql`, and the alert text is
   not in `gh` output at all: it was read by fetching each check run's
   `detailsUrl` as a web page, which worked without authentication on this public
   repository. Run URLs: A <https://github.com/brunolabbe/tools/runs/111550841424>,
@@ -381,7 +381,7 @@ statusCheckRollup`, filtered to `CodeQL` and `codeql`, and the alert text is
   `0`. The probe's other checks (`check`, `docker`, `test`) went red from B on,
   because the probe imports an uninstalled package; that is the probe, not a
   finding. The probe PR's title is `test(ledger): DO NOT MERGE — repo-91 CodeQL
-measurement`, not the dispatch's bare `DO NOT MERGE — ...`, because
+  measurement`, not the dispatch's bare `DO NOT MERGE — ...`, because
   `.claude/hooks/check-pr-title.sh` refuses a title that is not a conventional
   commit.
 
@@ -394,7 +394,7 @@ measurement`, not the dispatch's bare `DO NOT MERGE — ...`, because
   `MissingRateLimiting.qll` through a summarising fetch (not a clone), before
   choosing variants:
   `FastifyRateLimiter` is `this = DataFlow::moduleImport(["fastify-rate-limit",
-"@fastify/rate-limit"])`; `FastifyPerRouteRateLimit` requires a
+  "@fastify/rate-limit"])`; `FastifyPerRouteRateLimit` requires a
   `Fastify::RouteSetup` whose method is not `route` or `addHook`, with three or
   more arguments, where an object flowing to argument 1 has
   `getAPropertySource("config").getAPropertySource("rateLimit")` or
@@ -416,8 +416,8 @@ measurement`, not the dispatch's bare `DO NOT MERGE — ...`, because
   pass with no plugin at all, as the class text predicts: the model matches the
   key. **But the probe's own CI rejected both literals** (run 37257413673 for
   G1: `probe.ts(19,34): error TS2353 ... 'rateLimit' does not exist in type
-'FastifyContextConfig'`; run 37257508695 for G2: `probe.ts(20,24): error
-TS2353 ... 'rateLimit' does not exist in type 'RouteShorthandOptions<...>'`,
+  'FastifyContextConfig'`; run 37257508695 for G2: `probe.ts(20,24): error
+  TS2353 ... 'rateLimit' does not exist in type 'RouteShorthandOptions<...>'`,
   both from `npm run check` and `npm run build`; found by the 2026-10-05 gate and
   reproduced with `gh run view <id> --log-failed | grep -m2 "error TS"`). So with
   no plugin installed the literal forms do not pass the repo's own checks. Not
@@ -441,7 +441,7 @@ TS2353 ... 'rateLimit' does not exist in type 'RouteShorthandOptions<...>'`,
   all.
 
   **The commands.** Same as 2026-10-04: conclusions from `gh pr view 356 --json
-statusCheckRollup` filtered to `CodeQL` and `codeql` (the `codeql` job was
+  statusCheckRollup` filtered to `CodeQL` and `codeql` (the `codeql` job was
   SUCCESS on every head), alert text from fetching each `detailsUrl` as a web
   page. Run URLs: H <https://github.com/brunolabbe/tools/runs/111596813723>, G4
   <https://github.com/brunolabbe/tools/runs/111597212755>, G1
@@ -451,11 +451,11 @@ statusCheckRollup` filtered to `CodeQL` and `codeql` (the `codeql` job was
   <https://github.com/brunolabbe/tools/runs/111598769570>. The G4 and G6
   pages read "No new alerts in code changed by this pull request"; G1 and G2 were
   read by conclusion only. Cleanup: `git ls-remote --heads origin | grep -c
-repo-91-codeql-probe-scratch` printed `0`. The 2026-10-04 gate's other
+  repo-91-codeql-probe-scratch` printed `0`. The 2026-10-04 gate's other
   findings are folded into the body above (the cause, options 1 and 2) and were
   reproduced: `git grep -c "onRequest" origin/main --
-'tools/*/api/src/routes/*.ts'` lists 10 route files, and `git grep -n "addHook"
-origin/main -- tools packages` lists seven calls, none a limiter (CORS in all
+  'tools/*/api/src/routes/*.ts'` lists 10 route files, and `git grep -n "addHook"
+  origin/main -- tools packages` lists seven calls, none a limiter (CORS in all
   three servers' `registerCors`, request logging, identity, `onSend`).
 
 - 2026-10-05: **the owner chose option 2; the ticket is landed `done`.** The

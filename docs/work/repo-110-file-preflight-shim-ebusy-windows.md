@@ -31,7 +31,7 @@ Reproduce it with `gh run view 39094129753 --job 117576949695 --log | grep -E "E
 What was measured, and no more:
 
 - **The branch does not reach the file.** PR #541's diff, `gh pr diff 541
---name-only`, lists only paths under `tools/ledger/`. None is under
+  --name-only`, lists only paths under `tools/ledger/`. None is under
   `scripts/`.
 - **The same file passed on the same leg at the same time.** The three
   release-please runs `39094138876`, `39094138627` and `39094138222`, started
@@ -145,7 +145,7 @@ next-id.mjs's id-sweep wording when gh fails inside check 5". Grep for
 - **low** · `nfr:maintainability` · no `Done when` line depends on it · F3 —
   the leak spec's guard, `shimDirsMade.length >= 3`, is met by the three
   `removeShimDir` unit specs on their own. `npx vitest run
-scripts/test/preflight.test.ts -t "repo-110"` gives `4 passed | 105 skipped`
+  scripts/test/preflight.test.ts -t "repo-110"` gives `4 passed | 105 skipped`
   and exit 0, with none of the three call sites run. A future shim test that
   uses a raw `mkdtempSync` is invisible to the spec. The same order dependence
   makes it go red falsely (the safe direction) whenever it runs first: under
@@ -219,7 +219,7 @@ scripts/test/preflight.test.ts -t "repo-110"` gives `4 passed | 105 skipped`
   `origin/main` at `e40a506a`. Reproduction and the CI readings are in Why.
   - `node scripts/next-id.mjs repo` (re-run before the commit): last line
     `next free: repo-110`. Its `clash: repo-93 is claimed by
-branch/repo-93-sqlite-file-tests-windows-timeout, merged` line names a
+    branch/repo-93-sqlite-file-tests-windows-timeout, merged` line names a
     merged ticket, not a held id.
   - `npm run build` at the base: exit 0.
   - `grep -n "rmSync(shimDir" scripts/test/preflight.test.ts` on the base: three
@@ -257,22 +257,22 @@ branch/repo-93-sqlite-file-tests-windows-timeout, merged` line names a
     as a default parameter, so the literal `rmSync(shimDir` does not occur.
     Three call sites, `removeShimDir(shimDir)`, at the three tests Build names.
   - `Done when` 2, the spec `removeShimDir survives one EBUSY and then removes the
-directory (repo-110)`: the injected remove throws `EBUSY` on call 1, succeeds
+    directory (repo-110)`: the injected remove throws `EBUSY` on call 1, succeeds
     on call 2; asserts 2 calls, one wait of 50 ms, directory gone.
   - `Done when` 3, the spec `no preflight-ghshim directory this file made is left
-behind (repo-110)`. Each site's `removeShimDir(shimDir)` line replaced by a
+    behind (repo-110)`. Each site's `removeShimDir(shimDir)` line replaced by a
     comment, `npx vitest run scripts/test/preflight.test.ts`, then restored with
     `git checkout beb5ba3d -- <file>`: line 779 `Tests  1 failed | 108 passed
-(109)` (`expected [ '/tmp/preflight-ghshim-W7QFkb' ] to deeply equal []`),
+    (109)` (`expected [ '/tmp/preflight-ghshim-W7QFkb' ] to deeply equal []`),
     line 2267 `1 failed | 108 passed (109)` (`...-qKBdpM`), line 2320 `1 failed |
-108 passed (109)` (`...-T4VIBE`). Three green: the restored file, once after
+    108 passed (109)` (`...-T4VIBE`). Three green: the restored file, once after
     each, `Tests  109 passed (109)` x3. The three leaked directories were removed
     by hand.
   - `Done when` 4, the spec `removeShimDir fails naming the directory when EBUSY
-never clears (repo-110)`: remove throws on every call; `toThrow(dir)`, 8
+    never clears (repo-110)`: remove throws on every call; `toThrow(dir)`, 8
     calls, directory still present. Mutation: `return` instead of the throw on
     the last attempt gives `FAIL ... removeShimDir fails naming the directory
-when EBUSY never clears`, `1 failed | 108 passed (109)`. A third spec,
+    when EBUSY never clears`, `1 failed | 108 passed (109)`. A third spec,
     `removeShimDir throws any error other than EBUSY at once, unretried`, pins
     that the helper does not swallow everything; the mutation that deletes the
     `!== "EBUSY"` guard fails exactly it, `1 failed | 108 passed (109)`.
@@ -311,7 +311,7 @@ when EBUSY never clears`, `1 failed | 108 passed (109)`. A third spec,
     `preflight-ghshim-*` directories in `os.tmpdir()` before and after goes red."
     New wording: "a spec that asserts none of the shim directories this file made
     survives goes red", the rest of the line unchanged. The spec is `no
-preflight-ghshim directory this file made is left behind (repo-110)`; the
+    preflight-ghshim directory this file made is left behind (repo-110)`; the
     three red and three green readings are in the builder's entry above. A count
     of the shared temp directory races with concurrent sessions
     (`.claude/rules/testing.md`).

@@ -165,7 +165,7 @@ in the frontmatter of _this_ ticket would be the defect it documents.
 3. **The other two readers already cope, so do not "fix" them.** Verified with
    the same neutered copy:
    - `readyTickets` (`:224-226`) filters on `depends_on.every((id) =>
-done.has(id))`. A dangling id is not in `done`, so the ticket is withheld
+     done.has(id))`. A dangling id is not in `done`, so the ticket is withheld
      from `--ready` — conservative, and the right answer already.
    - The default view prints `(waits on repo-404)` from `:455`, which reads
      `depends_on` directly. It rendered every other ticket correctly.
@@ -289,7 +289,7 @@ What to assert, using `repoWith`:
   id. None of them prints only the error.
 - `npm run status -- --show <the malformed ticket>` prints the ticket and names
   the missing dependency, and does not print `Cannot read properties of
-undefined`.
+  undefined`.
 - `npm run status -- --json` writes parseable JSON to stdout that contains the
   readable tickets and a structured account of the unreadable dependency. Its
   exit code is whatever Build step 5 decided, and the Log says which and why.

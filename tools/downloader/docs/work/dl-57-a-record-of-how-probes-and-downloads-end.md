@@ -95,7 +95,7 @@ download success rate measures patience instead of the tool.
    the Dockerfile's workspace list. On the host it runs as
    `docker compose exec downloader node tools/downloader/api/dist/report.js --days 7`
    — the full path from `/app`, the container's `WORKDIR`, which `docker
-compose exec` inherits since neither compose file sets its own
+   compose exec` inherits since neither compose file sets its own
    `working_dir`; `dist/report.js` alone resolves to a path that does not
    exist. Document that under "Operating it" in `docs/02-DEPLOYMENT.md`.
 
@@ -434,7 +434,7 @@ row; a trailing-dot host normalises to the same string as without one).
 
   **What the brief had wrong or left open:**
   - `details` on `AppErrorPayload` (`@webtools/core`) is `Record<string,
-unknown>` — not typed in `@downloader/contract` — so step 3's "stop and
+    unknown>` — not typed in `@downloader/contract` — so step 3's "stop and
     raise it" did not apply; proceeded without asking.
   - "Time the winning attempt too" turned out to need more than adding
     `durationMs` to the existing `details.attempts` entries (which only ever
@@ -468,7 +468,7 @@ unknown>` — not typed in `@downloader/contract` — so step 3's "stop and
     successes), not that resolver's own hit rate across every attempt —
     `attempts_json` has the data for the latter if a future report wants it.
     Duration percentiles per resolver exclude cache hits (recorded `durationMs:
-0`), which would otherwise deflate real resolve latency.
+    0`), which would otherwise deflate real resolve latency.
 
   **dl-51 seam** (per-client job-slot cap, built concurrently by
   `aaa591c7f4b3f67c7` on an unmerged branch): agreed directly with that builder
@@ -519,9 +519,9 @@ unknown>` — not typed in `@downloader/contract` — so step 3's "stop and
   assertions updated from 4 to 5), `tools/downloader/resolvers/test/registry.test.ts`.
 
   **Verification:** `npm run check` — clean. `npm test -- --project
-downloader` — 77 files, 1284 tests, all green (baseline before this branch:
+  downloader` — 77 files, 1284 tests, all green (baseline before this branch:
   75 files, 1265 tests). `docker compose exec downloader node
-tools/downloader/api/dist/report.js` is **unproven (gate)** — the container
+  tools/downloader/api/dist/report.js` is **unproven (gate)** — the container
   build did not run here, per the ticket. **Correction:** the command as
   originally written here and in the brief (`node dist/report.js`, no path
   prefix) cannot run in the built image — the runtime stage's `WORKDIR` is
@@ -559,7 +559,7 @@ tools/downloader/api/dist/report.js` is **unproven (gate)** — the container
   reproduces 3 red, and its NULL-check-dropped mutation reproduces as a
   genuine no-op (recorded as such, not claimed fixed); both wording errors
   corrected in place. Verified: `npm run check` clean; `npm test -- --project
-downloader` — 78 files, 1298 tests; citations 46/46 verified,
+  downloader` — 78 files, 1298 tests; citations 46/46 verified,
   `citations-gate.mjs` unchanged (`repo-33` only).
 - 2026-09-15 — Phase 2. The owner answered all three of gate round 1's held
   items (see `## Decisions` above), and dl-51 settled at `6045f80`
@@ -610,7 +610,7 @@ downloader` — 78 files, 1298 tests; citations 46/46 verified,
      text actually sits at there (`215`, not the record's un-pinned `248`,
      which was dl-51's own tip and not main) — verified with
      `node scripts/citations.mjs <record> --section Review --require-anchors
---require-distinct-anchors`, exit 0, before trusting it.
+     --require-distinct-anchors`, exit 0, before trusting it.
   5. **Also folded in**, per the reviewer's ask on the prior round's commit:
      a markdown blockquote artefact in the round-2 disclosure note (oxfmt read
      a wrapped line starting with `>= ?` as a blockquote marker) — rephrased
@@ -618,7 +618,7 @@ downloader` — 78 files, 1298 tests; citations 46/46 verified,
      `grep -n "^  > "`.
 
   Verified after all of the above: `npm run check` clean; `npm test --
-project downloader` — 80 files, 1339 tests, all green; citations on this
+  project downloader` — 80 files, 1339 tests, all green; citations on this
   record 46/46 verified (`--require-anchors --require-distinct-anchors`);
   `node scripts/citations-gate.mjs --against origin/main` — exit 0, `repo-33`
   no longer failing (its pin arrived with dl-51). Sent the new sha to the
@@ -647,7 +647,7 @@ project downloader` — 80 files, 1339 tests, all green; citations on this
   (#251, `1806525`) and dl-63 (#256, `2dc8365`) squash-merged, orphaning the
   branch's old base commits and the two gate-record pins (`790c17b`,
   `7b0cdcb`) built against them. `git checkout --detach
-origin/dl-57-outcome-record && git rebase --onto origin/main 2e8aa7b`
+  origin/dl-57-outcome-record && git rebase --onto origin/main 2e8aa7b`
   replayed the 7 commits unique to this branch with **no manual conflict**:
   the one conflict the rebase brief predicted — this branch's own re-pin of
   `tools/downloader/api/src/config.ts@95c6403:215` in dl-51's record colliding
@@ -678,8 +678,8 @@ origin/dl-57-outcome-record && git rebase --onto origin/main 2e8aa7b`
   added in phase 2 that happens to read the same). No finding, verdict or
   acceptance line changed — only how each citation points at the commit the
   gate actually reviewed. Verified: `node scripts/citations.mjs
-tools/downloader/docs/work/dl-57-a-record-of-how-probes-and-downloads-end.md
---section Review --require-anchors --require-distinct-anchors` — exit 0, 56
+  tools/downloader/docs/work/dl-57-a-record-of-how-probes-and-downloads-end.md
+  --section Review --require-anchors --require-distinct-anchors` — exit 0, 56
   verified, 0 moved, 0 unanchored, 0 unresolvable, 7 unchecked (the 7 prose
   citations, exactly), 1 pinned (the `@95c6403` one dl-51's own record owns).
   **Also checked, per the rebase brief's step 4**: this branch's rewrite of
@@ -690,7 +690,7 @@ tools/downloader/docs/work/dl-57-a-record-of-how-probes-and-downloads-end.md
   enforced, 0 failing, 7 grandfathered (none of them touching these files),
   **0 raised** against `origin/main`, and spot-checking dl-51, dl-55 and
   dl-60 individually with `citations.mjs --section Review
---require-anchors --require-distinct-anchors` each exits 0. Nothing moved
+  --require-anchors --require-distinct-anchors` each exits 0. Nothing moved
   out of range, so no new pin was needed on any other ticket's record.
   Verified after both repairs: `npm run build`; `npm run check` exit 0;
   `npm test -- --project downloader` — 82 files, 1386 tests, all green.

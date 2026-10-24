@@ -300,7 +300,7 @@ case rather than to paper over a disagreement.
 - **`ffmpeg-static` 7.0.2** (`--enable-gnutls`, johnvansickle static build):
   verified a real public HTTPS origin with `-tls_verify 1` and no `-ca_file`,
   reading 101,147 bytes of body before failing on `Invalid data found when
-processing input` — which is the demuxer's complaint about JSON, i.e. after a
+  processing input` — which is the demuxer's complaint about JSON, i.e. after a
   completed, verified handshake.
 - **The distribution's ffmpeg 6.1.1** (Ubuntu noble, also `--enable-gnutls`):
   same command, same 101,147 bytes, same demuxer complaint. This is the binary

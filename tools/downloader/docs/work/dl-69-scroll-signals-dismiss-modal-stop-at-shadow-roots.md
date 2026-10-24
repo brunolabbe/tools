@@ -23,7 +23,7 @@ the light DOM only:
   used to scroll a player into view before the provocation clicks run.
 - `SIGNALS_SCRIPT`'s `hasPlayerElement` (~:421) —
   `document.querySelector('video, audio, iframe[src], [class*="player"],
-[id*="player"]')`, fed into `classify.ts:161`'s `loginForm` test:
+  [id*="player"]')`, fed into `classify.ts:161`'s `loginForm` test:
   `hasPasswordInput && !hasPlayerElement`.
 - `dismissModal`'s close-layer guard, `container.querySelector('video')`
   (~:129, inside `MARK_CLOSE_SCRIPT`) — a layer holding a `<video>` is left
@@ -161,7 +161,7 @@ label each honestly rather than claim a measurement that was not taken:
 1. In `resolvers/src/browser/provoke.ts`, give `SIGNALS_SCRIPT`'s
    `hasPlayerElement` a shadow-piercing check:
    `(${ALL_MEDIA_FN})('video, audio, iframe[src], [class*="player"],
-[id*="player"]').length > 0` in place of the `document.querySelector(...)`
+   [id*="player"]').length > 0` in place of the `document.querySelector(...)`
    call. This is the one with a measured, reproduced effect (above) — build
    it first, and confirm on the reproduction fixture that the verdict changes
    from `AUTH_REQUIRED` to something that does not stop the chain (dl-68's
@@ -181,7 +181,7 @@ label each honestly rather than claim a measurement that was not taken:
    to `document` at every existing call site, so `CHOOSE_VIDEO_FN`,
    `PLAY_SCRIPT` and dl-69's own new calls above are unaffected), and call it
    with `container` here: `(${ALL_MEDIA_FN})('video',
-container).length > 0` in place of `container.querySelector('video')`.
+   container).length > 0` in place of `container.querySelector('video')`.
    Measure its actual effect the same way as step 2.
 4. **Tests**, at the end of `browser-resolver.test.ts` and/or
    `provoke.test.ts`, whichever isolates each case the way dl-68's Build step
@@ -295,13 +295,13 @@ Three call sites now use it:
 
 - `SIGNALS_SCRIPT`'s `hasPlayerElement`:
   `(ALL_MEDIA_FN)('video, audio, iframe[src], [class*="player"],
-[id*="player"]').length > 0` in place of `document.querySelector(...)`
+  [id*="player"]').length > 0` in place of `document.querySelector(...)`
   (Build step 1).
 - `SCROLL_SCRIPT`: `(ALL_MEDIA_FN)('video, iframe, [class*="player"],
-[id*="player"]')[0]` in place of `document.querySelector(...)` (Build step
+  [id*="player"]')[0]` in place of `document.querySelector(...)` (Build step
   2).
 - `MARK_CLOSE_SCRIPT`'s close-layer guard: `(ALL_MEDIA_FN)('video',
-container).length > 0` in place of `container.querySelector('video')`
+  container).length > 0` in place of `container.querySelector('video')`
   (Build step 3), the one call site that passes a non-default `root`.
 
 **`hasPlayerElement`, verified.** After the fix, the same reproduction

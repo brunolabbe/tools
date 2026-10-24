@@ -413,7 +413,7 @@ The round's own tests each go red under a mutant of the line they guard:
   **Brief correction.** The ticket says dl-79 narrows the untyped-playlist case.
   It does only when the response declares a `Content-Length`:
   `resolvers/src/browser/sniff.ts` has `if (length === undefined || length <= 0)
-return false;`. The ticket's own harness answers with
+  return false;`. The ticket's own harness answers with
   `writeHead(...).end(string)`, which Node sends chunked, so the literal repro
   still fails after dl-79. A chunked untyped playlist, a JSON-borne one and a
   blob-borne one all remain.
@@ -561,7 +561,7 @@ return false;`. The ticket's own harness answers with
   media segment, which has no `moov`: fragment), and in a real Chromium
   `chunk-streams.test.ts` "a lone numbered file with moov, mvex and then moof is
   offered" (red on `020b5dfc`'s `chunk-sniff.ts`: `AppError: No downloadable
-video stream was found on that page.`) and "beside two whole files in one
+  video stream was found on that page.`) and "beside two whole files in one
   directory, all three are offered". The small-body unit case is what pins the
   `moof` clause: with that clause deleted only `fragmentedMovie(1024)` fails,
   because a large `mdat` already leaves unparsed bytes after the head.
@@ -575,7 +575,7 @@ video stream was found on that page.`) and "beside two whole files in one
   reads no more" (a `/slow.html` of 8 files whose head reads are never answered;
   aborts when the first arrives; expects `CANCELED`, under 2 s, and no further
   head read). With the signal not passed it fails `expected 6009 to be less than
-2000`, the gate's 6012 ms. Unit: "an abort starts no further read" and "an
+  2000`, the gate's 6012 ms. Unit: "an abort starts no further read" and "an
   abort abandons the read in flight instead of waiting out its budget".
 
   **Low, fixed in the sniff, found real in `rank.ts`.** The sniff's directory is

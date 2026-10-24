@@ -220,7 +220,7 @@ site now passes `'video'` explicitly (`CHOOSE_VIDEO_FN`,
 it:
 
 - `PLAY_SCRIPT` now builds its candidate list from `ALL_MEDIA_FN('video,
-audio')` instead of `document.querySelectorAll('video, audio')`.
+  audio')` instead of `document.querySelectorAll('video, audio')`.
 - `METADATA_SCRIPT`'s duration fallback now reads
   `(ALL_MEDIA_FN)('audio')[0] || null` instead of
   `document.querySelector('audio')`.

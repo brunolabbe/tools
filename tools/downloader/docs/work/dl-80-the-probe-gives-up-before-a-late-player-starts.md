@@ -108,7 +108,7 @@ applied unconditionally. Mutant D is **high 1**.
 - **high** · Done-when line 2 depends on it · **"No later than the deadline" is
   asserted by a bound that is not the deadline, and the test passes with the
   deadline broken.** `a page with no media respects the empty floor and the
-deadline` asserts `elapsedMs < shortTimeoutMs + 2000`. The wait's deadline is
+  deadline` asserts `elapsedMs < shortTimeoutMs + 2000`. The wait's deadline is
   not `shortTimeoutMs`: `BrowserResolver.#run` passes `deadline - TEARDOWN_RESERVE_MS`
   (4000 ms) to `waitForQuiet`, so the latest a `NO_MEDIA_FOUND` can arrive at a
   15 s budget is about 11 s, and when the deadline arrives first `classifyFailure`
@@ -410,7 +410,7 @@ corrects them.
 **2026-10-06, gate 1 (FAIL at `056aab7..bd541c1`), repaired by the fixer:**
 
 - **Step 1's reproduction, recorded late.** Without the floor (`emptyMinWaitMs:
-1200`, today's behaviour) the branch's own `delayed-player.html` ends
+  1200`, today's behaviour) the branch's own `delayed-player.html` ends
   `NO_MEDIA_FOUND` at 2.82 s and 2.79 s (two runs, measured by the gate, not by
   the builder). With the default 9 s floor the same page ends `OK hls` at 8.6 to
   8.8 s.
@@ -457,5 +457,5 @@ corrects them.
 - **Left as the gate wrote them (recorded, not repaired):** `hasPlayableHit`
   counts any non-segment hit, so a preview clip or a dead manifest ends the floor
   (this is the ticket's own definition of "non-segment"); `HitCollector.
-hasPlayableHit` has no kind-by-kind unit test; the e2e sniffer leg's timing was
+  hasPlayableHit` has no kind-by-kind unit test; the e2e sniffer leg's timing was
   checked green on CI at the gated head.

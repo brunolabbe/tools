@@ -493,7 +493,7 @@ re-resolved rather than left, which is the standing rule for a gate record. _rep
   shows the same single assertion the filing found —
   `citations.test.ts > --rev names which record it read…`,
   `expected '2 references in ..\..\..\..\..\RUNNER…' to match /This record
-exists at that rev and ci…/` — at 19:32Z, roughly eight hours after it merged.
+  exists at that rev and ci…/` — at 19:32Z, roughly eight hours after it merged.
   One regression, not eleven Windows problems.
 
   **Measurement 4's flagship claim is wrong, and the correction changes what
@@ -510,7 +510,7 @@ exists at that rev and ci…/` — at 19:32Z, roughly eight hours after it merge
   Not taken on reading. `killProcessTree` was temporarily edited to append its
   `pid` and `process.platform` to a scratch file, and
   `npx vitest run tools/downloader/engine/test/hls-e2e.test.ts -t "cancelling
-kills the process tree"` was run: 1 passed, and the marker file contained
+  kills the process tree"` was run: 1 passed, and the marker file contained
   exactly `killProcessTree 26858 linux`. So a real abort of a real ffmpeg
   reaches the call; on `windows-latest` the same call takes `IS_WINDOWS` into
   `killTreeWindows` and the real `taskkill.exe`, and the two `fs.stat`
@@ -553,7 +553,7 @@ kills the process tree"` was run: 1 passed, and the marker file contained
   **Free fix taken on the way past**, since the lines were being edited: the
   comment closing the `test` job said the "Windows suite" lives in
   `downloader.yml`. It does not, and `git log -S windows --
-.github/workflows/downloader.yml` returns nothing at all, so no revision of
+  .github/workflows/downloader.yml` returns nothing at all, so no revision of
   that file ever had one. Corrected to say `windows-latest` appears in this
   repository exactly once.
 
@@ -643,7 +643,7 @@ kills the process tree"` was run: 1 passed, and the marker file contained
   `ce636aa8709d92e3b8cbb7df8302dad7ba2c4e54` — read with
   `gh run view 34166115140 --json status,conclusion,headSha,jobs` and
   `--json jobs --jq '.jobs[] | select(.name | contains("informational")) |
-.steps[]'`, rather than taken from the relay that prompted this entry.
+  .steps[]'`, rather than taken from the relay that prompted this entry.
 
   1. **The rename renders on a real runner.** The job list reads
      `test (windows-latest, informational)`; the other leg is exactly
@@ -661,7 +661,7 @@ kills the process tree"` was run: 1 passed, and the marker file contained
      → **success**. The notice ran.
 
   And it went red for the predicted reason, not a new one: `gh run view
-34166115140 --log-failed` shows the same
+  34166115140 --log-failed` shows the same
   `citations.test.ts > --rev names which record it read…` assertion,
   `expected '2 references in ..\..\..\..\..\RUNNER…'`, which repo-36 fixes on
   its own branch. The prediction that this leg would be red on this pull request

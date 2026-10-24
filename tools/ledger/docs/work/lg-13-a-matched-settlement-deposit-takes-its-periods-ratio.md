@@ -186,12 +186,12 @@ Findings in the lines this round touched:
   - Red, then green. `npx vitest run tools/ledger/books` with `periods.ts`
     reverted: `4 failed | 193 passed (197)` (the 0.5 and 0.7 cases, at 100.00
     and at 100.01). Restored: `197 passed (197)`. `npx vitest run
-tools/ledger/api/test/periods.test.ts` against the books `dist` built
+    tools/ledger/api/test/periods.test.ts` against the books `dist` built
     before the change: `2 failed | 25 passed (27)` (0.5 and 0.7). After
     rebuilding books (`grep -n "deposit.settles"` in
     `books/dist/periods.js` finds lines 130 and 132), `npx vitest run
-tools/ledger/api` passes `269 passed (269)`. `npm test -- --project
-ledger` passes `519 passed (519)`. `git diff --numstat` shows 0 lines
+    tools/ledger/api` passes `269 passed (269)`. `npm test -- --project
+    ledger` passes `519 passed (519)`. `git diff --numstat` shows 0 lines
     removed from either test file, so every lg-6 test stands unchanged.
   - **Sub-cent residue, measured, not changed.** I ran a seeded sweep (a scratch
     script over `books/dist`) of 20 000 trials. Each draws a random share

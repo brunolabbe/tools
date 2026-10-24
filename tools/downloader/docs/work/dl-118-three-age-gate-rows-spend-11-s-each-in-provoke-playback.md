@@ -241,14 +241,14 @@ The new cap test can fail. With `cappedTimeout` made to ignore the cap, `provoke
     `/age-false-shell-menu-button.html` — `10925 ms, error NO_MEDIA_FOUND`, four
     `locator.click failed` of 2004, 2000, 1999 and 2066 ms (10974 ms before).
   - Rows, `npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts
--t "accepted residue: .* is pressed where play is a click"`, 3 passed of 183:
+    -t "accepted residue: .* is pressed where play is a click"`, 3 passed of 183:
     closable 4546 ms (was 12.8 to 13.0 s), sticky 4489 ms (was 12.8 to 13.0 s),
     menu button 4125 ms (was 10.8 s). Same three assertions. The margin under
     5 s is about 0.5 s, so a runner slower than this one may see a row above it;
     the floor is the 2.9 s a clean probe costs here.
   - The cap itself, `provoke.test.ts` "clickTimeoutMs caps the clicks a covering
     layer blocks (dl-118)": one page, four blocked play clicks, `clickTimeoutMs:
-200`, finishes in under 5 s where the uncapped run above takes 8 s of waits.
+    200`, finishes in under 5 s where the uncapped run above takes 8 s of waits.
 
 - 2026-10-12 — **Gate 1's four lows, _fixed at landing_, by the owner's choice**
   (asked: "Land it how?"; options: "lander applies all four (recommended)",
@@ -265,35 +265,35 @@ The new cap test can fail. With `cappedTimeout` made to ignore the cap, `provoke
      0, NaN, -1, Infinity. With the body put back to
      `cap === undefined ? timeoutMs : Math.min(timeoutMs, cap)`,
      `npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts -t
-cappedTimeout`:
+     cappedTimeout`:
      `× a cap of '0'` (`expected +0 to be 2000`), `× 'NaN'` (`expected NaN to be
-2000`), `× 'negative'` (`expected -1 to be 2000`), `Tests  3 failed | 4
-passed | 234 skipped (241)`.
+     2000`), `× 'negative'` (`expected -1 to be 2000`), `Tests  3 failed | 4
+     passed | 234 skipped (241)`.
   2. _The consent click's cap was untested._ The cap test is now a `test.each`
      over the menu page and both cookie-sheet pages. With `dismissConsent(frame,
-2000, scriptable)` restored in `provokeFrame` and nothing else changed, the
+     2000, scriptable)` restored in `provokeFrame` and nothing else changed, the
      same command with `-t "dl-118"`:
      `✓ a shell's 18+ menu button … 2028ms`, `× … closable panel … 4022ms`
      (`expected 4020 to be less than 3000`), `× … sticky panel … 3929ms`
      (`expected 3927 to be less than 3000`), `Tests  2 failed | 8 passed | 231
-skipped (241)`. With the fix in place the three rows ran 2011, 2213 and 2155 ms,
+     skipped (241)`. With the fix in place the three rows ran 2011, 2213 and 2155 ms,
      all green. The menu page does not move, which is why the cookie sheets are rows: the
      ceiling sits between about 2.2 s capped and about 4 s with the consent click
      alone uncapped.
   3. _No test checked that the uncapped wait is still 2000 ms._ The same seven
      rows: `unset -> 2000` and `5000 -> 2000`. With the body planted as
      `Math.min(timeoutMs, cap ?? 300)`: `× a cap of 'unset'` (`expected 300 to be
-2000`) and the three non-positive rows, `Tests  4 failed | 3 passed | 234
-skipped (241)`.
+     2000`) and the three non-positive rows, `Tests  4 failed | 3 passed | 234
+     skipped (241)`.
   4. _The cap test's title claimed 4 x the cap._ It now reads "the blocked clicks
      wait for the cap, not 2000 ms", and its comment says the ceiling shows the cap
      shortened the run and is not a count of the clicks.
 
   After the fixes, with the fix in place: `npx vitest run
-tools/downloader/resolvers/test/browser/provoke.test.ts`: `Tests  241 passed
-(241)`; `npx vitest run
-tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "accepted
-residue"`: `Tests  5 passed | 178 skipped (183)`, the three rows at 4387 ms
+  tools/downloader/resolvers/test/browser/provoke.test.ts`: `Tests  241 passed
+  (241)`; `npx vitest run
+  tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "accepted
+  residue"`: `Tests  5 passed | 178 skipped (183)`, the three rows at 4387 ms
   (closable), 4368 ms (sticky) and 4015 ms (menu button), under Done when 2's 5 s.
   `provoke.ts` and `browser.ts` change only `cappedTimeout` and two doc comments;
   `isPlayPress`, `startsWord` and the dl-83 block of `browser-resolver.test.ts`

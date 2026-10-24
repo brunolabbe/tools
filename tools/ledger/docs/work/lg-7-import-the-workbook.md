@@ -21,7 +21,7 @@ prove it reproduces the workbook's own figures before it writes a row.
 ## Build
 
 1. **A command, not a route.** `npm run import:ledger -- <workbook.xlsx>
-[--corrections <file.json>]`, in `api`, writing to the configured database.
+   [--corrections <file.json>]`, in `api`, writing to the configured database.
    It is a one-off, and it has no reason to exist on the network.
 2. **Reading `.xlsx`:**
    - use cached cell values, never evaluated formulas;

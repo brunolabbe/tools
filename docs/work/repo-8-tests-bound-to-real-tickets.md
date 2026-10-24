@@ -180,7 +180,7 @@ is for.
    criterion — the marker of the generated region in the file it deleted — and
    it must not be lost in the move. Add the closed-board case as its pair: a
    tool with no open tickets renders `None. Every ticket this tool has is
-closed.` and no `| Ticket ` header, which is also unasserted today.
+   closed.` and no `| Ticket ` header, which is also unasserted today.
 4. **Leave `:459-464` and `:596-602` rootless, and say in the Log that you
    did.** They are the suite's only proof that the CLI runs at all against the
    tree it derives itself, and neither asserts anything a ticket can move. Do

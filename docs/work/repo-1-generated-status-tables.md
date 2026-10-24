@@ -488,7 +488,7 @@ changed it:
   acceptance criteria. `dl-19` cites the page nowhere.
 - **The remainder, in this ticket's own prose** — a number that this sentence
   moves by existing, which is why it is not written down. `git grep -c 03-STATUS
-docs/work/repo-1-generated-status-tables.md` answers it, and reproducing the
+  docs/work/repo-1-generated-status-tables.md` answers it, and reproducing the
   two groups above is `git grep -n 03-STATUS` with the ticket paths filtered out
   afterwards, never before.
 

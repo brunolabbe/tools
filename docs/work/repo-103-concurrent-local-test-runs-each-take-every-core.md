@@ -247,7 +247,7 @@ The gate needs no agent to coordinate and costs no tokens.
     - run 0: `test-gate: slot-0, 2 of 2 runs active (pids 1218694, 1218688): 5 workers`
     - run 1: `test-gate: slot-1, 2 of 2 runs active (pids 1218694, 1218688): 5 workers`
     - run 2: three lines `test-gate: waiting for a test slot: 2 runs active (pids 1218694,
-1218688); waited 0 s | 15 s | 30 s of at most 300 s`, then
+      1218688); waited 0 s | 15 s | 30 s of at most 300 s`, then
       `test-gate: slot-1, 1 of 2 runs active (pids 1219098): 11 workers`.
     - All three ended `Test Files 77 passed (77)`, `Tests 1305 passed (1305)`. A process
       sampler counted the vitest worker processes under each run at its peak: 6 under
@@ -318,7 +318,7 @@ The gate needs no agent to coordinate and costs no tokens.
     header's "briefly" and "machine-wide" are gone, and the one-worker downloader figure
     (1043 s, gate 1) is recorded there.
   - **Med, answer 3: dropped `detached` on POSIX.** `sig.mjs <tree> <dir> group SIGKILL 5000
-npm test -- --project planner` now gives `survivors after 4000 ms: 0`; the
+    npm test -- --project planner` now gives `survivors after 4000 ms: 0`; the
     lock stays (SIGKILL cannot be caught) and is reclaimed by the next run. SIGINT and
     SIGTERM to the group: 0 survivors and an empty lock directory. SIGTERM forwarding walks
     `/proc` for the child's descendants; Windows keeps `taskkill /T /F`. Test: "a SIGKILL to
@@ -330,7 +330,7 @@ npm test -- --project planner` now gives `survivors after 4000 ms: 0`; the
     alive from `/proc/<pid>/stat`; `startTimeOf` now treats state `Z` as gone.
   - **Med, answer 4: the `test:<tool>` scripts go through the gate.** `test:downloader`,
     `test:planner`, `test:ledger` and `test:repo` are `node scripts/test-gate.mjs vitest run
---project <tool>`; `npm run test:<tool> -- no-such-file-anywhere` prints
+    --project <tool>`; `npm run test:<tool> -- no-such-file-anywhere` prints
     `test-gate: slot-0, 1 of 2 runs active (pids …): 11 workers` for each of the four.
     In the root `CLAUDE.md` the package-wide line is now `npm test -- <package-dir>`
     (replacing `npx vitest run <package-dir>`) and `npx vitest run <spec-file>` is named as
@@ -347,7 +347,7 @@ npm test -- --project planner` now gives `survivors after 4000 ms: 0`; the
   - **High, a missing file was unlinked under the guard.** Reproduced with gate 2's
     `release-race.mjs` against a copy of the tree with both busy-waits planted
     (`MUTANT_GAP0_MS=1000 MUTANT_GAP_MS=1000`): before, `A said: test-gate: slot-0, 1 of 1
-runs active (pids 1836946): 11 workers`, `slot-0 after A finished: (none)`, `files: []`.
+    runs active (pids 1836946): 11 workers`, `slot-0 after A finished: (none)`, `files: []`.
     `inspect` reported a missing file as `live: false`, so a run that claimed the slot between
     the guarded re-read and the unlink lost its lock. Fixed in code, which makes the
     comment true: `inspect` now says `exists`, and the guard holder unlinks only a file it
@@ -356,14 +356,14 @@ runs active (pids 1836946): 11 workers`, `slot-0 after A finished: (none)`, `fil
     cannot be replaced before the unlink. After, the gap now sits right after the guarded
     re-read (the unlink it used to sit before no longer runs for a missing file), with
     `TEST_GATE_WAIT_MS=3000` so A's wait is short: A waits (`waiting for a test slot: 1 runs
-active`), then falls back (`no test slot after 3 s; running anyway with 1 worker and no
-slot`), and `slot-0 after A finished: {"pid":…,"who":"second run"}` is the second run's
+    active`), then falls back (`no test slot after 3 s; running anyway with 1 worker and no
+    slot`), and `slot-0 after A finished: {"pid":…,"who":"second run"}` is the second run's
     lock, intact. Test: "a lock released mid-reclaim is not unlinked after another run has
     claimed it" (makes the claim at the guarded re-read, by wrapping `fs.readFileSync`); with
     `if (state.exists && !state.live)` reverted to `if (!state.live)` it fails, with the zombie
     mutant alongside it: `2 failed | 26 passed (28)`. `reclaim2.mjs` (two slots, 60 dead) and
     `reclaim.mjs` (one slot: 60 dead, 30 empty, 30 garbage, 30 reused pid) all give `0 of N
-trials ran both at once`.
+    trials ran both at once`.
   - **Low, the zombie rule had no test.** The `Z` check moved into `parseStartTime`, where
     a stat-line fixture can reach it (a holder cannot be made a zombie from a test, since
     node reaps what it spawns). Test: "a zombie has no start time: it has exited and holds

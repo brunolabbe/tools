@@ -279,7 +279,7 @@ Concretely, the remaining half needs four additions to the contract, none of
 which changes anything that exists:
 
 1. **`RunStatus` and its `TransitionTable`** — `queued → fanning-out → composing
-→ reviewing → done | failed | canceled`, on `@webtools/core`'s machinery. It
+   → reviewing → done | failed | canceled`, on `@webtools/core`'s machinery. It
    belongs in `contract` for the reason the downloader's job FSM does: `web`
    renders the state and `api` enforces it, and neither should own it.
 2. **A `RunEvent` union and its zod schema** — the SSE frames. The

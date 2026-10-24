@@ -294,12 +294,12 @@ owner answered its two open decisions (Decisions 6 and 7). Dispositions:
   served-once-then-403 origin through the real engine
   (`webm-undeclared-codecs.test.ts`: completes as VP9/Opus on attempt 2; a
   really undeclared file fails after exactly one re-probe with `retryable:
-false` and no further header reads). With the exemption removed, 4 of 35
+  false` and no further header reads). With the exemption removed, 4 of 35
   failed. The failed read is now logged (debug, `redactUrl`; a test asserts a
   signature in the query never reaches the log).
 - **MP4 output changed (med, Decision 7): amended, aliases added.** The gate
   measured, from `buildOutputArgs`, at base `mp4 avc1 + ac-3 => -c copy | -c:a
-aac` and `mp4 mp4v.20.9 + mp4a => -c copy | -c:v libx264`; at head both copy.
+  aac` and `mp4 mp4v.20.9 + mp4a => -c copy | -c:v libx264`; at head both copy.
   It also listed header-read fourccs outside the alias table that now transcode
   for MP4 where an undeclared variant was copied: `dvh1`/`dvhe`/`dva1`/`dvav`/
   `dav1` (now aliased, one `mux-args.test.ts` case each), and still `vp08`,

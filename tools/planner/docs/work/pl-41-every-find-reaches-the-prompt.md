@@ -351,7 +351,7 @@ reproduced independently before acting on them.
   gate itself dropped them.
 - **Verification, after the ranking rewrite and all fixes above**:
   `npx vitest run tools/planner/api/test/discovery-pass.test.ts
-tools/planner/api/test/discovery-prompt-bound.test.ts` — 32/32. Every gate
+  tools/planner/api/test/discovery-prompt-bound.test.ts` — 32/32. Every gate
   finding re-verified by mutation on this tree before and after the fix
   (sorter bypass, kind-diff bypass, name-comparator inversion, cap-removal
   against the new ceiling) — each mutation went red only after its matching

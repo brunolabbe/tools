@@ -299,7 +299,7 @@ Per-cell table at the head, `correct / wrongAccept / ambiguous / refusedOther` (
 
   Under every direction, every cell of both probes has `wrongAccept` 0 and
   `refusedOther` 0. Cell by cell, each as `correct / wrongAccept / ambiguous /
-refusedOther`:
+  refusedOther`:
 
   | cell                  | leave (`main`)     | narrow             | pair               | wide 2/3           | pairwide 2/3       |
   | --------------------- | ------------------ | ------------------ | ------------------ | ------------------ | ------------------ |
@@ -426,12 +426,12 @@ refusedOther`:
     reading found throws `ambiguousAcrossDays`. Nothing is ever stored on a
     rival reading. Both files' headers say so.
   - **The final message**, as R1 gets it: `The paste starting at 2026-02-20
-"Virement 0" -5.00 $ (balance 995.00 $) can be read two ways: as 1 already
-stored and 3 new, which fits what is stored, or as 3 already stored and 1 new,
-which fits it too if the workbook dated a row up to 3 days from the bank's
-date, pairing rows that far apart. The books cannot tell which was meant, so
-nothing was stored. Paste a stretch that starts on an earlier row, or on the
-first row not stored yet, so only one reading fits.` Its code is
+    "Virement 0" -5.00 $ (balance 995.00 $) can be read two ways: as 1 already
+    stored and 3 new, which fits what is stored, or as 3 already stored and 1 new,
+    which fits it too if the workbook dated a row up to 3 days from the bank's
+    date, pairing rows that far apart. The books cannot tell which was meant, so
+    nothing was stored. Paste a stretch that starts on an earlier row, or on the
+    first row not stored yet, so only one reading fits.` Its code is
     `STATEMENT_ROW_CONFLICT`, and its `details` have the shape the in-tolerance
     refusal's have (`readings`, most stored first, and the oldest row). The
     in-tolerance "two ways" message is unchanged. Its advice to paste a longer
@@ -516,7 +516,7 @@ first row not stored yet, so only one reading fits.` Its code is
   "The seam lg-58 builds on" and the builder's "The lg-58 seam") say the same.
   Fixed together with the next entry, in one commit, as both are comment edits
   to `workbook-days.ts`. `grep -c "not returned: .matchPart. answers a boolean"
-tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
+  tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
 
 - 2026-10-20 — Fixed at landing by owner choice: gate 1, second low (text) —
   "the code states what the rival pass covers and not what it leaves: a
@@ -526,7 +526,7 @@ tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
   dated 4 or more days off is not weighed, and that a paste like R1 against
   such a row is still stored with the wrong split, as on `main`. Same commit as
   the previous entry. `grep -c "4 or more days off is not weighed"
-tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
+  tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
 
 - 2026-10-20 — Fixed at landing by owner choice: gate 2, low 1 (text, false in
   the safe direction) — "the Log's step-3 paragraph says "`both` is probe c's
@@ -538,7 +538,7 @@ tools/ledger/api/src/workbook-days.ts` → 1 (0 at the gated head).
   "6,000").
 
 - 2026-10-20 — Fixed at landing by owner choice: gate 1, third low (no `Done
-when` line depends on it) — "the Log's "Outcomes changed: 2 of 54" and its
+  when` line depends on it) — "the Log's "Outcomes changed: 2 of 54" and its
   time figures are not reproduced." The builder's figures above stay as
   written. Gate 1's, at `32c20df2` against `main`, from its full report
   ("Attack 4: timing" and "Attack 2"), are beside them. The builder's 54-case

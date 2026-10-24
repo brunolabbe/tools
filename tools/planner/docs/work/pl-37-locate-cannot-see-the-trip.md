@@ -156,7 +156,7 @@ Two halves, both against `6f29eb0`:
   and `county | Nez Perce County, Idaho, United States`, 3 882 km apart.
 - **The seam.** Adding `trip: { destination: "Québec" }` to that same call
   failed to compile: `TS2353: Object literal may only specify known properties,
-and 'trip' does not exist in type 'LocateRequest'`. There was nowhere to put
+  and 'trip' does not exist in type 'LocateRequest'`. There was nowhere to put
   it, which is this ticket's title as a compiler error.
 
 **And the trip did know.** `execute` in `api/src/runs/orchestrator.ts` holds

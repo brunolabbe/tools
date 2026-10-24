@@ -41,7 +41,7 @@ test in `scripts/test/preflight.test.ts`, with no mention of
 ## Build
 
 1. Read the failing run's log for where the 49 s went (`gh run view 36944832854
---attempt 1 --log`, not `--job <id> --log` alone, which `repo-71`'s gate
+   --attempt 1 --log`, not `--job <id> --log` alone, which `repo-71`'s gate
    found returns the wrong attempt's log on a retried run): which of the test's
    steps — splice, push, verify, preflight and its `npm run check`, or the
    real `gh` — was slow, and whether other tests on the leg stalled in the same
@@ -105,7 +105,7 @@ test in `scripts/test/preflight.test.ts`, with no mention of
     test, and the CLI's own steps print only `ok`/`FAIL`
     (`gh run view 36944832854 --job 110644469545 --log-failed`, whose
     per-test lines read `× the --land CLI lands the commit and the push for
-real, … 49088ms`). That log is the failing attempt's own — the timing and
+    real, … 49088ms`). That log is the failing attempt's own — the timing and
     the `Test timed out in 30000ms` at `review-record.test.ts:1551` match the
     ticket — so the `--attempt 1 --log` form the Build names was not needed
     here.
@@ -114,7 +114,7 @@ real, … 49088ms`). That log is the failing attempt's own — the timing and
     tests (`npx vitest run scripts/test/review-record.test.ts --reporter=verbose`),
     and its tests ran mostly 2–5x slower on the runner (one 7.4x); this one ran **18.3x**
     slower (49,088 ms against 2,681 ms). The next worst, `land() splices two
-gates …`, was 2.7x. What this test has that its `land()` siblings do not is
+    gates …`, was 2.7x. What this test has that its `land()` siblings do not is
     `runPreflightDefault`'s real `preflight.mjs` child.
   - **Across the windows leg of 27 `ci.yml` runs, 2026-09-30 to 2026-10-03
     (`gh run view <id> --job <windows job id> --log`, one run per id), the case
@@ -131,7 +131,7 @@ gates …`, was 2.7x. What this test has that its `land()` siblings do not is
     `gh pr list` 65 ms, `npm run check` 122 ms, the preflight `node` child 275 ms,
     five `oxfmt` runs 280 to 375 ms each, everything else under 20 ms. On Linux
     a real `gh` answers `none of the git remotes configured for this repository
-point to a known GitHub host` in 65 ms; on the Windows runner repo-71 already
+    point to a known GitHub host` in 65 ms; on the Windows runner repo-71 already
     measured the same call at 41,330 ms once and 2,024 ms on a retry of the same
     sha, and found that the `PATH` fake never answered there at all.
   - **Unproven, and named so:** that the 49 s was `gh`. No Windows machine was
@@ -146,9 +146,9 @@ point to a known GitHub host` in 65 ms; on the Windows runner repo-71 already
   - Green: `npx vitest run scripts/test/review-record.test.ts` — 68 of 68; the
     case ran 2,042 ms.
   - Red, with the `vi.stubEnv` line replaced by a no-op: `npx vitest run
-scripts/test/review-record.test.ts -t "the --land CLI lands"` fails with
+    scripts/test/review-record.test.ts -t "the --land CLI lands"` fails with
     `AssertionError: expected '\n== setup ==\nok  zz-1 (repo) at bas…' to contain
-'fake gh answered'`, the real `gh` having answered `FAIL  mergeTree threw`
+    'fake gh answered'`, the real `gh` having answered `FAIL  mergeTree threw`
     in its place — the marker is what tells a fake from a real binary, since a
     real `gh` in this fixture exits non-zero too (`.claude/rules/testing.md`).
   - **Line-neutral on purpose.** Merged records cite this file at 1577, 1586 and
@@ -168,7 +168,7 @@ scripts/test/review-record.test.ts -t "the --land CLI lands"` fails with
   consecutive `windows-latest` runs of the file after this lands, and there is
   no pull request yet. The per-run read that gave the table above is a loop over
   `gh run list --workflow ci.yml` and `gh run view <id> --job <windows job id>
---log`; re-running it after the merge is the measurement (the CLI case under
+  --log`; re-running it after the merge is the measurement (the CLI case under
   about 3 s in all of them would be the confirmation, a 5 s to 49 s spread the
   refutation). Local checks are in the branch's report.
 - 2026-10-03 — **Could have been folded in, was not:** `preflight.test.ts`'s own

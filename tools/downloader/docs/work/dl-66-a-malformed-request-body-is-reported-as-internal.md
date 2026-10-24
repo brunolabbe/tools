@@ -147,7 +147,7 @@ for the measured table.
 ## Done when
 
 - An `inject` of `POST /api/jobs/:id/cancel` with `content-type:
-application/json` and no body answers 400 `BAD_REQUEST`, and logs at
+  application/json` and no body answers 400 `BAD_REQUEST`, and logs at
   `info`, not `error`.
 - The same for a malformed JSON body on `POST /api/jobs`.
 - `npm run check` and `npm test` are green.
@@ -278,7 +278,7 @@ file. Re-run after: verified, 0 moved, 0 unresolvable, exit 0.
     (and the premise-correction note above) believed — updated in place
     rather than left to contradict the Log.
   - **The citations gate broke a merged record.** `node
-scripts/citations-gate.mjs --against origin/main` failed
+    scripts/citations-gate.mjs --against origin/main` failed
     `dl-32-the-job-list-has-no-caller.md` — 9 anchors into
     `api/test/routes.test.ts` moved by the exact number of lines a new
     top-of-file `import { createLogger }` added. Fixed by not adding a
@@ -312,7 +312,7 @@ scripts/citations-gate.mjs --against origin/main` failed
   failing.
 
 - 2026-09-19 — Owner answered the width decision (**A**, see `## The width
-decision` above) via `AskUserQuestion`, matching both the reviewer's and the
+  decision` above) via `AskUserQuestion`, matching both the reviewer's and the
   orchestrator's recommendation. Applied in the same round as the rest of this
   gate's findings:
 

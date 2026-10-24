@@ -342,9 +342,9 @@ claim and a produced one stays visible.
     `page.goto: net::ERR_CERT_AUTHORITY_INVALID at https://127.0.0.1:PORT/…`
     followed by a call log.
   - yt-dlp 2025.09.26, default `urllib` backend: `ERROR: [generic] Unable to
-download webpage: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify
-failed: self-signed certificate (_ssl.c:1032) (caused by
-CertificateVerifyError(…))`.
+    download webpage: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify
+    failed: self-signed certificate (_ssl.c:1032) (caused by
+    CertificateVerifyError(…))`.
 
   **What that measurement changed about the design.** All three certificates
   produced `ERR_CERT_AUTHORITY_INVALID` from Chromium — an untrusted issuer is
@@ -385,7 +385,7 @@ CertificateVerifyError(…))`.
     stderr carrying both a certificate refusal and the word "drm" came out
     `DRM_PROTECTED` before the certificate branch was moved ahead of it. A
     handshake that failed means yt-dlp never read the page, so no `drm`, `sign
-in`, `in your country` or `429` in that buffer can be a fact about the
+    in`, `in your country` or `429` in that buffer can be a fact about the
     source.
   - **"The copy must name the setting" needed a decision the ticket did not
     flag.** `AppError.message` reaches the browser: `presentError` renders the
@@ -468,7 +468,7 @@ in`, `in your country` or `429` in that buffer can be a fact about the
   further and produced the message itself, live: a two-level chain (root →
   intermediate → leaf) built for this exchange, served with only the leaf, gives
   the real yt-dlp binary the exact stderr `…certificate verify failed: unable
-to get local issuer certificate (_ssl.c:1032)…`. I also pointed the real
+  to get local issuer certificate (_ssl.c:1032)…`. I also pointed the real
   Chromium this repo pins at the same fixture with no AIA data available, and it
   fails identically to the self-signed case (`ERR_CERT_AUTHORITY_INVALID`) —
   expected, since AIA chasing needs something to chase, and not evidence

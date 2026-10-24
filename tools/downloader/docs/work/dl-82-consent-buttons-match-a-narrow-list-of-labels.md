@@ -115,12 +115,12 @@ fixture: building one is the first step.
   the scoping as a ticket.
 - **med** · no `Done when` line depends on it · **The start anchor has no
   test.** Mutation: `new RegExp(\`^\\s*(?:`→`new RegExp(\`\\s*(?:`in`provoke.ts`, then
-`npx vitest run …/provoke.test.ts …/browser-resolver.test.ts -t "dl-82"`→`Tests 91 passed | 57 skipped (148)`. Every `REFUSED`entry and the
-look-alike fixture start with a consent phrasing, so none ends with one.
-"Read and continue" or "Click OK" would pass unnoticed. Dropping the end
-anchor fails 9, and an ungrouped alternation fails 8, so those are guarded.
-The Log's "With the anchors removed … fails" holds only for the end anchor.
-Fix: add a`REFUSED` entry that ends in a phrasing (e.g. "Read and
+  `npx vitest run …/provoke.test.ts …/browser-resolver.test.ts -t "dl-82"`→`Tests 91 passed | 57 skipped (148)`. Every `REFUSED`entry and the
+  look-alike fixture start with a consent phrasing, so none ends with one.
+  "Read and continue" or "Click OK" would pass unnoticed. Dropping the end
+  anchor fails 9, and an ungrouped alternation fails 8, so those are guarded.
+  The Log's "With the anchors removed … fails" holds only for the end anchor.
+  Fix: add a`REFUSED` entry that ends in a phrasing (e.g. "Read and
   continue", "Premi OK").
 - **low** · the generic-word guard is a denylist sample. Planting
   `|yes|next|avanti` in the English entry fails only `does not match "Yes"`
@@ -171,11 +171,11 @@ Fix: add a`REFUSED` entry that ends in a phrasing (e.g. "Read and
   `["/beacon/consent-accepted"]`.
 - **med, start anchor untested: fixed.** Dropping the `^` from `CONSENT_TEXT`
   gives `provoke.test.ts -t "dl-82"` → `Tests 5 failed | 150 passed | 7
-skipped (162)`. The failures are the five new refused rows that end in a
+  skipped (162)`. The failures are the five new refused rows that end in a
   phrasing.
 - **low, Log base count: fixed.** I put `provoke.ts` at `056aab7` into the
   head tree and ran `browser-resolver.test.ts -t "no vendor selector
-matches"` → `Tests 7 failed | 2 passed | 57 skipped (66)`, as the Log now
+  matches"` → `Tests 7 failed | 2 passed | 57 skipped (66)`, as the Log now
   says.
 - **low, trailing `[.!]?`: fixed, as a side effect of the scoping.**
   `CONSENT_TEXT_ANYWHERE` refuses `"ok."`, `"OK!"` and `"Continue."`.
@@ -260,7 +260,7 @@ both passes shows twice.
   (`["/beacon/poll-ok","/beacon/poll-ok"]`, `NO_MEDIA_FOUND`). Pressing in both
   passes is older than dl-82, so this is not a new class.
 - **dropped** · the container script's cost on a large DOM. `node
-<scratch>/gate-2/bench.mjs` times `dismissConsent` alone, 7 calls, on a page
+  <scratch>/gate-2/bench.mjs` times `dismissConsent` alone, 7 calls, on a page
   with no consent layer:
 
   | Page                                                    | Base median | Head median |
@@ -277,7 +277,7 @@ both passes shows twice.
   against it.
 - **findings** · the hunt returned 6; 3 carried, 3 dropped.
 - Gates at `cabd299`: `npm run check` exit 0. `npm test -- --project
-downloader` exit 0, with 1760 passed and 2 skipped of 1762 tests (gate 1:
+  downloader` exit 0, with 1760 passed and 2 skipped of 1762 tests (gate 1:
   1680, +80 = 5 refused rows + 31 + 37 pinning rows + 7 integration). PR #370
   on `cabd299`: 10 checks pass, and `test (windows-latest, informational)` was
   still **pending** when read.
@@ -292,7 +292,7 @@ downloader` exit 0, with 1760 passed and 2 skipped of 1762 tests (gate 1:
   2's page with no link in the header (`a3d` below) now finds the stream. The
   docstring sentence is gone. With `provoke.ts` at `cabd299`,
   `browser-resolver.test.ts -t "gate 2"` → `Tests 6 failed | 7 passed | 66
-skipped (79)`, as the Log says. The same regression returns once the sticky
+  skipped (79)`, as the Log says. The same regression returns once the sticky
   header carries one cookie word: see the first med below.
 - **med, rows ii and iii pressed: fixed for layers that do not mention cookies
   or consent.** It returns when they do (same med below).
@@ -424,7 +424,7 @@ variant.
 - **low, docstring: made true.** a sticky header that only links a cookie
   policy is not a container (a3, a3c), as `clickConsentText` now says.
 - **Builder's red count: confirmed.** With `provoke.ts` at `ab92dcd`, `-t
-"dl-82"` over both files → `Tests 13 failed | 217 passed | 57 skipped (287)`.
+  "dl-82"` over both files → `Tests 13 failed | 217 passed | 57 skipped (287)`.
   The failures are 6 integration rows and 7 `CONSENT_WORDING` rows.
 
 **Gate 3's `cases.mjs`, re-run unchanged at `199dd5f`.** Base is gate 3's run

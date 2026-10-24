@@ -207,13 +207,13 @@ Two findings, and the second is not what the dl-99 builder's run showed:
 
 1. **ffmpeg alone** (the engine's output arguments, none of its input
    arguments), which is the dl-99 builder's run: 1,300 bytes, exit 0, `partial
-file`. The same script on dl-99's 103,485-byte `tail.mp4` printed 1,292 bytes,
+   file`. The same script on dl-99's 103,485-byte `tail.mp4` printed 1,292 bytes,
    exit 0 and `Stream ends prematurely at 48, should be 103485`. An empty file
    reported as success.
 2. **Through the engine** the result is different and `dl-53`'s own check does
    not catch it. The engine adds `-reconnect` and its siblings
    (`engine/src/ffmpeg/args.ts`), so ffmpeg writes `Stream ends prematurely at
-48` and then `Will reconnect at 48 in 0 second(s)`, from the same
+   48` and then `Will reconnect at 48 in 0 second(s)`, from the same
    connection. `STREAM_ENDED_EARLY` is cleared by a `WILL_RECONNECT` on the same
    connection (that is `stream.ts`'s rule for a progressive body that heals), so
    the exit-time check finds nothing pending. What the visitor receives is a
@@ -891,7 +891,7 @@ name.
 
 1. The red run above.
 2. Same test, green: `{ refused: "SOURCE_NOT_SEEKABLE", retryable: false,
-message: DEFAULT_ERROR_MESSAGES.SOURCE_NOT_SEEKABLE }`, and the origin saw
+   message: DEFAULT_ERROR_MESSAGES.SOURCE_NOT_SEEKABLE }`, and the origin saw
    exactly one request, the probe's, so ffmpeg never started.
 3. In the same `describe`: "control: the same tail-moov file from an origin that
    honours Range completes whole" and "control: a fast-start MP4 from an origin
@@ -909,7 +909,7 @@ message: DEFAULT_ERROR_MESSAGES.SOURCE_NOT_SEEKABLE }`, and the origin saw
 5. This entry, and the `stream.ts` header's "An origin that ignores Range".
 6. `node scripts/preflight.mjs --base origin/main --title "…"` at `41653474`,
    exit 0, printing `ok npm run check` and `ok npm test -- --project
-downloader`; it prints no counts. The one full run that did print them, at
+   downloader`; it prints no counts. The one full run that did print them, at
    the commit before, was `Tests 1 failed | 2257 passed | 2 skipped (2260)`,
    the failure `web/test/mock-api.test.ts` "every ErrorCode is demonstrable",
    which the `norange` scenario fixed (that file and the presentation test:

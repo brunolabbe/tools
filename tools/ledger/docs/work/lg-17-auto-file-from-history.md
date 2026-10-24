@@ -43,7 +43,7 @@ after lg-16 has shown its history answers working.
 4. **Storage, and its trap.** `classifications.source` is
    `CHECK (source IN ('rule', 'accepted', 'manual'))`, with
    `CHECK ((source = 'manual') = (rule_id IS NULL))` and `classified_by NOT
-NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
+   NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
    these rows are append-only history. Choose between a table rebuild in a
    migration that copies every row and proves the count, and a sibling record
    that the latest-classification read takes into account; write down which,
@@ -262,7 +262,7 @@ The round is one commit (`git log --no-merges` over the range: 1 commit, 0 merge
   filed automatically" button, only when there are some, and its count leaves
   them out because a record exists for them.
   - Every `Done when` has a test: `books/test/history.test.ts` (`autoFile
-(lg-17)`) and `api/test/auto-file.test.ts` for 1 to 5, `web/test/inbox.test.tsx`
+    (lg-17)`) and `api/test/auto-file.test.ts` for 1 to 5, `web/test/inbox.test.tsx`
     for 6. Each API test was made to fail first by breaking what it guards:
     counting `auto` in `answersByDescription` failed "two automatic filings and
     one answer do not make three"; letting `differs` and `ambiguous` reach
@@ -315,7 +315,7 @@ The round is one commit (`git log --no-merges` over the range: 1 commit, 0 merge
      chosen, the gate recommended it; (b) _change the route_ so the pattern
      does not match, for which no shape was found and five sibling routes take
      the excusal. The route is limited (`{ onRequest:
-read }`); `api/test/route-limits.test.ts` fails 1 of its 41 tests
+     read }`); `api/test/route-limits.test.ts` fails 1 of its 41 tests
      without it, "autoFiled refuses the second request in a minute, as
      RATE_LIMITED", reproduced on this head before the comment was written.
      The five-field comment is on the route in `api/src/routes/inbox.ts`.
@@ -352,7 +352,7 @@ read }`); `api/test/route-limits.test.ts` fails 1 of its 41 tests
     check forbids) are refused at boot and stay at `user_version` 6 with every
     classification intact and no `classifications_v7` or `rests_on` object.
     Only the refusal at boot is covered: migration 7's own proof (`copied = kept
-AND differing = 0`) cannot be made to fail from a test without changing
+    AND differing = 0`) cannot be made to fail from a test without changing
     `schema.ts`, since a copy that differs needs the migration itself to be
     wrong, and the prototype measurement above remains its only firing.
   - _Recorded, not fixed (F4, F5):_ the four older register comments' "1 of its

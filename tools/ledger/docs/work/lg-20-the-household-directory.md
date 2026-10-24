@@ -223,7 +223,7 @@ So a third name in `people` rewrites a past mortgage split in thirds (a figure t
     membership fails "once removed, is refused on the next request, without a
     restart"; a `personOf` that lets a null person through fails "is
     identified, and refused by /api/me as by every books route"; a `DELETE FROM
-memberships` string in the command fails the directory scan; a dropped
+    memberships` string in the command fails the directory scan; a dropped
     update trigger fails "the schema refuses an UPDATE or a DELETE"; a cap of
     three in the code fails three tests, in the trigger one; dropping the
     second-household refusal, the `ACCESS_PEOPLE` refusal, the `DEV_IDENTITY`

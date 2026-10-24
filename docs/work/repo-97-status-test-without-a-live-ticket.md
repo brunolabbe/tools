@@ -65,7 +65,7 @@ Two defects, both fixed here:
 1. `npx vitest run scripts/test/status.test.ts` passes on this branch, where it
    failed on `origin/main` at `1a044437`.
 2. Both new tests fail with the field's parsing removed (`ticket.awaiting =
-null` in `readTickets`, and separately the `FIELDS` entry deleted).
+   null` in `readTickets`, and separately the `FIELDS` entry deleted).
 3. Deleting every real `awaiting:` line leaves `status.test.ts` green.
 4. The Log names every other test that reads live ticket state, and states
    the markdown-only gap as options with the owner's answer recorded.
@@ -185,7 +185,7 @@ New in this round:
   also covered, for a malformed ticket, on an all-markdown change by `ci.yml`'s
   `node scripts/status.mjs --json` step in `check`. The other five read the
   repo for something `--json` does not look at (`repo-wide tickets live in
-docs/work`, `no tool keeps a status page`, the two format-document tests and
+  docs/work`, `no tool keeps a status page`, the two format-document tests and
   `--tool … no tool has`, whose tool-name failure `--json` never reaches), as
   do the cross-check and the tool-set clause of `parses`. So **a markdown-only
   change can break them and, before the step below, CI would not run them.**
@@ -219,7 +219,7 @@ docs/work`, `no tool keeps a status page`, the two format-document tests and
 
   **The step catches the defect**, measured with `1a044437`'s
   `status.test.ts` put back over this branch's (`git checkout 1a044437 --
-scripts/test/status.test.ts`, then restored) and the exact step command:
+  scripts/test/status.test.ts`, then restored) and the exact step command:
 
   ```
   $ npx vitest run scripts/test/status.test.ts      # exit 1
@@ -232,7 +232,7 @@ scripts/test/status.test.ts`, then restored) and the exact step command:
   pull request). `scripts/preflight.mjs` derives `ci.yml`'s `check`-job
   commands and spawns any that are not `npm ci` or `npm run check`, so it
   runs the new step too (its `ciCommands` section lists `ok    npx vitest run
-scripts/test/status.test.ts`). **The brief did not say** that two tests in
+  scripts/test/status.test.ts`). **The brief did not say** that two tests in
   `scripts/test/preflight.test.ts` pin the real `ci.yml` check-job command list
   (`extractCheckJobCommands reads this repo's own ci.yml check job, in order` and
   `deriveExtraCiCommands runs only what no other check already covers`); the

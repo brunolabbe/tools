@@ -134,7 +134,7 @@ that returns early.
     at the test's start and end and at the wait's entry and exits; temporary,
     reverted), one whole-file run passed 181 of 181 in 614.55 s, with the floor
     test at `elapsed=10535 perfElapsed=10536` and the wait at `waitedFor=9023
-perfWaited=9023`. [WITHDRAWN — do not cite this sentence or the next one; see the correction entry of 2026-10-11 below] A monitor sampling `Date.now()` against
+    perfWaited=9023`. [WITHDRAWN — do not cite this sentence or the next one; see the correction entry of 2026-10-11 below] A monitor sampling `Date.now()` against
     `performance.now()` once a second saw no step across 26 minutes, which
     took in that run and the preflight's downloader project (which passed). It
     saw the wall clock gain a steady 55 ms per 30 s (0.18 percent), which over
@@ -147,7 +147,7 @@ perfWaited=9023`. [WITHDRAWN — do not cite this sentence or the next one; see 
     back 5 s from the resolver's own `network-quiet` stage callback (superseded: the step now lands at `page-load`, see the correction entry of 2026-10-11 below), which runs
     after the test took its start and before the wait takes its own. Before the
     fix, asserting the old measurement, it failed with `AssertionError:
-expected 1450 to be greater than or equal to 3000` (floor 3000 ms; the
+    expected 1450 to be greater than or equal to 3000` (floor 3000 ms; the
     test's wall clock had lost the whole 5 s). After it, with the assertion on
     the stopwatch: 1 of 182 passes, and dl-80's floor test, on the same
     stopwatch, 1 of 182 passes. The 9000 ms floor is unchanged.
@@ -209,8 +209,8 @@ expected 1450 to be greater than or equal to 3000` (floor 3000 ms; the
     `page-load`, before navigation. `browser-resolver.test.ts`, the last test,
     with its comment saying why. Three runs of dl-80's floor test and this one
     together (one per state), `npx vitest run --project downloader
-tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
-"respects the empty floor and the deadline|wall clock stepped back"`
+    tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
+    "respects the empty floor and the deadline|wall clock stepped back"`
     (at 97a59990; 2 of 182 selected each run):
     - at head: `Tests  2 passed | 180 skipped (182)`, the new test at 4584 ms.
     - stopwatch back on `Date.now` (`datenow`): the new test fails,
@@ -218,8 +218,8 @@ tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
       dl-80's floor test passes (10667 ms), as it did at the base.
     - the floor deleted in `waitForQuiet` (`nofloor`, production ignores
       `emptyMinWaitMs`): both fail, `expected 2865.43 to be greater than or
-equal to 9000` (dl-80's) and `expected 2793.65 to be greater than or
-equal to 3000` (the new test).
+      equal to 9000` (dl-80's) and `expected 2793.65 to be greater than or
+      equal to 3000` (the new test).
   - **Fixed at landing (gate 1, second med): the two sentences above.** The
     corrections are the two entries before this one, and the withdrawn
     sentences stand with their marks.

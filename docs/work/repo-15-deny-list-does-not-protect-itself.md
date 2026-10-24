@@ -455,7 +455,7 @@ and on a failed HEAD read, by design); maintainability ✓.
     _do_ double-cover the `git push … main` rows, which is the opposite of where
     the reassurance was aimed.
   - **`gh repo edit --visibility public` is a no-op.** `gh repo view --json
-visibility` returns `PUBLIC`. Tier 3's "one command, irreversible as a
+    visibility` returns `PUBLIC`. Tier 3's "one command, irreversible as a
     disclosure" does not apply to this repo, and it was dropped from the threat
     list rather than carried as an unexamined line.
   - **The ruleset's condition is `~DEFAULT_BRANCH`.** So the tier-2 threats
@@ -576,7 +576,7 @@ visibility` returns `PUBLIC`. Tier 3's "one command, irreversible as a
      **"0 uncovered" is a statement about commands, and the tier-1 table's last
      row is not one.** The table has 11 rows: 10 command rows — one of which
      carries two strings, `git push origin main` and `git push --force origin
-main` — plus "editing `.github/workflows/` so a required check passes
+     main` — plus "editing `.github/workflows/` so a required check passes
      trivially", which is a `Write`/`Edit` act and not a command at all. That
      makes 11 command strings in the table; the check ran 12, the extra being
      `git push --force-with-lease origin main`, added here. **The workflow-edit

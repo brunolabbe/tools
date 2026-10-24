@@ -421,7 +421,7 @@ as a dangling citation and "fixes" it.
 - **`depends_on: [repo-7]` resolves**: `npm run status -- --show repo-9` renders
   and prints `unblocked`; repo-9 appears in `--ready`.
 - **The `--json` gate is real, not assumed**: `node scripts/status.mjs --json >
-/dev/null` -> **0**. Repointed `depends_on` at `repo-404`: exit **1**, stderr
+  /dev/null` -> **0**. Repointed `depends_on` at `repo-404`: exit **1**, stderr
   `depends_on "repo-404", which is not a ticket`. Restored, re-ran -> **0**,
   `git status --porcelain` empty, HEAD `fb33ee6`. The green is evidence.
 - **Formatting gate clean and citation-safe**: `npm run check` exit **0**;
@@ -655,7 +655,7 @@ it nearly missed were checked specifically:
 - **Self-citations into the record's own file**: `:781-783`, `:781-786`,
   `:735-740`, `:838-840`, `:35`, `:41` all resolve.
 - Also exact: all five workflow citations, `release-please-config.json:28-29,
-30-35, 31`, both CHANGELOG lines, `repo-3:223,336-355,346-348`,
+  30-35, 31`, both CHANGELOG lines, `repo-3:223,336-355,346-348`,
   `01-TICKETS.md:69-70,145,163-169`, `adr/002:33-36`, `adr/003:147,180,194`, and
   `repo-9:44` (anchor slugs to the heading at `03-RELEASING.md:117`).
 
