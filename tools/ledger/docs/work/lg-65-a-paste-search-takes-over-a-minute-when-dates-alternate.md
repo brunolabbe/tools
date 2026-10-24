@@ -3,7 +3,7 @@ id: lg-65
 tool: ledger
 title: A paste search takes over a minute when a workbook's dates alternate by a day
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: hard
@@ -209,7 +209,7 @@ almost every row (the gate's dates come from the formula above); the other
 `mode` values (`tail`, `miss`); the constant 1,000-row shape; the scaling between
 the sizes; and whether the branch's outcomes are right in the constant case.
 
-## Decision — open
+## Decision — answered 2026-10-24
 
 The defect is slow search, and the owner has to choose the bound before anyone
 can build a fix that is checked against it. Two questions, the second depending on
@@ -244,9 +244,18 @@ needs a cap the owner has to choose. The filer has not measured C's speed-up, so
 this is a recommendation and not a finding. `difficulty: hard` rates C, the
 recommended option; A alone would be `standard`.
 
+**The owner's answers, 2026-10-24** (relayed by the orchestrator in the build
+dispatch; the full options are in that day's second Log entry):
+
+- **Question 1: "10 s / 30 s".** A three-row paste completes in under 10 s on each
+  300-row shape and under 30 s on the 1,000-row shape.
+- **Question 2: "C, then A".** Build C. If C cannot meet 10 s / 30 s, do not build
+  A: stop, and bring the owner the measured speed-up, the cap value that would meet
+  the bound and the pastes it would refuse, as options.
+
 ## Build
 
-Not dispatchable until the Decision is answered. Once it is, the work is:
+The Decision is answered (above). The work is:
 
 1. On a worktree of `main`, copy the reproduction spec in, run the 300-row
    alternating case, and confirm it runs past 60 s before any code changes.
@@ -405,3 +414,37 @@ Not dispatchable until the Decision is answered. Once it is, the work is:
   each is not a fit); a repeat of the 200-row and 250-row cases; real workbooks
   with this shape; whether the cap run's 277 s against a 300 s cap is a clock or a
   harness artefact.
+
+### 2026-10-24 — the owner's answers to both questions (lg-65's builder)
+
+- **Who and how.** The owner answered on 2026-10-24; the orchestrator relayed the
+  answers, with the options they were chosen from, in this build's dispatch.
+  `status` moves from `needs-decision` to `ready` in this commit, before any source
+  changes.
+- **Question 1, "How long may a paste hold the write lock?"** Options, each put with
+  the measured times on `main` (300-row alternating ~30 s, 300-row constant 51 to
+  71 s, 1,000-row alternating past ~277 s): "10 s / 30 s", "5 s / 15 s",
+  "30 s / 90 s" and "No bound: accept". The orchestrator made no recommendation.
+  **The owner chose "10 s / 30 s"**: the 300-row shapes under 10 s, the 1,000-row
+  shape under 30 s.
+- **Question 2, "How is the bound kept?"** Options: "C, then A" (the same answers
+  found faster; C writes its own differential oracle against `main`; if C misses
+  the bound, stop and bring the owner A's cap value to choose), "A only: cap and
+  refuse" and "C only, no fallback". **The owner chose "C, then A"**, the filer's and
+  the orchestrator's recommendation. Concretely: build C; if C cannot meet
+  10 s / 30 s, do not build A, but stop and report the measured speed-up, the cap
+  value that would meet the bound and which pastes it would refuse, as options.
+- **How each line is graded**, as the dispatch scoped it:
+  - The bound is read on the three Build-1 shapes, 300-row alternating, 300-row
+    constant and 1,000-row alternating, all `"p":3,"mode":"inside","redate":"alt"`:
+    the median of 3 isolated runs for each 300-row shape and 1 run of the 1,000-row
+    shape, with `/proc/loadavg` beside each. A time taken at a load over 6 is re-run.
+  - "Outcomes unchanged" is read on (a) every paste the `lg-59` and `lg-61` suites
+    cover; (b) a seeded differential of the new search against `main`'s over seeds
+    1 to 20,000, the population lg-58's gate used, run once and recorded here with a
+    positive control (a planted one-cut divergence the oracle must catch); and
+    (c) a committed spec that runs a subset of those seeds, sized to the ledger
+    suite's budget.
+  - Build step 3's smaller shape is chosen after looking up the suite's budget.
+  - Stop conditions: C missing the bound (above), and any outcome difference the
+    oracle finds that is not a bug in the new search, reported with its seed.
