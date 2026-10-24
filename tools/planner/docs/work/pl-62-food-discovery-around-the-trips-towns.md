@@ -1233,3 +1233,193 @@ tools/planner/api/src/runs/lodging.ts`; `73 passed (73)` after.
   record were Opus's. **The projection is $7.2 to $8.4, under $10**, so the run went
   ahead. The wrapper's caps bound it at $10 in any case, apart from run.ts's documented
   one-run fallback excess.
+
+- **The run.** Started at 18:30:49Z and ended at 18:58:39Z on 2026-10-24 (the launcher's
+  own `date -u` stamps), from the worktree at `398db9bf` with `setsid nohup`, pid
+  1704412 (also its process group), through a scratch launcher (`launch-live.sh`). The
+  command was `node run-pl62.mjs 2026-10-24 /home/pwuser/.planner-live-key
+tools/planner/api/test/fixtures/live <scratch>/pl-62/build-6/live-logs 10`. The key is
+  the one the owner placed for pl-60 (`stat`: 106 bytes, mode 600, owner `pwuser`); it
+  was passed by path, read only by the wrapper and handed to each child's environment,
+  and nothing printed or logged it. The wrapper exited 0, every session exited 0, and
+  no spend stop tripped. The run date is the run's real date.
+
+  | Session (`fixtures/live/`)                | `--max-usd` | Records | A   | B                       | C   | D   | Observed | pl-60's |
+  | ----------------------------------------- | ----------- | ------- | --- | ----------------------- | --- | --- | -------- | ------- |
+  | `claude-haiku-5-5-low-pl62-2026-10-24`    | 1.00        | 25      | 6   | 15 (cap, 68 candidates) | 3   | 1   | $0.1599  | $0.1558 |
+  | `claude-haiku-5-5-medium-pl62-2026-10-24` | 1.00        | 25      | 6   | 15 (cap, 79)            | 3   | 1   | $0.1875  | $0.1836 |
+  | `claude-haiku-5-5-high-pl62-2026-10-24`   | 1.00        | 24      | 6   | 14 (107)                | 3   | 1   | $0.2464  | $0.2348 |
+  | `claude-sonnet-5-5-low-pl62-2026-10-24`   | 5.00        | 19      | 6   | 9 (108)                 | 3   | 1   | $2.2884  | $2.2501 |
+  | `claude-opus-5-5-low-pl62-2026-10-24`     | 7.12        | 18      | 6   | 8 (107)                 | 3   | 1   | $4.5195  | $4.3891 |
+
+  **Total: 111 records, $7.4018 observed against the $10 bound** (pl-60: 110 records,
+  $7.2134; pl-58: 112, $7.08). Each session cost 1.7% to 4.9% more than pl-60's, 2.6% in
+  all, inside the projection above. Set B's candidates are `activities` plus `food`, set
+  B's stopping rule. `servedModels` equals the requested model in every record
+  (`sessions.mjs` prints no mismatch).
+
+- **Credentials.** `grep -ril -E 'sk-ant|x-api-key|authorization'` over the five
+  directories (111 files) printed nothing (exit 1); the same command over a planted
+  control file (`{"headers":{"x-api-key":"planted"}}`) printed it (exit 0)
+  (`cred-grep.sh`). Over the run's logs and the wrapper's output, nothing (exit 1). The
+  planner project's `live-records.test.ts` scans every new file too (below).
+- **The join, `matched of written`** (`join62.mjs`, pl-60's `join.mjs` with the kinds
+  compared as an argument: a candidate matches when any `place.name` equals a find's
+  `name` in the same record, after NFD diacritic and case folding; sets B to D records
+  that carry finds of those kinds):
+  - **`food` against the food finds it was shown: 302 of 335 (90.1%), over 81
+    records.** By family: Haiku 202 of 210 (low 60 of 63, medium 64 of 68, high 78 of
+    79), Opus 51 of 62, Sonnet 49 of 63. Against everything `food` was shown (its food
+    finds and the corridor's), the same 302 of 335: no `food` candidate named a corridor
+    find. pl-60's `food`, shown the corridor finds alone, was 0 of 322 over 80 records.
+  - **`lodging` against the lodging finds it was shown: 341 of 369 (92.4%), over 81
+    records** (pl-60: 333 of 360, 92.5%). By family: Haiku 231 of 234, Opus 55 of 66,
+    Sonnet 55 of 69. The control did not move.
+  - `activities` against the corridor finds, the other control: 3 of 278, over 81
+    records (`Plaines d'Abraham` 2, `Observatoire de la Capitale` 1), pl-60's
+    corridor-reader names.
+  - **Which of the twelve food finds were chosen.** Nine: `La Maison du Pêcheur` 76,
+    `Peppino Pizza` 73, `RESTO du CAPITAINE` 65, `Pub Aire Salin` 35, `Restaurant Le
+Surcouf` 32, `La Cantina` 9, `Pub Pit Caribou` 7, `Resto du Village` 4, `Gaspésie
+Brasserie Gourmande` 1. Never: `Le p'tit bateau`, `Restaurant au Mille Délices`, `La
+Table a Roland`. The 33 unmatched are kinds of place: `bakery` 20 (12 at Gaspé),
+    fish markets, casse-croûtes and one grocery 12, `pub|Percé` 1.
+  - **Provenance is not changed on this count**, as Build 6 says.
+- **The hand classification.** `invention/pl62-2026-10-24/classification.json` copies
+  pl-57's rubric object byte for byte (`build.mjs`, pl-60's with the paths changed). The
+  new run has 640 places through `collectPlaces`.
+  - **365 carried** with their class and tags: 266 from pl-60's file, 73 found first in
+    pl-58's, and 26 only in pl-57's (`prep.mts`).
+  - **275 new, classified by hand**, each from its `name|locality`, its use (`at` or
+    `between`) and its specialists, with no web lookup, following pl-57's, pl-58's and
+    pl-60's cases for the same strings (`lookup.mjs`). One line per key is in the
+    scratch `classify/assign.txt`. New: 52 `named-premises`, 158 `kind-of-place`, 42
+    `settlement-or-area`, 23 `route-or-transit`.
+  - **Three carried park keys were re-judged by the park rules** for this run's use:
+    `forillon national park|gaspé peninsula, québec` and `…|gaspésie, québec` to
+    `park-visit` (an `at` here), and `…|gaspé, qc` to `park-area` (a `between` only).
+  - Totals: 199 `named-premises`, 264 `kind-of-place`, 128 `settlement-or-area`, 49
+    `route-or-transit`.
+  - **Judgement cases a reader may reverse, for `food`:** `la cantina|gaspé` (6) and
+    `la cantina|` (3), a common noun for a canteen used as a name; `resto du
+village|percé` (4), a category plus "du village"; and `gaspésie brasserie
+gourmande|percé` (1), a region plus a category, taken as named because the region is
+    not the candidate's locality, as pl-60 took `auberge internationale de forillon`.
+    Each is the name of an OSM element the run handed `food`, and each is
+    `named-premises`. Build 7's other cases: **no `Restaurant de <town>`** was written;
+    **no chain outlet** (Decision 1 (a) left `fast_food` out); and **two bars**, `pub
+aire salin|percé` (35) and `pub pit caribou|percé` (7), named premises whatever they
+    serve, so a class reversal does not reach them, and they are given as an outer
+    reading below. **For `lodging`**, pl-60's cases, on this run's counts: the three
+    `locality-plus-category` campgrounds (`camping parc nature gaspé|gaspé` 19, `camping
+de la baie de percé|percé` 11, `camping baie de gaspé|gaspé` 6), `auberge
+internationale de forillon|gaspé` (42) and `manoir de percé|percé` (40).
+- **The re-measure** (`PLANNER_LIVE_RUN=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24`, exit 0, which
+  makes no request). The after population is the new run's 111 records alone: 640
+  places and 2,714 mentions, by the same rubric. The before populations are pl-58's and
+  pl-60's, from their Logs and re-read here by set with `sens62.mts`:
+
+  |                          | pl-58 (mentions)  | pl-60 (mentions)   | **pl-62 (mentions)**   | pl-58 (places)    | pl-60 (places)    | **pl-62 (places)** |
+  | ------------------------ | ----------------- | ------------------ | ---------------------- | ----------------- | ----------------- | ------------------ |
+  | `food` named-premises    | 43 of 407 (10.6%) | 41 of 395 (10.4%)  | **303 of 406 (74.6%)** | 26 of 186 (14.0%) | 30 of 170 (17.6%) | 11 of 80 (13.8%)   |
+  | `lodging` named-premises | 33 of 418 (7.9%)  | 301 of 443 (67.9%) | 307 of 451 (68.1%)     | 25 of 162 (15.4%) | 17 of 76 (22.4%)  | 17 of 74 (23.0%)   |
+  - **Split by set** (`sens62.mts <worktree> <run> food`, the same keys and classes):
+
+    | `food`                     | pl-58            | pl-60            | **pl-62**              |
+    | -------------------------- | ---------------- | ---------------- | ---------------------- |
+    | set A (no finds), mentions | 30 of 75 (40.0%) | 27 of 73 (37.0%) | **1 of 71 (1.4%)**     |
+    | set A, places              | 17 of 56         | 18 of 53         | 1 of 52                |
+    | sets B to D, mentions      | 13 of 332 (3.9%) | 14 of 322 (4.3%) | **302 of 335 (90.1%)** |
+    | sets B to D, places        | 10 of 141        | 12 of 128        | 10 of 29               |
+
+    `lodging` in pl-62: set A 2 of 82 (2.4%), sets B to D 305 of 369 (82.7%); pl-60's
+    were 1 of 83 and 300 of 360.
+
+  - **The rise is all in sets B to D, and set A fell to almost nothing**, as `lodging`'s
+    did in pl-60 (11 of 95 to 1 of 83). In set A the run hands no finds, and Build 4's
+    role sends `food` to the kind-of-place fallback: Opus's `city-and-culture` went from
+    `Mercato di Testaccio`, `Flavio al Velavevodetto`, `Roscioli Salumeria con Cucina`,
+    `Antico Forno Roscioli` and `Mercato Trionfale` in pl-60 to `covered food market`,
+    `trattoria`, `artisan gelateria`, `wine bar (enoteca)` and `bakery (forno)`. The one
+    set A named premises left is `odprta kuhna|ljubljana`. This is the behaviour Build 4
+    specifies; the report to the orchestrator puts it as a question.
+  - **The places share barely moved (13.8%) while the mentions share rose sevenfold**,
+    because `food`'s named premises in sets B to D are ten keys naming nine of the twelve finds,
+    written again in record after record, where pl-60's were spread over more strings.
+  - **Sensitivity, `food`:** with the four keys above moved to `kind-of-place`, 289 of
+    406 (71.2%), sets B to D 288 of 335 (86.0%). No `food` key is `kind-of-place` with
+    `locality-plus-category`, so nothing moves the other way: **the band is 71.2% to
+    74.6%**. The outer reading that also leaves out the two bars as not meals: 247 of
+    406 (60.8%), sets B to D 246 of 335 (73.4%). pl-58's 10.6% and pl-60's 10.4% are far
+    below every reading.
+  - **Sensitivity, `lodging` (the control):** the campgrounds moved to
+    `named-premises`, 343 of 451 (76.1%); the Auberge internationale's key to
+    `kind-of-place`, 265 (58.8%); `manoir de percé` alone, 267 (59.2%); both, 225 of 451
+    (49.9%). **The band is 49.9% to 76.1%**, against pl-60's 49.2% to 75.4% on the same
+    keys. `lodging` did not move.
+  - Not claimed: that this is caused by more than the finds and the role together. The
+    food finds come from one checked-in capture, so sets B to D see the same twelve every
+    time, ten of them within 300 m of Percé's point.
+
+- **The checks after it, each exit code read directly, with no pipe** (`checks.sh`):
+  `PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
+tools/planner/api/test/live/invention.ts` exit 0; the same with `--after
+pl58-2026-10-21` exit 0, and with `--after pl60-2026-10-24` exit 0 ("check: the
+  committed record equals its regeneration; every sampled place has a verdict"). So the
+  earlier records still regenerate with the new run on disk. **`--after
+pl62-2026-10-24` with the check flag is not run and no pl-62 record is written**: the
+  web check has not filled `verdicts.json`, so the check would refuse it by design.
+- **`npm test -- --project planner`: `Test Files 84 passed (84)`, `Tests 1929 passed
+(1929)`.** 1814 at the previous entry, plus the two tests of lows 1 and 2, plus 113
+  cases of `live-records.test.ts`, which takes one per JSON file under
+  `fixtures/live/`: the 111 records, `classification.json` and `verdicts.json`.
+  `npm run check` exit 0. The e2e suite and the image gate did not run locally.
+- **pl-58's `food`-only not-confirmed rate** (`pl58-food-rate.mts`, pl-60's
+  `pl58-lodging-rate.mts` with the specialist swapped, over pl-58's committed
+  `verdicts.json`: an object is `food`'s when `food` proposed any of its checked keys).
+  **3 of 21 objects (14.3%, 95% Wilson 5.0–34.6)**, all `exists-elsewhere`: `Fumoir
+Monsieur Émile`, `Brasserie Pit Caribou L'Anse-à-Beaufils` (its key `pit
+caribou|gaspé`) and `Fumoir d'Antan`. None of `food`'s 21 objects was also
+  `lodging`'s, so none is counted twice. These are the three wrong-town objects _Why_
+  item 4 names.
+
+**For the web check (Build 7, `Done when` 10), which a separate agent runs.**
+`verdicts.json` is committed with its `budget` and no `checks`; its `written` says the
+agent records each key's planned first query in this Log before it searches. The
+stratum is `food`'s named-premises keys, **11 keys**, in the harness's seeded order (seed
+20261020), as the worksheet above printed it. That is fewer than 40 objects, so the walk
+takes every key and stops `exhausted`. The objects below are this builder's reading of
+which keys name one premises, for the agent to confirm before its first query:
+
+| #   | key                                   | suggested first query              | object            | in the food capture                                 |
+| --- | ------------------------------------- | ---------------------------------- | ----------------- | --------------------------------------------------- |
+| 1   | `resto du capitaine\|percé`           | Resto du Capitaine Percé           | object 1          | way 302432445, 162 Route 132                        |
+| 2   | `peppino pizza\|gaspé`                | Peppino Pizza Gaspé                | object 2          | node 9979845990, 1986 Bd de Grande Greve            |
+| 3   | `gaspésie brasserie gourmande\|percé` | Gaspésie Brasserie Gourmande Percé | object 3          | node 12972316601                                    |
+| 4   | `restaurant le surcouf\|percé`        | Restaurant Le Surcouf Percé        | object 4          | way 598383461, 168 Route 132                        |
+| 5   | `la cantina\|`                        | La Cantina Gaspé                   | object 5          | node 6753296585 (Forillon's capture)                |
+| 6   | `pub aire salin\|percé`               | Pub Aire Salin Percé               | object 6          | way 484236636, 182 Route 132                        |
+| 7   | `la maison du pêcheur\|percé`         | La Maison du Pêcheur Percé         | object 7          | way 302432126, 155 Place du Quai                    |
+| 8   | `odprta kuhna\|ljubljana`             | Odprta Kuhna Ljubljana             | object 8          | no: set A, pl-58's query verbatim (it was `exists`) |
+| 9   | `pub pit caribou\|percé`              | Pub Pit Caribou Percé              | object 9          | node 9437751976                                     |
+| 10  | `resto du village\|percé`             | Resto du Village Percé             | object 10         | node 5739969621                                     |
+| 11  | `la cantina\|gaspé`                   | La Cantina Gaspé                   | object 5 (repeat) | node 6753296585                                     |
+
+- **Ten objects**, nine of them map entries the run handed `food`. Two things for the
+  agent to settle before it searches, not settled here: **`Pub Pit Caribou` and `Pub
+Aire Salin` sit 0.2 m apart** in the capture (node 9437751976 at 48.5207094,
+  -64.2153527; way 484236636 at 48.5207103, -64.2153504, 182 Route 132), which reads like
+  one premises mapped under two names, one of them stale; and pl-58 searched the Pit
+  Caribou brewery at L'Anse-à-Beaufils as one object (`Brasserie Pit Caribou
+L'Anse-à-Beaufils`), which may or may not be the Percé pub. Under the budget's "the
+  same real-world entity reuses its first query" rule, which object 9 is changes its
+  query.
+- The record is then `PLANNER_INVENTION_OFFLINE=1 node --import tsx
+tools/planner/api/test/live/invention.ts --after pl62-2026-10-24`, and its check the
+  same with `PLANNER_INVENTION_CHECK=1`, its exit code taken without a pipe. Report the
+  not-confirmed rate per object with a 95% Wilson interval beside pl-58's 3 of 21 above,
+  and each object not confirmed by class (wrong-town, not found, closed, other) and
+  whether the capture holds it (the column above).
+- **pl-61 (#618) has still not merged**: when it does, the `queried` count in
+  `lodging-pass.test.ts` that the Build 2 entry describes goes from 1 to 2.
