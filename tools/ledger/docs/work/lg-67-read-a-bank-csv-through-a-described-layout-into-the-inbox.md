@@ -5,7 +5,7 @@ title: Read a bank CSV the reader does not know through a layout a model describ
 kind: work-package
 status: needs-decision
 milestone: P6
-depends_on: [lg-66]
+depends_on: [lg-66, lg-68]
 difficulty: hard
 ---
 
@@ -901,3 +901,5 @@ after the edits (no item was added, removed or renumbered): each
 reference resolves to the item it names, among them Decision 2's "Build 5's third
 bullet" (the rows' source), Decision 3's "Done when 3", and Done when 10's "the 13
 pins of Done when 2".
+
+### 2026-10-24 — `lg-68` added to `depends_on`: lg-68 merged to `main` (#626, `940e4511`), as gate 2's N2 and the landing entry said it would be.
