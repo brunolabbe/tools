@@ -3,7 +3,7 @@ id: pl-61
 tool: planner
 title: Overpass discovery sends no user agent, and the public instance answers 406
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -99,6 +99,23 @@ this request is unknown.
    stubbed `fetch`, with a spy `AppLogger` whose `warn` records its fields. Put it in
    `tools/planner/api/test/lodging-pass.test.ts`, which already drives `discoverLodging` (its
    existing cases use a fixture provider and a silent logger).
+8. Owner's decision, 2026-10-24, folded in (see the Log): four more `warn` calls in
+   `tools/planner/api/src/runs/discovery.ts` drop the HTTP status the same way step 6
+   describes. They are `a notability lookup failed, continuing with the rest` (`notability`),
+   `a corridor reading lookup failed, continuing` (`corridorReading`), `discovery could not
+locate a corridor endpoint` (`locate`) and `a detour cost could not be measured`
+   (`detourCosts`). Each gets step 6's field: `status` read from `AppError.from(error).details`
+   when it is a numeric `status`, omitted otherwise. Keep `code`, every return and the
+   no-URL rule. Each catch wraps a call that goes through `#json`, which is where the status
+   is set. One test each goes at the end of `tools/planner/api/test/discovery-pass.test.ts`,
+   which drives all four paths through `discoverAlongCorridor`.
+9. Owner's decision, 2026-10-24, folded in (see the Log): two more `warn` calls in
+   `tools/planner/api/src/runs/travel.ts` drop the HTTP status the same way step 6 describes.
+   They are `a place could not be located` (the locate loop in `measureTravel`) and
+   `the travel matrix could not be measured` (its matrix call). Each gets step 6's field, and
+   each catch wraps a `#json` call (`locate` and `travel`), so each can carry a status. Keep
+   `code` and every return. One test each goes at the end of
+   `tools/planner/api/test/travel-measure.test.ts`, which drives `measureTravel`.
 
 ## Done when
 
@@ -110,14 +127,77 @@ this request is unknown.
    a spy logger, and the recorded `warn` for `the corridor could not be queried` carries
    `status: 406`. It fails on the base, where the field is absent, and passes after the
    change. Offline.
-3. A stubbed `fetch` answers the town pass's requests with HTTP 406: the Overpass `POST` behind
-   `queryTown`, and the Nominatim request behind `locateTown`. `discoverLodging` runs over a
+3. A stubbed `fetch` that refuses one town's geocoder query and another town's Overpass query,
+   both with HTTP 406, so that both warns fire in one run. `discoverLodging` runs over a
    `ValhallaGroundingProvider` built on that stub with a spy logger, and the recorded `warn`s
    for `the town pass could not query a town` and `the town pass could not locate a town` each
    carry `status: 406`. They fail on the base, where the field is absent, and pass after the
    change. Offline.
-4. `npx vitest run` on each spec file that Build steps 2, 6 and 7 name passes in full.
+4. `npx vitest run` on each spec file that Build steps 2, 6, 7, 8 and 9 name passes in full.
 5. `npm run check` passes.
+6. A stubbed `fetch` that refuses, with HTTP 406, the request each of the four lookups named by
+   Build step 8 makes: the article queries behind `a notability lookup failed, continuing with
+the rest` and `a corridor reading lookup failed, continuing`, the geocoder query behind
+   `discovery could not locate a corridor endpoint`, and the routing `POST` behind `a detour cost
+could not be measured`. `discoverAlongCorridor` runs over a `ValhallaGroundingProvider` built
+   on that stub, once per lookup, with a spy logger, and each recorded `warn` carries
+   `status: 406`. Each fails on the base, where the field is absent, and passes after the
+   change. Offline.
+7. A stubbed `fetch` that refuses, with HTTP 406, the geocoder query behind `a place could not
+be located` and the routing `POST` behind `the travel matrix could not be measured`.
+   `measureTravel` runs over a `ValhallaGroundingProvider` built on that stub, with a spy logger,
+   and each recorded `warn` for those two messages carries `status: 406`. Each fails on the
+   base, where the field is absent, and passes after the change. Offline.
+
+## Review
+
+**Gate: PASS** — 2026-10-24 · `89a38d30..a8954049` · Sonnet 5.5, depth narrow
+
+| Done when                                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The `nearby` case asserts the Overpass `POST` carries a non-empty `user-agent`; fails on the base, passes after                                   | `api/test/grounding-valhalla.test.ts` › "nearby, the Overpass request's own headers (pl-61) the POST names its client, because node's default user-agent gets HTTP 406 from the public instance" ✓. The assertion is `headers?.["user-agent"]` matching `/\S/u`. Planting the revert of only the `user-agent` entry in `#overpassJson` turns exactly this test red (1 of 166).                                                                                                                                                      |
+| 2. A 406 on the Overpass `POST` puts `status: 406` on the `the corridor could not be queried` warn                                                   | `api/test/discovery-pass.test.ts` › "discoverAlongCorridor, when the Overpass request is refused (pl-61) a 406 reaches the corridor warn with its status, and the coverage sentence is unchanged" ✓. Removing only the `nearby()` status spread turns exactly this test red (1 of 166).                                                                                                                                                                                                                                             |
+| 3. One stub refuses one town's geocoder query and another town's Overpass query; both town-pass warns fire in one run and each carries `status: 406` | `api/test/lodging-pass.test.ts` › "the town pass, when the backend refuses (pl-61) a 406 from the geocoder and from Overpass reaches each town-pass warn with its status" ✓. Asserts one `could not locate a town` warn and one `could not query a town` warn, each `{ code: "UNREACHABLE", status: 406 }`, and `finds` equal to `[]`. Removing either spread turns this one test red (1 of 166 each). Breaking either stub matcher so it matches no request also turns it red, so it does not pass on a stub that matches nothing. |
+| 4. `npx vitest run` on each spec file Build steps 2, 6, 7 and 8 name passes in full                                                                  | **verified** — `npx vitest run` on `grounding-valhalla`, `discovery-pass`, `lodging-pass`: `Test Files 3 passed (3)`, `Tests 166 passed (166)`, exit 0. The Log's "162 plus four" reconciles.                                                                                                                                                                                                                                                                                                                                       |
+| 5. `npm run check` passes                                                                                                                            | **verified** — exit 0 at `a8954049`. The warnings are `no-await-in-loop` on `await` lines the diff does not touch.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 6. A 406 on each of the four lookups reaches its own warn with `status: 406`, once per lookup                                                        | `api/test/discovery-pass.test.ts` › "discoverAlongCorridor, when a backend refuses a lookup (pl-61)" — "a refused notability lookup …", "a refused corridor-reading lookup …", "a refused endpoint lookup …", "a refused routing matrix reaches its warn with the status" ✓. Each asserts `toMatchObject({ code: "UNREACHABLE", status: 406 })` after a `length > 0` companion. Removing each site's spread turns exactly that site's own test red and no other (1 of 166 each, positive control green at 166 of 166).              |
+
+Does any `Done when` line depend on Build step 5 (the unmeasured `sources_to_targets` user agent)? No. Done when 1 asserts only the Overpass `POST`; Done when 6's routing case stubs a 406 and does not depend on a user agent.
+
+- **low** · no `Done when` line depends on it · `nfr:maintainability` and shape · `api/src/runs/travel.ts` has two more warns with the same shape the ticket fixes, `a place could not be located` and `the travel matrix could not be measured`. Each logs `code` alone for a refusal that went through `#json`, where `details.status` is set. They are outside the owner's folded scope (seven warns, named), so this is recorded, not required. **Open decision**: (a) leave and record, (b) fold both into pl-61 with a test each (recommended: same defect, same one-line change, the branch's helpers `overValhalla` and the spy logger already exist), (c) file a ticket. Nothing here settles it.
+- **low** · no `Done when` line depends on it · after this change two adapter requests still go out with Node's default `user-agent: node`: `travel`'s `sources_to_targets` `POST` (Build step 5, left unmeasured by design) and `articlesNear`'s Wikipedia/Wikivoyage geosearch `GET` (named nowhere in the ticket). Whether either is refused is unmeasured. Also the `USER_AGENT` doc comment in `valhalla.ts` still reads "Sent on every geocoder request", which is true but no longer says Overpass sends it too. False in the safe direction; no live call site.
+- **low** · `nfr:maintainability` · the same three-line narrowing (`const status = AppError.from(error).details?.status` plus the conditional spread) is written seven times, and `AppError.from(error)` is evaluated twice at each site. A tool-local helper would hold the `typeof` narrow in one place. The test files carry two different `overValhalla` helpers (one in `discovery-pass.test.ts`, one in `lodging-pass.test.ts`) and the first corridor test builds its spy logger inline beside the new `recordingLogger` helper. No defect.
+- **dropped** · "the lodging test's stub refuses all Overpass queries, not one town's". Only Gaspé is located, so only Gaspé's Overpass query is ever sent; the stub is equivalent to the reworded line, which the owner settled. Not a defect.
+- **dropped** · "Build step 5 is logged as unmeasured, so the ticket is incomplete". It is a Build step that says not to fix and to name it only if checked; the Log says it was not checked. Consistent, and no `Done when` rests on it.
+- **findings** · the hunt returned 5; 3 carried, 2 dropped.
+- NFR: security ✓ (no URL, body or header reaches any new warn; only a `typeof number` `details.status` is read, `details` is never spread; `details` in `valhalla.ts` carries `status`, `timeoutMs`, `reason`, `language`, `backend`/`remark`, never a URL) · performance n/a · reliability ✓ (every `catch` return is unchanged in the diff) · maintainability — above.
+- CI at head `a8954049` (PR #618): `check`, `test (ubuntu-latest)`, `e2e`, `docker`, `codeql`, `dependency-review`, `CodeQL`, `changes` pass; `test (windows-latest, informational)` still pending when read, not graded.
+- Unmeasured: Build step 4's live Overpass reading (network-dependent, not a Done-when line); the Log's `ok: true` is the builder's, not re-run here.
+
+### Gate 2
+
+**Gate: PASS** — 2026-10-24 · round `a8954049..510e5f78` (one commit, `510e5f78`), base `89a38d30` · Sonnet 5.5, depth narrow
+
+| Done when                                                                                                                                                                                | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The `nearby` case asserts the Overpass `POST` carries a non-empty `user-agent`; fails on the base, passes after                                                                       | `api/test/grounding-valhalla.test.ts` › "nearby, the Overpass request's own headers (pl-61) the POST names its client, because node's default user-agent gets HTTP 406 from the public instance" ✓. **Re-run**: gate 1's `mutate.mjs`, unchanged, on the new head. Control 166 of 166; dropping only the `user-agent` entry in `#overpassJson` turns exactly this test red (1 of 166).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 2. A 406 on the Overpass `POST` puts `status: 406` on the `the corridor could not be queried` warn                                                                                       | `api/test/discovery-pass.test.ts` › "discoverAlongCorridor, when the Overpass request is refused (pl-61) a 406 reaches the corridor warn with its status, and the coverage sentence is unchanged" ✓. **Re-run**: removing only the `nearby()` spread turns exactly this test red (1 of 166).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 3. One stub refuses one town's geocoder query and another's Overpass query; both town-pass warns carry `status: 406`                                                                     | `api/test/lodging-pass.test.ts` › "the town pass, when the backend refuses (pl-61) a 406 from the geocoder and from Overpass reaches each town-pass warn with its status" ✓. **Re-run**: removing either spread turns this one test red (1 of 166 each); `plant-stub.mjs`, unchanged: either stub matcher changed to match no request turns it red (`expected [] to have a length of 1 but got +0`, and `expected { provider: 'valhalla', …(1) } to match object { code: 'UNREACHABLE', status: 406 }`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 4. `npx vitest run` on each spec file Build steps 2, 6, 7, 8 and 9 name passes in full                                                                                                   | **verified** — `npx vitest run` on `grounding-valhalla`, `discovery-pass`, `lodging-pass` and `travel-measure`: `Test Files 4 passed (4)`, `Tests 180 passed (180)`, exit 0. The four files are the population the five steps name (steps 6 and 8 share `discovery-pass`). 166 in the first three, unchanged from gate 1, plus 14 in `travel-measure`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 5. `npm run check` passes                                                                                                                                                                | **verified** — exit 0 at `510e5f78`; 17 warnings, the count gate 1 read at `a8954049`. The one that names `travel.ts` is `no-await-in-loop` on the `provider.locate` await, a line the round does not touch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 6. A 406 on each of the four lookups reaches its own warn with `status: 406`, once per lookup                                                                                            | `api/test/discovery-pass.test.ts` › "discoverAlongCorridor, when a backend refuses a lookup (pl-61)" — "a refused notability lookup …", "a refused corridor-reading lookup …", "a refused endpoint lookup …", "a refused routing matrix reaches its warn with the status" ✓. **Re-run**: each of the five `discovery.ts` spreads removed alone turns exactly that site's test red (1 of 166 each).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 7. A 406 on the geocoder query behind `a place could not be located` and on the routing `POST` behind `the travel matrix could not be measured` each reaches its warn with `status: 406` | `api/test/travel-measure.test.ts` › "the measuring pass, when the backend refuses (pl-61)" — "a refused locate reaches the place warn with its status" and "a refused routing matrix reaches the matrix warn with its status" ✓. The locate test asserts a `length > 0` companion, then `toMatchObject({ code: "UNREACHABLE", status: 406 })` on every `a place could not be located` warn; the matrix test asserts exactly one `the travel matrix could not be measured` warn and the same `toMatchObject`. **Plants (2)**: removing the locate spread alone turns exactly the locate test red (1 of 14); removing the matrix spread alone turns exactly the matrix test red (1 of 14); control 14 of 14. **Stub non-vacuity (2)**: the geocoder matcher changed to match no request turns the locate test red (`expected 0 to be greater than 0`); the routing matcher changed to match no request turns the matrix test red (`expected { provider: 'valhalla', …(1) } to match object { code: 'UNREACHABLE', status: 406 }`). Neither passes on a stub that matches nothing. |
+
+Does any `Done when` line depend on Build step 5 (the unmeasured `sources_to_targets` user agent)? No, as at gate 1: row 7's matrix case answers 406 from a stub.
+
+- **fixed** · gate 1 finding 1 (low, two more `travel.ts` warns). The owner chose (b). Both sites carry `status` read through the same `typeof number` narrow, Build step 9 and Done when 7 record it, and the two plants above show each site is pinned by its own test. Verified by the plants in row 7, not by the Log's red-on-base run.
+- **fixed** · gate 1 finding 2 (low), to the extent the owner chose: the `USER_AGENT` doc comment in `valhalla.ts` now reads "Sent on every geocoder request and on every Overpass request", which the census re-run bears out. The header is deliberately not added to `#json`; settled, not re-raised. The census still shows `travel`'s `sources_to_targets` `POST` and `articlesNear`'s `GET` going out as Node's default `user-agent: node`, as gate 1 measured.
+- **not fixed, by owner's choice** · gate 1 finding 3 (low, one helper for the seven narrowings). Settled. The round writes the narrowing at two more `travel.ts` sites, and the test files now carry `overValhalla` three times (`discovery-pass`, `lodging-pass`, `travel-measure`) and `recordingLogger` three times (`discovery-pass`, `travel-measure`, and `grounding-cache`, which predates the branch). Recorded as a count, not a new finding.
+- Ticket edits read: Done when 4 now names steps 2, 6, 7, 8 and 9, and each of the four files exists and ran; Done when 7 is met by its two tests (row above). The Log's follow-up entry records finding 1 as (b), the owner's choice and the gate's recommendation, and finding 2 as "the comment only", with the header not added to `#json` and the third low not applied. It attributes the Wikipedia measurement to the orchestrator and says "This branch did not re-run it". I re-ran that curl at this head: `-A node` 200, the planner's own agent 200, no user agent 403, the three numbers the Log gives.
+- **findings** · the hunt in the round's lines returned 0 new; gate 1's three get verdicts above and are not counted again. Nothing in the round is a `high`.
+- NFR: security ✓ (the two new warns read `AppError.from(error).details?.status` only, narrowed `typeof number`; `details` is never spread; no URL, body or header reaches either; where `details` is set in `valhalla.ts` no value is a URL) · performance n/a · reliability ✓ (both `catch` bodies keep their `code` field and their returns; the diff adds one field to each warn) · maintainability — the settled third low.
+- CI at head `510e5f78` (PR #618), read once: `CodeQL`, `codeql`, `check` (both runs), `e2e`, `docker`, `dependency-review` pass; `changes` pending, and neither `test (ubuntu-latest)` nor the informational Windows leg is registered yet. No `Done when` line rests on those legs: rows 4 and 5 were run here.
+- Unmeasured: the public Valhalla endpoint's reaction to Node's default user agent. Build step 4's live `ok: true` Overpass reading is the builder's: one serial `POST` with `-A node` returned 406 here, and the one with the planner's agent timed out at 25 s (curl exit 28), so no `ok` reading was taken and none was retried.
 
 ## Log
 
@@ -223,3 +303,157 @@ Nominatim stub, not only an Overpass one; if the owner reads that as more than m
 the owner's call to change the field.
 
 Ticket edited only. No source changed. `status` is still `ready`.
+
+### 2026-10-24 — built on `pl-61-overpass-user-agent` (builder, build dispatch)
+
+Base `89a38d30`. Farm, then `npm run build` in this worktree: exit 0.
+
+**Step 2, red on the base.** The three new cases were written and run before any source change:
+
+`npx vitest run tools/planner/api/test/grounding-valhalla.test.ts tools/planner/api/test/discovery-pass.test.ts tools/planner/api/test/lodging-pass.test.ts`
+
+```
+× the POST names its client, because node's default user-agent gets HTTP 406 from the public instance
+× a 406 from the geocoder and from Overpass reaches each warn with its status, and the towns are still asked about
+× a 406 reaches the corridor warn with its status, and the coverage sentence is unchanged
+Tests  3 failed | 159 passed (162)
+```
+
+The failures are the ones the ticket predicts. The header is absent: `TypeError: .toMatch() expects to receive a string, but got undefined`. The warns carry no `status`: `expected { provider: 'valhalla', …(1) } to match object { code: 'UNREACHABLE', status: 406 }`, with `- "status": 406` missing from the received fields. The lodging case's title was shortened to "a 406 from the geocoder and from Overpass reaches each town-pass warn with its status" after this run; no assertion changed.
+
+**The fix**, located by content:
+
+- `valhalla.ts`, `#overpassJson`: `headers: { "content-type": "text/plain", "user-agent": USER_AGENT }`, the existing constant.
+- `discovery.ts`, `nearby()`'s `catch`: the corridor warn adds `status` from `AppError.from(error).details?.status` when it is a number, omitted otherwise. `code`, the return value and the coverage sentence are unchanged. The URL is not logged.
+- `lodging.ts`, `locateTown`'s and `queryTown`'s `catch`: the same field, same narrow. `null` and `[]` returns unchanged.
+
+**Step 2, green.** The same command after the fix:
+
+```
+Test Files  3 passed (3)
+Tests  162 passed (162)
+```
+
+Placement: the step-2 case is the last block of `grounding-valhalla.test.ts`. The step-6 corridor case is the last block of `discovery-pass.test.ts`, which step 6 permits, and it builds its `RunGrounding` over a real `ValhallaGroundingProvider` with a helper `overValhalla`. The step-7 case is the last block of `lodging-pass.test.ts`, one stub for both refusals: Percé's geocoder query is refused (the locate warn) and Gaspé's Overpass query is refused (the query warn). Both assert `{ code: "UNREACHABLE", status: 406 }`. The new imports are `type AppLogger` in `discovery-pass.test.ts` and `ValhallaGroundingProvider` in `lodging-pass.test.ts`.
+
+**`npm run check`:** exit 0. Its oxlint output shows warnings only, all `no-await-in-loop` or `prefer-array-find` in lines this change does not touch. `npx oxfmt --check` on the six touched files: `All matched files use the correct format.`
+
+**Step 4, live, once** (2026-10-24, serial, no retries, `node live-check.mts` in the scratch `build/` directory). The adapter's `nearby` on the Gaspé point with `[point, point]`, radius 2000, kind `viewpoint`, which renders the same `around:2000,…` query the probe logged:
+
+```
+{"ok":true,"ms":41435,"finds":2,"names":["Du Sanatorium","Le Belvédère"]}
+```
+
+The base reading for this query is the 406 in the curl entry above, from the same day. This session did not re-run the base live.
+
+**Not done, and why:**
+
+- Step 5, `#json`'s `sources_to_targets` POST: not checked, so no reading exists. Unchanged.
+- Four more warns in `discovery.ts` drop the status in the same way: `a notability lookup failed, continuing with the rest`, `a corridor reading lookup failed, continuing`, `discovery could not locate a corridor endpoint` and `a detour cost could not be measured`. The Build names only the corridor warn, and the owner's answer covered the two lodging warns. Folding the four in would be the same one-line change, but it is not already specified, so it was not folded in. Nothing was filed. This is an open decision for the orchestrator: fold them into pl-61, or file a follow-up.
+
+Status stays `ready`; the lander sets it with the gate record.
+
+### 2026-10-24 — two owner answers applied on the same branch (builder, follow-up round)
+
+**Question 1: four more warns in `discovery.ts`.** Four warns drop the status the way the
+corridor warn did: `a notability lookup failed, continuing with the rest`, `a corridor reading
+lookup failed, continuing`, `discovery could not locate a corridor endpoint` and `a detour cost
+could not be measured`. Options: (1) fold them into pl-61; (2) file a follow-up ticket; (3)
+leave them. The builder recommended (2). **The owner chose (1), fold in. That overrode the
+builder's recommendation of (2).** Recorded as Build step 8 and Done when 6, with the same
+`status` field as step 6 and one test each at the end of `discovery-pass.test.ts`.
+
+None of the four can never carry an HTTP status. Each catch wraps a call that goes through
+`#json` (`articlesNear`, `locate` and `travel` all do, in `valhalla.ts`), and `#json` is the path
+that sets `details.status` on a non-2xx. A timeout or a cancel has no status, so the field is
+omitted there, as the step says. The tests drive a 406 for each.
+
+Red, then green. On the base source, `npx vitest run tools/planner/api/test/discovery-pass.test.ts`:
+
+```
+× a refused notability lookup reaches its warn with the status
+× a refused corridor-reading lookup reaches its warn with the status
+× a refused endpoint lookup reaches its warn with the status
+× a refused routing matrix reaches its warn with the status
+Tests  4 failed | 32 passed (36)
+```
+
+Each failure reads `expected { provider: 'valhalla', …(1) } to match object { code: 'UNREACHABLE', status: 406 }`.
+After the four warns were given the field: `npx vitest run` on the three touched spec files,
+`Test Files  3 passed (3)`, `Tests  166 passed (166)` (162 before, plus four).
+
+Test-design note. The first draft of the test stub answered `articlesNear` with `[]` and
+`travel` with all-`UNKNOWN`. Under that stub the notability, reading and detour warns never fired,
+and the base read `expected 0 to be greater than 0`. That was the stub's fault, not the defect. The
+stub now delegates `articlesNear` and `travel` to the real provider, and the base then fails on
+the missing field, as above.
+
+**Question 2: Done when 3's single 406 stub.** Options: (1) reword it to a two-stub form; (2) keep
+the wording. The builder's view was that (2) cannot be satisfied. **The owner chose (1).** The
+wording is now "a stubbed `fetch` that refuses one town's geocoder query and another town's
+Overpass query, both with HTTP 406, so that both warns fire in one run."
+
+Why the old wording cannot pass. A single stub that answers every request with 406 fires only
+`the town pass could not locate a town`. `locateTown`'s `catch` returns `null`, and `discoverLodging`
+then takes the `located === null` branch of its town loop (`if (located === "refused" || located ===
+null) { … continue; }`), so `queryTown` never runs for that town and its warn never fires. The
+test uses one stub that refuses Percé's geocoder query and Gaspé's Overpass query, so both warns
+fire in one run.
+
+Done when 4 now names Build step 8 as well, and Done when 6 covers the four warns.
+
+Commit and push: the change is a second commit on `pl-61-overpass-user-agent`. Status stays `ready`.
+
+### 2026-10-24 — gate 1's two lows, applied on the same branch (builder, round 1 follow-up)
+
+Gate 1 (the narrow Sonnet gate) graded `a8954049` PASS and recorded three lows. The owner answered
+two of them on 2026-10-24. The third stays recorded and is not applied.
+
+**Finding 1: two more warns in `travel.ts`.** Gate 1 found that `measureTravel` in
+`tools/planner/api/src/runs/travel.ts` has two warns with the same shape the ticket fixes: `a place
+could not be located` (the locate loop) and `the travel matrix could not be measured` (the matrix
+call). Each logs `code` alone for a refusal that went through `#json`, where `details.status` is set.
+Options: (a) leave them and record it; (b) fold both into pl-61, with a test each; (c) file a
+ticket. Gate 1 recommended (b). **The owner chose (b), fold in, which is the gate's recommendation.**
+Recorded as Build step 9 and Done when 7. Neither catch is a path that can never carry a status:
+both wrap `provider.locate` and `provider.travel`, which go through `#json`. The same narrow `status`
+field as the other warns, one test each at the end of `travel-measure.test.ts` (the spec that drives
+`measureTravel`), with the spy logger and a `ValhallaGroundingProvider` on a refusing stub.
+
+Red on the base, before the fix: `npx vitest run tools/planner/api/test/travel-measure.test.ts`,
+with `travel.ts` as committed at `a8954049`:
+
+```
+× a refused locate reaches the place warn with its status
+× a refused routing matrix reaches the matrix warn with its status
+Tests  2 failed | 12 passed (14)
+```
+
+Both read `expected { provider: 'valhalla', …(1) } to match object { code: 'UNREACHABLE', status: 406 }`.
+Both warns fired, so the failures are the missing field and nothing else. After the fix, the same
+file: `Test Files  1 passed (1)`, `Tests  14 passed (14)`.
+
+**Finding 2: the `USER_AGENT` comment.** After this change two adapter requests still go out with
+Node's default `user-agent: node`: the `sources_to_targets` `POST` in `#json` (Build step 5, unmeasured
+by design) and `articlesNear`'s Wikipedia and Wikivoyage geosearch `GET`, which the ticket names
+nowhere. Gate 1 also noted that the `USER_AGENT` doc comment in `valhalla.ts` still read "Sent on every
+geocoder request", which is true but no longer says Overpass sends it too. The question was whether to
+send the header from `#json` as well, or to correct the comment. **The owner chose the comment only.**
+The header is not added to `#json`. The comment now reads "Sent on every geocoder request and on every
+Overpass request", with the 406 reason.
+
+Context, recorded and not acted on in this branch. On 2026-10-24 the orchestrator measured
+fr.wikipedia.org's geosearch with three user agents, using this command:
+
+```
+curl -s -o /dev/null -w '%{http_code}' -A node 'https://fr.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=48.83%7C-64.48&gsradius=2000&format=json'
+```
+
+It gave 200 for `user-agent: node` and 200 for the planner's own agent, and 403 with no user agent.
+This branch did not re-run it. So the Wikipedia `GET` is not refused by Node's default, at least on
+that measurement, and the `sources_to_targets` `POST` remains unmeasured.
+
+**The third low, not applied.** Gate 1 also noted that the seven narrowings across these files could
+share one helper. The owner did not ask for it, so it stays recorded here and is not applied.
+
+`status` stays `ready`.

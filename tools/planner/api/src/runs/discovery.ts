@@ -506,9 +506,11 @@ async function notability(
       // One tile failing is not the pass failing: the rest of the corridor is
       // still worth asking about, and a find nobody reached keeps the same
       // empty `notability` a find nobody wrote about has.
+      const status = AppError.from(error).details?.status;
       logger.warn("a notability lookup failed, continuing with the rest", {
         provider: provider.name,
         code: AppError.from(error).code,
+        ...(typeof status === "number" ? { status } : {}),
       });
       continue;
     }
@@ -575,9 +577,11 @@ async function corridorReading(
       });
     } catch (error: unknown) {
       if (isCancellation(error, signal)) throw error;
+      const status = AppError.from(error).details?.status;
       logger.warn("a corridor reading lookup failed, continuing", {
         provider: provider.name,
         code: AppError.from(error).code,
+        ...(typeof status === "number" ? { status } : {}),
       });
       continue;
     }
@@ -677,9 +681,11 @@ async function locate(
     return { ...place, coordinates: outcome.value.coordinates };
   } catch (error: unknown) {
     if (isCancellation(error, signal)) throw error;
+    const status = AppError.from(error).details?.status;
     logger.warn("discovery could not locate a corridor endpoint", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
     return null;
   }
@@ -834,9 +840,14 @@ async function nearby(
     // one this pass's one entry per corridor can carry without a second kind,
     // and both leave a traveller in the identical position — this plan cannot
     // say what is nearby.
+    // pl-61: the HTTP status of a refused backend goes in the log, so a 406
+    // reads as a refusal rather than as a quiet network failure. The URL is not
+    // logged: a request URL is as sensitive as a credential in a log line.
+    const status = AppError.from(error).details?.status;
     logger.warn("the corridor could not be queried", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
     return { kind: "answered", value: [] };
   }
@@ -878,9 +889,11 @@ async function detourCosts(
     matrix = outcome;
   } catch (error: unknown) {
     if (isCancellation(error, signal)) throw error;
+    const status = AppError.from(error).details?.status;
     logger.warn("a detour cost could not be measured", {
       provider: provider.name,
       code: AppError.from(error).code,
+      ...(typeof status === "number" ? { status } : {}),
     });
   }
 
