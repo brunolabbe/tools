@@ -127,3 +127,43 @@ directories as real directories; the new links go inside them.
     workspace does not, since the farm links the worktree's own workspaces. The
     paragraph's first line (the shared copy of the farm script) is unchanged: it was not
     part of the answer.
+- 2026-10-24 — Gate 1 (Opus) passed `5486e056` with four lows; the owner chose which to
+  fix, relayed by the orchestrator.
+  - **F4**, the worktree's fetched packages. Question: a stale shared checkout still passes
+    a worktree on `main` that lacks a newly _fetched_ package; should the farm also run
+    `--packages` on the worktree after the copy loop? Options: (A) leave it, since every
+    `Done when` line is about workspaces (the gate's recommendation); (B) the farm checks
+    the worktree too, with a remedy text that does not tell the reader to install in a
+    worktree. The owner chose **(B)**, overriding the gate's recommendation. Built:
+    `check-farm-freshness.mjs --worktree-packages <worktree>` (`warnIfStale` with
+    `{ worktree: true }`), called by the farm last. Its remedy reads "the shared checkout
+    this worktree was farmed from is behind its lockfile. Stop and report it to the
+    orchestrator; do not install in a worktree." `--packages` keeps its text: the
+    `equiv.sh` comparison against the old no-flag form on main is identical again, on a
+    stale and a healthy root (exit 1 with the same stderr; exit 0, nothing). Where the
+    shared lockfile is itself ahead of its install, both passes name the package: two
+    warnings, not one.
+  - **F1**, the Done when 1 evidence. Accepted: the earlier "Fixture proof" ran in a
+    worktree under `/workspaces/tools`, where Node's parent walk reaches the shared
+    checkout's `node_modules/@webtools/ui`, so a build there passed with or without the
+    link. Remeasured from a detached worktree under the scratch directory
+    (`build/outside.sh`; no `node_modules` on any ancestor, `NODE_PATH` empty), farmed from
+    a fixture shared root whose `@webtools` held only `core`: the farm printed
+    `linked workspace @webtools/ui -> ../../packages/ui`, `npm run build` exited **0**
+    with the link; with `node_modules/@webtools/ui` removed,
+    `npm run build -w @planner/web` exited **1** (`Rollup failed to resolve import
+"@webtools/ui/tokens.css"`); re-running the farm restored the link and the same build
+    exited **0**. The gate's `t2-build.sh` measures the same thing; I wrote my own only
+    to add the restore step and print the ancestor check. The earlier Fixture-proof
+    bullet above stands as the farm's output, not as proof of the build.
+  - **F3**, `--link` through a symlinked `node_modules`. Reproduced first with the gate's
+    fixture (the tree's `node_modules` a symlink to a shared one holding `core`):
+    `linkMissingWorkspaces` returned `@webtools/ui` and the shared `@webtools` listing
+    went from `core` to `core,ui`. `linkMissingWorkspaces` now resolves the directory it
+    writes into (nearest existing ancestor, `realpath`) and skips any that leaves the
+    tree's own `realpath`; the workspace is then left for the `--workspaces` warning.
+    Removing the guard turns the new test and the scope-symlink test red (3 failed of 28
+    with the farm's new call also removed); restored, 28 of 28.
+  - **F2**, recorded unfixed on the owner's word. The orchestrator's message pasted three
+    of the gate's four lows (F1, F3, F4); F2's text did not reach this builder, so it is
+    named here only as left unfixed, and its wording is the gate's own record.

@@ -362,8 +362,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const flags = args.filter((a) => a.startsWith("--"));
   const root = args.find((a) => !a.startsWith("--"));
-  const known = ["--packages", "--worktree-packages", "--workspaces", "--link"];
-  if (!root || flags.some((f) => !known.includes(f))) {
+  const known = new Set(["--packages", "--worktree-packages", "--workspaces", "--link"]);
+  if (!root || flags.some((f) => !known.has(f))) {
     process.stderr.write(
       "usage: node check-farm-freshness.mjs [--packages | --worktree-packages | --workspaces | --link] <root>\n",
     );
