@@ -104,7 +104,12 @@ node scripts/next-id.mjs <prefix>     # repo, dl, pl …
 ```
 
 It prints **every claimant with its source**, then any id two sources both hold,
-then anything it could not read in full, then the first free one:
+then anything it could not read in full, then the first free one: the answer
+is the last line, `next free:`, after some fifty `merged` rows for a tool with
+that many tickets. A `merged` row means the ticket's file is on `main`, not that
+its work has merged — lg-40 read `merged` with #548 open — and a branch stacked
+on a sibling's reads as a `clash` with both pull requests (lg-66 in #623 and
+#625); both are repo-118's.
 
 ```
 merged repo-29
@@ -329,14 +334,21 @@ what the pilot measured, including the three points repo-48 could not test:
 
 Until the pilot has measured those, the numbered steps above are the procedure.
 
-**Unstack a branch after its parent squash-merges with `--onto`.** A squash merge
+**Unstack a branch after its parent squash-merges with a merge commit carrying
+the replayed tree, never `--onto`.** A squash merge
 rewrites the parent's history into one new commit, so a child branch still carries
 the parent's *original* commits — which are now duplicates of content already on
 `main`. `git rebase main` replays them and conflicts on every line the squash
-touched; `git merge main` keeps them and puts the duplicates in the PR diff. The
-one that works is
-`git rebase --onto main <the-parent-branch's-old-tip> <child-branch>` — recover
-the old tip from the reflog or `gh pr view <parent> --json headRefOid` before the
+touched; `git merge main` keeps them and puts the duplicates in the PR diff;
+`git rebase --onto` gives the right tree but needs the force-push
+`dispatching.md` and `roles/fixer.md` forbid. The one that reaches `origin` as a
+fast-forward (lg-34, 2026-10-18):
+`git merge-tree --write-tree --merge-base <the-parent's-old-tip> origin/main <child>`
+prints a tree; check `git diff origin/main <tree>` is byte-identical to
+`git diff <old tip> <child>`; then
+`git commit-tree <tree> -p <child> -p origin/main -F <message file>` and push
+the new commit to the child's branch. Recover
+the old tip from `gh pr view <parent> --json headRefOid` before the
 branch is deleted. **GitHub reports the un-rebased child as "conflicting"**, which
 reads like a content problem and is not: it is history shape. Do not send a builder
 to resolve those conflicts by hand.

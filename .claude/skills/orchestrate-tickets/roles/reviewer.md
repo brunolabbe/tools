@@ -13,9 +13,14 @@ your scratch directory and no `Edit`.
 1. `git checkout --detach <head sha>` for the commit you were given. The builder
    still holds the branch name in its own worktree.
 2. Confirm the tree: `git log --oneline -1` and one
-   `git diff --stat <base sha>...HEAD`. Use the base **sha** your dispatch names
-   for every range, never a branch name.
-3. Farm, then build — per `common.md`, **after** the checkout. A gate that
+   `git diff --stat <base sha>...HEAD -- . ':!<ticket path>'`. Use the base
+   **sha** your dispatch names for every range, never a branch name — and once
+   the builder has merged `main`, that range carries `main`'s files: diff from
+   `git merge-base <base sha> HEAD` instead and say so in the header (three
+   gates in one batch read 3,503 lines where the branch had 3,248).
+3. Farm, then build — per `common.md`, **after** the checkout, unless the
+   diff is markdown only: then skip both and say so (`common.md`, _Your
+   worktree_). A gate that
    builds before it detaches grades `main`, and produces a fluent section that
    marks every acceptance line `unproven`.
 
@@ -31,8 +36,11 @@ confirm it. So read in this order:
    `git show <head sha>:<ticket path> | awk '/^## Log/{exit} {print}'` —
    `sed -n 1,80p` reads past the heading, and the diff puts a reworded line and
    the Log in one hunk.
-2. **The diff and the tests**, excluding the ticket's own `## Log`. Every
-   acceptance verdict comes from here and from what you run.
+2. **The diff and the tests**, with the ticket file excluded —
+   `git diff <base sha>...HEAD -- . ':!<ticket path>'`: any diff of the ticket
+   prints the branch's Log additions, since the `## Log` heading sits outside
+   the hunk as context (lg-52, repo-110, repo-116). Every acceptance verdict
+   comes from here and from what you run.
 3. **Only then the branch's `## Log`**, as a document under review: a claim in
    it that your measurements contradict is a finding.
 
@@ -57,13 +65,13 @@ confirm it. So read in this order:
   `git worktree add --detach /workspaces/tools/.claude/worktrees/gate-<id>-<n> <sha>`,
   then farm and `npm run build` in it, and `git worktree remove --force` it
   before you report. Not under your scratch directory, nor anywhere outside
-  `/workspaces/tools`: the farm's links resolve to the shared `node_modules`,
-  and TypeScript can name a type from there as its package only when that
-  directory is an ancestor's `node_modules`, so a tree under `/tmp` fails
-  `npm run check` with TS2883 at `tools/ledger/api/test/helpers/households.ts`
-  even at the base sha (lg-23; re-run 2026-10-17 at `f3b9776b`: build exit 0,
-  typecheck exit 1, that one error — lg-36 removes it), where the same sha
-  beside the agent worktrees passes. The farm fills the toplevel of the
+  `/workspaces/tools`: the farm's links are relative and resolve to the shared
+  `node_modules` only from a sibling of the agent worktrees. The Edit tool
+  cannot write a second tree, and `git` run in it — `cd <tree> && git status`
+  — is refused as a change of directory out of your worktree (lg-61, lg-58):
+  change its files by `cp` from your scratch directory, read it with
+  `node <script> <tree>`, and take its sha from your dispatch. The farm fills
+  the toplevel of the
   directory it runs in and the cwd resets between calls, so a `cd` in one call
   and the farm in the next re-farms your own tree and exits 0 (lg-25): put both
   in one script in your scratch directory and run it with `bash <file>`. A
@@ -76,7 +84,20 @@ confirm it. So read in this order:
   that failed 1 in 10 (its gate 2's `repeat.summary`: run 1 exit 1, runs 2–10
   exit 0).
 - **Enumerate, never sample**, and report the population you covered against the
-  population that exists.
+  population that exists. Size the population from your positive control's
+  catch rate: lg-58's gate planted a rival pass caught about once in 500
+  pastes, ran 20,000 seeds rather than 1,000, and found F1 at 5 in 11,542.
+- **A replay through the test helpers' `startApp()` meets the default rate
+  limit** (120 reads a minute): count non-200 answers before you compare dumps.
+  lg-41's first base/head dump had 67 of 183 at `429`, and `cmp` exited 0.
+- **An e2e run takes a private `E2E_PORT`**: the config's fixed default
+  collides with a peer's run (lg-64's gate: `8108 is already used`).
+- **A phrase check on a ticket file reads the diff, not the whole file**: the
+  Log restates figures the brief carries, so a whole-file count passed a plant
+  that changed the brief (lg-66's gate 4: "6 of 6" → "5 of 6", still 18 of
+  18). A planting script fails when its replacement changed nothing — oxfmt
+  wraps a phrase across lines, and a line-wise `sed` on it planted nothing
+  while the control "passed" (lg-67's gate 1).
 - **Sweep inside the budget your dispatch names** — 15 minutes for all your
   sweeps when it names none. When the budget is spent, start no other sweep:
   report the population you covered against the one that exists, as a
@@ -108,15 +129,22 @@ confirm it. So read in this order:
 - **Set a private `TMPDIR`, `TEMP` and `TMP` for mutation runs**, so concurrent
   sessions do not race on the shared temp directory. Make it short and make it
   first — `mkdir -p /tmp/claude-1000/<ticket id>` — and run TypeScript with
-  `node --import tsx`: the `tsx` CLI's socket path overflows under the scratch
-  directory, and ffmpeg fails on a directory that does not exist yet.
+  `node --import tsx` from your worktree as the working directory: the `tsx`
+  CLI's socket path overflows under the scratch directory, `tsx` itself
+  resolves from the cwd's `node_modules` (`ERR_MODULE_NOT_FOUND` from the
+  scratch directory: lg-57's gate 2, lg-65's gate 1), and ffmpeg fails on a
+  directory that does not exist yet.
 
 ## Returning the gate
 
 - **Write the section to one file in your scratch directory with the Write
   tool**, named `gate-<n>@<short head sha>.md`, starting on its heading line —
-  `## Review` for gate 1, `### Gate <n>` for a later one — and name the path in
-  your report. The lander commits that file as it stands — or, when the branch
+  `## Review` for gate 1, `### Gate <n>` for a later one, counting the sections
+  the ticket already holds, which your dispatch names: a ticket gated in two
+  slices, or a filing pull request that closes a ticket already carrying
+  `## Review`, continues at `<k+1>` (lg-56's second slice: `--land` refused a
+  second `## Review`, and both gates re-emitted their files as Gates 3 and 4)
+  — and name the path in your report. The lander commits that file as it stands — or, when the branch
   only files a ticket or records a decision on one, posts it on the pull
   request thread (`gate.md`, `records.md`). **Write the full report to a
   second file beside it, `gate-<n>@<short head sha>.full.md`**: the section
@@ -171,11 +199,16 @@ report before the round's commits, as the account of what it measured.
   your report, with the command that showed it (`common.md`, _Your report_).
 - Give **each of gate 1's findings** a verdict: fixed, with how you verified it; fixed
   in part, naming the clause that remains (lg-17's F6); not fixed; or refuted,
-  where you re-ran the refutation and it held. A finding that comes back
+  where you re-ran the refutation and it held. A refutation that quotes gate
+  1's own mislabelled output is **not refuted**, and the verdict names the
+  label (pl-57: gate 1's `objects.py` counted two campgrounds as parks); a
+  builder's text copied from gate 1's own unqualified sentence is still a
+  finding, attributed to gate 1 (pl-58's G4). A finding that comes back
   unfixed keeps its number and severity — a verdict, not a new finding, and
-  never counted twice (dl-111).
+  never counted twice (dl-111). **A gap that shares a gate-1 finding's
+  mechanism is that finding `fixed in part`**, never a new one (pl-62's F2).
 - **A new problem in the lines this round touched is a finding; nothing else is
-  in scope.** Do not re-run the whole review. One exception: re-read at the new
+  in scope.** Your header names the round's range, `<gated sha>..<new sha>`. Do not re-run the whole review. One exception: re-read at the new
   head any path a gate-1 finding rests on that the round's merge of
   `main` touched (`git diff --name-only <gated sha> <new sha> -- <path>`):
   pl-56's F2 rested on `docs/02-DEPLOYMENT.md`, and the round's merge changed

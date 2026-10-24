@@ -20,13 +20,22 @@ instead.
    branch exists for a re-dispatch to refuse.
 2. Confirm the branch name you were given is free — `git branch --list <branch>`
    and `git ls-remote --heads origin <branch>` both print nothing — then
-   `git checkout --no-track -b <branch> origin/<base>`. Without `--no-track`
+   `git checkout --no-track -b <branch> <base sha>`, the sha your dispatch
+   names: `origin/<base>` may already be past it (lg-40 was dispatched at
+   `960f4b26` and `origin/main` read `140bd78a` after the fetch), and the gate
+   diffs from the dispatch's sha. Without `--no-track`
    the branch tracks `origin/<base>` and a bare `git push` aims at `main`: 33
    builders since 2026-10-10 saw `set up to track 'origin/main'`. **Never
    `-B`, and never reuse or
    rename an existing branch**: refs are shared across every worktree. If the
    name exists, stop and report. When the base was never pushed, branch off the
-   named local ref and say which you used. **If the auto-mode classifier denies
+   named local ref and say which you used. **When your dispatch continues a
+   branch another agent built** — a split build's later step, a web check, a
+   reproduction before the fix (lg-65, pl-58) — the name is held by that
+   agent's worktree: `git fetch origin <branch>`, then
+   `git checkout --detach origin/<branch>`, and push with
+   `git push origin HEAD:refs/heads/<branch>`. Never `git checkout <branch>`
+   there: it tracks `origin/<branch>` and shares the ref. **If the auto-mode classifier denies
    the checkout** ("Modify Shared Resources": lg-25, and repo-99's records
    builder), do not try another spelling: stop and report the denial verbatim.
    The orchestrator dispatches you again fresh — never a resume, which with
@@ -51,6 +60,12 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   The exception is a filing that poses a question its own page says the next
   agent must not settle: that one is `needs-decision`, its first state in
   `docs/01-TICKETS.md` (dl-126).
+- **An owner's answer to a `ready` ticket** — a fold-in, a reworded `Done
+  when` line, a Build step added — is recorded as a `needs-decision` answer is:
+  who, the date, the options, in its own commit before the work it changes,
+  with the line it supersedes left beside it and marked so (pl-61's
+  `lodging.ts` fold-in, 2026-10-24). `reference/dispatching.md` schedules that
+  dispatch when nobody is building the ticket.
 - **A tool's `CLAUDE.md` is edited only when the Build names the change**
   (owner, 2026-10-17). A line binds every later session in that tool, so a rule
   your change establishes goes in your report as a proposed line, and the
@@ -72,13 +87,32 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
 
 ## Before you report
 
-- `npx oxfmt <the files you touched>` after touching any `.md`; `npm run
-  format` walks the whole repo (1,105 files on pl-56). Fix lint by hand; never
-  `npm run lint:fix`, which rewrites files outside the branch.
+- `npx oxfmt --check <the files you touched>` after touching any `.md`. It
+  exits 2 when every file named is under an ignore pattern (`.claude/`,
+  `**/test/fixtures/`), which is not a fault: read the message, and never chain
+  it ahead of a commit (pl-62's builder committed under the previous message
+  when it did). `npm run format` walks the whole repo (1,105 files on pl-56).
+  Fix lint by hand; never `npm run lint:fix`, which rewrites files outside the
+  branch.
 - `npx oxlint <the packages you touched>`, `npm run check`, and the narrowest
-  `npx vitest run` for what you changed — one spec file, then its package.
-  `npm run check` catches a type error `npx vitest run` never sees (lg-19's
-  `exactOptionalPropertyTypes` error failed only there).
+  `npx vitest run` for what you changed — one spec file, then its package —
+  and again after every later commit: lg-58's two
+  `consistent-function-scoping` errors came from commits after its one run and
+  surfaced in `npm run check`. `npm run check` catches a type error
+  `npx vitest run` never sees (lg-19's `exactOptionalPropertyTypes` error
+  failed only there). `npx vitest run <spec>` works from the worktree root
+  only: from `tools/ledger` it answers `No test files found`.
+- **A `Done when` line that names a suite with no spec** (repo-108's "each
+  tool's e2e suite passes", against a ledger with no `e2e/*.spec.ts`), **or
+  one that fails identically at the base**, is reported as such with the base
+  run, not met by a run you improvise; the orchestrator rewords it.
+- **`--base` is the pull request's base ref** — `origin/main` when the pull
+  request targets `main`, on a branch stacked on a sibling too (lg-66, lg-67):
+  preflight's merge-tree probe covers the parent.
+- **A stop before any source change opens its draft under a `docs(<tool>)`
+  title**: a `feat` title over a diff with only markdown under `tools/` fails
+  the title check (pl-62's Build 1 capture, exit 8); the lander retitles once
+  source lands.
 - `git fetch origin` before the fast checks: `--base origin/<base>` reads the ref this
   worktree holds, and `main` moves during a batch. **A moved `main` is taken by
   `git merge origin/<base>`, never by a rebase**: a rebased branch cannot reach
@@ -167,9 +201,15 @@ the gate's own; where they disagree, the disagreement comes back as a finding.
 1. `git fetch origin`, then `git merge --ff-only origin/<branch>`: a fixer may
    have pushed since you reported. If it is not a fast-forward, stop and report.
    Then, if `main` has moved since the build, merge it as _Before you report_
-   says, before the fix (pl-56's round was that merge).
-2. Fix, run the narrowest checks, then preflight, then commit and push.
-3. Report per finding: fixed, with the command that failed before and passes
+   says, before the fix (pl-56's round was that merge) — as many times as it
+   moves during the round (lg-38's needed two), with a rebuild before
+   preflight. A seam pull request your dispatch named that merged during the
+   round is now in `main`: merge it and say so (lg-40, #542).
+2. **A message carrying an owner's decision** — on a build stopped at its stop
+   condition, or beside the findings — is recorded first, as _Scope_ says for
+   an answer, in its own commit; then the work (lg-59's builder met both).
+3. Fix, run the narrowest checks, then preflight, then commit and push.
+4. Report per finding: fixed, with the command that failed before and passes
    after; refuted, with the command and output that refute it; or an open
    decision, as options. Name the new head sha.
 

@@ -20,7 +20,17 @@ as filed — and you trace those as acceptance, saying they came from the prompt
 A ticket the branch files beside its own work is checked the same way, as one
 finding block. The section goes on the pull request thread, not into the file
 (`orchestrate-tickets`' `records.md`, _When there is no ticket_); the lander's
-side is in [SKILL.md](SKILL.md).
+side is in [SKILL.md](SKILL.md). **The supplied checks roll up as acceptance
+lines do**: the reproduction's fidelity failing is **not met**, a FAIL — a
+filing whose reproduction does not show what it claims is wrong, not untested
+(pl-62's gate 1 graded it `med` and put the regrade to the owner); the format,
+the id's freedom and the honesty of `status` and `difficulty` are findings
+graded by the table, so a brief with five `med`s is CONCERNS (pl-58's gate 1
+returned FAIL on them and named the ambiguity). The table has one row per
+supplied check, headed `Check (from the dispatch)`, and a later gate on the
+same filing one row per earlier finding (lg-66, lg-67). A pull request that
+files one ticket and closes another lands its sections on the closed ticket,
+continuing its gate numbering (#623: lg-66 filed, lg-38 closed).
 
 ## Steps
 
@@ -34,7 +44,11 @@ side is in [SKILL.md](SKILL.md).
    the section's header — a gate against an unstated range cannot be reproduced.
 
 3. **Hunt defects yourself**, in your own context, to the depth your dispatch
-   names — `medium` when it names none. **Account for every finding**: keep it,
+   names — `medium` when it names none. **narrow** is the named attacks and the
+   acceptance table, no hunt of your own and no invariant walk; **medium** is
+   these steps as written; **full** adds the invariant walk over every file the
+   diff touches and a sweep of each new branch's inputs, inside the dispatch's
+   budget. **Account for every finding**: keep it,
    or drop it and say in the section that you dropped it and why — wrong, already
    fixed, out of the reviewed range, a product decision rather than a defect. A
    finding that vanishes between the hunt and the section leaves a gate that
@@ -57,8 +71,16 @@ side is in [SKILL.md](SKILL.md).
      to prevent. A line with one clause unasserted is **unproven**, and the row
      names the clause (lg-8's Done when 5). A line that reads two ways, one met
      and one that a test on the branch contradicts, is graded on the literal
-     reading as the open-decision case below, and the owner rewords or confirms
-     the line (dl-100).
+     reading: that test is a `high` and the gate is FAIL (_Severity and the
+     gate_); with no such test the line is the open-decision case below, and
+     the owner rewords or confirms it (dl-100, lg-57).
+   - **A line met in property by a mechanism its words do not name** (repo-110's
+     Done when 1, a literal grep) is **verified**, the row names the mechanism,
+     and the wording is a `low` for the owner to reword; it is `not met` only
+     when the property fails.
+   - **A line only your dispatcher can check** — it names the builder's report,
+     which you are not given (lg-36's Done when 3) — is `unproven (scope)`, the
+     row naming the orchestrator as who checks it. It does not force FAIL.
    - **Every "contains no X" assertion needs a companion that fails on empty
      output.** A test that a string never appears passes on a function that
      returns nothing.
@@ -135,7 +157,10 @@ side is in [SKILL.md](SKILL.md).
 
 6. **Sweep the four NFRs** — security, performance, reliability,
    maintainability — one line each. *Not applicable* is a fine answer; silence
-   is not.
+   is not. A new web form or control is read at 360 px and desktop as well
+   (repo-109's layout spec): no unit test reads CSS, and lg-63's radio group
+   rendered as full-width boxes under `input, select { width: 100% }` through
+   a PASS gate.
 
 7. **Decide the gate by the rule below, not by feel**, write the section to the
    file `roles/reviewer.md` names, and return it. You do not commit it.
@@ -294,10 +319,12 @@ is posted to the pull request thread.
 line that separates a gate whose hunt found nothing from one whose hunt never
 ran, and its count has to reconcile against the bullets.
 
-A later gate's section starts `### Gate 2` with the same header line, gives each
+A later gate's section starts `### Gate 2` with the same header line, its range
+the round's (`<gated sha>..<new sha>`), gives each
 earlier finding a verdict — fixed, fixed in part, not fixed, refuted — and
 lists only findings
-in the lines the round touched.
+in the lines the round touched; a gap sharing an earlier finding's mechanism
+is that finding `fixed in part`, not a new one.
 
 ## What this is not
 

@@ -11,7 +11,12 @@ nothing, you build nothing, and you do not recommend which tickets to run — th
 is a decision for the user, and your job is to make it answerable. Read
 `difficulty` from the ticket's frontmatter line and quote it in your output. Use
 `npm run -s status -- --json` to suppress npm's banner lines, and never print
-it whole — it is about 135 KB. Filter it to the ids you were given,
+it whole — it is about 135 KB. When your dispatch names an exported snapshot of
+`origin/main` instead of the checkout (the shared checkout is stale while a
+peer is live), read status with `node scripts/status.mjs --root <snapshot>
+--json` and history from the ref, `git log origin/main --oneline -20 -- <paths>`:
+the snapshot has no commits (`git -C <snapshot> log` → "does not have any
+commits yet", tools-a3). Filter it to the ids you were given,
 `npm run -s status -- --json | jq '.tickets[] | select(.id == "<id>")'`, or
 read `npm run -s status -- --show <id>` per ticket.
 
@@ -49,8 +54,10 @@ Nothing but this, and keep it under about forty lines, **grouped by tool**: the
 orchestrator offers the owner batches of one tool's tickets, so the groups are
 the options it builds from.
 
-- **Each candidate's open decisions, quoted, as findings**: the question under a
-  `## Decision — open` heading, and each `Done when` line a gate would grade
+- **Each candidate's open decisions, quoted, as findings**: each question
+  marked open under any Decision heading — a ticket answered in part keeps one
+  `## Decision — answered` heading over its open questions (pl-62's 5 and 6) —
+  and each `Done when` line a gate would grade
   `unproven (open decision)` — one the build cannot meet until the owner
   chooses. The owner answers them at intake, beside the batch question; one
   left out is asked after gate 1, at the cost of a round.

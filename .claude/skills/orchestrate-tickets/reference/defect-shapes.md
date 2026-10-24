@@ -180,6 +180,12 @@ the fix's tests began from. The gate form of this is in
 `roles/reviewer.md`, _What makes a gate worth its cost_ ("Start a fix from a
 state its own tests never began from").
 
+**A new form control's layout.** No unit test reads CSS, so a gate asked to
+attack a form runs the tool's layout spec at 360 px and desktop, or reads the
+control in a browser: lg-63's radio group sat under `input, select { width:
+100% }` and rendered as full-width boxes (262 px and 510 px wide, label below),
+found by a peer's layout probe the day its gate passed it.
+
 ## Verification traps
 
 - **A harness that cannot fail is the defect class that produced everything else

@@ -48,7 +48,10 @@ the batch cannot proceed, put it to the user at once.
    you run it in, and `git fetch` does not move it — compare
    `git log --oneline -1 HEAD` with `origin/main`, and if they differ read ticket
    state with `git show origin/main:<path>`. Never reset the shared checkout
-   while `ListAgents` shows a live peer. Then
+   while `ListAgents` shows a live peer. Read the peer sessions' `board.md`
+   files too (`/tmp/claude-1000/-workspaces-tools/*/scratchpad/board.md`,
+   newest first): they show queued tickets `git worktree list` does not
+   (tools-11, 2026-10-20). Then
    `node .claude/scripts/check-farm-freshness.mjs /workspaces/tools`: a shared
    checkout missing a package the lockfile declares stops every builder at the
    farm, and only `npm install` there, when no peer is live, repairs it
@@ -77,9 +80,12 @@ the batch cannot proceed, put it to the user at once.
      and no peer holds one, recommend the tool with the most unblocked `ready`
      tickets.
    - **Ask the candidates' open decisions in the same checkpoint**: each
-     `## Decision — open` question, and each `Done when` line a gate would
-     grade `unproven (open decision)`, as the seam map quotes them. The answers
-     travel in the build dispatch
+     question marked open, under whichever Decision heading it sits (pl-62
+     held two open under `## Decision — answered`), and each `Done when` line a
+     gate would grade `unproven (open decision)`, as the seam map quotes them.
+     `AskUserQuestion` takes four questions: a candidate with more than fit
+     beside the batch question gets a second checkpoint before its dispatch.
+     The answers travel in the build dispatch
      ([reference/dispatching.md](reference/dispatching.md)), so no builder
      starts on a question only the owner can settle.
 
@@ -98,7 +104,10 @@ the batch cannot proceed, put it to the user at once.
    state on that head (`gh pr checks <n>`) where a local suite run used to be:
    a first build runs no full suite (`roles/builder.md`). Send a
    failing line back now, while the builder's cache is warm. When a `Done when`
-   line names several subjects, check all of them in one message.
+   line names several subjects, check all of them in one message. **An open
+   decision in the report goes to the owner now, before the gate**: lg-63 and
+   lg-58 then ran builder → gate → lander with no round and no gate 2 ($14.06
+   and $17.01, against $20.01 and $17.40 for lg-35 and lg-40 with a round).
 
 5. **Gate each accepted branch** with the reviewer the pairing table names,
    spawned by you. **Give the gate nothing from the build** — the ticket, the
@@ -129,6 +138,15 @@ the batch cannot proceed, put it to the user at once.
    one Log entry in the form `reference/records.md` gives under _Fixed at
    landing_. The owner took that path on seven tickets in five batches, and on
    most tickets of the eleven batches that followed.
+
+   **A builder is resumed for one round and one owner stop, no more.** Each
+   resume re-reads the whole transcript, so a ticket with several stops goes to
+   fresh agents for its later steps — handed the branch, its head and the Log —
+   and sooner when `node scripts/agent-cost.mjs --agent <id>` shows the
+   builder past about $15: pl-60's builder-hard was resumed four times to
+   $38.03 while the fresh agents that finished the ticket cost $0.60 to $3.92
+   each; pl-62, retiring its builder at $12.01, cost $34.24 against pl-60's
+   $47.50 for the same shape.
 
    After sending to a running or resumed agent, confirm delivery with
    `ListAgents` and with the artefact the message should produce.
@@ -167,6 +185,10 @@ the batch cannot proceed, put it to the user at once.
    lander first commits the ticket's `awaiting:` line. Then one command per
    ticket ([reference/records.md](reference/records.md)):
    `node scripts/review-record.mjs --land <ticket-path> <gate files…> --base origin/<base> --status done --title "<PR title>" --branch <branch>`.
+   A pull request that only files a ticket gets no `--land`, and its fixes at
+   the landing are committed all the same (records.md, _When there is no
+   ticket_); a ticket already holding `## Review` takes its new gates as
+   `### Gate <k+1>`, and the gate dispatch names `k` (lg-56's second slice).
    **A gate writes two files, its section and its full report** —
    `gate-<n>@<sha>.md` and `gate-<n>@<sha>.full.md` in its scratch directory
    (`roles/reviewer.md`); you write neither. The harness refuses a subagent one
@@ -193,7 +215,10 @@ the batch cannot proceed, put it to the user at once.
     the ticket's worktrees: each clean, each head on origin, each agent finished
     and sent nothing since. If CI shows a problem, ask the owner whether to keep
     them. A lock names your own pid for every agent, so it is not a liveness
-    test.
+    test. **Delete only the `worktree-agent-<id>` branches of your own
+    agents**, by id; never a pattern sweep over the clone's branches, which
+    deleted other sessions' (tools-62, 2026-10-24:
+    `git branch --list 'worktree-agent-*' | xargs git branch -D`).
 
 11. **After a merge, look once at `main`.** See _After a merge_.
 
@@ -204,8 +229,12 @@ the batch cannot proceed, put it to the user at once.
     request. No gate: it is your own account, and the review session checks it
     against the transcripts. Ask every agent for the defects in its dispatch;
     each item names the page and heading it concerns and carries a reproduction
-    — a command and its output. Change no rule. When the log holds about twenty
-    items, or five entries, tell the user a review is due.
+    — a command and its output. A refused shell shape is an item only when
+    `roles/common.md` says that shape works. Change no rule. When the log holds
+    about twenty items, or five entries, tell the user a review is due — at
+    intake, before you offer a batch, and again at close: the 2026-10-17 review
+    was followed by seventeen entries and about a hundred items before the
+    next, and one records.md gap was logged fourteen times over.
 
 ## Which model built it, and which gated it
 
@@ -218,7 +247,9 @@ files together.
 | `mechanical` — code only | `builder-mechanical` (Haiku 5.5, high) | `ticket-reviewer-sonnet`, narrow: named attacks only |
 | `standard` | `builder-standard` (Sonnet 5.5, high) | `ticket-reviewer-opus` (Opus 5.5, high) |
 | `hard` | `builder-hard` (Opus 5.5, high) | `ticket-reviewer-sonnet` (Sonnet 5.5, xhigh) |
-| maintenance — a rebase, a merge from `main`, one Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | none, or `ticket-reviewer-sonnet` where one runs |
+| a Build step that searches the web — a measurement ticket's web check | `builder-web` (Sonnet 5.5, high; the one builder with `WebSearch`), dispatched for that step alone, continuing the ticket's branch | the ticket's own gate row |
+| maintenance — a rebase, a merge from `main`, one Log edit, recording an answer | `builder-mechanical`, prompt saying "maintenance" | none |
+| a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | `ticket-reviewer-sonnet`, narrow, after the PR opens |
 | a docs-only chore — ticket files, tool docs, no source | `builder-standard` | one gate, narrow, after the PR opens |
 | a round's mechanical fixes, and a landing | `fixer` (Sonnet 5.5, high) | gate 2: the ticket's own gate row, dispatched fresh |
 
@@ -228,8 +259,13 @@ files together.
   against $0.63 and $1.17 for dl-123 and dl-125 on `builder-standard`); a
   filing that must first reproduce on `main` is not in hand and is a `standard`
   dispatch. The rule is "a different model", not "a cheaper one".
-- A Haiku build is always gated: it has reported verifications it did not run
-  (dl-36, pl-51).
+- A Haiku build or filing is always gated: it has reported verifications it
+  did not run (dl-36, pl-51), and lg-64's filing gate found a false fact among
+  seven lows. A maintenance dispatch that changes no source and no brief is
+  not a build, and gets none.
+- No other agent has `WebSearch`. A `general-purpose` stand-in ran on Opus at
+  an unpinned effort four times (pl-57, pl-58, pl-60, pl-62: $3.92 to $6.28
+  each); `builder-web` is that row.
 - Confirm what ran from the transcript:
   `node scripts/agent-cost.mjs --agent <id>`. Never ask an agent what model it
   is, and never read it off a commit trailer.
