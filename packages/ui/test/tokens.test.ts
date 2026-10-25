@@ -18,6 +18,7 @@ import {
   headerRoles,
   RETIRED_NAMES,
   stripComments,
+  unreadNames,
   vocabularyProblems,
 } from "./support/stylesheet.ts";
 
@@ -135,12 +136,21 @@ describe("tokens.css", () => {
       "--radius",
       "--gap",
       "--page-width",
-      "--space-1",
       "--font-sans",
       "--font-mono",
       "--font-size-base",
     ].filter((name) => !new RegExp(`${name}\\s*:`, "u").test(body));
     expect(missing).toEqual([]);
+  });
+
+  test("declares no name that no tool reads", () => {
+    // repo-130: a spacing and a font-size scale sat here a week, read by no tool,
+    // and were removed. A name arrives with the tool that first reads it.
+    const sources = WEBS.flatMap(sourceFiles).map((file) => fs.readFileSync(file, "utf8"));
+    expect(
+      unreadNames(css, sources),
+      "names in tokens.css no tool reads: add one with the tool that first reads it",
+    ).toEqual([]);
   });
 });
 
@@ -237,5 +247,30 @@ describe("the header reader", () => {
 
   test("does not read a name that is only mentioned in a sentence", () => {
     expect(headerRoles(header(" * Every tool also sets --info for notices."))).toEqual([]);
+  });
+
+  test("finds a declared name nothing reads, and only that one", () => {
+    const tokens = ":root {\n  --gap: 1rem;\n  --space-1: 0.25rem;\n}\n";
+    expect(unreadNames(tokens, [".a { gap: var(--gap); }"])).toEqual(["--space-1"]);
+  });
+
+  test("reads a name with a fallback, with spaces, or in an inline style", () => {
+    const tokens = ":root {\n  --a: 1;\n  --b: 1;\n  --c: 1;\n}\n";
+    const sources = [
+      ".x { gap: var(--a, 0); }",
+      ".y { gap: var( --b ); }",
+      'style={{ gap: "var(--c)" }}',
+    ];
+    expect(unreadNames(tokens, sources)).toEqual([]);
+  });
+
+  test("does not count a longer name, or a comment, as a read", () => {
+    const tokens = ":root {\n  --font-size: 1rem;\n  --space-1: 1;\n  --space-2: 1;\n}\n";
+    const sources = [
+      "body { font-size: var(--font-size-base); }",
+      "/* var(--space-1) */",
+      "  // var(--space-2)",
+    ];
+    expect(unreadNames(tokens, sources)).toEqual(["--font-size", "--space-1", "--space-2"]);
   });
 });

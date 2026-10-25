@@ -86,7 +86,12 @@ Asked as options in the session that filed this ticket.
    with its tests. Add an icon to each choice (system, light, dark). The visible
    text can go only if the accessible name stays, and the control has to stay
    reachable by keyboard. It must fit beside the tool's name and glyph at
-   360 px.
+   360 px. **Each segment is at least 44px tall**, the tap-target floor
+   repo-130's base layer sets for every button and field (owner, 2026-10-25).
+   The downloader's segments are about 28px by its stylesheet's numbers (`0.8rem`
+   text at 1.55 line height, `0.25rem` padding), not measured. The layout spec
+   asserts the height at 360 px. A choice hides its radio with the shared
+   `.sr-only`, not the downloader's `.visually-hidden`, which repo-130 retires.
 
 3. **`AppHeader`**: `{ name, tagline, glyph }`, where `glyph` is a `ReactNode`
    the tool supplies. It renders `<header>` with the glyph, the `<h1>`, the
@@ -157,6 +162,13 @@ ticket blocks the other. Whichever lands second rebases.
   stored `dark` applies before first paint with no CSP violation.
 - The downloader's `e2e/layout.spec.ts` passes at 360 px with the new header,
   and covers `terms.html`.
+- Each theme segment is at least 44px tall at 360 px, and the layout spec says
+  so.
 - `npm run check` and `npm test -- --project downloader --project core` pass.
 
 ## Log
+
+**2026-10-25 — amended before any build.** From repo-130's session (#665): the
+owner set the 44px tap-target floor for the theme control too. Build 2 and the
+acceptance line above say so, and the control hides its radios with the shared
+`.sr-only`.

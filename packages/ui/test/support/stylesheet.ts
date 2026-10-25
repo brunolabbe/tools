@@ -55,6 +55,23 @@ export function stripComments(css: string): string {
 }
 
 /**
+ * The custom properties `tokens.css` declares that no source reads (repo-130).
+ * A read is `var(` and the whole name, then a comma or the closing parenthesis,
+ * so `--font-size` is not read by `var(--font-size-base)`. Block comments are
+ * stripped from every source, and so are whole-line `//` comments; a `//` after
+ * code is left alone, since `https://` in a string looks the same.
+ */
+export function unreadNames(tokensCss: string, sources: readonly string[]): string[] {
+  const declared = [...stripComments(tokensCss).matchAll(/(--[\w-]+)\s*:/gu)].map(
+    (match) => match[1] ?? "",
+  );
+  const read = sources
+    .map((source) => stripComments(source).replaceAll(/^\s*\/\/.*$/gmu, ""))
+    .join("\n");
+  return declared.filter((name) => !new RegExp(String.raw`var\(\s*${name}\s*[,)]`, "u").test(read));
+}
+
+/**
  * The text between the braces of the first block whose header matches, or null.
  * The header must start a line at the margin: the light tokens are a top-level
  * `:root`, and the dark ones are indented inside their `@media`, so a bare

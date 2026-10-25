@@ -49,22 +49,14 @@
 
   /* The gap between a screen's blocks. */
   --gap: 1rem;
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.5rem;
-  --space-6: 2rem;
 
   /* The content column. A phone-first tool narrows it in its own `:root`. */
   --page-width: 62rem;
 
   --font-sans: system-ui, sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
-  --font-size-sm: 0.875rem;
+  /* Body text. */
   --font-size-base: 1rem;
-  --font-size-lg: 1.25rem;
-  --font-size-xl: 1.5rem;
 }
 
 * {
