@@ -152,7 +152,8 @@ jobs:
       # sits here because the `test` matrix is skipped for a change that is all
       # `.md`, which is exactly what a ticket edit is — a test that goes red on
       # one merged green and failed main unseen (repo-97, and repo-8 before it).
-      # One file, seconds, no build.
+      # One file, seconds, no build. Its only run in CI: the matrix excludes it
+      # rather than running it a second time (repo-127).
       - run: npx vitest run scripts/test/status.test.ts
 
   # Which files this change actually touches, because **Actions has no per-job
@@ -184,15 +185,40 @@ jobs:
   # unguarded on purpose, so if git itself fails the job stops there rather than
   # letting the second one's `|| true` turn the failure into an empty `non_md`
   # and a skip.
+  #
+  # **It also says which vitest projects the matrix runs (repo-127)**, the
+  # owner's option (a) of four: filter on `pull_request`, and keep every project
+  # on `push`, `schedule` and `workflow_dispatch`. The audit behind it measured
+  # the downloader at 631 of 815 summed test-seconds on ubuntu, and 37 of the
+  # last 51 code commits on `main` touching neither that tool nor shared config.
+  # The mapping is not written here: `scripts/preflight.mjs --ci-projects` reads
+  # the diff on stdin and answers with `projectsFor`, the same function that
+  # plans a branch's local preflight, so the two cannot drift. A tool's change
+  # runs that tool, `repo` and `core`; `scripts/` runs `repo` and `core`;
+  # `packages/`, root config, `.github/**` and anything else no tool owns run
+  # every project. Each fallback above — no base, a first push, a missing commit
+  # — answers with every project, through `--ci-projects --all`, so a full set
+  # is never a list typed into this file. The step prints its reading, so a
+  # pull request's `changes` log says what ran and why.
+  #
+  # Project filtering is only sound because one tool cannot import another
+  # unseen: `packages/core/test/tool-isolation.test.ts` fails on it, and `core`
+  # is in every list.
   changes:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      projects: ${{ steps.diff.outputs.projects }}
     steps:
       - uses: actions/checkout@v7
         with:
           # The whole history, or the base commit is not there to diff against.
           fetch-depth: 0
+      # For `--ci-projects`, which imports nothing outside `scripts/`: no
+      # `npm ci`, and no cache to restore.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
       - id: diff
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
@@ -203,8 +229,11 @@ jobs:
             || [ "${BASE}" = "0000000000000000000000000000000000000000" ] \
             || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null \
             || ! git cat-file -e "${HEAD}^{commit}" 2>/dev/null; then
-            echo "No usable diff base for ${GITHUB_EVENT_NAME}; running the matrix."
+            echo "No usable diff base for ${GITHUB_EVENT_NAME}; running the matrix on every project."
+            projects="$(node scripts/preflight.mjs --ci-projects --all)"
+            echo "Projects: ${projects}"
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "projects=${projects}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Three dots: what this change added, not what `main` moved past
@@ -221,7 +250,23 @@ jobs:
           git diff --no-renames --name-only "${BASE}...${HEAD}" | sed 's/^/  /'
           non_md="$(git diff --no-renames --name-only "${BASE}...${HEAD}" | grep -v '\.md$' || true)"
           if [ -n "${non_md}" ]; then
+            # Only a pull request is filtered; every other event that got this
+            # far is a `push` to `main`, which records the merged state whole.
+            if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+              projects="$(git diff --no-renames --name-only "${BASE}...${HEAD}" | node scripts/preflight.mjs --ci-projects)"
+            else
+              projects="$(node scripts/preflight.mjs --ci-projects --all)"
+            fi
+            # A code change always reaches `core`. An empty list here is a
+            # defect in the mapping, and it must not reach the matrix as
+            # "nothing to run".
+            if [ -z "${projects}" ]; then
+              echo "::error::non-markdown paths changed, and --ci-projects named no project"
+              exit 1
+            fi
+            echo "Projects: ${projects}"
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "projects=${projects}" >> "$GITHUB_OUTPUT"
           else
             echo "Documentation only; skipping the matrix. check still ran."
             echo "code=false" >> "$GITHUB_OUTPUT"
@@ -256,8 +301,10 @@ jobs:
   # setting can all change Windows behaviour without touching a downloader
   # path, and a filter that never fires for them is a gap, not a saving.
   #
-  # The one filter it does carry is markdown, via `changes` above — the same
-  # rule the workflow trigger used to apply to every job at once.
+  # The filters it does carry come from `changes` above: markdown — the same
+  # rule the workflow trigger used to apply to every job at once — and, on a
+  # pull request only, the project list (repo-127). That list sends every one
+  # of those root files to every project, on both legs alike.
   #
   # **`windows-latest` runs and reports; it does not gate the merge** — repo-31,
   # answered by the owner as option D over the brief's own preference for
@@ -355,7 +402,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
           echo "FFMPEG_PATH=/usr/bin/ffmpeg" >> "$GITHUB_ENV"
-      - run: npm test
+      # The projects `changes` named, and both legs run the same list. Every
+      # project on `push`, `schedule` and `workflow_dispatch`; on a pull request
+      # the ones its paths reach (repo-127). An empty list is refused here a
+      # second time, so no path through this job can run nothing and pass.
+      #
+      # `status.test.ts` is excluded because `check` runs it on every event,
+      # this one included, and twice was ~7 s of ubuntu time for one answer. It
+      # stays in the `repo` project, so a local `npm test` still runs it.
+      #
+      # `bash` on both legs, for the array: the Windows default is PowerShell.
+      - name: Test the projects this change reaches
+        shell: bash
+        env:
+          PROJECTS: ${{ needs.changes.outputs.projects }}
+        run: |
+          set -euo pipefail
+          read -r -a projects <<< "${PROJECTS}"
+          if [ "${#projects[@]}" -eq 0 ]; then
+            echo "::error::changes reported a code change and no project to test"
+            exit 1
+          fi
+          args=()
+          for project in "${projects[@]}"; do args+=(--project "${project}"); done
+          echo "npm test -- ${args[*]} --exclude scripts/test/status.test.ts"
+          npm test -- "${args[@]}" --exclude scripts/test/status.test.ts
       # The other half of "informational, not invisible". `continue-on-error`
       # takes the run's conclusion green, so without this a Windows failure is
       # one collapsed job in a list of green ones. The run summary is the page

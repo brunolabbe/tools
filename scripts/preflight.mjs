@@ -28,7 +28,8 @@
  *     skip a tool's suite the way a hand-typed one can. When every path of the
  *     tool is inside one of its packages the project narrows to the packages
  *     those paths can reach (repo-102); any path outside a package runs the
- *     whole project. CI always runs the whole project.
+ *     whole project. CI never narrows a project, and on a pull request it
+ *     runs the same project list this plans (`projectsFor`, repo-127).
  *   - check 3 reads a ticket's frontmatter and its `## Review` heading off
  *     `git show HEAD:<ticket>` — the same command
  *     `orchestrate-tickets/SKILL.md` step 9 names as this precondition today.
@@ -71,7 +72,8 @@ import { EXTRA_SCOPES, TYPES, releasingTypes, toolScopes, validate } from "./com
 import { hasGateRecord } from "./status.mjs";
 
 export const USAGE =
-  "usage: node scripts/preflight.mjs --base <ref> [--title <text>] [--repo <dir>] [--only <check>[,<check>...]]";
+  "usage: node scripts/preflight.mjs --base <ref> [--title <text>] [--repo <dir>] [--only <check>[,<check>...]]\n" +
+  "       node scripts/preflight.mjs --ci-projects [--all]   (diff paths on stdin; ci.yml's changes job)";
 
 /** An error carrying the exit status the CLI should leave behind. */
 function fail(message, exit) {
@@ -206,29 +208,34 @@ export function touchedTools(diffPaths) {
  * a per-tool run the way the builder role's gate list already says: "full
  * `npm test` if shared config moved."
  *
- * Root-level only — a nested `tools/<tool>/tsconfig.json` is that tool's own
- * and must not force the full suite, so a path carrying a `/` never matches
- * here whatever its basename. `tsconfig.*json` is a pattern rather than a
- * literal `tsconfig.json`/`tsconfig.tests.json` pair, so a third root
- * `tsconfig*.json` this repo adds later is shared config on the day it is
- * added, with nothing here to update — the same reasoning `commit-message.mjs`
- * gives for reading `TYPES` off `release-please-config.json` rather than a
- * second list.
+ * `packages/`, and every path outside `tools/` and `scripts/` that is not
+ * markdown. A nested `tools/<tool>/tsconfig.json` is that tool's own and does
+ * not force the full suite. Until repo-127 this was `packages/` plus a named
+ * set of root files (`package*.json`, `vitest.config.ts`, the two oxc configs,
+ * `tsconfig*.json`), and anything else — `.github/**` first among it — planned
+ * no suite here at all.
+ *
+ * **That gap became CI's when `ci.yml`'s `changes` job started reading its
+ * project list from `projectsFor` below (repo-127)**: a workflow change must run
+ * every project, and a path this function did not know would have run fewer
+ * suites than it reaches. The rest of that set is not hypothetical either.
+ * `scripts/test/hooks.test.ts` reads `.claude/hooks/` and `.claude/settings.json`,
+ * `commit-message.test.ts` reads `release-please-config.json`,
+ * `cloudflare-setup.test.ts` and the downloader's `ytdlp-in-the-image.test.ts`
+ * read the root `compose*.yaml`, `spawn-safety.test.ts` scans every tracked
+ * source file `.gitignore` lets through, and `.gitattributes` decides the line
+ * endings every suite reads on Windows. A list of those would be one more list
+ * to keep, so a path no tool and no `scripts/` owns runs everything: not knowing
+ * means running the suites, the rule `ci.yml` already applies to a missing diff
+ * base. A `.md` there is still not code, except under `packages/`, as before.
  *
  * @param {string[]} diffPaths
  */
 export function sharedConfigTouched(diffPaths) {
-  const SHARED_FILES = new Set([
-    "package.json",
-    "package-lock.json",
-    "vitest.config.ts",
-    ".oxlintrc.json",
-    ".oxfmtrc.json",
-  ]);
   return diffPaths.some((p) => {
     if (p.startsWith("packages/")) return true;
-    if (p.includes("/")) return false;
-    return SHARED_FILES.has(p) || /^tsconfig.*\.json$/u.test(p);
+    if (p.endsWith(".md")) return false;
+    return !p.startsWith("tools/") && !p.startsWith("scripts/");
   });
 }
 
@@ -580,14 +587,80 @@ export function narrowedFilters(repo, tool, toolPaths) {
 }
 
 /**
- * `npm run check`, plus whichever `npm test` a diff's own paths call for: the
- * full suite when shared config moved, the `repo` project when `scripts/`
- * moved, one project per tool the diff touches, and `core` after those (repo-90)
- * — all read from the diff's own paths, never from a flag.
+ * The vitest projects a diff's own paths call for, or `null` for every one.
+ *
+ * Every project when shared config moved (`sharedConfigTouched`); otherwise one
+ * per tool the diff touches, then `repo` and `core` whenever any code moved —
+ * `repo` because `scripts/` is its own code and because
+ * `scripts/test/preflight.test.ts` reads every tool's real package layout
+ * (`packageGraph` and `testPlan` against this checkout, repo-102), and `core`
+ * because its source scans read every file under `scripts/` and `tools/`
+ * (repo-90). An empty list means every path was markdown, and nothing else.
+ *
+ * **This is the one mapping, and `ci.yml` calls it** (repo-127, through
+ * `--ci-projects`), so a pull request's CI and its preflight cannot disagree
+ * about which suites a change reaches. Until repo-127 `repo` ran here only
+ * when `scripts/` moved; it joined a tool's plan because CI's list could not
+ * leave out a suite that reads the tool, and it costs about 18 s locally.
+ *
+ * @param {string[]} diffPaths
+ * @returns {string[] | null}
+ */
+export function projectsFor(diffPaths) {
+  if (sharedConfigTouched(diffPaths)) return null;
+  const tools = touchedTools(diffPaths);
+  if (tools.length === 0 && !scriptsTouched(diffPaths)) return [];
+  return [...tools, "repo", "core"];
+}
+
+/**
+ * Every vitest project `vitest.config.ts` declares: `core`, `repo` and one per
+ * tool, read off `tools/` rather than listed, so a new tool is in CI's full set
+ * the day its directory exists. `scripts/test/preflight.test.ts` holds this
+ * against the config's own `name:` lines, which is what keeps a project that
+ * is renamed or split (repo-129) from silently dropping out of CI.
+ *
+ * @param {string} repo
+ * @returns {string[]}
+ */
+export function allProjects(repo) {
+  const tools = fs
+    .readdirSync(path.join(repo, "tools"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  return ["core", "repo", ...tools.toSorted()];
+}
+
+/**
+ * `ci.yml`'s `changes` job's entry (repo-127): diff paths in, one per line on
+ * stdin, and the projects they reach out, space-separated on one line. `--all`
+ * reads no stdin and prints the full set — the answer for `push`, `schedule`,
+ * `workflow_dispatch` and a missing diff base, which the workflow decides.
+ *
+ * An empty answer is printed as an empty line and is only ever correct for an
+ * all-markdown diff; the workflow refuses to run the matrix on one rather than
+ * reading it as "nothing to run, green".
+ *
+ * @param {string} repo
+ * @param {boolean} all
+ * @param {string} stdin
+ */
+export function ciProjects(repo, all, stdin) {
+  if (all) return allProjects(repo);
+  const paths = stdin
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return projectsFor(paths) ?? allProjects(repo);
+}
+
+/**
+ * `npm run check`, plus whichever `npm test` a diff's own paths call for —
+ * `projectsFor`'s answer, read from the diff's own paths, never from a flag.
  *
  * With `repo`, a tool's project narrows to the packages the diff reaches
  * (`narrowedFilters`, repo-102). Without it, every touched tool runs whole,
- * which is also what a tree that cannot be read gives.
+ * which is also what a tree that cannot be read gives. CI never narrows.
  *
  * @param {string[]} diffPaths
  * @param {string} [repo]
@@ -595,14 +668,13 @@ export function narrowedFilters(repo, tool, toolPaths) {
  */
 export function testPlan(diffPaths, repo) {
   const commands = [["npm", ["run", "check"]]];
-  if (sharedConfigTouched(diffPaths)) {
+  const projects = projectsFor(diffPaths);
+  if (projects === null) {
     commands.push(["npm", ["test"]]);
     return commands;
   }
   const tools = touchedTools(diffPaths);
-  const projects = scriptsTouched(diffPaths) ? ["repo", ...tools] : tools;
-  // `core` last, whenever code moved: its source scans read every file under scripts/ and tools/ (repo-90)
-  for (const project of projects.length > 0 ? [...projects, "core"] : projects) {
+  for (const project of projects) {
     const filters =
       repo !== undefined && tools.includes(project)
         ? narrowedFilters(
@@ -1704,7 +1776,20 @@ export function parseArgs(argv) {
   return parsed;
 }
 
-export function main(argv = process.argv.slice(2)) {
+export function main(argv = process.argv.slice(2), readStdin = () => fs.readFileSync(0, "utf8")) {
+  if (argv[0] === "--ci-projects") {
+    const rest = argv.slice(1);
+    if (rest.some((arg) => arg !== "--all")) {
+      throw fail(`--ci-projects takes only --all\n${USAGE}`, EXIT.setup);
+    }
+    const all = rest.length > 0;
+    const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+      shell: false,
+    }).trim();
+    process.stdout.write(`${ciProjects(repo, all, all ? "" : readStdin()).join(" ")}\n`);
+    return;
+  }
   const { base, title, repo: repoArg, only } = parseArgs(argv);
   const repo =
     repoArg ??

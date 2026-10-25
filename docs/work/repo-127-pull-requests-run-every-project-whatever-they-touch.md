@@ -88,3 +88,67 @@ green, one extra 61 s setup per run, no loss of coverage); (c) both; (d) neither
   measurement, was in the filing session's scratchpad and is summarised here and
   in [repo-128](./repo-128-repo-and-core-tests-spawn-what-they-could-import.md)
   and [repo-129](./repo-129-every-test-file-reimports-its-module-graph.md).
+- 2026-10-25: Built on `repo-127-ci-project-filter` from `7f8d7f48`.
+  `ci.yml`'s `changes` job now also outputs `projects`, read from
+  `node scripts/preflight.mjs --ci-projects` (diff paths on stdin) on a pull
+  request and from `--ci-projects --all` on every other event and every
+  no-base fallback. The matrix runs `npm test -- --project <p>...` on that list,
+  under `shell: bash` on both legs, with `--exclude scripts/test/status.test.ts`.
+  An empty list is refused twice, once in `changes` and once in the test step.
+  `projectsFor` in `preflight.mjs` is the one mapping, and `testPlan` calls it
+  too. `packages/core/test/tool-isolation.test.ts` is the cross-tool scan.
+
+  **What the brief had wrong:**
+  - Build 2 said preflight's mapping "already encodes" the answer Done when 1
+    names. It did not: `testPlan(["tools/planner/api/src/a.ts"])` planned
+    `planner` and `core`, with no `repo`. `repo` belongs on that list because
+    `scripts/test/preflight.test.ts` reads every tool's real package layout
+    (`packageGraph(REPO_ROOT, …)` and `testPlan(…, REPO_ROOT)` on the
+    downloader, the planner and the ledger), so a tool change can break it.
+    Now `projectsFor` adds `repo` beside `core` after any tool change, locally
+    as well, so the two cannot drift. The local cost is
+    `npx vitest run --project repo` → `14 passed (14)`, `616 passed (616)`,
+    18 s. Four existing `testPlan` expectations gained the `repo` row.
+  - Build 3 widened `sharedConfigTouched` by `.github/**` alone. That leaves
+    paths that suites read running fewer projects than reach them:
+    `hooks.test.ts` reads `.claude/hooks/` and `.claude/settings.json`,
+    `commit-message.test.ts` reads `release-please-config.json`,
+    `cloudflare-setup.test.ts` and the downloader's
+    `ytdlp-in-the-image.test.ts` read the root `compose*.yaml`, and
+    `spawn-safety.test.ts` scans every tracked source file (`.claude/**/*.mjs`
+    included). So `sharedConfigTouched` now fires on `packages/` and on every
+    non-markdown path outside `tools/` and `scripts/`. The cost, measured over
+    the last 100 first-parent commits of `main` (scratch script
+    `history.mts` at `7f8d7f48`): 51 docs-only, 17 that run every project,
+    32 filtered, and 28 of those 32 skip the downloader. A named list plus
+    `.github/**` would have run every project on 7 of them (4
+    `package-lock.json`, 3 `.github/workflows`). The other 10 are 6 release
+    commits (`.release-please-manifest.json`), 1 `.env.prod.example`, 1
+    `.devcontainer/Dockerfile` and 2 under `.claude/`. Every one of them runs
+    every project today too.
+  - Build 5's premise holds: nothing enforced the rule. With
+    `import type { AppError } from "@downloader/contract"` planted in
+    `tools/planner/api/test/helpers/`, `npx vitest run --project core` →
+    `Tests  1 failed | 93 passed (94)`, and the one failure was the new
+    `tool-isolation.test.ts`. `image-closure.test.ts` reads only `src`, and it
+    asks only that an import be declared. The same plant under
+    `tools/planner/api/src/` fails the new scan with
+    `tools/planner/api/src/zz-repo127-probe.ts:1 imports @downloader/contract, which is tools/downloader's`.
+    It passes once the plant is removed (`9 passed (9)`).
+
+  Build 6: `npx vitest list --filesOnly` lists 314 files, and 313 with
+  `--exclude scripts/test/status.test.ts`, none of them under `node_modules`.
+  The matrix's exact command shape, run locally through the test gate
+  (`npm test -- --project core --project repo --exclude scripts/test/status.test.ts`)
+  → `Test Files  22 passed (22)`, `Tests  570 passed (570)`.
+
+  The new `preflight.test.ts` cases sit just before the file's last test,
+  not after it, because that test says it must stay last. They do not touch
+  `makeRepo` or `makeTitleRepo` (repo-128's seam). The `changes`-step case
+  cuts the `run: |` block out of the real `ci.yml` and runs it with bash in a
+  temporary repository, once per event. It is skipped on Windows, where bash
+  could resolve to WSL's, and the job runs only on ubuntu.
+
+  Fold-in: none came free. The root `CLAUDE.md` line "CI runs lint, typecheck
+  and every unit suite on every push" is still literally true, since `push` is
+  `main` only. It is not edited here, and the report proposes a rewording.
