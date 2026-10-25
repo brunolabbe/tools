@@ -202,3 +202,10 @@ panel's stage line, and the connection count has no "4×" mark (the pull request
 that filed dl-133). Decision 3 (the saved row leaves on the next analysis) is
 superseded by [dl-133](./dl-133-one-box-per-analysis.md) decision 5: a saved box
 stays until dismissed, once dl-133 lands.
+
+**2026-10-25, later**: decision 9 is extended, at the owner's answer to gate 1 of
+#646. The list stays below the panel, and the card just started is also scrolled
+into view (`block: "nearest"`, once, never for a restored job): with the
+duration line moved under the title the panel is shorter, Download is pressed
+without scrolling at 1280×720, and the new card landed below the fold, which
+`download.spec.ts`'s `toBeInViewport` caught on every run.
