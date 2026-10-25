@@ -30,7 +30,10 @@ not exist. A prop is added when a third use needs it.
 `tokens.css`'s header, in its light `:root` and in its dark override, with its
 own values. `packages/ui/test/tokens.test.ts` reads each tool's `styles.css` and
 fails on a missing role or a retired name (`--muted`, `--bad`). A role only one
-tool uses stays in that tool's stylesheet until a second tool needs it.
+tool uses stays in that tool's stylesheet until a second tool needs it. **A name
+arrives in `tokens.css` with the first tool that reads it**: the same test fails on
+a name no tool's `web/src` reads with `var(`, which is how a spacing and a
+font-size scale nobody used left it (repo-130).
 
 **Breakpoints are not tokens.** A custom property does not resolve inside
 `@media (max-width: ...)`, so each stylesheet keeps its own literals. Reaching

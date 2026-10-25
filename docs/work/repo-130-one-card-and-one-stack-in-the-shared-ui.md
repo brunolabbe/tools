@@ -20,11 +20,11 @@ On 2026-10-25, while finding why the ledger's Admin cards stood flush
 stylesheets at `origin/main@01e80b71` shows each tool now draws a card and a
 vertical stack of them, under three names and with three sets of numbers:
 
-| Tool       | Card                                      | Padding             | Shadow          | Inside the card      | Title                                | Stack of cards                               |
-| ---------- | ----------------------------------------- | ------------------- | --------------- | -------------------- | ------------------------------------ | -------------------------------------------- |
-| downloader | `.card` (+ `.card--quiet`, `.card__head`) | `1.1rem 1.2rem`     | `var(--shadow)` | block                | `.card__head`, a flex row            | `.layout`, flex column, `gap: 1.25rem`       |
-| ledger     | `.card`                                   | `var(--gap)` (1rem) | none            | grid, `gap: 0.75rem` | `.card h2`: no margin, `1.125rem`    | `main` and `.stack`, grid, `gap: var(--gap)` |
-| planner    | `.panel` (+ `.panel.warn`, `.status`)     | `1.25rem`           | none            | block                | `.panel h2`: `0 0 0.5rem`, `1.15rem` | `.main`, `.aside`, grid, `gap: var(--gap)`   |
+| Tool       | Card                                      | Padding                             | Shadow          | Inside the card      | Title                                    | Stack of cards                                             |
+| ---------- | ----------------------------------------- | ----------------------------------- | --------------- | -------------------- | ---------------------------------------- | ---------------------------------------------------------- |
+| downloader | `.card` (+ `.card--quiet`, `.card__head`) | `1.1rem 1.2rem`                     | `var(--shadow)` | block                | `.card__title`: `0 0 0.25rem`, `1.05rem` | `.layout`, flex column, `gap: 1.25rem`                     |
+| ledger     | `.card`                                   | `var(--gap)` (1rem)                 | none            | grid, `gap: 0.75rem` | `.card h2`: no margin, `1.125rem`        | `main`, grid, `gap: var(--gap)` (and `.stack`, from lg-70) |
+| planner    | `.panel` (+ `.panel.warn`, `.status`)     | `1.25rem` (`.status`: `var(--gap)`) | none            | block                | `.panel h2`: `0 0 0.5rem`, `1.15rem`     | `.main`, `.aside`, grid, `gap: var(--gap)`                 |
 
 All three take `--surface`, `--border` and `--radius` from the shared names. They
 differ only in the numbers. The stack is where the ledger's flush cards came
@@ -40,7 +40,7 @@ where that lesson should live.
    (Recommended.) `@webtools/ui` gets `.card` (surface, border, radius) and
    `.stack` (grid, `gap: var(--gap)`). A tool sets its own padding, shadow and
    title in its stylesheet, which loads after the tokens and wins. The planner
-   renames `.panel` to `.card` (about 13 uses across six files). The downloader
+   renames `.panel` to `.card` (13 `className` uses across six web files, and 11 `.panel` locators across six e2e files). The downloader
    swaps `.layout` for `.stack`. This is the rule repo-108 applied to colours: names
    are shared, palettes are not. No screen should change by more than the
    downloader's stack gap, from 1.25rem to `--gap`, unless the downloader sets
@@ -63,6 +63,10 @@ Written for option 1. Re-write it if another is chosen.
 2. Each tool's `main.tsx` imports it after the tokens and before its own
    stylesheet. `ui-package.md`'s three steps for a new web package then list it.
 3. Planner: `.panel` becomes `.card`, and `.main` and `.aside` take `.stack`.
+   Its e2e locators move with it: `section.panel.*` in `plan-walk.ts`,
+   `intake-walk.ts`, `layout.spec.ts`, `intake.spec.ts`, `revise.spec.ts` and
+   `pin.spec.ts`, and the comment in `web/test/stylesheet.test.ts`. The planner's
+   e2e job is the only thing that would catch a locator left behind.
    Downloader: `.layout` becomes `.stack`. Ledger: delete its own `main` grid
    rule (with `.stack`, if lg-70 has merged) and put `.stack` on `main` in
    `App.tsx`. Keep `main`'s gap. lg-70's layout check, once merged, holds it.
@@ -86,7 +90,14 @@ nothing read (`--space-1` to `--space-6`, `--font-size-sm`, `--font-size-lg`,
 `--font-size-xl`). That branch also adds a guard, in
 `packages/ui/test/tokens.test.ts`, that fails on a name in `tokens.css` that no
 tool reads. A token for the card's padding should therefore arrive in the same
-change as the tool that first reads it. lg-70, in review in a separate pull
-request when this was filed, adds the ledger's `.stack`, which step 3 replaces.
+change as the tool that first reads it. lg-70, open as pull request #664 when this
+was filed, adds the ledger's `.stack`, which step 3 replaces.
 It is not in `depends_on` because the id does not exist on this branch, so
 `npm run status -- --json` fails on it here and in CI.
+
+**2026-10-25 — gate 1 on the filing, CONCERNS.** One `med`: Option 1 priced the
+planner rename without its 11 e2e locators. Option 1 and Build step 3 now name
+them. Two `low` corrections to the table: the downloader's title is
+`.card__title`, not `.card__head`, and `.status` pads `var(--gap)`. The ledger
+cell now says `.stack` comes from lg-70. The gate's report is on the pull
+request thread.
