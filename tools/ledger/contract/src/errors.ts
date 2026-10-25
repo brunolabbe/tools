@@ -263,10 +263,10 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   SPENDING_CATEGORY_NOT_FOUND:
     "There is no such spending category in the list. It may have been retired since the list was loaded.",
   ADDRESS_ALREADY_A_MEMBER:
-    "That address already belongs to a household. Remove it there before adding it here.",
-  MEMBER_NOT_ADDED: "That address cannot be added to this household.",
+    "That email already belongs to a household. Remove it there before adding it here.",
+  MEMBER_NOT_ADDED: "That email cannot be added to this household.",
   HOUSEHOLD_NOT_FOUND: "There is no such household.",
-  MEMBER_NOT_FOUND: "That address is not a member of this household.",
+  MEMBER_NOT_FOUND: "That email is not a member of this household.",
   PERSON_NOT_FOUND: "That person is not one this household's members have been added as.",
   PERSON_NAME_TAKEN: "Another person in this household is already shown under that name.",
   PERSON_RETIRED:

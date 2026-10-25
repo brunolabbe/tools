@@ -219,15 +219,20 @@ export interface PersonName {
   name: string;
 }
 
-/** `POST /api/admin/households`: a new household, with no members yet. */
+/**
+ * `POST /api/admin/households`: a new household, made by adding its first person
+ * (lg-71), so no household exists without a member. The API gives it a generated
+ * UUID for an id and the name "Home"; a request naming either is refused. The two
+ * fields are an added member's, with the same limits.
+ */
 export interface CreateHouseholdRequest {
-  id: string;
-  name: string;
+  address: string;
+  person: string;
 }
 
 export const createHouseholdRequestSchema = z.strictObject({
-  id: z.string().min(1).max(32),
-  name: z.string().min(1).max(80),
+  address: z.string().min(1).max(320),
+  person: z.string().min(1).max(64),
 }) satisfies z.ZodType<CreateHouseholdRequest>;
 
 /**
@@ -269,6 +274,13 @@ export interface AdminHousehold extends HouseholdSummary {
   /** Everyone the household has named, with where they stand (lg-35). */
   people: AdminPerson[];
 }
+
+/**
+ * What creating a household answers (lg-71): the household as the admin's list
+ * shows it, holding its first member, so the screen adds its card without
+ * asking for the list again.
+ */
+export type CreateHouseholdResponse = AdminHousehold;
 
 /** `GET /api/admin/households`: every household, for an admin only. */
 export interface AdminHouseholdsResponse {

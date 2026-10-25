@@ -58,8 +58,9 @@ export interface BucketKey {
  * A person's id, which is the household's own name for them and no secret,
  * and so is safe in a log line where an address or a token is not — behind
  * their household's id, so two households' people with the same name do not
- * share a bucket (lg-21). An id is one lowercase word, so the first colon is
- * always the one written here.
+ * share a bucket (lg-21). A household id is a lowercase word or a UUID
+ * (lg-71), neither of which holds a colon, so the first colon is always the one
+ * written here.
  */
 function personKey(request: FastifyRequest): BucketKey {
   const person = personOf(request);
@@ -69,7 +70,8 @@ function personKey(request: FastifyRequest): BucketKey {
 
 /**
  * An admin's address (lg-22), which no log line carries. Behind an `@`, which
- * no household id can hold (`[a-z]+`), so no person's key — a household called
+ * no household id can hold (a lowercase word or a UUID, lg-71), so no person's
+ * key — a household called
  * `admin` with a member named like the admin's address included — is ever an
  * admin's (lg-22's gate 1, F4).
  */

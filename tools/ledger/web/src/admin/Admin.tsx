@@ -2,8 +2,9 @@
  * The admin's screen (lg-22): every household and its members, with adding and
  * removing any member, changing a member's address (lg-34), renaming a person
  * (lg-33), retiring a person from the books at the next close or bringing them
- * back (lg-35), and creating a household. Only an admin is answered (`LEDGER_ADMINS`),
- * whether or not they are in a household, and being one shows no household's books.
+ * back (lg-35), and creating a household by adding its first person (lg-71).
+ * Only an admin is answered (`LEDGER_ADMINS`), whether or not they are in a
+ * household, and being one shows no household's books.
  *
  * It lists every household's addresses in one place as well, because each must
  * also be admitted on the ledger's Access policy, which the operator does in the
@@ -67,38 +68,66 @@ export function Admin(): React.ReactElement {
     );
   }
 
-  const addresses = load.households.flatMap((household) =>
+  const { households } = load;
+  const addresses = households.flatMap((household) =>
     household.members.map((member) => member.address),
   );
+  // lg-71: the answer to a create is the new card, so it goes in without asking
+  // for the list again, where the list puts it: the API orders households by id.
+  const created = (household: AdminHousehold): void => {
+    setLoad({
+      state: "ready",
+      households: [...households, household].toSorted((a, b) =>
+        a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+      ),
+    });
+  };
 
   return (
     <section aria-labelledby="admin-heading" className="stack">
       <h2 id="admin-heading">Households</h2>
       <p className="muted hint">{ACCESS_POLICY_NOTE}</p>
 
-      {load.households.map((household) => (
+      {households.map((household) => (
         <HouseholdCard key={household.id} household={household} onChange={refresh} />
       ))}
 
-      <NewHousehold onCreated={refresh} />
+      <NewHousehold first={households.length === 0} onCreated={created} />
 
-      <section aria-labelledby="admit-heading" className="card">
-        <h3 id="admit-heading">Addresses to admit</h3>
-        <p className="muted hint">
-          Every household&rsquo;s addresses. Each must be on the ledger&rsquo;s Access policy.
-        </p>
-        {addresses.length === 0 ? (
-          <p className="muted">No addresses yet.</p>
-        ) : (
-          <ul className="members" aria-label="Addresses to admit">
-            {addresses.map((address) => (
-              <li key={address}>{address}</li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {households.length > 0 && (
+        <section aria-labelledby="admit-heading" className="card">
+          <h3 id="admit-heading">Emails to admit</h3>
+          <p className="muted hint">
+            Every household&rsquo;s emails. Each must be on the ledger&rsquo;s Access policy.
+          </p>
+          {addresses.length === 0 ? (
+            <p className="muted">No emails yet.</p>
+          ) : (
+            <ul className="members" aria-label="Emails to admit">
+              {addresses.map((address) => (
+                <li key={address}>{address}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </section>
   );
+}
+
+/**
+ * How a household's card is told apart from another's (lg-71). Every household
+ * made by adding its first person is called "Home" and its id is a UUID, which
+ * says nothing to whoever reads it, so the card names the household's people:
+ * everyone it has named, a member who has left included, under the names they
+ * are shown by. That list only grows (a name stays in the books), so a card
+ * keeps its label as members come and go. A household that has never named
+ * anyone, which only one made before lg-71 can be, is told by its id instead.
+ */
+function householdLabel(household: AdminHousehold, names: ShownNames): string {
+  const people = household.people.map((one) => shownName(names, one.person));
+  if (people.length === 0) return `${household.name} (${household.id})`;
+  return `${household.name}: ${new Intl.ListFormat("en", { type: "conjunction" }).format(people)}`;
 }
 
 function HouseholdCard(props: {
@@ -120,6 +149,7 @@ function HouseholdCard(props: {
     ...household.people.map((one) => [one.person, one.name]),
     ...household.members.map((member) => [member.person, member.name]),
   ]);
+  const label = householdLabel(household, names);
 
   const add = async (member: AddMemberRequest) => {
     const added = await adminAddMember(household.id, member);
@@ -143,9 +173,7 @@ function HouseholdCard(props: {
 
   return (
     <section aria-labelledby={headingId} className="card">
-      <h3 id={headingId}>
-        {household.name} <span className="muted">({household.id})</span>
-      </h3>
+      <h3 id={headingId}>{label}</h3>
       {household.members.length === 0 ? (
         <p className="muted">Nobody yet.</p>
       ) : (
@@ -218,8 +246,8 @@ function HouseholdCard(props: {
       )}
       {confirming !== null && (
         <p className="muted hint">
-          Removing an address signs it out of this household on its next request. Its records keep
-          the person&rsquo;s name.
+          Removing an email signs it out of this household on its next request. Its records keep the
+          person&rsquo;s name.
         </p>
       )}
       {problem !== null && (
@@ -230,7 +258,7 @@ function HouseholdCard(props: {
       {household.people.length > 0 && (
         <>
           <h4>People</h4>
-          <ul className="members" aria-label={`People in ${household.name}`}>
+          <ul className="members" aria-label={`People in ${label}`}>
             {household.people.map((one) => (
               <RenamePerson
                 key={one.person}
@@ -290,7 +318,7 @@ function ChangeAddress(props: {
   const submit = (event: React.SyntheticEvent): void => {
     event.preventDefault();
     if (typed.trim() === "") {
-      setProblem("Give the address to sign in with.");
+      setProblem("Give the email to sign in with.");
       return;
     }
     void save();
@@ -298,7 +326,7 @@ function ChangeAddress(props: {
 
   return (
     <form className="member-form" onSubmit={submit}>
-      <label htmlFor={`${id}-address`}>New address for {address}</label>
+      <label htmlFor={`${id}-address`}>New email for {address}</label>
       <input
         id={`${id}-address`}
         type="email"
@@ -475,20 +503,29 @@ function RenamePerson(props: {
   );
 }
 
-function NewHousehold({ onCreated }: { onCreated: () => Promise<void> }): React.ReactElement {
+/**
+ * A new household, made by adding its first person (lg-71): the email they sign
+ * in with and their name, and nothing else. The API gives the household its id
+ * and calls it "Home". With no household yet it is the screen's only form.
+ */
+function NewHousehold(props: {
+  first: boolean;
+  onCreated: (household: AdminHousehold) => void;
+}): React.ReactElement {
+  const { first, onCreated } = props;
   const id = useId();
-  const [householdId, setHouseholdId] = useState("");
-  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [person, setPerson] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const create = async (household: CreateHouseholdRequest): Promise<void> => {
     setBusy(true);
     try {
-      await createHousehold(household);
-      setHouseholdId("");
-      setName("");
-      await onCreated();
+      const made = await createHousehold(household);
+      setAddress("");
+      setPerson("");
+      onCreated(made);
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
     } finally {
@@ -498,30 +535,41 @@ function NewHousehold({ onCreated }: { onCreated: () => Promise<void> }): React.
 
   const submit = (event: React.SyntheticEvent): void => {
     event.preventDefault();
-    if (householdId.trim() === "" || name.trim() === "") {
-      setProblem("Give the household an id and a name.");
+    if (address.trim() === "" || person.trim() === "") {
+      setProblem("Give the first person's email and their name.");
       return;
     }
     setProblem(null);
-    void create({ id: householdId.trim(), name: name.trim() });
+    void create({ address: address.trim(), person: person.trim() });
   };
 
   return (
     <section aria-labelledby={`${id}-heading`} className="card">
       <h3 id={`${id}-heading`}>New household</h3>
+      <p className="muted hint">
+        {first ? "There is no household yet. " : ""}A household starts with its first person. It is
+        called Home.
+      </p>
       <form className="member-form" onSubmit={submit}>
-        <label htmlFor={`${id}-id`}>Id</label>
+        <label htmlFor={`${id}-address`}>Email</label>
         <input
-          id={`${id}-id`}
+          id={`${id}-address`}
+          type="email"
+          inputMode="email"
           autoComplete="off"
           autoCapitalize="none"
           spellCheck={false}
-          value={householdId}
-          onChange={(event) => setHouseholdId(event.target.value)}
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
         />
-        <p className="muted hint">One lowercase word, a to z. It cannot be changed.</p>
-        <label htmlFor={`${id}-name`}>Name</label>
-        <input id={`${id}-name`} value={name} onChange={(event) => setName(event.target.value)} />
+        <label htmlFor={`${id}-person`}>Person</label>
+        <input
+          id={`${id}-person`}
+          autoComplete="off"
+          spellCheck={false}
+          value={person}
+          onChange={(event) => setPerson(event.target.value)}
+        />
         {problem !== null && (
           <p className="bad" role="alert">
             {problem}

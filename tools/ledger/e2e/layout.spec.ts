@@ -178,6 +178,18 @@ async function seed(
 ): Promise<void> {
   const api = await playwright.request.newContext({ baseURL });
 
+  // lg-71: the serve script makes the household with alex alone, under a UUID it
+  // cannot name to a second command, so alex adds sam here, as a member can.
+  // Asked first, since a hook run again finds sam already there.
+  const me = (await (await api.get("/api/me")).json()) as { person: { household: string } };
+  const members = `/api/households/${me.person.household}/members`;
+  const household = (await (await api.get(`/api/households/${me.person.household}`)).json()) as {
+    members: { address: string }[];
+  };
+  if (!household.members.some((member) => member.address === "sam@example.test")) {
+    await post(api, members, { address: "sam@example.test", person: "sam" });
+  }
+
   // Playwright starts a new worker after a failed test and runs this hook in
   // it again, against the same server: the books are already full.
   const closed = (await (await api.get("/api/periods")).json()) as { periods: unknown[] };
@@ -292,9 +304,10 @@ async function openTab(page: Page, name: string): Promise<void> {
  * **Every entry is a row or a figure, never a heading.** A heading is rendered
  * while the screen is still loading, when its request has failed, and over empty
  * books, and a screen measured in any of those states is not the screen this spec
- * is about. Admin and Household have no seed of the spec's own: what they show is
- * the household directory, which the `e2e:ledger:serve` script fills before the
- * API boots, so their entries are those, and Household passes over empty books.
+ * is about. What Admin and Household show is the household directory, which the
+ * `e2e:ledger:serve` script makes with alex before the API boots and the seed
+ * completes with sam (lg-71), so their entries are those, and Household passes
+ * over empty books.
  * Stats renders 10 cards and the patterns cover 9 of them: "Put into the
  * mortgage" shows "Nothing was filed to a person in this range." over the seed,
  * and its series, `contributions`, is already covered by "Put into the buffer".
@@ -324,7 +337,7 @@ const TABS: readonly (readonly [tab: string, arrived: readonly RegExp[]])[] = [
   ["Categories", [/12 rows, newest first/u, /Frais mensuels/u]],
   ["Salaries", [/Ratio in effect: alex 57\.1429/u]],
   ["Household", [/sam@example\.test added as sam/u]],
-  ["Admin", [/Test household/u, /sam@example\.test/u]],
+  ["Admin", [/Home: alex and sam/u, /sam@example\.test/u]],
 ];
 
 /**

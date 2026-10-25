@@ -35,8 +35,7 @@ Cloudflare Access. In development, put an invented household and member in the
 household directory, then start as that member:
 
 ```bash
-npm run household:ledger -- add home "Test household"
-npm run household:ledger -- member home alex@example.test alex
+npm run household:ledger -- add alex@example.test alex
 DEV_IDENTITY=alex@example.test npm run dev:ledger
 ```
 
@@ -92,11 +91,16 @@ screen but remove nobody (lg-22). The first household and its first member, and 
 recovery, are written from the host:
 
 ```bash
-npm run household:ledger -- add <household> <display name>        # one lowercase word, then a name
-npm run household:ledger -- member <household> <address> <person> # an address, as that person
-npm run household:ledger -- remove <address>
+npm run household:ledger -- add <email> <person>                 # a household, by its first person
+npm run household:ledger -- member <household> <email> <person>   # an email, as that person
+npm run household:ledger -- remove <email>
 npm run household:ledger -- list
 ```
+
+`add` makes the household and its first member at once, so no household is ever
+empty (lg-71). It is called "Home", and its id is a generated UUID, which `add`
+prints and `member` takes; a household made before lg-71 keeps the one-word id
+it was given.
 
 A household holds any number of people, each behind any number of addresses,
 and a name it has held stays in its books. Every address must also be on the ledger's

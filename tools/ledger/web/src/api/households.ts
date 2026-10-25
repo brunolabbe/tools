@@ -12,9 +12,9 @@ import type {
   AdminPerson,
   ChangeAddressRequest,
   CreateHouseholdRequest,
+  CreateHouseholdResponse,
   HouseholdMember,
   HouseholdResponse,
-  HouseholdSummary,
   PersonName,
   RenamePersonRequest,
   RetirePersonRequest,
@@ -47,10 +47,14 @@ export async function fetchAdminHouseholds(signal?: AbortSignal): Promise<AdminH
     .households;
 }
 
+/**
+ * A new household, made by adding its first person (lg-71). The answer is the
+ * household as the admin's list shows it, so the screen needs no second request.
+ */
 export async function createHousehold(
   household: CreateHouseholdRequest,
-): Promise<HouseholdSummary> {
-  return await requestJson<HouseholdSummary>(ROUTES.adminHouseholds, {
+): Promise<CreateHouseholdResponse> {
+  return await requestJson<CreateHouseholdResponse>(ROUTES.adminHouseholds, {
     method: "POST",
     body: household,
   });
