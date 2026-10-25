@@ -114,3 +114,5 @@ it costs, measured at filing:
 - 2026-10-19 — Asked again while clearing the decision queue; the owner keeps it
   deferred. Still `needs-decision`: the allowlist stays until the owner wants the
   ledger open to anyone.
+- 2026-10-25 — Asked again while clearing the awaiting queue; the owner keeps it
+  deferred. Still `needs-decision`.
