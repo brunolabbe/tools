@@ -52,7 +52,7 @@ the batch cannot proceed, put it to the user at once.
    files too (`/tmp/claude-1000/-workspaces-tools/*/scratchpad/board.md`,
    newest first): they show queued tickets `git worktree list` does not
    (tools-11, 2026-10-20). Then
-   `node .claude/scripts/check-farm-freshness.mjs /workspaces/tools`: a shared
+   `node .claude/scripts/check-farm-freshness.mjs --packages /workspaces/tools`: a shared
    checkout missing a package the lockfile declares stops every builder at the
    farm, and only `npm install` there, when no peer is live, repairs it
    ([reference/worktree-hygiene.md](reference/worktree-hygiene.md)).
