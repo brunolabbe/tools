@@ -25,7 +25,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { expect, test } from "vitest";
+import { afterAll, expect, test } from "vitest";
 import {
   findMissingPackages,
   findMissingWorkspaceLinks,
@@ -68,14 +68,34 @@ function makeSharedRoot(options: {
   return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
-/** A throwaway git repository, so `git rev-parse --show-toplevel` resolves. */
-function makeGitRepo() {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "farm-tree-")));
-  const init = spawnSync("git", ["init", "-q", "-b", "main", dir], {
+let gitTemplate: string | undefined;
+
+/**
+ * An empty repository, made once per file. The farm and `listWorkspaces` only
+ * need `git rev-parse --show-toplevel` to resolve, so a copy of its `.git` does
+ * the work of a `git init` spawn, which costs about 100 times more on Windows.
+ * `--template=` leaves out the sample hooks, so there is less to copy.
+ */
+function gitTemplateDir(): string {
+  if (gitTemplate !== undefined) return gitTemplate;
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "farm-template-")));
+  const init = spawnSync("git", ["init", "-q", "-b", "main", "--template=", dir], {
     shell: false,
     encoding: "utf8",
   });
   if (init.status !== 0) throw new Error(`git init failed: ${init.stderr}`);
+  gitTemplate = dir;
+  return dir;
+}
+
+afterAll(() => {
+  if (gitTemplate !== undefined) fs.rmSync(gitTemplate, { recursive: true, force: true });
+});
+
+/** A throwaway git repository, so `git rev-parse --show-toplevel` resolves. */
+function makeGitRepo() {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "farm-tree-")));
+  fs.cpSync(path.join(gitTemplateDir(), ".git"), path.join(dir, ".git"), { recursive: true });
   return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
@@ -197,31 +217,37 @@ test("warnIfStale prints nothing and returns 0 when nothing is missing", () => {
   expect(captured).toBe("");
 });
 
+// The farm is a bash script wired for the Linux devcontainer's worktrees (repo-128): on Windows `ln -s` under Git Bash and the temp path's short-name form differ from what these tests assert, and each case costs seconds there. `farmTest` skips every case that runs it.
+const farmTest = test.skipIf(process.platform === "win32");
+
 // --- worktree-farm.sh end to end, against today's script --------------------
 
-test("worktree-farm.sh warns on stderr and still links and exits 0, given a stale shared root", () => {
-  const shared = makeSharedRoot({
-    packages: { "": {}, "node_modules/@anthropic-ai/sdk": {} },
-    present: [],
-  });
-  const tree = makeGitRepo();
-  try {
-    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
-      cwd: tree.dir,
-      shell: false,
-      encoding: "utf8",
+farmTest(
+  "worktree-farm.sh warns on stderr and still links and exits 0, given a stale shared root",
+  () => {
+    const shared = makeSharedRoot({
+      packages: { "": {}, "node_modules/@anthropic-ai/sdk": {} },
+      present: [],
     });
-    expect(result.status).toBe(0);
-    expect(result.stderr).toContain("@anthropic-ai/sdk");
-    expect(result.stderr).toContain("npm install");
-    expect(result.stdout).toContain("farm built:");
-  } finally {
-    tree.cleanup();
-    shared.cleanup();
-  }
-});
+    const tree = makeGitRepo();
+    try {
+      const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+        cwd: tree.dir,
+        shell: false,
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      expect(result.stderr).toContain("@anthropic-ai/sdk");
+      expect(result.stderr).toContain("npm install");
+      expect(result.stdout).toContain("farm built:");
+    } finally {
+      tree.cleanup();
+      shared.cleanup();
+    }
+  },
+);
 
-test("worktree-farm.sh prints no warning, given a shared root with nothing missing", () => {
+farmTest("worktree-farm.sh prints no warning, given a shared root with nothing missing", () => {
   const shared = makeSharedRoot({
     packages: { "": {}, "node_modules/left-pad": {} },
     present: ["left-pad"],
@@ -279,23 +305,26 @@ test("warnIfStale prints one notice line and returns 0, instead of a raw stack t
   expect(captured.trim().split("\n")).toHaveLength(1);
 });
 
-test("worktree-farm.sh warns without a raw stack trace when the shared lockfile does not parse", () => {
-  const shared = makeUnparsableSharedRoot();
-  const tree = makeGitRepo();
-  try {
-    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
-      cwd: tree.dir,
-      shell: false,
-      encoding: "utf8",
-    });
-    expect(result.status).toBe(0);
-    expect(result.stderr).not.toContain("SyntaxError");
-    expect(result.stdout).toContain("farm built:");
-  } finally {
-    tree.cleanup();
-    shared.cleanup();
-  }
-});
+farmTest(
+  "worktree-farm.sh warns without a raw stack trace when the shared lockfile does not parse",
+  () => {
+    const shared = makeUnparsableSharedRoot();
+    const tree = makeGitRepo();
+    try {
+      const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+        cwd: tree.dir,
+        shell: false,
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      expect(result.stderr).not.toContain("SyntaxError");
+      expect(result.stdout).toContain("farm built:");
+    } finally {
+      tree.cleanup();
+      shared.cleanup();
+    }
+  },
+);
 
 // --- the parse-failure notice names itself, not just a line count ----------
 //
@@ -321,21 +350,24 @@ test("warnIfStale's stderr names the failure as a parse failure, on an unparsabl
   expect(captured).toContain("did not parse");
 });
 
-test("worktree-farm.sh's stderr names the failure as a parse failure, on an unparsable shared lockfile", () => {
-  const shared = makeUnparsableSharedRoot();
-  const tree = makeGitRepo();
-  try {
-    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
-      cwd: tree.dir,
-      shell: false,
-      encoding: "utf8",
-    });
-    expect(result.stderr).toContain("did not parse");
-  } finally {
-    tree.cleanup();
-    shared.cleanup();
-  }
-});
+farmTest(
+  "worktree-farm.sh's stderr names the failure as a parse failure, on an unparsable shared lockfile",
+  () => {
+    const shared = makeUnparsableSharedRoot();
+    const tree = makeGitRepo();
+    try {
+      const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+        cwd: tree.dir,
+        shell: false,
+        encoding: "utf8",
+      });
+      expect(result.stderr).toContain("did not parse");
+    } finally {
+      tree.cleanup();
+      shared.cleanup();
+    }
+  },
+);
 
 // --- workspaces: repo-117 ----------------------------------------------------
 //
@@ -414,10 +446,7 @@ function runCheck(args: string[]) {
   });
 }
 
-// The farm is a bash script that runs only in the devcontainer's worktrees; on Windows `ln -s` under Git Bash and the temp path's short-name form differ from what these tests assert.
-const testOffWindows = test.skipIf(process.platform === "win32");
-
-testOffWindows(
+farmTest(
   "worktree-farm.sh links a workspace the shared root has no link for, inside the scope directory the copy loop made",
   () => {
     const shared = makeSharedWithWorkspaceLinks(["@webtools/ui"]);
@@ -451,7 +480,7 @@ testOffWindows(
   },
 );
 
-testOffWindows(
+farmTest(
   "worktree-farm.sh creates the scope directory and an unscoped link when the shared root has neither",
   () => {
     const shared = makeSharedWithWorkspaceLinks(["@demo/api", "plain-name"]);
@@ -476,23 +505,26 @@ testOffWindows(
   },
 );
 
-test("worktree-farm.sh prints no workspace line and no warning when the shared root links every workspace", () => {
-  const shared = makeSharedWithWorkspaceLinks([]);
-  const tree = makeWorkspaceTree();
-  try {
-    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
-      cwd: tree.dir,
-      shell: false,
-      encoding: "utf8",
-    });
-    expect(result.status).toBe(0);
-    expect(result.stderr).toBe("");
-    expect(result.stdout).not.toContain("linked workspace");
-  } finally {
-    tree.cleanup();
-    shared.cleanup();
-  }
-});
+farmTest(
+  "worktree-farm.sh prints no workspace line and no warning when the shared root links every workspace",
+  () => {
+    const shared = makeSharedWithWorkspaceLinks([]);
+    const tree = makeWorkspaceTree();
+    try {
+      const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+        cwd: tree.dir,
+        shell: false,
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(result.stdout).not.toContain("linked workspace");
+    } finally {
+      tree.cleanup();
+      shared.cleanup();
+    }
+  },
+);
 
 test("linkMissingWorkspaces leaves a scope directory that is itself a symlink alone", () => {
   const tree = makeWorkspaceTree();
@@ -622,7 +654,7 @@ function writeLockDeclaringSdk(dir: string) {
   );
 }
 
-testOffWindows(
+farmTest(
   "worktree-farm.sh names a package the worktree's lockfile declares and a healthy shared checkout lacks, without telling the reader to install in the worktree",
   () => {
     // The shared checkout's own lockfile predates the dependency, so its own

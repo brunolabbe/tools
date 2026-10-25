@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import {
+  cli,
   danglingDependencies,
   describeTicket,
   ignoreClosedPipe,
@@ -98,7 +99,10 @@ const atRepo = (id: string) => `docs/work/${id}-slug.md`;
  * every case runs against the real tickets, which cannot be malformed on
  * purpose.
  */
-function run(args: string[], root?: string): { stdout: string; stderr: string; status: number } {
+function runProcess(
+  args: string[],
+  root?: string,
+): { stdout: string; stderr: string; status: number } {
   const result = spawnSync(
     "node",
     [CLI, ...(root === undefined ? [] : ["--root", root]), ...args],
@@ -109,6 +113,28 @@ function run(args: string[], root?: string): { stdout: string; stderr: string; s
     },
   );
   return { stdout: result.stdout, stderr: result.stderr, status: result.status ?? 1 };
+}
+
+/**
+ * The same run without the process (repo-128). A case spent 120 ms and most of
+ * a CPU second on starting node and importing the script, 57 times over; the
+ * views are what is under test, and `cli` is what the entry point calls, with
+ * the two streams collected apart and the exit status returned, so everything
+ * the helper above reports is reported here.
+ *
+ * What only a process shows is kept on `runProcess`: the entry point's own exit
+ * code, `--json`'s as CI reads it, the rootless runs against this checkout's
+ * real tickets, and that stdout and stderr stay on their own pipes. Those cases
+ * name it, and there are about ten.
+ */
+function run(args: string[], root?: string): { stdout: string; stderr: string; status: number } {
+  let stdout = "";
+  let stderr = "";
+  const status = cli([...(root === undefined ? [] : ["--root", root]), ...args], {
+    stdout: (text) => (stdout += text),
+    stderr: (text) => (stderr += text),
+  });
+  return { stdout, stderr, status };
 }
 
 /**
@@ -731,7 +757,7 @@ test("--tool narrows the view to one tool", () => {
     [at("pl-2")]: pl("pl-2"),
     [atRepo("repo-9")]: repoTicket("repo-9"),
   });
-  const { stdout, status } = run(["--tool", "planner", "--ready"], root);
+  const { stdout, status } = runProcess(["--tool", "planner", "--ready"], root);
   expect(status).toBe(0);
   const lines = stdout.trimEnd().split("\n");
   expect(lines).toHaveLength(2);
@@ -761,7 +787,7 @@ test("--ready with nothing ready says so rather than printing nothing", () => {
 // absence, and the only board that could move it is one where some tool is
 // named `sniffer`.
 test("--tool with a name no tool has is a named failure, not an empty view", () => {
-  const { stdout, stderr, status } = run(["--tool", "sniffer"]);
+  const { stdout, stderr, status } = runProcess(["--tool", "sniffer"]);
   expect(status).toBe(1);
   expect(stdout).toBe("");
   expect(stderr).toMatch(/no tickets for a tool called "sniffer"/);
@@ -929,7 +955,7 @@ test("--markdown on a tool with nothing open says so rather than emitting a tabl
     [at("pl-1")]: pl("pl-1", { status: "done" }),
     [at("pl-2")]: pl("pl-2", { status: "dropped" }),
   });
-  const { stdout, status } = run(["--markdown", "--tool", "planner"], root);
+  const { stdout, status } = runProcess(["--markdown", "--tool", "planner"], root);
   expect(status).toBe(0);
   expect(stdout).toContain("None. Every ticket this tool has is closed.");
   expect(stdout).not.toContain("| Ticket ");
@@ -946,7 +972,7 @@ test("--markdown on a tool with nothing open says so rather than emitting a tabl
 // proof that the derived root works at all.
 test("--write and --check are gone, and say so rather than being ignored", () => {
   for (const flag of ["--write", "--check"]) {
-    const { stderr, status } = run([flag]);
+    const { stderr, status } = runProcess([flag]);
     expect(status).toBe(1);
     expect(stderr).toContain(`unrecognised argument "${flag}"`);
   }
@@ -1018,7 +1044,7 @@ test("a malformed ticket costs its own row and no other", () => {
 // 1 and zero bytes, which is what "no tickets at all" and "the script is not
 // installed" also look like. The payload now says which.
 test("--json emits the tickets it could read and a structured account of the one it could not", () => {
-  const { stdout, stderr, status } = run(["--json"], repoWithADanglingDependency());
+  const { stdout, stderr, status } = runProcess(["--json"], repoWithADanglingDependency());
   const payload = JSON.parse(stdout);
   expect(payload.tickets.map((t: { id: string }) => t.id)).toEqual([
     "pl-1",
@@ -1054,7 +1080,10 @@ test("--json narrowed to a tool still reports a dangling edge outside it", () =>
 // The trap in repo-6's Build step 2, end to end: dropping the throw without
 // fixing `describeTicket` replaced a named message with a `TypeError`.
 test("--show on the malformed ticket names the missing id and does not crash", () => {
-  const { stdout, stderr, status } = run(["--show", "repo-9"], repoWithADanglingDependency());
+  const { stdout, stderr, status } = runProcess(
+    ["--show", "repo-9"],
+    repoWithADanglingDependency(),
+  );
   expect(status).toBe(0);
   expect(stdout).toContain("blocked by  repo-404 (not a ticket)");
   expect(stdout).not.toContain("unblocked");
@@ -1745,7 +1774,7 @@ test("the command reports the duplicate by name and exits non-zero, which is the
       difficulty: "standard",
     }),
   });
-  const { stdout, stderr, status } = run(["--json"], root);
+  const { stdout, stderr, status } = runProcess(["--json"], root);
   expect(status).toBe(1);
   expect(stdout).toBe("");
   expect(stderr).toContain(
@@ -1795,7 +1824,7 @@ test("the same heading on a needs-decision ticket is the case it is for, and pas
     [at("pl-1")]: decisionBody("needs-decision", "## Decision — open\n\nWhich model?\n"),
   });
   expect(readTickets(root).map((t) => [t.id, t.status])).toEqual([["pl-1", "needs-decision"]]);
-  expect(run(["--json"], root).status).toBe(0);
+  expect(runProcess(["--json"], root).status).toBe(0);
 });
 
 test("a heading quoted inside a fence is an example, and a ready ticket carrying one passes", () => {

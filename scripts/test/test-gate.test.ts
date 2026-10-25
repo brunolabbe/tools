@@ -298,7 +298,7 @@ describe.skipIf(!supported)("slots and worker counts", () => {
     // The settle is what lets two runs started together both see two. Here the
     // test plays the second run: it takes slot 1 once the gate holds slot 0,
     // inside the gate's settle window, and the gate must count it.
-    const gate = startGate({ TEST_GATE_SETTLE_MS: "2500" });
+    const gate = startGate({ TEST_GATE_SETTLE_MS: "1000" });
     await waitUntil(() => slotFiles().includes("slot-0.lock"), "the gate to take slot 0");
     liveLock(1);
     expect(await gate.done).toEqual({ code: 0, signal: null });

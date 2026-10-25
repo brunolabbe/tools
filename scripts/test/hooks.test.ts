@@ -65,17 +65,25 @@ function isSilent({ status, stdout, stderr }: HookRun): boolean {
   return status === 0 && stdout === "" && stderr === "";
 }
 
-test("check-tree-grep warns on a tree-walking grep, and does not block it", () => {
+// The hooks are bash scripts wired in `.claude/settings.json` for the Linux
+// devcontainer harness, and nothing runs them on Windows (repo-128, owner,
+// 2026-10-25): 34 cases, 29 that spawn bash and five that only read files (the
+// PreToolUse Bash matcher wiring and the header checks), skipped there and
+// reported as skipped. Every one still runs on ubuntu. `test.skipIf` rather than a wrapping
+// `describe`, which would move the helpers below into a closure.
+const linuxOnly = test.skipIf(process.platform === "win32");
+
+linuxOnly("check-tree-grep warns on a tree-walking grep, and does not block it", () => {
   const result = run(TREE_GREP, "grep -rl x .");
   expect(result.stderr).toContain("command grep");
   expect(result.status).toBe(0);
 });
 
-test("check-tree-grep fires after a shell operator, not only at the start", () => {
+linuxOnly("check-tree-grep fires after a shell operator, not only at the start", () => {
   expect(run(TREE_GREP, "cd /tmp && grep -r x .").stderr).not.toBe("");
 });
 
-test("check-tree-grep finds -r inside a bundled short-flag cluster", () => {
+linuxOnly("check-tree-grep finds -r inside a bundled short-flag cluster", () => {
   // Every real call site in this repo's tickets bundles it. A `-r\b` match
   // would pass a review and then fire on nothing.
   for (const command of [
@@ -90,7 +98,7 @@ test("check-tree-grep finds -r inside a bundled short-flag cluster", () => {
   }
 });
 
-test("check-tree-grep stays quiet on the spellings that are already correct", () => {
+linuxOnly("check-tree-grep stays quiet on the spellings that are already correct", () => {
   // Each of these already runs the real binary, or does not walk a tree at all.
   // The wrapper is a bash function, so it only applies when `grep` is the
   // command word — which is what the boundary anchor is really testing for.
@@ -107,7 +115,7 @@ test("check-tree-grep stays quiet on the spellings that are already correct", ()
   }
 });
 
-test("check-tree-grep stays quiet on the paren-adjacent shape", () => {
+linuxOnly("check-tree-grep stays quiet on the paren-adjacent shape", () => {
   // The shape the naive boundary anchor got wrong: it read the raw `(` as a
   // command boundary without checking it was a shell operator rather than a
   // character inside a string. The quote-adjacent case above is the one that
@@ -115,7 +123,7 @@ test("check-tree-grep stays quiet on the paren-adjacent shape", () => {
   expect(isSilent(run(TREE_GREP, 'echo "(grep -r x .) is risky"'))).toBe(true);
 });
 
-test("check-tree-grep stays quiet when an escaped inner quote splits the phrase", () => {
+linuxOnly("check-tree-grep stays quiet when an escaped inner quote splits the phrase", () => {
   // The quote strip pairs `\"` as a real quote, so a naive strip deletes the
   // words *between* an operator and the phrase and manufactures an adjacency
   // the raw text never had. Removing backslash-escaped characters first is what
@@ -124,7 +132,7 @@ test("check-tree-grep stays quiet when an escaped inner quote splits the phrase"
   expect(isSilent(run(TREE_GREP, 'printf "abc"; "she said \\"grep -r x .\\" too"'))).toBe(true);
 });
 
-test("check-tree-grep's header carries the reasoning, not a pointer to it", () => {
+linuxOnly("check-tree-grep's header carries the reasoning, not a pointer to it", () => {
   // It is the only carrier: repo-22's decision was a hook and no prose
   // elsewhere, so a reader has nowhere else to look.
   const header = fs.readFileSync(TREE_GREP, "utf8");
@@ -133,7 +141,7 @@ test("check-tree-grep's header carries the reasoning, not a pointer to it", () =
   }
 });
 
-test("check-tree-grep cites its siblings rather than copying them", () => {
+linuxOnly("check-tree-grep cites its siblings rather than copying them", () => {
   const header = fs.readFileSync(TREE_GREP, "utf8");
   expect(header).toContain("repo-20");
   expect(header).toContain("records.md");
@@ -152,7 +160,7 @@ interface Settings {
   };
 }
 
-test("every hook is wired into the PreToolUse Bash matcher", () => {
+linuxOnly("every hook is wired into the PreToolUse Bash matcher", () => {
   // All of them run; none replaces another. A second matcher entry would work
   // equally well, so this asserts the commands are reachable under `Bash`
   // rather than the shape of the entry that carries them.
@@ -177,7 +185,7 @@ test("every hook is wired into the PreToolUse Bash matcher", () => {
  */
 const PHRASE = ["gh", "pr", "create"].join(" ");
 
-test("check-pr-title ignores a command that only mentions the phrase in a quoted span", () => {
+linuxOnly("check-pr-title ignores a command that only mentions the phrase in a quoted span", () => {
   // repo-22's reproduction, kept rather than described. Against the anchor as
   // it shipped, this exited 2 with the "without an inspectable --title"
   // rejection — measured before the fix. A stray `(` was the whole cause.
@@ -186,7 +194,7 @@ test("check-pr-title ignores a command that only mentions the phrase in a quoted
   expect(result.status).toBe(0);
 });
 
-test("check-pr-title still rejects a title that is not a conventional commit", () => {
+linuxOnly("check-pr-title still rejects a title that is not a conventional commit", () => {
   // The half that proves the strip did not simply disable the guard. Strip too
   // much and this one passes.
   const result = run(PR_TITLE, `${PHRASE} --title 'nope'`);
@@ -194,13 +202,13 @@ test("check-pr-title still rejects a title that is not a conventional commit", (
   expect(result.status).toBe(2);
 });
 
-test("check-pr-title still rejects an invocation with no inspectable title", () => {
+linuxOnly("check-pr-title still rejects an invocation with no inspectable title", () => {
   const result = run(PR_TITLE, `${PHRASE} --fill`);
   expect(result.stderr).toContain("inspectable --title");
   expect(result.status).toBe(2);
 });
 
-test("check-pr-title does not block when an escaped inner quote splits the phrase", () => {
+linuxOnly("check-pr-title does not block when an escaped inner quote splits the phrase", () => {
   // A REGRESSION TEST, not an edge case. `origin/main` — which has no quote
   // strip at all — exits 0 on this input, because in the raw text the word
   // "note " sits between the `;` and the phrase and there is no adjacency to
@@ -211,7 +219,7 @@ test("check-pr-title does not block when an escaped inner quote splits the phras
   expect(result.status).toBe(0);
 });
 
-test("check-pr-title does not block a heredoc that quotes the phrase in prose", () => {
+linuxOnly("check-pr-title does not block a heredoc that quotes the phrase in prose", () => {
   // The shape that makes the one above matter: a real command word in front,
   // and a heredoc body that merely mentions the command. A heredoc misfire is
   // the reason this hook's boundary anchor exists at all — see its header — so
@@ -231,7 +239,7 @@ test("check-pr-title does not block a heredoc that quotes the phrase in prose", 
  */
 const SENTINEL = "";
 
-test("check-pr-title does not block when an escape precedes the phrase", () => {
+linuxOnly("check-pr-title does not block when an escape precedes the phrase", () => {
   for (const gap of ["\\x", "\\\\", "\\;", 'a\\"b']) {
     const command = `true; ${gap} ${PHRASE} --web`;
     // `\x` is a no-op escape, so this runs a program named `x` — it never
@@ -248,7 +256,7 @@ test("check-pr-title does not block when an escape precedes the phrase", () => {
   expect(isSilent(run(PR_TITLE, `true \\; ${PHRASE} --web`))).toBe(true);
 });
 
-test("check-pr-title does not forge a boundary out of one inside a quoted span", () => {
+linuxOnly("check-pr-title does not forge a boundary out of one inside a quoted span", () => {
   // A `;`, `&&` or `(` that exists only inside a string is not a shell
   // operator. Deleting the span could leave the phrase against whatever
   // preceded it; substituting cannot.
@@ -258,7 +266,7 @@ test("check-pr-title does not forge a boundary out of one inside a quoted span",
   }
 });
 
-test("check-pr-title treats a literal sentinel in the command as inert", () => {
+linuxOnly("check-pr-title treats a literal sentinel in the command as inert", () => {
   // The sentinel need not be absent from real input: it is not whitespace, not
   // a boundary character and not part of the phrase, so one that someone
   // actually types can neither forge a match nor break a real one.
@@ -266,13 +274,13 @@ test("check-pr-title treats a literal sentinel in the command as inert", () => {
   expect(run(PR_TITLE, `${PHRASE} --title 'nope'${SENTINEL}`).status).toBe(2);
 });
 
-test("check-tree-grep does not warn when an escape precedes the command word", () => {
+linuxOnly("check-tree-grep does not warn when an escape precedes the command word", () => {
   // Same substitution, same reasoning; advisory here, so the cost of the bug
   // was noise rather than a block.
   expect(isSilent(run(TREE_GREP, "true; \\x grep -rl x ."))).toBe(true);
 });
 
-test("check-pr-title still reads a title out of a quoted span", () => {
+linuxOnly("check-pr-title still reads a title out of a quoted span", () => {
   // The trap in the fix: strip for the boundary test only. Substitute the
   // stripped text into the extraction and the title becomes unfindable, turning
   // every real invocation into the rejection above.
@@ -311,7 +319,7 @@ function checkoutOn(branch: string): string {
   return dir;
 }
 
-test("check-main-writes refuses a pull request merge, including the bare form", () => {
+linuxOnly("check-main-writes refuses a pull request merge, including the bare form", () => {
   // Bare is the one that matters: `Bash(gh pr merge *)` is an anchored prefix
   // with a trailing `*`, and `gh pr merge` with no argument opens an
   // interactive picker. Whether the real matcher covers it was not settled —
@@ -329,7 +337,7 @@ test("check-main-writes refuses a pull request merge, including the bare form", 
   }
 });
 
-test("check-main-writes refuses every spelling of main the deny list's globs miss", () => {
+linuxOnly("check-main-writes refuses every spelling of main the deny list's globs miss", () => {
   for (const command of [
     `${PUSH} origin +main`,
     `${PUSH} origin refs/heads/main`,
@@ -348,51 +356,57 @@ test("check-main-writes refuses every spelling of main the deny list's globs mis
   }
 });
 
-test("check-main-writes leaves a push with no refspec alone, whatever any checkout's HEAD says", () => {
-  // repo-42, option (c): the bare-push branch is gone, so no arrangement of
-  // directories produces a refusal for a command that names no destination.
-  //
-  // The four rows are the ones the deleted branch refused, and the directory
-  // pairs are the three arrangements that mattered to it. The first is the
-  // split the harness's own worktree isolation creates — the shared root on
-  // `main`, the command running in a worktree that is not — and it is the false
-  // positive repo-42 measured live, so it leads. The second is the case the
-  // hook was written for and no longer answers, held instead by ruleset
-  // 20870721's `pull_request` rule, which reads the ref that arrives on the
-  // wire rather than the refspec the client typed.
-  const onMain = checkoutOn("main");
-  const onFeature = checkoutOn("repo-42-fixture");
-  for (const [projectDir, cwd] of [
-    [onMain, onFeature],
-    [onMain, onMain],
-    [onFeature, onFeature],
-  ]) {
-    for (const command of [PUSH, `${PUSH} origin`, `${PUSH} --force`, `${PUSH} -u origin`]) {
-      const where = `${command} (CLAUDE_PROJECT_DIR=${projectDir}, cwd=${cwd})`;
-      expect(isSilent(run(MAIN_WRITES, command, projectDir, cwd)), where).toBe(true);
+linuxOnly(
+  "check-main-writes leaves a push with no refspec alone, whatever any checkout's HEAD says",
+  () => {
+    // repo-42, option (c): the bare-push branch is gone, so no arrangement of
+    // directories produces a refusal for a command that names no destination.
+    //
+    // The four rows are the ones the deleted branch refused, and the directory
+    // pairs are the three arrangements that mattered to it. The first is the
+    // split the harness's own worktree isolation creates — the shared root on
+    // `main`, the command running in a worktree that is not — and it is the false
+    // positive repo-42 measured live, so it leads. The second is the case the
+    // hook was written for and no longer answers, held instead by ruleset
+    // 20870721's `pull_request` rule, which reads the ref that arrives on the
+    // wire rather than the refspec the client typed.
+    const onMain = checkoutOn("main");
+    const onFeature = checkoutOn("repo-42-fixture");
+    for (const [projectDir, cwd] of [
+      [onMain, onFeature],
+      [onMain, onMain],
+      [onFeature, onFeature],
+    ]) {
+      for (const command of [PUSH, `${PUSH} origin`, `${PUSH} --force`, `${PUSH} -u origin`]) {
+        const where = `${command} (CLAUDE_PROJECT_DIR=${projectDir}, cwd=${cwd})`;
+        expect(isSilent(run(MAIN_WRITES, command, projectDir, cwd)), where).toBe(true);
+      }
     }
-  }
-});
+  },
+);
 
-test("check-main-writes consults no checkout at all, which is what makes the case above hold", () => {
-  // The behavioural test above passes for two different reasons — a hook that
-  // reads the *right* directory would also pass it — so this pins the stronger
-  // property option (c) actually bought: the verdict is a function of the
-  // command string alone. A future editor re-adding a branch read has to delete
-  // this line to do it.
-  //
-  // Split at `set -uo pipefail` so the header stays free to *discuss* the
-  // branch it dropped and the variable it stopped reading — the assertion is
-  // about the executable half, not about the prose above it.
-  const source = fs.readFileSync(MAIN_WRITES, "utf8");
-  const start = source.indexOf("set -uo pipefail");
-  expect(start, "the header/body marker moved").toBeGreaterThan(-1);
-  const body = source.slice(start);
-  expect(body).not.toContain("symbolic-ref");
-  expect(body).not.toContain("CLAUDE_PROJECT_DIR");
-});
+linuxOnly(
+  "check-main-writes consults no checkout at all, which is what makes the case above hold",
+  () => {
+    // The behavioural test above passes for two different reasons — a hook that
+    // reads the *right* directory would also pass it — so this pins the stronger
+    // property option (c) actually bought: the verdict is a function of the
+    // command string alone. A future editor re-adding a branch read has to delete
+    // this line to do it.
+    //
+    // Split at `set -uo pipefail` so the header stays free to *discuss* the
+    // branch it dropped and the variable it stopped reading — the assertion is
+    // about the executable half, not about the prose above it.
+    const source = fs.readFileSync(MAIN_WRITES, "utf8");
+    const start = source.indexOf("set -uo pipefail");
+    expect(start, "the header/body marker moved").toBeGreaterThan(-1);
+    const body = source.slice(start);
+    expect(body).not.toContain("symbolic-ref");
+    expect(body).not.toContain("CLAUDE_PROJECT_DIR");
+  },
+);
 
-test("check-main-writes leaves an ordinary branch push alone", () => {
+linuxOnly("check-main-writes leaves an ordinary branch push alone", () => {
   for (const command of [
     `${PUSH} -u origin repo-15-deny-list-hook`,
     `${PUSH} --force origin my-feature`,
@@ -408,7 +422,7 @@ test("check-main-writes leaves an ordinary branch push alone", () => {
   }
 });
 
-test("check-main-writes reads each invocation's own arguments, not the whole line", () => {
+linuxOnly("check-main-writes reads each invocation's own arguments, not the whole line", () => {
   // `main` after `&&` belongs to the echo. Matching across the operator would
   // block a correct push because of a word in an unrelated command.
   expect(isSilent(run(MAIN_WRITES, `${PUSH} origin my-feature && echo main`))).toBe(true);
@@ -417,7 +431,7 @@ test("check-main-writes reads each invocation's own arguments, not the whole lin
   expect(run(MAIN_WRITES, `echo hi && ${PUSH} origin +main`).status).toBe(2);
 });
 
-test("check-main-writes ignores a command that only mentions the phrase in prose", () => {
+linuxOnly("check-main-writes ignores a command that only mentions the phrase in prose", () => {
   // Build step 3's case, and it is not hypothetical: repo-15's own ticket file
   // contains every dangerous string here as prose, so a substring test blocks
   // reading the ticket back. check-pr-title.sh's first live run was exactly
@@ -433,12 +447,12 @@ test("check-main-writes ignores a command that only mentions the phrase in prose
   }
 });
 
-test("check-main-writes does not block a heredoc that quotes the phrases in prose", () => {
+linuxOnly("check-main-writes does not block a heredoc that quotes the phrases in prose", () => {
   const command = `cat > /tmp/f.md <<'EOF'\n"run \\"${MERGE} 129\\" to land it"\n"or \\"${PUSH} origin +main\\", which is refused"\nEOF`;
   expect(isSilent(run(MAIN_WRITES, command))).toBe(true);
 });
 
-test("check-main-writes over-blocks an unquoted heredoc line, and that is pinned", () => {
+linuxOnly("check-main-writes over-blocks an unquoted heredoc line, and that is pinned", () => {
   // NOT an assertion that this is right. It pins the one shape where the hook
   // refuses something harmless, so the trade is met here rather than in a
   // refusal nobody expected. The boundary rule works per line, so an *unquoted*
@@ -454,7 +468,7 @@ test("check-main-writes over-blocks an unquoted heredoc line, and that is pinned
   ).toBe(true);
 });
 
-test("check-main-writes misses a quoted refspec, which is the direction to miss in", () => {
+linuxOnly("check-main-writes misses a quoted refspec, which is the direction to miss in", () => {
   // Also pinned rather than claimed. The quote strip replaces a quoted span
   // before the argument scan runs, so these are invisible to it. Both are
   // refused by the ruleset on `main` regardless, and over-blocking is the
@@ -463,7 +477,7 @@ test("check-main-writes misses a quoted refspec, which is the direction to miss 
   expect(isSilent(run(MAIN_WRITES, `${PUSH} origin '+main'`))).toBe(true);
 });
 
-test("check-main-writes does not expand a glob while tokenising", () => {
+linuxOnly("check-main-writes does not expand a glob while tokenising", () => {
   // The argument scan word-splits, which is also globbing unless it is turned
   // off. With globbing on, `*` becomes the hook's own working directory
   // listing — and this repo's root contains no `main`, so the bug would hide
@@ -471,7 +485,7 @@ test("check-main-writes does not expand a glob while tokenising", () => {
   expect(isSilent(run(MAIN_WRITES, `${PUSH} origin *`))).toBe(true);
 });
 
-test("check-main-writes stays out of the way of commands that cannot push", () => {
+linuxOnly("check-main-writes stays out of the way of commands that cannot push", () => {
   const onMain = checkoutOn("main");
   for (const command of [`${PUSH} --dry-run origin main`, `${PUSH} --help`, `${PUSH} -n`]) {
     expect(isSilent(run(MAIN_WRITES, command, onMain)), command).toBe(true);
@@ -481,14 +495,14 @@ test("check-main-writes stays out of the way of commands that cannot push", () =
   }
 });
 
-test("check-main-writes says what to do instead, rather than only refusing", () => {
+linuxOnly("check-main-writes says what to do instead, rather than only refusing", () => {
   // Both existing hooks do this, and the reason is in repo-15: a hook that says
   // "denied" trains the reader to route around it, and routing around it works.
   expect(run(MAIN_WRITES, `${MERGE} 129`).stderr).toContain("ask for the merge");
   expect(run(MAIN_WRITES, `${PUSH} origin +main`).stderr).toContain("open a pull request");
 });
 
-test("check-main-writes carries its limits in its header, not only in the ticket", () => {
+linuxOnly("check-main-writes carries its limits in its header, not only in the ticket", () => {
   // repo-15 `Done when` 5. The header is the only place the next editor
   // reliably reads, and each of these is a fact that makes the hook look
   // stronger than it is if it is missing.
@@ -507,29 +521,32 @@ test("check-main-writes carries its limits in its header, not only in the ticket
   }
 });
 
-test("check-main-writes refuses a stacked-pull-request merge as it refuses a pull request merge", () => {
-  // repo-95: `gh stack merge` merges pull requests through the gh-stack
-  // extension. Until the hook named it, the deny rule `Bash(gh stack merge*)`
-  // was the only layer, and a glob is the matcher this hook exists to back up.
-  // Bare, flagged and chained spellings, as the `gh pr merge` case above.
-  for (const command of [
-    STACK_MERGE,
-    `${STACK_MERGE} -y`,
-    `${STACK_MERGE} --squash 12`,
-    `cd /tmp && ${STACK_MERGE} -y`,
-  ]) {
-    const result = run(MAIN_WRITES, command);
-    expect(result.status, command).toBe(2);
-    expect(result.stderr, command).toContain("owner's decision");
-  }
-  // The nearest shapes that must stay silent: the extension's other
-  // subcommands do not merge, and a mention in an argument is not an invocation.
-  for (const command of [
-    "gh stack view",
-    "gh stack sync",
-    "gh stack submit --open",
-    `echo ${STACK_MERGE}`,
-  ]) {
-    expect(isSilent(run(MAIN_WRITES, command)), command).toBe(true);
-  }
-});
+linuxOnly(
+  "check-main-writes refuses a stacked-pull-request merge as it refuses a pull request merge",
+  () => {
+    // repo-95: `gh stack merge` merges pull requests through the gh-stack
+    // extension. Until the hook named it, the deny rule `Bash(gh stack merge*)`
+    // was the only layer, and a glob is the matcher this hook exists to back up.
+    // Bare, flagged and chained spellings, as the `gh pr merge` case above.
+    for (const command of [
+      STACK_MERGE,
+      `${STACK_MERGE} -y`,
+      `${STACK_MERGE} --squash 12`,
+      `cd /tmp && ${STACK_MERGE} -y`,
+    ]) {
+      const result = run(MAIN_WRITES, command);
+      expect(result.status, command).toBe(2);
+      expect(result.stderr, command).toContain("owner's decision");
+    }
+    // The nearest shapes that must stay silent: the extension's other
+    // subcommands do not merge, and a mention in an argument is not an invocation.
+    for (const command of [
+      "gh stack view",
+      "gh stack sync",
+      "gh stack submit --open",
+      `echo ${STACK_MERGE}`,
+    ]) {
+      expect(isSilent(run(MAIN_WRITES, command)), command).toBe(true);
+    }
+  },
+);

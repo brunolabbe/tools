@@ -3,8 +3,7 @@
  * against a real git fixture for the process-boundary claims (a check that fails, a
  * formatter that repads a table, a restore proven against `HEAD`).
  *
- * Two layers, the same split `next-id.test.ts` and `citations.test.ts` use and
- * for the same reason: the pure functions can be asserted quickly and
+ * Two layers, the same split `next-id.test.ts` uses and for the same reason: the pure functions can be asserted quickly and
  * precisely, and the CLI tests are the only thing that can prove the process
  * boundary — that a failed check really does leave the file on disk
  * byte-identical to `HEAD`, that `npx oxfmt` really does re-pad a table, that
@@ -502,7 +501,7 @@ test('refuses a second first-review call once "## Review" already exists on disk
 // gate's own trailing heading, and a repeated --gate must be refused.
 // ---------------------------------------------------------------------------
 
-test("refuses to run when the ticket has uncommitted changes against HEAD, and touches nothing", () => {
+test("refuses to run when the ticket has uncommitted changes against HEAD, touches nothing, and advises committing, never stashing", () => {
   const { dir, ticketAbs, cleanup } = withTicketRepo();
   try {
     const before = fs.readFileSync(ticketAbs, "utf8");
@@ -519,6 +518,11 @@ test("refuses to run when the ticket has uncommitted changes against HEAD, and t
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toMatch(/uncommitted changes against HEAD/);
+    expect(result.stderr).toMatch(/commit them first/);
+    // The stash stack in this checkout is shared across worktrees and
+    // concurrent sessions, so a bare `git stash` is unsafe here — the advice
+    // must never point at it.
+    expect(result.stderr).not.toMatch(/stash/iu);
     // Not restored to HEAD, not spliced — exactly as it stood before the run,
     // uncommitted note included. A restore that overwrote this with HEAD's
     // content would pass just as silently as the splice it was meant to undo.
@@ -655,27 +659,6 @@ test('locateInsertedBlock bounds a gate\'s block to the end of "## Review", past
 // refusal message must not advise a bare stash in a checkout with a shared
 // stash stack, and an untracked ticket must not slip the dirty guard.
 // ---------------------------------------------------------------------------
-
-test("the dirty-ticket refusal advises committing, never stashing", () => {
-  const { dir, ticketAbs, cleanup } = withTicketRepo();
-  try {
-    fs.appendFileSync(ticketAbs, "\n- another uncommitted note.\n");
-    const section = writeSectionFile(
-      dir,
-      "section.md",
-      '## Review\n\n### Gate 1 — 2026-09-20\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
-    );
-    const result = runCli(dir, [ticketAbs, section]);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/commit them first/);
-    // The stash stack in this checkout is shared across worktrees and
-    // concurrent sessions, so a bare `git stash` is unsafe here — the advice
-    // must never point at it.
-    expect(result.stderr).not.toMatch(/stash/iu);
-  } finally {
-    cleanup();
-  }
-});
 
 test("refuses to run when the ticket is not tracked by git yet, and touches nothing", () => {
   const { dir, cleanup } = withTicketRepo();
@@ -1154,26 +1137,75 @@ function withLandRepo(): {
   base: string;
   cleanup: () => void;
 } {
+  const template = landRepoTemplate();
   const bareDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-origin-")));
-  gitIn(bareDir, "init", "-q", "--bare", "-b", "main");
+  fs.cpSync(template.bareDir, bareDir, { recursive: true });
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-")));
+  fs.cpSync(template.dir, dir, { recursive: true });
 
-  const { dir, ticketAbs } = withTicketRepo();
-  gitIn(dir, "remote", "add", "origin", bareDir);
-  const base = gitIn(dir, "rev-parse", "HEAD");
-  gitIn(dir, "push", "-q", "-u", "origin", "main");
-  gitIn(dir, "checkout", "-qb", "feature");
+  // The copy's `origin` still names the template's bare repository. Forward
+  // slashes, which git reads on Windows and which need no escaping in a config
+  // value.
+  const config = path.join(dir, ".git", "config");
+  fs.writeFileSync(
+    config,
+    fs
+      .readFileSync(config, "utf8")
+      .replace(/^(\s*url = ).*$/mu, (_line, head: string) => head + bareDir.replaceAll("\\", "/")),
+  );
 
   return {
     dir,
     bareDir,
-    ticketAbs,
-    base,
+    ticketAbs: path.join(dir, TICKET_PATH),
+    base: template.base,
     cleanup: () => {
       fs.rmSync(dir, { recursive: true, force: true });
       fs.rmSync(bareDir, { recursive: true, force: true });
     },
   };
 }
+
+/**
+ * The working repository and its bare `origin`, pushed and on `feature`, built
+ * once per file (repo-128, after `ticketRepoTemplate` above): `init --bare`,
+ * `remote add`, `rev-parse`, `push -u` and `checkout -b` are five spawns that
+ * each of about 20 `--land` tests ran. Both are plain directories holding no
+ * absolute path but the one `origin` URL, which `withLandRepo` rewrites in its copy.
+ * A test that fails at setup, before the remote is read, has no use for the
+ * pair and takes `withTicketRepo`.
+ */
+let landTemplate: { dir: string; bareDir: string; base: string } | undefined;
+
+function landRepoTemplate(): { dir: string; bareDir: string; base: string } {
+  if (landTemplate === undefined) {
+    const bareDir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "review-record-origin-template-")),
+    );
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-land-")));
+    try {
+      gitIn(bareDir, "init", "-q", "--bare", "-b", "main");
+      fs.cpSync(ticketRepoTemplateDir(), dir, { recursive: true });
+      gitIn(dir, "remote", "add", "origin", bareDir);
+      const base = gitIn(dir, "rev-parse", "HEAD");
+      gitIn(dir, "push", "-q", "-u", "origin", "main");
+      gitIn(dir, "checkout", "-qb", "feature");
+      landTemplate = { dir, bareDir, base };
+    } catch (error) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(bareDir, { recursive: true, force: true });
+      throw error;
+    }
+  }
+  return landTemplate;
+}
+
+afterAll(() => {
+  if (landTemplate !== undefined) {
+    fs.rmSync(landTemplate.dir, { recursive: true, force: true });
+    fs.rmSync(landTemplate.bareDir, { recursive: true, force: true });
+  }
+});
 
 const okPreflight = () => ({ ok: true, output: "preflight passed (exit 0)" });
 
@@ -1325,65 +1357,6 @@ test("land() validates every section against a scratch clone before any commit, 
   }
 });
 
-test("land() never touches the real repository while validating — an unrelated uncommitted edit to a tracked file survives, and no commit is ever made (gate 1, F3 corrected; superseded at setup by gate 2, G2-a)", () => {
-  const { dir, ticketAbs, base, cleanup } = withLandRepo();
-  try {
-    fs.mkdirSync(path.join(dir, ".claude"), { recursive: true });
-    fs.writeFileSync(path.join(dir, ".claude", "rule.md"), "line one\nline two\n");
-    gitIn(dir, "add", "-A");
-    gitIn(dir, "commit", "-qm", "docs(repo): add a rule page");
-
-    const preLandingSha = gitIn(dir, "rev-parse", "HEAD");
-
-    // An unrelated, uncommitted edit to a *tracked* file in the same working
-    // tree — untracked survives any `git reset --hard` on its own, so this
-    // has to be a modification to something already committed to be a real
-    // test of it. A mechanism that reached for `git reset --hard` in the
-    // real checkout on a later failure — the round-1 shape of this fix —
-    // discards exactly this. Gate 2's own G2-a then found the round-2
-    // shape (a scratch clone made from `HEAD`) could still commit gate 1 for
-    // real before noticing gate 2's own failure, if a tracked file's
-    // uncommitted edit shifted a cited line the clone never saw — so this
-    // case is now caught earlier still, at `setup`, before the clone is even
-    // made, which is what this test now asserts.
-    const trackedPath = path.join(dir, "src", "tls.ts");
-    const trackedBefore = fs.readFileSync(trackedPath, "utf8");
-    fs.writeFileSync(trackedPath, `${trackedBefore}// an unrelated, uncommitted edit\n`);
-
-    const gate1 = writeSectionFile(
-      dir,
-      "gate1.md",
-      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
-    );
-    const gate2 = writeSectionFile(
-      dir,
-      "gate2.md",
-      "## Review\n\n### Gate 1 — 2026-09-29, again\n\nA second first review.\n",
-    );
-
-    const result = land({
-      ticket: ticketAbs,
-      sections: [gate1, gate2],
-      base,
-      status: "done",
-      title: "docs(repo): land the fixture ticket (zz-1)",
-      runPreflight: okPreflight,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.steps.at(-1)?.name).toBe("setup");
-
-    // No commit was ever made in the real repository — not gate 1's, not any
-    // other — and the unrelated, uncommitted edit is still there.
-    expect(gitIn(dir, "rev-parse", "HEAD")).toBe(preLandingSha);
-    expect(gitIn(dir, "log", "--format=%H", `${preLandingSha}..HEAD`).trim()).toBe("");
-    expect(fs.readFileSync(trackedPath, "utf8")).toContain("an unrelated, uncommitted edit");
-    expect(gitIn(dir, "status", "--porcelain")).toContain("src/tls.ts");
-  } finally {
-    cleanup();
-  }
-});
-
 test('land() names "push" when the remote already holds a commit this branch has not seen', () => {
   const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
   try {
@@ -1461,7 +1434,7 @@ test("spliceSection and verifySection are what main() and verifyMain() now call"
 // ---------------------------------------------------------------------------
 
 test("the --land CLI refuses a missing flag before touching git, naming it on stderr", () => {
-  const { dir, ticketAbs, cleanup } = withLandRepo();
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
   try {
     const gate1 = writeSectionFile(
       dir,
@@ -1585,9 +1558,11 @@ test("runPreflightDefault passes --title through to the real preflight.mjs argv 
 // ---------------------------------------------------------------------------
 
 test("land() refuses at setup when a tracked file has an uncommitted change, before any clone or commit (gate 2, G2-a)", () => {
-  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  // Refused at setup, before any remote is read, so no `origin` is needed.
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
+  const base = gitIn(dir, "rev-parse", "HEAD");
   try {
-    const preLandingSha = gitIn(dir, "rev-parse", "HEAD");
+    const preLandingSha = base;
 
     // Not the ticket itself — a different tracked, already-committed file,
     // the exact shape gate 2's probe used: an uncommitted edit that would
@@ -1629,6 +1604,10 @@ test("land() refuses at setup when a tracked file has an uncommitted change, bef
 
     expect(gitIn(dir, "rev-parse", "HEAD")).toBe(preLandingSha);
     expect(fs.readFileSync(trackedPath, "utf8")).toContain("inserted, uncommitted");
+    // The edit is still there, uncommitted: the one assertion the superseded
+    // "never touches the real repository" case (repo-128 deleted it) made that
+    // this one did not.
+    expect(gitIn(dir, "status", "--porcelain")).toContain("src/tls.ts");
   } finally {
     cleanup();
   }
@@ -1832,7 +1811,9 @@ test("parseLandArgs reads --branch", () => {
 });
 
 test("land() refuses a detached HEAD with no --branch before it commits anything", () => {
-  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  // Refused at setup, before any remote is read, so no `origin` is needed.
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
+  const base = gitIn(dir, "rev-parse", "HEAD");
   try {
     const gate1 = writeSectionFile(dir, "gate1.md", "## Review\n\n### Gate 1\n\nA first review.\n");
     gitIn(dir, "checkout", "-q", "--detach");

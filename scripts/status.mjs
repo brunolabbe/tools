@@ -425,7 +425,7 @@ export function reviewedButReady(tickets) {
  * "ticket ids that must land first", so an id nothing carries is either a typo
  * or a forward reference, and both are worth saying out loud.
  *
- * What changed is who decides. The reader reports; `main` prints the warning
+ * What changed is who decides. The reader reports; `cli` prints the warning
  * beside the view instead of instead of it, and picks the exit code per mode —
  * see `EXIT_ON_PROBLEMS`.
  *
@@ -912,7 +912,7 @@ function parseArgs(argv) {
 const EXIT_ON_PROBLEMS = ["json"];
 
 /**
- * Either kind of problem, which is what `main` builds and every view receives.
+ * Either kind of problem, which is what `cli` builds and every view receives.
  *
  * Named because `renderView` used to be documented as taking
  * `ReturnType<typeof danglingDependencies>` and quietly stopped being handed
@@ -923,19 +923,46 @@ const EXIT_ON_PROBLEMS = ["json"];
  * @typedef {ReturnType<typeof danglingDependencies>[number] | ReturnType<typeof reviewedButReady>[number]} Problem
  */
 
-function main() {
-  const { flags, values } = parseArgs(process.argv.slice(2));
-  const repoRoot = values.root ?? DEFAULT_ROOT;
-  const all = readTickets(repoRoot);
-  const problems = [...danglingDependencies(all), ...reviewedButReady(all)];
+/**
+ * Where the views write. `cli`'s default is the process's own streams; a test
+ * passes two collecting functions and reads what each was given, which is what
+ * lets about fifty cases run without a process each (repo-128).
+ *
+ * @typedef {{stdout: (text: string) => unknown, stderr: (text: string) => unknown}} Io
+ */
 
-  renderView(all, problems, flags, values, repoRoot);
+/** @type {Io} */
+const PROCESS_IO = {
+  stdout: (text) => process.stdout.write(text),
+  stderr: (text) => process.stderr.write(text),
+};
 
-  // stderr, after the view: a pipeline reading stdout is unaffected, and a
-  // person reads it last rather than watching it scroll off the top.
-  for (const problem of problems) process.stderr.write(`${problem.message}\n`);
-  if (problems.length > 0 && EXIT_ON_PROBLEMS.some((flag) => flags.has(flag))) {
-    process.exitCode = 1;
+/**
+ * One run of the CLI: what `node scripts/status.mjs <argv>` does, minus the
+ * process. Returns the exit status instead of setting `process.exitCode`, and
+ * reports a thrown error on `stderr` with status 1, as the entry point below
+ * always has.
+ *
+ * @param {string[]} argv
+ * @param {Io} [io]
+ * @returns {number}
+ */
+export function cli(argv, io = PROCESS_IO) {
+  try {
+    const { flags, values } = parseArgs(argv);
+    const repoRoot = values.root ?? DEFAULT_ROOT;
+    const all = readTickets(repoRoot);
+    const problems = [...danglingDependencies(all), ...reviewedButReady(all)];
+
+    renderView(all, problems, flags, values, repoRoot, io);
+
+    // stderr, after the view: a pipeline reading stdout is unaffected, and a
+    // person reads it last rather than watching it scroll off the top.
+    for (const problem of problems) io.stderr(`${problem.message}\n`);
+    return problems.length > 0 && EXIT_ON_PROBLEMS.some((flag) => flags.has(flag)) ? 1 : 0;
+  } catch (error) {
+    io.stderr(`${/** @type {Error} */ (error).message}\n`);
+    return 1;
   }
 }
 
@@ -945,13 +972,14 @@ function main() {
  * @param {Set<string>} flags
  * @param {Record<string, string>} values
  * @param {string} repoRoot
+ * @param {Io} io
  */
-function renderView(all, problems, flags, values, repoRoot) {
+function renderView(all, problems, flags, values, repoRoot, io) {
   // `--show` is about one ticket and its blockers can be under another tool, so
   // it reads the whole graph and ignores `--tool` — narrowing first would
   // report that a ticket which exists does not.
   if (values.show !== undefined) {
-    printTicket(describeTicket(all, values.show));
+    printTicket(describeTicket(all, values.show), io);
     return;
   }
 
@@ -968,21 +996,21 @@ function renderView(all, problems, flags, values, repoRoot) {
   // It is not narrowed by `--tool`: a dangling edge anywhere is a fact about
   // the graph the reader is being handed a slice of.
   if (flags.has("json")) {
-    process.stdout.write(`${JSON.stringify({ tickets: selected, problems }, null, 2)}\n`);
+    io.stdout(`${JSON.stringify({ tickets: selected, problems }, null, 2)}\n`);
     return;
   }
 
   if (flags.has("markdown")) {
-    process.stdout.write(`${renderMarkdown(selected)}\n`);
+    io.stdout(`${renderMarkdown(selected)}\n`);
     return;
   }
 
   if (flags.has("ready")) {
     const ready = readyTickets(selected, all);
     for (const ticket of ready) {
-      process.stdout.write(`${ticket.id}\t${ticket.tool}\t${ticket.title}\n`);
+      io.stdout(`${ticket.id}\t${ticket.tool}\t${ticket.title}\n`);
     }
-    if (ready.length === 0) process.stdout.write("nothing is ready and unblocked\n");
+    if (ready.length === 0) io.stdout("nothing is ready and unblocked\n");
     // stderr, and for the reason the problems below use it: stdout is the
     // answer and something is piping it. `node scripts/status.mjs --ready |
     // wc -l` is the measurement repo-19 was filed off, and the whole point of
@@ -991,7 +1019,7 @@ function renderView(all, problems, flags, values, repoRoot) {
     // view, unlike `problems`: a reader who asked about one tool is being told
     // what *that* question withheld, not handed a fact about the whole graph.
     for (const withheld of withheldFromReady(selected, all)) {
-      process.stderr.write(`${withheld.message}\n`);
+      io.stderr(`${withheld.message}\n`);
     }
     return;
   }
@@ -1001,13 +1029,13 @@ function renderView(all, problems, flags, values, repoRoot) {
   for (const tool of byTool) {
     const mine = selected.filter((t) => t.tool === tool);
     const open = mine.filter((t) => OPEN.has(t.status));
-    process.stdout.write(`\n${tool} — ${open.length} open of ${mine.length}\n\n`);
+    io.stdout(`\n${tool} — ${open.length} open of ${mine.length}\n\n`);
     for (const row of milestones(mine)) {
-      process.stdout.write(
+      io.stdout(
         `  ${(row.milestone ?? "—").padEnd(4)} ${row.state.padEnd(12)} ${row.done} done, ${row.open} open\n`,
       );
     }
-    if (open.length > 0) process.stdout.write("\n");
+    if (open.length > 0) io.stdout("\n");
     // The whole graph, not `mine`: a dependency on another tool's done ticket
     // is met, and `mine` is one tool's rows (repo-114).
     const unblocked = new Set(readyTickets(mine, all).map((t) => t.id));
@@ -1026,7 +1054,7 @@ function renderView(all, problems, flags, values, repoRoot) {
         : unblocked.has(ticket.id) || ticket.status === "in-flight"
           ? ""
           : ` (waits on ${ticket.depends_on.filter((id) => !done.has(id)).join(", ")})`;
-      process.stdout.write(`  ${mark} ${ticket.id.padEnd(6)} ${ticket.title}${blocked}\n`);
+      io.stdout(`  ${mark} ${ticket.id.padEnd(6)} ${ticket.title}${blocked}\n`);
     }
 
     // repo-32. Its own section, below the open list, because most of what it
@@ -1038,20 +1066,23 @@ function renderView(all, problems, flags, values, repoRoot) {
     // view it sits in, unlike `problems`.
     const owed = awaitingTickets(mine);
     if (owed.length > 0) {
-      process.stdout.write(`\n  awaiting — ${owed.length}\n\n`);
+      io.stdout(`\n  awaiting — ${owed.length}\n\n`);
       for (const ticket of owed) {
-        process.stdout.write(`  ! ${ticket.id.padEnd(6)} ${ticket.awaiting}\n`);
+        io.stdout(`  ! ${ticket.id.padEnd(6)} ${ticket.awaiting}\n`);
       }
     }
   }
 
-  if (flags.has("prs")) printOpenPullRequests(repoRoot);
-  process.stdout.write("\n");
+  if (flags.has("prs")) printOpenPullRequests(repoRoot, io);
+  io.stdout("\n");
 }
 
-/** @param {ReturnType<typeof describeTicket>} described */
-function printTicket({ ticket, blockers, missing }) {
-  process.stdout.write(`\n${ticket.id}  ${ticket.title}\n\n`);
+/**
+ * @param {ReturnType<typeof describeTicket>} described
+ * @param {Io} io
+ */
+function printTicket({ ticket, blockers, missing }, io) {
+  io.stdout(`\n${ticket.id}  ${ticket.title}\n\n`);
   for (const [key, value] of [
     ["tool", ticket.tool],
     ["kind", ticket.kind],
@@ -1063,7 +1094,7 @@ function printTicket({ ticket, blockers, missing }) {
     ["awaiting", ticket.awaiting ?? "—"],
     ["file", ticket.file],
   ]) {
-    process.stdout.write(`  ${key.padEnd(11)} ${value}\n`);
+    io.stdout(`  ${key.padEnd(11)} ${value}\n`);
   }
   // A dangling id is printable here and nowhere else: it has no status to
   // report, so it says what it is. Beside the real blockers rather than instead
@@ -1093,7 +1124,7 @@ function printTicket({ ticket, blockers, missing }) {
     // refused. Appended to the pair above rather than replacing them: a
     // `dropped` ticket can carry its reason and an obligation at once.
     const owed = ticket.awaiting === null ? "" : `; still awaiting ${ticket.awaiting}`;
-    process.stdout.write(`\n  ${ticket.status} — nothing to pick up${why}${stale}${owed}\n\n`);
+    io.stdout(`\n  ${ticket.status} — nothing to pick up${why}${stale}${owed}\n\n`);
     return;
   }
   // Before the pair below, because `unblocked` is exactly the lie `--ready` was
@@ -1104,12 +1135,10 @@ function printTicket({ ticket, blockers, missing }) {
   // a line naming only the question reads as startable once it is answered.
   if (ticket.status === "needs-decision") {
     const also = holding.length === 0 ? "" : `; also blocked by ${holding.join(", ")}`;
-    process.stdout.write(
-      `\n  waiting on a decision — not startable until someone answers it${also}\n\n`,
-    );
+    io.stdout(`\n  waiting on a decision — not startable until someone answers it${also}\n\n`);
     return;
   }
-  process.stdout.write(
+  io.stdout(
     holding.length === 0 ? "\n  unblocked\n\n" : `\n  blocked by  ${holding.join(", ")}\n\n`,
   );
 }
@@ -1123,8 +1152,9 @@ function printTicket({ ticket, blockers, missing }) {
  * or unauthenticated one must not fail the view someone asked for.
  *
  * @param {string} repoRoot
+ * @param {Io} io
  */
-function printOpenPullRequests(repoRoot) {
+function printOpenPullRequests(repoRoot, io) {
   let output;
   try {
     output = execFileSync("gh", ["pr", "list", "--json", "number,title,baseRefName"], {
@@ -1134,17 +1164,17 @@ function printOpenPullRequests(repoRoot) {
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch {
-    process.stdout.write("\nin review: `gh` did not answer — skipping\n");
+    io.stdout("\nin review: `gh` did not answer — skipping\n");
     return;
   }
   const prs = JSON.parse(output);
-  process.stdout.write(`\nin review — ${prs.length}\n\n`);
+  io.stdout(`\nin review — ${prs.length}\n\n`);
   for (const pr of prs) {
     // A pull request based on another branch disappears when that branch does,
     // and its own page still says merged. CLAUDE.md names this; it is worth
     // seeing in the list rather than discovering later.
     const base = pr.baseRefName === "main" ? "" : `  ← based on ${pr.baseRefName}`;
-    process.stdout.write(`  #${pr.number} ${pr.title}${base}\n`);
+    io.stdout(`  #${pr.number} ${pr.title}${base}\n`);
   }
 }
 
@@ -1200,10 +1230,5 @@ function duplicateIdMessage(ticket, first) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   ignoreClosedPipe([process.stdout, process.stderr]);
-  try {
-    main();
-  } catch (error) {
-    process.stderr.write(`${/** @type {Error} */ (error).message}\n`);
-    process.exitCode = 1;
-  }
+  process.exitCode = cli(process.argv.slice(2));
 }

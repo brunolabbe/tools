@@ -87,6 +87,19 @@ function quietRun(command: string, args: string[], options: { cwd: string }) {
   return { status: result.status, error: result.error, output: result.stdout + result.stderr };
 }
 
+/**
+ * `quietRun`, noting the directory each `npm` ran in. The script installs into a
+ * temporary directory of its own, which has to be gone whatever the verdict; a
+ * case that already runs the real install checks it here rather than running
+ * two more for it (repo-128).
+ */
+function noteNpmDirs(made: string[]) {
+  return (command: string, args: string[], options: { cwd: string }) => {
+    if (command === "npm") made.push(options.cwd);
+    return quietRun(command, args, options);
+  };
+}
+
 /** A spawn that never started: `status` is null and `error` says why. */
 const neverStarted = () => ({ status: null, error: new Error("spawn npm ENOENT") });
 
@@ -112,11 +125,14 @@ realNpm("a lockfile that matches every manifest passes and leaves the directory 
   const dir = fixture("1.0.0");
   const before = snapshot(dir);
   const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  const made: string[] = [];
 
-  expect(checkLockfileSync(dir, quietRun)).toBe(0);
+  expect(checkLockfileSync(dir, noteNpmDirs(made))).toBe(0);
 
   expect(stderr).not.toHaveBeenCalled();
   expect(snapshot(dir)).toEqual(before);
+  expect(made).toHaveLength(1);
+  expect(fs.existsSync(made[0] ?? dir)).toBe(false);
 });
 
 realNpm(
@@ -126,8 +142,10 @@ realNpm(
     const before = snapshot(dir);
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     let diffOutput = "";
+    const made: string[] = [];
+    const run = noteNpmDirs(made);
     const capturing = (command: string, args: string[], options: { cwd: string }) => {
-      const result = quietRun(command, args, options);
+      const result = run(command, args, options);
       if (command === "git") diffOutput = result.output;
       return result;
     };
@@ -140,6 +158,9 @@ realNpm(
     // The property gate 1 found missing: the script reports drift, it does not
     // repair it in the caller's tree.
     expect(snapshot(dir)).toEqual(before);
+    // The temporary directory is removed on a failing verdict too.
+    expect(made).toHaveLength(1);
+    expect(fs.existsSync(made[0] ?? dir)).toBe(false);
   },
 );
 
@@ -165,21 +186,6 @@ realNpm(
     expect(fs.existsSync(path.join(dir, "node_modules", "a"))).toBe(false);
   },
 );
-
-realNpm("its temporary directory is removed, whatever the verdict", () => {
-  const made: string[] = [];
-  const spy = (command: string, args: string[], options: { cwd: string }) => {
-    if (command === "npm") made.push(options.cwd);
-    return quietRun(command, args, options);
-  };
-  vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-
-  checkLockfileSync(fixture("1.0.0"), spy);
-  checkLockfileSync(fixture("0.9.0"), spy);
-
-  expect(made).toHaveLength(2);
-  for (const dir of made) expect(fs.existsSync(dir)).toBe(false);
-});
 
 test("a spawn that never started says so and fails, instead of exiting silently", () => {
   const dir = fixture("1.0.0");
