@@ -152,3 +152,65 @@ first; the owner chose this ticket instead.
     repo-118's finished ticket still names `stackPulls`, left alone because a finished
     ticket's edit needs a `## Review` that its file does not carry on this branch (preflight
     fails it) and the name is a historical record there.
+- 2026-10-25 — Round 1, after gate 1 at `3b3a26ac` (FAIL, F1 high and four lows). Owner's
+  answers the same day: F1's remedy is option 1 of {1: never take a source whose sha is
+  reachable from the trunk rev for a stack parent (`git merge-base --is-ancestor
+  <parent> <rev>`); 2: require a parent to hold a path beyond its name claim}; the round
+  covers F1 plus every low (F2-F5), over the coordinator's F1+F3+F4. (The sweep
+  time is Build 3's ask, not a `Done when` line's; the ticket's text is unchanged.)
+  - **F1 (high) reproduced, fixed.** `shapes.mts` of the gate run on the head
+    `3b3a26ac` reproduced both shapes: S3, `repo-130-reserve` pushed at the trunk tip,
+    printed no `branch/repo-130-other` row and no clash; S4, `repo-140-early` behind a
+    moved trunk, printed no `PR#710` row and no clash. The base prints `clash: repo-130 is
+    claimed by branch/repo-130-other, branch/repo-130-reserve, branch/repo-131-files` and
+    `clash: repo-140 is claimed by PR#710, branch/repo-140-early`. `stackSources` now
+    takes `rev` (from `collect`) and, for a pair git has already said is an ancestor,
+    asks `heldByRev(parent)` (`isAncestor(parent.sha, rev)`, memoized per source) and
+    skips the parent if the rev holds it. Asking only after the pair test means a spawn
+    per stacked parent and not per source. The gate's `shapes.mts` re-run on the fixed
+    tree prints the base's rows and clash lines for S3 and S4 (7 and 3 `merge-base`
+    probes). Red: with `&& !heldByRev(other)` removed from the parent filter, `npx vitest
+    run scripts/test/next-id.test.ts` gave `Tests  2 failed | 50 passed (52)` — "a
+    branch pushed at a commit the rev holds is no stack parent, and its name still
+    clashes" (`expected [] to deeply equal [ { id: 130, sources: [ …(2) ] } ]`) and "a
+    name-only branch behind the rev still clashes with a pull request naming its id"
+    (`expected [] to deeply equal [ { id: 140, … } ]`); restored, 52 of 52. The trunk
+    branch itself (sha the rev's tip) is now excluded by the same rule and no longer by
+    the path pruning alone.
+  - **F2 (low), the text corrected, not the code.** Both cases reproduce
+    (`shapes.mts` S1: `branch/chain-c (stacked on branch/chain-a)`, the root, probes 3;
+    S2: no label). They are the price of pruning a pair that shares nothing: the label
+    depends on ancestry alone, and knowing it is one spawn per pair, which is what the
+    pruning removes. The `stackSources` docstring and `concurrency.md` now say that no
+    clash is lost but a label can be, and name both cases. Two tests pin the behaviour
+    ("a chain whose middle shares nothing with the end names the nearest parent that
+    shares something", "a branch parent that adds nothing gives its child no stacked
+    label"); with the pruning turned off (`mayClash` returning true) they and the
+    zero-probe test fail, `Tests  3 failed | 49 passed (52)`.
+  - **F3 (low), reproduced, tested.** The gate's plant D (the PR/PR exemption
+    removed) left 44 of 44. New test "a pull request stacked on one that adds nothing is
+    still labelled" (`PR#700` only edits `code.txt`, `PR#701` is cut from it): with the
+    exemption removed, `Tests  1 failed | 51 passed (52)`, `expected [ 'at origin/trunk',
+    'PR#700', …(2) ] to include 'PR#701 (stacked on PR#700)'`.
+  - **F4 (low), reproduced, tested.** Plants A and B left 44 of 44 (the gate's `a3.sh`
+    hard-codes `git checkout 3b3a26ac`, which would have reverted this round's source, so
+    I planted A by hand: `!source.unread` removed). New `describe("an unread source is
+    never stacked")` hands `stackSources` sources directly, with a `git` that says `a` is
+    an ancestor of `b` and nothing else is: a control (both read, stacked), an unread
+    child and an unread parent. With `!source.unread` removed, `Tests  2 failed | 50
+    passed (52)`, the unread child and the unread parent.
+  - **F5 (low), shown to be out of reach without dropping the label.** On this clone a
+    `merge-base --is-ancestor` spawn costs 4.0 ms (40 runs), so the gate's 42 PR-pair
+    probes are about 170 ms of a sweep that reads 0.7 to 1.2 s; the rest is `ls-remote`
+    and `gh`. The PR exemption is the label repo-118 set, and a label depends on
+    ancestry alone, so no test on paths or ids can skip a pair without dropping the
+    label for some pair that is stacked. The pruning therefore stays as built, and the
+    docstring and `concurrency.md` say n open pull requests cost n(n-1) probes. An option
+    this ticket does not take, because Build 2 keeps `merge-base --is-ancestor` as the
+    ancestor test: one `git rev-list <child> ^<rev>` per child and a lookup of every
+    other sha in that list gives the same answer in n spawns, at the price of
+    reading a full history for an unrelated branch.
+  - **Sweep spawns, the same board, base against this head** (`time-ab.mts`, 8 runs
+    each, 9 sources): 32 spawns and 12 `merge-base` before; 35 and 15 after. The 3 extra
+    are `heldByRev` for the stacked parents the board actually has. Medians 946 ms and
+    959 ms, the spread (737-1185) wider than the gap.

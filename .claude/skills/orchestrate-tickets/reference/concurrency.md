@@ -158,8 +158,19 @@ whose branch names share one, still clash, and so does a stacked child's own,
 different ticket under a parent's id. The rule holds for a pushed branch with **no
 pull request** as well (repo-124): cut from an open pull request's head it reads
 `branch/<name> (stacked on PR#<m>)`, and cut from another branch it names that
-branch. To keep the sweep to a few `git` spawns, a branch pair is asked about only
-when the two share a path or an id; two pull requests are always asked.
+branch. A source whose head `main` already holds is never a parent: a branch pushed
+with no commit of its own, only a name reserving an id, sits on a commit every later
+branch contains, and taking it for a parent would hide the clash the name is there
+to show.
+
+To keep the sweep to a few `git` spawns, a branch pair is asked about only when the
+two share a path or an id; two pull requests are always asked, because their label
+(repo-118) is printed even when nothing would clash. **No clash is lost to that, but
+a label can be**: a parent whose diff adds nothing (it only edits files) gives its
+child no `(stacked on …)`, and in a chain whose middle branch shares nothing with
+the end, the end names the nearest parent that shares something, not the nearest.
+A pair of pull requests costs one `git merge-base` each way (about 4 ms on this
+clone), so n open pull requests cost n(n-1) of them and are not pruned.
 
 **So a `branch/…`/`on main` clash is one of two things, and both need a look.**
 Either the branch filed a second ticket under a taken id — the collision this
