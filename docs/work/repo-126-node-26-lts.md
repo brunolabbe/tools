@@ -63,9 +63,12 @@ Facts that make this more than a version bump:
 - Root `engines.node` is mirrored in the lockfile's root package entry
   (`package-lock.json`, `packages[""].engines.node`), and
   `scripts/check-lockfile-sync.mjs` fails on a `package.json` edit that the
-  lockfile does not follow. Dry-run on repo-123's head by gate 1: changing
-  `package.json` alone exits 1, changing both files exits 0. So the engines
-  edit is a two-file edit.
+  lockfile does not follow. Dry-run by gate 1 on its own tree (the base plus
+  this ticket; its saved diff shows `-">=22.0.0"`): changing `package.json`
+  alone exits 1, changing both files exits 0. The orchestrator ran the same
+  dry run on a scratch worktree of repo-123's `8b96fbd9` on 2026-10-25:
+  `package.json` alone gave sync exit 1, and both files gave exit 0. So the
+  engines edit is a two-file edit.
 - Node 26 bundles a different npm from Node 22's 10.9.9 (Build step 3 measures
   which). `.claude/rules/dependency-updates.md` describes a `libc` difference
   between npm 10's and npm 11's lockfiles, and `check-lockfile-sync.mjs` runs
@@ -165,11 +168,16 @@ Facts that make this more than a version bump:
 8. **Types.** Keep `@types/node` at `^26.1.2` (root `package.json`, line 60)
    unless `npm run check` fails with it on Node 26. Record the major the tree
    carries after the move, and why. A change here changes `package.json` and
-   the lockfile's root entry together, and the Log names the lines.
+   the lockfile's root entry together, and the lockfile's
+   `node_modules/@types/node` entry (`version`, `resolved`, `integrity`) moves
+   with it; the Log names the lines.
 9. **Lockfile check, after the edit.** Run `node scripts/check-lockfile-sync.mjs`
    on the tree with steps 4 and 8 applied, under Node 26's npm. A hunk on
    `engines` means a mirror edit was missed in step 4 or 8, not the `libc`
-   difference; fix it and run again. A hunk on `libc` only is step 3's fork.
+   difference; fix it and run again. A hunk on the `node_modules/@types/node`
+   entry's `version`, `resolved` or `integrity` is expected when step 8 changed
+   `@types/node`, and is named in the Log. A hunk on `libc` only is step 3's
+   fork.
    The target is exit 0.
 10. **Local checks.** `npm run build`, then `npm run check` on Node 26 (lint,
     format, typecheck). The build comes first: `api` reads `engine` and
@@ -180,14 +188,14 @@ Facts that make this more than a version bump:
     other downloader and planner e2e specs need a live service or browser
     session and are not run locally. They do run in CI: the workflows'
     `e2e` jobs are the only place the full suites run on the new Node (Done
-    when 11).
+    when 10).
 12. **Devcontainer.** Build `.devcontainer/Dockerfile` if the sandbox allows it,
     and record its `node --version` line (the Dockerfile's own test on lines
     51–52). If it cannot be built here, say so in the Log. The sandbox has no
     Docker daemon (gate 1 measured `docker info`), so expect "unmeasured".
 13. **CI readings on the PR head.** `test (windows-latest, informational)` in
     `ci.yml`'s `test` matrix is informational; read it on the PR head and do not
-    grade it as blocking. The `e2e` jobs of the three tool workflows (Done when 11) are read the same way as the `check` and `docker` jobs: `gh pr checks`,
+    grade it as blocking. The `e2e` jobs of the three tool workflows (Done when 10) are read the same way as the `check` and `docker` jobs: `gh pr checks`,
     naming the head sha.
 
 ## Done when
@@ -218,7 +226,7 @@ Facts that make this more than a version bump:
 - `test (windows-latest, informational)` on the PR head is read: pass, or a red leg named with its failing test and the latest reading of that leg on `main`.
 - The `docker` job of each of `.github/workflows/downloader.yml`, `planner.yml` and `ledger.yml` concludes success on the PR head, building `tools/downloader/Dockerfile`, `tools/planner/Dockerfile` and `tools/ledger/Dockerfile` respectively.
 - These four `e2e` jobs conclude success on the PR head, the only runs of the full e2e suites on Node 26: `e2e (direct)` and `e2e (sniffer)` of `.github/workflows/downloader.yml`, `e2e` of `.github/workflows/planner.yml`, and `e2e` of `.github/workflows/ledger.yml`.
-- The Log holds the Node version of `mcr.microsoft.com/playwright:v1.62.1-noble` and the Build step 5 decision taken, and the version reads v26.x after it, or the Log names the downloader image's Node as unmeasured. A registry reading of the build arguments is named as that and not as `node --version`.
+- The Log holds the Node version of `mcr.microsoft.com/playwright:v1.62.1-noble` and the Build step 5 decision taken, and either the version reads v26.x after it, or the owner's Build step 5 answer keeps the base's Node 24 and the Log records that reading (registry or `node --version`), or the Log names the downloader image's Node as unmeasured. A registry reading of the build arguments is named as that and not as `node --version`.
 - The Log holds, for `better-sqlite3` and for `ffmpeg-static`, the install result on Node 26 (prebuilt or compiled), the command that showed it, and the open-the-binary check from Build step 2.
 - `node scripts/check-lockfile-sync.mjs` exits 0 under the npm Node 26 bundles, and the Log names that npm version.
 - `npm run check` exits 0 on Node 26, and the Log names the `@types/node` major the tree carries.
@@ -262,7 +270,7 @@ Facts that make this more than a version bump:
   ```
 
   `.devcontainer/Dockerfile:39` carries the dangling "CLAUDE.md on type
-  stripping" reference (Build step 4).
+  stripping" reference (Build step 6).
 
 - 2026-10-25: the engines raise is not on PR #647 yet. Its head `8b96fbd9` still
   reads `"node": ">=22.0.0"` in `package.json`, and its body says the
@@ -352,3 +360,34 @@ Facts that make this more than a version bump:
 - 2026-10-25: Docker Hub tag API, `https://hub.docker.com/v2/repositories/library/node/tags/<tag>`,
   HTTP 200 for `26-bookworm`, `26-slim` and `26-bookworm-slim`: the planner and
   ledger Dockerfiles' base and runtime tags exist for Node 26.
+- 2026-10-25, owner's answers at landing, after gate 2 (CONCERNS at `f1fed037`;
+  both gates' full reports are on the PR #650 thread, which is this ticket's
+  record: the filing PR carries no `## Review` section and no `--land`, and the
+  ticket stays `ready`). Each matched the recommendation.
+  1. **`Done when` 11.** Options: (1) add an explicit exit for Build step 5's
+     option (a), in `Done when` 16's "either ... or" shape (recommended); (2)
+     leave it. **The owner chose (1).**
+  2. **Not-before enforcement.** Options: leave `ready` with the note and
+     dispatch on or after 2026-10-28 (recommended by the round builder and by
+     gate 2); `needs-decision` until then. **The owner chose to leave `ready`.**
+  3. **Gate 2's lows.** Options: fix at landing (recommended); record unfixed.
+     **The owner chose to fix at landing.**
+- 2026-10-25 — Fixed at landing by owner choice: gate 2, F2 remainder — "the
+  version reads v26.x after it, or the Log names the downloader image's Node as
+  unmeasured". `Done when` 11 now has the third exit, the owner's Build step 5
+  answer keeping the base's Node 24 with the reading recorded.
+  `git diff f1fed037 -- docs/work/repo-126-node-26-lts.md | grep -c '^-.*the version reads v26.x after it'` → `1`.
+- 2026-10-25 — Fixed at landing by owner choice: gate 2, F1 remainder — "the
+  lockfile's `node_modules/@types/node` entry (version 26.6.5, `resolved`,
+  `integrity`) moves too, and step 9 has no rule for that hunk". Steps 8 and 9
+  name that entry's hunk as expected.
+  `git diff f1fed037 -- docs/work/repo-126-node-26-lts.md | grep -c '^-.*the lockfile.s root entry together, and the Log names the lines'` → `1`.
+- 2026-10-25 — Fixed at landing by owner choice: gate 2, F9 — "Build steps 11 and
+  13 say Done when 11 for the e2e jobs; that is Done when 10", and the Log's pin
+  entry calls the dangling comment "Build step 4", which is step 6 now. Three
+  references corrected in place: step 11, step 13 and the pin entry.
+  `git diff f1fed037 -- docs/work/repo-126-node-26-lts.md | grep -c '^-.*stripping" reference (Build step 4)'` → `1`.
+- 2026-10-25 — Fixed at landing by owner choice: gate 2, F10 — "Dry-run on
+  repo-123's head by gate 1". The Why credits the dry run to gate 1's own tree
+  and adds the orchestrator's dry run on repo-123's `8b96fbd9`.
+  `git diff f1fed037 -- docs/work/repo-126-node-26-lts.md | grep -c "^-.*Dry-run on repo-123's head by gate 1"` → `1`.
