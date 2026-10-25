@@ -72,7 +72,7 @@ export function Admin(): React.ReactElement {
   );
 
   return (
-    <section aria-labelledby="admin-heading">
+    <section aria-labelledby="admin-heading" className="stack">
       <h2 id="admin-heading">Households</h2>
       <p className="muted hint">{ACCESS_POLICY_NOTE}</p>
 
