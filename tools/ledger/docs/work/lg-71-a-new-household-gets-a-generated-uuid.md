@@ -55,8 +55,8 @@ The same answer renames the form's **Address** label to **Email**: "address" rea
 as a postal address.
 
 A household's name is not editable today: `households_never_updated` refuses any
-update. Renaming is lg-73, filed with this decision; the owner chose that members
-and the admin can both rename. Until lg-73 lands, every household made here is
+update. Renaming is lg-77, filed with this decision; the owner chose that members
+and the admin can both rename. Until lg-77 lands, every household made here is
 "Home".
 
 ## Build
@@ -136,7 +136,7 @@ and the admin can both rename. Until lg-73 lands, every household made here is
   the Name field goes too, the first person creates the household, and the form
   says Email. The host command's `add` was `add <display name>` in the first
   brief; it follows the route to `add <address> <person>` so the operator cannot
-  make an empty household either. Renaming split out as lg-73. The first
+  make an empty household either. Renaming split out as lg-77. The first
   person's email stays required here; lg-74 makes it optional for anyone added
   after, and lg-75 marks an email that has never signed in. lg-76 makes `person`
   optional in this create request later, naming the person from the email; build

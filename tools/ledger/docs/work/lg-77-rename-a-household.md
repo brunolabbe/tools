@@ -1,5 +1,5 @@
 ---
-id: lg-73
+id: lg-77
 tool: ledger
 title: A household's members and the admin can rename it
 kind: work-package
@@ -9,7 +9,7 @@ depends_on: []
 difficulty: standard
 ---
 
-# lg-73 — Rename a household
+# lg-77 — Rename a household
 
 ## Why
 
