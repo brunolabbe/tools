@@ -2,8 +2,7 @@
 # tools share behind it. **It names no tool, and that is the point.**
 #
 #   cp .env.prod.example .env     # then fill in TUNNEL_TOKEN
-#   docker compose -f compose.downloader.yaml -f compose.prod.yaml \
-#                  -f compose.downloader.prod.yaml up -d
+#   docker compose -f compose.prod.yaml -f compose.downloader.prod.yaml up -d
 #
 # or, once `COMPOSE_FILE` is set in `.env`, a bare `docker compose up -d`.
 #
