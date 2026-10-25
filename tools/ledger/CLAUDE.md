@@ -66,8 +66,7 @@ nothing has; and an address must be a member in the household directory. Put
 an invented one there, then start as it — `.env.example` has the rest:
 
 ```bash
-npm run household:ledger -- add home "Test household"
-npm run household:ledger -- member home alex@example.test alex
+npm run household:ledger -- add alex@example.test alex
 DEV_IDENTITY=alex@example.test npm run dev:ledger
 ```
 

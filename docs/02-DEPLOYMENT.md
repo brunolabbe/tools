@@ -1493,13 +1493,16 @@ reaches outside the host unless it is given a key to read receipts
 
   ```bash
   F="-f compose.prod.yaml -f compose.ledger.prod.yaml"
-  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js add <household> <display name>
+  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js add <address> <person>
   docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js member <household> <address> <person>
   docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js remove <address>
   docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js list
   ```
 
-  A household id is one lowercase word; a household holds two people, each
+  `add` makes a household by adding its first person: it is named "Home", its id
+  is a generated UUID that the command prints, and `member` takes that id. A
+  household made before lg-71 keeps its one-word id, and `list` prints every id.
+  A household holds two people, each
   behind any number of addresses, and a name it has held stays one of its two.
   A household's books file is made by the API the first time it needs it. **On
   the first deploy of the directory (lg-20) it is empty**, so everyone sees the
