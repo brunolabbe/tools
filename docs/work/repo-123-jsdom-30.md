@@ -3,7 +3,7 @@ id: repo-123
 tool: repo
 title: Move the web test environment from jsdom 27 to 30
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -30,6 +30,22 @@ changed under it is the failure to look for.
 ## Done when
 
 - One jsdom 30.x in the lockfile and all three tools' suites pass.
+
+## Review
+
+**Gate: PASS** — 2026-10-25 · `64ddcb0c..8b96fbd9` (against `origin/repo-121-vite-8-vitest-5`, the stacked base) · Sonnet 5.5, depth narrow
+
+| Done when                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One jsdom 30.x in the lockfile and all three tools' suites pass (two clauses, both traced) | **Clause 1, verified.** The head lockfile has one `node_modules/jsdom` entry, 30.1.3, and no nested copy; the three `web/package.json` read `^30.1.3`; `node scripts/check-lockfile-sync.mjs` exits 0 at the head, and exits 1 with `^30.1.2` planted in `tools/ledger/web/package.json` (control), 0 again once restored. **Clause 2, proven by CI.** `test (ubuntu-latest)`, step `Run npm test`, succeeded at 8b96fbd9: `Test Files 313 passed \| 1 skipped (314)`, `Tests 6906 passed \| 2 skipped (6908)`, which includes the downloader, planner and ledger projects; `test (windows-latest, informational)` passed too. Re-run in the head's installed tree (jsdom 30.1.3, vitest 5.0.5): the three `web` suites, downloader 22 of 22 files and 311 of 311 tests, planner 7 of 7 and 131 of 131, ledger 19 of 19 and 241 of 241. No test file changed on the branch. |
+
+- **low** · no `Done when` line depends on it · `tools/ledger/web/test/stats-layout.test.ts`: the header comment says jsdom's `getComputedStyle` "does not read these properties back (tried: it answers an empty string)". On jsdom 30.1.3 a stylesheet rule `min-width: 0; grid-template-columns: minmax(0,1fr)` reads back as `minWidth "0px"` and `gridTemplateColumns "minmax(0,1fr)"`. The test reads the stylesheet as text and never calls `getComputedStyle`, so nothing relies on the sentence; it is false in the safe direction (it understates jsdom). Whether the bump made it false or it already was at 27.4 is unmeasured. No live call site.
+- **Lockfile against `dependency-updates.md`** (cutoff 2026-10-18): 11 entries added or changed against the base, 9 removed, 3 workspace `devDependencies` lines; the newest entry is `@asamuzakjp/css-color` 7.1.7, published 2026-10-17, so none is inside the week and no advisory exemption is needed. All 11 `integrity` values match the registry's. Per-entry dates are in the full report.
+- **Engine test** (`tools/downloader/engine/test/parallel-ranges-limits.test.ts` › "bytes held ahead never exceed 4 x 4 MB…"): passed in CI at 8b96fbd9 (`✓ downloader tools/downloader/engine/test/parallel-ranges-limits.test.ts (14 tests)`). jsdom cannot reach it: the `downloader` project is `environment: "node"`, no file under `tools/downloader/engine` mentions jsdom, and the engine imports none of the web workspaces. It is the load-sensitive test repo-99 and dl-106 already record.
+- **Node floor** (owner-decided, graded only for the floor): `>=22.22.2` is the right floor. jsdom 30.1.3's `engines.node` is `^22.22.2 || ^24.15.0 || >=26.0.0`, and the highest 22.x minor anywhere in the lockfile is that same 22.22.2 (jsdom, `@asamuzakjp/css-color`, `@asamuzakjp/dom-selector`, `w3c-xmlserializer`). Nothing in the tree runs below it: CI's `node-version: 22` resolved to 22.23.3 on the ubuntu leg with no `EBADENGINE` line, and the sandbox runs 22.23.3.
+- **CI at 8b96fbd9, read once:** `check` x2, `docker` x3, `e2e` x2, `e2e (sniffer)`, `CodeQL`, `codeql`, `dependency-review`, `test (ubuntu-latest)` and `test (windows-latest, informational)` passed; `e2e (direct)` was still pending at the read. No `Done when` line depends on it.
+- **findings** · the three attacks returned 1 finding; 1 carried, 0 dropped.
+- NFR: security ✓ (no entry younger than the cutoff, integrity matches the registry; `jsdom` is a test-only `devDependency`) · performance n/a · reliability ✓ (the one known flake is unrelated to jsdom, above) · maintainability — the low above.
 
 ## Log
 
