@@ -124,3 +124,16 @@ changed under it is the failure to look for.
   - **Not changed here**: the root `engines.node` (`>=22.0.0`), against jsdom 30's
     Node floor above. The Build does not name it, so it is left for the
     orchestrator to put to the owner.
+- 2026-10-25 — Owner's answers, put by the orchestrator, all 2026-10-25.
+  - **Root engines.** jsdom 30.1.3 needs `^22.22.2 || ^24.15.0 || >=26.0.0` and
+    the root said `>=22.0.0`. The owner first proposed Node 24, the LTS; asked
+    again with scope, they chose (a): file a Node 24 ticket and have repo-123
+    raise the floor to `>=22.22.2`. Done here in the root `package.json` and in
+    `package-lock.json` at `packages[""].engines.node`. The Node 24 move is
+    filed as repo-126, on PR #650.
+  - **The engine timing test** that failed once under load (above): CI grades
+    the line, and `test (ubuntu-latest)` passed at 8b96fbd9. jsdom cannot reach
+    it, since the downloader project uses the `node` environment (gate 1,
+    attack 2). Accepted, nothing changed, nothing filed.
+  - **Gate 1's low**: fix at landing, next entry.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the first low — "does not read these properties back". `git diff 8b96fbd9 HEAD -- tools/ledger/web/test/stats-layout.test.ts | grep -c '^-.*does not read these properties'` → `1`. The header comment now says jsdom reads a declared value back on 30.1.3 and still says nothing about a width; the test is untouched.
