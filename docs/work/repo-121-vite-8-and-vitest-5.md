@@ -44,3 +44,72 @@ vite 8's `Plugin`). That update added `overrides.vitest.vite: ^7.3.7` to the roo
 ## Log
 
 - 2026-10-24: filed from the dependency audit.
+- 2026-10-25: built on `origin/main` 558ce370, branch `repo-121-vite-8-vitest-5`.
+  - **Versions, against the seven-day rule** (today 2026-10-25, cutoff 2026-10-18):
+    vite **8.3.4** (2026-10-08), not 8.3.5 (published 2026-10-21, inside the week —
+    the brief named it as latest); `@vitejs/plugin-react` **6.1.2** (2026-10-05);
+    vitest **5.0.5** (2026-10-15). The ranges are `^8.3.4`, `^6.1.2`, `^5.0.5`, so
+    nothing younger than 8.3.5's week can be pulled in by a plain `npm install`.
+    The lockfile came from `npx -y npm@11.21.1 install --package-lock-only
+    --ignore-scripts --before=2026-10-18`, then `npm update vite` and `npm dedupe`
+    the same way (the first pass kept a root vite 7.3.7 for vitest, which accepts
+    6, 7 or 8), then a plain `npm install --package-lock-only` on npm 10.9.9.
+    41 lockfile entries changed version or were added, 86 removed (rollup and its 27
+    platform binaries, plugin-react 5's babel tree, vitest 4's `@vitest/*`); the
+    newest added entry is vitest 5.0.5 at 2026-10-15, so none is inside the week and
+    none needs the advisory exemption. rolldown 1.2.14 and its bindings
+    (2026-10-14) and `lightningcss` 1.33.0 are new in the tree, as vite 8 brings them.
+    `node scripts/check-lockfile-sync.mjs` exit 0. One vite, 8.3.4, at
+    `node_modules/vite`; plugin-react hoisted once; no nested vite.
+  - **The override is gone**: `overrides.vitest` and its sentence in
+    `"// overrides"` removed from `package.json`.
+  - **Breaking changes that reach this tree: none needed a config edit.** Read from
+    vite's migration guide (rolldown for rollup, Oxc for esbuild, Lightning CSS for
+    CSS minification, `build.rollupOptions` renamed `rolldownOptions`, `esbuild`
+    optional) and vitest 5.0.0's release notes (43 breaking changes; the ones that
+    could reach here are mocks cleared before each test, an un-awaited async
+    assertion failing, inline projects extending the root config, hoisted-method
+    errors). The three `vite.config.ts` set only `root`, `plugins: [react()]`,
+    `server` and `build.{outDir,emptyOutDir,sourcemap}`; none of the renamed or
+    removed keys appears. `vitest.config.ts` is unchanged except for two comment
+    words. vitest 5 still resolves a project's worker count from the project's own
+    `maxWorkers`, then the root's (`resolveMaxWorkers` is in
+    `node_modules/vitest/dist/chunks/index.1TqnEahn.js`, not in a `cli-api` chunk
+    any more), so `scripts/test-gate.mjs`'s `VITEST_MAX_WORKERS` still works: the
+    gate printed `11 workers` and vitest ran them.
+  - **Measured**, in a worktree with a real `npm ci --ignore-scripts` (the farm's
+    links would have written through to the shared checkout), better-sqlite3's
+    `build/Release` and ffmpeg-static's binary copied from the shared checkout:
+    - `npm run build`: exit 0, every `vite build` printed `vite v8.3.4`, no
+      warning or deprecation line (`grep -i "warn|deprecat|error"` printed nothing).
+    - `npm run check`: exit 0.
+    - `npm test`: exit 0, `313 passed | 1 skipped (314)` files, `6906 passed | 2
+      skipped (6908)` tests, 111 s, `RUN v5.0.5`.
+    - `npm run e2e:planner`: 10 passed of 10. `npm run e2e:ledger`: 12 passed of 12.
+    - `npm run e2e:downloader`: **14 passed, 1 failed of 15** — `download.spec.ts:33
+      paste a URL, pick a quality, and download the file`, at
+      `await expect(job).toBeInViewport()` (line 82), `viewport ratio 0`. It fails
+      the same way on three reruns here **and on the base**: a second tree at
+      558ce370 (vite 7.3.7, vitest 4.1.12, built there) failed the same spec the
+      same way on two runs (`Received: viewport ratio 0`). So it is not this
+      change's; it is unexplained, and the `Done when` line's "the three e2e suites
+      pass" is met for two and not for the downloader's one spec. Not filed: I have
+      no reproduction beyond this environment (WSL devcontainer, Chromium
+      headless shell 1248), and CI's reading of that spec on `main` is the
+      orchestrator's to take.
+    - The three dev servers (`npm run dev -w @<tool>/web`, ports 5173, 5183, 5193)
+      each answered `200` on `/` and `200 text/javascript` on `/src/main.tsx`.
+    - `npm audit`: one high, `node-forge`, no fix available — dl-132's, as at base.
+  - **Folded in**: `.claude/rules/testing.md` named
+    `@rollup/rollup-win32-x64-msvc` as the native module a faked `win32` crashes
+    on; rollup is not in the tree now, so it names `@rolldown/binding-win32-x64-msvc`
+    (the entry exists in the lockfile; not run on Windows). `vitest 4`'s
+    `--execArgv` sentence next to it and `reference/defect-shapes.md`'s `basic`
+    reporter line are left: I did not re-measure either on vitest 5
+    (`basic` is still absent from vitest 5's reporters, by grep).
+  - **For repo-123 (jsdom 30)**: vitest 5.0.5 declares `jsdom: '*'` as a peer, so
+    it does not constrain the major. jsdom 30.1.x declares `engines.node`
+    `^22.22.2 || ^24.15.0 || >=26.0.0`; this sandbox runs 22.23.3, and CI and the
+    two Dockerfiles ask for `22` / `22-bookworm`, which float to the latest 22.x.
+    vitest 5 itself needs `^22.12.0 || ^24.0.0 || >=26.0.0`. The repo's own
+    `engines.node` is `>=22.0.0`. Nothing was run against jsdom 30 here.

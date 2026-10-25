@@ -63,18 +63,15 @@
     "oxlint": "^1.77.0",
     "tsx": "^4.23.8",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.5"
   },
   "overrides": {
     "exceljs": {
       "uuid": "^11.1.1"
-    },
-    "vitest": {
-      "vite": "^7.3.7"
     }
   },
   "engines": {
     "node": ">=22.0.0"
   },
-  "// overrides": "exceljs (the ledger's workbook import, lg-7) pins uuid ^8, which carries a moderate advisory (GHSA-w5hq-g745-h8pq, fixed in 11.1.1) that the dependency-review job refuses at moderate. exceljs calls only uuid's v4, which 11 keeps, and 11 still ships the CommonJS build exceljs requires. Scoped to exceljs, so nothing else's uuid moves. Drop it when an exceljs release takes a fixed uuid itself. vitest accepts vite 6, 7 or 8, so an update hoists vite 8 for it while every web workspace declares ^7, and @vitejs/plugin-react in the vite configs then typechecks against vite 8's Plugin type (TS2769). Holding vitest's vite to the workspaces' 7 keeps one vite in the tree; drop it with the vite 8 upgrade."
+  "// overrides": "exceljs (the ledger's workbook import, lg-7) pins uuid ^8, which carries a moderate advisory (GHSA-w5hq-g745-h8pq, fixed in 11.1.1) that the dependency-review job refuses at moderate. exceljs calls only uuid's v4, which 11 keeps, and 11 still ships the CommonJS build exceljs requires. Scoped to exceljs, so nothing else's uuid moves. Drop it when an exceljs release takes a fixed uuid itself."
 }
