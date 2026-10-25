@@ -152,3 +152,27 @@ green, one extra 61 s setup per run, no loss of coverage); (c) both; (d) neither
   Fold-in: none came free. The root `CLAUDE.md` line "CI runs lint, typecheck
   and every unit suite on every push" is still literally true, since `push` is
   `main` only. It is not edited here, and the report proposes a rewording.
+
+- 2026-10-25: Done when 1's probe. PR #659 was a draft on
+  `repo-127-probe-scratch`, based on this branch at `f7f32a8c`, and added only
+  `tools/planner/repo-127-probe.txt`. `ci.yml`'s `pull_request` trigger has
+  no branch filter, so the probe ran against a non-`main` base. Its `changes`
+  job (run `40223951225`, job `121261277357`) printed
+  `Changed files, f7f32a8c…...ca5f0096…:` / `  tools/planner/repo-127-probe.txt`
+  / `Projects: planner repo core`. The ubuntu test step ran
+  `npm test -- --project planner --project repo --project core --exclude scripts/test/status.test.ts`
+  and the job passed in 1m28s. The PR was then closed and the branch deleted, and
+  `git ls-remote --heads origin repo-127-probe-scratch | wc -l` → `0`.
+
+  The probe found a defect in the first build. The Windows leg ran the test
+  step under `shell: bash` and failed
+  `next-id.test.ts > a command that is not on PATH exits 127 and says which one`
+  (`expected 'git ls-tree HEAD docs/work/ --name-on…' to match /^gh:/mu`).
+  On `main` the same leg passed at `7f8d7f48` (run `40222603997`) under
+  PowerShell. Git Bash puts mingw64's `git.exe` first on PATH, and the
+  test's `pathWithout` symlinks whichever `git` it finds, so this was the
+  fixture measuring the shell. The test step is now two steps: bash on Linux,
+  and PowerShell on Windows calling `npm.cmd` so the `--` reaches npm. Each
+  leg keeps the shell `npm test` always ran under. Pull request #658's own
+  Windows leg is the reading for the PowerShell step. pwsh is not installed
+  here.

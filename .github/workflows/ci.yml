@@ -411,8 +411,15 @@ jobs:
       # this one included, and twice was ~7 s of ubuntu time for one answer. It
       # stays in the `repo` project, so a local `npm test` still runs it.
       #
-      # `bash` on both legs, for the array: the Windows default is PowerShell.
-      - name: Test the projects this change reaches
+      # Two steps, one per leg, so each keeps the shell `npm test` always ran
+      # under: bash on Linux and PowerShell on Windows. The first build ran
+      # both under `shell: bash`, and Git Bash's PATH puts mingw64's `git.exe`
+      # first. `next-id.test.ts`'s "not on PATH" case symlinks whichever `git`
+      # it finds, that one did not run from the symlink, and the leg failed on
+      # the fixture rather than the code (repo-127's probe, run 40223951225).
+      # The PowerShell step calls `npm.cmd`, so `--` reaches npm as an argument.
+      - if: runner.os != 'Windows'
+        name: Test the projects this change reaches
         shell: bash
         env:
           PROJECTS: ${{ needs.changes.outputs.projects }}
@@ -427,6 +434,21 @@ jobs:
           for project in "${projects[@]}"; do args+=(--project "${project}"); done
           echo "npm test -- ${args[*]} --exclude scripts/test/status.test.ts"
           npm test -- "${args[@]}" --exclude scripts/test/status.test.ts
+      - if: runner.os == 'Windows'
+        name: Test the projects this change reaches
+        shell: pwsh
+        env:
+          PROJECTS: ${{ needs.changes.outputs.projects }}
+        run: |
+          $projects = @("$env:PROJECTS".Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries))
+          if ($projects.Count -eq 0) {
+            Write-Output "::error::changes reported a code change and no project to test"
+            exit 1
+          }
+          $projectArgs = @($projects | ForEach-Object { '--project'; $_ })
+          Write-Output "npm test -- $($projectArgs -join ' ') --exclude scripts/test/status.test.ts"
+          npm.cmd test -- @projectArgs --exclude scripts/test/status.test.ts
+          exit $LASTEXITCODE
       # The other half of "informational, not invisible". `continue-on-error`
       # takes the run's conclusion green, so without this a Windows failure is
       # one collapsed job in a list of green ones. The run summary is the page

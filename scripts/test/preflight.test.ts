@@ -2723,11 +2723,13 @@ test("ci.yml runs status.test.ts once, in check, and the matrix runs changes' li
   expect(extractCheckJobCommands(REAL_CI_YAML)).toContain(
     "npx vitest run scripts/test/status.test.ts",
   );
+  // One per leg: bash on Linux, PowerShell on Windows.
   const npmTests = REAL_CI_YAML.split("\n").filter((line) =>
-    /^\s+(?:- run: )?npm test\b/u.test(line),
+    /^\s+(?:- run: )?npm(?:\.cmd)? test\b/u.test(line),
   );
   expect(npmTests.map((line) => line.trim())).toEqual([
     'npm test -- "${args[@]}" --exclude scripts/test/status.test.ts',
+    "npm.cmd test -- @projectArgs --exclude scripts/test/status.test.ts",
   ]);
   expect(REAL_CI_YAML).toContain("PROJECTS: ${{ needs.changes.outputs.projects }}");
   expect(REAL_CI_YAML).toContain("projects: ${{ steps.diff.outputs.projects }}");
