@@ -138,3 +138,15 @@ cannot fall back.
     lint is the scratch binary: unmeasured is `npm run check` with 1.88.0
     installed, which CI does on the merged tree.
 - 2026-10-25 — Fixed at landing by owner choice: gate 1, the second low — "the ticket's Log says 1.88.0 printed "18 warnings" on `7f8d7f48`". The 2026-10-25 build entry above now says 19 on `7f8d7f48` (18 on the merge, as its next sentence already had it); `git diff eaa71a6d HEAD -- docs/work/repo-119-oxlint-1-88-adds-140-errors.md | grep -c '^-.*plus 18 warnings'` → `1`.
+- 2026-10-25 — Owner answers recorded by a maintenance dispatch. The
+  orchestrator put both questions through `AskUserQuestion` on 2026-10-25; they
+  were not in this Log before this entry. No code, lockfile or test changed.
+  - Is a reasoned `oxlint-disable-next-line` acceptable in place of a code fix,
+    for the 13 findings left that way (see the build entry above)? Options:
+    "accept, and the gate checks each" (the recommended option, **chosen**);
+    "fix the five dependency lists"; "fix all 27". Gate 1 then checked all 13
+    and each reason held (see `## Review`).
+  - `Chart`'s `refs` finding: keep the state fed by `onScroll`, which changes
+    behaviour (the tip follows a wheel or swipe while the pointer is still)?
+    Options: "keep the state fix" (the builder's recommendation, **chosen**);
+    "revert to a disable".
