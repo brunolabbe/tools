@@ -177,3 +177,34 @@ Three facts make this more than a version bump:
   types already sit on a different major from the runtime.
 - `difficulty: standard`, the value the dispatch named, because the format
   requires the field until `done`. The owner can re-rate it.
+- 2026-10-25, owner's answers after gate 1 (CONCERNS at `f55141f6`). Each is
+  recorded before the work it changes; the lines it supersedes are left above,
+  unedited.
+  1. **Runtime target.** The premise changed since filing. The release schedule,
+     `curl -s https://raw.githubusercontent.com/nodejs/Release/main/schedule.json`,
+     read on 2026-10-25:
+
+     ```
+     v22 {"start":"2024-04-24","lts":"2024-10-29","maintenance":"2025-10-21","end":"2027-04-30","codename":"Jod"}
+     v24 {"start":"2025-05-06","lts":"2025-10-28","maintenance":"2026-10-20","end":"2028-04-30","codename":"Krypton"}
+     v25 {"start":"2025-10-15","maintenance":"2026-04-01","end":"2026-06-01"}
+     v26 {"start":"2026-05-05","lts":"2026-10-28","maintenance":"2027-10-20","end":"2029-04-30","codename":""}
+     ```
+
+     Node 24 entered maintenance on 2026-10-20; Node 26 enters LTS on
+     2026-10-28. Options: (a) Node 26 from 2026-10-28, recommended; (b) Node 24
+     now; (c) the builder chooses at Build step 1's stop. **The owner chose (a)**,
+     which matched the recommendation and overrode the owner's own earlier
+     proposal of 24 "since it's the LTS", made before the schedule was read. The
+     ticket is retargeted to Node 26 and is not startable before 2026-10-28.
+     The Log lines above that say 24 are the filing's, superseded by this one.
+  2. **`Done when` 8** (gate 1's F2: the proof needs a Docker daemon that the
+     sandbox does not have and no CI job prints `node --version`). Options: (a)
+     reword the line like the devcontainer line, "or the Log names it
+     unmeasured"; (b) add a step to the downloader workflow's `docker` job that
+     prints `node --version` (recommended); (c) read the image's build history
+     from the registry. **The owner chose (a)**, which overrode the
+     recommendation.
+  3. **Round scope.** Options: gate 1's F1 plus the lows the dispatch stated
+     (recommended); F1 plus every low (F3 to F8); F1 only. **The owner chose F1
+     plus every low**, which overrode the recommendation.
