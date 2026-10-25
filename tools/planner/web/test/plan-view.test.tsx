@@ -2080,3 +2080,49 @@ describe("the reset behind 'leave the budget as it was' (gate 3)", () => {
     expect(document.activeElement).toBe(budgetGroup);
   });
 });
+
+describe("a different plan on a mounted view (repo-119)", () => {
+  /**
+   * `App` hands the same mounted view a new `planId` when the reader opens
+   * another plan. The view must say it is reading, not keep painting the old
+   * plan's document under the new id — and must ask for the new plan.
+   */
+  test("goes back to loading, asks for the new plan, then shows it", async () => {
+    const first = candidate({ title: "The first plan's walk" });
+    const second = candidate({ title: "The second plan's walk" });
+    fetched.mockResolvedValueOnce(
+      planView({
+        candidates: [first],
+        revisions: [revision([day(0, [item({ candidateId: first.id })])])],
+      }),
+    );
+    let arrive: ((view: ReturnType<typeof planView>) => void) | undefined;
+    fetched.mockReturnValueOnce(
+      new Promise((resolve) => {
+        arrive = resolve;
+      }),
+    );
+
+    const props = {
+      onExit: () => undefined,
+      onReplan: () => undefined,
+      onWatchRun: () => undefined,
+    };
+    const { rerender } = render(<PlanView planId="plan-1" {...props} />);
+    await screen.findByText("The first plan's walk");
+
+    rerender(<PlanView planId="plan-2" {...props} />);
+
+    expect(screen.getByText("Reading the plan…")).toBeTruthy();
+    expect(screen.queryByText("The first plan's walk")).toBeNull();
+    expect(fetched).toHaveBeenLastCalledWith("plan-2", expect.any(AbortSignal));
+
+    arrive?.(
+      planView({
+        candidates: [second],
+        revisions: [revision([day(0, [item({ candidateId: second.id })])])],
+      }),
+    );
+    await screen.findByText("The second plan's walk");
+  });
+});

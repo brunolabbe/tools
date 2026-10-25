@@ -275,12 +275,21 @@ export function PlanView({
     [planId],
   );
 
+  // A different plan on a mounted view starts from "loading", not from the old
+  // plan's document. Derived state, set during render, so the old plan is never
+  // painted under the new id — an effect would paint it first.
+  const [shownPlanId, setShownPlanId] = useState(planId);
+  if (shownPlanId !== planId) {
+    setShownPlanId(planId);
+    setState({ kind: "loading" });
+  }
+
+  // `load` is rebuilt when `planId` changes, so it is the only dependency.
   useEffect(() => {
     const controller = new AbortController();
-    setState({ kind: "loading" });
     load(controller.signal);
     return () => controller.abort();
-  }, [planId, load]);
+  }, [load]);
 
   const pin = useCallback(
     (item: PlanItem): void => {
