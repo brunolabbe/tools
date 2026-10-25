@@ -64,12 +64,33 @@ afterthought.
   - **Source:** no `src` change. `npm run check` exit 0 and
     `npm test -- --project downloader --project planner --project ledger` exit 0
     (291 files passed, 1 skipped of 292; 6220 tests passed, 2 skipped of 6222), on
-    Linux, Node 22.23.3, against the 13.0.3 binary.
-  - **Not verified here, left to the draft's checks:** the Windows CI leg (repo-93's
-    sqlite file tests), and the three container builds (`downloader.yml`, `planner.yml`,
-    `ledger.yml`), which are the only readings of the `win32-x64` prebuilt and of the
-    Linux prebuilt against each image's glibc. No Dockerfile line changed: each `npm ci`
-    stage still carries the python3/make/g++ toolchain as the compile fallback, and the
-    comments there ("its fallback when no prebuilt binary fits is a compile") stay true.
-  - **Fold-in:** none. The `.devcontainer/Dockerfile` comment about the node-gyp fallback
-    and the Dockerfile comments still describe the fallback correctly.
+    Linux, Node 22.23.3, against the shipped prebuilt (installed with `--ignore-scripts`, no compile).
+  - **The draft's checks (PR #636, head 0cf0f4d3) refuted the premise that 13 installs
+    from a prebuilt binary.** `npm ci` compiles `better-sqlite3` 13.0.3 from source on
+    every install, because the package ships no `install` script and carries a
+    `binding.gyp`: npm then runs its default `node-gyp rebuild` unless the package's
+    `package.json` says `"gypfile": false`, which 13.0.2 added. A fresh `npm install`
+    reads that field from the registry manifest and skips the compile; a lockfile-driven
+    `npm ci` builds its nodes from the lockfile, which has nowhere to record `gypfile`,
+    and compiles. Reproduced outside the repo, in a directory holding only
+    `{"dependencies":{"better-sqlite3":"13.0.3"}}`: `npm install --foreground-scripts`
+    prints no gyp output; after `rm -rf node_modules`, `npm ci --foreground-scripts`
+    prints `better-sqlite3@13.0.3 install` / `node-gyp rebuild` on npm 10.9.9 and on
+    npm 11.21.1 alike. `npm ci --ignore-scripts` does not compile and the package then
+    carries its `prebuilds/` (`linux-x64.node` among them), but that flag also skips every
+    other package's install script.
+  - **What that did to the checks** (`gh pr checks 636`): `docker` for the downloader
+    failed at `RUN npm ci` with `gyp ERR! stack Error: not found: make` (its base is
+    Playwright's `noble` image, which has no compiler; the planner and ledger images are
+    the full `node:` image and passed, compiling); `test (windows-latest, informational)`
+    failed in `Run npm ci` with `gyp ERR! stack Error: Could not find any Visual Studio
+    installation to use`, so no Windows test ran; `test (ubuntu-latest)`, `check`,
+    `e2e`, `dependency-review` and CodeQL passed. So the Linux suites ran against a
+    binary compiled on the runner, and the prebuilds that 13 ships were never loaded by
+    any CI leg.
+  - **Not fixed on this branch**; the way out is a choice, put to the orchestrator in the
+    report (hand-adding `"gypfile": false` to the lockfile entry does stop the compile
+    in the experiment above, but npm drops the field on the next `npm install
+    --package-lock-only`, which is the command that script regenerates with; unrun against the edited lockfile).
+  - **Fold-in:** none made; the `.devcontainer/Dockerfile` and `Dockerfile` comments
+    about the compile fallback are unchanged and are now the path every install takes.
