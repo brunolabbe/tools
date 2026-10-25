@@ -213,7 +213,7 @@ New findings in the round:
     `linked workspace @webtools/ui -> ../../packages/ui`, `npm run build` exited **0**
     with the link; with `node_modules/@webtools/ui` removed,
     `npm run build -w @planner/web` exited **1** (`Rollup failed to resolve import
-"@webtools/ui/tokens.css"`); re-running the farm restored the link and the same build
+    "@webtools/ui/tokens.css"`); re-running the farm restored the link and the same build
     exited **0**. The gate's `t2-build.sh` measures the same thing; I wrote my own only
     to add the restore step and print the ancestor check. The earlier Fixture-proof
     bullet above stands as the farm's output, not as proof of the build.
@@ -236,7 +236,7 @@ New findings in the round:
   `npm install --ignore-scripts` from `common.md` applies; otherwise, stop and report it to
   the orchestrator and do not install in a worktree", exit 1 (the warning still fires; only
   its text changed). `git diff df339907 HEAD -- .claude/scripts/check-farm-freshness.mjs |
-grep -c '^-.*Stop and report it to the orchestrator; do not install'` → `1`. The farm
+  grep -c '^-.*Stop and report it to the orchestrator; do not install'` → `1`. The farm
   test now asserts the three fragments and still asserts no `npm install` in the shared
   checkout or in the worktree.
 - 2026-10-25 — Fixed after `--land`, on the owner's decision about a CI reading (not a gate
