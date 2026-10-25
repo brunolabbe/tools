@@ -3,7 +3,7 @@ id: repo-124
 tool: repo
 title: a branch stacked on an open pull request's head, with no pull request of its own, still reads as a clash
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [repo-118]
 difficulty: standard
@@ -83,6 +83,27 @@ first; the owner chose this ticket instead.
 3. Two unrelated sources that file one id still clash, and two unrelated sources whose
    branch names share an id still clash, each asserted by a test.
 4. `concurrency.md`'s stacked-branch paragraph no longer says the gap is open.
+
+## Review
+
+**Gate: FAIL** — 2026-10-25 · `b9c6c8be..3b3a26ac` (merge base `b9c6c8be`; the branch merged `main`) · Opus 5.5, depth standard
+
+| Done when                                                                                          | Proof                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A branch with no PR, cut from an open PR's head, reports no `clash` for the parent's ticket     | `scripts/test/next-id.test.ts` › "a branch with no pull request, cut from a pull request's head, reports no clash for it" ✓ (it asserts `clashes` is `[]`, the `(stacked on PR#623)` row and `nextFree` 68)                                                     |
+| 2. That test goes red when the widened check is removed, shown in the Log                          | proven. The Log shows the removal. Reproduced: candidates cut back to `PR#` only gave `Tests 4 failed \| 40 passed (44)`, the Done when 1 case among the four                                                                                                   |
+| 3. Two unrelated sources filing one id still clash; two whose branch names share an id still clash | proven for sources that carry commits: "two unrelated branches with no pull request that file one id still clash", "… whose names share an id still clash", plus repo-118's PR versions ✓. **F1 is a shape of unrelated sources where the second clause fails** |
+| 4. `concurrency.md`'s stacked-branch paragraph no longer says the gap is open                      | verified by reading the diff. The "still reads as a clash … follow-up is repo-124" sentence is replaced by the new rule                                                                                                                                         |
+
+- **high** · F1 · Done when 3 depends on it · **A branch with only a name claim, sitting on a commit that `rev` already holds, becomes the stack parent of every later source whose name shares its id, and the clash disappears.** The name floor exists for exactly this branch: one pushed before its ticket file was committed (`branchSources`' docstring). Its sha is an ancestor of every branch cut from `trunk` since, `mayClash` passes on the shared name id, and `unheldName` takes the id off the child. Fixtures (real git): `repo-130-reserve` is pushed empty at the trunk tip and `repo-130-other` is cut from trunk on its own. The base prints `clash: repo-130 is claimed by branch/repo-130-other, branch/repo-130-reserve, …`. At the head, `branch/repo-130-other` drops off the board and that clash is gone. The same happens with `repo-140-early` pushed empty and trunk then moving on, against `PR#710` on `repo-140-late`: the base prints `clash: repo-140 is claimed by PR#710, branch/repo-140-early`, and at the head `PR#710` has no row and there is no clash line. The text is false in the dangerous direction. `concurrency.md` ("Two unrelated sources that file one id, or whose branch names share one, still clash") and the source's own "the expensive error is the one to keep" both promise the opposite. `next free` is unaffected, since the reserve still claims the id; what is lost is the collision line. This is new with the widening: a PR cannot be opened with no commits (premise, not measured), so repo-118's PR-only pass could not reach it. Direction, not tested: do not treat a source as a stack parent when its sha is reachable from `rev`, because it carries no commits of its own.
+- **low** · F2 · `nfr:maintainability` · Pruning can drop or misname a stack label, which contradicts "nothing is lost by not probing it" (`stackSources` docstring) and "cut from another branch it names that branch" (`concurrency.md`). The text is false in the safe direction: a label only, and no clash changes. Two cases. (a) In a chain `chain-a`→`chain-b`→`chain-c`, `chain-b` deletes `chain-a`'s ticket and `chain-c` re-adds it. The head prints `branch/chain-c (stacked on branch/chain-a)`, the root, because `chain-b` was pruned; the nearest parent is `chain-b`. (b) A parent whose diff against trunk adds nothing (it only modifies `code.txt`, as a branch or as `PR#700`) gives its child no `(stacked on …)` label. One mechanism, one bullet.
+- **low** · F3 · no `Done when` line · Nothing tests repo-118's "two pull requests are always probed and labelled" once pruning exists. Deleting the `PR#`/`PR#` early return in `mayClash` left `Tests 44 passed (44)`. The Log's reason for that exemption ("pruning them would have dropped a label repo-118 set") rests on no test.
+- **low** · F4 · no `Done when` line; no live call site · Nothing tests "an unread source is never stacked". Dropping `!source.unread` from `readable` left 44 of 44 passing. So did dropping it and also giving an unfetched branch its `ls-remote` sha. Today the guarantee holds only because no unread source carries a sha.
+- **low** · F5 · `nfr:performance` · The PR exemption leaves the one quadratic term this board actually has unpruned. On this clone's remote (7 open PRs, 9 heads) the base and the head both spawn 64 commands, 42 of them `merge-base`, which is 7×6 PR pairs. The two non-PR branches get 0 probes. This is no regression, but Build 3's pruning does not reach the pairs that cost anything today.
+- **dropped** · repo-118's done ticket still names `stackPulls`. It is a historical record, `git grep` finds no other reference outside `docs/work`, and the builder's reason for leaving it holds.
+- **findings** · the hunt returned 6; 5 carried, 1 dropped.
+- NFR: security n/a · performance (above) · reliability (F1) · maintainability (above). Invariants: no shell ✓ (argv arrays through `run`); the rest are n/a to a `scripts/` change.
+- CI on `3b3a26ac`: every check passes, the Windows leg included.
 
 ## Log
 
