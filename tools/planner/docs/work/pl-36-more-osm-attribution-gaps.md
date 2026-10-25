@@ -488,7 +488,7 @@ passed proves the fixture and not the code:
 
 - `citations([cell.source, ...ends])` → `[cell.source]`: 2 of the 3 new travel
   tests failed, `expected [ 'OpenStreetMap, routed by Valhalla' ] to deeply
-equal [ …(2) ]`. The third is the negative — an end nothing looked up cites no
+  equal [ …(2) ]`. The third is the negative — an end nothing looked up cites no
   geocoder — and stayed green, which is what makes the pair worth having.
 - `travelSourcesOf`'s key → `source.url`: the new plan-view test failed.
 - `ProvenanceNote`'s React key → `source.url`: the same test failed **only**
@@ -497,10 +497,10 @@ equal [ …(2) ]`. The third is the negative — an end nothing looked up cites 
   been unpinned — the warning is visible in `--reporter=verbose` and nothing in
   this suite turns it into a failure.
 - Dropping `provenance: MODEL_ASSERTED` from `accept()`: failed with `expected
-undefined to deeply equal { kind: 'model-asserted' }` — undefined, because the
+  undefined to deeply equal { kind: 'model-asserted' }` — undefined, because the
   schema now strips what the model sent. Dropping the `cost` line instead:
   failed with `expected { kind: 'grounded', …(1) } to deeply equal { kind:
-'model-asserted' }`, which is the model's invented citation arriving intact.
+  'model-asserted' }`, which is the model's invented citation arriving intact.
 - Unwiring `<RouteReading reading={revision.reading} />` from `Document`: the
   `reading` render's positive test failed. Its negative half — a revision that
   read nothing shows no such section — stayed green, which is exactly why the

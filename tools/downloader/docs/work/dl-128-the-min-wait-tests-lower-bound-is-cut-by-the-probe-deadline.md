@@ -127,7 +127,7 @@ removed the upper bounds; the lower one stayed on the claim quoted above.
     and cannot shorten the wait; a forward step would, and none was observed. Mutation, a `Date.now` spy
     adding 500 ms at 2000 ms after the call (the wait runs 1.6 s to 2.8 s):
     `AssertionError: the wait lasted 802 ms by performance.now and 1301 ms by
-Date.now: expected 801.9789369999999 to be greater than or equal to 1200`.
+    Date.now: expected 801.9789369999999 to be greater than or equal to 1200`.
     That is dl-126's shape (a short stopwatch, the wait itself satisfied). It
     does not prove dl-126 was a step: a 200 ms step gives 1001.7 too, and the
     run is gone. Unmeasured: whether the landing's machine stepped its clock.
@@ -138,21 +138,21 @@ Date.now: expected 801.9789369999999 to be greater than or equal to 1200`.
     "budget the deadline cannot reach" was already true and is not edited;
     Build 3 held: no upper bound.
   - **Done when 1.** `ten.sh` (scratch): `npx vitest run
-tools/downloader/resolvers/test/browser/browser-resolver-departure-and-floor.test.ts
--t "defaults to 1200"`, 10 sequential runs, each `Tests  3 passed | 14
-skipped (17)`, 10 of 10 exit 0. Load average (1 min) before each run: 2.92,
+    tools/downloader/resolvers/test/browser/browser-resolver-departure-and-floor.test.ts
+    -t "defaults to 1200"`, 10 sequential runs, each `Tests  3 passed | 14
+    skipped (17)`, 10 of 10 exit 0. Load average (1 min) before each run: 2.92,
     4.37, 6.84, 6.86, 6.39, 6.20, 5.47, 5.19, 4.47, 4.11 (other builders'
     suites were running).
   - **Done when 2.** Mutation: `timeoutMs: 5000` added to the `options({...})`
     call in `quietWait` in the spec file (not the one in
     `helpers/browser-harness.ts`; deadline 1000 ms after the call, before the
     wait starts). Command: `npx vitest run
-tools/downloader/resolvers/test/browser/browser-resolver-departure-and-floor.test.ts
--t "defaults to 1200"` → exit 1, `Tests  1 failed | 2 passed | 14 skipped
-(17)`. The spec file was the only file mutated, restored with `git checkout
-64bcecb1 -- <that spec file>`. `× a resolver given no minWaitMs hands the
-wait MIN_WAIT_MS, and holds it that long`, `AssertionError: the wait ended
-at its deadline, not at quiet: expected false to be true`, at the new
+    tools/downloader/resolvers/test/browser/browser-resolver-departure-and-floor.test.ts
+    -t "defaults to 1200"` → exit 1, `Tests  1 failed | 2 passed | 14 skipped
+    (17)`. The spec file was the only file mutated, restored with `git checkout
+    64bcecb1 -- <that spec file>`. `× a resolver given no minWaitMs hands the
+    wait MIN_WAIT_MS, and holds it that long`, `AssertionError: the wait ended
+    at its deadline, not at quiet: expected false to be true`, at the new
     assertion, before the duration one.
   - **Done when 3.** The correction is in dl-115's Log, dated today. It sits at
     the end of the Log, not inside the `## Review`, which is the gate's record
@@ -175,7 +175,7 @@ at its deadline, not at quiet: expected false to be true`, at the new
   here" and dl-115's "measured which of the two it can be here" now say the
   steps measured here run backwards and cannot shorten the wait, and that a
   forward step would and none was observed. `awk '/^- 2026-10-18 — Fixed at
-landing/{exit} {print}' <this ticket> | grep -c "was seen here"` → 0;
+  landing/{exit} {print}' <this ticket> | grep -c "was seen here"` → 0;
   `grep -c "none was observed" <dl-115 ticket>` → 1.
 
 - 2026-10-18 — Fixed at landing by owner choice: gate 1, F2 — "the test's
@@ -187,7 +187,7 @@ landing/{exit} {print}' <this ticket> | grep -c "was seen here"` → 0;
 - 2026-10-18 — Fixed at landing by owner choice: gate 1, F3 — "page load and
   provocation 'take under 2 s on `/mse.html`'". The comment says about 2 s,
   1.6 to 2.0 s measured at a load average up to 11.5. `grep -c "take under 2 s"
-<the spec file>` → 0.
+  <the spec file>` → 0.
 
 - 2026-10-18 — Fixed at landing by owner choice: gate 1, F4 — "the Log's Done
   when 2 bullet gives the mutation and the message but not the command". The
@@ -195,4 +195,4 @@ landing/{exit} {print}' <this ticket> | grep -c "was seen here"` → 0;
   result, names the `options({...})` call in `quietWait` in the spec file rather
   than "the helper's `options()`", and says the spec file was the only file
   restored. `awk '/^- 2026-10-18 — Fixed at landing/{exit} {print}' <this
-ticket> | grep -c "the helper's"` → 0.
+  ticket> | grep -c "the helper's"` → 0.

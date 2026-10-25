@@ -161,9 +161,9 @@ Re-issued with gate 4 at `4fce8d3`: words, rows and verdicts unchanged. One cita
   name off that list must be written with its directory — an open rule would
   read `Note:5` as a file, and an unresolvable one is fatal.
   - The brief's repro now counts three: `node scripts/citations.mjs
-probe.md --section Review --require-anchors` printed `1 verified, 2 moved, 0
-unanchored, 0 unresolvable, 0 unchecked, 0 evidence — of 3 references, 3
-pinned`, exit 2, where it had printed `0 verified, 1 moved … of 1 reference`.
+    probe.md --section Review --require-anchors` printed `1 verified, 2 moved, 0
+    unanchored, 0 unresolvable, 0 unchecked, 0 evidence — of 3 references, 3
+    pinned`, exit 2, where it had printed `0 verified, 1 moved … of 1 reference`.
   - **The brief's second Done-when line is met more strongly than it asks**: a
     wrong citation into such a file is `MOVED` (exit 2), not "unanchored or
     unchecked" — it is anchored, so it is checked like any other.
@@ -181,13 +181,13 @@ pinned`, exit 2, where it had printed `0 verified, 1 moved … of 1 reference`.
     and `Dockerfile` citations in repo-33, repo-66, repo-87, dl-27, dl-37, dl-39,
     dl-57, dl-72, pl-2, pl-31, pl-32 and `history.md`.
   - **What fails CI as a result** (`node scripts/citations-gate.mjs --against
-origin/main`): `FAIL dl-37 — 9 verified, 1 unresolvable`, `FAIL pl-31 — 10
-verified, 2 unchecked, 1 unanchored`, `WORSE pl-32 — 5 failing, its entry
-allows 1`. These are the records' own citations, newly visible, not drift; none is
+    origin/main`): `FAIL dl-37 — 9 verified, 1 unresolvable`, `FAIL pl-31 — 10
+    verified, 2 unchecked, 1 unanchored`, `WORSE pl-32 — 5 failing, its entry
+    allows 1`. These are the records' own citations, newly visible, not drift; none is
     repaired in this branch because how is an open decision (see the report).
     Dry-run in scratch, not committed: one anchor added in each of the three
     records, and dl-37's bare name given its directory, takes dl-37 to `10
-verified … exit 0`, pl-31 to `11 verified … exit 0`, and pl-32 back to its
+    verified … exit 0`, pl-31 to `11 verified … exit 0`, and pl-32 back to its
     entry's one unresolvable (`21 verified, 1 unresolvable`).
   - **For repo-84:** extraction now returns `file` for these as the written
     path, unresolved (`Dockerfile`, `tools/planner/Dockerfile`, `.gitignore`); a
@@ -204,10 +204,10 @@ verified … exit 0`, pl-31 to `11 verified … exit 0`, and pl-32 back to its
     Four lines for four, so no citation into that page moves.
   - Tests, appended at the end of `scripts/test/citations.test.ts`: seven. With
     the old `scripts/citations.mjs` swapped in, `npx vitest run
-scripts/test/citations.test.ts` gave `5 failed | 114 passed (119)`; the two
+    scripts/test/citations.test.ts` gave `5 failed | 114 passed (119)`; the two
     that pass on both are the negative guards (a ratio, a date and a URL are
     not paths; an extension path reads as before). With the new one, `119
-passed (119)`.
+    passed (119)`.
 - 2026-10-01 — **Decision, from the owner via the orchestrator, answered
   through AskUserQuestion the same day:** the three newly failing records are
   repaired in this branch, one pull request, under a hidden-type title. The
@@ -226,7 +226,7 @@ passed (119)`.
     `release-please-config.json`. `ci` names the pipeline and its workflow
     files; this is a script's parsing rule plus the records it newly reaches,
     which `chore` says without claiming CI changed. The title is `chore(repo):
-read citations into files with no extension (repo-87)`.
+    read citations into files with no extension (repo-87)`.
   - dl-57's `moved` Dockerfile citation and the other non-fatal moves in
     unchanged records are left alone, as instructed.
 - 2026-10-01 — Gate 1 (Opus) returned FAIL at `ea901ee` on one high; the round
@@ -234,12 +234,12 @@ read citations into files with no extension (repo-87)`.
   - **High, reproduced and fixed.** dl-37's record line 138 quotes dl-39's Log
     about an `INSTALL_YTDLP=false` citation, whose lines 90-93 at the commit the
     reviewer meant begin "Optional, and off by default" (`git show
-1aae8c8:tools/downloader/Dockerfile | sed -n 90,93p`), while at the base they begin "yt-dlp,
+    1aae8c8:tools/downloader/Dockerfile | sed -n 90,93p`), while at the base they begin "yt-dlp,
     installed by default" — the opposite. My anchor had been true of the base
     and false of the reviewer's meaning. Owner chose the pin: the citation
     now reads `tools/downloader/Dockerfile@1aae8c8:90-93 "Optional, and off by
-default"`; `node scripts/citations.mjs <dl-37> --section Review
---require-anchors --require-distinct-anchors` gives `10 verified … 4 pinned`,
+    default"`; `node scripts/citations.mjs <dl-37> --section Review
+    --require-anchors --require-distinct-anchors` gives `10 verified … 4 pinned`,
     exit 0. `1aae8c8` is an ancestor of the base, so the pin outlives a squash.
   - **Med, reproduced and fixed as the owner chose (keep the open rule, fail
     loud).** `extractCitations("see and/or:5")`, the unquoted sentence, returns
@@ -260,7 +260,7 @@ default"`; `node scripts/citations.mjs <dl-37> --section Review
   - **Low 4: dl-57 fixed, repo-48 and repo-60 declined.** dl-57's one
     unpinned Dockerfile citation is now pinned to `eb903a3`, where line 152 is
     `CMD ["node", "tools/downloader/api/dist/main.js"]` (`git show
-eb903a3:tools/downloader/Dockerfile | sed -n 152p`) and which is an ancestor of the
+    eb903a3:tools/downloader/Dockerfile | sed -n 152p`) and which is an ancestor of the
     base; no shorthand follows it on that line, so no inheritance changes. I
     could also have pinned the eight into `scripts/citations.mjs` in repo-48 (2)
     and repo-60 (6) and did not: they were never in the instruction, they are

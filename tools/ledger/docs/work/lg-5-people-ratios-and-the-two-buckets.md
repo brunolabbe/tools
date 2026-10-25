@@ -160,7 +160,7 @@ Only `git diff 4a7647b..ce0a97b` was reviewed. Nothing found in it is a `high`, 
   each rate limited; one code, `SALARY_NOT_FOUND` (404); and in `web` a home
   screen, now the first tab, and a salaries screen.
   - **The suite passes.** `npm test -- --project ledger` → `Test Files 28 passed
-(28)`, `Tests 391 passed (391)`; `npm run check` exit 0.
+    (28)`, `Tests 391 passed (391)`; `npm run check` exit 0.
   - **Done when, and where each is proved.** (1) `books/test/buckets.test.ts`:
     "the two sum to the balance to the cent, right after an odd-cent payment",
     "each person's own money is their deposits less half of every payment", and
@@ -177,7 +177,7 @@ Only `git diff 4a7647b..ce0a97b` was reviewed. Nothing found in it is a `high`, 
   - **The tests can fail.** Each mutation applied to the source alone and
     restored; books rebuilt where the API reads its `dist`. Dropping the odd cent
     in `splitCents` (`index < 0`): the two bucket suites → `10 failed | 7 passed
-(17)`, the API's included, since the sum check throws. The same with the sum
+    (17)`, the API's included, since the sum check throws. The same with the sum
     check disabled → `8 failed | 9 passed (17)`. Rounding each joint row
     separately instead of the cumulative total → `1 failed | 10 passed (11)`,
     the long history's "never drift". Rounding both ratio shares on their own →
@@ -256,8 +256,8 @@ Only `git diff 4a7647b..ce0a97b` was reviewed. Nothing found in it is a `high`, 
     lines 62 and 29, each the handler's last line, so the comment sits above the
     `app.get(` line where the handler starts. **The guard was measured, not
     argued:** taking `{ onRequest: read }` off `GET /api/people` makes `npx
-vitest run tools/ledger/api/test/route-limits.test.ts` answer `1 failed |
-21 passed (22)` ("people refuses the second request in a minute, as
+    vitest run tools/ledger/api/test/route-limits.test.ts` answer `1 failed |
+    21 passed (22)` ("people refuses the second request in a minute, as
     RATE_LIMITED"); off `GET /api/salaries`, `1 failed | 21 passed (22)` ("GET
     salaries refuses the second request in a minute too"). Both restored.
   - **The display name stays as built** (`people(id, added_at)`), by the owner's
@@ -270,7 +270,7 @@ vitest run tools/ledger/api/test/route-limits.test.ts` answer `1 failed |
     optional target version so a test can build a database as lg-4 left it.
     `api/test/people.test.ts`, "every person id its rules and classifications
     name is enrolled, configured or not", failed before the change (`expected [
-'alex', 'sam' ] to deeply equal [ 'alex', 'casey', 'dana', 'sam' ]`) and
+    'alex', 'sam' ] to deeply equal [ 'alex', 'casey', 'dana', 'sam' ]`) and
     passes after.
   - **What three people does, reproduced** on a database at migration 2 with
     rows classified to alex, sam and casey, the configuration naming alex and
@@ -306,7 +306,7 @@ vitest run tools/ledger/api/test/route-limits.test.ts` answer `1 failed |
     comment in `api/src/db/schema.ts`, the sentence in `tools/ledger/CLAUDE.md`
     and the sentence in `docs/00-ANALYSIS.md` §7 now say the person ids on
     `rules` and `classifications` are enrolled, and nothing else. `npx vitest run
-tools/ledger/api/test/schema.test.ts tools/ledger/api/test/people.test.ts` →
+    tools/ledger/api/test/schema.test.ts tools/ledger/api/test/people.test.ts` →
     `Test Files 2 passed (2)`, `Tests 13 passed (13)`.
 - 2026-10-06 — An `awaiting` line added, from repo-88's rule: Done when 4,
   "Gates green", was `unproven (gate)` in both gates only because the `CodeQL`

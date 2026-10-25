@@ -425,8 +425,8 @@ On the box rows neither option is a regression against `main`: option 1 frees 6 
   media-activity narrowing was requested, so none is filed.
 - 2026-10-11 — **Gate 1, round 2** (builder, Sonnet 5.5). Gate 1 failed on two
   highs; the second is the answer above. The first held: `PLAY_WORD_START =
-/(?:^|[^a-z])play/i` treats a capital as part of a word, so `data-testid=
-"videoPlayButton"` or `title="VideoPlay"` on an icon-only button was pressed but
+  /(?:^|[^a-z])play/i` treats a capital as part of a word, so `data-testid=
+  "videoPlayButton"` or `title="VideoPlay"` on an icon-only button was pressed but
   not counted, and with the manifest 1.5 s late a related card was pressed
   (`zz-gate-grid.html`, the gate's rows `camel-testid` and `camel-title`).
   Reproduced as the new `player-poster-icon-grid.html?ctl=…&delay=1500` tests: at

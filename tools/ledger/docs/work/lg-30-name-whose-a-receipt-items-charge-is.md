@@ -43,7 +43,7 @@ ticket can give it a picker as well.
 Naming whose is a change to `@ledger/contract`, so it is the owner's to approve.
 
 - **A. On the item (recommended).** The item becomes `share: "shared" |
-"not-shared" | { theirs: personId }`, or it gains a `chargedTo` beside `share`.
+  "not-shared" | { theirs: personId }`, or it gains a `chargedTo` beside `share`.
   Each item can be charged to a different person, so a receipt shared by three
   can charge one item to casey and another to sam. The cost is that
   `ReceiptProposal`, its schema, `receipt_items` (a column, or a rebuild for the
@@ -63,7 +63,7 @@ approved in this shape.
 as the share.** The code settles it, so it is not left open:
 
 - `share` is stored as text under `CHECK (share IN ('shared', 'not-shared',
-'theirs'))` (`api/src/db/schema.ts`, migration 9). An object-valued share would
+  'theirs'))` (`api/src/db/schema.ts`, migration 9). An object-valued share would
   need that column rebuilt or a JSON text in it; a `chargedTo` is one added
   column, and the CHECK stays.
 - The three strings are compared, used as a key or a CSS class in `books`
@@ -72,7 +72,7 @@ as the share.** The code settles it, so it is not left open:
   compiling and working unchanged.
 - The floor of this ticket says a two-person filing keeps its current request. A
   request with `share: "theirs"` and no name is valid today. With `{ theirs:
-personId }` as the only form it stops being valid; keeping both makes two
+  personId }` as the only form it stops being valid; keeping both makes two
   spellings of one thing. With `chargedTo` it stays valid: `chargedTo` omitted on
   a `theirs` item means "the household's one other member", as it means today.
 - The cost of `chargedTo` is two combinations the type can say and must not
@@ -93,7 +93,7 @@ may vary if the Log says what changed and why.
      item whose `share` is not `theirs`. `null` on a `theirs` item means "the one
      other current member", which the API resolves (step 3).
    - `ReceiptFiling` gains `charges: ReceiptCharge[]`, with `ReceiptCharge =
-{ chargedTo: string; lineId: number }`: every charge line the filing made,
+     { chargedTo: string; lineId: number }`: every charge line the filing made,
      one per person, in the order each person's first `theirs` item is printed,
      including a charge that is also `periodLineId`. `chargeLineId` keeps its
      meaning exactly as documented today and is not removed: the charge filed
@@ -200,7 +200,7 @@ may vary if the Log says what changed and why.
    - File one charge line per person from `split.charges`, after the shared
      line, in `split.charges` order, **except for an entry that comes to 0 cents:
      that files no line** (`period_lines.amount_cents` has `CHECK (amount_cents <>
-0)`, and `fileLines`' own header says a part that comes to nothing files no
+     0)`, and `fileLines`' own header says a part that comes to nothing files no
      line). A free or netted-out item marked `theirs` is stored with its resolved
      `charged_to` and no `charge_line_id`, and is not in `charges`. Each line
      carries that person's cents, `chargedTo`
@@ -293,7 +293,7 @@ new only by its message, or by a paired request that is accepted.
    to 2,476; `charges` is `[casey, sam]` with those two line ids; the stored
    items carry `charged_to` casey and sam and the response's items carry them.
 2. **lg-23's refusal is lifted.** `grep -rn "more than two people in the
-household" tools/ledger/api/src tools/ledger/web/src` prints nothing, and
+   household" tools/ledger/api/src tools/ledger/web/src` prints nothing, and
    the lg-23 refusal test is gone or inverted to line 1.
 3. **A `theirs` item with no name among three: refused.** The same request with
    `chargedTo: null` on a `theirs` item, in a household of three current
@@ -321,7 +321,7 @@ household" tools/ledger/api/src tools/ledger/web/src` prints nothing, and
      parent refuses it with the same words.
 6. **A departed name.** A household whose books hold three names and whose
    directory holds two current members files a `theirs` item with `chargedTo:
-null` as a two-person filing does (to the one other current member); and the
+   null` as a two-person filing does (to the one other current member); and the
    same item with `chargedTo` naming the departed name files a charge to them.
 7. **Nothing shared, two people charged.** `BASKET` with item 1 and item 3
    `theirs` to casey and item 2 to sam, 2,476 charged, in a household of three:
@@ -336,7 +336,7 @@ null` as a two-person filing does (to the one other current member); and the
    off this receipt than the card was charged. …"), as now.
 8. **`splitReceipt`** (`books/test/receipts.test.ts`): `charges` has one entry
    per distinct `chargedTo`, in first-printed order; `sharedCents +
-notSharedCents + chargedCents` equals the payment in each case the existing
+   notSharedCents + chargedCents` equals the payment in each case the existing
    `splitReceipt` tests assert, and on `BASKET` with item 2 to casey and item 3
    to sam, where the two rounded apart are 1,554 and 574 (2,128) and rounded
    together are 2,127, so the shared amount is 348, not 349. Run that case first
@@ -357,7 +357,7 @@ notSharedCents + chargedCents` equals the payment in each case the existing
     `household` that `fetchMe` answered, and does not call `fetchPeople`; the
     people it counts are the distinct `members[].person` of that answer.
     `ROUTES.people` and `PeopleResponse` are unchanged: an API test shows `GET
-/api/people` answers exactly the one key `people`, and `PeopleResponse` in
+    /api/people` answers exactly the one key `people`, and `PeopleResponse` in
     `contract/src/api.ts` has the one field it has today. (No clause pins a file
     diff: `api/src/routes/rules.ts` holds `ruleContext`, which Build 3 may extend
     to pass the current members in.)
@@ -567,7 +567,7 @@ No `high`. One `med` (an open decision, no `Done when` line depends on it), four
       four numbers were checked, not copied: `measure2.mts` gives the parts 349,
       1,554 and 574 and the together-shared 0, so taking the one cent off 349 gives 348. lg-32 says the same rule and that its build is the same guard.
   - **G1:** Done when 10 no longer pins `git diff origin/main --
-…/routes/rules.ts` is empty. `rules.ts` holds `ruleContext`, which every
+    …/routes/rules.ts` is empty. `rules.ts` holds `ruleContext`, which every
     `ruleContext(context, request)` caller uses, including the filing route's;
     Build 3 may extend it. The clause asks for `GET /api/people` answering exactly
     the key `people`, and `PeopleResponse` as it is.
@@ -753,7 +753,7 @@ No `high`. One `med` (an open decision, no `Done when` line depends on it), four
   does not hold (lg-30, gate 1 F2)": each asserts 400, its message and zero rows
   in `period_lines`, `receipt_filings` and `receipt_items`. They pass at
   `01c30bf7`, since the checks exist; they fail under the gate's `mutate-api.mjs
-<tree> nocheck`: 3 failed | 72 passed of 75 (the other member of another
+  <tree> nocheck`: 3 failed | 72 passed of 75 (the other member of another
   household, the unknown name, the payer).
 - 2026-10-18 — Fixed at landing by owner choice: gate 1, F3 — "the bound's upper
   edge is unpinned. `roundingBound` with `+ 1` passes the whole books spec." Added

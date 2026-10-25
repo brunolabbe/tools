@@ -322,7 +322,7 @@ request at two characters a token plus 16 000 output tokens.
 - "Exactly as before" was checked against the base reader. The base's
   `books/src` (029641b4) was exported to scratch and both readers were run on
   lg-7's and lg-37's fixtures: `lg7: default layout identical true; own
-layout identical true` and the same for `lg37`. These are JSON-equal
+  layout identical true` and the same for `lg37`. These are JSON-equal
   readings of 6 548 and 52 690 characters.
 - The base's 23 tests in `books/test/workbook.test.ts` and every
   `api/test/workbook-import.test.ts` case pass unchanged.
@@ -509,11 +509,11 @@ Still no model call and no spend.
 - 2026-10-18 — Fixed at landing by owner choice: gate 2, the note that the
   Log's owner command "does not say how to unset it". The paragraph above the
   command now gives both ways. `sed -n 108,110p
-tools/ledger/docs/work/lg-38-a-model-reads-a-workbooks-layout.md` → the
+  tools/ledger/docs/work/lg-38-a-model-reads-a-workbooks-layout.md` → the
   lines `refuses to run with it set (gate 1's med, fixed in round 1 below).
-Unset it`, `with ` + `unset ANTHROPIC_CUSTOM_HEADERS` + ` in the shell
-first, or put` and `env -u ANTHROPIC_CUSTOM_HEADERS` + ` in front of each
-command. Run it`.
+  Unset it`, `with ` + `unset ANTHROPIC_CUSTOM_HEADERS` + ` in the shell
+  first, or put` and `env -u ANTHROPIC_CUSTOM_HEADERS` + ` in front of each
+  command. Run it`.
 
 ### 2026-10-18 — the owner's paid run (Build 4), the recommendation (Build 5), and the owner's answers
 
@@ -604,7 +604,7 @@ I read these from the records. Each `score` block is quoted.
   `sameImport: true`, `matched: false`, `issues: []`, `problems: 0`,
   `differences: ["account.summary"]` in both. Both answered the summary
   column `C` with the labels `["Solde Dép. Courantes", "Solde Hypothèque",
-"Total"]`; the correct description says `["Solde", "Total"]`. **Not
+  "Total"]`; the correct description says `["Solde", "Total"]`. **Not
   refused, and nothing wrong was imported**: the reading is identical.
 
 So, of the layout failures, **1 was caught by the verifications, 3 were

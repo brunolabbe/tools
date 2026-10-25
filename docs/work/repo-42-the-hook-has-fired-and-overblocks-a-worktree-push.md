@@ -405,7 +405,7 @@ corrected me.
   unmeasured gap.
 
   Two tests replace the two the fix invalidates (`"reads HEAD for a push with no
-refspec"` and `"leaves a bare push alone when HEAD is not main"`). `run()`
+  refspec"` and `"leaves a bare push alone when HEAD is not main"`). `run()`
   gained a fourth parameter, `cwd`, defaulting to `projectDir`; it is sent as
   the payload's `cwd` field and used as the spawned process's working directory,
   which is what the real harness does. That default is precisely the assumption
@@ -493,7 +493,7 @@ refspec"` and `"leaves a bare push alone when HEAD is not main"`). `run()`
   ```
 
   Nothing invoked the hook; the harness did, and the `PreToolUse:Bash hook
-error:` prefix is the harness's, not this script's. That settles registration
+  error:` prefix is the harness's, not this script's. That settles registration
   and automatic invocation, which the direct drive could not, and it is
   simultaneously a live reproduction of the false positive — HEAD was not `main`
   in the checkout the command ran in, only in `CLAUDE_PROJECT_DIR`. The reviewer

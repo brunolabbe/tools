@@ -433,7 +433,7 @@ that base (merged as `1806525`). Nothing here touches
   - `pgrep -a ffmpeg` afterwards: none left.
 - `npm run check`: exit 0. `npm test -- --project downloader`: 87 files, 1456
   tests, all pass. `npx vitest run packages/core/test/spawn-safety.test.ts
-packages/core/test/image-closure.test.ts`: 11 pass.
+  packages/core/test/image-closure.test.ts`: 11 pass.
   `npm run e2e:downloader` (7 passed) and `npm run e2e:downloader:sniffer`
   (1 passed) both ran locally, with the new code.
 - **Citations.** This branch moves lines in `orchestrator.ts`, `server.ts`,
@@ -560,7 +560,7 @@ capture would make every probe hold a slot for a decorative image.
 - `npm run check` exits 0. `npm test -- --project downloader`: 87 files, 1461
   tests, all pass (1458 + 3). `node scripts/citations.mjs` on this record's
   Review section: 15 verified, exit 0. `citations-gate.mjs --against
-origin/main`: 85 enforced, 0 failing.
+  origin/main`: 85 enforced, 0 failing.
 - Gate B's Review cites six lines that this entry's code moved — the
   `server.ts` call and five in `thumbnails.test.ts`. Each is repointed to the
   line its own anchor text is on now, which the section's disclosure note
@@ -715,7 +715,7 @@ files are missing or differently named.
 
 - Deleting `dash-init-0.m4s` **before** the guard: `beforeAll` fails with
   `the generated MPD names "dash-init-0.m4s", which the fixture directory does
-not hold. It holds: dash-chunk-0-00001.m4s, …, dash-init-1.m4s, dash.mpd, …`.
+  not hold. It holds: dash-chunk-0-00001.m4s, …, dash-init-1.m4s, dash.mpd, …`.
   So the guard bites, and it prints the evidence the Windows run lacked.
 - Deleting it **after** the guard, so the grab meets the same 404 Windows met:
   the test fails with `the grab produced no frame`, carrying

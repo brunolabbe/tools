@@ -304,7 +304,7 @@ narrowings.
   wrong trade for a diagonal corridor, which is the tool's own headline
   example. No payload had been captured yet, so the switch cost no fixture.
   `overpassQuery` (`valhalla.ts`) now sends `around:radiusMetres,lat1,lon1,
-lat2,lon2,...` over the corridor's own points; `corridorBoundingBox` and
+  lat2,lon2,...` over the corridor's own points; `corridorBoundingBox` and
   `BoundingBox` are deleted from `geometry.ts` (dead code once nothing calls
   them, not kept for an imagined caller). The client-side re-filter is
   unchanged and, if anything, more load-bearing now: the primary filter is
@@ -508,9 +508,9 @@ component, its dedup, its tests) and the ticket file itself.
   `Source` is built and then discarded before anything downstream could store
   it:
   - `api/src/runs/travel.ts:327 "located.set(each.key, outcome.value.coordinates);"` — `located.set(each.key,
-outcome.value.coordinates)` keeps a geocoded place's coordinates and
+    outcome.value.coordinates)` keeps a geocoded place's coordinates and
     drops `outcome.value.source`; `located` is typed `Map<string,
-Coordinates>`, so there is no field for the source to survive in even if
+    Coordinates>`, so there is no field for the source to survive in even if
     the line kept it.
   - `agent/src/providers/scripted-fan-out.ts:89 "since pl-36"` (line 98 when the finding was written, before pl-36 removed the field from the proposal) — every candidate was
     stamped `provenance: MODEL_ASSERTED` regardless of whether it was written
@@ -699,7 +699,7 @@ stale-`dist`-on-restore trap pl-27's Log names.
 `api/src/runs/discovery.ts`'s `detourCosts`: one `travel()` call with
 `origins = [origin, ...finds]`, `destinations = [destination, ...finds]`.
 Cell `[0][0]` is the baseline, `[0][i+1]` is origin→find _i_, `[i+1][0]` is
-find *i*→destination. `detourMinutes = max(0, toFind + fromFind - baseline)`,
+find _i_→destination. `detourMinutes = max(0, toFind + fromFind - baseline)`,
 or `null` if any of the three is unanswered. Proven with hand-picked minutes
 (180/100/90 → 10) and a mutation (`+baseline` instead of `-baseline`, giving
 370 instead of 10 — caught, restored, confirmed green):

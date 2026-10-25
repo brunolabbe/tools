@@ -154,7 +154,7 @@ that comparison.
     so a refused reply or two malformed attempts were billed and never counted.
     Measured by running the new `agent/test/fan-out-usage.test.ts` against the
     `95c6403` orchestrator (`npx vitest run --project planner
-tools/planner/agent/test/fan-out-usage.test.ts`, exit 1, 5 failed of 5): a
+    tools/planner/agent/test/fan-out-usage.test.ts`, exit 1, 5 failed of 5): a
     fan-out with one refused reply counted `calls: 5, inputTokens: 500` where 6
     replies and 501 tokens were billed. The fix counts every reply at the seam,
     by wrapping `send` inside `runFanOut`, so this and cancellation are one

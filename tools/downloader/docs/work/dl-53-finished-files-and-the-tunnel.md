@@ -745,7 +745,7 @@ None.
   Ten merged `## Review` citations into `args.ts`, `runner.ts`, `index.ts` and
   `api/test/helpers.ts` (dl-19, dl-34, dl-45, dl-50, dl-56, dl-58) moved and
   are pinned to `c87153d`; `node scripts/citations-gate.mjs --against
-origin/main` exits 0.
+  origin/main` exits 0.
 
   **Open, and put to the owner through the orchestrator:** the contract diff (a
   single-use `link` on `Job`, `downloadUrl` and `expiresAt` off `JobResult`,
@@ -858,7 +858,7 @@ origin/main` exits 0.
     option, as an output option, on both sides, as `-f_err_detect explode`,
     and with `-xerror`. Without `-bsf:a aac_adtstoasc` the same command exits
     **255** with no flag at all — `Malformed AAC bitstream … Error muxing a
-packet` — which is the exit the gate recorded. The fix the owner chose
+    packet` — which is the exit the gate recorded. The fix the owner chose
     ("`-err_detect explode` or equivalent") is therefore the equivalent: the
     engine watches ffmpeg's stderr for the HLS demuxer's giving-up line,
     `failed too many times, skipping`, and ends the stream with
@@ -870,7 +870,7 @@ packet` — which is the exit the gate recorded. The fix the owner chose
     finish short. **A segment refused on its certificate is skipped the same
     way**, and the first draft reported it as `DOWNLOAD_FAILED`: two cases in
     `api/test/two-origin-tls.test.ts` failed on exactly that (`expected
-'DOWNLOAD_FAILED' to be 'TLS_VERIFICATION_FAILED'`). The skip now ends the
+    'DOWNLOAD_FAILED' to be 'TLS_VERIFICATION_FAILED'`). The skip now ends the
     stream as `TLS_VERIFICATION_FAILED` when a certificate line came first, as
     the runner classifies an exit. DASH was not reproduced the same way: its demuxer fails at
     open on the equivalent fixture (exit 183) rather than skipping, so no
@@ -878,7 +878,7 @@ packet` — which is the exit the gate recorded. The fix the owner chose
 
   **Gate 1, med — the wait cap did not allow for the re-probe. Fixed as
   decided.** `maxLinkWaitMs` is now `100 s − PROBE_TIMEOUT_MS ×
-(MAX_REPROBE_RETRIES + 1)`: 10 s at the 45 s default, and 0 from 50 s up.
+  (MAX_REPROBE_RETRIES + 1)`: 10 s at the 45 s default, and 0 from 50 s up.
   Red first: the new case at the end of `api/test/stream-link.test.ts` failed
   with `expected 55000 to be 10000`, and passes after. The deployment doc,
   the architecture diagram and the route's header say "both probes" now.
@@ -970,9 +970,9 @@ packet` — which is the exit the gate recorded. The fix the owner chose
   **`PROBE_TIMEOUT_MS` is capped at 50 s (gate 3's low, fixed as decided).**
   `PROBE_TIMEOUT_CEILING_MS` in `api/src/config.ts` is the `max` on its `int()`
   call; `config.test.ts`'s new last case failed first with `expected 120000 to
-be 50000`, and holds the ceiling to `TUNNEL_BUDGET_MS / (MAX_REPROBE_RETRIES
+  be 50000`, and holds the ceiling to `TUNNEL_BUDGET_MS / (MAX_REPROBE_RETRIES
   - 1)`. An override passed in code is not capped — tests use one to reach a
-zero wait. `.env.example`, the settings table and the deployment doc say so.
+    zero wait. `.env.example`, the settings table and the deployment doc say so.
 
   **The certificate precedence has an engine-level case (gate 4's low).** A
   real refused segment needs the API's egress proxy, which the engine cannot

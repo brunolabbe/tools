@@ -16,9 +16,11 @@ the oxc binaries read them, and oxfmt preserves the comments when it formats the
 squiggle both unless `files.associations` maps them to `jsonc`.
 
 `oxfmt` is opinionated in the gofmt sense, but it is not a one-key formatter:
-**at 0.62.0, the pinned version, it honours `ignorePatterns`, `printWidth`,
+**at 0.74.0, the pinned version, it honours `ignorePatterns`, `printWidth`,
 `proseWrap`, `singleQuote` and `tabWidth`, among others** (those five are the ones
-measured; the `configuration_schema.json` shipped with oxfmt is the full list).
+measured, at 0.62.0; at 0.74.0 all five are still in the shipped
+`configuration_schema.json`, which is the full list, and `lineWidth` and
+`quoteStyle` were re-measured as still ignored).
 `proseWrap: "always"` is what switches markdown wrapping on, and `printWidth` is the
 width it wraps to (default 100; `printWidth` alone leaves markdown untouched). Keys that are not oxfmt's, like
 `quoteStyle` and `lineWidth`, parse without error and are silently ignored, so do

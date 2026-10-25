@@ -1101,11 +1101,11 @@ The reviewer was told before this was committed.
      what the page records.** Re-run with `history.md` checked out at `4901cd6`,
      then restored with `git checkout HEAD --` and `git status --porcelain`
      confirmed it gone: `--rev b142a4a` exits **3**, `7 verified, 6 moved, 1
-unanchored, 5 unresolvable, 3 unchecked`; `--rev 9b426c8` exits **3**, `16
-verified, 1 moved, 1 unanchored, 1 unresolvable, 3 unchecked`. Neither row
+     unanchored, 5 unresolvable, 3 unchecked`; `--rev 9b426c8` exits **3**, `16
+     verified, 1 moved, 1 unanchored, 1 unresolvable, 3 unchecked`. Neither row
      prints `pinned`, because that copy carries no pin. **The plain row drifted
      again**, to exit **2**, `10 verified, 8 moved, 1 unanchored, 0 unresolvable,
-3 unchecked` — one more `moved` than the 2026-09-08 re-run. **Not caused by
+     3 unchecked` — one more `moved` than the 2026-09-08 re-run. **Not caused by
      this branch, and both halves of that were measured**: the base checker, run
      from a copy over the same tree, prints the identical line; and the one cited
      file this branch also edits, `scripts/test/citations.test.ts`, is changed
@@ -1123,9 +1123,9 @@ verified, 1 moved, 1 unanchored, 1 unresolvable, 3 unchecked`. Neither row
      151 and 142, `next-id.mjs` to 36, each re-read at `HEAD`. Two more, into
      `scripts/citations.mjs`, were moved **by this branch** and are pinned to
      `64edce2` rather than chased. `node scripts/citations.mjs
-.claude/skills/orchestrate-tickets/reference/history.md` → exit **0**, `35
-verified, 0 moved, 5 unanchored, 0 unresolvable, 14 unchecked, 0 evidence —
-of 54 references, 12 pinned`.
+     .claude/skills/orchestrate-tickets/reference/history.md` → exit **0**, `35
+     verified, 0 moved, 5 unanchored, 0 unresolvable, 14 unchecked, 0 evidence —
+     of 54 references, 12 pinned`.
   4. **Met, and the sweep says which tests carry it.** One test per malformed
      shape — "a malformed pin is counted and fails loudly", four cases: a rev
      that is not hex, one too short, one after the line number, one on a
@@ -1137,10 +1137,10 @@ of 54 references, 12 pinned`.
   5. **Met, with two numbers corrected below.** The five pinnable locations are
      pins; `node scripts/citations-gate.mjs --against origin/main` → exit **0**,
      `30 enforced, 0 failing; 45 grandfathered, holding 35 unresolvable, 43 moved,
-530 unanchored, 6 indistinct.`, identical to its base line, and `45
-entr(y/ies) compared against origin/main: 0 raised`. The boundary rule is
+     530 unanchored, 6 indistinct.`, identical to its base line, and `45
+     entr(y/ies) compared against origin/main: 0 raised`. The boundary rule is
      written beside the syntax in `reference/records.md`, with the `git log --all
--S` command. **Enforcement built: the cheap half only** — "a declaration is
+     -S` command. **Enforcement built: the cheap half only** — "a declaration is
      refused for a citation that another line of its file would verify", which
      also asserts the pin clears it and that a declaration still stands where no
      line of the file carries the anchor.
@@ -1168,7 +1168,7 @@ entr(y/ies) compared against origin/main: 0 raised`. The boundary rule is
      are the same six with the same counts on both sides. **The population
      identity holds at today's numbers, not the page's**: 128 files, **53**
      without a single Review section, 128 − 53 = 75 = `30 enforced + 45
-grandfathered`. And the ordering constraint is a test: "a self-citation of
+     grandfathered`. And the ordering constraint is a test: "a self-citation of
      its own line still fails, although it now starts on one line", plus the
      gate's spec "a self-citation fails the gate by name, even when its fragment
      is on one line".
@@ -1223,7 +1223,7 @@ grandfathered`. And the ordering constraint is a test: "a self-citation of
   four live — the first two parsed as pins, the third and the relayed claim as
   malformed pins — which is fact 1 answered on the page that measured it. `node scripts/citations.mjs` on this page
   → exit **0**, `43 verified, 0 moved, 31 unanchored, 0 unresolvable, 10
-unchecked, 0 evidence — of 84 references, 38 pinned`.
+  unchecked, 0 evidence — of 84 references, 38 pinned`.
 
   **`GRANDFATHERED`: no entry changed.** The `--against origin/main` run above
   reports 0 raised, and every entry's failing number is the same before and after:
@@ -1598,7 +1598,7 @@ unchecked, 0 evidence — of 84 references, 38 pinned`.
   Corroborated by the strip-and-run rather than left as a count: removing all
   twelve declaration lines and nothing else takes
   `node scripts/citations-gate.mjs` from **exit 0 to exit 1**, `27 enforced, 0
-failing` becoming `27 enforced, 3 failing`, naming **`pl-29`, `pl-34` and
+  failing` becoming `27 enforced, 3 failing`, naming **`pl-29`, `pl-34` and
   `repo-25`**. (The dispatch relaying this reversal wrote "pl-29, pl-24 and
   repo-25" and corrected itself in the same message; `pl-34` is the measured name
   and there is no `pl-24` in this tree.)
@@ -1770,7 +1770,7 @@ failing` becoming `27 enforced, 3 failing`, naming **`pl-29`, `pl-34` and
   **5. `Done when` #3's "It exits 0 today" is corrected in place, not annotated
   around.** Re-measured at this branch's base: `history.md`'s plain run exits **2**
   with `11 verified, 7 moved, 3 unanchored, 0 unresolvable, 3 unchecked, 8
-evidence — of 32 references`. That is worse than the 2026-09-08 re-measurement
+  evidence — of 32 references`. That is worse than the 2026-09-08 re-measurement
   found (four `moved`, no `unanchored`); three more citations have drifted and
   three have lost their anchors since. #3 now names the five residual drifting
   citations that are unrelated to pinning and requires them repointed, because
@@ -1789,7 +1789,7 @@ evidence — of 32 references`. That is worse than the 2026-09-08 re-measurement
   the repairs are folded in rather than filed.** A first draft of the Build spelled
   its example tokens with real line numbers and laid step 6's breakdown out as a
   table. Re-running the checker took this page from `10 verified, 1 moved, 10
-unanchored, 1 unresolvable, 2 unchecked`, exit 3, to **8 failing** — the example
+  unanchored, 1 unresolvable, 2 unchecked`, exit 3, to **8 failing** — the example
   tokens had become live citations, and the table's `declaration lines` column had
   become seven citations into the seven files those rows name, because a findings
   table's bare numbers are citations too. Three repairs, all inside this file:
@@ -1805,7 +1805,7 @@ unanchored, 1 unresolvable, 2 unchecked`, exit 3, to **8 failing** — the examp
     out in words instead. Neither changes what either note says.
 
   **This page now exits 0**, `24 verified, 0 moved, 10 unanchored, 0 unresolvable,
-5 unchecked, 0 evidence — of 39 references`, against exit 3 at the base. It is
+  5 unchecked, 0 evidence — of 39 references`, against exit 3 at the base. It is
   grandfathered by `citations-gate.mjs` rather than enforced, so none of that was
   load-bearing for CI; it is recorded because a ticket about citation hygiene that
   degrades its own page is worth catching before a reviewer does.
@@ -1919,11 +1919,11 @@ unanchored, 1 unresolvable, 2 unchecked`, exit 3, to **8 failing** — the examp
   branch's diff past its stated purpose.
 
   **Declarations are load-bearing, checked directly.** Deleting the `<!--
-citations: evidence dispatching.md@fdafd1a:206, dispatching.md@fdafd1a:209 -->` line from a
+  citations: evidence dispatching.md@fdafd1a:206, dispatching.md@fdafd1a:209 -->` line from a
   scratch copy of `history.md` and re-running turned `4 moved, ..., 8 evidence`
   into `8 moved, ..., 4 evidence` — the four citations that line covers move
   from suppressed to failing the moment it is gone. Reverted with `git checkout
-HEAD --`, diffed byte-identical against a pre-edit backup before continuing.
+  HEAD --`, diffed byte-identical against a pre-edit backup before continuing.
 
   **The `965` figure (`scripts/citations.mjs:114`) has never been recomputed
   since it was written** (`git log -S"965 citations"` names exactly one commit,
@@ -1949,8 +1949,8 @@ HEAD --`, diffed byte-identical against a pre-edit backup before continuing.
   numbers are the ones recorded above.
 
   **Verification.** `node scripts/citations-gate.mjs` → exit 0. `node
-scripts/citations-gate.mjs --against origin/main` → exit 0, 0 raised. `npm
-run check` → exit 0. `node scripts/status.mjs --json` → exit 0, `repo-35`
+  scripts/citations-gate.mjs --against origin/main` → exit 0, 0 raised. `npm
+  run check` → exit 0. `node scripts/status.mjs --json` → exit 0, `repo-35`
   still reads `needs-decision`. All four read from `$?` on unpiped
   invocations, redirected to a file rather than piped, per the pipe-swallows-
   exit-code trap this dispatch named explicitly.

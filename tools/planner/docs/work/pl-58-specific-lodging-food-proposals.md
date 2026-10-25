@@ -334,7 +334,7 @@ round is ticket text only, with no code, and each finding's disposition is below
   reviewer's `classify-guard.mts` reproduced both walls on pl-57's tip: a new place
   gives `no class for planted premises hotel|percé`, and a class added to
   `classification.json` with the default pinned to 111 gives `classification names
-planted premises hotel|percé, which no record names`.
+  planted premises hotel|percé, which no record names`.
 - **F3, med, Done when 4 met without the property — fixed.** The new records are
   committed under `live/claude-<family>-…`, and the 111 old files do not move. The
   default is pinned by a manifest, and the Log gives its counts with the new records on
@@ -666,8 +666,8 @@ Commands, from the worktree:
    `PLANNER_LIVE_RUN=1 node --import tsx tools/planner/api/test/live/invention.ts --after pl58-2026-10-21`
 2. Write `tools/planner/api/test/fixtures/live/invention/pl58-2026-10-21/verdicts.json`
    in `invention.ts`'s `VerdictsFile` shape: `{runDate, budget: {written,
-queriesBeforeNotFound[], osm}, checks: {<key>: {verdict, queries[], evidence[{url,
-readOn, note}], actualLocality?, closedYear?, note?}}}`, the keys in the worksheet's
+   queriesBeforeNotFound[], osm}, checks: {<key>: {verdict, queries[], evidence[{url,
+   readOn, note}], actualLocality?, closedYear?, note?}}}`, the keys in the worksheet's
    order, each key's first query written before its search. The harness takes keys in
    that order and stops at the first key with no verdict, at 40 distinct first queries or
    when the 51 run out; a verdict for a key past the stop is refused.
@@ -833,7 +833,7 @@ Every key that is not `exists`:
    That is on the Magdalen Islands, not the Gaspé peninsula. A second query found no Fumoir
    d'Antan in Gaspé or Rivière-au-Renard.
 2. to 4. `fumoir monsieur émile|rivière-au-renard`, `fumoir monsieur émile|gaspé
-(anse-au-griffon)` and `fumoir monsieur émile|gaspé`: **exists-elsewhere**, Percé. These
+   (anse-au-griffon)` and `fumoir monsieur émile|gaspé`: **exists-elsewhere**, Percé. These
    are one object. Gentologie, fetched 2026-10-21, places "Monsieur Émile Smokehouse" at 574
    route d'Irlande, Percé, QC G0C 2L0 (published 2025-08-28, updated 2026-07-24). Queries 1
    and 2 found nothing; query 3, in French, found the page. This repeats pl-57's verdict on
@@ -948,17 +948,17 @@ call, and the lookup's reach is 9% of these two specialists' mentions.
 
 - 2026-10-21 — Fixed at landing by owner choice: gate 1, low 1 — "in
   `invention/pl58-2026-10-21/classification.json`, `parc national de la gaspésie,
-mont-albert sector|sainte-anne-des-monts` is `named-premises` with no `park-visit`
+  mont-albert sector|sainte-anne-des-monts` is `named-premises` with no `park-visit`
   tag." The tag is added to that key. Regenerated with `PLANNER_INVENTION_OFFLINE=1
-node --import tsx tools/planner/api/test/live/invention.ts --after pl58-2026-10-21` →
+  node --import tsx tools/planner/api/test/live/invention.ts --after pl58-2026-10-21` →
   exit 0, `stratum draw (pl58-2026-10-21, seed 20261020): 51 lodging-or-food
-named-premises keys; 51 keys taken for 40 of 40 objects (target); without the
-park-visit objects: 37 objects, not confirmed 5 of 37, 13.5% (5.9%–28.0%)`. The same
+  named-premises keys; 51 keys taken for 40 of 40 objects (target); without the
+  park-visit objects: 37 objects, not confirmed 5 of 37, 13.5% (5.9%–28.0%)`. The same
   command with `PLANNER_INVENTION_CHECK=1` added → exit 0, "the committed record equals
   its regeneration" (taken from a file, no pipe). The default check
   (`PLANNER_INVENTION_OFFLINE=1 PLANNER_INVENTION_CHECK=1 node --import tsx
-tools/planner/api/test/live/invention.ts`, no `--after`) → exit 0, `111 live records, 2594
-place mentions, 1019 distinct places`. `cmp` of `invention/2026-10-17.json` against the shared checkout's copy → exit 0, and
+  tools/planner/api/test/live/invention.ts`, no `--after`) → exit 0, `111 live records, 2594
+  place mentions, 1019 distinct places`. `cmp` of `invention/2026-10-17.json` against the shared checkout's copy → exit 0, and
   `git diff --stat 2d1b22bb HEAD`
   on that path is empty. The run's record changed in three places only: the Gaspésie
   row gained the tag, `edgeTags` `named-premises: park-visit` went 35 → 36, and

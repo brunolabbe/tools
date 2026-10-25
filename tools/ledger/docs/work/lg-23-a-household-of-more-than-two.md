@@ -366,7 +366,7 @@ Done when 1, 3, 4 and 5 are untouched by the round. Their specs pass in the full
 
   **What the brief had wrong.** Build 4's "the next free directory migration"
   is 4, not 3: lg-24 took 3 (`// 3 — a household is never added without an id
-(lg-24)` in `api/src/db/directory-schema.ts` on `8e50f0d4`). Build 4 now says
+  (lg-24)` in `api/src/db/directory-schema.ts` on `8e50f0d4`). Build 4 now says
   so. Question 1 said "the person furthest ahead for their share deposits
   nothing"; that holds, but its claim that rounding each deposit once, half-up,
   is enough does not past three people. Measured with a scratch search over
@@ -376,7 +376,7 @@ Done when 1, 3, 4 and 5 are untouched by the round. Their specs pass in the full
   nothing and move by their share of every other deposit's rounding. Four is
   already enough: with each deposit rounded alone, the four-person property test
   fails at trial 1207 with `casey: expected 1046539 to be less than or equal to
-1000000`. So `roundDeposits` (in `books/src/settlement.ts`) rounds the deposits
+  1000000`. So `roundDeposits` (in `books/src/settlement.ts`) rounds the deposits
   together. As many go up as the sum of their fractions rounds to, half-up, so
   the total is off by half a cent at most. A deposit goes up, or down, only if
   that keeps its person within a cent. There are always enough of each to

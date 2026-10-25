@@ -290,7 +290,7 @@ before editing, and do not settle either here.
     paragraph. Everything else the grep returned is history or a comment that
     is still true (`history.md`, `adr/006`, `scripts/status.mjs`,
     `planner.yml`, `planner/e2e/pin.spec.ts`, `dispatching.md`'s `unproven
-(scope)` and Windows lines), and no script parses a row verdict:
+    (scope)` and Windows lines), and no script parses a row verdict:
     `grep -rln "gate.md\|unproven (gate)\|Four verdicts" scripts packages` printed
     nothing. **The landing step is on two more pages than the Build named**,
     because the procedure lives there: `reference/records.md` (the full step, in

@@ -647,7 +647,7 @@ the tip that added the repo suite's spawn timeout, which merged in the meantime.
   record now names `5fed828` and carries the `--section`-scoped command that
   passes against it; the Log entry above names `23d4bc3`.
 - **The pin was measured, not assumed.** `--rev 5fed828 --section "The gate on
-this filing"` resolves the anchor `ok` — `1 verified, 0 moved`. The Log's
+  this filing"` resolves the anchor `ok` — `1 verified, 0 moved`. The Log's
   citation cannot be confirmed by the tool at all, being unanchored, so it was
   confirmed by hand with `git show 23d4bc3:scripts/status.mjs`: lines `115-118`
   there are `parseScalar`'s doc comment, its signature and the two body lines
@@ -670,7 +670,7 @@ this filing"` resolves the anchor `ok` — `1 verified, 0 moved`. The Log's
   pipe's, which is the footgun `records.md` already records and which caught
   this builder once while writing this entry:
   - `--rev 5fed828 --section "The gate on this filing"` → `3 verified, 0 moved,
-0 unanchored`, exit `0`.
+    0 unanchored`, exit `0`.
   - `--section Log --rev 5fed828` → `5 verified, 1 moved`. The one that moves is
     `scripts/status.mjs:387` "export function reviewedButReady", and that is
     correct: it was written by the "built"
@@ -842,7 +842,7 @@ the patch passed its own tests.
   stands, but it **inherits** that failure rather than causing it.
   `origin/main`'s anchor has no escape-awareness at all, so it reads the `;` in
   `\;` as a shell operator. The gate's cleaner isolation — `true \; gh pr create
---web`, with no real `;` in front — gives `origin/main` **2** and the deleting
+  --web`, with no real `;` in front — gives `origin/main` **2** and the deleting
   version **0**, which exhibits the pre-existing defect on its own with no
   stripping involved at all.
 - **So the substitution also fixes a defect this ticket did not create.**

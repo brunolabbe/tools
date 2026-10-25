@@ -133,7 +133,7 @@ Re-issued unchanged beside gate 3, every coordinate re-resolved at `952c813`; no
   of the pasted text it names; a chain break also carries `unexplainedCents`,
   which lg-2's "how much went missing" needs.
   - **The suite passes:** `npm test -- --project ledger` → `Test Files 8 passed
-(8)`, `Tests 100 passed (100)`; `npx oxlint tools/ledger` prints nothing.
+    (8)`, `Tests 100 passed (100)`; `npx oxlint tools/ledger` prints nothing.
   - **The tests can fail.** Each mutation below was applied to
     `books/src/statement.ts` alone, with `npx vitest run tools/ledger/books`:
     chain check `previous.balanceCents + row.amountCents` → `previous.balanceCents`
@@ -173,7 +173,7 @@ Re-issued unchanged beside gate 3, every coordinate re-resolved at `952c813`; no
     name (`JUN`, `JAN`, `FEV`, `MAR`, `AVR`, `MAI`, `OCT`, `NOV`, `DEC`); a real
     paste that spells one differently fails loudly, naming its line.
   - **Column header position is not assumed.** The `Date Description Montant
-Solde lien` line is accepted anywhere, and `lien` is optional, because the
+    Solde lien` line is accepted anywhere, and `lien` is optional, because the
     analysis shows it once under the first month and the paste may repeat it.
   - **Could have been folded in, was not:** wiring `parseStatement` into an API
     route is lg-2's whole scope and needs a decision about empty pastes and

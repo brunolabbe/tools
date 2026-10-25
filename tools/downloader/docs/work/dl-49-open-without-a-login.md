@@ -267,7 +267,7 @@ The acceptance rows are as gate 1 left them. The four `unproven (scope)` rows ar
     address can still hold both job slots, and links the table.
   - F5: the `planAccess` doc comment no longer says the downloader has two
     applications. F6: the `before` run now also asserts the `ok access
-planner.example.com (allow)` line.
+    planner.example.com (allow)` line.
 - 2026-10-17 — The owner answered two questions raised by the gates (via the
   orchestrator). **Fail closed.** Question: dl-49's gate notes an optional code
   fix, in production the downloader would refuse probes when the Turnstile keys

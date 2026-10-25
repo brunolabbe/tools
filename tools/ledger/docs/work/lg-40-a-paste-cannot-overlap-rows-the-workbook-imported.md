@@ -204,15 +204,15 @@ Positive control: the day's-end balance check in `matchPart` dropped → 8 of 11
   `workbook-import.ts` as at `960f4b26` and only the new test added:
   `npx vitest run tools/ledger/api/test/workbook-import.test.ts -t "lg-40"` →
   1 failed | 1 passed, the import refusing with `2024 row 2, 2024-03-01 "Achat"
--20.00 $ (balance 1599.99 $) moves the same day and amount as the oldest
-stored row, but leaves 1599.99 $ where it leaves 1584.99 $: -15.00 $ is
-unexplained.` Fixed in `readings` and `place`, not in `run()`. `place` now
+  -20.00 $ (balance 1599.99 $) moves the same day and amount as the oldest
+  stored row, but leaves 1599.99 $ where it leaves 1584.99 $: -15.00 $ is
+  unexplained.` Fixed in `readings` and `place`, not in `run()`. `place` now
   pairs each movement with its own stored row within a day, not the row in its
   position, so "dated differently" names the right row, and `lastSeq` is the
   position the overlap reaches.
 
   **The ticket's reproduction on the base**: `npx vitest run
-tools/ledger/api/test/statements.test.ts` with the source at `960f4b26` and
+  tools/ledger/api/test/statements.test.ts` with the source at `960f4b26` and
   the new tests added → 8 failed | 42 passed (50), the first with "A row is
   missing between the two, so paste a longer stretch that overlaps what is
   stored." After the fix, 50 of 50.
@@ -288,7 +288,7 @@ tools/ledger/api/test/statements.test.ts` with the source at `960f4b26` and
   "a day the workbook lists as %s, pasted from the bank's row %i of it on, adds
   only the new row (F1)": 5 non-identity orders × 2 mid-day starts. With the
   source at `cea53bf7`, `npx vitest run tools/ledger/api/test/statements.test.ts
-tools/ledger/api/test/workbook-import.test.ts` → 10 failed | 88 passed (98): 8
+  tools/ledger/api/test/workbook-import.test.ts` → 10 failed | 88 passed (98): 8
   of the 10 F1 cases (the gate's count), F2 and F6. At `b4bcb94b`, all pass.
 
   **F2 reproduced, then fixed.** The gate's probe `gate-lg40g`: at `cea53bf7`
@@ -375,7 +375,7 @@ tools/ledger/api/test/workbook-import.test.ts` → 10 failed | 88 passed (98): 8
   Three tests added at the end of their suites, each run red against its mutant
   and green on the clean source, the source restored from a copy after each:
   `npx vitest run tools/ledger/api/test/workbook-days.test.ts
-tools/ledger/api/test/statements.test.ts` → clean 92 passed (92); `later`
+  tools/ledger/api/test/statements.test.ts` → clean 92 passed (92); `later`
   emptied in `overlaps` → 7 failed | 85 passed, in "a paste wholly inside a
   reordered day the workbook lists between two others (F7)" › "a day of three
   listed as %s, pasted from any of the bank's rows to any other inside it, adds
@@ -394,8 +394,8 @@ tools/ledger/api/test/statements.test.ts` → clean 92 passed (92); `later`
   inside a day of more than 20 rows. Their wording is never compared."; the
   `statements.ts` header and the `workbook-days.ts` header name both.
   `npx vitest run tools/ledger/api/test/statements.test.ts
-tools/ledger/api/test/workbook-import.test.ts
-tools/ledger/api/test/workbook-days.test.ts` → 3 files, 124 passed (124); no
+  tools/ledger/api/test/workbook-import.test.ts
+  tools/ledger/api/test/workbook-days.test.ts` → 3 files, 124 passed (124); no
   test asserts the refusal's text.
 - 2026-10-18 — **Gate 2's decisions, the owner's answers.** Asked by the
   orchestrator on 2026-10-18.

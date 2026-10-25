@@ -216,7 +216,7 @@ measured bar, and the Build above fixes it.
   ```
 
   Both defects entered with pl-10: `git log --oneline -S"var(--line)" --
-tools/planner/web/src/styles.css` prints only `6291ee58`, and the same for the
+  tools/planner/web/src/styles.css` prints only `6291ee58`, and the same for the
   `var(--ok, ` and `var(--warn, ` fallbacks.
 
 - **2026-10-20 — what repo-108 does and does not do.** Read from its branch
@@ -331,7 +331,7 @@ tools/planner/web/src/styles.css` prints only `6291ee58`, and the same for the
     `--okx` in both the light and the dark block and running
     `npx vitest run tools/planner/web/test/stylesheet.test.ts`: at `f94a64ef`,
     **6 of 16 fail**, among them `a var() with no fallback names a custom property
-someone declares` (`expected [ '--ok' ] to deeply equal []`). The same rename on
+    someone declares` (`expected [ '--ok' ] to deeply equal []`). The same rename on
     the previous commit's stylesheet (`4c27d4db`, fallbacks present) fails **5 of
     16** and that check is **not** among them: it was blind to the fallback use,
     the contrast checks alone caught it. Both mutations were restored with
@@ -340,7 +340,7 @@ someone declares` (`expected [ '--ok' ] to deeply equal []`). The same rename on
   - **A limit of check (a), not fixed here:** it asks that a name be defined
     _somewhere_, so renaming only the dark `--ok` (light still defined) does not
     fail (a); the dark contrast checks fail instead (3 of 16, `dark --ok is
-undefined, not a #rrggbb colour`). A missing dark definition is therefore
+    undefined, not a #rrggbb colour`). A missing dark definition is therefore
     held by the contrast tests, for `--ok` and `--warn` only.
 - 2026-10-21 — Fixed at landing by owner choice: gate 1, low "no `Done when` line
   depends on it" — "the contrast tests read the `--ok` / `--warn` tokens, not the
@@ -362,7 +362,7 @@ undefined, not a #rrggbb colour`). A missing dark definition is therefore
   flag removed leaves the real-stylesheet test green (only the synthetic case
   fails), which is the gap. Planted `.zz { color: var(--zz-nope); }` in
   `packages/ui/src/tokens.css` → 1 failed | 19 passed (`expected [ '--zz-nope' ]
-to deeply equal []`); restored with `git checkout 1d4f1537 -- <path>`. The
+  to deeply equal []`); restored with `git checkout 1d4f1537 -- <path>`. The
   second mechanism (a name defined only in a rule that never reaches the
   consumer) is not fully stated and stays recorded as the gate wrote it.
   `npx vitest run tools/planner/web/test/stylesheet.test.ts` → 20 passed (20);

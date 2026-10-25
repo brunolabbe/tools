@@ -138,7 +138,7 @@ the first step.
 - **med** · no Done-when line depends on it · `segments-without-manifest` fires
   on a page that played nothing. A page fetching only one `.vtt`, only one
   `.key`, or only one `.ts` _script_ each ended `NO_MEDIA_FOUND
-reason=segments-without-manifest segments=1` (measured through
+  reason=segments-without-manifest segments=1` (measured through
   `BrowserResolver`). `segmentCount` also counts unconfirmed request-only hits
   and hits with a status of 400 or more. The `PageSignals.segmentCount`
   docblock ("Playback demonstrably started") is false for these cases. The
@@ -155,7 +155,7 @@ reason=segments-without-manifest segments=1` (measured through
     including `certificate_verify_failed`, the one urllib output matches first.
     Only `certificateverifyerror` is kept.
   - Dropped, correctly: the `UNREACHABLE` first line (`page.goto: net::… at
-https://…`).
+    https://…`).
   - A bare single-label host such as `intranet-db` passes the filter, but no
     live producer emits one.
 - **low** · Two documented misses, measured. A chunked (no `Content-Length`)
@@ -191,7 +191,7 @@ https://…`).
     new log line, so redaction is not affected; the sniff issues no request of
     its own, and sniffed urls still pass `assertAllAllowed` in
     `routes/probe.ts`; contract unchanged; `sniff.test.ts` registered (`vitest
-list --project downloader`); no `any` or `console` in the diff.
+    list --project downloader`); no `any` or `console` in the diff.
   - Skipped as untouched: shell and kill-tree, progress, Dockerfile closure, and
     routes.
 - NFR: security, the **high** above · performance, the first **med** ·

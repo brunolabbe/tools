@@ -364,7 +364,7 @@ named:
   ranges). "with the egress proxy configured, ffmpeg's own request never
   reaches it". "a proxy's refusal reaches ffmpeg in the proxy's own words, and
   nothing goes around it": a refused `CONNECT`'s `502 TLS certificate
-verification failed (CERT_HAS_EXPIRED)` reaches ffmpeg verbatim, so the runner
+  verification failed (CERT_HAS_EXPIRED)` reaches ffmpeg verbatim, so the runner
   still reads it as a certificate failure (dl-27).
 - Replayed headers: the same proxy test, and the 3x test, which asserts
   `Referer`, `Cookie` and `User-Agent` on every request the origin saw.
@@ -435,7 +435,7 @@ feeder's.
    uses one (a chunked `200` with no length). The fixture shape that would have
    kept the size unknown at a ranging origin, `Content-Range: bytes a-b/*`, is
    unreadable to ffmpeg itself: 6.1.1 given one directly fails with `moov atom
-not found`.
+   not found`.
 3. **"Unknown duration"** is the probe's duration or ffmpeg's own `Duration:`
    line (dl-96), whichever arrives. dl-96's reported source was untimed by the
    probe, so with the probe's alone this would not have helped the case it was
@@ -514,8 +514,8 @@ tests are in "dl-98 round 1: what gate 1 found", at the end of
 - **F1** (high), fixed. A status line Node will not write reached
   `writeHead` inside an unobserved `.then`. Before the fix:
   `crash.mts <tree> "HTTP/1.1 099 Odd"` died with `RangeError
-[ERR_HTTP_INVALID_STATUS_CODE]`, exit 1. After it, `job rejected:
-DOWNLOAD_FAILED`, the process alive, exit 0; the same for `000` and for
+  [ERR_HTTP_INVALID_STATUS_CODE]`, exit 1. After it, `job rejected:
+  DOWNLOAD_FAILED`, the process alive, exit 0; the same for `000` and for
   `206 Par\x01tial`, which matches what the base tree gives. Three changes:
   - `#receiveOrFail` turns any throw into a failure of that fetch.
   - A status outside 200 to 599 is told to ffmpeg as `502 Bad Gateway`.
@@ -558,7 +558,7 @@ DOWNLOAD_FAILED`, the process alive, exit 0; the same for `000` and for
 - **F3** (high), fixed. The meter now subtracts the time the origin was paused
   from the interval that held it. It no longer discards that interval, which
   every 64 KiB write paused. `winsim.mts <tree> normal 1000000 65536`: `feeder
-mode=single; fan-out … 0` before; `mode=parallel; fan-out … 29` after (and
+  mode=single; fan-out … 0` before; `mode=parallel; fan-out … 29` after (and
   for 131072). Tests: "F3: an origin that writes 65536 / 131072 bytes at a
   time is measured, and splits", both red with the old interruption put back.
   The fixture now takes a write size (16 KiB by default).
@@ -619,7 +619,7 @@ the end of `engine/test/parallel-ranges.test.ts`.
   - "F9: a paused request ffmpeg closed does not keep the meter paused for the
     next one" and "F9: a paused request left open does not stop the meter for
     one that is reading" were both red on `3b6a832d` (`expected null not to be
-null`: B never split). The second is red again with the all-paused rule
+    null`: B never split). The second is red again with the all-paused rule
     reverted.
   - The release on drop needed its own case. Without it, the two tests above
     still pass, because the all-paused rule alone covers them. Without it, a
@@ -633,7 +633,7 @@ null`: B never split). The second is red again with the all-paused rule
   ffmpeg's own 30 s, as it is without the feeder; ffmpeg going away is what
   closes it.
   - Gate 2's `delayhdr.mts <tree> feeder 25000 faststart.mp4`: `ok () in
-25.8 s`, where it was `DOWNLOAD_FAILED … in 20.1 s`.
+    25.8 s`, where it was `DOWNLOAD_FAILED … in 20.1 s`.
   - `idlebound.mts <tree> chunk-silent`: the silent fan-out fetch is still cut
     at 20.3 s (`onRefused 127.0.0.1 reset`), and the read continues
     `fallen-back`.
@@ -641,7 +641,7 @@ null`: B never split). The second is red again with the all-paused rule
     wait is ffmpeg's", and the 101 test, renamed "F1: a 101 on a relay is left
     to ffmpeg's own timeout, and going away closes it". Both were red on
     `3b6a832d` (`expected 504 to be 206`; `expected 'answered 504' to be 'gave
-up'`), and red again with the relay bounded.
+    up'`), and red again with the relay bounded.
   - The round-1 stall test still passes, so the chunk-fetch bound still does
     its job.
 - **F11** (low), fixed with one registry instead of a `try/finally` in each

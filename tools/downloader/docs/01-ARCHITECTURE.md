@@ -376,7 +376,7 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
   each was measured rather than assumed:
 
   - **Chromium** gets `--ignore-certificate-errors-spki-list=<base64 SHA-256 of
-the root's SPKI>`. Not a trust store: Chromium on Linux reads NSS, which
+    the root's SPKI>`. Not a trust store: Chromium on Linux reads NSS, which
     needs a `certutil` the image does not ship, and `SSL_CERT_FILE` reaches it
     not at all. The flag exempts chains carrying **that key**, so it adds rather
     than replaces and cannot fail closed on a public origin; what bounds it is

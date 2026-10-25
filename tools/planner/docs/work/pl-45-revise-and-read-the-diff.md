@@ -42,7 +42,7 @@ Build section as a specification, and held.
      `ReviseRequest` and returns the `Run` from a `{ kind: "run" }`
      `ReviseResponse`, 202. Same shape as `startRun`.
    - `editPlan(planId, request)` — POSTs a `{ kind: "move" | "remove" | "restore",
-... }` `ReviseRequest` and returns the `PlanView` from a
+     ... }` `ReviseRequest` and returns the `PlanView` from a
      `{ kind: "revision" }` `ReviseResponse`, 200. Same shape as `pinItem`.
 
    Two functions, not four, because the response shape is what actually
@@ -55,7 +55,7 @@ Build section as a specification, and held.
    `PlanDetail` already carries in full — **no second fetch for an older
    version**, it is already on the document. A **version picker** lets a
    reader move through `plan.revisions`, each labelled `Version N of M ·
-reason`; older ones are read-only and carry a **"Restore this version"**
+   reason`; older ones are read-only and carry a **"Restore this version"**
    button.
 
    **Trap: do not touch the existing crumb line's text or its place in the
@@ -69,7 +69,7 @@ reason`; older ones are read-only and carry a **"Restore this version"**
    still read exactly `Version {revision} of {latestRevision} · {reason}`.
 
 3. **Restore is `editPlan(planId, { kind: "restore", revision: n,
-baseRevisionId })`, and `baseRevisionId` is always the _current_ latest
+   baseRevisionId })`, and `baseRevisionId` is always the _current_ latest
    revision's id, never the one being viewed.** Restoring copies an old
    revision forward as a new one; the concurrency check is against what the
    plan actually is right now, not against the page someone is looking at.
@@ -85,11 +85,11 @@ baseRevisionId })`, and `baseRevisionId` is always the _current_ latest
      (`Day 1` … `Day N`, 1-based per `format.ts`'s `dayHeading` convention) and
      a position selector, scoped to the chosen day's current item count.
      Submits `editPlan(planId, { kind: "move", itemId, toDayIndex, toPosition,
-baseRevisionId })`. No drag-and-drop: every other control in this file is
+     baseRevisionId })`. No drag-and-drop: every other control in this file is
      a button, a select or a checkbox, and a reorder that only a mouse can do
      would be the one interaction on the page that is not.
    - **Remove** — a direct button, submitting `{ kind: "remove", itemId,
-baseRevisionId }` immediately, the same directness pin already has.
+     baseRevisionId }` immediately, the same directness pin already has.
      Unlike a pin toggle this is not instantly reversible from the same
      control, but it is never destructive: the old revision still exists and
      "Restore this version" undoes it in one step, so a confirmation dialog
@@ -116,7 +116,7 @@ baseRevisionId }` immediately, the same directness pin already has.
      note is and is not.
 
    Submits `startReplan(planId, { kind: "replan", days, specialists, note,
-baseRevisionId })`. **On success this is a `Run`, and control leaves
+   baseRevisionId })`. **On success this is a `Run`, and control leaves
    `PlanView` entirely** — hand it to a new `onReplan: (run: Run) => void`
    prop, wired at `App.tsx`'s level beside `Wizard`'s `onDraft`, which is
    `(run) => setWatching(run)`. A re-plan also needs `setReading(null)` first,
@@ -133,14 +133,14 @@ baseRevisionId })`. **On success this is a `Run`, and control leaves
      ready — …" for `"replan"`.
    - **The zero-specialist case named in this ticket's brief is real and
      reachable**: a re-plan naming no specialists re-packs with `rosterSize:
-0`, and `progressLine`'s existing arithmetic renders that as `"0 of 0
-specialists done."` — technically true and useless. Render **"Re-packing
+     0`, and `progressLine`'s existing arithmetic renders that as `"0 of 0
+     specialists done."` — technically true and useless. Render **"Re-packing
      the existing days…"** (or equivalent) whenever `total === 0`, before
      falling through to the specialist-count sentence, regardless of status.
      Leaving `progressLine` as it is would be the n-of-n-of-nothing sentence the
      repo's _never fake progress_ rule is about, so this change is required.
    - Nothing else about the run/progress machinery changes — `queued →
-composing` (pl-42's new edge) already renders correctly with no code
+     composing` (pl-42's new edge) already renders correctly with no code
      here: `LABELS` has an entry for every `RunStatus`, and the bar's
      indeterminate state already covers "no roster frame has arrived yet".
 
@@ -287,7 +287,7 @@ The options are kept as posed.
    walk extended rather than duplicated. It cannot be written or run until
    **both** pl-44 (the route, the migration) and this ticket (the controls)
    exist, so it structurally cannot be either parallel ticket's own `Done
-when`. Options:
+   when`. Options:
    - **A. A follow-up ticket** (`pl-4x`, filed once pl-44 and pl-45 are both
      merged), exactly pl-19's relationship to pl-10. Keeps the parallel cut
      the owner already chose — pl-43/pl-44/pl-45 do not serialise on each
@@ -492,7 +492,7 @@ message to the orchestrator; not duplicated here. Fixed in this round:
   this branch. Re-run with the SDK unpacked into this worktree (see below):
   `npm run check` exits 0; `npm test -- --project planner` is 56 files, 960
   tests, none failing (55/950 before this round's own new tests); `npx vitest
-run tools/planner/web` is 6 files, 89 tests.
+  run tools/planner/web` is 6 files, 89 tests.
 - **Re-plan and Watch it were unreachable from a plan opened off the Plans
   list (med).** `App.tsx` rendered `RunView` only inside its open-intake
   branch; a plan opened from the list has none, so clearing `reading` fell
@@ -503,7 +503,7 @@ run tools/planner/web` is 6 files, 89 tests.
 - **The "Watch it" placeholder (med, open decision) — resolved by the owner,
   not by this session: an honest attaching state.** `RunView` now accepts a
   `Run` (a freshly started run — unchanged) **or** an `AttachTarget` (`{id,
-planId}`, all "Watch it" has, pl-42 having added no route to fetch a `Run`
+  planId}`, all "Watch it" has, pl-42 having added no route to fetch a `Run`
   by id). `Progress.status`/`kind` are nullable; before the first `snapshot`
   the screen says "Connecting…" with an indeterminate bar and no fabricated
   status or count, and `Finished`'s wording now reads `progress.kind` (set

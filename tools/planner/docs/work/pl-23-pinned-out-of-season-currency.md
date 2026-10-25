@@ -105,7 +105,7 @@ is the test that says why.
   check_: a `previous` revision pins a candidate whose season is `12-01`–`03-15`
   against a July trip, carrying the only EUR cost beside a CAD lodging. It
   asserts the item is on a day **and** that `budget-currency` names `CAD and
-EUR`, so a regression in the pin-outranks-season rule reports itself rather
+  EUR`, so a regression in the pin-outranks-season rule reports itself rather
   than showing up as a missing note.
 - `itinerary/src/unchecked.ts` gains a three-line comment at the `placed`
   lookup saying the full candidate list is deliberate.

@@ -174,7 +174,7 @@ the one rule below.
   ticket with an open dependency and a `needs-decision` ticket. Passes before and
   after the fix.
 - `scripts/test/status.test.ts`, the eighth case of Build 4: `run(["--show", "pl-2"],
-root)` on the first fixture still prints `unblocked`, and with `repo-9` at
+  root)` on the first fixture still prints `unblocked`, and with `repo-9` at
   `status: ready` prints `blocked by  repo-9 (ready)`. Passes before and after the
   fix; `--show` is unchanged by it.
 - `npm run -s status -- --json > <scratch>/status.json; echo $?` prints `0`.
@@ -215,7 +215,7 @@ root)` on the first fixture still prints `unblocked`, and with `repo-9` at
   only. The ticket is `ready`, since no question is open and the shape of the fix is
   the builder's to choose inside Build.
   - **Id.** `node scripts/next-id.mjs repo` printed `next free: repo-114`. `git grep
-repo-114` outside `docs/work` printed nothing, and no branch or open pull request
+    repo-114` outside `docs/work` printed nothing, and no branch or open pull request
     carries the id.
   - **Base.** `origin/main` at `aaccab20`. The intake reproduction was on `93bfa1f1`;
     its output is the one pasted above.
@@ -284,7 +284,7 @@ repo-114` outside `docs/work` printed nothing, and no branch or open pull reques
   `repo-9` done / `repo-10` ready fixture as its fourth case and `Done when` 4 reads
   "the fourth case of Build 4". The phrase "Three cases" and the phrase naming
   Build 6's test, each counted above `## Log` by `awk '/^## Log/{exit} {print}'
-<ticket> | grep -c`, → 0 and 0.
+  <ticket> | grep -c`, → 0 and 0.
 - 2026-10-21 — Fixed at landing by owner choice: gate 1, F2 — "The ticket frames the
   default-view defect as `--tool`'s ... it also fires with no flag." Build 4's
   second case now calls `run([], root)` as well, and `Done when` carries a live line

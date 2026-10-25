@@ -45,7 +45,7 @@ Options as put to the owner:
 - **Methods only** — guard only `addMember` (`household`, `address`, `person`),
   `removeMember` (`address`) and `membershipOf` (`address`). `addHousehold` keeps its
   current behaviour for `at` and `by`: a `TypeError` and a `SqliteError
-SQLITE_CONSTRAINT_NOTNULL`, both of which store nothing. Cost: the smallest diff,
+  SQLITE_CONSTRAINT_NOTNULL`, both of which store nothing. Cost: the smallest diff,
   and two rows of the table stay untyped.
 - **Leave it open** — file the ticket with this question unanswered.
 

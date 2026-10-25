@@ -372,7 +372,7 @@ defect committed into its own record. Citations below resolve against `65c12cb`,
 
   **`Done when` 3 — the summary, checked as its own path.** `N/N` is gone
   outright; the line is `V verified, M moved, U unanchored, X unresolvable — of N
-citations`, every bucket printed even at zero. The test asserts the buckets by
+  citations`, every bucket printed even at zero. The test asserts the buckets by
   name _and_ that no `/\b(\d+)\/\1\b/` survives anywhere in stdout, on a record
   holding all four states at once.
 
@@ -532,7 +532,7 @@ citations`, every bucket printed even at zero. The test asserts the buckets by
   copy of the tree rather than a shared one), not by re-running mine. Committed
   above as `## Review`, verbatim, with all ten of its own citations re-checked
   against `23d3b56` with this ticket's own tool before commit — `10 verified, 0
-moved, 0 unanchored, 0 unresolvable`.
+  moved, 0 unanchored, 0 unresolvable`.
 
   **This ticket's thesis, demonstrated on this ticket's own gate record.** The
   `## Review` section above is a record whose citations were resolved against

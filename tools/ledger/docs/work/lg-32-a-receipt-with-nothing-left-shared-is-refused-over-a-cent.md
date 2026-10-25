@@ -176,7 +176,7 @@ change what the other person owes by a cent to fix the payer's own rounding.
     refused. The guard now runs on the items; see the "Fixed at landing" entry.
   - **Measured.** Before the change, on the three new tests that reach it:
     `npx vitest run tools/ledger/books/test/receipts.test.ts
-tools/ledger/api/test/receipts.test.ts -t "lg-32"` gave 3 failed | 2 passed
+    tools/ledger/api/test/receipts.test.ts -t "lg-32"` gave 3 failed | 2 passed
     of 108: the API test `BAD_REQUEST` "More comes off this receipt…" and the two
     books tests `sharedCents: -1` (the refund `+1`). After it, both whole files:
     108 passed of 108 (api resolves books through `dist`, so `books` was rebuilt
@@ -198,13 +198,13 @@ tools/ledger/api/test/receipts.test.ts -t "lg-32"` gave 3 failed | 2 passed
   `splitReceipt`'s header no longer says the case "cannot arise yet" for an amount
   of 0, and the Build entry's two false sentences above are withdrawn in place.
   - Reproduced first, at the gated head `f72a51c0`: `npx vitest run
-tools/ledger/books/test/receipts.test.ts tools/ledger/api/test/receipts.test.ts
--t "gate 1 F2"` → 2 failed | 108 skipped of 110 (books `sharedCents: -1`, the API
+    tools/ledger/books/test/receipts.test.ts tools/ledger/api/test/receipts.test.ts
+    -t "gate 1 F2"` → 2 failed | 108 skipped of 110 (books `sharedCents: -1`, the API
     `BAD_REQUEST` "More comes off this receipt…"). After: the same two files whole →
     110 passed of 110 (`books` rebuilt between, the built `receipts.js` grepped for
     `notShared.length > 0`).
   - Mutation, on a committed tree: restoring the old condition `notSharedCents !==
-0` → 2 failed | 108 passed of 110, the two new tests. Deleting the condition
+    0` → 2 failed | 108 passed of 110, the two new tests. Deleting the condition
     outright (`if (roundingOnly)`) → 110 passed of 110: an equivalent mutant, since
     with no not-shared items `together` and the parts apart are the same number, so
     `roundingOnly` is already false; the condition documents that, and nothing can

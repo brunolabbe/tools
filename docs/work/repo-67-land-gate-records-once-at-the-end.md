@@ -175,7 +175,7 @@ batch.
     `node scripts/citations.mjs docs/work/repo-64-record-the-2026-09-27-batch.md`
     before the pin printed the first as `unanchored` over the line
     `- what the brief had wrong.` and the second over `citation — say so and
-point to the evidence`. After pinning, builder.md to `1a8321c` and
+    point to the evidence`. After pinning, builder.md to `1a8321c` and
     fixer.md to `6988b65`, each with an anchor, both print `ok`, exit 0.
   - **Could have folded in, did not:** `pl-48`'s Log cites lines 63 and 148
     of `records.md` unpinned, already wrong at `1a8321c` (true at
@@ -199,13 +199,13 @@ point to the evidence`. After pinning, builder.md to `1a8321c` and
   repo-73..76 rewrites that line in place; owner's decision.
 - 2026-09-27 — repo-79's builder repointed the one remaining unpinned citation
   this record's `## Review` section carries, `scripts/preflight.mjs:408
-"exec(content)?.[1]"` → `:605` — coordinate only, anchor text unchanged —
+  "exec(content)?.[1]"` → `:605` — coordinate only, anchor text unchanged —
   because repo-79's own additions to `scripts/preflight.mjs` moved it. `node
-scripts/citations-gate.mjs --against origin/main` exit 0: 127 enforced, 0
+  scripts/citations-gate.mjs --against origin/main` exit 0: 127 enforced, 0
   failing.
 - 2026-09-28 — repo-79's gate 1 round moved the same citation again, to
   `:703`; repointed once more, coordinate only. `node
-scripts/citations-gate.mjs --against origin/main` exit 0: 127 enforced, 0
+  scripts/citations-gate.mjs --against origin/main` exit 0: 127 enforced, 0
   failing.
 - 2026-09-28 — repo-79's gate 2 fixer round moved the same citation again, to
   `:774` — coordinate only, anchor text unchanged. Per the orchestrator's

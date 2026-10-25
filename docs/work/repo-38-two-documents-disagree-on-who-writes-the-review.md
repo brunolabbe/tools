@@ -234,7 +234,7 @@ Every finding across six rounds is resolved or dropped; nothing is carried. One 
   **Third document found stale by this change, and fixed rather than filed**
   (fold-in): `.claude/skills/orchestrate-tickets/reference/records.md` directly
   quoted the old SKILL.md phrasing — `"the caller commits the gate record
-**verbatim**"` — as the thing a later splice threatens. That quote, and the
+  **verbatim**"` — as the thing a later splice threatens. That quote, and the
   "caller editing a reviewer's words" framing beside it, named the actor this
   ticket just renamed. Updated both to "the builder" and cited `(repo-38)` so a
   future reader knows why the quote does not match `SKILL.md` word-for-word (it
@@ -242,7 +242,7 @@ Every finding across six rounds is resolved or dropped; nothing is carried. One 
 
   Checked for other stale references with
   `grep -rn "caller commits\|caller writes\|caller who summarises\|caller
-appends"` across the repo: two hits were this ticket's own brief (quoting
+  appends"` across the repo: two hits were this ticket's own brief (quoting
   itself, fine to leave) and two were historical `docs/work/` Log entries
   (`repo-1`, `pl-5`) quoting wording as it stood at the time — append-only
   records, not live rules, left untouched.
@@ -278,7 +278,7 @@ appends"` across the repo: two hits were this ticket's own brief (quoting
   editing it — who does the appending is stated once, below, not here."
 
   **Not acted on, med** — `.claude/skills/orchestrate-tickets/reference/
-dispatching.md@fdafd1a:176` ("Verbatim transcription is nowhere in that rule")
+  dispatching.md@fdafd1a:176` ("Verbatim transcription is nowhere in that rule")
   contradicts `SKILL.md`'s now-authoritative verbatim requirement. Confirmed
   real and pre-existing at `origin/main`, sharpened rather than created by this
   branch: `docs/01-TICKETS.md` now delegates the rule to `SKILL.md` by name, so
@@ -330,7 +330,7 @@ dispatching.md@fdafd1a:176` ("Verbatim transcription is nowhere in that rule")
   the round-2 fix commit reddens CI.
 
   **Not acted on, high** — `node scripts/citations-gate.mjs --against
-origin/main` exits 1 at this tip. `repo-29`'s own already-committed `## Review`
+  origin/main` exits 1 at this tip. `repo-29`'s own already-committed `## Review`
   section, at line 549 of its ticket file, cites `docs/01-TICKETS.md:293` with
   an anchor that now sits at `:294` — moved by this ticket's own Finding-1
   fix, which added a line above it. Reproduced the exit code, the mechanism,
@@ -373,8 +373,8 @@ origin/main` exits 1 at this tip. `repo-29`'s own already-committed `## Review`
   not touch `docs/work/repo-29-citations-carry-no-anchor.md` or
   `docs/01-TICKETS.md:282-286`'s height — both wait on the orchestrator.
   `npm run check`, `node scripts/status.mjs --json` and `npx vitest run
---project repo` (288/288, 6/6) all still green; `node
-scripts/citations-gate.mjs --against origin/main` still exits 1, unchanged,
+  --project repo` (288/288, 6/6) all still green; `node
+  scripts/citations-gate.mjs --against origin/main` still exits 1, unchanged,
   because the `high` is deliberately untouched.
 
 - **2026-09-09, owner's rulings** — Both open decisions this ticket's gate
@@ -429,7 +429,7 @@ scripts/citations-gate.mjs --against origin/main` still exits 1, unchanged,
   trimmed it further.
 
   Gates re-verified at each step: `npm run check` exit 0, `npx vitest run
---project repo` 288/288 across 6 files, `node scripts/status.mjs --json`
+  --project repo` 288/288 across 6 files, `node scripts/status.mjs --json`
   exit 0, and both `node scripts/citations-gate.mjs` and the same command with
   `--against origin/main` at exit 0 with `23 enforced, 0 failing` and nothing
   raised — the condition that had failed every round since it first
@@ -461,7 +461,7 @@ scripts/citations-gate.mjs --against origin/main` still exits 1, unchanged,
   and `docs/work/repo-32-done-can-hide-an-outstanding-obligation.md:193` — and
   restate the reference in prose that names no line.** Done, identically in
   both records: `` `docs/01-TICKETS.md`'s "So the reviewer reports and the
-builder writes the section down" sentence ``, with the four-value history
+  builder writes the section down" sentence ``, with the four-value history
   parenthesised so a future reader does not mistake a missing coordinate for
   an oversight. No verdict, finding, severity, row or measurement in either
   record was touched — confirmed by re-reading both records' `## Review`
@@ -484,7 +484,7 @@ builder writes the section down" sentence ``, with the four-value history
   was right this time, but arrived at rather than accepted — and turned out
   not to be needed for the two owner-ruled citations at all, since those no
   longer carry a line. It was still needed elsewhere: this ticket's own `##
-Why` section (`:294` before this entry) and
+  Why` section (`:294` before this entry) and
   `.claude/skills/orchestrate-tickets/reference/dispatching.md`'s citation of
   the same sentence in its own prose (`:294` before this entry, outside any
   `## Review` section and so never gate-enforced, but a live claim in a
@@ -502,7 +502,7 @@ Why` section (`:294` before this entry) and
   citations: five branches have merged since it was written") rather than one
   found independently. Repointed both, verified unique first, re-ran the
   section-scoped checker after: `7 verified, 0 moved, 0 unanchored, 0
-unresolvable, 0 unchecked — exit 0`.
+  unresolvable, 0 unchecked — exit 0`.
 
   **Found and reported, not fixed, per instruction:**
   `docs/work/repo-41-next-id-cannot-see-a-pushed-branch-with-no-pr.md`'s Log
@@ -525,7 +525,7 @@ unresolvable, 0 unchecked — exit 0`.
   repeating: `npm run check` exit 0; `npx vitest run --project repo` — 313
   tests across 6 files, all passed (the count moved from 288 because the base
   moved, not because anything here added tests); `node
-scripts/citations-gate.mjs` exit 0, `27 enforced, 0 failing` (up from 23,
+  scripts/citations-gate.mjs` exit 0, `27 enforced, 0 failing` (up from 23,
   because more sibling tickets are now enforced too, not because anything
   here changed); `node scripts/citations-gate.mjs --against origin/main` exit
   0, same count, `0 raised`. No record named in either failing list, because

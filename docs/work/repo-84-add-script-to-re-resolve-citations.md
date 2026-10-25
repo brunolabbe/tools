@@ -156,7 +156,7 @@ The ticket now carries a `## Done when`; the table traces its five lines. Unpinn
   The suite's `a range the branch shortened the file below is still found`
   case is that gap; mutation M1 below turns it red.
 - 2026-10-03 — **The suite, and that it can fail:** `npx vitest run
-scripts/test/re-resolve-citations.test.ts` is 18 of 18. Seven mutations of the
+  scripts/test/re-resolve-citations.test.ts` is 18 of 18. Seven mutations of the
   script, each applied alone and restored (a `finally` rewrites the original, and
   the run printed `restored true`): tip range not widened, 1 failed; range width
   dropped from the suggestion, 1; `pin` branch disabled, 3; declared-evidence
@@ -165,20 +165,20 @@ scripts/test/re-resolve-citations.test.ts` is 18 of 18. Seven mutations of the
 - 2026-10-03 — **Run once on a real record, checked by two other methods.**
   `node scripts/re-resolve-citations.mjs docs/work/repo-80-land-records-one-command.md --section Review`
   exited 1: `24 holds, 15 repoint, 0 pin, 0 ambiguous, 0 gone, 0 unresolvable —
-of 39 re-resolved`, and `not re-resolved: 2 pinned, 0 malformed pin, 0
-unanchored, 6 prose or file-less, 0 declared evidence`. (1) Against
+  of 39 re-resolved`, and `not re-resolved: 2 pinned, 0 malformed pin, 0
+  unanchored, 6 prose or file-less, 0 declared evidence`. (1) Against
   `node scripts/citations.mjs <same record> --section Review` (exit 2): 15
   `MOVED`, and a comparison script over both outputs keyed on record line, cited
   file and start line, and new line printed `only in re-resolve: []` and `only in
-citations.mjs: []` — but both read `locateAnchor`, so this shows the report is
+  citations.mjs: []` — but both read `locateAnchor`, so this shows the report is
   faithful to the checker, not that the checker is right. (2) So four of the 15
   were re-found with no shared code, by `grep -n -F` of the anchor in
   `scripts/review-record.mjs`: `--untracked-files=no` at 1369, `dirtyStatus.trimEnd()`
   at 1388, `const baseAnchorLine = baseResult.foundAt` at 1130, `export function
-runPreflightDefault(repo, base, title, spawn` at 1243 — each the line the script
+  runPreflightDefault(repo, base, title, spawn` at 1243 — each the line the script
   suggested. The `pin` verdict was checked the same way with `--base 2ffb72a`
   (1 pin, the one anchor that predates repo-80): `git show 2ffb72a:<repo-62
-record> | grep -n -F "starts on two"` printed line 173, the suggested pin, and
+  record> | grep -n -F "starts on two"` printed line 173, the suggested pin, and
   `git show 2ffb72a:scripts/review-record.mjs | grep -c -F baseAnchorLine` printed
   0, so that anchor, which repo-80 introduced, was rightly not a pin. The run's
   other 38 verdicts (23 holds, 15 repoint) were not checked against the base by a
@@ -217,7 +217,7 @@ record> | grep -n -F "starts on two"` printed line 173, the suggested pin, and
     one rule on both sides; and a pin to one of several lines is a pin
     `--require-distinct-anchors` refuses at the dry run, so `pin` stating one
     would be a suggestion known to fail. New test `with --base, an anchor on
-several base lines is ambiguous, never a pin to the first`; removing the new
+    several base lines is ambiguous, never a pin to the first`; removing the new
     branch turns it red (1 failed of 21). Mutating `[0]` alone survives and is an
     equivalent mutant now, since the ambiguous branch returns first.
   - **F3, taken.** The ticket now has a `## Done when`, derived from the Decision.

@@ -170,7 +170,7 @@ testability on 2026-10-12**, provided production behaviour is unchanged.
   `play-press.test.ts`, the comment above the counting rows in
   `browser-resolver.test.ts`, and the brief. The conclusion holds but the reason
   is wrong. `provoke.ts` runs `clickVisible(frame, PLAY_SELECTORS, { countPress:
-isPlayPress })` in every frame, and the gate's read log shows `embed-inner`'s
+  isPlayPress })` in every frame, and the gate's read log shows `embed-inner`'s
   `id="play"` read through `isPlayPress` inside a frame. `xo`
   (`box-xo-cta.html`) stays out of the rule because its "Watch now" button has
   no attribute mark and takes `clickByText`. — owner chose fix, 2026-10-13;
@@ -351,7 +351,7 @@ Gate 2's finding:
     | `ctl=label (aria-label=Play) ...`                                                     | play-press, count: `label`                                  |
 
     Kept in the browser, as the ticket asked: `adding ?t= on play is not a
-departure` (now a single test), the `location.assign` departure test (the
+    departure` (now a single test), the `location.assign` departure test (the
     ticket's 336, still at that line), `ctl=autoplay`, `ctl=jw`, `ctl=watch` and
     `ctl=xo`. `t`, `autoplay` and `jw` are in the tables
     as well. 17 rows deleted: `browser-resolver.test.ts` went from 137 tests to
@@ -384,7 +384,7 @@ departure` (now a single test), the `location.assign` departure test (the
     | `release` of the last member calls `interrupt()` (option (b)) | meter         | the two release rows and all three `a gap of N ms` rows                             |
 
   - **The gap rule is pinned as option (a).** `a gap of 0, 300, 1000 ms before
-B's first byte` in `parallel-ranges-meter.test.ts`: the 8 MB/s origin, A
+    B's first byte` in `parallel-ranges-meter.test.ts`: the 8 MB/s origin, A
     read for 0.5 s and released, the judge at 1500 ms of measured time against 5
     MB/s of media. 0 ms: 12 080 000 bytes in 1500 ms, fast; 300 ms: 9 680 000 in
     1500, fast; 1000 ms: 4 080 000 in 1500, **not fast** (a fast origin is split).
@@ -526,7 +526,7 @@ B's first byte` in `parallel-ranges-meter.test.ts`: the 8 MB/s origin, A
     it "presses in a frame": the header of `play-press.test.ts`, the comment above
     the counting rows in `browser-resolver.test.ts`, and this brief (Build item 2).
     The reason was wrong. `provoke.ts` runs `clickVisible(frame, PLAY_SELECTORS,
-{ countPress: isPlayPress })` in every frame, and `xo`'s `cta-inner.html` has
+    { countPress: isPlayPress })` in every frame, and `xo`'s `cta-inner.html` has
     only `<button onclick=...>Watch now</button>`, with no attribute mark, so it
     matches `PLAY_TEXT` through `clickByText`; `watch` is an `<a href="#later">`
     with the same property. Reworded in all three places. **The brief's sentence

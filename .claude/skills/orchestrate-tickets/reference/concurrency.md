@@ -103,23 +103,29 @@ from half the namespace without saying so:
 node scripts/next-id.mjs <prefix>     # repo, dl, pl …
 ```
 
-It prints **every claimant with its source**, then any id two sources both hold,
-then anything it could not read in full, then the first free one: the answer
-is the last line, `next free:`, after some fifty `merged` rows for a tool with
-that many tickets. A `merged` row means the ticket's file is on `main`, not that
-its work has merged — lg-40 read `merged` with #548 open — and a branch stacked
-on a sibling's reads as a `clash` with both pull requests (lg-66 in #623 and
-#625); both are repo-118's.
+It prints **the answer first**: `next free:` is line 1, so it is the first thing a
+caller reads whatever the board holds. Under it come anything it could not read in
+full, then **every claimant with its source**, then any id two sources both hold.
+Before repo-118 the answer was the last line, after some fifty rows for a tool with
+that many tickets.
+
+A row labelled `on main` means the ticket's file is on `main`, not that its work
+has merged — lg-40 read `on main` with #548 still open. A sweep of another ref
+(`--rev`) labels its rows `at <ref>` instead. A pull request whose head sits on
+another open pull request's head is labelled `PR#<n> (stacked on PR#<m>)`, and its
+parent's ticket is not a clash: lg-66's #625 carried only #623's commits, and read
+as a clash with both until repo-118.
 
 ```
-merged repo-29
-merged repo-30
-PR#174 repo-31
-branch/repo-31-a-peer-pushed-this repo-31
-clash: repo-31 is claimed by PR#174, branch/repo-31-a-peer-pushed-this
+next free: repo-34
 unread: branch wip-not-fetched-here is on origin at 9c1f0ab, which is not in this
   checkout — only its name was read; run `git fetch origin` and re-run for its files
-next free: repo-32
+on main repo-29
+on main repo-30
+PR#174 repo-31
+branch/repo-31-a-peer-pushed-this repo-31
+PR#176 (stacked on PR#174) repo-33
+clash: repo-31 is claimed by PR#174, branch/repo-31-a-peer-pushed-this
 ```
 
 The maximum alone is what made two real collisions unreadable — `26` with no
@@ -141,7 +147,18 @@ an id nothing has merged, so `repo-49-…` building `repo-49` claims nothing
 either. A PR whose head branch is not fetched, or comes from a fork, keeps its
 own `gh pr diff`, which cannot be filtered that way and still over-reports.
 
-**So a `branch/…`/`merged` clash is one of two things, and both need a look.**
+A stacked pull request's parent ticket is taken off its claim only when git says
+the parent's head is in the child's history (`git merge-base --is-ancestor`). The
+files the parent holds come off the child, and so does an id in the child's
+*branch name* that the parent also holds, so `repo-66-followup` stacked on
+`repo-66-parent` does not clash on 66 by its name (repo-118). An id in the name
+that the parent does not hold stays. Two unrelated pull requests that file one id,
+or whose branch names share one, still clash, and so does a stacked child's own,
+different ticket under a parent's id. A stacked branch with **no pull request** is
+not checked against its parent, so it still reads as a clash with that parent's
+pull request; the follow-up is repo-124.
+
+**So a `branch/…`/`on main` clash is one of two things, and both need a look.**
 Either the branch filed a second ticket under a taken id — the collision this
 page is about, and the fix is to renumber it — or its work already
 squash-merged and nobody deleted it, so the ticket file it filed still reads as
@@ -170,9 +187,11 @@ verified by removing each one in turn, not by assertion.
 | drop the advice on a missing default rev | `fatal: Not a valid object name origin/main` and nothing else, which is what every CI runner and every shallow clone gets |
 | count every path a branch's diff touches | a branch that only edits a merged ticket claims its id — 11 of 14 clash lines on a `pl` sweep, 2026-09-19 |
 | filter to added paths without `--no-renames`, on either diff | a ticket renumbered on a branch, or copied under a new id onto an orphan branch, is one `R` line, and its new id is **not claimed at all** |
-| read a merged id in a branch's name as a claim | every `<id>-slug` build branch clashes with `merged` on its own ticket — 4 of the 11 edit-only lines on 2026-09-19 |
+| read a merged id in a branch's name as a claim | every `<id>-slug` build branch clashes with `on main` on its own ticket — 4 of the 11 edit-only lines on 2026-09-19 |
 | sweep a PR and its head branch separately | one claim prints as two, and the PR's unfilterable diff clashes on every merged ticket it edits |
 | find a PR's head branch by its label | the first PR relabels it, so a second PR on the same head keeps its unfiltered diff and clashes |
+| ask git whether one pull request's head contains another's (`merge-base --is-ancestor`) | a PR stacked on another's head claims its parent's ticket as well, and the two print as a clash: `clash: repo-66 is claimed by PR#623, PR#625`. Measured in repo-118's build by removing the check; the stacked-pair test went red on that line |
+| take a stacked child's name-derived ids off its claim | a branch named `repo-66-followup` on `repo-66-parent` claims 66 by its name, and the two print as `clash: repo-66 is claimed by PR#623, PR#625 (stacked on PR#623)`. Measured in repo-118's build by removing the name rule; the stacked-name test went red on that line |
 | let an unfetched head branch stand for its PR | only the branch's name was read, so the PR's files are dropped |
 | drop the branch source (repo-41) | a **pushed branch with no pull request** is in neither of the other two sources, so a ticket file already committed and pushed on one is handed out as free. Measured on `main` at `a5e31c7`: `next free: repo-39` while `docs/work/repo-39-….md` was on `repo-37-anchor-planner-review-corpus` |
 | read `refs/remotes/origin/*` instead of `ls-remote` | wrong in both directions at once — a plain `git fetch` does not prune, so it keeps branches the remote deleted (**twelve refs against the remote's five**, measured), and it cannot see a branch pushed since your last fetch at all |

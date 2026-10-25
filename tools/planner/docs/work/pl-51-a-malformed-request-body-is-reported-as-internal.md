@@ -53,7 +53,7 @@ repo-wide search — so this ticket is `api`-only).
    A, confirm later) — that answer is about how to leave this ticket, not a
    second, standing decision that A itself binds the planner.
 2. In `toErrorResponse`, map such an error to `new AppError("BAD_REQUEST",
-undefined, { cause: error })` before falling through to `AppError.from`.
+   undefined, { cause: error })` before falling through to `AppError.from`.
 3. Add `BAD_REQUEST: 400` to `STATUS_BY_CODE`.
 4. **dl-66's own review gate found a second bug of the same shape and fixed
    it there — repeat the fix here rather than rediscovering it.**
@@ -64,14 +64,14 @@ undefined, { cause: error })` before falling through to `AppError.from`.
    still said `INTERNAL` for the identical request — the same failure this
    ticket's `Why` describes, just moved from the response to the log line.
    Have `toErrorResponse` return the `AppError` it built (`{ status, body,
-appError }`) and read `server.ts`'s copy from that instead of calling
+   appError }`) and read `server.ts`'s copy from that instead of calling
    `AppError.from` a second time — see dl-66's `http-errors.ts` and
    `server.ts` for the worked pattern.
 
 ## Done when
 
 - An `inject` of a route that accepts a JSON body, sent with `content-type:
-application/json` and no body, answers 400 `BAD_REQUEST` and logs at `info`,
+  application/json` and no body, answers 400 `BAD_REQUEST` and logs at `info`,
   not `error`.
 - The same for a malformed JSON body.
 - `npm run check` and `npm test -- --project planner` are green.
@@ -116,7 +116,7 @@ application/json` and no body, answers 400 `BAD_REQUEST` and logs at `info`,
   its own gate fixes, which do not touch the planner): `POST /api/intakes`
   with `content-type: application/json` and no body answers 500
   `{"error":{"code":"INTERNAL",...}}`, logged `error`/`request
-failed`/`code=INTERNAL`. Malformed JSON on `POST /api/plans` does the same.
+  failed`/`code=INTERNAL`. Malformed JSON on `POST /api/plans` does the same.
   Separately, `toErrorResponse(new AppError("BAD_REQUEST"))` in the planner
   today answers **500** with code `BAD_REQUEST`, because `STATUS_BY_CODE`'s
   `Partial` table falls back to 500 for anything unmapped — the core code
@@ -132,11 +132,11 @@ failed`/`code=INTERNAL`. Malformed JSON on `POST /api/plans` does the same.
   (`npx vitest run`, `GATE_OUT=<file>`), and got the same three findings —
   `POST /api/intakes` with an empty declared-JSON body and `POST /api/plans`
   with a malformed one both answer `500
-{"error":{"code":"INTERNAL","message":"Something went wrong on our
-end.","retryable":false}}`, logged `error/request failed/code=INTERNAL`; and
+  {"error":{"code":"INTERNAL","message":"Something went wrong on our
+  end.","retryable":false}}`, logged `error/request failed/code=INTERNAL`; and
   `toErrorResponse(new AppError("BAD_REQUEST"))` called directly answers `500
-{"error":{"code":"BAD_REQUEST","message":"The request could not be
-understood.","retryable":false}}` (the `STATUS_BY_CODE` `Partial`'s
+  {"error":{"code":"BAD_REQUEST","message":"The request could not be
+  understood.","retryable":false}}` (the `STATUS_BY_CODE` `Partial`'s
   fallback). Deleted the probe file afterward; it is not part of this
   ticket's own test suite. dl-66's width decision (A: keep the rule as
   written) is copied into this ticket's Build step 1 rather than re-decided

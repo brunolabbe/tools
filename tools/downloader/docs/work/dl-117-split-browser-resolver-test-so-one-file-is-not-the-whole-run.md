@@ -141,7 +141,7 @@ The round is `git log --no-merges 17adad5..515201b`: the dl-117 Log correction a
   **One deviation from Build step 2.** `probe` and `probeError` cannot close over
   a `let server` assigned in another module, so the helper builds them with
   `probes(() => server)` and each file calls `const { probe, probeError } =
-probes(() => server)`. The bodies are otherwise the same. The `vi.mock` that
+  probes(() => server)`. The bodies are otherwise the same. The `vi.mock` that
   records `minWaitMs` (dl-115) moved with the only test that reads it.
 
   **Move check, Done when 1.** Commands, run from the worktree:
@@ -156,7 +156,7 @@ probes(() => server)`. The bodies are otherwise the same. The `vi.mock` that
     names match the base run's JSON report exactly: 124 of 124, 0 mismatches.
   - Base and after `Tests` lines, the same on every run: base
     `Test Files 119 passed | 1 skipped (120)` and `Tests 2565 passed | 2 skipped
-(2567)`; after `Test Files 124 passed | 1 skipped (125)` and the same
+    (2567)`; after `Test Files 124 passed | 1 skipped (125)` and the same
     `Tests` line.
   - `npm run typecheck`: exit 0. `npm run check`: exit 0.
 
@@ -271,7 +271,7 @@ probes(() => server)`. The bodies are otherwise the same. The `vi.mock` that
   in each `beforeAll`, or a longer first-probe budget). The owner chose **record
   only, file neither** (recommended). Nothing is filed; the reproduction is gate
   1's F2: `npx vitest run --project downloader --reporter=default
-tools/downloader/resolvers/test/browser/browser-resolver-` on a machine that
+  tools/downloader/resolvers/test/browser/browser-resolver-` on a machine that
   has not launched Chromium for several minutes.
 
   **The 34 old `file:line` pins** into `browser-resolver.test.ts` (dl-55: 20,

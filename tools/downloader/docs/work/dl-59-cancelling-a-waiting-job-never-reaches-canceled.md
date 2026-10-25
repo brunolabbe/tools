@@ -154,7 +154,7 @@ mine, not the reviewer's.
   (1) the restart Done-when line was proven only indirectly, through
   `store.unfinished()`, and never by an actual restart — added
   `"a restart over a real database reports a canceled wait-line job as
-canceled, not the interrupted-restart INTERNAL"` at the end of
+  canceled, not the interrupted-restart INTERNAL"` at the end of
   `api/test/pipeline.test.ts`, file-backed (`databasePath`, two `createHarness`
   calls over one SQLite file, the same shape as "a restart does not lose the
   preview of a job whose file survived it" above it in the same file),

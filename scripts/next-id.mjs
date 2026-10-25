@@ -63,7 +63,10 @@ function fail(message, exit) {
  * into `source`, because a label prints only when its source produced a row and
  * the dangerous branch is the one that produces none.
  *
- * @typedef {{source: string, paths: string[], note?: string, unread?: boolean}} Source
+ * `sha` is set on a branch the checkout holds, and on nothing else: it is what
+ * `stackPulls` asks git about, and only a commit in hand can be asked.
+ *
+ * @typedef {{source: string, paths: string[], note?: string, unread?: boolean, sha?: string, name?: string}} Source
  */
 
 /**
@@ -185,7 +188,7 @@ export function clashes(rows) {
  *
  * **`--diff-filter=A`**: a branch that only *edits* a merged ticket — a Log
  * entry, a gate record, a corrected premise — is not a second claimant of its
- * id, and without the filter every such edit printed as a clash with `merged`.
+ * id, and without the filter every such edit printed as a clash with `on main`.
  * Measured on a `pl` sweep, 2026-09-19: 11 of 14 clash lines were `M` alone.
  *
  * **`--no-renames`, which the filter is unsafe without.** `git diff` detects
@@ -219,7 +222,7 @@ const ADDED = /** @type {const} */ (["diff", "--no-renames", "--diff-filter=A", 
  * **A diff, not an `ls-tree` — the same reason `gh pr diff` is a diff.** A tree
  * listing returns every ticket file a branch *contains*, so `main` itself and
  * any long-lived branch cut from it would each re-report the whole merged set
- * and clash with `merged` on every id. A three-dot diff is the branch's own
+ * and clash with `on main` on every id. A three-dot diff is the branch's own
  * contribution, which makes the trunk head self-excluding with no special case.
  *
  * **The branch name counts too**, as a floor. It is the weaker kind of claim —
@@ -235,7 +238,7 @@ const ADDED = /** @type {const} */ (["diff", "--no-renames", "--diff-filter=A", 
  * **What it over-reports, knowingly — repo-49's shape 2.** A branch whose work
  * already squash-merged, and which nobody deleted, still has its pre-squash
  * merge base, so a ticket file it filed is reported `A` and clashes with the
- * `merged` copy of the same file. Only a content comparison against `rev`'s
+ * `on main` copy of the same file. Only a content comparison against `rev`'s
  * tree tells that apart from a genuine second ticket under a taken id, and the
  * owner chose to leave it (2026-09-28): it is rare, and an extra clash line
  * costs a glance where a missing one costs a collision.
@@ -295,7 +298,7 @@ export function branchSources(options = {}) {
       // `rev` lacks, not just the ones it added) — and per `idsIn` above,
       // over-reporting is the cheap error here and under-reporting is the
       // expensive one. Filtered to additions like the three-dot diff: a file
-      // only `rev` holds is `merged`'s claim, not this branch's, and a file
+      // only `rev` holds is `on main`'s claim, not this branch's, and a file
       // both hold is already taken, so neither is a claim lost.
       if (!/no merge base/iu.test(failure.message)) throw failure;
       paths.push(...lines(run("git", [...ADDED, rev, sha], { cwd })));
@@ -305,9 +308,11 @@ export function branchSources(options = {}) {
         note:
           `unrelated: branch ${name} shares no history with ${rev}, so every file it holds that ` +
           `${rev} lacks was read, not just the branch's own — expect it to over-claim`,
+        sha,
+        name,
       };
     }
-    return { source, paths };
+    return { source, paths, sha, name };
   });
 }
 
@@ -363,6 +368,10 @@ export function collect(prefix, options = {}) {
     ),
   ];
 
+  // The label names where the files were read from. `on main` is the one a
+  // builder reads; a `--rev` names another ref, and says so.
+  const atRev = rev === "origin/main" ? "on main" : `at ${rev}`;
+
   // Its own statement before the loop, and the ancestor of this line is why:
   // in the shell version the pull request list was inlined into a `for`, where
   // a failing command substitution has its status discarded even under
@@ -417,7 +426,7 @@ export function collect(prefix, options = {}) {
   const byHead = new Map(branches.map((branch, at) => [branch.source.slice("branch/".length), at]));
 
   /** @type {Source[]} */
-  const sources = [{ source: "merged", paths: merged }];
+  const sources = [{ source: atRev, paths: merged }];
   for (const { number, head } of prs) {
     const source = `PR#${number}`;
     // repo-49's shape 3: a pull request and its own head branch read the same
@@ -425,7 +434,7 @@ export function collect(prefix, options = {}) {
     // stands for both, under the PR's label so the number is still on the
     // line, because its diff takes the added-only filter and `gh pr diff` takes
     // none — with the PR's diff kept, a PR that only edits a merged ticket would
-    // still clash with `merged`.
+    // still clash with `on main`.
     const at = head === undefined ? undefined : byHead.get(head);
     const branch = at === undefined ? undefined : branches[at];
     // Two pull requests on one head share its source, and both numbers stay on it.
@@ -449,7 +458,137 @@ export function collect(prefix, options = {}) {
   }
 
   sources.push(...branches);
-  return sources;
+  return stackPulls(sources, { run, cwd, prefix });
+}
+
+/**
+ * Whether `ancestor` is in `descendant`'s history, in this checkout.
+ *
+ * `git merge-base --is-ancestor` answers with its status: 0 is yes, 1 is no,
+ * and anything else (an object this checkout lacks, say) is not an answer, so
+ * it propagates rather than reading as "no".
+ *
+ * @param {string} ancestor
+ * @param {string} descendant
+ * @param {typeof runCommand} run
+ * @param {string | undefined} cwd
+ * @returns {boolean}
+ */
+export function isAncestor(ancestor, descendant, run, cwd) {
+  try {
+    run("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd });
+    return true;
+  } catch (error) {
+    if (/** @type {Error & {exit?: number}} */ (error).exit === 1) return false;
+    throw error;
+  }
+}
+
+/**
+ * The child's branch name, with the ids its parent already holds taken off it.
+ *
+ * A branch named for a ticket claims that ticket through its name, which is a
+ * floor and not a diff (repo-49). Stacked on a parent that holds the same id,
+ * the name is the parent's ticket as well, so `repo-66-followup` on
+ * `repo-66-parent` must not clash on 66 (repo-118's Q2). A name that also names
+ * an id the parent does not hold keeps that id, restated on its own, so the
+ * name claims what it claims.
+ *
+ * Only the branch's own name is touched, and only where it still sits first in
+ * `paths` — `collect` strips a name naming only merged ids, and that case has
+ * nothing here to take off.
+ *
+ * @param {Source} child
+ * @param {Set<number>} heldByParent
+ * @param {string} prefix
+ * @returns {string[]}
+ */
+function unheldName(child, heldByParent, prefix) {
+  const [head = "", ...rest] = child.paths;
+  if (child.name === undefined || head !== child.name) return child.paths;
+  const named = idsIn([child.name], prefix);
+  const unheld = named.filter((id) => !heldByParent.has(id));
+  if (unheld.length === named.length) return child.paths;
+  return unheld.length === 0 ? rest : [unheld.map((id) => `${prefix}-${id}`).join(" "), ...rest];
+}
+
+/**
+ * repo-118's stacked case: a pull request whose head contains another open
+ * pull request's head is stacked on it, and must not clash with it.
+ *
+ * Its diff is taken against `main`, so it carries the parent's commits, and
+ * the parent's ticket file reads as the child's claim as well. On 2026-10-24
+ * that printed `clash: lg-66 is claimed by PR#623, PR#625` for #625, which only
+ * sits on #623. Such a child is labelled `PR#625 (stacked on PR#623)`, and the
+ * paths its parent holds come off its own claim, so the parent's id is the
+ * parent's alone.
+ *
+ * The ancestor check is what makes that safe. Two unrelated pull requests that
+ * both file the same path do not contain one another, and still clash — that
+ * is a real collision. And a stacked child's *own* different file under a
+ * parent's id still clashes, because only paths the parent holds are removed.
+ * The child's branch name is a path of its own here, and the ids in it that the
+ * parent holds come off the same way (`unheldName`), so `repo-66-followup` on
+ * `repo-66-parent` does not clash on 66 by its name.
+ *
+ * Only a pull request whose head is read has a sha to ask git about. One whose
+ * head is unfetched, or comes from a fork, is never treated as stacked: that
+ * would hide its files, and the expensive error is the one to keep.
+ *
+ * The labels and paths are all decided before any is applied, because a parent
+ * that is itself stacked must still be named by its own label.
+ *
+ * @param {Source[]} sources
+ * @param {{run?: typeof runCommand, cwd?: string, prefix: string}} options
+ * @returns {Source[]}
+ */
+export function stackPulls(sources, options) {
+  const run = options.run ?? runCommand;
+  const cwd = options.cwd;
+  const prefix = options.prefix;
+  const pulls = sources.filter(
+    (source) => source.sha !== undefined && !source.unread && source.source.startsWith("PR#"),
+  );
+
+  /** @type {Map<Source, Source>} */
+  const restated = new Map();
+  for (const child of pulls) {
+    const parents = pulls.filter(
+      (other) =>
+        other !== child &&
+        other.sha !== child.sha &&
+        isAncestor(/** @type {string} */ (other.sha), /** @type {string} */ (child.sha), run, cwd),
+    );
+    if (parents.length === 0) continue;
+    // The nearest parent is the one no other parent sits above, so a chain of
+    // three names its middle pull request, not the root.
+    const nearest = parents.filter(
+      (parent) =>
+        !parents.some(
+          (other) =>
+            other !== parent &&
+            isAncestor(
+              /** @type {string} */ (parent.sha),
+              /** @type {string} */ (other.sha),
+              run,
+              cwd,
+            ),
+        ),
+    );
+    const inherited = new Set(parents.flatMap((parent) => parent.paths));
+    const heldByParent = new Set(
+      idsIn(
+        parents.flatMap((parent) => parent.paths),
+        prefix,
+      ),
+    );
+    restated.set(child, {
+      ...child,
+      source: `${child.source} (stacked on ${nearest.map((parent) => parent.source).join(", ")})`,
+      paths: unheldName(child, heldByParent, prefix).filter((entry) => !inherited.has(entry)),
+    });
+  }
+  return sources.map((source) => restated.get(source) ?? source);
 }
 
 /**
@@ -479,27 +618,28 @@ export function parseArgs(argv) {
 }
 
 /**
- * The claims, then any clash, then anything the sweep could not read, then the
- * answer.
+ * The answer, then anything the sweep could not read, then the claims and any
+ * clash.
  *
- * `notes` sits immediately above `next free` on purpose: the last two lines a
- * caller reads are what this could not see and the number it is handing out
- * anyway. A note is printed whether or not its source produced a row, which is
- * the point — a branch named `wip-x` holding `repo-50-….md`, not yet fetched,
- * claims nothing at all, and the note is the only thing standing between that
- * and silence.
+ * `next free` is the first line, and `notes` sits immediately below it, on
+ * purpose: the first two lines a caller reads are the number this is handing
+ * out and what this could not see anyway. They were the last two lines until
+ * repo-118, and after fifty claimant rows for a busy tool the answer was the
+ * one a caller could not find. A note is printed whether or not its source
+ * produced a row, which is the point — a branch named `wip-x` holding
+ * `repo-50-….md`, not yet fetched, claims nothing at all, and the note is the
+ * only thing standing between that and silence.
  *
  * @param {{source: string, id: number}[]} rows
  * @param {string} prefix
  * @param {string[]} [notes]
  */
 export function render(rows, prefix, notes = []) {
-  const out = rows.map(({ source, id }) => `${source} ${prefix}-${id}`);
+  const out = [`next free: ${prefix}-${nextFree(rows)}`, ...notes];
+  out.push(...rows.map(({ source, id }) => `${source} ${prefix}-${id}`));
   for (const { id, sources } of clashes(rows)) {
     out.push(`clash: ${prefix}-${id} is claimed by ${sources.join(", ")}`);
   }
-  out.push(...notes);
-  out.push(`next free: ${prefix}-${nextFree(rows)}`);
   return out.join("\n");
 }
 

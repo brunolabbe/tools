@@ -239,7 +239,7 @@ test pressing the label path in a cross-site frame.
   existing one pinning that the label path alone holds the box click back.
 - `resolvers/src` is untouched; the plants below were applied to `provoke.ts`
   in place and restored from commit `e051772c`, and `git diff HEAD --stat --
-tools/downloader/resolvers/src` was empty after each.
+  tools/downloader/resolvers/src` was empty after each.
 
 The brief had one thing wrong in the fixture: a glyph wrapped in a `<span>` is
 not enough. The embed's own `document` click listener reports any click whose

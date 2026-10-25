@@ -115,9 +115,9 @@ transfer that differs from its usual amount is a question, not a guess
   offer to make an answer a rule, the rules screen and tabs that carry the
   inbox's count.
   - **The suite passes.** `npm test -- --project ledger` → `Test Files 20 passed
-(20)`, `Tests 313 passed (313)`; `npm run check` exit 0; `node scripts/preflight.mjs
---base origin/main --title "feat(ledger): classify rows by rule and put the
-rest in an inbox (lg-4)"` → `preflight passed (exit 0)`.
+    (20)`, `Tests 313 passed (313)`; `npm run check` exit 0; `node scripts/preflight.mjs
+    --base origin/main --title "feat(ledger): classify rows by rule and put the
+    rest in an inbox (lg-4)"` → `preflight passed (exit 0)`.
   - **Done when 1–4, and where each is proved.** (1) An exact match is classified
     on paste: `api/test/classifications.test.ts`, "a row matching one rule
     exactly is classified, and the rest are the inbox"; a changed amount is the
@@ -185,7 +185,7 @@ rest in an inbox (lg-4)"` → `preflight passed (exit 0)`.
     `lg-1-parse-an-accesd-paste.md` (1, in `tools/ledger/CLAUDE.md`). Preflight
     reports them as moved and does not fail them, since the branch edits
     neither record (repo-47's rule). Repointing is mechanical: `node
-scripts/citations.mjs tools/ledger/docs/work/lg-2-store-a-pasted-statement.md`
+    scripts/citations.mjs tools/ledger/docs/work/lg-2-store-a-pasted-statement.md`
     lists the new lines.
   - **Fold-in: one done, one not.** Done: `tools/ledger/README.md` still said
     "the books do not yet", false since lg-1 and more so now; one sentence. Not
@@ -257,8 +257,8 @@ scripts/citations.mjs tools/ledger/docs/work/lg-2-store-a-pasted-statement.md`
     `npx vitest run tools/ledger/api/test/route-limits.test.ts` (17 tests): taking
     `{ onRequest: read }` off the inbox route → `1 failed | 16 passed (17)`
     ("inbox refuses the second request"); making the hook return at once → `13
-failed | 4 passed (17)`; keying on `request.ip` for the person → `3 failed |
-14 passed (17)`.
+    failed | 4 passed (17)`; keying on `request.ip` for the person → `3 failed |
+    14 passed (17)`.
   - **Citations.** `routes/statements.ts`'s route line now carries the hook, so
     lg-2's record, which quotes `app.post(ROUTES.statements, { config }` there,
     is moved by that anchor as well as by the import line above it; it was already

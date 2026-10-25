@@ -228,7 +228,7 @@ programmatically against the tip, not by eye.
   indices silently.
 
   Verified by mutation, control run first (clean tree, `npx vitest run
-tools/downloader/resolvers`, exit 0): reverting the `vtt` row's prefix to
+  tools/downloader/resolvers`, exit 0): reverting the `vtt` row's prefix to
   `(web)?` alone fails 3 tests, reverting the `ttml` row to the fused
   `/ttml|dfxp|stpp|tt$/i` alone fails 3 others. Neither fix covers for the
   other, which is the thing the brief warned about.

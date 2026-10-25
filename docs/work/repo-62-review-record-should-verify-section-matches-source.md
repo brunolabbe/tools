@@ -111,7 +111,7 @@ _Coordinates below are re-resolved against `1848baa` (round 2), not `162a166`, p
      shows only what the formatter did not do.
   3. _"On the pushed branches of open PRs #289 and #291"_: both merged, and
      both branches are deleted on origin (`git ls-remote --heads origin
-dl-69-provoke-shadow-dom repo-50-citations-displaced` prints nothing). The
+     dl-69-provoke-shadow-dom repo-50-citations-displaced` prints nothing). The
      commits survive under the PR refs: `refs/pull/289/head` is `55c40b3` and
      `refs/pull/291/head` is `e6fa633`, the two repairs, whose parents are the
      incident commits. The gates' original section files are gone; the only
@@ -140,7 +140,7 @@ dl-69-provoke-shadow-dom repo-50-citations-displaced` prints nothing). The
   **Placement.** Every addition to `review-record.mjs` is below `main`, and the
   tests are at the end of `review-record.test.ts` with their own `import`,
   because repo-55's merged record cites both files by line: `git diff origin/main
--U0` shows no hunk above line 478 of the script except three in-place lines in
+  -U0` shows no hunk above line 478 of the script except three in-place lines in
   `buildDiff`, and none above line 638 of the spec.
 
   **Folded in.** `buildDiff` ran `git diff --no-index` on absolute temp paths,
@@ -155,7 +155,7 @@ dl-69-provoke-shadow-dom repo-50-citations-displaced` prints nothing). The
   `const fmt = spawnSync(process.execPath, [OXFMT`, the anchors of two of that
   record's citations, so each anchor started on two lines. Renamed to
   `headings` and `formatter`; `node scripts/citations-gate.mjs --against
-origin/main` → exit 0, 112 enforced, 0 failing.
+  origin/main` → exit 0, 112 enforced, 0 failing.
 
   **Tests.** `npx vitest run scripts/test/review-record.test.ts` → 33 of 33
   (27 before, 6 new). Red runs by mutation, each reverted: the comparison
@@ -168,7 +168,7 @@ origin/main` → exit 0, 112 enforced, 0 failing.
   kept the design as built and both skill-page lines on this branch.
 
   **Gate 1's record is not in this ticket.** `node scripts/review-record.mjs
-<this ticket> review-gate1.md` at `162a166` exited 20 and restored the ticket:
+  <this ticket> review-gate1.md` at `162a166` exited 20 and restored the ticket:
   "1 unanchored, 1 anchor(s) not distinct" — the NFR bullet's `:653` carries no
   anchor, and its `scripts/review-record.mjs@2ffb72a:434 "shell: false,"` starts on two
   lines, the second being this branch's own `formatMarkdown`. Neither is a

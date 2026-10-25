@@ -457,7 +457,7 @@ an extra problem and is caught. `LAYOUT_FIXTURE_NAMES` against the names
 
 - Deleting `"bank-wide"` from `LAYOUT_FIXTURE_NAMES` turned exactly "the names
   the measurement runs are the fixtures there are, in the same order" red (`1
-failed | 50 passed (51)`); restored from the commit.
+  failed | 50 passed (51)`); restored from the commit.
 - The harness's own test, `layout-live-gate.test.ts`, failed with thirteen
   fixtures until it was updated (below), which is the check that the fake
   model's records cover the new ones too (26 records for 2 runs of 13).
@@ -618,7 +618,7 @@ that replaces "read such a run by its `differences`", for steps 3 and 4:
   - **movement-changing**: anything else (amount, balance or detail on another
     column; order; buckets).
 - Report the let-through count in step 4 as `N let-through, of which M
-note-only, K date-column and J movement-changing`, and state the
+  note-only, K date-column and J movement-changing`, and state the
   rule-of-three bound on **both** `N` and `J` as estimates, with the runs and
   fixtures behind each. The recommendation rests on `J`, and says so.
 - The listing, which reads files and calls nothing (it prints each non-matched
@@ -636,8 +636,8 @@ Run on a fake directory it printed `bank-wide-1.json refused account.order |
 
 - The `MISTAKES` title put the `change` function in the third slot. In this
   ticket's table the cases are objects and the title is `$name, $mistake:
-$outcome`; the verbose run now prints `'bank-wide', 'the detail read from the
-currency col…': 'let-through'`. **lg-38's own `MISTAKES` table has the same
+  $outcome`; the verbose run now prints `'bank-wide', 'the detail read from the
+  currency col…': 'let-through'`. **lg-38's own `MISTAKES` table has the same
   title and is left alone**: it is nineteen merged tuples outside this
   ticket's fixtures, and the defect is cosmetic.
 - `bankWide()`'s `shape` says four.
@@ -818,7 +818,7 @@ What each says, from the records:
   unmeasured, as in lg-38. The two shown `english` answers list `Home` as well
   as `Lists` (the correct description has `Lists` only). The two masked `lg37`
   answers give the summary labels `["Solde Dép. Courantes", "Solde Hypothèque",
-"Total"]` where the correct description has `["Solde", "Total"]`, as lg-38's
+  "Total"]` where the correct description has `["Solde", "Total"]`, as lg-38's
   Sonnet did twice.
 
 #### Let through, and its bounds
@@ -1085,8 +1085,8 @@ place, with the sentence that was wrong now saying what holds.
 - **F7 (low):** the provenance clause "at `main` 89a38d30" had no source in
   `run.sh` or `run.log`. The source is the shared checkout's `HEAD` log. Re-read
   for this round: its newest line is `89a38d30` by `pull --tags origin main:
-Fast-forward` at 1792859785 seconds, which is 2026-10-24T16:36:25Z (`date -u -d
-@1792859785`), before the run's 17:32:40Z start. The entry cites it.
+  Fast-forward` at 1792859785 seconds, which is 2026-10-24T16:36:25Z (`date -u -d
+  @1792859785`), before the run's 17:32:40Z start. The entry cites it.
   (`git reflog` run through `git -C` was refused by the worktree-isolation check,
   so the file under `.git/logs/` was read directly.)
 

@@ -264,7 +264,7 @@ live, and it deliberately fixes nothing.
   recommendation, so it overrode nobody; (b) was declined on cost rather than on
   the idea, and (c) is kept so it is not re-proposed. `status: needs-decision` →
   `ready`. The Decision section is now `## Decision — answered 2026-09-07, not
-open`, and Build step 4 is marked `n/a` because it was conditional on (c).
+  open`, and Build step 4 is marked `n/a` because it was conditional on (c).
 
   **The objection carried with the answer**, in this ticket's own words: the set
   in (a) is invisible and unenforced, so a future hook that shells out to a new
@@ -320,7 +320,7 @@ open`, and Build step 4 is marked `n/a` because it was conditional on (c).
   - **Positive control first**, because a red is not evidence until the harness
     is shown able to be green: unmutated,
     `npx vitest run scripts/test/commit-message.test.ts` → `Tests 27 passed
-(27)`, exit 0.
+    (27)`, exit 0.
   - Mutated `scripts/commit-message.mjs:317` to `if (false) {`, same command →
     `Tests 1 failed | 26 passed (27)`, failing exactly
     **`run as a process, a bad message is rejected`** with

@@ -258,8 +258,8 @@ New, in the lines the round touched:
     on its mortgage is the same (lg-55, `current_mortgage_record`); it decides
     which views are shown and never what is counted."
   - **Measured at the commit this entry is in:** `npx vitest run
-tools/ledger/api/test/mortgage.test.ts`, 16 of 16; `npm test -- --project
-ledger`, 1594 of 1594 in 73 files, exit 0; `npm run check` exit 0. The
+    tools/ledger/api/test/mortgage.test.ts`, 16 of 16; `npm test -- --project
+    ledger`, 1594 of 1594 in 73 files, exit 0; `npm run check` exit 0. The
     isolation sweep (`isolation.test.ts`) and `route-limits.test.ts` picked the
     route up from the lists they already walk, once `mortgage` was added to
     `VERBS`, to the isolation writes and reads and to the two-verb list (the
@@ -349,5 +349,5 @@ ledger`, 1594 of 1594 in 73 files, exit 0; `npm run check` exit 0. The
   books." At a negative balance `mortgageStanding` now reads "The bucket is 500.00
   $ short.", as Home does; the new test is "the household screen's line says a
   short bucket is short, as Home does". `npx vitest run
-tools/ledger/web/test/mortgage.test.tsx` → 1 failed of 22 against the previous
+  tools/ledger/web/test/mortgage.test.tsx` → 1 failed of 22 against the previous
   `MortgageSetting.tsx` (the new test), 22 passed of 22 against this one.

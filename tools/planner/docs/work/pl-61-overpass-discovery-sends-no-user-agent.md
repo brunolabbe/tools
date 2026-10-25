@@ -103,7 +103,7 @@ this request is unknown.
    `tools/planner/api/src/runs/discovery.ts` drop the HTTP status the same way step 6
    describes. They are `a notability lookup failed, continuing with the rest` (`notability`),
    `a corridor reading lookup failed, continuing` (`corridorReading`), `discovery could not
-locate a corridor endpoint` (`locate`) and `a detour cost could not be measured`
+   locate a corridor endpoint` (`locate`) and `a detour cost could not be measured`
    (`detourCosts`). Each gets step 6's field: `status` read from `AppError.from(error).details`
    when it is a numeric `status`, omitted otherwise. Keep `code`, every return and the
    no-URL rule. Each catch wraps a call that goes through `#json`, which is where the status
@@ -137,14 +137,14 @@ locate a corridor endpoint` (`locate`) and `a detour cost could not be measured`
 5. `npm run check` passes.
 6. A stubbed `fetch` that refuses, with HTTP 406, the request each of the four lookups named by
    Build step 8 makes: the article queries behind `a notability lookup failed, continuing with
-the rest` and `a corridor reading lookup failed, continuing`, the geocoder query behind
+   the rest` and `a corridor reading lookup failed, continuing`, the geocoder query behind
    `discovery could not locate a corridor endpoint`, and the routing `POST` behind `a detour cost
-could not be measured`. `discoverAlongCorridor` runs over a `ValhallaGroundingProvider` built
+   could not be measured`. `discoverAlongCorridor` runs over a `ValhallaGroundingProvider` built
    on that stub, once per lookup, with a spy logger, and each recorded `warn` carries
    `status: 406`. Each fails on the base, where the field is absent, and passes after the
    change. Offline.
 7. A stubbed `fetch` that refuses, with HTTP 406, the geocoder query behind `a place could not
-be located` and the routing `POST` behind `the travel matrix could not be measured`.
+   be located` and the routing `POST` behind `the travel matrix could not be measured`.
    `measureTravel` runs over a `ValhallaGroundingProvider` built on that stub, with a spy logger,
    and each recorded `warn` for those two messages carries `status: 406`. Each fails on the
    base, where the field is absent, and passes after the change. Offline.

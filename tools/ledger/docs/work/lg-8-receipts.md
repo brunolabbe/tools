@@ -39,7 +39,7 @@ this ticket's seam.
      memory.
    - It returns a **list** of proposals, because one measured photo held two
      receipts side by side. Each is `{ merchant, date, subtotal, gst, qst,
-total }` in cents, each field `null` when not read.
+     total }` in cents, each field `null` when not read.
    - The photo goes as sent. The models read rotated photos without help, so
      there is no rotation step.
 3. **The arithmetic check is pure and lives in `books`.** It checks subtotal +
@@ -579,7 +579,7 @@ ticket, as the dispatch said.
   unsent. That was three lines, so it is in.
   - Red: the bucket test got `[200, 200, 200, 200, 200, 200]`. The filed test
     got `200`. The signal test got `expected undefined to be an instance of
-AbortSignal`.
+    AbortSignal`.
   - With the abort call removed, the signal test still fails:
     `expected false to be true`.
 - **F1.** "filing as a line and onto a row calls no reader" files both ways
@@ -590,7 +590,7 @@ AbortSignal`.
   from `setupFiles` in the root `vitest.config.ts`). Twelve test files build an
   app directly, so a helper would not have reached them all.
   - Red: with both variables set, `npx vitest run --project ledger
-tools/ledger/api` gave 17 of 28 files and 332 of 525 tests failed.
+    tools/ledger/api` gave 17 of 28 files and 332 of 525 tests failed.
   - After: 28 of 28 files, 525 of 525 tests.
 - **F7.** "never the photo, and never the key" now builds the real reader from
   a configured key against a `401` that quotes the key back. It asserts that
@@ -621,7 +621,7 @@ re-gate.** The orchestrator recommended it.
   proposals.
   - Red: "answers no more proposals than a photo can file", with a fake reader
     returning 11, failed with `expected [ …(11) ] to have a length of 10 but
-got 11`.
+    got 11`.
 - **N3 — nothing asserts the unique index on `row_id`.** _Fixed at landing._
   `api/test/schema.test.ts` now has "refuse a second filing on a row a receipt
   already documents", which inserts two filings for one row.

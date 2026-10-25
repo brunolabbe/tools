@@ -262,7 +262,7 @@ Scope: the round's own commit. It replaces dl-98's "a 403" and "a 503" rows in `
   commit, not a decision about it.
 - **Each shortened timing can still fail.** The "interleave" short exit: with
   `connectionOf` returning a constant, `npx vitest run
-tools/downloader/engine/test/stream.test.ts -t "however the lines interleave"`
+  tools/downloader/engine/test/stream.test.ts -t "however the lines interleave"`
   fails (`promise resolved … instead of rejecting`, 0.87 s), and passes unmutated.
   The opted-out row: with `singleConnectionHosts: ["127.0.0.2"]` it fails
   (`fanOut` 25, `maxOpen` 4), so the 4 MB/s rate still splits a host that is not
@@ -290,13 +290,13 @@ tools/downloader/engine/test/stream.test.ts -t "however the lines interleave"`
   - **Red without each member.** `REFUSAL_STATUSES` is
     `engine/src/download/parallel-ranges.ts:177`, restored after each run. With
     `new Set([403, 429])`, `npx vitest run
-tools/downloader/engine/test/parallel-ranges.test.ts -t "fan-out fetch is
-reported"` prints `× a 503 on a fan-out fetch is reported to onRefused as a
-status refusal 5010ms`, `Error: not within 5000 ms: no refusal reported;
-origin saw
-["bytes=0-","bytes=966656-1097727","bytes=1097728-1228799","bytes=1228800-1359871","bytes=835584-"]`
+    tools/downloader/engine/test/parallel-ranges.test.ts -t "fan-out fetch is
+    reported"` prints `× a 503 on a fan-out fetch is reported to onRefused as a
+    status refusal 5010ms`, `Error: not within 5000 ms: no refusal reported;
+    origin saw
+    ["bytes=0-","bytes=966656-1097727","bytes=1097728-1228799","bytes=1228800-1359871","bytes=835584-"]`
     and `Tests 1 failed | 2 passed`. With `new Set([429, 503])` it prints `× a
-403 on a fan-out fetch …`, the same error and `Tests 1 failed | 2 passed`.
+    403 on a fan-out fetch …`, the same error and `Tests 1 failed | 2 passed`.
     Unmutated: 3 of 3 pass.
   - **Timing.** `parallel-ranges.test.ts` alone: 102.2 s before dl-112, 78.8 s
     after round 1, 75.9 s now (39 of 39 tests). The two rows were 2.3 s each; the

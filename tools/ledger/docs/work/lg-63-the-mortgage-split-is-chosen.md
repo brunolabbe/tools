@@ -298,7 +298,7 @@ CI on `a318d52e`, read once with `gh pr checks 594` after the sweeps: 9 of 9 che
   50/50" and "Each person's own part is their deposits minus half of every
   payment"", the roadmap's convention being an "_Amended later on …_" line
   beneath it. Run on `02-ROADMAP.md`, `grep -c "Amended later on 2026-10-21
-(lg-63)"` → 2, one beneath each bullet.
+  (lg-63)"` → 2, one beneath each bullet.
 - 2026-10-21 — Fixed at landing by owner choice: gate 1, the "never changed"
   finding — "Build 4's "a household whose people never changed reads exactly as
   it does now" holds when every listed person is named by every ratio, or there
@@ -311,7 +311,7 @@ CI on `a318d52e`, read once with `gh pr checks 594` after the sweeps: 9 of 9 che
   shares grow (gate 1: 8,823 of 14,905 `mortgageAsOf` comparisons differ, 296 of
   500 seeds); no live household is known to be in it (unmeasured). §4 now names
   it. Run on `00-ANALYSIS.md` above `## Log`, `grep -c "does not hold for a
-listed person that no confirmed ratio names"` → 1.
+  listed person that no confirmed ratio names"` → 1.
 - 2026-10-21 — Fixed at landing by owner choice: gate 1, the no-ratio finding,
   open decision (a) — "leave it and say in `00-ANALYSIS.md` §4 that a book with
   no ratio has no add date to read". Run on `00-ANALYSIS.md` above `## Log`,
