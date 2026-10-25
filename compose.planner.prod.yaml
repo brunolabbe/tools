@@ -93,7 +93,8 @@ services:
       #
       # **No grounding endpoints.** `GROUNDING_PROVIDER` defaults to `fixtures`,
       # which answers from a checked-in table and reaches nothing. Making the
-      # distances real is `compose.planner.yaml` plus a `.osm.pbf`, and the
+      # distances real is `compose.planner.yaml` plus a `.osm.pbf`: that file
+      # sets the endpoints and adds this service to its network (pl-63). The
       # procedure — including why not to automate the rebuild — is in
       # docs/02-DEPLOYMENT.md. Merging this file does not commit a host to that.
       #

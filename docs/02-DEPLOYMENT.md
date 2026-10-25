@@ -1189,9 +1189,19 @@ automatically and nothing should — see step 4.
 
 #### 2 — Build the graph
 
+Append `:compose.planner.yaml` to `COMPOSE_FILE`, after
+`compose.planner.prod.yaml`. **It is an overlay, not a project of its own**
+([pl-63](../tools/planner/docs/work/pl-63-the-planner-reaches-its-grounding-services.md)).
+It adds to the planner service that file defines, so every command for these
+services runs through the full list, like every other command on this page.
+`docker compose -f compose.planner.yaml …` on its own is an invalid project.
+
 ```bash
-docker compose -f compose.planner.yaml --profile tiles run --rm valhalla-tiles
+docker compose --profile tiles run --rm valhalla-tiles
 ```
+
+Build it before the next `up -d`. From this point the planner names these
+services, and until the graph exists its distances come back as named gaps.
 
 A profile rather than a service, so a routine `up -d` never selects it. It
 downloads the extract, builds the tile set into the `valhalla_tiles` volume and
@@ -1224,8 +1234,8 @@ on is a deliberate act with a reason attached.
 #### 3 — Bring them up and point the planner at them
 
 ```bash
-docker compose -f compose.planner.yaml up -d
-docker compose -f compose.planner.yaml logs -f valhalla
+docker compose up -d
+docker compose logs -f valhalla
 ```
 
 Valhalla mmaps the tile set, so its resident memory tracks the tiles actually
@@ -1233,7 +1243,9 @@ touched rather than the size of the extract — which is the whole reason it and
 not OSRM on a 16 GB host. Nominatim imports the same `.pbf` into PostgreSQL the
 first time it starts, which is its own long wait and happens once.
 
-The planner then takes these settings:
+`compose.planner.yaml` sets these on the planner and adds it to the fragment's
+private network, which is the only way it can resolve the three service names.
+To change one, add it to a host-side override listed after it in `COMPOSE_FILE`:
 
 | Variable                         | Value                   | Required                    |
 | -------------------------------- | ----------------------- | --------------------------- |
@@ -1281,9 +1293,8 @@ same one command with `VALHALLA_FORCE_REBUILD=True`, against a freshly
 downloaded extract:
 
 ```bash
-VALHALLA_FORCE_REBUILD=True docker compose -f compose.planner.yaml \
-  --profile tiles run --rm valhalla-tiles
-docker compose -f compose.planner.yaml restart valhalla
+VALHALLA_FORCE_REBUILD=True docker compose --profile tiles run --rm valhalla-tiles
+docker compose restart valhalla
 ```
 
 **Do not automate this.** It is hours of CPU for a change measured in months,
