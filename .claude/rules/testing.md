@@ -107,7 +107,7 @@ strings are unequal. Assert the resolved directory instead.
 
 **Measuring a `process.platform` skip.** Do not fake `win32` process-wide via
 environment setup; it crashes vitest's startup with missing native modules like
-`@rolldown/binding-win32-x64-msvc`. The workaround that worked: flip the predicate
+`@rollup/rollup-win32-x64-msvc`. The workaround that worked: flip the predicate
 inline in the test file (`process.platform === 'win32'` to `!== 'win32'`), run the
 suite, then restore it. `vitest 4`'s `--execArgv` flag does not reach worker
 processes, so process-wide env changes do not reliably affect tests anyway.

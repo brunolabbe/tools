@@ -54,8 +54,10 @@ vite 8's `Plugin`). That update added `overrides.vitest.vite: ^7.3.7` to the roo
     --ignore-scripts --before=2026-10-18`, then `npm update vite` and `npm dedupe`
     the same way (the first pass kept a root vite 7.3.7 for vitest, which accepts
     6, 7 or 8), then a plain `npm install --package-lock-only` on npm 10.9.9.
-    41 lockfile entries changed version or were added, 86 removed (rollup and its 27
-    platform binaries, plugin-react 5's babel tree, vitest 4's `@vitest/*`); the
+    41 lockfile entries changed version or were added, 78 removed (rollup, its 25
+    `@rollup/*` platform binaries and `@napi-rs/lzma-linux-x64-gnu`, plugin-react
+    5's babel tree, vitest 4's `@vitest/*`; the first draft of this line said 86
+    and 27, counts nothing relied on); the
     newest added entry is vitest 5.0.5 at 2026-10-15, so none is inside the week and
     none needs the advisory exemption. rolldown 1.2.14 and its bindings
     (2026-10-14) and `lightningcss` 1.33.0 are new in the tree, as vite 8 brings them.
@@ -72,11 +74,15 @@ vite 8's `Plugin`). That update added `overrides.vitest.vite: ^7.3.7` to the roo
     errors). The three `vite.config.ts` set only `root`, `plugins: [react()]`,
     `server` and `build.{outDir,emptyOutDir,sourcemap}`; none of the renamed or
     removed keys appears. `vitest.config.ts` is unchanged except for two comment
-    words. vitest 5 still resolves a project's worker count from the project's own
-    `maxWorkers`, then the root's (`resolveMaxWorkers` is in
-    `node_modules/vitest/dist/chunks/index.1TqnEahn.js`, not in a `cli-api` chunk
-    any more), so `scripts/test-gate.mjs`'s `VITEST_MAX_WORKERS` still works: the
-    gate printed `11 workers` and vitest ran them.
+    words. In vitest 5 an inline project extends the root config by default, so it
+    inherits the root's `maxWorkers`, and `resolveConfig` falls back to
+    `getDefaultMaxWorkers` (core count less one) only where none is set (both in
+    `node_modules/vitest/dist/chunks/index.1TqnEahn.js`; `resolveMaxWorkers` there
+    only parses a number or a percentage), so `scripts/test-gate.mjs`'s
+    `VITEST_MAX_WORKERS` still works: the gate printed `11 workers` and vitest ran
+    them. The first draft named `resolveMaxWorkers` as the resolver, which was
+    wrong; gate 1 measured every project at 11 locally, 4 with `CI=1`, 3 with
+    `VITEST_MAX_WORKERS=3`.
   - **Measured**, in a worktree with a real `npm ci --ignore-scripts` (the farm's
     links would have written through to the shared checkout), better-sqlite3's
     `build/Release` and ffmpeg-static's binary copied from the shared checkout:
@@ -96,11 +102,13 @@ vite 8's `Plugin`). That update added `overrides.vitest.vite: ^7.3.7` to the roo
       pass" is met for two and not for the downloader's one spec. Not filed: I have
       no reproduction beyond this environment (WSL devcontainer, Chromium
       headless shell 1248), and CI's reading of that spec on `main` is the
-      orchestrator's to take.
+      orchestrator's to take. Read in this sandbox only: the owner's answer of
+      2026-10-25 is below, and CI grades the line.
     - The three dev servers (`npm run dev -w @<tool>/web`, ports 5173, 5183, 5193)
       each answered `200` on `/` and `200 text/javascript` on `/src/main.tsx`.
     - `npm audit`: one high, `node-forge`, no fix available — dl-132's, as at base.
-  - **Folded in**: `.claude/rules/testing.md` named
+  - **Folded in, then dropped at landing (see the owner's answers below)**:
+    `.claude/rules/testing.md` named
     `@rollup/rollup-win32-x64-msvc` as the native module a faked `win32` crashes
     on; rollup is not in the tree now, so it names `@rolldown/binding-win32-x64-msvc`
     (the entry exists in the lockfile; not run on Windows). `vitest 4`'s
@@ -113,3 +121,29 @@ vite 8's `Plugin`). That update added `overrides.vitest.vite: ^7.3.7` to the roo
     two Dockerfiles ask for `22` / `22-bookworm`, which float to the latest 22.x.
     vitest 5 itself needs `^22.12.0 || ^24.0.0 || >=26.0.0`. The repo's own
     `engines.node` is `>=22.0.0`. Nothing was run against jsdom 30 here.
+- 2026-10-25, owner's answers at the landing:
+  - `.claude/rules/testing.md` fold-in: **dropped**, no ticket. The hunk is
+    reverted so the file equals `origin/main`'s: rule pages change in the owner's
+    review session, and the rolldown binding name is unmeasured on Windows.
+  - The e2e `Done when` line: **graded by CI, the sandbox noted here, no ticket.**
+    The local downloader failure (`download.spec.ts:33`, base reproduction at
+    558ce370) is this sandbox's; CI's downloader `e2e (direct)` passed 15 of 15
+    at e1b83883.
+  - Vite 8's CSS baseline: **accepted**, not pinned. Vite 8 minifies CSS with
+    Lightning CSS against its Safari 16.4 baseline, which rewrites `max-width`
+    media queries to range syntax, so Safari 16.4 is the floor for the three web
+    apps' built CSS; no `build.cssTarget` is set.
+  - Gate 1's second and third lows: fixed at landing; the fifth stays recorded and
+    unfixed.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the second low — "the
+  comment names resolveMaxWorkers, which only parses a number or a percentage".
+  The `vitest.config.ts` comment and the Log's worker-count sentence now name the
+  inherited root config and `getDefaultMaxWorkers`. The diff from e1b83883 on
+  `vitest.config.ts`, piped to `grep -c '^-.*resolveMaxWorkers in vitest'`, gives
+  1, and the same on this file for `^-.*then the root's (` gives 1.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the third low — "86
+  removed is 78, and rollup with 27 platform binaries is 25 `@rollup/*` plus
+  lzma". Counted from both lockfiles: 78 removed against `origin/main`
+  (5bd945c6), 25 `@rollup/*` entries, `@napi-rs/lzma-linux-x64-gnu` and
+  `node_modules/rollup` itself. The diff from e1b83883 on this file, piped to
+  `grep -c '^-.*86 removed (rollup and its 27'`, gives 1.
