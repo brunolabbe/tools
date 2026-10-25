@@ -2643,12 +2643,12 @@ function changesStepScript(yaml: string): string {
 }
 
 /** The `run: |` block of the matrix's test step for one leg's shell, dedented. */
-function matrixStepScript(yaml: string, shell: "bash" | "pwsh"): string {
+function matrixStepScript(yaml: string, leg: "bash" | "pwsh"): string {
   const lines = yaml.split("\n");
   const name = lines.findIndex(
     (line, i) =>
       line === "        name: Test the projects this change reaches" &&
-      lines[i + 1] === `        shell: ${shell}`,
+      lines[i + 1] === `        shell: ${leg}`,
   );
   const start = lines.findIndex((line, i) => i > name && line === "        run: |");
   expect(name).toBeGreaterThan(0);
@@ -2943,7 +2943,7 @@ test.skipIf(process.platform === "win32")(
  * Runs one leg's matrix step with `npm` (`npm.cmd` for PowerShell) replaced by
  * a stub that prints the arguments it got on a line starting `ARGS:`.
  */
-function runMatrixStep(shell: "bash" | "pwsh", projects: string | undefined) {
+function runMatrixStep(leg: "bash" | "pwsh", projects: string | undefined) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-matrix-"));
   try {
     if (process.platform === "win32") {
@@ -2957,11 +2957,11 @@ function runMatrixStep(shell: "bash" | "pwsh", projects: string | undefined) {
     env[pathKey] = `${dir}${path.delimiter}${env[pathKey] ?? ""}`;
     delete env.PROJECTS;
     if (projects !== undefined) env.PROJECTS = projects;
-    const script = matrixStepScript(REAL_CI_YAML, shell);
+    const script = matrixStepScript(REAL_CI_YAML, leg);
     // The runner's own wrapping for each shell: `bash -e {0}` with the step's
     // `set` line, and pwsh's stop preference plus its LASTEXITCODE epilogue.
     const result =
-      shell === "bash"
+      leg === "bash"
         ? spawnSync("bash", ["-e", "-c", script], { encoding: "utf8", shell: false, env })
         : spawnSync(
             "pwsh",
@@ -3007,19 +3007,24 @@ test.skipIf(process.platform === "win32")(
   },
 );
 
-const HAS_PWSH =
-  spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", "exit 0"], { shell: false })
-    .status === 0;
+// A PATH lookup, not a launch: starting pwsh costs over a second, and this
+// file is loaded by every filtered run too.
+const HAS_PWSH = (process.env.PATH ?? process.env.Path ?? "")
+  .split(path.delimiter)
+  .some((dir) =>
+    ["pwsh", "pwsh.exe"].some((name) => dir !== "" && fs.existsSync(path.join(dir, name))),
+  );
 
 // The Windows leg's step. Skipped wherever pwsh is not installed, which
-// includes the devcontainer; GitHub's runners carry it.
+// includes the devcontainer; GitHub's runners carry it. Each case is a pwsh
+// start, so an unset PROJECTS is left out: `"$env:PROJECTS"` reads it as "".
 test.skipIf(!HAS_PWSH)(
   "ci.yml's PowerShell matrix step passes every project as --project and refuses an empty list (repo-127)",
   () => {
     const listed = runMatrixStep("pwsh", "planner repo core");
     expect(listed.status, listed.stdout).toBe(0);
     expect(listed.args).toEqual([MATRIX_ARGS]);
-    for (const empty of ["", "   ", undefined]) {
+    for (const empty of ["", "   "]) {
       const result = runMatrixStep("pwsh", empty);
       expect(result.stdout, JSON.stringify(empty)).toContain(MATRIX_EMPTY);
       expect(result.status, JSON.stringify(empty)).toBe(1);

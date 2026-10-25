@@ -260,4 +260,9 @@ Range `7f8d7f48...80ee7306`, two commits on the base (merge-base is the base sha
   pass. The PowerShell spec skips wherever `pwsh` is not installed, which
   includes the devcontainer (fetching a portable `pwsh` was refused), so its
   two mutations stay green here and its first run is this pull request's CI.
+  ubuntu-latest has `pwsh` and ran it on the first push (passed, 6.5 s for four
+  starts, now three). The same push failed `core`'s `spawn-safety.test.ts`: a
+  parameter typed `shell: "bash" | "pwsh"` reads to its scan as a truthy
+  `shell:` option, so it is named `leg`. Run `--project core` beside `repo` for
+  any test that spawns.
   The gate's other lows stay as recorded.
