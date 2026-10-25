@@ -156,3 +156,20 @@ as its `config` example. The guide's "On the LAN as well" told a host to overrid
 planner and the ledger, and the tunnel's log is small. `release.yml` still says
 `compose.prod.yaml` pins the version, which has been `.env`'s job since repo-33.
 That is stale, but in a workflow file outside this change's paths.
+
+**2026-10-25: run on the live host, after the merge.** The owner redeployed
+before copying. The new volume mounted under the right name, so the guide's
+`docker inspect` check passed, but the downloader was on a fresh database: a
+4096-byte `jobs.db` beside a 123 KB `-wal`, and no `out/` or `tmp/` from the old
+volume. Step 1's "If `up -d` has already run" path worked as written: stop,
+count, remove, copy, check, up. The empty window had collected 0 jobs and 1 probe
+outcome, which were lost. After the copy both volumes read 90112 bytes with the
+same 77824-byte `jobs.db`, and every service came up healthy.
+
+Two things the guide lacked, added afterwards:
+
+- Compose warns on every `up` that a volume made by `docker volume create`
+  `already exists but was not created by Docker Compose`. It is harmless, and
+  neither migration section mentioned it.
+- Step 4 now says that a correct mount does not prove the data, and how to
+  recognise a fresh database.
