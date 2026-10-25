@@ -239,3 +239,14 @@ measured.
   well, each only a `readFileSync`), and the comment now says 29 spawn bash and
   five only read files. `git diff 397d1935 -- scripts/test/hooks.test.ts | grep
   -c '^-.*34 cases that spawn bash'` → `1`.
+- 2026-10-25 — Owner answers recorded by a maintenance dispatch. The
+  orchestrator put both questions through `AskUserQuestion` on 2026-10-25; they
+  were not in this Log before this entry. No code or test changed.
+  - Build 6, `ticketRemote`: should the template stand in place of the brief's
+    `git fast-import` rewrite? Options: "accept the template as the whole of
+    Build 6" (the builder's recommendation, **chosen**); "file a follow-up for
+    fast-import". Build 6 is closed, and no follow-up ticket is filed.
+  - Build 9: keep the production change that makes `scripts/status.mjs` export
+    `cli(argv, io)`? Options: "keep it, and the gate attacks it" (the recommended
+    option, **chosen**); "revert it". Gate 1 then found 0 differences over 30
+    cases (see `## Review`).
