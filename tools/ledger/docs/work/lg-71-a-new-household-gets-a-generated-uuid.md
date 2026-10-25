@@ -147,3 +147,75 @@ and the admin can both rename. Until lg-77 lands, every household made here is
   the web form, copy across several screens, and Build 6's design choice), with
   the options keep `standard` (the orchestrator's recommendation) or re-rate to
   `hard`. The owner chose **re-rate to `hard`**, overriding the recommendation.
+- 2026-10-25 — Built on branch `lg-71-first-person-create`, off `53bb5d0f`.
+  - **What the brief had wrong.** The schema refused a UUID: migration 1's
+    `CHECK` on `households.id` takes `[a-z]` only, and Build 2 named
+    `directory.ts` alone. A `CHECK` cannot be altered, so directory migration 7
+    (`api/src/db/directory-schema.ts`) rebuilds the table with one that takes a
+    word or an 8-4-4-4-12 lowercase hex UUID, by the recipe lg-24 measured
+    (migration 3's comment): rows copied aside, table dropped and made again,
+    rows copied back under `defer_foreign_keys`, then migrations 1 to 3's four
+    triggers made again. Four existing assertions of the directory's
+    `user_version` moved from 6 to 7 (`directory.test.ts` three,
+    `person-names.test.ts` one); nothing else in them changed. Second: the
+    e2e server's script (`e2e:ledger:serve`, root `package.json`), both
+    READMEs and the ledger `CLAUDE.md` made the dev household with
+    `add home "Test household"` then `member home …`. The script now runs
+    `add alex@example.test alex`, and the layout spec's seed adds sam through
+    `POST /api/households/:id/members` as alex, since the script cannot name a
+    UUID to a second command. `CLAUDE.md`'s two-line dev recipe is left stale
+    on purpose: a tool's `CLAUDE.md` is edited only when the Build names it,
+    so the replacement line goes to the owner through the orchestrator.
+  - **Build 6, how two "Home" cards are told apart.** The card's heading is the
+    household's name and the shown names of **everyone it has named**, a member
+    who has left included (`AdminHousehold.people`): "Home: alex and sam",
+    joined by `Intl.ListFormat`, and the People list's label follows it. Why
+    people and not the current members: a name stays in a household's books
+    once there, so the list only grows and a card keeps its label as emails
+    come and go, and a household whose every email was removed still has one.
+    A household that has named nobody, which only one made before lg-71 can be,
+    is labelled `{name} ({id})`, since nothing else tells it apart. The UUID is
+    shown nowhere else.
+  - **The response** is `CreateHouseholdResponse`, an alias of `AdminHousehold`:
+    the household holding its first member, so the admin screen inserts the
+    card where the list would put it (by id) and asks for nothing again.
+  - **Email, not Address**: the member form's label, the change-address label
+    ("New email for …"), the admin's "Emails to admit" card, its sentence and
+    its empty line, `ACCESS_POLICY_NOTE`, the removal and retirement hints, the
+    form's own refusal sentence, and `NoHousehold`'s sentence. Server: the three
+    contract messages that said "That address" (`ADDRESS_ALREADY_A_MEMBER`,
+    `MEMBER_NOT_ADDED`, `MEMBER_NOT_FOUND`), and every `directory.ts` sentence a
+    person can reach. A guard reached only past the schema ("The address is not
+    a string.") and the route's body-shape sentences are left: no person reads
+    them. `ADDRESS_ALREADY_A_MEMBER` still names the household's id, so for a
+    UUID household the admin reads the UUID there: `households.test.ts`'s
+    lg-22 test holds that an admin is told which household holds the email,
+    and the card no longer shows an id to match it against. Naming it by its
+    people instead is a sentence for lg-77, which gives a household a name.
+  - **"No screen labels an address field Address", enumerated.**
+    `grep -rn "<label" web/src` finds 61 labels; the three on an email input
+    (`type="email"`) are `household/MemberForm.tsx` ("Email", on the Household
+    screen and on every Admin card), `admin/Admin.tsx`'s `ChangeAddress`
+    ("New email for {address}") and its `NewHousehold` ("Email"). The screens
+    are Household and Admin. `web/test/admin.test.tsx`, "labels no address
+    field Address, the change-address form included", opens all three on the
+    admin screen and finds no label matching `/address/i`;
+    `web/test/household.test.tsx`, "labels no address field Address", does the
+    same on the Household screen.
+  - **Rollback, proved by mutation.** With `createHousehold`'s insert moved out
+    of its transaction, three tests fail and the rest of the three files pass
+    (`npx vitest run` on `directory.test.ts`, `households.test.ts`,
+    `household-command.test.ts`: 3 failed, 124 passed of 127), each a refused
+    first address leaving a household behind; restored from `e8d0693c`.
+  - **Fold-in.** `NoHousehold`'s "This address" sentence and the `--household`
+    refusal in the import and backfill commands ("one lowercase word"), which
+    the change made wrong. Not folded: `LEDGER_ADMINS`' "is not an address" in
+    `config.ts`, an operator's configuration sentence rather than copy on a
+    screen.
+  - **Commands.** `npm run check`: exit 0. `E2E_PORT=8171 npm run e2e:ledger`:
+    12 passed of 12, Admin at 360 px and 1280 px included; the 360 px
+    screenshot shows "Home: alex and sam" over its members and the New
+    household card holding Email and Person. `npm test -- --project ledger`:
+    1,701 passed of 1,701 in 81 files, once `authority.test.ts`'s admin
+    probe of `POST adminHouseholds` sent `{ address, person }` (its first run
+    was 1 failed of 1,701, that probe still sending `{ id, name }`).

@@ -276,8 +276,8 @@ function HouseholdCard(props: {
           </p>
           <p className="muted hint">
             Retiring a person takes effect at the household&rsquo;s next close: they settle the open
-            period, and every period after leaves them out. Remove their addresses first. Bringing
-            them back works the same way.
+            period, and every period after leaves them out. Remove their emails first. Bringing them
+            back works the same way.
           </p>
         </>
       )}
