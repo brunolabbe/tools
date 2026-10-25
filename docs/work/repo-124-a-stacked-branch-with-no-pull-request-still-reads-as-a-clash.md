@@ -90,3 +90,65 @@ first; the owner chose this ticket instead.
   head `e8216ac6` when the fixture was run) as the follow-up to repo-118's decision Q1, as
   set out under _Why_. The reproduction is a fixture and no live case exists; the output
   is under _Why_.
+- 2026-10-25 — Built on branch `repo-124-stacked-branch-no-clash`, base `558ce370`
+  (builder, Sonnet 5.5).
+  - **What changed.** `stackPulls` in `scripts/next-id.mjs` is now `stackSources` (it is
+    no longer about pull requests; nothing else imported the old name). Its candidates are
+    every source with a sha, not `unread`, labelled `PR#…` or `branch/…`. Every rule of
+    repo-118 is kept as it was (`isAncestor`, nearest parent, only the parent's paths and
+    name ids come off, an unread source is never stacked). **The pruning of Build 3** is
+    `mayClash`: a pair is asked about only when the two share a path or an id (worked out
+    once per source, not per pair). **Two pull requests are exempt and always probed**:
+    there are few of them, and repo-118's label (`PR#625 (stacked on PR#623)`) is printed
+    for them even when nothing would clash, so pruning them would have dropped a label
+    repo-118 set. Without the pruning every branch is a parent of every descendant, and
+    the trunk branch (`branch/trunk`, its diff against itself empty, an ancestor of
+    everything) was labelled as the parent of every branch: turning `mayClash` into
+    `return true` failed 18 of the 44 tests of `scripts/test/next-id.test.ts`, the old
+    pull-request ones included.
+  - **Done when 1** (a branch with no pull request, cut from a pull request's head, reports
+    no clash for the parent's ticket): `npx vitest run scripts/test/next-id.test.ts`, 44 of
+    44 pass, the new case being "a branch with no pull request, cut from a pull request's
+    head, reports no clash for it" (fixture of _Why_: `parent-pr` as `PR#623` adding
+    `repo-66`, `stacked-no-pr` adding `repo-67`; rows `PR#623 repo-66` and
+    `branch/stacked-no-pr (stacked on PR#623) repo-67`, no `clash:` line, `next free` 68).
+    Two more cases beside it: a chain of three pull-request-less branches names the
+    nearest parent, not the root, and a branch's name ids the parent holds come off while
+    one it does not hold stays.
+  - **Done when 2** (red when the widening is removed). Commit `8ab3410c` is the green
+    state. With the candidate filter in `stackSources` restored to `source.source.startsWith("PR#")`
+    alone (the base's), the same file gave `Tests  4 failed | 40 passed (44)`: the
+    reproduction (`expected [ { id: 66, sources: [ …(2) ] } ] to deeply equal []`), the
+    three-branch chain, the name-ids case and the different-ticket-under-the-parent's-id case.
+    Restored with `git checkout 8ab3410c -- scripts/next-id.mjs`, 44 of 44 again.
+  - **Done when 3** (the two negatives): "two unrelated branches with no pull request that
+    file one id still clash" (`clash: repo-70` between `branch/first-filer` and
+    `branch/second-filer`) and "two unrelated branches with no pull request whose names
+    share an id still clash" (`branch/repo-70-first-filer`, `branch/repo-70-second-filer`).
+    The two pull-request versions of them (repo-118's) are untouched and still pass. A
+    third, "a stacked branch with no pull request filing a different ticket under its
+    parent's id clashes", is the third half of repo-118's rule on a branch child. And
+    "branches that share no path and no id are not probed" asserts zero `merge-base`
+    spawns for four branches filing four tickets.
+  - **Done when 4**: `concurrency.md`'s paragraph no longer says the gap is open and
+    describes the rule (the sentence on the example output labels is widened to mention
+    `branch/<name> (stacked on PR#<m>)` too).
+  - **Sweep time on this checkout, before and after** (Build 3). The script is
+    `time-ab.mts` in the builder's scratch directory: it runs the base's `next-id.mjs`
+    (`git show 558ce370:scripts/next-id.mjs`) and the branch's, interleaved, against this
+    worktree's real remote and `gh`, 10 runs each. Run 1 saw a different board (a pull
+    request opened between the two readings: 22 spawns, then 28), so the figures are runs
+    2-10 of each, the same board: **before, 9 runs, median 872 ms (min 618, max 992);
+    after, 9 runs, median 754 ms (min 655, max 911)**. Both spawned 28 commands, 12 of them
+    `merge-base`, so there is no difference to claim: the spread of one version is wider
+    than the gap between them, and this checkout's remote holds 5 branches, all but trunk
+    belonging to a pull request, so the widening finds no pull-request-less branch to
+    probe. Before the interleaved run, 7 runs of the branch's code alone read 586-896 ms
+    on a 5-source board. **What is not measured**: a remote with many pull-request-less
+    branches; the cost there is bounded by pruning (zero `merge-base` for unrelated
+    branches, per the last test above) and is otherwise one spawn per ordered pair that
+    shares a path or id.
+  - **Fold-in.** None taken. Renaming `stackPulls` to `stackSources` is within this change;
+    repo-118's finished ticket still names `stackPulls`, left alone because a finished
+    ticket's edit needs a `## Review` that its file does not carry on this branch (preflight
+    fails it) and the name is a historical record there.
