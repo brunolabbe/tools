@@ -239,3 +239,19 @@ New findings in the round:
 grep -c '^-.*Stop and report it to the orchestrator; do not install'` → `1`. The farm
   test now asserts the three fragments and still asserts no `npm install` in the shared
   checkout or in the worktree.
+- 2026-10-25 — Fixed after `--land`, on the owner's decision about a CI reading (not a gate
+  finding). Run 40146023330, job 121027483489, `test (windows-latest, informational)` at
+  `5b0adfcd`: 3 failed of 28 in `scripts/test/check-farm-freshness.test.ts`, each a
+  `worktree-farm.sh` test (`..\..\packages\ui` against `../../packages/ui`, the same for
+  `tools\demo\api`, and the temp path's `RUNNER~1` short-name form against the long form in
+  the warning). The Windows leg had passed on #626, #620 and #617. The owner chose, over
+  asserting path-agnostically or merging as is and filing, to skip those three tests on
+  win32: the farm is a bash script that runs only in the devcontainer's worktrees. They now
+  run through `test.skipIf(process.platform === "win32")`, and no other test changed. Proof
+  on Linux: `npx vitest run scripts/test/check-farm-freshness.test.ts` → 28 passed of 28,
+  including the three skipped on Windows, "worktree-farm.sh links a workspace the shared
+  root has no link for, inside the scope directory the copy loop made", "worktree-farm.sh
+  creates the scope directory and an unscoped link when the shared root has neither" and
+  "worktree-farm.sh names a package the worktree's lockfile declares and a healthy shared
+  checkout lacks, without telling the reader to install in the worktree". The skip itself
+  is unmeasured on Windows: the next push's Windows leg is its reading.

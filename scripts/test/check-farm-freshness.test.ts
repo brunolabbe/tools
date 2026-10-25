@@ -414,58 +414,67 @@ function runCheck(args: string[]) {
   });
 }
 
-test("worktree-farm.sh links a workspace the shared root has no link for, inside the scope directory the copy loop made", () => {
-  const shared = makeSharedWithWorkspaceLinks(["@webtools/ui"]);
-  const tree = makeWorkspaceTree();
-  try {
-    expect(fs.existsSync(path.join(shared.dir, "node_modules", "@webtools", "ui"))).toBe(false);
-    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
-      cwd: tree.dir,
-      shell: false,
-      encoding: "utf8",
-    });
-    expect(result.status).toBe(0);
-    expect(result.stderr).toBe("");
-    expect(result.stdout).toContain("linked workspace @webtools/ui -> ../../packages/ui");
+// The farm is a bash script that runs only in the devcontainer's worktrees; on Windows `ln -s` under Git Bash and the temp path's short-name form differ from what these tests assert.
+const testOffWindows = test.skipIf(process.platform === "win32");
 
-    const scope = path.join(tree.dir, "node_modules", "@webtools");
-    // A real directory the loop made, not a link into the shared checkout.
-    expect(fs.lstatSync(scope).isSymbolicLink()).toBe(false);
-    const link = path.join(scope, "ui");
-    expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
-    expect(fs.readlinkSync(link)).toBe("../../packages/ui");
-    expect(fs.realpathSync(link)).toBe(fs.realpathSync(path.join(tree.dir, "packages", "ui")));
-    // The shared root was only read.
-    expect(fs.existsSync(path.join(shared.dir, "node_modules", "@webtools", "ui"))).toBe(false);
-    // A link the shared root did have still came from the copy loop.
-    expect(fs.readlinkSync(path.join(scope, "core"))).toBe("../../packages/core");
-  } finally {
-    tree.cleanup();
-    shared.cleanup();
-  }
-});
+testOffWindows(
+  "worktree-farm.sh links a workspace the shared root has no link for, inside the scope directory the copy loop made",
+  () => {
+    const shared = makeSharedWithWorkspaceLinks(["@webtools/ui"]);
+    const tree = makeWorkspaceTree();
+    try {
+      expect(fs.existsSync(path.join(shared.dir, "node_modules", "@webtools", "ui"))).toBe(false);
+      const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+        cwd: tree.dir,
+        shell: false,
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(result.stdout).toContain("linked workspace @webtools/ui -> ../../packages/ui");
 
-test("worktree-farm.sh creates the scope directory and an unscoped link when the shared root has neither", () => {
-  const shared = makeSharedWithWorkspaceLinks(["@demo/api", "plain-name"]);
-  const tree = makeWorkspaceTree();
-  try {
-    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
-      cwd: tree.dir,
-      shell: false,
-      encoding: "utf8",
-    });
-    expect(result.status).toBe(0);
-    expect(fs.readlinkSync(path.join(tree.dir, "node_modules", "@demo", "api"))).toBe(
-      "../../tools/demo/api",
-    );
-    expect(fs.readlinkSync(path.join(tree.dir, "node_modules", "plain-name"))).toBe(
-      "../tools/demo/plain",
-    );
-  } finally {
-    tree.cleanup();
-    shared.cleanup();
-  }
-});
+      const scope = path.join(tree.dir, "node_modules", "@webtools");
+      // A real directory the loop made, not a link into the shared checkout.
+      expect(fs.lstatSync(scope).isSymbolicLink()).toBe(false);
+      const link = path.join(scope, "ui");
+      expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+      expect(fs.readlinkSync(link)).toBe("../../packages/ui");
+      expect(fs.realpathSync(link)).toBe(fs.realpathSync(path.join(tree.dir, "packages", "ui")));
+      // The shared root was only read.
+      expect(fs.existsSync(path.join(shared.dir, "node_modules", "@webtools", "ui"))).toBe(false);
+      // A link the shared root did have still came from the copy loop.
+      expect(fs.readlinkSync(path.join(scope, "core"))).toBe("../../packages/core");
+    } finally {
+      tree.cleanup();
+      shared.cleanup();
+    }
+  },
+);
+
+testOffWindows(
+  "worktree-farm.sh creates the scope directory and an unscoped link when the shared root has neither",
+  () => {
+    const shared = makeSharedWithWorkspaceLinks(["@demo/api", "plain-name"]);
+    const tree = makeWorkspaceTree();
+    try {
+      const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+        cwd: tree.dir,
+        shell: false,
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      expect(fs.readlinkSync(path.join(tree.dir, "node_modules", "@demo", "api"))).toBe(
+        "../../tools/demo/api",
+      );
+      expect(fs.readlinkSync(path.join(tree.dir, "node_modules", "plain-name"))).toBe(
+        "../tools/demo/plain",
+      );
+    } finally {
+      tree.cleanup();
+      shared.cleanup();
+    }
+  },
+);
 
 test("worktree-farm.sh prints no workspace line and no warning when the shared root links every workspace", () => {
   const shared = makeSharedWithWorkspaceLinks([]);
@@ -613,35 +622,38 @@ function writeLockDeclaringSdk(dir: string) {
   );
 }
 
-test("worktree-farm.sh names a package the worktree's lockfile declares and a healthy shared checkout lacks, without telling the reader to install in the worktree", () => {
-  // The shared checkout's own lockfile predates the dependency, so its own
-  // check passes; the tree on main declares it (gate 1, F4).
-  const shared = makeSharedWithWorkspaceLinks([]);
-  const tree = makeWorkspaceTree();
-  writeLockDeclaringSdk(tree.dir);
-  try {
-    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
-      cwd: tree.dir,
-      shell: false,
-      encoding: "utf8",
-    });
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain("farm built:");
-    expect(result.stderr).toContain("@anthropic-ai/sdk");
-    expect(result.stderr).toContain(path.join(tree.dir, "package-lock.json"));
-    // common.md forbids an install in a worktree except for a dependency this
-    // branch adds, which the lockfile alone cannot tell from a stale shared
-    // checkout: the remedy names both cases (gate 2, the med).
-    expect(result.stderr).toContain("If this branch's own diff adds the package");
-    expect(result.stderr).toContain("npm install --ignore-scripts");
-    expect(result.stderr).toContain("otherwise, stop and report");
-    expect(result.stderr).not.toContain("npm install` in the shared checkout");
-    expect(result.stderr).not.toContain("npm install` in " + tree.dir);
-  } finally {
-    tree.cleanup();
-    shared.cleanup();
-  }
-});
+testOffWindows(
+  "worktree-farm.sh names a package the worktree's lockfile declares and a healthy shared checkout lacks, without telling the reader to install in the worktree",
+  () => {
+    // The shared checkout's own lockfile predates the dependency, so its own
+    // check passes; the tree on main declares it (gate 1, F4).
+    const shared = makeSharedWithWorkspaceLinks([]);
+    const tree = makeWorkspaceTree();
+    writeLockDeclaringSdk(tree.dir);
+    try {
+      const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+        cwd: tree.dir,
+        shell: false,
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("farm built:");
+      expect(result.stderr).toContain("@anthropic-ai/sdk");
+      expect(result.stderr).toContain(path.join(tree.dir, "package-lock.json"));
+      // common.md forbids an install in a worktree except for a dependency this
+      // branch adds, which the lockfile alone cannot tell from a stale shared
+      // checkout: the remedy names both cases (gate 2, the med).
+      expect(result.stderr).toContain("If this branch's own diff adds the package");
+      expect(result.stderr).toContain("npm install --ignore-scripts");
+      expect(result.stderr).toContain("otherwise, stop and report");
+      expect(result.stderr).not.toContain("npm install` in the shared checkout");
+      expect(result.stderr).not.toContain("npm install` in " + tree.dir);
+    } finally {
+      tree.cleanup();
+      shared.cleanup();
+    }
+  },
+);
 
 test("check-farm-freshness.mjs --worktree-packages prints nothing when the worktree's lockfile declares nothing absent", () => {
   const tree = makeFarmedTree([]);
