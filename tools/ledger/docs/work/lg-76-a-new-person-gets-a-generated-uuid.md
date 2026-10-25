@@ -73,6 +73,11 @@ their name stays required.
 5. **Host command and import**: `household-command.ts`'s `member` and
    `import-command.ts`'s `--as` take a shown name and resolve it, still
    accepting a legacy id; `list` prints shown names beside ids.
+   The workbook reader resolves a name in the file to a person id by folding it
+   against the ids (`People` in `books/src/workbook.ts`): a UUID person would
+   never match, and every row naming them would be refused. It resolves against
+   shown names too, so the import needs the directory's names beside its
+   people (`directoryPeople` in `api/src/import-command.ts`).
 6. **A name from the email**: `person` becomes optional in the add-member
    request and in lg-71's create request. Left out, the shown name is the
    address's part before the `@`, cut to the 64 characters a name may hold; when

@@ -83,3 +83,5 @@ the owner noted that most likely one member of a house keeps the ledger.
 - 2026-10-25 — Now waits on lg-76 too: a person added without an email gets a
   UUID id and their typed name as their shown name, so `addPerson` follows
   lg-76's rule rather than storing the name as the id.
+- 2026-10-25 — lg-78 waits on this: the import screen adds a name the household
+  lacks as a person without an email, through `addPerson`.
