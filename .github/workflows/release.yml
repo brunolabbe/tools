@@ -138,7 +138,8 @@ jobs:
           # sha instead. `context: git` cannot stand in: the checkout above is a
           # bare sha, a detached HEAD, and the action refuses it ("Cannot infer
           # ref from detached HEAD", ledger 0.4.1's run, repo-115). A custom
-          # label replaces the generated one of the same name.
+          # label replaces the generated one of the same name. The step's
+          # `annotations` output still carries `github.sha`; do not pass it on.
           images: ${{ steps.image.outputs.repository }}
           tags: |
             type=semver,pattern={{version}},value=${{ steps.image.outputs.version }}

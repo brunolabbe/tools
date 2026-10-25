@@ -396,12 +396,12 @@ against the `main` it will merge into.
 
 Published tags, per release:
 
-| Tag          | Use                                              |
-| ------------ | ------------------------------------------------ |
-| `0.2.0`      | What a host pins. The only one worth deploying   |
-| `0.2`        | Convenience for a local `docker run`             |
-| `latest`     | Convenience. Deliberately not what the host runs |
-| `sha-1a2b3c` | Tracing an image back to a commit                |
+| Tag           | Use                                              |
+| ------------- | ------------------------------------------------ |
+| `0.2.0`       | What a host pins. The only one worth deploying   |
+| `0.2`         | Convenience for a local `docker run`             |
+| `latest`      | Convenience. Deliberately not what the host runs |
+| `sha-1a2b3c4` | Tracing an image back to a commit                |
 
 Nothing is published for a push that releases nothing, and the downloader's
 two-gigabyte image is not rebuilt when only the planner was released.
