@@ -144,13 +144,15 @@ claim`), which adds `unheldName`. The `concurrency.md` paragraph is updated to s
   printed line". In `concurrency.md`'s guard-table row for the name rule, the line is now
   `clash: repo-66 is claimed by PR#623, PR#625 (stacked on PR#623)`. Planting the removal
   (`plant.mjs <tree> name`) and running `scenarios.mjs <tree> name` printed exactly that
-  line. `git diff 700d5b24 HEAD -- .claude/skills/orchestrate-tickets/reference/concurrency.md |
-  grep -c '^-.*by PR#623, PR#625`. Measured'` → `1`.
+  line. The removed-line count, from `git diff 700d5b24 HEAD -- <concurrency.md>` piped
+  to `grep -c '^-.*PR#625.\. Measured'`, is `1`; the same pattern on `^+` lines is `0`.
 - 2026-10-25 — Fixed at landing by owner choice: gate 1, the second low — "the other two
   stayed green" is false. Withdrawn in place under the Q2 bullet above, attributed to the
   builder, with the measured counts: 2 failed, 34 passed (36), with the name rule removed
   (`plant.mjs <tree> name`, then `npx vitest run scripts/test/next-id.test.ts`).
 - 2026-10-25 — Fixed at landing by owner choice: gate 1, the third low — "promise a clash that
   no test asserts". Added "a stacked child filing a different ticket under its parent's id
-  still clashes" at the end of `scripts/test/next-id.test.ts`; it passes at the head, 37 of
-  37. RED_RESULT_PLACEHOLDER
+  still clashes" at the end of `scripts/test/next-id.test.ts`; it passes at the head, 37 of 37.
+  With `stackPulls`'s filter also dropping any entry that carries an id the parent
+  holds, it alone went red, `expected [] to deeply equal [ { id: 66, sources: [ …(2) ] } ]`,
+  1 failed, 36 passed (37). Restored from `7037f68a`.
