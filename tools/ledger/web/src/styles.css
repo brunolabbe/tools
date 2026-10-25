@@ -81,10 +81,19 @@ body {
   gap: var(--gap);
 }
 
-/* A screen's cards are siblings in main, which would otherwise stack them flush. */
-main {
+/*
+ * A screen's cards are siblings in main, which would otherwise stack them flush.
+ * A grid gap reaches only its own children, so a screen that keeps its cards in
+ * one labelled section of its own (Admin) puts `.stack` on it (lg-70).
+ */
+main,
+.stack {
   display: grid;
   gap: var(--gap);
+}
+
+.stack > h2 {
+  margin: 0;
 }
 
 h1 {
@@ -119,7 +128,9 @@ h1 {
   gap: 0.75rem;
 }
 
-.card h2 {
+/* A card under a screen's own h2 is titled by an h3 (Admin), and reads as any other card's title (lg-70). */
+.card h2,
+.card > h3:first-child {
   margin: 0;
   font-size: 1.125rem;
 }
@@ -141,7 +152,7 @@ button {
   padding: 0 1.25rem;
   font: inherit;
   font-weight: 600;
-  color: var(--bg);
+  color: var(--accent-text);
   background: var(--accent);
   border: 0;
   border-radius: var(--radius);
@@ -214,7 +225,7 @@ button:disabled {
 }
 
 .tabs button[aria-pressed="true"] {
-  color: var(--bg);
+  color: var(--accent-text);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -477,7 +488,7 @@ label.check input {
 }
 
 .range button[aria-pressed="true"] {
-  color: var(--bg);
+  color: var(--accent-text);
   background: var(--accent);
 }
 
@@ -571,13 +582,14 @@ svg.chart text {
   font-size: 12px;
 }
 
-svg.chart .grid,
-svg.chart .baseline,
 /* A column chart whose columns open their rows. */
 svg.chart.openable {
   cursor: pointer;
 }
 
+/* lg-70: #539 put the rule above inside this list, and the gridlines lost their stroke. */
+svg.chart .grid,
+svg.chart .baseline,
 svg.chart .crosshair {
   stroke: var(--border);
   stroke-width: 1;

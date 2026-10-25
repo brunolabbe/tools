@@ -73,6 +73,7 @@ async function fitsBothWidths(
     // measures its container to draw at the new width.
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
     await also?.(page, width);
+    await cardsStandApart(page, screen, `${screen} at ${String(width)} px`);
     const measured = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       innerWidth: window.innerWidth,
@@ -94,6 +95,55 @@ async function fitsBothWidths(
       )
       .toBeLessThanOrEqual(measured.innerWidth);
   }
+}
+
+/**
+ * lg-70: no two cards touch. `main` spaces its children with a grid gap, which
+ * reaches only its own children, so Admin's cards, kept in one section of their
+ * own, stacked flush, and `scrollWidth` cannot see a gap that is missing. Each
+ * card that is not inside another is read against the one before it, and the
+ * space between them must be at least `main`'s gap. `CARDS` says how many a
+ * screen draws at least, so a screen whose cards lost their class compares
+ * nothing and fails rather than passing.
+ */
+async function cardsStandApart(page: Page, screen: string, at: string): Promise<void> {
+  const { gap, spaces } = await page.locator("main").evaluate((main) => {
+    const cards = [...main.querySelectorAll(".card")]
+      .filter((card) => card.parentElement?.closest(".card") === null)
+      .map((card) => card.getBoundingClientRect())
+      .filter((box) => box.height > 0);
+    return {
+      gap: Number.parseFloat(getComputedStyle(main).rowGap),
+      spaces: cards.slice(1).map((box, index) => box.top - (cards[index]?.bottom ?? 0)),
+    };
+  });
+  expect.soft(spaces.length + 1, `${at}: the cards`).toBeGreaterThanOrEqual(CARDS[screen] ?? 0);
+  spaces.forEach((space, index) => {
+    expect
+      .soft(
+        space,
+        `${at}: card ${String(index + 2)} is ${String(space)} px below card ${String(index + 1)}`,
+      )
+      .toBeGreaterThanOrEqual(gap - 0.5);
+  });
+}
+
+/**
+ * lg-70: a chart's gridlines are drawn. A `<line>` has no stroke unless a rule
+ * gives it one, and from #539 to lg-70 none did: a rule put inside the gridlines'
+ * selector list took their stroke away, and the charts lost every gridline but the
+ * baseline. Chromium's computed stroke is read, so it is the rule that applies
+ * which is held, not the text of the stylesheet.
+ */
+async function gridlinesDrawn(page: Page, width: number): Promise<void> {
+  const strokes = await page
+    .locator("svg.chart line.grid")
+    .evaluateAll((lines) => lines.map((line) => getComputedStyle(line).stroke));
+  expect(strokes.length, `Stats at ${String(width)} px: the gridlines`).toBeGreaterThan(0);
+  expect(
+    strokes.filter((stroke) => stroke === "none"),
+    `Stats at ${String(width)} px: gridlines with no stroke`,
+  ).toEqual([]);
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -343,6 +393,20 @@ function radiosBesideTheirLabels(count: number, screen: string) {
   };
 }
 
+/**
+ * The screens that draw more than one card over the seed, with how many at
+ * least: the ones `cardsStandApart` has a pair to read on. Counted at lg-70.
+ */
+const CARDS: Readonly<Record<string, number>> = {
+  Home: 2,
+  Stats: 11,
+  Period: 4,
+  Categories: 3,
+  Salaries: 2,
+  Household: 2,
+  Admin: 3,
+};
+
 /** The tabs whose screens carry a radio group, with how many radios each draws. */
 const RADIOS: Readonly<Record<string, number>> = {
   // MORTGAGE_STATES: live, ended, none.
@@ -362,7 +426,11 @@ for (const [tab, arrived] of TABS) {
       page,
       testInfo,
       tab,
-      radios === undefined ? undefined : radiosBesideTheirLabels(radios, tab),
+      tab === "Stats"
+        ? gridlinesDrawn
+        : radios === undefined
+          ? undefined
+          : radiosBesideTheirLabels(radios, tab),
     );
   });
 }
