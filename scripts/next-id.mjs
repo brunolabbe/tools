@@ -458,7 +458,7 @@ export function collect(prefix, options = {}) {
   }
 
   sources.push(...branches);
-  return stackSources(sources, { run, cwd, prefix });
+  return stackSources(sources, { run, cwd, prefix, rev });
 }
 
 /**
@@ -528,9 +528,24 @@ function unheldName(child, heldByParent, prefix) {
  *
  * **Pairs are pruned before git is asked** (repo-124): one `merge-base` spawn
  * per pair is quadratic in the remote's branch list, and a pair that shares no
- * path and no id cannot clash, so nothing is lost by not probing it. Two pull
- * requests are the exception and are always probed — there are few of them, and
- * the label says which one a ticket sits on even when nothing would clash.
+ * path and no id cannot clash, so no clash is lost by not probing it. What can
+ * be lost is a label, in two ways, both named in `concurrency.md`: a parent
+ * whose own diff adds nothing gives its child no `(stacked on …)`, and in a
+ * chain whose middle shares nothing with the end, the end names the nearest
+ * parent *that shares something*, not the nearest. Two pull requests are the
+ * exception and are always probed, so their label is printed even when nothing
+ * would clash — that is repo-118's, and it is why 7 open pull requests still
+ * cost 7 x 6 spawns: the label depends on ancestry alone, and ancestry is one
+ * `merge-base` per pair.
+ *
+ * **A source already in `rev` is never a parent** (repo-124, F1). A branch
+ * pushed with no commit of its own — the name floor's case, a ticket reserved
+ * before its file exists — sits on a commit `rev` holds, so it is an ancestor
+ * of everything cut from `rev` since, and taking it for a parent would remove
+ * the name's id from every such child and hide the clash the name exists to
+ * show. It carries no commits of its own, so there is nothing to take off.
+ * The check runs only for a pair git has already said is an ancestor, so it
+ * costs a spawn per stacked parent and not one per source.
  *
  * The ancestor check is what makes that safe. Two unrelated pull requests that
  * both file the same path do not contain one another, and still clash — that
@@ -548,13 +563,14 @@ function unheldName(child, heldByParent, prefix) {
  * that is itself stacked must still be named by its own label.
  *
  * @param {Source[]} sources
- * @param {{run?: typeof runCommand, cwd?: string, prefix: string}} options
+ * @param {{run?: typeof runCommand, cwd?: string, prefix: string, rev?: string}} options
  * @returns {Source[]}
  */
 export function stackSources(sources, options) {
   const run = options.run ?? runCommand;
   const cwd = options.cwd;
   const prefix = options.prefix;
+  const rev = options.rev ?? "origin/main";
   const readable = sources.filter(
     (source) =>
       source.sha !== undefined &&
@@ -584,6 +600,18 @@ export function stackSources(sources, options) {
     );
   };
 
+  /** @type {Map<Source, boolean>} */
+  const inRev = new Map();
+  /** @param {Source} source */
+  const heldByRev = (source) => {
+    let known = inRev.get(source);
+    if (known === undefined) {
+      known = isAncestor(/** @type {string} */ (source.sha), rev, run, cwd);
+      inRev.set(source, known);
+    }
+    return known;
+  };
+
   /** @type {Map<Source, Source>} */
   const restated = new Map();
   for (const child of readable) {
@@ -592,7 +620,13 @@ export function stackSources(sources, options) {
         other !== child &&
         other.sha !== child.sha &&
         mayClash(other, child) &&
-        isAncestor(/** @type {string} */ (other.sha), /** @type {string} */ (child.sha), run, cwd),
+        isAncestor(
+          /** @type {string} */ (other.sha),
+          /** @type {string} */ (child.sha),
+          run,
+          cwd,
+        ) &&
+        !heldByRev(other),
     );
     if (parents.length === 0) continue;
     // The nearest parent is the one no other parent sits above, so a chain of
