@@ -3,7 +3,7 @@ id: repo-121
 tool: repo
 title: Move the web toolchain to vite 8, @vitejs/plugin-react 6 and vitest 5
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -40,6 +40,34 @@ vite 8's `Plugin`). That update added `overrides.vitest.vite: ^7.3.7` to the roo
 
 - One vite (8.x) in `package-lock.json`, no `vitest` override, and `npm run
   check`, `npm test`, `npm run build` and the three e2e suites pass.
+
+## Review
+
+**Gate: PASS** — 2026-10-25 · `5bd945c6..e1b83883` (merge base with `origin/main` 5bd945c6; the branch was cut from 558ce370 and has merged `main`) · Opus 5.5, depth standard
+
+| Done when                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One vite (8.x) in `package-lock.json` | **verified**: a script over both lockfiles finds one `node_modules/vite` (8.3.4), no nested vite, and no `rollup` or `@rollup/*` entry. 29 entries added, 12 changed, 78 removed; all 41 added or changed published before the 2026-10-18 cutoff (`npm view <pkg> time`, enumerated, none younger)                                                                                                                                    |
+| No `vitest` override                  | **verified**: the root `package.json` `overrides` holds only `exceljs`, and the `"// overrides"` sentence went with it. `node scripts/check-lockfile-sync.mjs` exits 0 here and in CI `check` at e1b83883                                                                                                                                                                                                                             |
+| `npm run check` passes                | **proven (CI)**: `check` (ci.yml) passes at e1b83883                                                                                                                                                                                                                                                                                                                                                                                  |
+| `npm test` passes                     | **proven (CI)**: `test (ubuntu-latest)` at e1b83883 is `RUN v5.0.5`, 6906 passed and 2 skipped of 6908 tests, 313 passed and 1 skipped of 314 files. That matches main's push run at 5bd945c6 on vitest 4 exactly, and the diff touches no test file. Local `npm test -- --project repo` on the head tree: 601 of 601                                                                                                                 |
+| `npm run build` passes                | **proven (CI)**: the `Run npm run build` step of `test (ubuntu-latest)` at e1b83883 passes. Locally, the three webs each `vite v8.3.4` build with exit 0                                                                                                                                                                                                                                                                              |
+| The three e2e suites pass             | **proven (CI)**, graded by CI's e2e jobs as the owner chose (option b, 2026-10-25). At e1b83883, planner `e2e` and ledger `e2e` pass; downloader `e2e (direct)` has 15 passed, including `download.spec.ts` › "paste a URL, pick a quality, and download the file", and `e2e (sniffer)` has 1 passed. Both downloader jobs built the web with `vite v8.3.4`; main's push run 40208629612 built it with 7.3.7 and passed the same spec |
+
+- **low** · no `Done when` line depends on it · `nfr:reliability` (browser reach). vite 8 minifies CSS with Lightning CSS against its new Safari 16.4 baseline. That rewrites every `@media (max-width: …)` breakpoint in all three webs to range syntax: planner's `(max-width:46rem)` built by vite 7 becomes `(width<=46rem)` under vite 8. Range syntax first shipped in Safari 16.4, so on iOS Safari 16.0 to 16.3 the phone breakpoints stop applying. Chromium e2e cannot see this. It is vite 8's stated default and the repo states no browser floor, so this is an **open decision** for the owner. Recommended: accept vite 8's baseline and record it. Alternative: pin `build.cssTarget` in the three configs (direction only, not run).
+- **low** · `vitest.config.ts` comment, false in the safe direction. The behaviour it states holds; a probe through `createVitest` measured it: every project resolves to 11 locally, 4 with `CI=1`, 3 with `VITEST_MAX_WORKERS=3`. But "(resolveMaxWorkers in vitest's dist chunks)" names a function that, in vitest 5, only parses a number or a percentage. The chain is inline projects' default `extends: true` plus `resolveConfig`'s `getDefaultMaxWorkers`. The Log's sentence citing `resolveMaxWorkers` in `index.1TqnEahn.js` has the same flaw, so the two are one bullet.
+- **low** · Log figures. "86 removed" is 78 against 5bd945c6, and 78 against 558ce370 too. "rollup and its 27 platform binaries" is 25 `@rollup/*` entries plus `@napi-rs/lzma-linux-x64-gnu`. Nothing relies on either count.
+- **low** · for the lander. The Log grades the e2e line "not for the downloader's one spec". The owner's 2026-10-25 answer (grade by CI, note the local failure, no ticket) is not recorded yet. The local failure itself is recorded, with its base reproduction at 558ce370.
+- **low** · `.claude/rules/testing.md` still says "`vitest 4`'s `--execArgv` flag does not reach worker processes" on a tree that now runs vitest 5. Unmeasured on vitest 5. Nothing in scripts, workflows or `package.json` passes `--execArgv`. This is for the owner's rule-page session.
+- **dropped by owner, reverted at landing** · the `.claude/rules/testing.md` hunk (`@rollup/rollup-win32-x64-msvc` → `@rolldown/binding-win32-x64-msvc`). Not tested, by the owner's 2026-10-25 answer.
+- **dropped** · removal of `@napi-rs/lzma-linux-x64-gnu`: it was only an optional dependency of `rollup` and went with it.
+- **dropped** · hoisted `semver` 6→7 and `lru-cache` 5→11: their consumers were plugin-react 5's babel tree, which is removed, and `check-lockfile-sync` exits 0.
+- **dropped** · downloader `vite.config.ts` `configure` → `proxyRes` under vite 8. The bundled http-proxy-3 1.23.3 still emits `proxyRes` before its header passes, so deleting `content-length` still works (read, not run).
+- **dropped** · downloader bundle `/api/…` literals differ between vite 7 and 8 in quoting and variable names only. It is the same 10 paths.
+- **findings** · the hunt returned 10: 5 carried, 5 dropped (one of them by the owner).
+- Invariants: the image closure is touched only through devDependencies, and the three `docker` jobs pass at e1b83883. Skipped, since the diff cannot reach them: cross-tool imports, `AppError`, shell, redaction, SSRF, progress, contract, test registration, style.
+- NFR: security ✓ (`dependency-review` passes; every entry is past the week) · performance ✓ (JS 0.8–1.5 % smaller, CSS within 1.5 %) · reliability — the media-query low above · maintainability — the comment low above.
+- Windows (`test (windows-latest, informational)`) at e1b83883: pass, 6844 passed and 64 skipped of 6908, the same as main's run at 5bd945c6.
 
 ## Log
 
