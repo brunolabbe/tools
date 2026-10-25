@@ -135,12 +135,22 @@ describe("tokens.css", () => {
       "--radius",
       "--gap",
       "--page-width",
-      "--space-1",
       "--font-sans",
       "--font-mono",
       "--font-size-base",
     ].filter((name) => !new RegExp(`${name}\\s*:`, "u").test(body));
     expect(missing).toEqual([]);
+  });
+
+  test("declares no name that no tool reads", () => {
+    // repo-130: a spacing and a font-size scale sat here a week, read by no tool,
+    // and were removed. A name arrives with the tool that first reads it.
+    const declared = [...stripComments(css).matchAll(/(--[\w-]+)\s*:/gu)].map((match) => match[1]);
+    const read = WEBS.flatMap(sourceFiles)
+      .map((file) => stripComments(fs.readFileSync(file, "utf8")))
+      .join("\n");
+    expect(declared.length).toBeGreaterThan(0);
+    expect(declared.filter((name) => !read.includes(`var(${name ?? ""}`))).toEqual([]);
   });
 });
 
