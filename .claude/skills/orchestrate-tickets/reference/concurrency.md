@@ -112,7 +112,8 @@ that many tickets.
 A row labelled `on main` means the ticket's file is on `main`, not that its work
 has merged — lg-40 read `on main` with #548 still open. A sweep of another ref
 (`--rev`) labels its rows `at <ref>` instead. A pull request whose head sits on
-another open pull request's head is labelled `PR#<n> (stacked on PR#<m>)`, and its
+another open pull request's head is labelled `PR#<n> (stacked on PR#<m>)` (a branch
+with no pull request, `branch/<name> (stacked on PR#<m>)`), and its
 parent's ticket is not a clash: lg-66's #625 carried only #623's commits, and read
 as a clash with both until repo-118.
 
@@ -147,16 +148,29 @@ an id nothing has merged, so `repo-49-…` building `repo-49` claims nothing
 either. A PR whose head branch is not fetched, or comes from a fork, keeps its
 own `gh pr diff`, which cannot be filtered that way and still over-reports.
 
-A stacked pull request's parent ticket is taken off its claim only when git says
-the parent's head is in the child's history (`git merge-base --is-ancestor`). The
+A stacked source's parent ticket is taken off its claim only when git says the
+parent's head is in the child's history (`git merge-base --is-ancestor`). The
 files the parent holds come off the child, and so does an id in the child's
 *branch name* that the parent also holds, so `repo-66-followup` stacked on
 `repo-66-parent` does not clash on 66 by its name (repo-118). An id in the name
-that the parent does not hold stays. Two unrelated pull requests that file one id,
-or whose branch names share one, still clash, and so does a stacked child's own,
-different ticket under a parent's id. A stacked branch with **no pull request** is
-not checked against its parent, so it still reads as a clash with that parent's
-pull request; the follow-up is repo-124.
+that the parent does not hold stays. Two unrelated sources that file one id, or
+whose branch names share one, still clash, and so does a stacked child's own,
+different ticket under a parent's id. The rule holds for a pushed branch with **no
+pull request** as well (repo-124): cut from an open pull request's head it reads
+`branch/<name> (stacked on PR#<m>)`, and cut from another branch it names that
+branch. A source whose head `main` already holds is never a parent: a branch pushed
+with no commit of its own, only a name reserving an id, sits on a commit every later
+branch contains, and taking it for a parent would hide the clash the name is there
+to show.
+
+To keep the sweep to a few `git` spawns, a branch pair is asked about only when the
+two share a path or an id; two pull requests are always asked, because their label
+(repo-118) is printed even when nothing would clash. **No clash is lost to that, but
+a label can be**, for any parent and child that share no path and no id: the child
+gets no `(stacked on …)`, or, in a chain whose middle branch shares nothing with
+the end, the end names the nearest parent that shares something, not the nearest.
+A pair of pull requests costs one `git merge-base` each way (about 4 ms on this
+clone), so n open pull requests cost n(n-1) of them and are not pruned.
 
 **So a `branch/…`/`on main` clash is one of two things, and both need a look.**
 Either the branch filed a second ticket under a taken id — the collision this
