@@ -3,7 +3,7 @@ id: repo-123
 tool: repo
 title: Move the web test environment from jsdom 27 to 30
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -31,6 +31,125 @@ changed under it is the failure to look for.
 
 - One jsdom 30.x in the lockfile and all three tools' suites pass.
 
+## Review
+
+**Gate: PASS** — 2026-10-25 · `64ddcb0c..8b96fbd9` (against `origin/repo-121-vite-8-vitest-5`, the stacked base) · Sonnet 5.5, depth narrow
+
+| Done when                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One jsdom 30.x in the lockfile and all three tools' suites pass (two clauses, both traced) | **Clause 1, verified.** The head lockfile has one `node_modules/jsdom` entry, 30.1.3, and no nested copy; the three `web/package.json` read `^30.1.3`; `node scripts/check-lockfile-sync.mjs` exits 0 at the head, and exits 1 with `^30.1.2` planted in `tools/ledger/web/package.json` (control), 0 again once restored. **Clause 2, proven by CI.** `test (ubuntu-latest)`, step `Run npm test`, succeeded at 8b96fbd9: `Test Files 313 passed \| 1 skipped (314)`, `Tests 6906 passed \| 2 skipped (6908)`, which includes the downloader, planner and ledger projects; `test (windows-latest, informational)` passed too. Re-run in the head's installed tree (jsdom 30.1.3, vitest 5.0.5): the three `web` suites, downloader 22 of 22 files and 311 of 311 tests, planner 7 of 7 and 131 of 131, ledger 19 of 19 and 241 of 241. No test file changed on the branch. |
+
+- **low** · no `Done when` line depends on it · `tools/ledger/web/test/stats-layout.test.ts`: the header comment says jsdom's `getComputedStyle` "does not read these properties back (tried: it answers an empty string)". On jsdom 30.1.3 a stylesheet rule `min-width: 0; grid-template-columns: minmax(0,1fr)` reads back as `minWidth "0px"` and `gridTemplateColumns "minmax(0,1fr)"`. The test reads the stylesheet as text and never calls `getComputedStyle`, so nothing relies on the sentence; it is false in the safe direction (it understates jsdom). Whether the bump made it false or it already was at 27.4 is unmeasured. No live call site.
+- **Lockfile against `dependency-updates.md`** (cutoff 2026-10-18): 11 entries added or changed against the base, 9 removed, 3 workspace `devDependencies` lines; the newest entry is `@asamuzakjp/css-color` 7.1.7, published 2026-10-17, so none is inside the week and no advisory exemption is needed. All 11 `integrity` values match the registry's. Per-entry dates are in the full report.
+- **Engine test** (`tools/downloader/engine/test/parallel-ranges-limits.test.ts` › "bytes held ahead never exceed 4 x 4 MB…"): passed in CI at 8b96fbd9 (`✓ downloader tools/downloader/engine/test/parallel-ranges-limits.test.ts (14 tests)`). jsdom cannot reach it: the `downloader` project is `environment: "node"`, no file under `tools/downloader/engine` mentions jsdom, and the engine imports none of the web workspaces. It is the load-sensitive test repo-99 and dl-106 already record.
+- **Node floor** (owner-decided, graded only for the floor): `>=22.22.2` is the right floor. jsdom 30.1.3's `engines.node` is `^22.22.2 || ^24.15.0 || >=26.0.0`, and the highest 22.x minor anywhere in the lockfile is that same 22.22.2 (jsdom, `@asamuzakjp/css-color`, `@asamuzakjp/dom-selector`, `w3c-xmlserializer`). Nothing in the tree runs below it: CI's `node-version: 22` resolved to 22.23.3 on the ubuntu leg with no `EBADENGINE` line, and the sandbox runs 22.23.3.
+- **CI at 8b96fbd9, read once:** `check` x2, `docker` x3, `e2e` x2, `e2e (sniffer)`, `CodeQL`, `codeql`, `dependency-review`, `test (ubuntu-latest)` and `test (windows-latest, informational)` passed; `e2e (direct)` was still pending at the read. No `Done when` line depends on it.
+- **findings** · the three attacks returned 1 finding; 1 carried, 0 dropped.
+- NFR: security ✓ (no entry younger than the cutoff, integrity matches the registry; `jsdom` is a test-only `devDependency`) · performance n/a · reliability ✓ (the one known flake is unrelated to jsdom, above) · maintainability — the low above.
+
 ## Log
 
 - 2026-10-24: filed from the dependency audit.
+- 2026-10-25: built on `origin/repo-121-vite-8-vitest-5` at 64ddcb0c, branch
+  `repo-123-jsdom-30`, stacked as the owner chose (PR #643 merges first). Brief
+  corrections are at the end of this entry.
+  - **Version, against the seven-day rule** (today 2026-10-25, cutoff 2026-10-18):
+    jsdom **30.1.3**, published 2026-10-15 (`npm view jsdom time --json`). It is
+    inside the ticket's "30.1.3 latest" and is the newest version on or before the
+    cutoff; 30.0.0 is 2026-07-27, 30.0.1 2026-07-29, 30.1.0 2026-09-17, 30.1.1
+    2026-09-22, 30.1.2 2026-10-04. The three `web/package.json` files now read
+    `"jsdom": "^30.1.3"` (were `^27.4.0`).
+  - **Lockfile.** `npx -y npm@11.21.1 install --package-lock-only --ignore-scripts
+    --before=2026-10-18`, then a plain `npm install --package-lock-only
+    --ignore-scripts` on npm 10.9.9, as `dependency-updates.md` says. Against
+    `HEAD` (repo-121's 64ddcb0c): 2 entries added, 9 changed, 9 removed. Added:
+    `jsdom/node_modules/undici` 8.12.2 (2026-10-15), `@bramus/specificity` 2.4.3
+    (2026-10-05). Changed: `jsdom` 27.4.0→30.1.3 (2026-10-15), `@asamuzakjp/css-color`
+    4.1.2→7.1.7 (2026-10-17), `@asamuzakjp/dom-selector` 6.8.1→10.0.4 (2026-10-17),
+    `data-urls` 6.0.1→8.0.0 (2026-10-04), `html-encoding-sniffer` 6.0.0→7.0.0
+    (2026-09-21), `tr46` 6.0.0→7.0.0 (2026-10-04), `w3c-xmlserializer` 5.0.0→6.0.0
+    (2026-09-21), `whatwg-mimetype` 4.0.0→5.0.0 (2026-01-20), `whatwg-url`
+    15.1.0→17.3.0 (2026-10-14). Removed: `@acemir/cssom`, `@asamuzakjp/nwsapi`,
+    `agent-base`, `cssstyle`, `data-urls/node_modules/whatwg-mimetype`,
+    `http-proxy-agent`, `https-proxy-agent`, `symbol-tree`, `ws`. Every added or
+    changed entry was checked with `npm view <name> time --json`: **none is
+    younger than 2026-10-18** (0 of 11). No advisory exemption was needed.
+    `node scripts/check-lockfile-sync.mjs` exit 0. One `"node_modules/jsdom"`
+    entry, at 30.1.3.
+  - **Audit.** `npm audit --package-lock-only`: one high, `node-forge`, no fix
+    available. That is dl-132's advisory, as at the base; this branch adds none.
+  - **Release notes, read before the bump** (the GitHub release pages for 28.0.0,
+    29.0.0, 30.0.0 and 30.1.0, read through a summarising fetch, so not verbatim;
+    the tarball ships no changelog). Changes that could reach this tree:
+    - 30.0.0: **Node minimum `^22.22.2 || ^24.15.0 || >=26.0.0`** (the breaking
+      change); `getComputedStyle()` now converts lengths to pixels.
+    - 30.1.0: `window.close()` keeps the document; `volumechange` and `ratechange`
+      fire asynchronously; `storage` delivery; named access on `document`
+      (`document.myForm`); a fix for borderless elements reporting a 16px computed
+      border, a regression that 30.0.0 introduced.
+    - 29.0.0: `MediaList` parses with css-tree and an invalid query becomes
+      "not all"; the `selectorText` setter rejects invalid selectors; the
+      `XMLHttpRequest` `response` getter returns `null` during `LOADING`; Node
+      minimum v22.13.0 (superseded by 30.0.0).
+    - 28.0.0: `<iframe>`, `<frame>` and `<img>` fire `load`, not `error`, on a
+      non-OK response; XHR and WebSocket interception.
+    - None of the four names a change to layout (`getBoundingClientRect`,
+      `offsetWidth`), `window.matchMedia`, or form validation (`checkValidity`,
+      `reportValidity`, `required`, `:invalid`).
+  - **What the web suites reach.** `grep` over the three `web/test` trees finds no
+    `matchMedia`, `getComputedStyle`, `getBoundingClientRect`, `offsetWidth`,
+    `checkValidity`, `reportValidity`, `volumechange`, `ratechange`, `window.close`
+    or XHR call in a test. The only hits are comments and the ledger's
+    `clientWidth` stubs, which jsdom 30 does not touch.
+  - **Peer and engine checks.** `vitest@5.0.5` declares `jsdom: "*"` as an optional
+    peer (`peerDependenciesMeta.jsdom.optional: true`), so it admits 30. `jsdom@30.1.3`
+    declares `engines.node` `^22.22.2 || ^24.15.0 || >=26.0.0`; this sandbox runs
+    v22.23.3, which satisfies it. The repo's root `engines` stays `>=22.0.0`, so a
+    Node 22.0 to 22.22.1 install gets an `EBADENGINE` warning and jsdom 30 is untested
+    there. CI's `node-version: 22` and the Dockerfiles' `node:${NODE_VERSION}`
+    (`22-bookworm`) both float to the newest 22.x, which is above 22.22.2.
+  - **Build.** `npm run build` exit 0; the three webs each print `vite v8.3.4`.
+  - **Tests that needed a change: none.** The three web suites pass unchanged on
+    jsdom 30.1.3, run from the worktree's own `node_modules` (`require.resolve('jsdom')`
+    from `tools/planner/web` resolves to the worktree's `node_modules/jsdom`, 30.1.3):
+    - `npm test -- tools/downloader/web`: 22 of 22 files, 311 of 311 tests.
+    - `npm test -- tools/ledger/web`: 19 of 19 files, 241 of 241 tests.
+    - `npm test -- tools/planner/web`: 7 of 7 files, 131 of 131 tests.
+  - **`npm run check`**: exit 0. oxlint printed 18 warnings and no errors (all in
+    files this branch does not touch); `oxfmt --check` "All matched files use the
+    correct format"; typecheck clean.
+  - **`npm test` (full)**: exit 1, `Test Files 1 failed | 312 passed | 1 skipped
+    (314)`, `Tests 1 failed | 6905 passed | 2 skipped (6908)`. The one failure is
+    `tools/downloader/engine/test/parallel-ranges-limits.test.ts` › "dl-98: the
+    feeder's own limits" › "bytes held ahead never exceed 4 x 4 MB, measured at
+    the defaults with ffmpeg not reading": `expected 'fallen-back' to be 'parallel'`
+    at line 75. That spec is a 50 ms throughput window (`measureMs: 50`) that falls
+    back when the process is CPU-starved; the full run shared the machine with the
+    test gate's other run (`1 of 2 runs active`) and another session's vitest.
+    It does not touch jsdom or the lockfile's changed entries. **Alone, three
+    times on this same tree, it passed 14 of 14 each time** (`npx vitest run
+    tools/downloader/engine/test/parallel-ranges-limits.test.ts`, exit 0). Not run
+    at the base: a second tree at 64ddcb0c was not built, so whether it flakes
+    there under the same load is unmeasured.
+  - **Brief corrections.** The brief's "30.1.3 latest" is correct and its date is
+    2026-10-15, inside the week. The brief did not say that jsdom 30 raises the
+    Node floor to `^22.22.2`; that is the one change here the release notes name
+    that the repo's own `engines` does not follow (see above). Step 3's
+    `npm test -- --project downloader` would also run the downloader's api and
+    engine suites; the web suites were run by path, as the dispatch asked.
+  - **Not changed here**: the root `engines.node` (`>=22.0.0`), against jsdom 30's
+    Node floor above. The Build does not name it, so it is left for the
+    orchestrator to put to the owner.
+- 2026-10-25 — Owner's answers, put by the orchestrator, all 2026-10-25.
+  - **Root engines.** jsdom 30.1.3 needs `^22.22.2 || ^24.15.0 || >=26.0.0` and
+    the root said `>=22.0.0`. The owner first proposed Node 24, the LTS; asked
+    again with scope, they chose (a): file a Node 24 ticket and have repo-123
+    raise the floor to `>=22.22.2`. Done here in the root `package.json` and in
+    `package-lock.json` at `packages[""].engines.node`. The Node 24 move is
+    filed as repo-126, on PR #650.
+  - **The engine timing test** that failed once under load (above): CI grades
+    the line, and `test (ubuntu-latest)` passed at 8b96fbd9. jsdom cannot reach
+    it, since the downloader project uses the `node` environment (gate 1,
+    attack 2). Accepted, nothing changed, nothing filed.
+  - **Gate 1's low**: fix at landing, next entry.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the first low — "does not read these properties back". `git diff 8b96fbd9 HEAD -- tools/ledger/web/test/stats-layout.test.ts | grep -c '^-.*does not read these properties'` → `1`. The header comment now says jsdom reads a declared value back on 30.1.3 and still says nothing about a width; the test is untouched.

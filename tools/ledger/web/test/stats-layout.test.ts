@@ -1,7 +1,8 @@
 /**
  * The stylesheet rules a phone depends on (lg-9). Nothing here measures a width:
- * jsdom has no layout, and its `getComputedStyle` does not read these properties
- * back (tried: it answers an empty string). What is held is that the two
+ * jsdom has no layout, so even where its `getComputedStyle` reads a declared value
+ * back (it does on jsdom 30.1.3) the answer says nothing about a width, and this
+ * file reads the stylesheet as text instead. What is held is that the two
  * declarations which stopped every chart drawing 736px wide on a 360px page are
  * still in the rule for a chart's card and for its measured box. A chart is drawn
  * at its container's measured width; a grid item will not shrink below its
