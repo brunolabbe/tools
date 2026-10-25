@@ -1241,3 +1241,31 @@ test("two unrelated pull requests whose branch names share an id still clash", (
   const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
   expect(clashes(result)).toEqual([{ id: 70, sources: ["PR#801", "PR#802"] }]);
 });
+
+/**
+ * The third half of the stacked rule, which the code comment and
+ * `concurrency.md` promise and no other test asserted: only the paths the
+ * parent holds come off a stacked child, so a *different* ticket the child
+ * files under the parent's id (`repo-66-other.md` on a parent holding
+ * `repo-66-parent.md`) is still the child's own claim and still clashes.
+ */
+test("a stacked child filing a different ticket under its parent's id still clashes", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("parent-branch", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  runGit(peer, ["checkout", "-q", "-b", "stacked-child", "parent-branch"]);
+  fs.writeFileSync(path.join(peer, "docs/work/repo-66-other.md"), "the child's own\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", "stacked-child"]);
+  runGit(peer, ["push", "-q", "origin", "stacked-child"]);
+
+  const run = withGh([
+    { number: "623", head: "parent-branch", files: ["docs/work/repo-66-parent.md"] },
+    {
+      number: "625",
+      head: "stacked-child",
+      files: ["docs/work/repo-66-parent.md", "docs/work/repo-66-other.md"],
+    },
+  ]);
+  const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
+  expect(clashes(result)).toEqual([{ id: 66, sources: ["PR#623", "PR#625 (stacked on PR#623)"] }]);
+});

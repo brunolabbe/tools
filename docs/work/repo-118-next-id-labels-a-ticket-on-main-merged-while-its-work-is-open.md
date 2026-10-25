@@ -120,6 +120,13 @@ claim`), which adds `unheldName`. The `concurrency.md` paragraph is updated to s
     on `expected [ { id: 66, sources: [ …(2) ] } ] to deeply equal []` with `PR#623` and
     `PR#625 (stacked on PR#623)` in the sources; the other two stayed green. Restored from
     the fix's sha; `scripts/test/next-id.test.ts` 36 of 36.
+    - **WITHDRAWN — do not cite this paragraph:** the clause "the other two stayed green" in
+      the bullet above. The builder wrote it; gate 1 measured otherwise. With the name rule
+      removed, `scripts/test/next-id.test.ts` ran 2 failed, 34 passed (36): "a stacked child
+      whose branch name carries its parent's id reports no clash for it" and "a stacked
+      child's name keeps the ids its parent does not hold" both went red; only "two
+      unrelated pull requests whose branch names share an id still clash" stayed green. The
+      error is in the safe direction, since the second test has more teeth than claimed.
   - **Still not covered.** A stacked branch with no pull request is not checked against its
     parent. That is repo-124, filed in this branch. Its reproduction is a fixture, not a live
     case; the output is in repo-124's _Why_.
@@ -133,3 +140,17 @@ claim`), which adds `unheldName`. The `concurrency.md` paragraph is updated to s
     `clash: repo-93 is claimed by branch/repo-93-sqlite-file-tests-windows-timeout, on main`.
     That is a branch with no pull request, so the stacking check does not reach it. Its cause
     was not investigated.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the first low — "quotes the wrong
+  printed line". In `concurrency.md`'s guard-table row for the name rule, the line is now
+  `clash: repo-66 is claimed by PR#623, PR#625 (stacked on PR#623)`. Planting the removal
+  (`plant.mjs <tree> name`) and running `scenarios.mjs <tree> name` printed exactly that
+  line. `git diff 700d5b24 HEAD -- .claude/skills/orchestrate-tickets/reference/concurrency.md |
+  grep -c '^-.*by PR#623, PR#625`. Measured'` → `1`.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the second low — "the other two
+  stayed green" is false. Withdrawn in place under the Q2 bullet above, attributed to the
+  builder, with the measured counts: 2 failed, 34 passed (36), with the name rule removed
+  (`plant.mjs <tree> name`, then `npx vitest run scripts/test/next-id.test.ts`).
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the third low — "promise a clash that
+  no test asserts". Added "a stacked child filing a different ticket under its parent's id
+  still clashes" at the end of `scripts/test/next-id.test.ts`; it passes at the head, 37 of
+  37. RED_RESULT_PLACEHOLDER
