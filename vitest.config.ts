@@ -31,9 +31,10 @@ export default defineConfig({
     // "CI is set" is test-gate.mjs's own test: the strings "", "false" and "0"
     // are not CI, so a local `CI=false` run is not capped.
     //
-    // At the root, not per project: vitest 4 resolves a project's worker count
-    // from the project's own maxWorkers, then the root's, then the core count
-    // (resolveMaxWorkers in vitest's cli-api chunk), and no project sets one.
+    // At the root, not per project: vitest 5's inline projects extend the root
+    // config by default, so each inherits its maxWorkers, and resolveConfig's
+    // getDefaultMaxWorkers (the core count less one) applies only where none is
+    // set. No project sets one.
     ...(isCi(process.env.CI) ? { maxWorkers: 4 } : {}),
     projects: [
       {
