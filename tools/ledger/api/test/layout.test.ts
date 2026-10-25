@@ -361,7 +361,9 @@ describe("lg-56's harder fixtures", () => {
         moveColumn(copy, "withdrawal", "D");
         moveColumn(copy, "deposit", "G");
       },
-      "let-through",
+      // lg-66, Build 2.2: reading no row is a problem, so this is refused. It was
+      // let through until then.
+      "refused",
     ],
     [
       "bank-preamble",
@@ -453,18 +455,20 @@ describe("lg-56's harder fixtures", () => {
     }
   });
 
-  test("empty-columns-csv: a layout that reads empty columns reads no row, skips none and reports no problem", () => {
+  test("empty-columns-csv: a layout that reads empty columns reads no row, and that is a problem naming the sheet and the rows skipped", () => {
     const each = fixture("empty-columns-csv");
     const gap = wrong(each.layout, (copy) => {
       moveColumn(copy, "withdrawal", "D");
       moveColumn(copy, "deposit", "G");
     });
     const reading = readWorkbook(each.sheets, { people: each.people, layout: gap });
-    // The gap lg-38's gate 1 named, left in place on purpose: lg-56 measures it.
     expect([reading.movements.length + reading.unfiled.length, reading.skipped.length]).toEqual([
       0, 32,
     ]);
-    expect(reading.problems).toEqual([]);
+    // The gap lg-38's gate 1 named and lg-56 measured, closed by lg-66 (Build 2.2).
+    expect(reading.problems).toEqual([
+      'The layout reads no row of the account from "chequing-activity.csv": 32 dated rows were skipped for having no amount, and none was read.',
+    ]);
   });
 
   test("bank-preamble: the lines above the header are text and are read as no movement", () => {

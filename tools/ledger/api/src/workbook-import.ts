@@ -49,7 +49,7 @@ import type {
   WorkbookFigures,
   WorkbookReading,
 } from "@ledger/books";
-import type { Bucket, OwnMoney, SettlementFigures } from "@ledger/contract";
+import type { Bucket, OwnMoney, SettlementFigures, WorkbookLayout } from "@ledger/contract";
 import { applyMigrations } from "./db/schema.ts";
 import type { Database } from "better-sqlite3";
 import { classifyRow } from "./classifications.ts";
@@ -71,6 +71,12 @@ export interface WorkbookImportOptions {
   /** Whether to keep it, once every verification holds. Without it, all is rolled back. */
   commit: boolean;
   now: () => Date;
+  /**
+   * How the workbook is laid out: the household's own (`HOUSEHOLD_LAYOUT`)
+   * when absent, which is what `import:ledger` reads; a described one from the
+   * import screen (lg-66).
+   */
+  layout?: WorkbookLayout | undefined;
 }
 
 export interface WorkbookImportResult {
@@ -615,10 +621,15 @@ function run(
 ): { ok: boolean; report: string } {
   enrollPeople(db, options.members, options.now());
   const people = knownPeople(db);
-  const reading = readWorkbook(sheets, { people, corrections: options.corrections });
+  const reading = readWorkbook(sheets, {
+    people,
+    corrections: options.corrections,
+    ...(options.layout === undefined ? {} : { layout: options.layout }),
+  });
   const problems = [...reading.problems];
   // None under the household's layout, which names a bucket and a balance
   // column; a row with neither is a statement's, never filed by this import.
+  // A described layout can name neither (lg-66), and is refused here.
   if (reading.unfiled.length > 0) {
     problems.push(
       `${String(reading.unfiled.length)} rows have no bucket or no balance, and this import files every row it stores.`,
