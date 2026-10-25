@@ -159,11 +159,21 @@ export function History(): React.ReactElement {
   // One string stands for the query, so an unrelated render never reads again.
   const key = "query" in asked ? JSON.stringify(asked.query) : null;
 
+  // A new query starts from "loading" with no problem shown, not from the list
+  // the last one drew. Derived state, set during render, so that list is never
+  // painted under the new filters — an effect would paint it first.
+  const [askedKey, setAskedKey] = useState(key);
+  if (askedKey !== key) {
+    setAskedKey(key);
+    if (key !== null) {
+      setLoad({ state: "loading" });
+      setProblem(null);
+    }
+  }
+
   useEffect(() => {
     if (key === null) return;
     const controller = new AbortController();
-    setLoad({ state: "loading" });
-    setProblem(null);
     void (async (): Promise<void> => {
       try {
         const answer = await fetchRows(

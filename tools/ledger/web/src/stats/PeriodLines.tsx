@@ -76,6 +76,8 @@ export function PeriodLines({
       }
     })();
     return () => controller.abort();
+    // `version` is a trigger: a line written elsewhere bumps it, and the page is asked for again.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [start, end, filter, version]);
 
   const showMore = useCallback(async (): Promise<void> => {

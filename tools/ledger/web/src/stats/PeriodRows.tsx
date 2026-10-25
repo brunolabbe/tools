@@ -92,6 +92,8 @@ export function PeriodRows({
       }
     })();
     return () => controller.abort();
+    // `version` is a trigger: a row written elsewhere bumps it, and the page is asked for again.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [start, end, filter, version]);
 
   const choose = (next: Filter): void => {

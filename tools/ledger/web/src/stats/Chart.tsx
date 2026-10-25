@@ -591,6 +591,11 @@ export function ColumnChart(props: {
   const { onOpen } = props;
   const [box, measured] = useWidth();
   const scroller = useRef<HTMLDivElement | null>(null);
+  // How far the columns are scrolled under the fixed readout box. State, fed by
+  // the box's own scroll event, so the tip follows a wheel or a swipe even while
+  // the pointer is still; read off the ref during render it was as old as the
+  // last render.
+  const [scrolledBy, setScrolledBy] = useState(0);
   const height = 210;
   const count = categories.length;
 
@@ -630,6 +635,9 @@ export function ColumnChart(props: {
   useLayoutEffect(() => {
     const node = scroller.current;
     if (node !== null) node.scrollLeft = node.scrollWidth;
+    // `count` is a trigger: the box scrolls to its newest column when columns come
+    // or go, and does not read the count to do it.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [count]);
 
   const every = Math.max(1, Math.ceil(52 / slot));
@@ -670,7 +678,11 @@ export function ColumnChart(props: {
 
   return (
     <div ref={box} className="chart-box">
-      <div className="chart-scroll with-axis" ref={scroller}>
+      <div
+        className="chart-scroll with-axis"
+        ref={scroller}
+        onScroll={(event) => setScrolledBy(event.currentTarget.scrollLeft)}
+      >
         {/* The labels stay in view while the columns scroll under them. */}
         <svg
           className="chart chart-yaxis"
@@ -800,11 +812,7 @@ export function ColumnChart(props: {
       </div>
       {hovering && centres[index] !== undefined && (
         // The columns scroll under a fixed box, so the tip sits where the column is on screen.
-        <Tip
-          readout={readout}
-          x={(centres[index] ?? 0) - (scroller.current?.scrollLeft ?? 0)}
-          width={measured}
-        />
+        <Tip readout={readout} x={(centres[index] ?? 0) - scrolledBy} width={measured} />
       )}
       <ReadoutSlot readout={readout} sizer={sizer} />
     </div>

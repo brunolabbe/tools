@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { canMakeWebm } from "@downloader/contract";
 import type { JobOptions, ProbeResult } from "@downloader/contract";
 import { formatDuration } from "../lib/format.ts";
@@ -36,9 +36,14 @@ export function ProbePanel({
   const containerId = useId();
   const liveId = useId();
 
-  useEffect(() => {
+  // A new probe has a new variant list, so the pick starts over. Derived state,
+  // set during render: React re-renders at once with the new pick, before
+  // anything is painted with the old one, which an effect would paint first.
+  const [pickedFrom, setPickedFrom] = useState(probe);
+  if (pickedFrom !== probe) {
+    setPickedFrom(probe);
     setVariantId(pickDefaultVariantId(probe.variants));
-  }, [probe]);
+  }
 
   const subtitleLanguages = [...new Set(probe.subtitles.map((track) => track.language))];
   // The same pure call the table makes, because this line counts what the table

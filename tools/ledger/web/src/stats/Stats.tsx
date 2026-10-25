@@ -45,6 +45,9 @@ export function Stats(): React.ReactElement {
   const id = useId();
   const [preset, setPreset] = useState<Preset>("all");
   const [custom, setCustom] = useState<{ from: string; to: string }>({ from: "", to: "" });
+  // Read on every render, not once at mount, so a tab left open past midnight
+  // moves on with its next render; the purity rule would have it frozen.
+  // oxlint-disable-next-line react/purity
   const today = isoDay(new Date());
   const said = useMortgage();
   // The two mortgage cards wait for it, as Home does, so a household with no mortgage never asks for
