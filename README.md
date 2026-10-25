@@ -47,12 +47,12 @@ no port opened on the router.
 tools it runs** ([adr/004](./docs/adr/004-one-compose-fragment-per-tool.md)), and
 the list lives in `COMPOSE_FILE` in `.env`:
 
-| The host runs  | `COMPOSE_FILE`                                                                                                              |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| the downloader | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml`                                                    |
-| the planner    | `compose.prod.yaml:compose.planner.prod.yaml`                                                                               |
-| the ledger     | `compose.prod.yaml:compose.ledger.prod.yaml`                                                                                |
-| all three      | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml:compose.ledger.prod.yaml` |
+| The host runs  | `COMPOSE_FILE`                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| the downloader | `compose.prod.yaml:compose.downloader.prod.yaml`                                                    |
+| the planner    | `compose.prod.yaml:compose.planner.prod.yaml`                                                       |
+| the ledger     | `compose.prod.yaml:compose.ledger.prod.yaml`                                                        |
+| all three      | `compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml:compose.ledger.prod.yaml` |
 
 `compose.prod.yaml` is the tunnel and the network and names no tool; each
 `compose.<tool>.prod.yaml` adds one tool's released image. With the list set, a

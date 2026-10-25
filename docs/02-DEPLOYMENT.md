@@ -9,7 +9,7 @@ lacks them needs).
 
 The container half is a set of compose fragments merged on the host —
 [`compose.prod.yaml`](../compose.prod.yaml) for the tunnel and the network, plus
-a pair per tool — and **the list of fragments a host merges is the only place it
+one per tool — and **the list of fragments a host merges is the only place it
 says which tools it runs**; [adr/004](./adr/004-one-compose-fragment-per-tool.md)
 is why. The half that cannot be a file in this repo — the hostnames, the
 certificates, the login policies — lives in the Cloudflare dashboard, and is
@@ -22,9 +22,9 @@ tool, the step says so, tool by tool, and the two login policies differ in a way
 that is not a matter of taste. After that, [The downloader](#the-downloader),
 [The planner](#the-planner) and [The ledger](#the-ledger) hold what only one
 tool needs — for the planner, a routing engine and a real model, both optional. The
-[volume migration](#migrating-the-volumes-onto-the-project-name) is last, and a
-host that has been running since before repo-33 needs it before its next
-`up -d`.
+[volume migrations](#renaming-the-downloaders-volume) are last: a host that
+has run the downloader since before repo-125 needs the first before its next
+`up -d`, and one running since before repo-33 needs the second as well.
 
 This page is repo-wide and lives at the root rather than under a tool because the
 tunnel, the login policy and the version scheme are one story for whatever gets
@@ -83,12 +83,12 @@ real.
 
 The choice is one line in `.env`, `COMPOSE_FILE`:
 
-| This host runs | `COMPOSE_FILE`                                                                                                              |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| the downloader | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml`                                                    |
-| the planner    | `compose.prod.yaml:compose.planner.prod.yaml`                                                                               |
-| the ledger     | `compose.prod.yaml:compose.ledger.prod.yaml`                                                                                |
-| all three      | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml:compose.ledger.prod.yaml` |
+| This host runs | `COMPOSE_FILE`                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| the downloader | `compose.prod.yaml:compose.downloader.prod.yaml`                                                    |
+| the planner    | `compose.prod.yaml:compose.planner.prod.yaml`                                                       |
+| the ledger     | `compose.prod.yaml:compose.ledger.prod.yaml`                                                        |
+| all three      | `compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml:compose.ledger.prod.yaml` |
 
 Append `:compose.planner.yaml` to a line that runs the planner to make its
 distances real — hours of CPU the first time, so read
@@ -102,8 +102,7 @@ out as `-f` flags instead, four such lines are:
 
 ```bash
 # the downloader alone
-docker compose -f compose.downloader.yaml -f compose.prod.yaml \
-               -f compose.downloader.prod.yaml up -d
+docker compose -f compose.prod.yaml -f compose.downloader.prod.yaml up -d
 
 # the planner alone
 docker compose -f compose.prod.yaml -f compose.planner.prod.yaml up -d
@@ -112,8 +111,8 @@ docker compose -f compose.prod.yaml -f compose.planner.prod.yaml up -d
 docker compose -f compose.prod.yaml -f compose.ledger.prod.yaml up -d
 
 # the downloader and the planner, one tunnel
-docker compose -f compose.downloader.yaml -f compose.prod.yaml \
-               -f compose.downloader.prod.yaml -f compose.planner.prod.yaml up -d
+docker compose -f compose.prod.yaml -f compose.downloader.prod.yaml \
+               -f compose.planner.prod.yaml up -d
 ```
 
 An explicit `-f` replaces `COMPOSE_FILE` rather than adding to it, so the typed
@@ -130,13 +129,18 @@ downloader-only host merging it would stand up the planner without ever asking
 for it. Each tool's prod fragment is additive in the same way: it changes nothing
 that a host which does not merge it sees.
 
-**The downloader's line has one file more than the others'**, and that is not
-an inconsistency. [`compose.downloader.yaml`](../compose.downloader.yaml) is where
-the downloader's service is defined — its init, its shared memory, its volume —
-and its prod fragment only swaps the build for a released image.
-[`compose.planner.prod.yaml`](../compose.planner.prod.yaml) defines the planner's
-service outright, so it stands alone, and
-[`compose.ledger.prod.yaml`](../compose.ledger.prod.yaml) is the same shape.
+**Each tool's prod fragment defines its service outright**, so each line is the
+shared overlay plus one file per tool. The downloader's used to be three: its
+prod fragment was an overlay on
+[`compose.downloader.yaml`](../compose.downloader.yaml), the build-from-source
+file. Written as two files by analogy with the others, that line validated and
+started a downloader with no volume and no browser sandbox setting.
+[repo-125](./work/repo-125-the-downloaders-prod-fragment-stands-alone.md) made
+the prod fragment self-contained. **A host whose `COMPOSE_FILE` still names
+`compose.downloader.yaml` keeps working** (it gets the same service plus a
+`build:` it never uses), so dropping it is tidying, not a fix. The volume rename
+that came with it is not optional — see
+[Renaming the downloader's volume](#renaming-the-downloaders-volume).
 
 **Every fragment sets `name: webtools`**, so any merge of them is one compose
 project — including [`compose.planner.yaml`](../compose.planner.yaml), which is
@@ -1103,7 +1107,7 @@ address to `/api/files/<bad token>` in under 2 seconds.
 
 For LAN access alongside the public hostname — worth it for multi-gigabyte files
 when you are at home — republish the port on all interfaces in a local override
-rather than editing `compose.downloader.yaml`, which deliberately binds to
+rather than editing `compose.downloader.prod.yaml`, which deliberately binds to
 loopback.
 
 ---
@@ -1510,7 +1514,103 @@ outbound egress to `api.anthropic.com`.
 
 ---
 
+## Renaming the downloader's volume
+
+**Read this before your first `up -d` after pulling
+[repo-125](./work/repo-125-the-downloaders-prod-fragment-stands-alone.md), on a
+host that runs the downloader.** The downloader's volume was `storage` and is now
+`downloader_storage`, named like `planner_storage` and `ledger_storage`. Compose
+does not rename volumes. The next `up -d` creates an empty
+`webtools_downloader_storage` and leaves the job database in `webtools_storage`,
+where nothing references it.
+
+It holds less than it once did. Nothing is stored but the job database (dl-53),
+and job rows are deleted after 14 days (dl-54). Skipping this section costs the
+job list and every link still inside its window, and nothing older. It is still
+a copy and not a reason to lose them. As in the section below, every command is
+without `-v` and the old volume is kept until the new one is proven.
+
+A host that has not run repo-33's migration yet does that one instead, copying
+straight into the new name; it says how.
+
+### 1 — Stop the downloader
+
+```bash
+docker compose stop downloader
+```
+
+The service name did not change, so this works with the old files and the new.
+Stopped, because copying a SQLite database from under a running process copies a
+torn one.
+
+**If `up -d` has already run since the pull**, the new container has been writing
+a fresh, empty database into the new volume. Remove both, then carry on. The copy
+below goes into a volume that does not exist yet, so no stray `-wal` file from
+the empty database can sit beside the real one:
+
+```bash
+docker compose rm -sf downloader
+docker volume rm webtools_downloader_storage
+```
+
+Any job created between that `up -d` and now is lost. It was in the empty
+database, which nobody else was reading.
+
+### 2 — Copy the volume
+
+```bash
+docker volume create webtools_downloader_storage
+docker run --rm \
+  -v webtools_storage:/from:ro \
+  -v webtools_downloader_storage:/to \
+  alpine:3 sh -c 'cp -a /from/. /to/'
+```
+
+`cp -a` keeps ownership, and the service runs as a non-root user. `:ro` keeps a
+typo off the source. Both are explained in step 4 of the section below.
+
+### 3 — Check the copy
+
+```bash
+docker run --rm -v webtools_storage:/old:ro \
+  -v webtools_downloader_storage:/new alpine:3 \
+  sh -c 'du -sb /old /new; find /old -type f | wc -l; find /new -type f | wc -l'
+```
+
+Two identical byte counts and two identical file counts, with `jobs.db` in the
+listing.
+
+### 4 — Set `COMPOSE_FILE`, bring it up, and look
+
+Drop `compose.downloader.yaml` from `COMPOSE_FILE` while you are here; see
+[Choose what this host runs](#choose-what-this-host-runs). Then:
+
+```bash
+docker compose up -d
+docker inspect "$(docker compose ps -q downloader)" \
+  --format '{{range .Mounts}}{{.Name}} {{end}}'     # webtools_downloader_storage
+```
+
+Then open the UI and look for jobs you recognise. `/api/health` answers just as
+well on an empty database.
+
+### 5 — Later, remove the old volume
+
+Once the job list is the one you expected:
+
+```bash
+docker volume rm webtools_storage
+```
+
+Rolling back to a checkout from before repo-125 reads `webtools_storage` again,
+which is what keeping it until now buys.
+
 ## Migrating the volumes onto the project name
+
+**Since repo-125 the downloader's volume is `downloader_storage`.** A host doing
+this section now copies into `webtools_downloader_storage` wherever the steps
+below say `webtools_storage`, and then has nothing left to do in
+[Renaming the downloader's volume](#renaming-the-downloaders-volume).
 
 **Read this before your first `up -d` after pulling repo-33, and do not skip it
 on the grounds that the diff looks like a rename.** It is a rename _and_ a
@@ -1620,10 +1720,10 @@ and `DOWNLOADER_TAG`:
 
 ```bash
 # a downloader-only host
-COMPOSE_FILE=compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml
+COMPOSE_FILE=compose.prod.yaml:compose.downloader.prod.yaml
 
 # both tools — and keep PLANNER_TAG
-COMPOSE_FILE=compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml
+COMPOSE_FILE=compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml
 ```
 
 Check that compose agrees about the name, and about the service list, before

@@ -108,8 +108,7 @@ The image carries the docker **CLI** and the compose plugin, and no daemon. So
 this works:
 
 ```bash
-docker compose -f compose.downloader.yaml -f compose.prod.yaml \
-  -f compose.downloader.prod.yaml config
+docker compose -f compose.prod.yaml -f compose.downloader.prod.yaml config
 ```
 
 which merges the deployment overlay and checks it against the schema — worth

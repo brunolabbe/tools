@@ -1,9 +1,11 @@
-# The downloader's production overlay: its released image, on the shared edge.
+# The downloader's production fragment: its released image, on the shared edge.
 #
-#   docker compose -f compose.downloader.yaml -f compose.prod.yaml \
-#                  -f compose.downloader.prod.yaml up -d
+#   docker compose -f compose.prod.yaml -f compose.downloader.prod.yaml up -d
 #
-# or, once `COMPOSE_FILE` is set in `.env`, a bare `docker compose up -d`.
+# — a downloader-only host, which is two files because the shared overlay
+# carries no tool. Beside the others it is those two plus theirs, and
+# `COMPOSE_FILE` in `.env` is how a host stops typing the list; see
+# `.env.prod.example`.
 #
 # ## Why this is a file of its own, and not a block in compose.prod.yaml
 #
@@ -11,10 +13,22 @@
 # overlay is what belongs to the **host** rather than to any tool — the tunnel,
 # and the network the tools share. Everything that names a tool is a fragment of
 # that tool's own, so no host runs a service it did not name. This file is the
-# downloader's half and `compose.planner.prod.yaml` is the planner's; they are
-# the same shape on purpose.
+# downloader's, and `compose.planner.prod.yaml` and `compose.ledger.prod.yaml`
+# are the same shape on purpose.
 #
-# It changes six things about the service `compose.downloader.yaml` defines:
+# ## It defines the service outright (repo-125)
+#
+# It used to be an overlay on `compose.downloader.yaml`, the build-from-source
+# file, and a host merged both. That shape had two faults. Written as two files
+# by analogy with the other tools, it validated and started a downloader with no
+# volume, no `init`, no browser sandbox setting and a 64 MB `/dev/shm`. And the
+# source file's `build:` came along into production, where compose cannot unset
+# it. So everything the service needs is written here, and
+# `compose.downloader.yaml` is only for building and running from source. A host
+# whose `COMPOSE_FILE` still names that file as well gets the same service, plus
+# a `build:` it does not use.
+#
+# What differs from `compose.downloader.yaml`:
 #
 #  - the image is **pulled, not built**. That file builds from source because
 #    that is what a developer wants; a deployed host wants a released artifact it
@@ -30,22 +44,21 @@
 #    does not start.
 #  - the limits are **set here, with their sources** (dl-52): the per-client job
 #    cap and the three probe and job rate limits are new to this file, and the
-#    browser, job and file-size values that `compose.downloader.yaml` already sets
-#    are written again so that an edit to that file, or to `API_DEFAULTS`, does not
-#    silently move production. The comment on each says where its value came from.
+#    browser, job and file-size values are written out so that an edit to
+#    `compose.downloader.yaml`, or to `API_DEFAULTS`, does not silently move
+#    production. The comment on each says where its value came from.
 #
-# The loopback port inherited from `compose.downloader.yaml` stays, but it is for
-# debugging from the host — it is not how anything is served.
+# The settings it shares with `compose.downloader.yaml` — `init`, `shm_size`,
+# `BROWSER_NO_SANDBOX`, the volume, the memory limit — are explained there, and
+# a change to one belongs in both files.
 
 name: webtools
 
 services:
   downloader:
-    # A released image from the registry, pinned by version.
-    # `compose.downloader.yaml`'s `build:` section is still merged in underneath
-    # — compose has no way to unset it — which is what `pull_policy` is for:
-    # without it, `up -d` on a host that happens to have a stale local image
-    # would use that instead of pulling the version named here.
+    # A released image from the registry, pinned by version. `pull_policy`
+    # makes `up -d` pull the version named here rather than use a stale local
+    # image under the same name.
     #
     # DOWNLOADER_TAG is required rather than defaulted to `latest` on purpose. A
     # host following a moving tag cannot answer "what is it running", and
@@ -53,6 +66,32 @@ services:
     # matches this line because release-please stamps both.
     image: "ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env - see docs/02-DEPLOYMENT.md}/downloader:${DOWNLOADER_TAG:?set DOWNLOADER_TAG in .env to a released version - see docs/03-RELEASING.md}"
     pull_policy: always
+    restart: unless-stopped
+
+    # Loopback only, for `curl` from the host when something is wrong. It is not
+    # how anything is served: cloudflared reaches the service on `edge`.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    # ffmpeg and Chromium both fork, and Node as PID 1 does not reap orphans.
+    init: true
+
+    # Chromium's renderers use POSIX shared memory; Docker's default 64 MB shows
+    # up as tabs crashing mid-probe.
+    shm_size: "1gb"
+
+    volumes:
+      # The job database. Nothing else is stored (dl-53). Renamed from `storage`
+      # by repo-125: a host that ran the old name moves it once, per
+      # "Renaming the downloader's volume" in docs/02-DEPLOYMENT.md.
+      - downloader_storage:/data
+
+    # A Chromium probe is memory-hungry in bursts; bounded, so one runaway page
+    # cannot take the host and the other tools down with it.
+    deploy:
+      resources:
+        limits:
+          memory: 4g
 
     # How long the container's log keeps what it holds about a visitor (dl-54):
     # every `request` line carries the client's network, a /24 or a /48 since
@@ -93,6 +132,13 @@ services:
 
     networks: [edge]
     environment:
+      LOG_LEVEL: info
+
+      # Chromium's own sandbox needs privileges this container does not have,
+      # so the container is the boundary instead. `compose.downloader.yaml` has
+      # the full trade-off; without this line Chromium does not launch.
+      BROWSER_NO_SANDBOX: "true"
+
       # The proxy's CIDR, never `true`. `true` lets any client name its own
       # rate-limit bucket by sending X-Forwarded-For, which on a public hostname
       # makes every limit in the API decorative. cloudflared overwrites that
@@ -120,8 +166,8 @@ services:
       # --- Limits for traffic that is not just you (dl-52) -----------------
       # Every value below is set even where it equals `API_DEFAULTS`
       # (`tools/downloader/api/src/config.ts`) or what `compose.downloader.yaml`
-      # already sets (browsers, jobs and file size), so that a later change to
-      # either does not silently move production. The measurements are the
+      # sets for a source build (browsers, jobs and file size), so that a later
+      # change to either does not silently move production. The measurements are the
       # owner's, taken on 2026-10-05 on the host running `downloader-v0.8.0`
       # against the hls.js demo stream (10:35, five renditions); the full table
       # is in tools/downloader/docs/work/dl-52-limits-for-anonymous-traffic.md.
@@ -189,3 +235,6 @@ services:
         # seconds the SQLite migrations take, which reads to a user as the site
         # being broken rather than as it still starting.
         condition: service_healthy
+
+volumes:
+  downloader_storage:

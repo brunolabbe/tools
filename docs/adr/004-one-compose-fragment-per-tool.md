@@ -9,6 +9,27 @@
 > above and `compose.yaml` no longer exists; the migration that setting `name:`
 > forces on a host that was already running is in
 > [02-DEPLOYMENT.md](../02-DEPLOYMENT.md#migrating-the-volumes-onto-the-project-name).
+>
+> **Amended 2026-10-25 by
+> [repo-125](../work/repo-125-the-downloaders-prod-fragment-stands-alone.md).**
+> The decision stands. The layout under it has moved on, and the table in the
+> Decision section is no longer what the root holds:
+>
+> ```
+> compose.prod.yaml              cloudflared and the edge network, no tool
+> compose.downloader.prod.yaml   the downloader's released image, standalone
+> compose.planner.prod.yaml      the planner's released image, standalone
+> compose.ledger.prod.yaml       the ledger's released image, standalone
+> compose.downloader.yaml        the downloader built from source, never on a host
+> compose.planner.yaml           the planner's routing engine, geocoder, discovery
+> ```
+>
+> The planner service went into its prod fragment (pl-2), never into
+> `compose.planner.yaml`. The ledger came later and followed the planner's shape.
+> repo-125 brought the downloader to the same shape. Its prod fragment had been an
+> overlay on `compose.downloader.yaml`, and merged as two files like the others
+> it validated and started a downloader with no volume. So each tool's host line
+> is now the shared overlay plus that tool's prod fragment.
 
 ## Context
 

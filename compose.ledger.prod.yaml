@@ -71,6 +71,18 @@ services:
       # with the household command (`docs/02-DEPLOYMENT.md`).
       LEDGER_ADMINS: "${LEDGER_ADMINS:-}"
 
+    # A disk guard, added by repo-125. Docker's `json-file` driver keeps every
+    # line forever unless told otherwise, so an uncapped log grows until the disk
+    # is full. Unlike the downloader's cap (dl-54), this one promises nothing
+    # about how long a line is kept, and its size is not derived from a measured
+    # day: 30 MB is room for a long incident's worth of lines, and small beside
+    # the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
     # A Node process with SQLite behind it and two users. Bounded so a runaway
     # is attributable rather than taking the host down with the other tools.
     deploy:
