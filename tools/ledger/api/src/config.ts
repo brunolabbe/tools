@@ -67,6 +67,12 @@ export interface ApiConfig {
    * and not the writes' sixty. Zero disables it.
    */
   rateLimitReceiptReadsPerMinute: number;
+  /**
+   * Workbook descriptions a person may ask for per minute (lg-66): the other
+   * route that costs money, so a bucket of its own, as a receipt read has.
+   * Zero disables it.
+   */
+  rateLimitWorkbookDescribesPerMinute: number;
 
   /** `NODE_ENV=production`, which the image sets. Decides what may not be configured. */
   production: boolean;
@@ -137,6 +143,9 @@ export const API_DEFAULTS = {
   // A person reads a receipt or two at a time; five a minute is the planner's
   // runs, and a loop meets it at once.
   rateLimitReceiptReadsPerMinute: 5,
+  // A household imports its workbook once; five a minute lets a person read
+  // it again after a refusal, and a loop meets it at once.
+  rateLimitWorkbookDescribesPerMinute: 5,
 } as const satisfies Partial<Record<string, unknown>>;
 
 function int(
@@ -310,6 +319,13 @@ export function loadApiConfig(
       int(env["RATE_LIMIT_RECEIPT_READS_PER_MINUTE"], API_DEFAULTS.rateLimitReceiptReadsPerMinute, {
         min: 0,
       }),
+    rateLimitWorkbookDescribesPerMinute:
+      overrides.rateLimitWorkbookDescribesPerMinute ??
+      int(
+        env["RATE_LIMIT_WORKBOOK_DESCRIBES_PER_MINUTE"],
+        API_DEFAULTS.rateLimitWorkbookDescribesPerMinute,
+        { min: 0 },
+      ),
     production: overrides.production ?? isProduction(env["NODE_ENV"]),
     access: overrides.access ?? loadAccessConfig(env),
     receiptReader: overrides.receiptReader ?? loadReceiptReaderConfig(env),

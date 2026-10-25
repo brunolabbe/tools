@@ -39,8 +39,10 @@ import type {
   RowsResponse,
   SalaryEntryResponse,
   SpendingCategory,
+  DescribeWorkbookResponse,
+  WorkbookLayout,
 } from "@ledger/contract";
-import type { ReceiptReader } from "@ledger/receipts";
+import type { LayoutAsk, ReceiptReader } from "@ledger/receipts";
 import type { Directory } from "../src/directory.ts";
 import { createLogger } from "../src/logger.ts";
 import { filePhotoStore } from "../src/receipt-photos.ts";
@@ -56,6 +58,7 @@ import {
 } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import type { PasteRow } from "./helpers/paste.ts";
+import { xlsxOf } from "./helpers/xlsx-file.ts";
 
 const KEY = testKey("key-1");
 const NOW = new Date("2026-09-30T12:00:00Z");
@@ -256,6 +259,7 @@ async function start(photos: string = PHOTOS): Promise<App> {
     now: () => NOW,
     fetch: jwksFetch(() => [KEY]).fetch,
     receiptReader: echoReader,
+    layoutAsk: workbookAsk,
   });
 }
 
@@ -285,6 +289,81 @@ const echoReader: ReceiptReader = {
     ];
   },
 };
+
+/** How the sweep's workbook is laid out (lg-66): one sheet, oldest first. */
+const WORKBOOK_LAYOUT: WorkbookLayout = {
+  account: {
+    sheets: { by: "name", names: ["Compte"] },
+    yearPerSheet: false,
+    order: "oldest-first",
+    columns: [
+      { role: "date", column: "A" },
+      { role: "bucket", column: "B" },
+      { role: "detail", column: "C" },
+      { role: "balance", column: "D" },
+      { role: "amount", column: "E" },
+    ],
+    buckets: [
+      { bucket: "mortgage", labels: ["Hypo"] },
+      { bucket: "current-expenses", labels: ["Courant"] },
+    ],
+    carryOverLabel: null,
+    summary: null,
+  },
+  periods: null,
+  salaries: null,
+  ignored: [],
+};
+
+/**
+ * A household's old workbook: two rows in May carrying its word, the second
+ * leaving the 10 000.00 its first pasted row opened from, so it is placed
+ * before the pastes.
+ */
+async function workbookOf(household: Household): Promise<Buffer> {
+  const text = (value: string) => ({
+    value: { kind: "text" as const, text: value },
+    formula: null,
+  });
+  const number = (value: number) => ({
+    value: { kind: "number" as const, number: value },
+    formula: null,
+  });
+  const date = (value: string) => ({
+    value: { kind: "date" as const, date: value },
+    formula: null,
+  });
+  return await xlsxOf([
+    {
+      name: "Compte",
+      rows: [
+        [text("Date"), text("Compte"), text("Détail"), text("Solde"), text("Montant")],
+        [
+          date("2026-05-04"),
+          text("Courant"),
+          text(`${household.word} dépôt`),
+          number(9_800),
+          number(600),
+        ],
+        [
+          date("2026-05-18"),
+          text("Hypo"),
+          text(`${household.word} versement`),
+          number(10_000),
+          number(200),
+        ],
+      ],
+    },
+  ]);
+}
+
+/** A describer that answers the sweep's layout whatever it is shown: the file is what differs. */
+const workbookAsk: LayoutAsk = async () => ({
+  text: JSON.stringify(WORKBOOK_LAYOUT),
+  stopReason: "end_turn",
+  inputTokens: 1,
+  outputTokens: 1,
+});
 
 async function call(
   app: App,
@@ -461,6 +540,40 @@ const WRITES: Write[] = [
     route: "statements",
     async run(app, h) {
       await post(app, h, ROUTES.statements, { text: paste(h, 1) }, this.route);
+    },
+  },
+  // lg-66: a workbook described and then imported, older than the pastes and
+  // ending on the balance the oldest pasted row opened from. Describe writes
+  // nothing and reads the books for its dry run, so what it answers is read
+  // for the other household's marks here; Confirm writes rows the reads show.
+  {
+    route: "workbookDescribe",
+    async run(app, h) {
+      const response = await call(app, h, "POST", ROUTES.workbookDescribe, {
+        file: (await workbookOf(h)).toString("base64"),
+        consent: true,
+      });
+      expect(response.status, `${h.id} POST ${this.route}: ${response.body}`).toBe(200);
+      const body = JSON.parse(response.body) as DescribeWorkbookResponse;
+      expect(body.ok, body.problems.join("\n")).toBe(true);
+      expect(response.body).toContain(h.word);
+      const other = h === HOME ? AWAY : HOME;
+      expect(
+        marks(other).filter((mark) => response.body.includes(mark)),
+        response.body,
+      ).toEqual([]);
+    },
+  },
+  {
+    route: "workbookConfirm",
+    async run(app, h) {
+      await post(
+        app,
+        h,
+        ROUTES.workbookConfirm,
+        { file: (await workbookOf(h)).toString("base64"), layout: WORKBOOK_LAYOUT },
+        this.route,
+      );
     },
   },
   {

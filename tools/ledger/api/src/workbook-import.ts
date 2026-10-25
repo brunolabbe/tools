@@ -77,6 +77,8 @@ export interface WorkbookImportOptions {
    * import screen (lg-66).
    */
   layout?: WorkbookLayout | undefined;
+  /** Who reads the report: the command's terminal (the default) or the import screen (lg-66). */
+  via?: "command" | "screen" | undefined;
 }
 
 export interface WorkbookImportResult {
@@ -86,6 +88,10 @@ export interface WorkbookImportResult {
   written: boolean;
   /** What to print, before anything is kept. */
   report: string;
+  /** Each verification that failed, as the report lists it (lg-66). */
+  problems: string[];
+  /** What the workbook read as, through the layout (lg-66). */
+  reading: WorkbookReading;
 }
 
 interface StoredColumns {
@@ -598,16 +604,16 @@ export function importWorkbook(
   try {
     // Inside the transaction, so a refused import leaves the schema as it was.
     applyMigrations(db);
-    const { ok, report } = run(db, sheets, options);
+    const { ok, report, problems, reading } = run(db, sheets, options);
     if (options.commit && ok) {
       db.exec("COMMIT");
-      return { ok, written: true, report: `${report}\nWritten.\n` };
+      return { ok, written: true, report: `${report}\nWritten.\n`, problems, reading };
     }
     db.exec("ROLLBACK");
     const outcome = ok
-      ? "Every verification held. This was a dry run: nothing was written. Run again with --write to import."
+      ? `Every verification held. This was a dry run: nothing was written. ${options.via === "screen" ? "Confirm to import." : "Run again with --write to import."}`
       : "Refused: nothing was written.";
-    return { ok, written: false, report: `${report}\n${outcome}\n` };
+    return { ok, written: false, report: `${report}\n${outcome}\n`, problems, reading };
   } catch (error: unknown) {
     if (db.inTransaction) db.exec("ROLLBACK");
     throw error;
@@ -618,7 +624,7 @@ function run(
   db: Database,
   sheets: readonly Sheet[],
   options: WorkbookImportOptions,
-): { ok: boolean; report: string } {
+): { ok: boolean; report: string; problems: string[]; reading: WorkbookReading } {
   enrollPeople(db, options.members, options.now());
   const people = knownPeople(db);
   const reading = readWorkbook(sheets, {
@@ -816,5 +822,5 @@ function run(
   say("Verifications");
   for (const check of [...reading.checks, ...passed]) say(`  ok      ${check}`);
   for (const problem of problems) say(`  FAILED  ${problem}`);
-  return { ok: problems.length === 0, report: out.join("\n") };
+  return { ok: problems.length === 0, report: out.join("\n"), problems, reading };
 }

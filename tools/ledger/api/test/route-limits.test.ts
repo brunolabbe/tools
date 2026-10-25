@@ -48,6 +48,7 @@ async function startTight(): Promise<App> {
       rateLimitReadsPerMinute: 1,
       rateLimitWritesPerMinute: 1,
       rateLimitReceiptReadsPerMinute: 1,
+      rateLimitWorkbookDescribesPerMinute: 1,
     },
   });
   return app;
