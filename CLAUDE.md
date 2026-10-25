@@ -159,7 +159,7 @@ line and a `web` or `e2e` suite costs a file, and what `**/test/fixtures/` in
 [`.claude/rules/testing.md`](./.claude/rules/testing.md), which loads itself when
 you open a test, a fixture or a tsconfig.
 
-CI runs lint, typecheck and every unit suite on every push. **`ci.yml`'s `check`
+CI runs lint, typecheck and every unit suite on every push to `main`; a pull request runs the projects its paths reach (repo-127). **`ci.yml`'s `check`
 job is filtered by nothing at all**, markdown included, because `npm run check`
 runs `oxfmt --check` and oxfmt formats markdown here, and the job also runs
 `scripts/test/status.test.ts`, which reads ticket files (repo-97) — a

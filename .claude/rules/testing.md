@@ -116,7 +116,7 @@ processes, so process-wide env changes do not reliably affect tests anyway.
 sessions.** Point `TMPDIR`, `TEMP` and `TMP` at a private directory for the
 session so concurrent tests do not interfere.
 
-CI runs lint, typecheck and every unit suite on every push. **`ci.yml`'s `check`
+CI runs lint, typecheck and every unit suite on every push to `main`; a pull request runs the projects its paths reach (repo-127). **`ci.yml`'s `check`
 job is filtered by nothing at all**, markdown included, because `npm run check`
 runs `oxfmt --check` and oxfmt formats markdown here, and the job also runs
 `scripts/test/status.test.ts`, which reads ticket files (repo-97) — a

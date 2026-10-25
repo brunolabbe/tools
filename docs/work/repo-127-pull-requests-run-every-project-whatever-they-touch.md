@@ -120,12 +120,12 @@ green, one extra 61 s setup per run, no loss of coverage); (c) both; (d) neither
     non-markdown path outside `tools/` and `scripts/`. The cost, measured over
     the last 100 first-parent commits of `main` (scratch script
     `history.mts` at `7f8d7f48`): 51 docs-only, 17 that run every project,
-    32 filtered, and 28 of those 32 skip the downloader. A named list plus
-    `.github/**` would have run every project on 7 of them (4
-    `package-lock.json`, 3 `.github/workflows`). The other 10 are 6 release
-    commits (`.release-please-manifest.json`), 1 `.env.prod.example`, 1
-    `.devcontainer/Dockerfile` and 2 under `.claude/`. Every one of them runs
-    every project today too.
+    32 filtered, and 28 of those 32 skip the downloader. Over the same 100
+    commits the old named list plus `.github/**` would have run every project on
+    13 (the release commits touch `package-lock.json`, so the list already
+    caught them), and only 4 are rule (i) alone: 2 under compose,
+    `.env.prod.example` and `.devcontainer`, and 2 under `.claude/`. Rule (i)'s
+    marginal cost is 4 of 100. Every one of the 17 runs every project today too.
   - Build 5's premise holds: nothing enforced the rule. With
     `import type { AppError } from "@downloader/contract"` planted in
     `tools/planner/api/test/helpers/`, `npx vitest run --project core` →
@@ -136,7 +136,7 @@ green, one extra 61 s setup per run, no loss of coverage); (c) both; (d) neither
     `tools/planner/api/src/zz-repo127-probe.ts:1 imports @downloader/contract, which is tools/downloader's`.
     It passes once the plant is removed (`9 passed (9)`).
 
-  Build 6: `npx vitest list --filesOnly` lists 314 files, and 313 with
+  Build 6: `npx vitest list --filesOnly` lists 315 files, and 314 with
   `--exclude scripts/test/status.test.ts`, none of them under `node_modules`.
   The matrix's exact command shape, run locally through the test gate
   (`npm test -- --project core --project repo --exclude scripts/test/status.test.ts`)
@@ -176,3 +176,34 @@ green, one extra 61 s setup per run, no loss of coverage); (c) both; (d) neither
   leg keeps the shell `npm test` always ran under. Pull request #658's own
   Windows leg is the reading for the PowerShell step. pwsh is not installed
   here.
+
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the first low (path
+  reading) — "`git diff --name-only` quotes a non-ASCII path (core.quotePath)"
+  and "`ciProjects` trims each line". `ci.yml`'s `changes` step and
+  `preflight()`'s own diff read now pass `-c core.quotePath=false`, and
+  `ciProjects` skips empty lines without trimming. Three new tests in
+  `scripts/test/preflight.test.ts`, each red against `80ee7306`'s `ci.yml` and
+  `preflight.mjs` and green after: "ciProjects reads a path as its own text",
+  "ci.yml's changes step maps a non-ASCII path under tools/planner" and
+  "preflight plans a non-ASCII path under a tool". With `-t repo-127`, red is
+  `Tests  3 failed | 7 passed | 109 skipped (119)` and green is
+  `Tests  10 passed | 109 skipped (119)`.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the second low
+  (`projectsFor`'s comment) — "An empty list means every path was markdown, and
+  nothing else". The comment now says a non-markdown path no tool owns and no
+  shared rule covers also gives empty, and that `changes` then fails red.
+  `git diff 80ee7306 | grep -c '^-.* empty list means every path'` → `1`.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the third low (Log
+  figures) — "would have run every project on 7 of them" and "lists 314 files".
+  Both are corrected in the Build entry above as the gate measured them: 13 of
+  100 under the old named list plus `.github/**`, 17 under rule (i), 4
+  rule-(i)-only; and 315 files, 314 with the `--exclude`, re-read at this head
+  (`npx vitest list --filesOnly | grep -c .` → `315`, `314` with the
+  `--exclude`). `git diff 80ee7306 | grep -c '^-.*on 7 of them'` → `1`, and
+  `git diff 80ee7306 | grep -c '^-.*lists 314 files'` → `1`.
+- 2026-10-25 — The owner's edit at landing: the sentence "CI runs lint,
+  typecheck and every unit suite on every push." in the root `CLAUDE.md` and in
+  `.claude/rules/testing.md` now ends "on every push to `main`; a pull request
+  runs the projects its paths reach (repo-127)." This supersedes the Build
+  entry's "It is not edited here". `git diff 80ee7306 | grep -c '^-CI runs lint'`
+  → `2`.
