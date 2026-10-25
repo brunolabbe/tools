@@ -137,8 +137,10 @@ file. Written as two files by analogy with the others, that line validated and
 started a downloader with no volume and no browser sandbox setting.
 [repo-125](./work/repo-125-the-downloaders-prod-fragment-stands-alone.md) made
 the prod fragment self-contained. **A host whose `COMPOSE_FILE` still names
-`compose.downloader.yaml` keeps working** (it gets the same service plus a
-`build:` it never uses), so dropping it is tidying, not a fix. The volume rename
+`compose.downloader.yaml` keeps working**, and gets the same service plus a
+`build:`. That `build:` is the one remaining fault: `docker compose build`, or
+`up --build`, would build from source and tag the result with the release's
+image name. So drop the file from the list. The volume rename
 that came with it is not optional — see
 [Renaming the downloader's volume](#renaming-the-downloaders-volume).
 
@@ -1543,10 +1545,12 @@ does not rename volumes. The next `up -d` creates an empty
 `webtools_downloader_storage` and leaves the job database in `webtools_storage`,
 where nothing references it.
 
-It holds less than it once did. Nothing is stored but the job database (dl-53),
-and job rows are deleted after 14 days (dl-54). Skipping this section costs the
-job list and every link still inside its window, and nothing older. It is still
-a copy and not a reason to lose them. As in the section below, every command is
+It holds less than it once did: nothing is stored but the job database (dl-53).
+That database holds two things worth keeping. Job rows, deleted after 14 days
+(dl-54), carry the job list and every link still inside its window. Probe
+outcomes, kept 90 days by default (`OUTCOME_RETENTION_DAYS`), are what the
+operator's outcome report reads. Skipping this section loses both. It is a copy,
+and not worth losing either over. As in the section below, every command is
 without `-v` and the old volume is kept until the new one is proven.
 
 A host that has not run repo-33's migration yet does that one instead, copying
@@ -1593,7 +1597,7 @@ typo off the source. Both are explained in step 4 of the section below.
 ```bash
 docker run --rm -v webtools_storage:/old:ro \
   -v webtools_downloader_storage:/new alpine:3 \
-  sh -c 'du -sb /old /new; find /old -type f | wc -l; find /new -type f | wc -l'
+  sh -c 'du -sb /old /new; find /old -type f | wc -l; find /new -type f | wc -l; ls -la /new'
 ```
 
 Two identical byte counts and two identical file counts, with `jobs.db` in the
@@ -1626,9 +1630,9 @@ which is what keeping it until now buys.
 
 ## Migrating the volumes onto the project name
 
-**Since repo-125 the downloader's volume is `downloader_storage`.** A host doing
-this section now copies into `webtools_downloader_storage` wherever the steps
-below say `webtools_storage`, and then has nothing left to do in
+**Since repo-125 the downloader's volume is `downloader_storage`**, and the steps
+below copy straight into `webtools_downloader_storage`. A host that does this
+section has nothing left to do in
 [Renaming the downloader's volume](#renaming-the-downloaders-volume).
 
 **Read this before your first `up -d` after pulling repo-33, and do not skip it
@@ -1640,7 +1644,8 @@ fragments set no `name:` at all, so compose derived the project name from the
 basename of the directory you cloned into — `tools`, or `webtools-main`, or
 whatever the tarball unpacked as. Volumes are named `<project>_<volume>`, so
 this host's job database and its downloaded files are in **`<basename>_storage`**
-and the new project will look for `webtools_storage`, which does not exist.
+and the new project will look for `webtools_downloader_storage`, which does not
+exist.
 
 Nothing is lost when that happens. The stack comes up looking like a fresh
 install — an empty job list, no files — with the real data still on disk under a
@@ -1759,10 +1764,10 @@ docker compose config --services                      # expect the tools you run
 with both volumes mounted is the whole mechanism:
 
 ```bash
-docker volume create webtools_storage
+docker volume create webtools_downloader_storage
 docker run --rm \
   -v "${OLD}_storage:/from:ro" \
-  -v webtools_storage:/to \
+  -v webtools_downloader_storage:/to \
   alpine:3 sh -c 'cp -a /from/. /to/'
 ```
 
@@ -1786,8 +1791,9 @@ docker run --rm \
 ### 5 — Check the copy before starting anything
 
 ```bash
-docker run --rm -v "${OLD}_storage:/old:ro" -v webtools_storage:/new alpine:3 \
-  sh -c 'du -sb /old /new; find /old -type f | wc -l; find /new -type f | wc -l'
+docker run --rm -v "${OLD}_storage:/old:ro" \
+  -v webtools_downloader_storage:/new alpine:3 \
+  sh -c 'du -sb /old /new; find /old -type f | wc -l; find /new -type f | wc -l; ls -la /new'
 ```
 
 and, on a host that copied the planner's database too, **the same check again —
@@ -1797,7 +1803,7 @@ step 2**:
 ```bash
 docker run --rm -v "${OLD}_planner_storage:/old:ro" \
   -v webtools_planner_storage:/new alpine:3 \
-  sh -c 'du -sb /old /new; find /old -type f | wc -l; find /new -type f | wc -l'
+  sh -c 'du -sb /old /new; find /old -type f | wc -l; find /new -type f | wc -l; ls -la /new'
 ```
 
 Two identical byte counts and two identical file counts, each time. `jobs.db`
