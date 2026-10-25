@@ -2639,6 +2639,24 @@ function changesStepScript(yaml: string): string {
   const start = lines.findIndex((line, i) => i > job && line === "        run: |");
   expect(job).toBeGreaterThan(0);
   expect(start).toBeGreaterThan(job);
+  return dedentedRunBlock(lines, start);
+}
+
+/** The `run: |` block of the matrix's test step for one leg's shell, dedented. */
+function matrixStepScript(yaml: string, shell: "bash" | "pwsh"): string {
+  const lines = yaml.split("\n");
+  const name = lines.findIndex(
+    (line, i) =>
+      line === "        name: Test the projects this change reaches" &&
+      lines[i + 1] === `        shell: ${shell}`,
+  );
+  const start = lines.findIndex((line, i) => i > name && line === "        run: |");
+  expect(name).toBeGreaterThan(0);
+  expect(start).toBeGreaterThan(name);
+  return dedentedRunBlock(lines, start);
+}
+
+function dedentedRunBlock(lines: string[], start: number): string {
   const body: string[] = [];
   for (const line of lines.slice(start + 1)) {
     if (line !== "" && !line.startsWith("          ")) break;
@@ -2864,6 +2882,151 @@ test("preflight plans a non-ASCII path under a tool as that tool's suite, not ev
     repo.cleanup();
   }
 });
+
+// Gate 1's med (repo-127): the three empty-list guards and the Windows argument
+// mapping were each deletable with the suite green. These run the real step
+// scripts out of `ci.yml`, with a stub where a defect would have to be.
+
+test.skipIf(process.platform === "win32")(
+  "ci.yml's changes step fails a code change that --ci-projects maps to no project (repo-127)",
+  () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-empty-")));
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", shell: false });
+      if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+      return result.stdout.trim();
+    };
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-output-"));
+    const output = path.join(outputDir, "output");
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.email", "preflight@example.test");
+      git("config", "user.name", "preflight test");
+      // A mapping defect, planted: whatever it is asked, it names nothing.
+      fs.mkdirSync(path.join(dir, "scripts"));
+      fs.writeFileSync(path.join(dir, "scripts/preflight.mjs"), 'process.stdout.write("\\n");\n');
+      fs.writeFileSync(path.join(dir, "a.ts"), "export {};\n");
+      git("add", "-A");
+      git("commit", "-qm", "base");
+      const base = git("rev-parse", "HEAD");
+      fs.writeFileSync(path.join(dir, "a.ts"), "export const a = 1;\n");
+      git("commit", "-qam", "code");
+      const head = git("rev-parse", "HEAD");
+
+      fs.writeFileSync(output, "");
+      const result = spawnSync("bash", ["-c", changesStepScript(REAL_CI_YAML)], {
+        cwd: dir,
+        encoding: "utf8",
+        shell: false,
+        env: {
+          ...process.env,
+          GITHUB_EVENT_NAME: "pull_request",
+          BASE: base,
+          HEAD: head,
+          GITHUB_OUTPUT: output,
+        },
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.stdout).toContain(
+        "::error::non-markdown paths changed, and --ci-projects named no project",
+      );
+      expect(result.status).toBe(1);
+      expect(fs.readFileSync(output, "utf8")).toBe("");
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+/**
+ * Runs one leg's matrix step with `npm` (`npm.cmd` for PowerShell) replaced by
+ * a stub that prints the arguments it got on a line starting `ARGS:`.
+ */
+function runMatrixStep(shell: "bash" | "pwsh", projects: string | undefined) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-matrix-"));
+  try {
+    if (process.platform === "win32") {
+      fs.writeFileSync(path.join(dir, "npm.cmd"), "@echo ARGS: %*\r\n");
+    } else {
+      for (const stub of ["npm", "npm.cmd"])
+        fs.writeFileSync(path.join(dir, stub), '#!/bin/sh\necho "ARGS: $*"\n', { mode: 0o755 });
+    }
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    const pathKey = Object.keys(env).find((key) => key.toUpperCase() === "PATH") ?? "PATH";
+    env[pathKey] = `${dir}${path.delimiter}${env[pathKey] ?? ""}`;
+    delete env.PROJECTS;
+    if (projects !== undefined) env.PROJECTS = projects;
+    const script = matrixStepScript(REAL_CI_YAML, shell);
+    // The runner's own wrapping for each shell: `bash -e {0}` with the step's
+    // `set` line, and pwsh's stop preference plus its LASTEXITCODE epilogue.
+    const result =
+      shell === "bash"
+        ? spawnSync("bash", ["-e", "-c", script], { encoding: "utf8", shell: false, env })
+        : spawnSync(
+            "pwsh",
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              `$ErrorActionPreference = 'stop'\n${script}\nif ((Test-Path -LiteralPath variable:\\LASTEXITCODE)) { exit $LASTEXITCODE }`,
+            ],
+            { encoding: "utf8", shell: false, env },
+          );
+    expect(result.error).toBeUndefined();
+    const args = result.stdout
+      .split(/\r?\n/u)
+      .filter((line) => line.startsWith("ARGS: "))
+      .map((line) => line.slice("ARGS: ".length).trim());
+    return { status: result.status, stdout: result.stdout, args };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const MATRIX_ARGS =
+  "test -- --project planner --project repo --project core --exclude scripts/test/status.test.ts";
+const MATRIX_EMPTY = "::error::changes reported a code change and no project to test";
+
+test.skipIf(process.platform === "win32")(
+  "ci.yml's bash matrix step passes every project as --project and refuses an empty list (repo-127)",
+  () => {
+    const listed = runMatrixStep("bash", "planner repo core");
+    expect(listed.status, listed.stdout).toBe(0);
+    expect(listed.args).toEqual([MATRIX_ARGS]);
+    for (const empty of ["", "   ", "\n"]) {
+      const result = runMatrixStep("bash", empty);
+      expect(result.stdout, JSON.stringify(empty)).toContain(MATRIX_EMPTY);
+      expect(result.status, JSON.stringify(empty)).toBe(1);
+      expect(result.args).toEqual([]);
+    }
+    // Unset is `set -u`'s to refuse, before the guard is reached.
+    const unset = runMatrixStep("bash", undefined);
+    expect(unset.status).not.toBe(0);
+    expect(unset.args).toEqual([]);
+  },
+);
+
+const HAS_PWSH =
+  spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", "exit 0"], { shell: false })
+    .status === 0;
+
+// The Windows leg's step. Skipped wherever pwsh is not installed, which
+// includes the devcontainer; GitHub's runners carry it.
+test.skipIf(!HAS_PWSH)(
+  "ci.yml's PowerShell matrix step passes every project as --project and refuses an empty list (repo-127)",
+  () => {
+    const listed = runMatrixStep("pwsh", "planner repo core");
+    expect(listed.status, listed.stdout).toBe(0);
+    expect(listed.args).toEqual([MATRIX_ARGS]);
+    for (const empty of ["", "   ", undefined]) {
+      const result = runMatrixStep("pwsh", empty);
+      expect(result.stdout, JSON.stringify(empty)).toContain(MATRIX_EMPTY);
+      expect(result.status, JSON.stringify(empty)).toBe(1);
+      expect(result.args).toEqual([]);
+    }
+  },
+);
 
 // Last in the file on purpose: it reads what every test above left behind, and
 // it is the spec a shim test that stops calling `removeShimDir` turns red.
