@@ -33,7 +33,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import {
   branchSources,
   claims,
@@ -728,6 +728,67 @@ test("a branch sharing no history with the rev over-claims rather than killing t
 });
 
 /**
+ * A bare remote and its clone, trunk holding `merged`: built once per distinct
+ * `merged` and copied for each test (repo-128, after repo-113's
+ * `review-record.test.ts` template), because `init`, `clone`, `add`, `commit` and
+ * `push` are five spawns that about twenty tests ran for the same one-file trunk.
+ *
+ * The clone's `origin` holds the template's absolute path, so the copy's is
+ * rewritten in `.git/config` — with forward slashes, which git reads on Windows
+ * and which need no escaping in a config value. Background maintenance is off in
+ * the template for repo-116's reason: a `git commit` that forks one can leave a
+ * lock file that vanishes under a later `fs.cpSync`.
+ */
+const mergedRemoteTemplates = new Map<string, string>();
+
+function mergedRemoteTemplate(merged: Record<string, string>): string {
+  const key = JSON.stringify(merged);
+  const known = mergedRemoteTemplates.get(key);
+  if (known !== undefined) return known;
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "next-id-template-")));
+  const bare = path.join(dir, "remote.git");
+  const peer = path.join(dir, "peer");
+  try {
+    runGit(dir, ["init", "-q", "--bare", "-b", "trunk", bare]);
+    runGit(dir, ["clone", "-q", bare, peer]);
+    fs.appendFileSync(path.join(peer, ".git", "config"), "[maintenance]\n\tauto = false\n");
+    for (const [file, text] of Object.entries(merged)) {
+      fs.mkdirSync(path.dirname(path.join(peer, file)), { recursive: true });
+      fs.writeFileSync(path.join(peer, file), text);
+    }
+    runGit(peer, ["add", "-A"]);
+    runGit(peer, ["commit", "-qm", "merged tickets"]);
+    runGit(peer, ["push", "-q", "origin", "trunk"]);
+  } catch (error) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
+  mergedRemoteTemplates.set(key, dir);
+  return dir;
+}
+
+afterAll(() => {
+  for (const dir of mergedRemoteTemplates.values()) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function copyOfMergedRemote(merged: Record<string, string>) {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "next-id-edit-")));
+  fs.cpSync(mergedRemoteTemplate(merged), dir, { recursive: true });
+  const bare = path.join(dir, "remote.git");
+  const peer = path.join(dir, "peer");
+  const config = path.join(peer, ".git", "config");
+  fs.writeFileSync(
+    config,
+    fs
+      .readFileSync(config, "utf8")
+      .replace(/^(\s*url = ).*$/mu, (_line, head: string) => head + bare.replaceAll("\\", "/")),
+  );
+  return { dir, bare, peer };
+}
+
+/**
  * repo-49's fixture: a real remote whose trunk already holds some merged
  * tickets, and one call to push a branch that changes them.
  *
@@ -737,22 +798,13 @@ test("a branch sharing no history with the rev over-claims rather than killing t
  * `peer` reads its own remote, as the orphan case above does.
  */
 function ticketRemote(merged: Record<string, string>) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-edit-"));
-  const bare = path.join(dir, "remote.git");
-  const peer = path.join(dir, "peer");
+  const { peer } = copyOfMergedRemote(merged);
   const write = (file: string, text: string) => {
     fs.mkdirSync(path.dirname(path.join(peer, file)), { recursive: true });
     fs.writeFileSync(path.join(peer, file), text);
   };
   const move = (from: string, to: string) =>
     fs.renameSync(path.join(peer, from), path.join(peer, to));
-
-  runGit(dir, ["init", "-q", "--bare", "-b", "trunk", bare]);
-  runGit(dir, ["clone", "-q", bare, peer]);
-  for (const [file, text] of Object.entries(merged)) write(file, text);
-  runGit(peer, ["add", "-A"]);
-  runGit(peer, ["commit", "-qm", "merged tickets"]);
-  runGit(peer, ["push", "-q", "origin", "trunk"]);
 
   const branch = (
     name: string,

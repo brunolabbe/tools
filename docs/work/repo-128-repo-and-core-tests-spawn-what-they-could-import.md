@@ -100,3 +100,87 @@ measured.
   [repo-127](./repo-127-pull-requests-run-every-project-whatever-they-touch.md).
   Spawn counts measured with a git-counting shim: review-record 691, preflight
   464, next-id 287.
+- 2026-10-25: Built on `repo-128-spawn-trims`, from `7f8d7f48`. Ubuntu, one
+  spec file at a time, `npx vitest run <file>`, base then branch (Duration):
+  `hooks.test.ts` 1.25 s → 1.34 s (34 tests, same), `check-farm-freshness`
+  1.48 → 1.53 s (28, same), `spawn-safety` 2.36 → 1.27 s (18, same),
+  `preflight` 2.80 → 3.12 s (109, same), `next-id` 3.12 → 2.67 s (52, same),
+  `review-record` 17.45 → 16.64 s (64 → 62), `check-lockfile-sync` 1.74 →
+  1.08 s (7 → 6), `status` 4.61 → 1.34 s (147, same), `test-gate` 5.69 →
+  4.10 s (29, same). `npm test -- --project repo` 616 → 613 tests, `--project
+  core` 85 → 85, both exit 0. The ubuntu numbers are the small half of this
+  ticket: preflight is within noise and a little slower, because a `cpSync` of
+  a repository directory costs about what two `git config` spawns do on Linux.
+  **The Windows leg is unmeasured here**; Done when 2 is read from this pull
+  request's CI.
+  - Build 1 and 2: `hooks.test.ts`' 34 cases and the 8 `worktree-farm.sh` cases
+    in `check-farm-freshness.test.ts` skip on win32 (`test.skipIf`, the
+    file's own `testOffWindows` moved up and renamed `farmTest`, which already
+    guarded 3 of the 8). `hooks.test.ts` uses a `linuxOnly = test.skipIf(...)`
+    alias, not a wrapping `describe.skipIf`: the wrap put `checkoutOn` in a
+    closure and `npm run check` failed `unicorn(consistent-function-scoping)`.
+    `makeGitRepo` copies the `.git` of one `git init --template=` made per file
+    rather than sharing one repository, because the farm and
+    `makeWorkspaceTree` write into the tree and a shared one would carry one
+    case's `node_modules` into the next.
+  - Build 3: `mask()` in `packages/core/test/support/spawn-calls.ts` caches by
+    text, one map per `keepLiterals`. `--reporter=verbose` on the branch: the
+    first scan ("no call site sets `shell`") pays the tokenizer once, 669 ms; the
+    shell-runner scan took 5 ms and "every file that spawns says `shell: false`"
+    95 ms, where the brief measured 0.69 + 0.62 + 0.72 s.
+  - Build 4 and 5: `preflight.test.ts` `makeRepo` copies a template made once per
+    file (identity and `maintenance.auto = false` appended to its `.git/config`,
+    `.gitattributes` in the tree); `makeTitleRepo` is gone for
+    `titleFixtureDir()`, one plain directory for the five `checkTitle` cases
+    (the `test.each` counts as five).
+  - Build 6, **partly**: `ticketRemote` copies a bare-and-clone pair built once
+    per distinct `merged` map, with the clone's `origin` URL rewritten in
+    `.git/config`; 5 of its ~15 spawns per test go. **The `git fast-import`
+    rewrite was not done.** The tests reach into `peer` itself: `cutFrom` checks
+    out `-b <name> <parent>` from a local branch `branch()` made, the two orphan
+    cases check out and `rm --cached` in it, and "a branch that edits, adds,
+    deletes and renames" removes a file from its working tree with `fs.rmSync`.
+    An import into the bare repository would leave no local branches and a stale
+    working tree, so those tests would need rewriting around a fetch. That is
+    the larger, riskier change for the 1 s / 12 s the brief estimated. Open: do
+    it in a follow-up ticket, or accept the template as the whole of Build 6.
+  - Build 7: `withLandRepo` copies a bare-and-working pair built once per file
+    (`landRepoTemplate`), with the working copy's `origin` rewritten. The three
+    setup-refusal cases ("the --land CLI refuses a missing flag", "land() refuses
+    at setup when a tracked file has an uncommitted change", "land() refuses a
+    detached HEAD with no --branch") use `withTicketRepo`.
+  - Build 8, deleted or merged, each with what still covers it:
+    - "land() never touches the real repository while validating … superseded at
+      setup by gate 2, G2-a" is deleted; "land() refuses at setup when a tracked
+      file has an uncommitted change" covers it (same `setup` refusal, same
+      untouched `HEAD`), and gained its one unique assertion,
+      `git status --porcelain` still names `src/tls.ts`.
+    - "the dirty-ticket refusal advises committing, never stashing" is merged
+      into "refuses to run when the ticket has uncommitted changes against HEAD,
+      touches nothing, and advises committing, never stashing": same fixture,
+      same command, both `commit them first` and `not /stash/` assertions kept.
+    - "its temporary directory is removed, whatever the verdict" in
+      `check-lockfile-sync.test.ts` is deleted; the passing-lockfile case and
+      the one-version-behind case now record each `npm` cwd (`noteNpmDirs`) and
+      assert it is gone, so a pass and a fail verdict are both still checked,
+      and the two extra `npm install`s are not run.
+  - Build 9: the brief said to test rendering through the exported functions,
+    but the default view and `--show` are not exported; they were
+    `process.stdout.write` calls inside `main`. `scripts/status.mjs` now exports
+    `cli(argv, io)`, returning the exit status, with `process.stdout/stderr` as
+    the default `io` and the entry point reduced to
+    `process.exitCode = cli(process.argv.slice(2))`. `status.test.ts`' `run()`
+    calls it in-process; `runProcess()` keeps 9 spawns (the rootless `sniffer`
+    case, `--write`/`--check` (2), `--json` on a dangling dependency, `--json`
+    on a duplicate id, `--json` exit 0, `--show` beside a dangling dependency,
+    `--tool planner --ready`, and `--markdown` with nothing open), which is what
+    still proves the entry point's exit code and that stdout and stderr stay on
+    separate pipes.
+  - Build 10: `TEST_GATE_SETTLE_MS` 2500 → 1000, `npx vitest run
+    scripts/test/test-gate.test.ts` 10 runs in a row, all exit 0, 29 of 29 each.
+  - Build 11: `preflight.test.ts` lines 4, 13 and 69 and `review-record.test.ts`
+    line 6 no longer cite the retired citations test files, and the comment on
+    the second `workingTreePaths` import says adr/006 retired the rule it was
+    written for. The import was **not** moved into the top block: repo-127's
+    pull request (#658) edits that block.
+  - Fold-in: none. Nothing else the work freed was small and already specified.

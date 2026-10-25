@@ -1,17 +1,16 @@
 /**
  * repo-51's guards, one test per failure mode, each watched failing against a
  * build with the corresponding check removed — the same discipline
- * `next-id.test.ts` and `citations-gate.test.ts` both explain in their own
- * opening comments and this file borrows rather than re-argues.
+ * `next-id.test.ts` explains in its own opening comment and this file borrows
+ * rather than re-argues.
  *
  * Two layers, for the same reason `next-id.test.ts` splits them:
  *
  *   - **real temporary git repositories** for everything a check actually has
- *     an opinion about — a citation whose target line moved, a `done` ticket
- *     with no `## Review`, a title over the wrong paths, two branches that
- *     conflict on a file. Faking these would mean re-implementing the very
- *     logic (`citations-gate.mjs`'s corpus scan, `commit-message.mjs`'s
- *     convention, real `git merge-tree`) the check exists to defer to.
+ *     an opinion about — a `done` ticket with no `## Review`, a title over
+ *     the wrong paths, two branches that conflict on a file. Faking these would
+ *     mean re-implementing the very logic (`commit-message.mjs`'s convention,
+ *     real `git merge-tree`) the check exists to defer to.
  *   - **an injected `run`** only where the real command is expensive or
  *     environment-dependent and the check's *own* logic is what is under
  *     test — check 1's `npm run check` / `npm test` cannot run against a
@@ -26,7 +25,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { expect, test } from "vitest";
+import { afterAll, expect, test } from "vitest";
 import {
   CHECK_ORDER,
   CI_WORKFLOW_PATH,
@@ -65,22 +64,18 @@ const REAL_CI_YAML = fs.readFileSync(
 );
 
 /**
- * A throwaway repository this file controls end to end, the way
- * `citations-gate.test.ts`'s `withRepo` does — a corpus a test can move is the
- * only kind these checks can be proven against, since the live corpus changes
- * every time a ticket is gated.
+ * A throwaway repository this file controls end to end — a corpus a test can
+ * move is the only kind these checks can be proven against, since the live
+ * corpus changes every time a ticket is gated.
  */
 function makeRepo() {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-")));
+  fs.cpSync(repoTemplateDir(), dir, { recursive: true });
   const git = (...args: string[]) => {
     const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", shell: false });
     if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
     return result.stdout.trim();
   };
-  git("init", "-q", "-b", "main");
-  git("config", "user.email", "preflight@example.test");
-  git("config", "user.name", "preflight test");
-  fs.writeFileSync(path.join(dir, ".gitattributes"), "* text=auto eol=lf\n");
   const write = (file: string, content: string) => {
     fs.mkdirSync(path.join(dir, path.dirname(file)), { recursive: true });
     fs.writeFileSync(path.join(dir, file), content);
@@ -97,6 +92,46 @@ function makeRepo() {
     cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
   };
 }
+
+/**
+ * What `makeRepo` starts every test from, built once per file (repo-128, after
+ * repo-113's `review-record.test.ts`): `init` and two `git config` spawns for
+ * each of about 50 repositories, 40 ms apiece on Windows. A repository with no
+ * remote holds no absolute path, so a copy of its directory is a repository of
+ * its own. The identity is written to `.git/config` rather than set in the
+ * environment because a scratch clone a check makes must still find none of it
+ * — the same reason `review-record.test.ts`'s `setIdentity` gives. Background
+ * maintenance is off for repo-116's reason: a `git commit` that forks one can
+ * leave a lock file that vanishes under a later `fs.cpSync`.
+ */
+let repoTemplate: string | undefined;
+
+function repoTemplateDir(): string {
+  if (repoTemplate === undefined) {
+    const built = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-template-")));
+    try {
+      const init = spawnSync("git", ["-C", built, "init", "-q", "-b", "main"], {
+        encoding: "utf8",
+        shell: false,
+      });
+      if (init.status !== 0) throw new Error(`git init\n${init.stderr}`);
+      fs.appendFileSync(
+        path.join(built, ".git", "config"),
+        "[user]\n\temail = preflight@example.test\n\tname = preflight test\n[maintenance]\n\tauto = false\n",
+      );
+      fs.writeFileSync(path.join(built, ".gitattributes"), "* text=auto eol=lf\n");
+    } catch (error) {
+      fs.rmSync(built, { recursive: true, force: true });
+      throw error;
+    }
+    repoTemplate = built;
+  }
+  return repoTemplate;
+}
+
+afterAll(() => {
+  if (repoTemplate !== undefined) fs.rmSync(repoTemplate, { recursive: true, force: true });
+});
 
 const TLS = [
   "export function verify() {",
@@ -314,69 +349,64 @@ const RP_CONFIG = JSON.stringify({
   ],
 });
 
-function makeTitleRepo() {
-  const repo = makeRepo();
-  fs.writeFileSync(path.join(repo.dir, "release-please-config.json"), RP_CONFIG);
-  fs.mkdirSync(path.join(repo.dir, "tools", "downloader"), { recursive: true });
-  repo.commitAll("seed the title fixture");
-  return repo;
+/**
+ * With `--title` given, `checkTitle` reads only `release-please-config.json` and
+ * the names under `tools/` (`commit-message.mjs`'s `releasingTypes` and
+ * `toolScopes`) and never runs git, so a plain directory serves every case and
+ * is shared between them (repo-128). A case that wanted git state would use
+ * `makeRepo`.
+ */
+let titleDir: string | undefined;
+
+function titleFixtureDir(): string {
+  if (titleDir === undefined) {
+    const built = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-title-")));
+    fs.writeFileSync(path.join(built, "release-please-config.json"), RP_CONFIG);
+    fs.mkdirSync(path.join(built, "tools", "downloader"), { recursive: true });
+    titleDir = built;
+  }
+  return titleDir;
 }
+
+afterAll(() => {
+  if (titleDir !== undefined) fs.rmSync(titleDir, { recursive: true, force: true });
+});
 
 /** Done when's third planted failure: a feat title over markdown-only tools/ paths. */
 test("checkTitle fails a changelog-worthy type whose only tools/ path is markdown", () => {
-  const repo = makeTitleRepo();
-  try {
-    const result = checkTitle(
-      repo.dir,
-      ["tools/downloader/docs/work/dl-1-a.md"],
-      "feat(downloader): document a thing",
-    );
-    expect(result.ok).toBe(false);
-    expect(result.bit).toBe(EXIT.title);
-    expect(result.lines.join("\n")).toMatch(/markdown/);
-  } finally {
-    repo.cleanup();
-  }
+  const result = checkTitle(
+    titleFixtureDir(),
+    ["tools/downloader/docs/work/dl-1-a.md"],
+    "feat(downloader): document a thing",
+  );
+  expect(result.ok).toBe(false);
+  expect(result.bit).toBe(EXIT.title);
+  expect(result.lines.join("\n")).toMatch(/markdown/);
 });
 
 test("checkTitle passes the same type when a tools/ path is not markdown", () => {
-  const repo = makeTitleRepo();
-  try {
-    const result = checkTitle(
-      repo.dir,
-      ["tools/downloader/api/src/a.ts", "tools/downloader/docs/work/dl-1-a.md"],
-      "feat(downloader): add a thing",
-    );
-    expect(result).toMatchObject({ ok: true, bit: 0 });
-  } finally {
-    repo.cleanup();
-  }
+  const result = checkTitle(
+    titleFixtureDir(),
+    ["tools/downloader/api/src/a.ts", "tools/downloader/docs/work/dl-1-a.md"],
+    "feat(downloader): add a thing",
+  );
+  expect(result).toMatchObject({ ok: true, bit: 0 });
 });
 
 test("checkTitle passes a hidden type over markdown-only paths, since no changelog is cut", () => {
-  const repo = makeTitleRepo();
-  try {
-    const result = checkTitle(
-      repo.dir,
-      ["tools/downloader/docs/work/dl-1-a.md"],
-      "chore(downloader): file a ticket",
-    );
-    expect(result).toMatchObject({ ok: true, bit: 0 });
-    expect(result.lines.join("\n")).toMatch(/hidden/);
-  } finally {
-    repo.cleanup();
-  }
+  const result = checkTitle(
+    titleFixtureDir(),
+    ["tools/downloader/docs/work/dl-1-a.md"],
+    "chore(downloader): file a ticket",
+  );
+  expect(result).toMatchObject({ ok: true, bit: 0 });
+  expect(result.lines.join("\n")).toMatch(/hidden/);
 });
 
 test("checkTitle fails outright on a title commit-message.mjs's own convention rejects", () => {
-  const repo = makeTitleRepo();
-  try {
-    const result = checkTitle(repo.dir, [], "Fixed a thing.");
-    expect(result.ok).toBe(false);
-    expect(result.bit).toBe(EXIT.title);
-  } finally {
-    repo.cleanup();
-  }
+  const result = checkTitle(titleFixtureDir(), [], "Fixed a thing.");
+  expect(result.ok).toBe(false);
+  expect(result.bit).toBe(EXIT.title);
 });
 
 /**
@@ -402,17 +432,12 @@ test.each([
   "squash! feat(downloader): document a thing (dl-1)",
   "amend! feat(downloader): document a thing (dl-1)",
 ])("checkTitle fails a subject commit-message.mjs bypasses: %s", (subject) => {
-  const repo = makeTitleRepo();
-  try {
-    const result = checkTitle(repo.dir, ["tools/downloader/docs/work/dl-1-a.md"], subject);
-    expect(result.ok).toBe(false);
-    expect(result.bit).toBe(EXIT.title);
-    expect(result.lines.join("\n")).toMatch(/no conventional subject found/);
-    expect(result.lines.join("\n")).not.toMatch(/undefined/);
-    expect(result.lines.join("\n")).not.toMatch(/is hidden in release-please-config/);
-  } finally {
-    repo.cleanup();
-  }
+  const result = checkTitle(titleFixtureDir(), ["tools/downloader/docs/work/dl-1-a.md"], subject);
+  expect(result.ok).toBe(false);
+  expect(result.bit).toBe(EXIT.title);
+  expect(result.lines.join("\n")).toMatch(/no conventional subject found/);
+  expect(result.lines.join("\n")).not.toMatch(/undefined/);
+  expect(result.lines.join("\n")).not.toMatch(/is hidden in release-please-config/);
 });
 
 // --- check 5: merge-tree against every other open pull request head --------
@@ -1306,14 +1331,10 @@ test("deriveExtraCiCommands throws on npm install-clea, npm isntall-cl and npm c
 // --- repo-65: check 1 also selects a suite for a working-tree-only edit ----
 
 // A second, later `import` rather than one more name in the block at the top
-// of this file: every name up there is cited by line number from five
-// already-merged tickets' own `## Review` sections (this file's own
-// `:739`, `:293`, and more like them), and one more line in that block moves
-// every one of those citations by one — measured directly, with this import
-// briefly added up there instead: `node scripts/citations-gate.mjs --against
-// origin/main` went from 0 failing to 5 records, 44 citations, all `moved` by
-// exactly one line. An `import` declaration is valid at the top level of a
-// module wherever it is written, so this one costs nothing upstream of it.
+// of this file. It was written that way to keep the lines already-merged gate
+// records cited from moving, a rule adr/006 retired along with the citations;
+// an `import` declaration is valid at the top level of a module wherever it
+// is written, so it stays where it is.
 import { workingTreePaths } from "../preflight.mjs";
 
 /**

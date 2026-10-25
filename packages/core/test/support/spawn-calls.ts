@@ -108,6 +108,24 @@ const REGEX_AFTER_WORD = new Set([
  * gate 1). `spawn-safety.test.ts`'s `code()` is this too.
  */
 export function mask(text: string, keepLiterals = false): string {
+  const cache = keepLiterals ? KEPT : BLANKED;
+  const known = cache.get(text);
+  if (known !== undefined) return known;
+  const masked = maskText(text, keepLiterals);
+  cache.set(text, masked);
+  return masked;
+}
+
+/**
+ * The scan asks for the same file's masked text three times (`spawn-safety.test.ts`
+ * runs one check per rule over one list of sources), and the tokenizer below is
+ * most of what that test costs: 2.5 s on ubuntu and about 3 s more on Windows
+ * (repo-128). Keyed by the text, so a fixture string is its own entry.
+ */
+const KEPT = new Map<string, string>();
+const BLANKED = new Map<string, string>();
+
+function maskText(text: string, keepLiterals: boolean): string {
   const out = [...text];
   const { length } = text;
   const blankRange = (from: number, to: number): void => {
