@@ -138,4 +138,6 @@ and the admin can both rename. Until lg-73 lands, every household made here is
   brief; it follows the route to `add <address> <person>` so the operator cannot
   make an empty household either. Renaming split out as lg-73. The first
   person's email stays required here; lg-74 makes it optional for anyone added
-  after, and lg-75 marks an email that has never signed in.
+  after, and lg-75 marks an email that has never signed in. lg-76 makes `person`
+  optional in this create request later, naming the person from the email; build
+  it required here.

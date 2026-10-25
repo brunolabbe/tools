@@ -5,7 +5,7 @@ title: A household can hold a person who has no email and never signs in
 kind: work-package
 status: ready
 milestone: P6
-depends_on: [lg-71]
+depends_on: [lg-71, lg-76]
 difficulty: hard
 ---
 
@@ -80,3 +80,6 @@ the owner noted that most likely one member of a house keeps the ledger.
   Depends on lg-71 because both change the member and create request schemas
   and the admin form; building them in that order avoids one rewriting the
   other.
+- 2026-10-25 — Now waits on lg-76 too: a person added without an email gets a
+  UUID id and their typed name as their shown name, so `addPerson` follows
+  lg-76's rule rather than storing the name as the id.
