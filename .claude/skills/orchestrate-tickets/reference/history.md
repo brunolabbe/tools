@@ -6431,3 +6431,44 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - Re-asking the Node target with `schedule.json` attached reversed a choice made on a premise ("24 is the LTS") that expired that week.
 - Pointing gates at the builder's installed worktree, read-only, let dependency-major branches be probed on their own toolchain without an install in a gate.
 - Stacking repo-123 as a draft on the landed repo-121 branch let it build and gate without waiting for the owner's merge.
+
+### Batch 2026-10-25 (tools-97, repo-119 repo-127 repo-128) — base 7f8d7f48
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a4f15259c2f3d57c2 | seam-mapper, twelve candidates | 1m29s / 1m28s | 0 | $0.3276 |
+| #654 #655 #656 #657 | three merged; #657 open, ready, CI unread at 14ee0f61 | Sonnet 5.5 / high | a157af09704906e67 | builder-standard, repo-119 as four pull requests | 14m29s / 14m25s | 0 | $1.9201 |
+| #654 #655 #656 #657 | as above | Opus 5.5 / high | aa079dd4e1d492559 | ticket-reviewer-opus, repo-119 gate 1 over four heads | 10m00s / 9m40s | 0 | $2.6099 |
+| #657 | as above | Sonnet 5.5 / high | acd948cf5091bd5f3 | fixer, low 2 at landing + landing, #657 held draft | 4m58s / 4m55s | 0 | $0.4544 |
+| #657 | as above | Haiku 5.5 / high | a72120f3aec1f461f | builder-mechanical, maintenance: merge main after #654–#656, ready | 3m15s / 3m08s | 0 | $0.0289 |
+| #658 | open, ready, green at 1f69429d | Opus 5.5 / high | af6a85377816e2387 | builder-hard, repo-127 + probe PR #659 | 28m59s / 32m44s | 0 | $7.1044 |
+| #658 | as above | Sonnet 5.5 / xhigh | a1cf3402941bcb88d | ticket-reviewer-sonnet, repo-127 gate 1 | 17m52s / 17m38s | 0 | $2.7826 |
+| #658 | as above | Sonnet 5.5 / high | afa25ac9ef26ad1bf | fixer, three lows + CLAUDE.md/testing.md sentence at landing + landing | 9m12s / 9m09s | 0 | $1.1991 |
+| #658 | as above | Sonnet 5.5 / high | abca893fdfc9c8c33 | fixer, CodeQL high the landing raised | 1m43s / 1m43s | 0 | $0.3019 |
+| #660 | open, ready, CI unread at 3ca8dcf4 | Sonnet 5.5 / high | a85e6decd5178cb42 | builder-standard, repo-128 | 18m48s / 18m45s | 0 | $2.7453 |
+| #660 | as above | Opus 5.5 / high | a84bc6bb4cec21e22 | ticket-reviewer-opus, repo-128 gate 1 | 15m24s / 14m41s | 0 | $4.2579 |
+| #660 | as above | Sonnet 5.5 / high | a48299c08c971527e | fixer, low 1 at landing (stopped once on the count) + landing | 6m43s / 6m41s | 0 | $0.5114 |
+| #657 #660 | as above | Haiku 5.5 / high | a5d3dcc324746b227 | builder-mechanical, maintenance: record four post-build owner answers | 4m07s / 4m07s | 0 | $0.0440 |
+| — | — | Opus 5.5 / high | orchestrator c64b1f50 | orchestrator (floor) | 1h30m07s / 2h32m40s | 0 | $6.2530 |
+| | | | | **total** (rates read 2026-10-10) | 3h47m06s | 0 | **$30.5405** |
+
+**Tickets:**
+
+- repo-119 → #654 #655 #656 (merged 802a69f1, 2cb890f7, 7134af89) and #657 (main merged in after them by maintenance); gate 1 PASS, two lows, the second fixed at landing.
+- repo-127 → #658; gate 1 CONCERNS (one med recorded unfixed, six lows, three fixed at landing); the landing's own test raised a new CodeQL high, fixed at 1f69429d after the owner's answer.
+- repo-128 → #660; gate 1 PASS, two lows, the first fixed at landing with the count corrected from three to five.
+
+**Defects in the skill:**
+
+1. `SKILL.md`, step 9 — the `--land` command reads `<gate files…>` and the next paragraph says "Hand the lander both paths", which I read as both the section and the `.full.md` to `--land`; `reference/records.md` splices section files only, and repo-119's lander passed the section alone and said why. Reproduction: `grep -n -E 'Hand the lander both|<gate files' .claude/skills/orchestrate-tickets/SKILL.md` → lines 187 and 198.
+2. `reference/worktree-hygiene.md`, the `npm install` paragraph — "yours when no peer session is live" made a stale farm an owner question while the only peer was idle with its batch closed and no worktree. Reproduction at intake on d58d312e: `node .claude/scripts/check-farm-freshness.mjs --packages /workspaces/tools` → missing `@oxc-project/types`, `lightningcss`, `rolldown`, exit 1; `ListAgents` → `tools-5e [e57f83] · interactive · idle`.
+3. `roles/common.md`, line 22 ("no npm command that writes the lockfile") — silent on a dependency-update ticket. repo-119's builder took oxlint with `npx -y npm@11.21.1 update oxlint --before=2026-10-18 --package-lock-only --ignore-scripts` because the farm's `node_modules` entries are symlinks into the shared checkout. Reproduction, in any worktree after `bash .claude/scripts/worktree-farm.sh`: `ls -ld node_modules/oxlint` → `node_modules/oxlint -> /workspaces/tools/node_modules/oxlint` (run 2026-10-25 in agent-a5d3dcc324746b227's worktree); the npm command is relayed from the builder's report.
+4. `roles/builder.md` _first build_ ("CI runs every project on the draft while the gate works", line 140) and `reference/dispatching.md` _A probe pull request_ ("It runs `ci.yml`'s whole matrix too", line 131) — false once #658 merges, since a pull request then runs only the projects its paths reach; repo-127 gate 1's fifth low, left for this review by the owner. Reproduction: `grep -n -E 'every project on the draft|whole matrix too' .claude/skills/orchestrate-tickets/roles/builder.md .claude/skills/orchestrate-tickets/reference/dispatching.md`.
+5. `reference/dispatching.md`, _An answered decision has to be recorded even when you do not build it_ — covers an answer bigger than the running branch, or a ticket nobody is building, but not an answer given after the builder reported and before the landing. Four such answers went to the gates and no one recorded them; repo-128's lander then wrote "open decision" for Build 6 into #660's body from the ticket's Log. Reproduction: `git show e7019159:docs/work/repo-128-repo-and-core-tests-spawn-what-they-could-import.md | grep -n 'accept the template as the whole of Build 6'` → line 194, with no answer entry after it.
+
+**Worked, and worth keeping:**
+
+- Step 10's CodeQL read on the landing head: repo-127's landing fix (8f870cc4) raised "Insecure temporary file" (high) at `scripts/test/preflight.test.ts:2792`, where the gated 80ee7306 passed.
+- A lander that counted for itself instead of transcribing: repo-128's stopped on "31 of 34" (my arithmetic from the gate's three) and found five read-only cases.
+- A scratch merge of two sibling heads before marking ready (#658 × #660, 275 of 275), so the owner could merge them in either order.
+- Re-asking on a gate's corrected numbers: rule (i)'s cost was 4 full runs in 100, not 10; the owner kept it.
