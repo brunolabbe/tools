@@ -64,7 +64,7 @@ function fail(message, exit) {
  * the dangerous branch is the one that produces none.
  *
  * `sha` is set on a branch the checkout holds, and on nothing else: it is what
- * `stackPulls` asks git about, and only a commit in hand can be asked.
+ * `stackSources` asks git about, and only a commit in hand can be asked.
  *
  * @typedef {{source: string, paths: string[], note?: string, unread?: boolean, sha?: string, name?: string}} Source
  */
@@ -458,7 +458,7 @@ export function collect(prefix, options = {}) {
   }
 
   sources.push(...branches);
-  return stackPulls(sources, { run, cwd, prefix });
+  return stackSources(sources, { run, cwd, prefix });
 }
 
 /**
@@ -513,15 +513,24 @@ function unheldName(child, heldByParent, prefix) {
 }
 
 /**
- * repo-118's stacked case: a pull request whose head contains another open
- * pull request's head is stacked on it, and must not clash with it.
+ * repo-118's stacked case, widened by repo-124 from pull requests to any read
+ * source that carries a sha: a source whose head contains another's head is
+ * stacked on it, and must not clash with it.
  *
  * Its diff is taken against `main`, so it carries the parent's commits, and
  * the parent's ticket file reads as the child's claim as well. On 2026-10-24
  * that printed `clash: lg-66 is claimed by PR#623, PR#625` for #625, which only
  * sits on #623. Such a child is labelled `PR#625 (stacked on PR#623)`, and the
  * paths its parent holds come off its own claim, so the parent's id is the
- * parent's alone.
+ * parent's alone. A pushed branch with no pull request is the same: it is
+ * `branch/<name> (stacked on PR#623)`, and a branch stacked on another branch
+ * names that branch.
+ *
+ * **Pairs are pruned before git is asked** (repo-124): one `merge-base` spawn
+ * per pair is quadratic in the remote's branch list, and a pair that shares no
+ * path and no id cannot clash, so nothing is lost by not probing it. Two pull
+ * requests are the exception and are always probed — there are few of them, and
+ * the label says which one a ticket sits on even when nothing would clash.
  *
  * The ancestor check is what makes that safe. Two unrelated pull requests that
  * both file the same path do not contain one another, and still clash — that
@@ -531,9 +540,9 @@ function unheldName(child, heldByParent, prefix) {
  * parent holds come off the same way (`unheldName`), so `repo-66-followup` on
  * `repo-66-parent` does not clash on 66 by its name.
  *
- * Only a pull request whose head is read has a sha to ask git about. One whose
- * head is unfetched, or comes from a fork, is never treated as stacked: that
- * would hide its files, and the expensive error is the one to keep.
+ * Only a source whose head is read has a sha to ask git about. A pull request
+ * or branch whose head is unfetched, or comes from a fork, is never treated as
+ * stacked: that would hide its files, and the expensive error is the one to keep.
  *
  * The labels and paths are all decided before any is applied, because a parent
  * that is itself stacked must still be named by its own label.
@@ -542,21 +551,47 @@ function unheldName(child, heldByParent, prefix) {
  * @param {{run?: typeof runCommand, cwd?: string, prefix: string}} options
  * @returns {Source[]}
  */
-export function stackPulls(sources, options) {
+export function stackSources(sources, options) {
   const run = options.run ?? runCommand;
   const cwd = options.cwd;
   const prefix = options.prefix;
-  const pulls = sources.filter(
-    (source) => source.sha !== undefined && !source.unread && source.source.startsWith("PR#"),
+  const readable = sources.filter(
+    (source) =>
+      source.sha !== undefined &&
+      !source.unread &&
+      (source.source.startsWith("PR#") || source.source.startsWith("branch/")),
   );
+
+  // What each candidate could clash on, worked out once and not per pair: the
+  // paths it holds, and the ids those paths and its name carry.
+  const held = new Map(
+    readable.map((source) => [
+      source,
+      { paths: new Set(source.paths), ids: new Set(idsIn(source.paths, prefix)) },
+    ]),
+  );
+  /**
+   * @param {Source} a
+   * @param {Source} b
+   */
+  const mayClash = (a, b) => {
+    if (a.source.startsWith("PR#") && b.source.startsWith("PR#")) return true;
+    const [one, two] = [held.get(a), held.get(b)];
+    if (!one || !two) return true;
+    return (
+      [...one.paths].some((entry) => two.paths.has(entry)) ||
+      [...one.ids].some((id) => two.ids.has(id))
+    );
+  };
 
   /** @type {Map<Source, Source>} */
   const restated = new Map();
-  for (const child of pulls) {
-    const parents = pulls.filter(
+  for (const child of readable) {
+    const parents = readable.filter(
       (other) =>
         other !== child &&
         other.sha !== child.sha &&
+        mayClash(other, child) &&
         isAncestor(/** @type {string} */ (other.sha), /** @type {string} */ (child.sha), run, cwd),
     );
     if (parents.length === 0) continue;

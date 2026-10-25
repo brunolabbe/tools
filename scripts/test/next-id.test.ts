@@ -1269,3 +1269,157 @@ test("a stacked child filing a different ticket under its parent's id still clas
   const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
   expect(clashes(result)).toEqual([{ id: 66, sources: ["PR#623", "PR#625 (stacked on PR#623)"] }]);
 });
+
+/**
+ * repo-124: the stacking pass reads branches that have no pull request too.
+ *
+ * `cutFrom` is `ticketRemote`'s `branch`, but cut from another pushed branch's
+ * head and not from trunk: a stacked child, with or without a pull request of
+ * its own.
+ */
+function cutFrom(peer: string, name: string, parent: string, files: Record<string, string>) {
+  runGit(peer, ["checkout", "-q", "-b", name, parent]);
+  for (const [file, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(peer, file)), { recursive: true });
+    fs.writeFileSync(path.join(peer, file), text);
+  }
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", name]);
+  runGit(peer, ["push", "-q", "origin", name]);
+}
+
+/**
+ * Done when 1 and 2, the ticket's reproduction: `stacked-no-pr` is cut from
+ * `parent-pr`'s head and has no pull request. Its diff against trunk carries the
+ * parent's `repo-66`, which printed as `clash: repo-66 is claimed by PR#623,
+ * branch/stacked-no-pr` before the stacking pass read branches.
+ */
+test("a branch with no pull request, cut from a pull request's head, reports no clash for it", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("parent-pr", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  cutFrom(peer, "stacked-no-pr", "parent-pr", { "docs/work/repo-67-child.md": "the child\n" });
+
+  const run = withGh([
+    { number: "623", head: "parent-pr", files: ["docs/work/repo-66-parent.md"] },
+  ]);
+  const sources = collect("repo", { run, cwd: peer, rev: "origin/trunk" });
+  const result = claims(sources, "repo");
+  expect(clashes(result)).toEqual([]);
+  expect(rows(result)).toEqual([
+    "at origin/trunk repo-5",
+    "PR#623 repo-66",
+    "branch/stacked-no-pr (stacked on PR#623) repo-67",
+  ]);
+  expect(nextFree(result)).toBe(68);
+});
+
+/** A branch stacked on another branch, neither with a pull request, names that branch. */
+test("a branch cut from another pull-request-less branch is stacked on it by name", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("first-branch", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  cutFrom(peer, "second-branch", "first-branch", { "docs/work/repo-67-middle.md": "middle\n" });
+  cutFrom(peer, "third-branch", "second-branch", { "docs/work/repo-68-last.md": "last\n" });
+
+  const sources = collect("repo", { run: withGh([]), cwd: peer, rev: "origin/trunk" });
+  const result = claims(sources, "repo");
+  expect(clashes(result)).toEqual([]);
+  // The nearest parent, not the root: a chain of three names the middle one.
+  expect(rows(result)).toEqual([
+    "at origin/trunk repo-5",
+    "branch/first-branch repo-66",
+    "branch/second-branch (stacked on branch/first-branch) repo-67",
+    "branch/third-branch (stacked on branch/second-branch) repo-68",
+  ]);
+});
+
+/**
+ * The name floor under the same widening: `repo-66-and-repo-68-followup` has no
+ * pull request and is cut from `repo-66-parent`, so its name's 66 is its
+ * parent's. `repo-68` is not, and stays.
+ */
+test("a stacked branch with no pull request keeps the name ids its parent does not hold", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("repo-66-parent", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  cutFrom(peer, "repo-66-and-repo-68-followup", "repo-66-parent", {
+    "docs/work/repo-67-child.md": "the child\n",
+  });
+
+  const run = withGh([
+    { number: "623", head: "repo-66-parent", files: ["docs/work/repo-66-parent.md"] },
+  ]);
+  const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
+  expect(clashes(result)).toEqual([]);
+  expect(rows(result)).toEqual([
+    "at origin/trunk repo-5",
+    "PR#623 repo-66",
+    "branch/repo-66-and-repo-68-followup (stacked on PR#623) repo-67",
+    "branch/repo-66-and-repo-68-followup (stacked on PR#623) repo-68",
+  ]);
+});
+
+/** Done when 3, first half: no history in common, so no stacking, so a real clash. */
+test("two unrelated branches with no pull request that file one id still clash", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("first-filer", ({ write }) => write("docs/work/repo-70-same.md", "one\n"));
+  branch("second-filer", ({ write }) => write("docs/work/repo-70-same.md", "two\n"));
+
+  const result = claims(
+    collect("repo", { run: withGh([]), cwd: peer, rev: "origin/trunk" }),
+    "repo",
+  );
+  expect(clashes(result)).toEqual([
+    { id: 70, sources: ["branch/first-filer", "branch/second-filer"] },
+  ]);
+});
+
+/** Done when 3, second half: the name floor between two branches nothing stacks. */
+test("two unrelated branches with no pull request whose names share an id still clash", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("repo-70-first-filer", ({ write }) => write("notes-first.txt", "first\n"));
+  branch("repo-70-second-filer", ({ write }) => write("notes-second.txt", "second\n"));
+
+  const result = claims(
+    collect("repo", { run: withGh([]), cwd: peer, rev: "origin/trunk" }),
+    "repo",
+  );
+  expect(clashes(result)).toEqual([
+    { id: 70, sources: ["branch/repo-70-first-filer", "branch/repo-70-second-filer"] },
+  ]);
+});
+
+/** A stacked branch's own different ticket under its parent's id is still its claim. */
+test("a stacked branch with no pull request filing a different ticket under its parent's id clashes", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("parent-pr", ({ write }) => write("docs/work/repo-66-parent.md", "the parent\n"));
+  cutFrom(peer, "stacked-no-pr", "parent-pr", {
+    "docs/work/repo-66-other.md": "the child's own\n",
+  });
+
+  const run = withGh([
+    { number: "623", head: "parent-pr", files: ["docs/work/repo-66-parent.md"] },
+  ]);
+  const result = claims(collect("repo", { run, cwd: peer, rev: "origin/trunk" }), "repo");
+  expect(clashes(result)).toEqual([
+    { id: 66, sources: ["PR#623", "branch/stacked-no-pr (stacked on PR#623)"] },
+  ]);
+});
+
+/**
+ * Pruning: git is asked about a pair only when the pair could clash. Four
+ * branches that file four different tickets share no path and no id, so the
+ * sweep spawns no `merge-base` for them.
+ */
+test("branches that share no path and no id are not probed", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  for (const id of [70, 71, 72, 73]) {
+    branch(`b${id}`, ({ write }) => write(`docs/work/repo-${id}-x.md`, "x\n"));
+  }
+  let probes = 0;
+  const run = (command: string, args: string[], options?: { cwd?: string }) => {
+    if (command === "git" && args[0] === "merge-base") probes += 1;
+    return withGh([])(command, args, options);
+  };
+  const sources = collect("repo", { run, cwd: peer, rev: "origin/trunk" });
+  expect(clashes(claims(sources, "repo"))).toEqual([]);
+  expect(probes).toBe(0);
+});
