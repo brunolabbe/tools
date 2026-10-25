@@ -3,7 +3,7 @@ id: pl-63
 tool: planner
 title: merging compose.planner.yaml stands up three grounding services the planner cannot reach
 kind: fix
-status: needs-decision
+status: done
 milestone: null
 depends_on: [repo-125]
 difficulty: standard
@@ -39,9 +39,9 @@ fragments), and the comment was never acted on.
 Found while answering why the root compose files differ; repo-125 is the other
 half of that review.
 
-## Decision — open
+## Decision — answered 2026-10-25 by the owner
 
-**Should the planner wait for Valhalla to be healthy, or only started?**
+**Should the planner wait for Valhalla to be healthy, or only started?** Answered: **option 1, `service_started`**, chosen from the three below.
 
 adr/004 planned `condition: service_healthy`, so that a host restart is not several
 minutes of plans reporting gaps. But `cloudflared` waits on the planner's own
@@ -126,7 +126,7 @@ Dispositions, 2026-10-25, on the branch after the gate:
 - F1 fixed: `OVERPASS_URL` is `http://overpass/api` in the fragment and in the guide's table. Checked by hand: `valhalla.ts` posts to `${overpassUrl}/interpreter`, the fragment's own health check reads `/api/status`, and pl-33 used `overpass-api.de/api/interpreter`. Not run against the image.
 - F2 fixed: the fragment's header and the guide say that merging beside the downloader's needs the planner's prod fragment too.
 - F3 fixed: the guide's table says which variables the planner requires and which the fragment sets, and how to turn discovery off (an empty override, which `config.ts` treats as unset).
-- F4 held for the open decision. adr/004's `service_healthy` paragraph gets a dated note once the owner answers.
+- F4 fixed after the owner answered option 1: adr/004 has a dated note on its `service_healthy` paragraph.
 - F5 accepted, recorded: no test merges compose files. A `scripts/test` case running `docker compose config` would need the compose CLI on every runner, and adds a CI dependency that nothing here has needed so far.
 
 ## Log
@@ -150,3 +150,6 @@ and no daemon, so the open question in the guide is still open: does Valhalla's
 image ship the `curl` its health check calls? With `service_started` the answer no
 longer gates the tunnel. It still decides whether `docker compose ps` reports
 Valhalla correctly.
+
+**2026-10-25: decided and closed.** The owner chose `service_started`, which is
+what the branch already built. adr/004 has a dated note saying so, and why.

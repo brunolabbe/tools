@@ -127,6 +127,13 @@ nothing about the planner.
 and naming it on the command line enables its profile, which is the whole
 interface a one-shot job needs.
 
+> **Amended 2026-10-25 by
+> [pl-63](../../tools/planner/docs/work/pl-63-the-planner-reaches-its-grounding-services.md):
+> it waits on `service_started`, not on health.** `cloudflared` came to wait on
+> each tool's own health. So a healthy-wait on Valhalla would let one failing
+> routing engine keep every tool's tunnel down after an `up -d`. The owner chose
+> a few minutes of named gaps instead.
+
 **The planner waits on `condition: service_healthy`, and pays for it.** Not for
 correctness — pl-28 step 5 already maps an unreachable instance to a retryable
 `UNREACHABLE` rather than a thrown run — but so that a host restart is not
