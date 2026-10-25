@@ -6,10 +6,9 @@
  * is invented.
  */
 
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { layoutOutputFormat } from "@ledger/receipts";
 import { beforeAll, describe, expect, test } from "vitest";
 import { HOUSEHOLD_LAYOUT, readWorkbook } from "@ledger/books";
-import { workbookLayoutSchema } from "@ledger/contract";
 import type { WorkbookLayout } from "@ledger/contract";
 import { LAYOUT_FIXTURE_NAMES, layoutFixtures, writtenRows } from "./layout/fixtures.ts";
 import type { LayoutFixture } from "./layout/fixtures.ts";
@@ -21,7 +20,7 @@ import {
   layoutRequest,
   layoutView,
   shownRows,
-} from "./layout/view.ts";
+} from "../src/layout-view.ts";
 
 let fixtures: LayoutFixture[];
 
@@ -298,7 +297,7 @@ describe("what the model is shown", () => {
   });
 
   test("the layout's schema can be sent as a structured output's format", () => {
-    const format = zodOutputFormat(workbookLayoutSchema);
+    const format = layoutOutputFormat();
     expect(format.type).toBe("json_schema");
     expect(format.schema["additionalProperties"]).toBe(false);
     expect(JSON.stringify(format.schema)).toContain("withdrawal");

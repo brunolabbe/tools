@@ -41,14 +41,13 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { workbookLayoutSchema } from "@ledger/contract";
+import { LAYOUT_MAX_OUTPUT_TOKENS, createLayoutAsk } from "@ledger/receipts";
+import type { LayoutAnswer, LayoutAsk } from "@ledger/receipts";
 import { LAYOUT_FIXTURE_NAMES, layoutFixtures } from "../layout/fixtures.ts";
 import type { LayoutFixture } from "../layout/fixtures.ts";
 import { scoreLayout } from "../layout/score.ts";
 import type { Outcome, Score } from "../layout/score.ts";
-import { DEFAULT_VIEW, estimateTokens, layoutRequest } from "../layout/view.ts";
+import { DEFAULT_VIEW, estimateTokens, layoutRequest } from "../../src/layout-view.ts";
 
 /**
  * Refuses unless the run was asked for in so many words. Pure, so
@@ -73,15 +72,13 @@ export function assertLiveRunConsent(env: NodeJS.ProcessEnv): string {
   return key;
 }
 
-/** What a model answered, as the harness needs it. */
-export interface Answer {
-  text: string | null;
-  stopReason: string | null;
-  inputTokens: number;
-  outputTokens: number;
-}
+/**
+ * What a model answered, as the harness needs it: the product's own seam
+ * (`@ledger/receipts`, lg-66), so the harness and the product make one call.
+ */
+export type Answer = LayoutAnswer;
 
-export type Ask = (request: string) => Promise<Answer>;
+export type Ask = LayoutAsk;
 
 export interface MeasureOptions {
   model: string;
@@ -115,8 +112,8 @@ export interface RunRecord {
   answer: unknown;
 }
 
-/** Room for thinking on top of a description of a few hundred tokens, as the receipt reader gives it. */
-export const MAX_OUTPUT_TOKENS = 16_000;
+/** Room for thinking on top of a description of a few hundred tokens: the product's own. */
+export const MAX_OUTPUT_TOKENS = LAYOUT_MAX_OUTPUT_TOKENS;
 
 function cost(options: MeasureOptions, input: number, output: number): number {
   return (input * options.priceIn + output * options.priceOut) / 1_000_000;
@@ -326,37 +323,14 @@ export function parseCli(argv: readonly string[]): MeasureOptions {
 }
 
 /**
- * The real model, built only after consent. Every option the SDK reads from
- * the environment when it is not given one is given here; the one it reads
- * whatever it is given, `ANTHROPIC_CUSTOM_HEADERS`, `assertLiveRunConsent`
- * has already refused.
+ * The real model, built only after consent: the product's own call
+ * (`createLayoutAsk`, lg-66), given the model and effort being measured.
+ * Every option the SDK reads from the environment when it is not given one is
+ * given there; the one it reads whatever it is given,
+ * `ANTHROPIC_CUSTOM_HEADERS`, `assertLiveRunConsent` has already refused.
  */
 function anthropicAsk(apiKey: string, options: MeasureOptions): Ask {
-  const client = new Anthropic({
-    apiKey,
-    authToken: null,
-    webhookKey: null,
-    baseURL: "https://api.anthropic.com",
-    timeout: 180_000,
-    maxRetries: 2,
-    logLevel: "off",
-  });
-  const format = zodOutputFormat(workbookLayoutSchema);
-  return async (request) => {
-    const message = await client.messages.create({
-      model: options.model,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      output_config: { effort: options.effort, format },
-      messages: [{ role: "user", content: request }],
-    });
-    const text = message.content.flatMap((block) => (block.type === "text" ? [block.text] : []));
-    return {
-      text: text.length === 0 ? null : text.join(""),
-      stopReason: message.stop_reason,
-      inputTokens: message.usage.input_tokens,
-      outputTokens: message.usage.output_tokens,
-    };
-  };
+  return createLayoutAsk({ apiKey, model: options.model, effort: options.effort });
 }
 
 async function main(): Promise<void> {

@@ -23,8 +23,9 @@
  * periods' (lg-6), the next is the spending categories' (lg-15), the next
  * four are the household directory's (lg-22), the next two are its people's
  * shown names (lg-33), the next is a person retired from the books (lg-35), the
- * next six are the receipts' (lg-8), the next is their items' (lg-10), and the
- * last is the mortgage split's (lg-63).
+ * next six are the receipts' (lg-8), the next is their items' (lg-10), the
+ * next is the mortgage split's (lg-63), and the last six are the workbook
+ * import's through a described layout (lg-66).
  */
 
 import {
@@ -228,6 +229,40 @@ export const LEDGER_ERROR_CODES = [
    * request instead, refused by the schema.
    */
   "MORTGAGE_SHARES_WRONG_PEOPLE",
+  // --- A workbook imported through a described layout (lg-66) ---
+  //
+  // The upload's byte bound is core's `SIZE_LIMIT_EXCEEDED`, as a receipt
+  // photo's is: it is the size of what was sent. These are about what is in it.
+  /**
+   * The upload is not an `.xlsx` workbook, judged from its bytes and never its
+   * name: not a zip, a zip whose directory cannot be read, or one without the
+   * workbook's own entries. A bank CSV is refused this way until lg-67.
+   */
+  "WORKBOOK_NOT_XLSX",
+  /** The workbook reads as no sheet at all, so there is nothing to describe. */
+  "WORKBOOK_NO_SHEETS",
+  /**
+   * The workbook is over one of the import's bounds — what it inflates to, its
+   * sheets, its rows or cells, or the request it would make — named in
+   * `details.bound`. Nothing was sent.
+   */
+  "WORKBOOK_TOO_LARGE",
+  /**
+   * No model is configured to describe a workbook (no `ANTHROPIC_API_KEY`), so
+   * nothing is sent.
+   */
+  "LAYOUT_READER_UNCONFIGURED",
+  /**
+   * The model answered without a layout: it stopped short, or sent something
+   * that is not JSON or not a description. The model is called once per press
+   * of the button, never again on its own.
+   */
+  "LAYOUT_UNREADABLE",
+  /**
+   * The workbook, read through the description confirmed, fails a
+   * verification, so nothing was imported. `details.problems` lists them.
+   */
+  "WORKBOOK_IMPORT_REFUSED",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -284,6 +319,16 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
     "The items, deposits and taxes do not add up to the total. Correct the receipt before filing it.",
   MORTGAGE_SHARES_WRONG_PEOPLE:
     "Those parts do not name exactly the people in the books on that day. Give each of them a part, and nobody else.",
+  WORKBOOK_NOT_XLSX:
+    "Only an .xlsx workbook can be imported here. Save the file as an Excel workbook (.xlsx) and choose it again.",
+  WORKBOOK_NO_SHEETS: "That workbook has no sheet to read.",
+  WORKBOOK_TOO_LARGE: "That workbook is larger than this import reads.",
+  LAYOUT_READER_UNCONFIGURED:
+    "Describing a workbook is not set up on this server, so nothing was sent.",
+  LAYOUT_UNREADABLE:
+    "The model did not answer with a description of the workbook. Nothing was imported.",
+  WORKBOOK_IMPORT_REFUSED:
+    "The workbook, read through that description, does not pass every check, so nothing was imported.",
 };
 
 /**

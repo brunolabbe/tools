@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { assertLiveRunConsent, measure, parseCli } from "./live/layout-run.ts";
 import type { Answer, Ask, MeasureOptions } from "./live/layout-run.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
-import { layoutView } from "./layout/view.ts";
+import { layoutView } from "../src/layout-view.ts";
 
 let dir: string;
 
