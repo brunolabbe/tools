@@ -3,9 +3,8 @@
 #   docker compose -f compose.prod.yaml -f compose.planner.prod.yaml up -d
 #
 # — a planner-only host, which is two files because the shared overlay carries
-# no tool. Beside the downloader it is those two files plus the downloader's
-# two, and `COMPOSE_FILE` in `.env` is how a host stops typing the list; see
-# `.env.prod.example`.
+# no tool. Beside the others it is those two plus theirs, and `COMPOSE_FILE` in
+# `.env` is how a host stops typing the list; see `.env.prod.example`.
 #
 # ## Why this is a file of its own, and not a block in compose.prod.yaml
 #
@@ -94,7 +93,8 @@ services:
       #
       # **No grounding endpoints.** `GROUNDING_PROVIDER` defaults to `fixtures`,
       # which answers from a checked-in table and reaches nothing. Making the
-      # distances real is `compose.planner.yaml` plus a `.osm.pbf`, and the
+      # distances real is `compose.planner.yaml` plus a `.osm.pbf`: that file
+      # sets the endpoints and adds this service to its network (pl-63). The
       # procedure — including why not to automate the rebuild — is in
       # docs/02-DEPLOYMENT.md. Merging this file does not commit a host to that.
       #
@@ -109,6 +109,18 @@ services:
       # without a login is then a stranger spending a token budget:
       # `MAX_OUTPUT_TOKENS` caps one reply and nothing caps how many.
       MODEL_PROVIDER: "scripted"
+
+    # A disk guard, added by repo-125. Docker's `json-file` driver keeps every
+    # line forever unless told otherwise, so an uncapped log grows until the disk
+    # is full. Unlike the downloader's cap (dl-54), this one promises nothing
+    # about how long a line is kept, and its size is not derived from a measured
+    # day: 30 MB is room for a long incident's worth of lines, and small beside
+    # the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
     # A Node process with SQLite behind it. Bounded so a runaway is attributable
     # rather than taking the host down with the downloader.

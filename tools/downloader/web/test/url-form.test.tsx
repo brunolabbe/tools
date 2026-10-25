@@ -145,3 +145,29 @@ test("the field's own type refuses a string that is not a URL at all", async () 
   expect(spies.onSubmit).not.toHaveBeenCalled();
   expect(screen.getByRole("alert").textContent).toBe("Enter a full http:// or https:// address.");
 });
+
+// ---------------------------------------------------------------------------
+// The clear button
+// ---------------------------------------------------------------------------
+
+test("an empty field offers nothing to clear", () => {
+  mount();
+  expect(screen.queryByRole("button", { name: "Clear address" })).toBeNull();
+});
+
+test("clear empties the field and puts the cursor back in it, ready for the next paste", async () => {
+  const user = userEvent.setup();
+  const spies = mount({ url: SOURCE_URL });
+
+  await user.click(screen.getByRole("button", { name: "Clear address" }));
+  expect(spies.onUrlChange).toHaveBeenCalledWith("");
+  expect(document.activeElement).toBe(field());
+  // A type="button", so clearing never submits the address it is clearing.
+  expect(spies.onSubmit).not.toHaveBeenCalled();
+});
+
+test("the field can be cleared while an analysis runs, to paste the next one", () => {
+  mount({ url: SOURCE_URL, busy: true });
+  const clear = screen.getByRole("button", { name: "Clear address" }) as HTMLButtonElement;
+  expect(clear.disabled).toBe(false);
+});

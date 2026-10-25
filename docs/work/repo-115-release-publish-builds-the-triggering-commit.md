@@ -6,7 +6,6 @@ kind: fix
 status: done
 milestone: null
 depends_on: []
-awaiting: the next release run's publish job on main — green through Build and push, with a sha- tag of the released sha's first 7 characters in its summary and org.opencontainers.image.revision equal to the released sha in the Compute tags log
 ---
 
 # repo-115 — release publish builds the commit that triggered the run, not the one released
@@ -133,3 +132,14 @@ In `.github/workflows/release.yml`:
   names the pushed image and its revision label, not just the check. Recovery for 0.4.1 is the
   owner's: dispatch the `rebuild` job for `ledger`, which builds from `main`
   and does not use `metadata-action`.
+- 2026-10-25: `awaiting:` met and removed. Planner 0.10.0 (#614, run
+  40212273738) is the first release on the fixed step. `publish
+  (tools/planner)` is green through `Build and push`. The tags are `0.10.0`,
+  `0.10`, `latest` and `sha-f67fb8d`, and the label
+  `org.opencontainers.image.revision=f67fb8d7dd37e50824f66f2681c5c8ce029876af`
+  appears in both `Compute tags`'s output and the `buildx` command. That sha is
+  `planner-v0.10.0`'s commit. In this run the triggering commit was the
+  released one, so it shows the tagging path works but does not exercise the
+  race. The sha guard (step 3) remains the proof for that case. Ledger 0.4.1's
+  image was published separately, by the owner's `rebuild` dispatch from the tag
+  `ledger-v0.4.1` (run 40210099617, green).

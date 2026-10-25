@@ -307,10 +307,19 @@ code {
   gap: 0.5rem;
 }
 
-.urlform__input {
+.urlform__field {
+  position: relative;
+  display: flex;
   flex: 1 1 22rem;
   min-width: 0;
-  padding: 0.55rem 0.7rem;
+}
+
+.urlform__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Room on the right for the clear button, so a long address runs under it
+     to the button's edge and no further. */
+  padding: 0.55rem 2.4rem 0.55rem 0.7rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-2);
@@ -320,6 +329,32 @@ code {
 
 .urlform__input[aria-invalid="true"] {
   border-color: var(--danger);
+}
+
+.urlform__clear {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.urlform__clear:hover,
+.urlform__clear:focus-visible {
+  background: var(--surface);
+  color: var(--text);
 }
 
 .urlform__hint {
@@ -655,49 +690,18 @@ code {
 /*
  * Every progress message under the bar, one line each (dl-109): the status
  * line, then whatever explains it — dl-108's connection count is one of them.
+ * The same type as the analysing panel's `.stage`, so the two steps match.
  */
 .job__messages {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  margin: 0.2rem 0 0;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  gap: 0.2rem;
+  margin: 0.5rem 0 0.2rem;
+  padding: 0;
   list-style: none;
   font-size: 0.9rem;
-}
-
-.job__message {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
-}
-
-/*
- * One badge for every message, whatever leads it: an icon for a status line, or
- * a few characters such as dl-108's "4×".
- */
-.job__mark {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.7rem;
-  height: 1.4rem;
-  padding: 0 0.3rem;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
+  font-weight: 600;
   color: var(--accent);
-  font-size: 0.8rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.job__mark svg {
-  width: 0.9rem;
-  height: 0.9rem;
 }
 
 .jobs__note {

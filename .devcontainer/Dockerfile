@@ -64,11 +64,12 @@ RUN mkdir -p -m 0755 /etc/apt/keyrings \
 # The docker CLI and the compose plugin — `docker-ce-cli`, deliberately not
 # `docker-ce`, which is the daemon.
 #
-# What this buys: `docker compose -f compose.downloader.yaml ... config`
-# merges and schema-checks the deployment overlay. That overlay pins a subnet
-# and sets TRUST_PROXY to name it, and if those two ever drift apart every rate
-# limit in the API silently reverts to one shared bucket — a failure with no
-# symptom until someone abuses it. Merging files needs nothing to be running.
+# What this buys: `docker compose -f compose.prod.yaml -f
+# compose.downloader.prod.yaml config` merges and schema-checks the deployment
+# fragments. `compose.prod.yaml` pins a subnet and each tool's fragment sets
+# TRUST_PROXY to name it, and if those ever drift apart every rate limit in the
+# API silently reverts to one shared bucket — a failure with no symptom until
+# someone abuses it. Merging files needs nothing to be running.
 #
 # What is deliberately absent: a daemon. Docker-in-Docker needs --privileged,
 # and mounting the host's socket is the same authority by a longer route. Either

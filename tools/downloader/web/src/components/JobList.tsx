@@ -11,6 +11,8 @@ interface JobListProps {
   refusals: Record<string, AppErrorPayload>;
   /** The latest stage of each job's re-probe, by job id — see `useJobs`. */
   stages: Record<string, ProbeStageEvent>;
+  /** The job just started from this page, whose card is brought into view. */
+  revealId: string | null;
   onFollowLink: (id: string) => void;
   onCancel: (id: string) => void;
   onRemove: (id: string) => void;
@@ -28,6 +30,7 @@ export function JobList({
   streamStates,
   refusals,
   stages,
+  revealId,
   onFollowLink,
   onCancel,
   onRemove,
@@ -56,6 +59,7 @@ export function JobList({
             streamState={streamStates[job.id]}
             refusal={refusals[job.id]}
             stage={stages[job.id]}
+            reveal={job.id === revealId}
             onFollowLink={onFollowLink}
             onCancel={onCancel}
             onRemove={onRemove}

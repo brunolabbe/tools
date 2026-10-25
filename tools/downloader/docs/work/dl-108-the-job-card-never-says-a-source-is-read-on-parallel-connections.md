@@ -308,3 +308,7 @@ it. The comment now says that. Nothing else on the branch states the bound:
 say only that a split moves between chunks, and Done when 1 asks for `>= 2` at
 some tick of the split, which is what its test asserts. The gate's `low` (nothing
 holds the call site in `attempt`) stays recorded and unfixed.
+
+**2026-10-25**: the "4×" badge is gone at the owner's request; the connection
+count is a plain line under the bar, "Reading on 4 connections. This source
+throttles each one." (the pull request that filed dl-133).

@@ -188,7 +188,7 @@ test("pressing Download reports the current choices as JobOptions", () => {
   download();
   expect(spies.onDownload).toHaveBeenCalledWith({
     variantId: "v-1080",
-    container: "mp4",
+    container: "source",
     audioOnly: false,
     embedSubtitles: false,
   });
@@ -226,7 +226,7 @@ test("subtitles are offered, defaulted on, and asked for by language once each",
   download();
   expect(spies.onDownload).toHaveBeenCalledWith({
     variantId: "v-1080",
-    container: "mp4",
+    container: "source",
     audioOnly: false,
     embedSubtitles: true,
     subtitleLanguages: ["en", "fr"],
@@ -245,7 +245,7 @@ test("turning subtitles off drops the languages entirely, rather than sending an
   download();
   expect(spies.onDownload).toHaveBeenCalledWith({
     variantId: "v-1080",
-    container: "mp4",
+    container: "source",
     audioOnly: false,
     embedSubtitles: false,
   });
@@ -284,7 +284,7 @@ test("a live source is flagged and made to carry a duration", async () => {
   // matched" would pass even if the edit had changed nothing.
   expect(spies.onDownload).toHaveBeenLastCalledWith({
     variantId: "v-1080",
-    container: "mp4",
+    container: "source",
     audioOnly: false,
     embedSubtitles: false,
     liveDurationSec: 720,
@@ -474,4 +474,36 @@ test("keep source is withheld with WebM for a WebM file whose separate audio is 
   expect(containerOptions()).toEqual(["mp4", "mkv", "source"]);
   await pickRendition(user, "webm-whole");
   expect(containerOptions()).toEqual(["mp4", "mkv", "webm", "source"]);
+});
+
+// ---------------------------------------------------------------------------
+// Keep source by default, and what was found under the title
+// ---------------------------------------------------------------------------
+
+test("the container opens on keep source", () => {
+  mount();
+  expect((screen.getByLabelText("Container") as HTMLSelectElement).value).toBe("source");
+});
+
+test("where keep source is withheld, the default falls back to MP4 and asks for MP4", () => {
+  const spies = mount(
+    probe({
+      variants: [
+        file("webm-split", { container: "webm", audioUrl: "https://cdn.example.com/a.m4a" }),
+      ],
+    }),
+  );
+  // The only rendition, so it is the chosen one from the first render.
+  expect(containerOptions()).toEqual(["mp4", "mkv"]);
+  expect((screen.getByLabelText("Container") as HTMLSelectElement).value).toBe("mp4");
+  download();
+  expect(spies.onDownload).toHaveBeenCalledWith(expect.objectContaining({ container: "mp4" }));
+});
+
+test("the duration and rendition count sit under the title, where the job card keeps its subtitle", () => {
+  mount();
+  const heading = screen.getByRole("heading", { name: "A sample recording" });
+  const line = screen.getByText(/12:34 · 3 renditions/u);
+  expect(line.classList.contains("job__subtitle")).toBe(true);
+  expect(heading.nextElementSibling).toBe(line);
 });
