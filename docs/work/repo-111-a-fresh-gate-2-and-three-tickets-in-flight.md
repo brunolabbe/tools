@@ -7,7 +7,6 @@ status: done
 milestone: null
 depends_on: []
 difficulty: standard
-awaiting: Done when 17 — the first batch under these rules; per ticket, whether CI on the draft went red on something the dropped local suite run would have caught
 ---
 
 # repo-111 — A fresh gate 2, three tickets in flight, batches by tool, no suite before the gate
@@ -502,3 +501,13 @@ draft PR #568); its CI figures were re-read here with
 all "109 min wall", a false positive of `9 min`; anchored as
 `(^|[^0-9])9 min` it prints 0. The SVG and its `content` attribute both parse
 as XML (`svg ok: …svg`, `content ok: mxfile`).
+
+**2026-10-25 — Done when 17 is met, and nothing went red.** The first batch
+under these rules was tools-1c (2026-10-19, base `96da35c8`): lg-54 #574,
+lg-62 #571 and lg-57 #573. `gh run list --branch <head>` over each head reads
+`success` for CI, `ledger`, `security` and `pr-title` on every pushed sha
+(#574: `5b83df4a`, `7d58c3ea`; #571: `a496a1fd`, `71e962c9`; #573:
+`8291f5aa`, `695e83f7`, `32021323`). The one non-success is #573's
+`9a3eac21`, `cancelled` because `32021323` was pushed 11 s after it. So the
+dropped local suite run would have caught nothing in that batch, and the
+`awaiting:` line is removed.
