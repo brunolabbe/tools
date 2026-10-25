@@ -25,6 +25,13 @@ import type { WorkbookLayout } from "./layout.ts";
  */
 export const MAX_WORKBOOK_BYTES = 4 * 1024 * 1024;
 
+/**
+ * What the model is shown of each sheet: its first rows, an even sample of the
+ * middle, and its last rows (lg-38's view, `DEFAULT_VIEW` in `api`). Here so
+ * the screen that says what leaves the house (Build 4.1) says what is sent.
+ */
+export const LAYOUT_SAMPLE_ROWS = { first: 12, middle: 6, last: 3 } as const;
+
 /** The file as the requests carry it: its bytes, base64. */
 const file = z.string().min(1);
 

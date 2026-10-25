@@ -806,3 +806,14 @@ svg.chart .selected-band {
     column-gap: 1rem;
   }
 }
+
+/*
+ * lg-66: the import's reports, as the command prints them. Their lines are long,
+ * so they wrap inside the card rather than widen the page.
+ */
+.report {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+}

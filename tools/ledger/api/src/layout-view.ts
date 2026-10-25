@@ -20,6 +20,7 @@
  */
 
 import type { Cell, Sheet } from "@ledger/books";
+import { LAYOUT_SAMPLE_ROWS } from "@ledger/contract";
 
 export interface ViewOptions {
   firstRows: number;
@@ -37,10 +38,11 @@ export interface ViewOptions {
  */
 export const MAX_CELL_TEXT = 40;
 
+/** What was measured; the screen states the same numbers from the contract. */
 export const DEFAULT_VIEW: ViewOptions = {
-  firstRows: 12,
-  sampleRows: 6,
-  lastRows: 3,
+  firstRows: LAYOUT_SAMPLE_ROWS.first,
+  sampleRows: LAYOUT_SAMPLE_ROWS.middle,
+  lastRows: LAYOUT_SAMPLE_ROWS.last,
   maxText: MAX_CELL_TEXT,
   figures: "shown",
 };
