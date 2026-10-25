@@ -3,7 +3,7 @@ id: repo-119
 tool: repo
 title: oxlint 1.88 reports 140 errors on main that 1.77 does not, so the lockfile holds 1.77
 kind: chore
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -31,7 +31,7 @@ Measured on `5f9e3c0a` plus that update, `npx oxlint` at 1.88.0:
 |    15 | warning `eslint(no-await-in-loop)`            | e2e specs                                  |
 |     4 | warnings, three other rules                   |                                            |
 
-## Decision — open
+## Decision — answered
 
 Which of the new rules does this repo adopt?
 
@@ -65,3 +65,7 @@ cannot fall back.
 ## Log
 
 - 2026-10-24: filed from the dependency update that held oxlint at 1.77.0.
+- 2026-10-25: the owner chose option 2. Adopt the React rules and turn
+  `unicorn(consistent-function-scoping)` off in `.oxlintrc.json`, with a
+  comment saying why. The 27 React findings are fixed one pull request per
+  tool. Now `ready`.
