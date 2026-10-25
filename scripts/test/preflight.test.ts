@@ -31,11 +31,13 @@ import {
   CHECK_ORDER,
   CI_WORKFLOW_PATH,
   EXIT,
+  allProjects,
   checkBuild,
   checkCiCommands,
   checkMergeTree,
   checkReview,
   checkTitle,
+  ciProjects,
   deriveExtraCiCommands,
   extractCheckJobCommands,
   isTicketPath,
@@ -46,6 +48,7 @@ import {
   assertSpawnable,
   tokenize,
   preflight,
+  projectsFor,
   rerunCommand,
   runBuildCommand,
   scriptsTouched,
@@ -143,9 +146,11 @@ test("scriptsTouched fires on scripts/ and its own scripts/test/ subtree", () =>
 test("testPlan runs the repo project on scripts/, the full suite on shared config, one project per tool otherwise", () => {
   // `core` follows any code change since repo-90; the scripts/-only plan is the
   // first test appended at the end of this file, so these rows stay where they were.
+  // `repo` follows any tool too since repo-127: its preflight suite reads every tool's layout.
   expect(testPlan(["tools/downloader/api/src/a.ts"])).toEqual([
     ["npm", ["run", "check"]],
     ["npm", ["test", "--", "--project", "downloader"]],
+    ["npm", ["test", "--", "--project", "repo"]],
     ["npm", ["test", "--", "--project", "core"]],
   ]);
   expect(testPlan(["packages/core/src/a.ts", "tools/downloader/api/src/a.ts"])).toEqual([
@@ -155,8 +160,8 @@ test("testPlan runs the repo project on scripts/, the full suite on shared confi
   expect(testPlan(["docs/work/repo-1-a.md"])).toEqual([["npm", ["run", "check"]]]);
   expect(testPlan(["scripts/preflight.mjs", "tools/downloader/api/src/a.ts"])).toEqual([
     ["npm", ["run", "check"]],
-    ["npm", ["test", "--", "--project", "repo"]],
     ["npm", ["test", "--", "--project", "downloader"]],
+    ["npm", ["test", "--", "--project", "repo"]],
     ["npm", ["test", "--", "--project", "core"]],
   ]);
 });
@@ -1508,6 +1513,7 @@ test("testPlan runs core after the repo project when only scripts/ moved, and af
     ["npm", ["run", "check"]],
     ["npm", ["test", "--", "--project", "downloader"]],
     ["npm", ["test", "--", "--project", "planner"]],
+    ["npm", ["test", "--", "--project", "repo"]],
     ["npm", ["test", "--", "--project", "core"]],
   ]);
 });
@@ -1566,6 +1572,7 @@ test("testPlan still plans the tool and core for markdown mixed with one code pa
   ).toEqual([
     ["npm", ["run", "check"]],
     ["npm", ["test", "--", "--project", "downloader"]],
+    ["npm", ["test", "--", "--project", "repo"]],
     ["npm", ["test", "--", "--project", "core"]],
   ]);
 });
@@ -1665,6 +1672,7 @@ test("testPlan plans every package for a change to contract, as the tool's whole
     expect(testPlan(["tools/foo/contract/src/a.ts"], tree.dir)).toEqual([
       ["npm", ["run", "check"]],
       ["npm", ["test", "--", "--project", "foo"]],
+      ["npm", ["test", "--", "--project", "repo"]],
       ["npm", ["test", "--", "--project", "core"]],
     ]);
   } finally {
@@ -2512,6 +2520,327 @@ test("removeShimDir throws any error other than EBUSY at once, unretried (repo-1
     expect(calls).toBe(1);
   } finally {
     removeShimDir(dir);
+  }
+});
+
+// --- repo-127: a pull request's CI runs the projects its paths reach ---------
+
+test("projectsFor runs a planner-only change on core, repo and planner and nothing else (repo-127)", () => {
+  // Done when 1, the mapping half: `ci.yml`'s `changes` job prints this list.
+  expect(projectsFor(["tools/planner/api/src/a.ts"])).toEqual(["planner", "repo", "core"]);
+  expect(
+    projectsFor([
+      "tools/planner/web/src/b.tsx",
+      "tools/planner/docs/work/pl-1-x.md",
+      "tools/planner/api/test/c.test.ts",
+    ]),
+  ).toEqual(["planner", "repo", "core"]);
+  expect(projectsFor(["scripts/status.mjs"])).toEqual(["repo", "core"]);
+  // All markdown is the only empty answer, and CI never asks it: `code=false` skips the matrix.
+  expect(projectsFor(["tools/planner/docs/work/pl-1-x.md", "docs/work/repo-1-a.md"])).toEqual([]);
+});
+
+test("projectsFor runs every project for packages/, root config, .github/ and any path no tool owns (repo-127)", () => {
+  // Done when 2. `null` is every project: `ciProjects` turns it into the full list.
+  for (const shared of [
+    "packages/core/src/a.ts",
+    "packages/ui/README.md",
+    "package.json",
+    "package-lock.json",
+    "vitest.config.ts",
+    "tsconfig.json",
+    "tsconfig.tests.json",
+    ".oxlintrc.json",
+    ".oxfmtrc.json",
+    ".github/workflows/ci.yml",
+    ".github/workflows/planner.yml",
+    ".claude/hooks/check-pr-title.sh",
+    ".claude/settings.json",
+    ".githooks/commit-msg",
+    "release-please-config.json",
+    "compose.planner.yaml",
+    ".gitattributes",
+  ]) {
+    expect(projectsFor([shared]), shared).toBeNull();
+    expect(projectsFor(["tools/planner/api/src/a.ts", shared]), shared).toBeNull();
+  }
+  expect(sharedConfigTouched([".github/workflows/ci.yml"])).toBe(true);
+  expect(sharedConfigTouched([".claude/skills/orchestrate-tickets/SKILL.md"])).toBe(false);
+  expect(sharedConfigTouched(["tools/planner/api/tsconfig.json"])).toBe(false);
+});
+
+test("allProjects is exactly the projects vitest.config.ts declares (repo-127)", () => {
+  // The full set CI runs is read off `tools/`, so this is what keeps a renamed
+  // or split project (repo-129) from silently leaving the matrix.
+  const config = fs.readFileSync(path.join(REPO_ROOT, "vitest.config.ts"), "utf8");
+  const declared = [...config.matchAll(/^\s+name: "([^"]+)",$/gmu)].map((match) => match[1]);
+  expect(declared.length).toBeGreaterThanOrEqual(5);
+  expect(allProjects(REPO_ROOT).toSorted()).toEqual(declared.toSorted());
+});
+
+test("ciProjects answers --all with every project and turns projectsFor's null into the same list (repo-127)", () => {
+  const all = allProjects(REPO_ROOT);
+  expect(ciProjects(REPO_ROOT, true, "")).toEqual(all);
+  expect(
+    ciProjects(REPO_ROOT, false, ".github/workflows/ci.yml\ntools/planner/api/src/a.ts\n"),
+  ).toEqual(all);
+  expect(ciProjects(REPO_ROOT, false, "tools/planner/api/src/a.ts\r\n\n")).toEqual([
+    "planner",
+    "repo",
+    "core",
+  ]);
+});
+
+test("the --ci-projects CLI reads diff paths on stdin and prints one line (repo-127)", () => {
+  const run = (args: string[], input: string) =>
+    spawnSync(process.execPath, [CLI, ...args], {
+      cwd: REPO_ROOT,
+      input,
+      encoding: "utf8",
+      shell: false,
+    });
+  const planner = run(["--ci-projects"], "tools/planner/api/src/a.ts\n");
+  expect(planner.error).toBeUndefined();
+  expect(planner.status).toBe(0);
+  expect(planner.stdout).toBe("planner repo core\n");
+  const all = run(["--ci-projects", "--all"], "");
+  expect(all.status).toBe(0);
+  expect(all.stdout).toBe(`${allProjects(REPO_ROOT).join(" ")}\n`);
+  const bad = run(["--ci-projects", "--base", "origin/main"], "");
+  expect(bad.status).toBe(EXIT.setup);
+  expect(bad.stderr).toMatch(/--ci-projects takes only --all/u);
+});
+
+/** The `run: |` block of `ci.yml`'s `changes` job, dedented, exactly as the runner gets it. */
+function changesStepScript(yaml: string): string {
+  const lines = yaml.split("\n");
+  const job = lines.indexOf("  changes:");
+  const start = lines.findIndex((line, i) => i > job && line === "        run: |");
+  expect(job).toBeGreaterThan(0);
+  expect(start).toBeGreaterThan(job);
+  const body: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (line !== "" && !line.startsWith("          ")) break;
+    body.push(line.slice(10));
+  }
+  return body.join("\n");
+}
+
+/**
+ * Done when 1, 3 and 4 against the workflow's own shell: the `changes` step is
+ * cut out of `ci.yml` and run by bash in a throwaway repository carrying this
+ * checkout's `scripts/`, under each event's environment. POSIX only — Windows
+ * has no bash this suite can name without resolving WSL's, and the job runs on
+ * `ubuntu-latest` alone.
+ */
+test.skipIf(process.platform === "win32")(
+  "ci.yml's changes step filters a pull request and runs every project on push, schedule and no base (repo-127)",
+  () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-changes-")));
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", shell: false });
+      if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+      return result.stdout.trim();
+    };
+    const write = (file: string, content: string) => {
+      fs.mkdirSync(path.join(dir, path.dirname(file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), content);
+    };
+    const commit = (message: string) => {
+      git("add", "-A");
+      git("commit", "-qm", message);
+      return git("rev-parse", "HEAD");
+    };
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.email", "preflight@example.test");
+      git("config", "user.name", "preflight test");
+      for (const script of ["preflight.mjs", "commit-message.mjs", "status.mjs", "markdown.mjs"]) {
+        write(
+          `scripts/${script}`,
+          fs.readFileSync(path.join(REPO_ROOT, "scripts", script), "utf8"),
+        );
+      }
+      for (const tool of ["downloader", "ledger", "planner"])
+        write(`tools/${tool}/api/src/a.ts`, "export {};\n");
+      const base = commit("base");
+      write("tools/planner/api/src/a.ts", "export const a = 1;\n");
+      write("tools/planner/docs/work/pl-1-x.md", "# a ticket\n");
+      const planner = commit("planner only");
+      write("tools/planner/docs/work/pl-1-x.md", "# a ticket, edited\n");
+      const docs = commit("docs only");
+      write(".github/workflows/ci.yml", "name: CI\n");
+      const workflow = commit("workflow");
+
+      const script = changesStepScript(REAL_CI_YAML);
+      const step = (event: string, from: string, to: string) => {
+        // Its own directory, so the file's name is not a guessable one in the temp dir.
+        const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-output-"));
+        const output = path.join(outputDir, "output");
+        fs.writeFileSync(output, "");
+        try {
+          const result = spawnSync("bash", ["-c", script], {
+            cwd: dir,
+            encoding: "utf8",
+            shell: false,
+            env: {
+              ...process.env,
+              GITHUB_EVENT_NAME: event,
+              BASE: from,
+              HEAD: to,
+              GITHUB_OUTPUT: output,
+            },
+          });
+          expect(result.error).toBeUndefined();
+          expect(result.status, result.stderr).toBe(0);
+          return { log: result.stdout, output: fs.readFileSync(output, "utf8") };
+        } finally {
+          fs.rmSync(outputDir, { recursive: true, force: true });
+        }
+      };
+      const every = "projects=core repo downloader ledger planner\n";
+
+      const pr = step("pull_request", base, planner);
+      expect(pr.output).toBe("code=true\nprojects=planner repo core\n");
+      expect(pr.log).toContain("Projects: planner repo core");
+
+      expect(step("pull_request", planner, docs).output).toBe("code=false\n");
+      expect(step("pull_request", docs, workflow).output).toBe(`code=true\n${every}`);
+      // The same planner-only diff, pushed to main: every project (Done when 3).
+      expect(step("push", base, planner).output).toBe(`code=true\n${every}`);
+      // No base at all, a first push, and a base this clone does not have (Done when 3 and 4).
+      expect(step("schedule", "", workflow).output).toBe(`code=true\n${every}`);
+      expect(step("workflow_dispatch", "", workflow).output).toBe(`code=true\n${every}`);
+      expect(step("push", "0".repeat(40), planner).output).toBe(`code=true\n${every}`);
+      expect(step("pull_request", "1".repeat(40), planner).output).toBe(`code=true\n${every}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test("ci.yml runs status.test.ts once, in check, and the matrix runs changes' list without it (repo-127)", () => {
+  // Done when 6, read off the workflow: `check` runs it on every event, and the
+  // one `npm test` the matrix makes excludes it and takes the project list.
+  expect(extractCheckJobCommands(REAL_CI_YAML)).toContain(
+    "npx vitest run scripts/test/status.test.ts",
+  );
+  // One per leg: bash on Linux, PowerShell on Windows.
+  const npmTests = REAL_CI_YAML.split("\n").filter((line) =>
+    /^\s+(?:- run: )?npm(?:\.cmd)? test\b/u.test(line),
+  );
+  expect(npmTests.map((line) => line.trim())).toEqual([
+    'npm test -- "${args[@]}" --exclude scripts/test/status.test.ts',
+    "npm.cmd test -- @projectArgs --exclude scripts/test/status.test.ts",
+  ]);
+  expect(REAL_CI_YAML).toContain("PROJECTS: ${{ needs.changes.outputs.projects }}");
+  expect(REAL_CI_YAML).toContain("projects: ${{ steps.diff.outputs.projects }}");
+});
+
+// Gate 1's path-reading lows (repo-127). `git diff --name-only` quotes a
+// non-ASCII path unless `core.quotePath=false`, and `ciProjects` once trimmed
+// each line; both made a path read as something other than its own text.
+const CAFE = `caf${String.fromCharCode(0xe9)}`;
+
+test("ciProjects reads a path as its own text, so a directory named ` tools` is no tool (repo-127)", () => {
+  const all = allProjects(REPO_ROOT);
+  // Trimmed, ` tools/planner/api/src/a.ts` was `tools/planner/api/src/a.ts` and
+  // gave `planner repo core`; as written it is outside `tools/`, a path no tool
+  // owns, and runs every project.
+  expect(ciProjects(REPO_ROOT, false, " tools/planner/api/src/a.ts\n")).toEqual(all);
+  expect(ciProjects(REPO_ROOT, false, "tools/planner/api/src/a.ts\n\n")).toEqual([
+    "planner",
+    "repo",
+    "core",
+  ]);
+});
+
+test.skipIf(process.platform === "win32")(
+  "ci.yml's changes step maps a non-ASCII path under tools/planner to planner, repo and core (repo-127)",
+  () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-quote-")));
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", shell: false });
+      if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+      return result.stdout.trim();
+    };
+    const write = (file: string, content: string) => {
+      fs.mkdirSync(path.join(dir, path.dirname(file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), content);
+    };
+    // Its own directory, so the file's name is not a guessable one in the temp dir.
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-output-"));
+    const output = path.join(outputDir, "output");
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.email", "preflight@example.test");
+      git("config", "user.name", "preflight test");
+      // Quoting is git's default; a global `core.quotePath=false` would hide the fault.
+      git("config", "core.quotePath", "true");
+      for (const script of ["preflight.mjs", "commit-message.mjs", "status.mjs", "markdown.mjs"]) {
+        write(
+          `scripts/${script}`,
+          fs.readFileSync(path.join(REPO_ROOT, "scripts", script), "utf8"),
+        );
+      }
+      for (const tool of ["downloader", "ledger", "planner"])
+        write(`tools/${tool}/api/src/a.ts`, "export {};\n");
+      git("add", "-A");
+      git("commit", "-qm", "base");
+      const base = git("rev-parse", "HEAD");
+      write(`tools/planner/api/src/${CAFE}.ts`, "export {};\n");
+      git("add", "-A");
+      git("commit", "-qm", "a non-ASCII path");
+      const head = git("rev-parse", "HEAD");
+
+      fs.writeFileSync(output, "");
+      const result = spawnSync("bash", ["-c", changesStepScript(REAL_CI_YAML)], {
+        cwd: dir,
+        encoding: "utf8",
+        shell: false,
+        env: {
+          ...process.env,
+          GITHUB_EVENT_NAME: "pull_request",
+          BASE: base,
+          HEAD: head,
+          GITHUB_OUTPUT: output,
+        },
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(0);
+      expect(fs.readFileSync(output, "utf8")).toBe("code=true\nprojects=planner repo core\n");
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test("preflight plans a non-ASCII path under a tool as that tool's suite, not every project (repo-127)", () => {
+  const repo = makeRepo();
+  fs.writeFileSync(path.join(repo.dir, "release-please-config.json"), RP_CONFIG);
+  try {
+    // Quoting is git's default; a global `core.quotePath=false` would hide the fault.
+    repo.git("config", "core.quotePath", "true");
+    repo.write("tools/downloader/src/a.ts", TLS);
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+    repo.write(`tools/downloader/src/${CAFE}.ts`, TLS);
+    repo.commitAll("fix(downloader): add a non-ASCII file");
+
+    const calls: string[] = [];
+    preflight(repo.dir, {
+      base,
+      run: realRun,
+      buildRun: recordingRun(calls),
+      listOpenHeads: () => [],
+      only: ["check"],
+    });
+    expect(calls).toContain("npm test -- --project downloader");
+    expect(calls).toContain("npm test -- --project repo");
+    expect(calls).not.toContain("npm test");
+  } finally {
+    repo.cleanup();
   }
 });
 
