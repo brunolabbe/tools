@@ -104,6 +104,8 @@ export function App(): React.ReactElement {
       .then((rows) => setWaiting(rows.length))
       .catch(() => undefined);
     return () => controller.abort();
+    // `tab` and `stored` are triggers: the request reads neither, and asks again when either changes.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [tab, stored]);
 
   // Only a member has books to ask; a failure keeps the map it had.
@@ -115,6 +117,8 @@ export function App(): React.ReactElement {
       .then(setNames)
       .catch(() => undefined);
     return () => controller.abort();
+    // `tab` is a trigger: the request does not read it, and asks again when it changes.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [tab, member]);
 
   if (adminOnly) {

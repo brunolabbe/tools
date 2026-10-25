@@ -263,12 +263,20 @@ type Loaded<T> =
 function useLoad<T>(load: (signal: AbortSignal) => Promise<T>): [Loaded<T>, () => void] {
   const [loaded, setLoaded] = useState<Loaded<T>>({ state: "loading" });
   const [attempt, setAttempt] = useState(0);
+  // What the answer in state is for. A new `load` or a retry starts from
+  // "loading" — derived state, set during render, so the last answer is never
+  // painted for the new request — and the effect runs on this pair alone, which
+  // is how `attempt` reaches it without being read inside it.
+  const [asked, setAsked] = useState({ load, attempt });
+  if (asked.load !== load || asked.attempt !== attempt) {
+    setAsked({ load, attempt });
+    setLoaded({ state: "loading" });
+  }
   useEffect(() => {
     const controller = new AbortController();
-    setLoaded({ state: "loading" });
     const run = async (): Promise<void> => {
       try {
-        const value = await load(controller.signal);
+        const value = await asked.load(controller.signal);
         if (!controller.signal.aborted) setLoaded({ state: "loaded", value });
       } catch (error: unknown) {
         if (!controller.signal.aborted) {
@@ -278,7 +286,7 @@ function useLoad<T>(load: (signal: AbortSignal) => Promise<T>): [Loaded<T>, () =
     };
     void run();
     return () => controller.abort();
-  }, [load, attempt]);
+  }, [asked]);
   return [loaded, () => setAttempt((before) => before + 1)];
 }
 
