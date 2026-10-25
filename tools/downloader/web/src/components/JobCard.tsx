@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AppErrorPayload, Job, JobStatus, ProbeStageEvent } from "@downloader/contract";
 import { useElapsed } from "../hooks/useElapsed.ts";
 import { useNow } from "../hooks/useNow.ts";
@@ -11,11 +11,11 @@ import {
   formatSpeed,
 } from "../lib/format.ts";
 import type { StreamState } from "../lib/job-stream.ts";
-import { probeStageText } from "../lib/probe-stages.ts";
+import { PROBE_STAGE_PENDING, probeStageText } from "../lib/probe-stages.ts";
 import { STATUS_HINT, STATUS_LABEL } from "../lib/status.ts";
 import { ErrorPanel } from "./ErrorPanel.tsx";
 import { ProgressMessages } from "./ProgressMessages.tsx";
-import type { MessageIcon, ProgressMessage } from "./ProgressMessages.tsx";
+import type { ProgressMessage } from "./ProgressMessages.tsx";
 import { Preview } from "./Preview.tsx";
 import { ProgressBar } from "./ProgressBar.tsx";
 
@@ -39,6 +39,12 @@ interface JobCardProps {
    * first. Read only while the job is `probing`.
    */
   stage: ProbeStageEvent | undefined;
+  /**
+   * The job the visitor has just started from this page, so its card is
+   * scrolled into view once: it lands under the panel they pressed Download in,
+   * which can be below the fold. Never a job restored on a reload.
+   */
+  reveal?: boolean;
   /** The visitor followed the link, which makes any earlier refusal old news. */
   onFollowLink: (id: string) => void;
   onCancel: (id: string) => void;
@@ -52,6 +58,7 @@ export function JobCard({
   streamState,
   refusal,
   stage,
+  reveal = false,
   onFollowLink,
   onCancel,
   onRemove,
@@ -59,13 +66,20 @@ export function JobCard({
 }: JobCardProps): React.JSX.Element {
   const now = useNow(15_000);
   const waitedMs = useElapsed(useStepStartedAt(job.status), 1_000);
+  const item = useRef<HTMLLIElement>(null);
+
+  // `nearest`, so a card already on screen does not move; guarded because
+  // jsdom has no layout and so no `scrollIntoView`.
+  useEffect(() => {
+    if (reveal) item.current?.scrollIntoView?.({ block: "nearest" });
+  }, [reveal]);
 
   // dl-109: a saved job is a one-line confirmation, not a card. Nothing on it
   // can be acted on — the server kept no copy (dl-53) — and it leaves the list
   // when the next analysis starts.
   if (job.status === "completed" && job.result) {
     return (
-      <li className="job job--completed job--saved">
+      <li ref={item} className="job job--completed job--saved">
         <CompletedResult result={job.result} title={title} thumbnailPath={job.thumbnailPath} />
       </li>
     );
@@ -86,7 +100,7 @@ export function JobCard({
     .join(" · ");
 
   return (
-    <li className={`job job--${job.status}`}>
+    <li ref={item} className={`job job--${job.status}`}>
       <div className="job__head">
         {/* Same grouping reason as `card__headline`: `job__head` is
             `space-between`, and this must be additive — a job from before dl-29,
@@ -145,7 +159,7 @@ export function JobCard({
             {...(progress.speedBps !== null ? { valueText: formatSpeed(progress.speedBps) } : {})}
           />
           {/* Directly under the bar (dl-109). The connection count (dl-108) is
-              one more message here, with its "4×" as the mark. */}
+              one more message here. */}
           <ProgressMessages
             messages={progressMessages(job.status, stage, progress.originConnections)}
           />
@@ -227,18 +241,10 @@ function Stats({
   );
 }
 
-const STATUS_ICON: Partial<Record<JobStatus, MessageIcon>> = {
-  queued: "link",
-  probing: "refresh",
-  downloading: "send",
-};
-
 /**
  * The status line first, then whatever explains it. While re-analysing, the
- * re-probe's latest stage is the second line (dl-110, the owner's choice over
- * replacing the status line): the registry reports its first stage almost at
- * once, so a replaced status line would never be read, and it is the one that
- * says why the page is being analysed again.
+ * re-probe's latest stage is the line (dl-110), worded as the analysing panel
+ * words it, and the pending line until the first stage lands.
  */
 function progressMessages(
   status: JobStatus,
@@ -246,24 +252,15 @@ function progressMessages(
   originConnections: number | null,
 ): ProgressMessage[] {
   const messages: ProgressMessage[] = [
-    { key: "status", mark: STATUS_ICON[status] ?? "send", text: STATUS_HINT[status] },
+    status === "probing"
+      ? { key: "stage", text: stage === undefined ? PROBE_STAGE_PENDING : probeStageText(stage) }
+      : { key: "status", text: STATUS_HINT[status] },
   ];
-  if (status === "probing" && stage !== undefined) {
-    messages.push({ key: "stage", mark: "search", text: probeStageText(stage) });
-  }
-  if (status === "probing") {
-    messages.push({
-      key: "browser",
-      mark: "browser",
-      text: "Your browser shows the file in its downloads once the first bytes arrive. Until then, this card is the only sign it is working.",
-    });
-  }
   // Only a split is worth saying: "1 connection" on every job would be noise,
   // and `null` is "not measured", which is not a count to show.
   if (status === "downloading" && originConnections !== null && originConnections >= 2) {
     messages.push({
       key: "connections",
-      mark: { text: `${originConnections}×` },
       text: `Reading on ${originConnections} connections. This source throttles each one.`,
     });
   }

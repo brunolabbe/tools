@@ -25,9 +25,11 @@ test("the statuses read as a streamed download does, not as a queue and a stored
   });
 });
 
-test("every status has a label and a line", () => {
+test("every status has a label, and every one but re-analysing a line", () => {
+  // Re-analysing says what the re-probe is doing instead, from its stage.
   for (const status of JOB_STATUSES) {
     expect(STATUS_LABEL[status]).not.toBe("");
-    expect(STATUS_HINT[status]).not.toBe("");
+    if (status !== "probing") expect(STATUS_HINT[status]).not.toBe("");
   }
+  expect(Object.keys(STATUS_HINT)).not.toContain("probing");
 });

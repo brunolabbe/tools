@@ -42,6 +42,7 @@ export function App(): React.JSX.Element {
   const [probeError, setProbeError] = useState<AppErrorPayload | null>(null);
   const [startError, setStartError] = useState<AppErrorPayload | null>(null);
   const [starting, setStarting] = useState(false);
+  const [revealId, setRevealId] = useState<string | null>(null);
   // Bumped on every new analysis so a late response from an abandoned probe
   // cannot overwrite the current one.
   const probeToken = useRef(0);
@@ -132,7 +133,8 @@ export function App(): React.JSX.Element {
       setStarting(true);
       setStartError(null);
       try {
-        await jobs.start(phase.url, options, phase.probe.title);
+        const job = await jobs.start(phase.url, options, phase.probe.title);
+        setRevealId(job.id);
       } catch (error) {
         setStartError(AppError.from(error).toPayload());
       } finally {
@@ -220,6 +222,7 @@ export function App(): React.JSX.Element {
           streamStates={jobs.streamStates}
           refusals={jobs.refusals}
           stages={jobs.stages}
+          revealId={revealId}
           onFollowLink={jobs.clearRefusal}
           onCancel={(id) => void jobs.cancel(id)}
           onRemove={jobs.remove}

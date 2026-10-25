@@ -195,3 +195,10 @@ to the owner: the card's place (above the panel landed it off screen) and the
 close note while re-analysing (Firefox cancels before the first byte). The
 brief's Build step 3 was wrong for the same reason the gate gave. dl-110 filed
 for narrating the re-probe's stages.
+
+**2026-10-25**: two of the decisions above were replaced by the owner. Decision 5's
+badges are gone: the progress messages are plain lines styled like the analysing
+panel's stage line, and the connection count has no "4×" mark (the pull request
+that filed dl-133). Decision 3 (the saved row leaves on the next analysis) is
+superseded by [dl-133](./dl-133-one-box-per-analysis.md) decision 5: a saved box
+stays until dismissed, once dl-133 lands.

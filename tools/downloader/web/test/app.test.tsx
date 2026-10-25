@@ -831,11 +831,6 @@ test("a job's page title survives a reload, through the hook's own storage", asy
 // The re-probe's stages (dl-110)
 // ---------------------------------------------------------------------------
 
-const REANALYSING =
-  "Re-analysing the page for fresh stream links — signed links expire within minutes.";
-const BROWSER_NOTE =
-  "Your browser shows the file in its downloads once the first bytes arrive. Until then, this card is the only sign it is working.";
-
 /** The card's progress messages, in order. */
 function cardMessages(): string[] {
   return screen
@@ -852,7 +847,7 @@ function frame(event: Record<string, unknown>, second: number): JobEvent {
   } as JobEvent;
 }
 
-test("a re-analysing card narrates the latest stage under its status line, and drops it when the job moves on", async () => {
+test("a re-analysing card narrates the latest stage as its line, and drops it when the job moves on", async () => {
   // Through the real `useJobs`: the frame is folded in the hook and read three
   // components down, as a refusal is.
   const queued = job("queued", { id: "job-1" });
@@ -862,32 +857,32 @@ test("a re-analysing card narrates the latest stage under its status line, and d
     listeners[0]?.onOpen();
     listeners[0]?.onEvent(frame({ type: "status", status: "probing" }, 1));
   });
-  // Before any stage: the status line, then the browser note.
-  expect(cardMessages()).toEqual([REANALYSING, BROWSER_NOTE]);
+  // Before any stage: the pending line, as the analysing panel shows it.
+  expect(cardMessages()).toEqual([PROBE_STAGE_PENDING]);
 
   act(() => {
     listeners[0]?.onEvent(
       frame({ type: "stage", stage: "resolver-start", resolver: "browser" }, 2),
     );
   });
-  expect(cardMessages()).toEqual([REANALYSING, "Trying a real browser", BROWSER_NOTE]);
+  expect(cardMessages()).toEqual(["Trying a real browser"]);
 
   act(() => {
     listeners[0]?.onEvent(frame({ type: "stage", stage: "page-load", resolver: "browser" }, 3));
   });
-  expect(cardMessages()).toEqual([REANALYSING, "Loading the page", BROWSER_NOTE]);
+  expect(cardMessages()).toEqual(["Loading the page"]);
 
   act(() => {
     listeners[0]?.onEvent(frame({ type: "status", status: "downloading" }, 4));
   });
   expect(screen.queryByText("Loading the page")).toBeNull();
 
-  // The back-edge: a fresh re-probe starts from its status line, not from the
+  // The back-edge: a fresh re-probe starts from the pending line, not from the
   // first attempt's last stage.
   act(() => {
     listeners[0]?.onEvent(frame({ type: "status", status: "probing" }, 5));
   });
-  expect(cardMessages()).toEqual([REANALYSING, BROWSER_NOTE]);
+  expect(cardMessages()).toEqual([PROBE_STAGE_PENDING]);
 });
 
 test("a stage sent back to back with the probing status is not lost to the render between them", async () => {
@@ -901,5 +896,5 @@ test("a stage sent back to back with the probing status is not lost to the rende
     listeners[0]?.onEvent(frame({ type: "status", status: "probing" }, 1));
     listeners[0]?.onEvent(frame({ type: "stage", stage: "direct-head", resolver: "direct" }, 1));
   });
-  expect(cardMessages()).toEqual([REANALYSING, "Checking the address directly", BROWSER_NOTE]);
+  expect(cardMessages()).toEqual(["Checking the address directly"]);
 });
