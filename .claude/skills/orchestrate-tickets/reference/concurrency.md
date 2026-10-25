@@ -166,8 +166,8 @@ to show.
 To keep the sweep to a few `git` spawns, a branch pair is asked about only when the
 two share a path or an id; two pull requests are always asked, because their label
 (repo-118) is printed even when nothing would clash. **No clash is lost to that, but
-a label can be**: a parent whose diff adds nothing (it only edits files) gives its
-child no `(stacked on …)`, and in a chain whose middle branch shares nothing with
+a label can be**, for any parent and child that share no path and no id: the child
+gets no `(stacked on …)`, or, in a chain whose middle branch shares nothing with
 the end, the end names the nearest parent that shares something, not the nearest.
 A pair of pull requests costs one `git merge-base` each way (about 4 ms on this
 clone), so n open pull requests cost n(n-1) of them and are not pruned.

@@ -529,10 +529,10 @@ function unheldName(child, heldByParent, prefix) {
  * **Pairs are pruned before git is asked** (repo-124): one `merge-base` spawn
  * per pair is quadratic in the remote's branch list, and a pair that shares no
  * path and no id cannot clash, so no clash is lost by not probing it. What can
- * be lost is a label, in two ways, both named in `concurrency.md`: a parent
- * whose own diff adds nothing gives its child no `(stacked on …)`, and in a
- * chain whose middle shares nothing with the end, the end names the nearest
- * parent *that shares something*, not the nearest. Two pull requests are the
+ * be lost is a label, and only for a parent and child that share no path and
+ * no id (`concurrency.md` has the cases): the child gets no `(stacked on …)`,
+ * or, in a chain whose middle shares nothing with the end, names the nearest
+ * parent *that shares something* rather than the nearest. Two pull requests are the
  * exception and are always probed, so their label is printed even when nothing
  * would clash — that is repo-118's, and it is why 7 open pull requests still
  * cost 7 x 6 spawns: the label depends on ancestry alone, and ancestry is one

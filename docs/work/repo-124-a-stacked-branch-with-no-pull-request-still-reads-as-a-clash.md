@@ -214,3 +214,18 @@ first; the owner chose this ticket instead.
     each, 9 sources): 32 spawns and 12 `merge-base` before; 35 and 15 after. The 3 extra
     are `heldByRev` for the stacked parents the board actually has. Medians 946 ms and
     959 ms, the spread (737-1185) wider than the gap.
+- 2026-10-25 — Owner's answers at the landing, the rest of what round 1 did not record
+  (F1's remedy and the round's scope are in the round 1 entry above). F2: the reading
+  is a text fix, not code that produces the label (options: a text fix, the builder's
+  reading and the recommendation; make the code produce the label). F5: leave the
+  PR/PR term as built (options: leave it, the builder's recommendation; one `git
+  rev-list <child> ^<rev>` per child). Gate 2's remainder of F2: fix at the landing
+  (options: fix at landing, the recommendation; record unfixed).
+- 2026-10-25 — Fixed at landing by owner choice: gate 2, F2 — "a parent whose own diff
+  adds nothing gives its child no `(stacked on …)` … false in the safe direction. The
+  loss only ever touches a label, and the real rule is the pruning one: a pair that
+  shares no path and no id is never asked." The `stackSources` docstring in
+  `scripts/next-id.mjs` and the matching sentence in `concurrency.md` now say "a label
+  can be lost for any parent and child that share no path and no id" (the gate's
+  suggested wording); comments and prose only, no code changed.
+  `npx vitest run scripts/test/next-id.test.ts` is 52 of 52 after the edit, as before.
