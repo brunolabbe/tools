@@ -3,7 +3,7 @@ id: repo-119
 tool: repo
 title: oxlint 1.88 reports 140 errors on main that 1.77 does not, so the lockfile holds 1.77
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -61,6 +61,26 @@ cannot fall back.
 - `npm run check` passes with oxlint at the adopted version in the lockfile and
   as the `package.json` floor.
 - `.oxlintrc.json` states each rule turned off with a comment saying why.
+
+## Review
+
+**Gate: PASS** — 2026-10-25 · `7f8d7f48..eaa71a6d` (#657), with #654 `7f8d7f48..1edf40c4`, #655 `7f8d7f48..3d737bb0`, #656 `7f8d7f48..d8bffc9f` · Opus 5.5, depth medium
+
+| Done when                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run check` passes with oxlint at the adopted version in the lockfile and as the `package.json` floor | **verified** on a scratch merge of all four heads (no conflicts): oxlint 1.88.0 (scratch install, the farm holds 1.77.0) with the branch's `.oxlintrc.json` exit 0, 0 errors, 18 warnings; `npm run format:check` exit 0; `npm run typecheck` exit 0. Lockfile: `oxlint` and its 19 `@oxlint/binding-*` entries at 1.88.0, the root at `^1.88.0`, nothing else changed (21 entries of 21). `package.json` floor `^1.88.0`. On #657 alone 1.88.0 gives 27 errors, all in files #654–#656 fix, and CI's `check` on #657 at `eaa71a6d` fails with the same "Found 19 warnings and 27 errors": a merge-order fact, below |
+| `.oxlintrc.json` states each rule turned off with a comment saying why                                    | **verified** by reading: the diff turns off one rule, `unicorn/consistent-function-scoping`, with a comment giving the reason and the owner's decision. Positive control: with the branch config, 1.88.0 reports a planted `useEffect(() => { setX(1) }, [])` in a ledger web component (`react(set-state-in-effect)`) and does not report a planted nested test helper; the base config reports that helper (`unicorn(consistent-function-scoping)`)                                                                                                                                                                |
+
+**Merge order (not a finding):** #657's `check` cannot go green until #654, #655 and #656 have merged and `main` is merged into #657. Each of the three is green on its own head at the lockfile's 1.77.0, `check` included, so those three can merge in any order.
+
+- **low** · no `Done when` line depends on it · `nfr:maintainability` — none of the four reset-during-render fixes (`ProbePanel`, `PlanView`, `History`, `Receipts` `useLoad`) has a test that tells it from the effect it replaced. The test #655 adds, `tools/planner/web/test/plan-view.test.tsx` › "goes back to loading, asks for the new plan, then shows it", passes against the base `PlanView` (1 passed) and fails only when the reset is removed altogether. It guards that the reset happens, not that it happens before paint, which `act()` cannot see. Nothing re-renders `ProbePanel` with a new probe or `Preview` with a new path after a failure, and no test sends a scroll event to `ColumnChart`, so the owner's chosen tip behaviour is untested.
+- **low** · the ticket's Log says 1.88.0 printed "18 warnings" on `7f8d7f48`. At 1.88.0 there are 19: 15 `no-await-in-loop`, 2 `prefer-set-has`, 1 `prefer-array-find` and 1 `react(no-deriving-state-in-effects)` in `ProbePanel.tsx`. The same Log entry says that last warning went with the `ProbePanel` fix, so 18 is the count on the merge. The error is about a detail nothing relies on.
+- **dropped** · all 13 `oxlint-disable-next-line` lines were checked against the code, and each reason holds. The six `refresh` callbacks (`Admin`, `Household`, `Inbox`, `Rules`, `MortgageSplit`, `Spending`) set state only after an `await` or inside the `catch`, and every fetcher they call is an `async function`, so no synchronous throw reaches the `catch` before the first await. The five triggers (`App` ×2, `Chart` `count`, `PeriodLines` and `PeriodRows` `version`) are triggers: the effects read only setters, refs and module functions. `JobCard`'s clock read sits behind the status comparison. `Stats`' `today` is re-read on purpose, and a discarded render's value is never committed.
+- **dropped** · `Preview` going from path A to B and back to A keeps A hidden, where base retried it. That same token comes back only on a probe-cache hit within 60 s, and then it is the same image that failed. The comment's promise is a fresh chance for a _different_ image, and that still holds. A behaviour difference, not a defect.
+- **dropped** · `useElapsed`'s `now` goes stale while `startedAt` is `null`. At both call sites `startedAt` is set at or after the last `now` read (`JobCard`'s mark is read in render, `AnalysingPanel` mounts with its start), so the clamp shows 0 for at most one interval, which is correct.
+- **dropped** · `useJobs`' layout-effect sync: a child's layout effect runs before the parent's and would read the previous list. No other `useLayoutEffect` exists in `tools/downloader/web/src`. No live call site.
+- **findings** · the hunt returned 6; 2 carried, 4 dropped.
+- NFR: security n/a (lint config and render timing, no new input path) · performance: `ColumnChart` re-renders on every scroll event, the owner's choice, unmeasured in a browser as the Log says · reliability ✓: no reset loops, since each one stores the value it compared against, and A→B→A resets each time; web suites downloader 321/321, planner 132/132, ledger 241/241 · maintainability: see the first low.
 
 ## Log
 
