@@ -3,7 +3,7 @@ id: repo-118
 tool: repo
 title: next-id labels a ticket on main "merged" while its work's pull request is open, and a stacked branch as a clash
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -53,6 +53,39 @@ on PR#<m>)` and not as a clash.
 3. A fixture with a branch stacked on another's head reports no `clash` for the
    parent's ticket, asserted by a test that goes red when the ancestor check is
    removed.
+
+## Review
+
+**Gate: PASS** — 2026-10-24 · `3c5edec4..700d5b24` · Sonnet 5.5, depth narrow
+
+Range: `git diff 3c5edec4...700d5b24`, five files. The head is a merge of `origin/main` at the base sha itself, so the three-dot range carries none of `main`'s files. Tree: detached at the head, farmed, not built (the diff is `scripts/` and markdown; the `repo` project imports no workspace `dist`).
+
+| Done when (repo-118)                                                                                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `next-id lg` prints no `merged` row; a ticket file on `main` reads `on main <id>`; a test asserts it                                | **proven** — `scripts/test/next-id.test.ts` › "a ticket file on main is labelled on main, and no row says merged": `rows` equals `["on main repo-40", "PR#548 repo-41"]` (cannot pass on empty output) and no row's source is `merged`. Live `node scripts/next-id.mjs lg`: 56 lines, 55 `on main`, 0 containing `merged`.                                                               |
+| 2. `next free:` is line 1, asserted by a test (owner's layout: notes directly under, `render` comment reworded)                        | **proven** — same file › "the next free answer is the first line, and a note sits directly under it": line 1 `next free: repo-51`, line 2 the `unread:` note, line 3 `on main repo-1`, last line `on main repo-50`, 52 lines. Live `lg` and `repo`: line 1 is `next free:`. The `render` comment is reworded. No unread branch exists live, so "notes under" is proven by the test only. |
+| 3. A branch stacked on another's head reports no `clash` for the parent's ticket; the test goes red when the ancestor check is removed | **proven** — same file › "a pull request stacked on another's head reports no clash for the parent's ticket": `clashes(result)` equals `[]`, asserted before the labels. With `isAncestor` made to return `false`: 3 failed, 33 passed, on `expected [ { id: 66, sources: [ …(2) ] } ] to deeply equal []`. Restored: 36 of 36.                                                          |
+
+| Check (from the dispatch), repo-124 filing | Result                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Format against `docs/01-TICKETS.md`        | **verified** — every frontmatter field present, no wrapped quotes; Why, Build, Done when, Log; no Review. `npm run -s status -- --json` exits 0 with `problems: []`; `--show repo-124` prints `blocked by repo-118 (ready)`.                                                                                             |
+| The id is free                             | **verified** — `next-id repo` names PR#631 alone as holding `repo-124` (PR#632 holds 119 to 123); no file on `origin/main` and no line of PR#632's diff names it.                                                                                                                                                        |
+| Reproduction matches what was measured     | **verified** — rebuilt the fixture from the ticket's words and the test helpers (real bare remote, `parent-pr` adds `repo-66`, `stacked-no-pr` cut from it adds `repo-67`, fake `gh` for PR#623). Output is the ticket's six lines, byte for byte. The ticket marks it as a scratch script and does not ship the script. |
+| Claims about the code                      | **verified** — `stackPulls` keeps only sources whose label starts `PR#` and which carry a `sha`; a `branch/…` source is never a candidate, so the gap is as filed. No live case: the live `repo` sweep's one clash is repo-93, a squash-merged branch (repo-49's shape 2).                                               |
+| `status` and `difficulty` honest           | **verified** — `ready` with a stated Build and a named dependency on repo-118; `standard` fits a widened pairwise pass with pruning and a timing to take.                                                                                                                                                                |
+
+- **low** · no `Done when` line depends on it · `concurrency.md`, guard table, row "take a stacked child's name-derived ids off its claim" quotes the wrong printed line. With the name rule removed the line is `clash: repo-66 is claimed by PR#623, PR#625 (stacked on PR#623)`; the row says `PR#623, PR#625`, which is what removing the _ancestor_ check prints. False in a detail nothing relies on. Reproduction: `node <scratch>/plant.mjs <tree> name`, then `node <scratch>/scenarios.mjs <tree> name`.
+- **low** · no `Done when` line depends on it · repo-118's Log says that with the name rule removed "the other two stayed green". Measured: 2 failed, 34 passed — "a stacked child's name keeps the ids its parent does not hold" also went red; only "two unrelated pull requests whose branch names share an id still clash" stayed green. False in the safe direction (the test has more teeth than claimed).
+- **low** · no `Done when` line depends on it · `concurrency.md` ("and so does a stacked child's own, different ticket under a parent's id") and `stackPulls`'s comment promise a clash that no test asserts. The promise is true: a stacked child filing `repo-66-other.md` under the parent's `repo-66` prints `clash: repo-66 is claimed by PR#623, PR#625 (stacked on PR#623)` (`scenarios.mjs <tree> otherfile`). Missing fixture, no live call site.
+- **dropped** · the live `clash: repo-93 is claimed by branch/repo-93-sqlite-file-tests-windows-timeout, on main` that the Log says was not investigated: the branch's three-dot diff still adds `docs/work/repo-93-sqlite-file-tests-time-out-on-the-windows-leg.md`, which `main` holds. That is repo-49's shape 2, already in `concurrency.md`; the branch did not cause it.
+- **dropped** · the only clash on a 122-line `repo` sweep prints at the bottom, below the answer. That is the owner's settled layout.
+- **dropped** · the `concurrency.md` sample wraps the `unread:` note over two lines where the CLI prints one. Unchanged shape from before the branch.
+- **dropped** · "lg-40 read `on main`" in `concurrency.md` reads as the current label for that case, not history; ambiguous tense, no reader misled.
+- **dropped** · Build 1 still says `--ref`; the flag is `--rev`. The Log records the brief's error and the label reads `at HEAD` live (`next-id repo --rev HEAD`: `at HEAD repo-1`). The brief is not edited by a gate.
+- **findings** · the hunt returned 8; 3 carried, 5 dropped.
+- Consumers of the renamed label: 70 tracked files name `next-id`; none parses its output. Only `concurrency.md` (updated by the branch) and `scripts/test/next-id.test.ts` (updated) read a label, the line order or `clash:`; `docs/01-TICKETS.md` describes what it computes without them; `.claude/hooks`, `.claude/agents`, `.githooks`, `.github` and every other skill page name the script nowhere. No hook, skill or script greps `merged ` or takes the last line.
+- CI: `gh pr checks 631` at head `700d5b24`: `check` x2, `CodeQL`, `codeql` and `dependency-review` pass; `test (ubuntu-latest)` and `test (windows-latest, informational)` still pending. The three `Done when` lines are proven by the local run, not by the pending legs.
+- NFR: security n/a (`isAncestor` spawns an argument array through `runCommand`, as the other git calls do) · performance — one `git merge-base` spawn per ordered pair of open pull requests, 5 live, scale unmeasured · reliability ✓ (an exit other than 0 or 1 propagates, not read as "no") · maintainability — the lows above.
 
 ## Log
 
