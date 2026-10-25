@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 interface PreviewProps {
   /**
@@ -27,20 +27,25 @@ interface PreviewProps {
  *    no `og:image`, and a token expires out of an in-memory store.
  */
 export function Preview({ path, size }: PreviewProps): React.JSX.Element | null {
-  const [failed, setFailed] = useState(false);
-
-  // A different job, or a re-probe, is a different image and deserves a fresh
-  // chance. Without this, one failure would suppress every later preview this
-  // component instance is asked to show.
-  useEffect(() => {
-    setFailed(false);
-  }, [path]);
+  // The path that failed, not a flag: a different job, or a re-probe, is a
+  // different image and deserves a fresh chance, and comparing against the
+  // current path gives it one without an effect to reset the flag. A flag would
+  // let one failure suppress every later preview this component instance is
+  // asked to show.
+  const [failedPath, setFailedPath] = useState<string | null>(null);
+  const failed = failedPath === path;
 
   if (path === null || path === undefined || path === "" || failed) return null;
 
   return (
     <div className={`preview preview--${size}`}>
-      <img src={path} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+      <img
+        src={path}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailedPath(path ?? null)}
+      />
     </div>
   );
 }
