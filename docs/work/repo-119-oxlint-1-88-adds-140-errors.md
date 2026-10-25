@@ -91,7 +91,7 @@ cannot fall back.
   - **Counts, 1.88.0 binary from a scratch install, on `7f8d7f48`.** 113
     `consistent-function-scoping`, 12 `set-state-in-effect`, 9
     `exhaustive-effect-dependencies`, 4 `refs`, 2 `purity` errors (the table
-    above, to the digit), plus 18 warnings. On a scratch merge of this branch
+    above, to the digit), plus 19 warnings. On a scratch merge of this branch
     and the three (not pushed): `exit 0`, no error, 18 warnings, all
     `no-await-in-loop` (15), `prefer-set-has` (2) and `prefer-array-find` (1),
     which 1.77.0 also prints. `no-deriving-state-in-effects`, the fourth
@@ -117,3 +117,4 @@ cannot fall back.
     checkout's 1.77.0, so `npm run check` here measures 1.77.0 and the 1.88.0
     lint is the scratch binary: unmeasured is `npm run check` with 1.88.0
     installed, which CI does on the merged tree.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the second low — "the ticket's Log says 1.88.0 printed "18 warnings" on `7f8d7f48`". The 2026-10-25 build entry above now says 19 on `7f8d7f48` (18 on the merge, as its next sentence already had it); `git diff eaa71a6d HEAD -- docs/work/repo-119-oxlint-1-88-adds-140-errors.md | grep -c '^-.*plus 18 warnings'` → `1`.
