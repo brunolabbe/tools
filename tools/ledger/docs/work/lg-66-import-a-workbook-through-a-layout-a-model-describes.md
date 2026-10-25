@@ -5,7 +5,7 @@ title: Import a workbook the reader does not know, through a layout Haiku 5.5 de
 kind: work-package
 status: ready
 milestone: P6
-depends_on: [lg-38]
+depends_on: []
 difficulty: hard
 ---
 
@@ -112,8 +112,8 @@ screen" and "a confirmation screen".
 **Answered: (b), bank CSVs too** (this overrode the recommendation, (a)). The
 owner was then asked how to carry it out, and chose **"Split: file lg-67 for
 CSVs"**: lg-66 is the `.xlsx` build below, and a CSV is refused with the plain
-message until lg-67, which serves bank CSVs (to be filed after this pull
-request merges; it depends on lg-66 and is not in this ticket's `depends_on`).
+message until lg-67, which serves bank CSVs (filed, `ready`; it depends on
+lg-66 and is not in this ticket's `depends_on`).
 
 Of the 13 measured fixtures, six are workbooks and seven are bank CSVs. A CSV
 has no bucket column: the reader returns its rows as `unfiled`, and
@@ -243,7 +243,7 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
       `.xlsx` is read** (Decision 2, split): both requests refuse anything
       else, a CSV included, with a typed error and a plain message, judged from
       the bytes and not from the file's name. A CSV is refused this way until
-      lg-67, which serves bank CSVs (to be filed). The judgement is the zip's own
+      lg-67, which serves bank CSVs (filed). The judgement is the zip's own
       structure: the file opens with `PK`, has a readable end-of-central-directory
       record and central directory, and holds the workbook's own entries,
       `[Content_Types].xml` and `xl/workbook.xml`. It is made from the central
@@ -437,7 +437,7 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
     entry), return the same typed error with the same plain message that only
     an `.xlsx` is read, the fake is not called, the sheet reader is not called,
     and the books are unchanged. That holds until lg-67, which serves bank CSVs
-    (to be filed). A zip with the workbook's two entries and no sheet
+    (filed). A zip with the workbook's two entries and no sheet
     (its `xl/workbook.xml` a valid workbook with an empty `<sheets/>`; an empty
     file or text there fails in the parser, not at the 0-sheet refusal) reads as
     0 sheets and is a typed refusal with the fake uncalled, and the test asserts
@@ -771,3 +771,208 @@ lg-67. The options are as the Decision section states them.
    schema pin moves with a deliberate edit). (b) the schema refuses a layout that
    names a sheet as ignored and as an account, period or salaries sheet. (c) the
    reader honours `ignored`. **Chosen: (a). It took the recommendation.**
+
+### 2026-10-25 — the build
+
+Built on `53bb5d0f`, in five commits: `47d98627` (Build 1), `8a213224` (Build
+2.4), `bda7ab3e` (Build 2.1 to 2.3), `35f876ee` (Build 3), `ad268ddd` (Build 4).
+No test calls a model; Done when 11 is the owner's, after the merge.
+
+**Corrected on this page, as fold-ins, with no older entry rewritten:**
+`depends_on` named lg-38, which is done, and is now `[]`; Decision 2, Build 3.1
+and Done when 13 said lg-67 was "to be filed", and it is filed and `ready`
+(`npm run status -- --show lg-67`), so they now say "filed".
+
+**Build 1: the 14 hashes at the base**, taken at `53bb5d0f` before anything
+moved, by a script that imported `api/test/layout/view.ts` and
+`zodOutputFormat(workbookLayoutSchema)` from that tree (characters, then sha256):
+
+| What                  | Characters | sha256                                                             |
+| --------------------- | ---------- | ------------------------------------------------------------------ |
+| `lg7`                 | 5,363      | `57c9385c3f7fc1a27cb68a54b58d928d318ac3202befb017ef313b40dc4d260b` |
+| `lg37`                | 10,518     | `79dc3826e8f2576897fa8b7989ac523aacce22cb2b6e9fad93414f295e007d2e` |
+| `moved`               | 8,446      | `502035573fdbc86af43eb93b924c7bde8d8993b9b94eb51af696d12bb216b885` |
+| `english`             | 8,161      | `e95f911fc6a89d97024dad1bb341809112a7b5b789cc4a99d224626251b69524` |
+| `csv-balance`         | 3,110      | `4b6d2fdb139ba08018cd3840c711b1ad43f095392d839e0cef2aa037710ba2fe` |
+| `csv-no-balance`      | 2,857      | `2e711e2626d3326d7d75af5d0902a912d583cfdf7338369bb78b5982a2b7d220` |
+| `swapped-labels`      | 5,661      | `e21a2ad77293b92abfe8bcd6102934ec9ca4d1eac60107208c5f4e7e51bbb139` |
+| `empty-columns-carry` | 5,841      | `13ab93b615909dee2384ef90b9357024b18762687d29b2da6a587752d12b24ea` |
+| `empty-columns-csv`   | 3,115      | `9dd3898b7b7fe83a77817df4416f256f36dbc856e086b517dfc071d1daa3e8b7` |
+| `bank-preamble`       | 2,975      | `bb09bba739c1a40cb0eed108469d7f92b59d3c47b664b1ff04ac10a26cc4d858` |
+| `bank-two-dates`      | 3,740      | `e12bac7945aa5c645a9257b65ff1b4311fe30bf1d8367a083c99f12eb8e09c27` |
+| `bank-footer`         | 3,039      | `f68253f5f453bff2395865016b207649610b3d2ed987e5f61885c77338769921` |
+| `bank-wide`           | 4,861      | `6bc675ba868b27bbc853a3c56efa8265d84c59cf6e032c525ae78b878f3b54a8` |
+| format schema         | 5,842      | `cbf85552e814c2f9aed91a6678ff87ff3f043c7212331edca255ebebc07ad1b6` |
+
+`api/test/layout-pins.test.ts` pins all 14 and passed after the move (15 of 15
+at `47d98627`). **The schema pin moved once, on purpose**, with Build 2.4: it is
+now `e5c31565db17908aed3654c0d3e44f2eaaf0ff10124d84568ff462b76add6eb7`, 5,963
+characters, because `ignored`'s `.describe()` now reads "Every other sheet, by
+name. Advisory only: the reader does not consult this list, and a sheet not
+named as the account, the periods or the salaries is not imported either way."
+Before the pin was updated the run read 1 of 15 failed, `Expected: "cbf85552…"`,
+`Received: "e5c31565…"`, the 13 request pins passing. The four-characters
+estimate of the schema is 1,491 tokens now (1,461 at the base). Its effect on
+what Haiku answers is unmeasured, as Decision 3 (a) says.
+
+**Where things went.** The view, the prompt, `layoutRequest`, `DEFAULT_VIEW`
+and `estimateTokens` are `api/src/layout-view.ts`: they read `books`' cell
+grids, and `receipts` has no reason to know a sheet, so it is handed the text
+and gains no workspace dependency. The model call is `createLayoutAsk` in
+`receipts/src/layout.ts`, with the measured client options, `max_tokens` 16 000,
+`effort: "medium"`, `claude-haiku-5-5` and `layoutOutputFormat()`
+(`zodOutputFormat(workbookLayoutSchema)`); the harness calls it with the model
+and effort it measures. The SDK failure mapping moved to `receipts/src/failure.ts`,
+shared with the receipt reader, whose wording is unchanged. The view's sample
+sizes (12, 6, 3) are `LAYOUT_SAMPLE_ROWS` in the contract, which `DEFAULT_VIEW`
+and the screen's statement both read; the 13 request pins held after that.
+
+**Build 5: nothing to declare.** No file under `tools/ledger/api` imports
+`@anthropic-ai/sdk` any more (`grep -rln "@anthropic-ai/sdk" tools/ledger/api
+--include=*.ts` prints nothing, exit 1): `layout.test.ts` reads the format
+through `layoutOutputFormat()`. So no `npm install` ran, the lockfile is
+unchanged, and `node scripts/check-lockfile-sync.mjs` exits 0.
+
+**Build 2.2, and what the brief had to give.** "0 rows read is one problem"
+would add a line to three of `books/test/workbook.test.ts`'s cases, whose
+readings are already refused at a cell (a name nobody configured, an amount that
+is text, a split amount finer than a cent): Done when 2 says that suite passes
+with no case edited. So the problem is raised only when nothing else refused
+the reading. It reads `The layout reads no row of the account from
+"chequing-activity.csv": 32 dated rows were skipped for having no amount, and
+none was read.` Done when 3's `MISTAKES`, all 27 entries of the two tables in
+`layout.test.ts`, before and after:
+
+| Fixture               | Mistake                                              | Before          | After       |
+| --------------------- | ---------------------------------------------------- | --------------- | ----------- |
+| lg37                  | amount and balance swapped                           | refused         | refused     |
+| lg37                  | order flipped                                        | refused         | refused     |
+| lg37                  | person and detail swapped                            | refused         | refused     |
+| lg37                  | no summary rows                                      | refused         | refused     |
+| lg37                  | no carry-overs, no year per sheet                    | refused         | refused     |
+| lg37                  | periods' first line one row low                      | refused         | refused     |
+| lg37                  | periods' names row wrong                             | refused         | refused     |
+| lg37                  | the two buckets' labels swapped                      | let-through     | let-through |
+| lg37                  | detail and note swapped                              | let-through     | let-through |
+| lg37                  | no person column                                     | let-through     | let-through |
+| lg37                  | the period sheets missed                             | let-through     | let-through |
+| lg37                  | the salaries missed                                  | let-through     | let-through |
+| lg37                  | a sheet left out of ignored                          | same-import     | same-import |
+| moved                 | order flipped                                        | refused         | refused     |
+| english               | amount and balance swapped                           | refused         | refused     |
+| english               | deposit label wrong                                  | refused         | refused     |
+| csv-balance           | withdrawal and deposit swapped                       | refused         | refused     |
+| csv-balance           | order flipped                                        | refused         | refused     |
+| csv-no-balance        | order flipped                                        | let-through     | let-through |
+| csv-no-balance        | amount and detail swapped                            | refused         | refused     |
+| swapped-labels        | the two buckets' labels swapped                      | let-through     | let-through |
+| empty-columns-carry   | the amount column pointing at the empty one          | refused         | refused     |
+| **empty-columns-csv** | **withdrawal and deposit pointing at empty columns** | **let-through** | **refused** |
+| bank-preamble         | order flipped                                        | refused         | refused     |
+| bank-two-dates        | the date read from the transaction date's column     | let-through     | let-through |
+| bank-footer           | amount and balance swapped                           | refused         | refused     |
+| bank-wide             | the detail read from the currency column             | let-through     | let-through |
+
+One changed of 27: 16 refused, 10 let through and 1 the same import before; 17,
+9 and 1 after. With the reader changed and the pins not yet, exactly the two
+pins Done when 3 names failed (`npx vitest run tools/ledger/api/test/layout.test.ts
+tools/ledger/books/test`: 2 failed, 477 passed, of 479).
+
+**Build 2.3.** `readerFolded` in the contract is the reader's folding (accents,
+case, dots, spaces), and `books`' `folded` now calls it, so the two cannot
+disagree. Red: with the schema's key put back to the base's `text.toLowerCase()`,
+`contract/test/layout.test.ts` read 1 failed of 9 ("refuses Hypothèque and
+Hypotheque named for two different buckets"); restored from `35f876ee`, 9 of 9.
+
+**The error codes**, all ledger codes, none core (Build 3.5):
+`WORKBOOK_NOT_XLSX` (415), `WORKBOOK_NO_SHEETS` (422), `WORKBOOK_TOO_LARGE`
+(413, `details.bound` one of `inflated`, `sheets`, `rows`, `cells`, `request`),
+`LAYOUT_READER_UNCONFIGURED` (503), `LAYOUT_UNREADABLE` (422),
+`WORKBOOK_IMPORT_REFUSED` (422, `details.problems`). The byte bound is core's
+`SIZE_LIMIT_EXCEEDED` (413, `details.bound: "bytes"`), as a receipt photo's is:
+it is the size of what was sent, and Fastify's body cap raises the same code
+for a body far over it. A request without consent, or a confirm whose
+description does not validate, is `BAD_REQUEST`.
+
+**The bounds** (Build 3.3), in the order they are checked:
+
+- bytes: `MAX_WORKBOOK_BYTES`, 4 MiB, decoded size computed from the base64's
+  length before decoding. The six workbook fixtures are 10,782 to 21,803 bytes
+  as `exceljs` writes them.
+- the zip's structure, from the central directory, inflating nothing
+  (`api/src/workbook-zip.ts`, a hand parse; no `jszip`).
+- inflated size: `MAX_WORKBOOK_INFLATED_BYTES`, 16 MiB, first from the declared
+  sizes, then counted as `node:zlib`'s `createInflateRaw` produces it, every
+  chunk discarded. The largest workbook fixture, `lg37`, inflates to 90,542
+  bytes. **The chunk a stop may overshoot by is `INFLATE_CHUNK_BYTES`, 16 KiB**
+  (the inflater's `chunkSize`). Every accepted file is inflated once here and
+  once more by `exceljs`.
+- sheets: 40 (the workbook fixtures hold 2 to 9); rows: 20,000 over every sheet
+  (`lg37` holds 320); cells holding a value: 200,000 (`lg37` holds 1,533).
+- cell text: 40 characters, `MAX_CELL_TEXT`, the measured `maxText`, a cut
+  with `…`, never a refusal.
+- the request: **an estimate**, `ceil((ceil(request / 4) + ceil(schema / 4)) ×
+  2.32)`, refused over `MAX_REQUEST_TOKENS`, 24,000. `lg37`'s request estimates
+  at `ceil((2,630 + 1,491) × 2.32)` = 9,561 (the API counted 9,468 at the base's
+  schema). The largest request the bounds allow is 24,000 estimated tokens:
+  `24,000 / 2.32` = 10,344 four-character tokens, less the schema's 1,491, is
+  8,853, so about 35,400 characters of request, 2.5 times `lg37`'s input, plus
+  the answer's 16,000 tokens at most.
+
+The describe route has its own bucket, `RATE_LIMIT_WORKBOOK_DESCRIBES_PER_MINUTE`,
+5 a minute per person by default, as a receipt read has; confirm takes `write`.
+
+**The client's retries.** `createLayoutAsk` keeps the measured `maxRetries: 2`
+and a 180 s timeout: the SDK retries a dropped connection, a 429 or a 5xx on
+its own. That is the transport, under the one model call the route makes;
+nothing retries an answer.
+
+**The confirmation (Build 4.2).** The date column's header is the nearest text
+above the first row read in that column, on the first sheet that has a row read.
+**The rule for a label's 3 rows**: the newest row of each of its 3 most frequent
+details, most frequent first, then the newest rows not yet shown. On
+`swapped-labels` that puts the monthly `Paiement prêt` in `Compte 2`'s three
+(Done when 10). The field is `examples`, not `sample`: the isolation sweep
+marks "sam" as the other household's person, and "sample" contains it.
+
+**What the brief had wrong: lg37 does not import, through the command or the
+screen.** lg-38's generator opens every generated workbook at 1,200.00 (mortgage)
+and 300.00 (buffer), and `importWorkbook` refuses money carried in before the
+books' first row. `import:ledger --write` on `lg37` written as an `.xlsx`, into
+fresh books, exits 1 with three `FAILED` lines, ending "The first year carries in
+1200.00 $ (mortgage) and 300.00 $ (buffer) from before the workbook, and the
+books count nothing before their first row." Of the six workbook fixtures only
+`lg7` imports. So Done when 7's first half, read on `lg37`, holds only
+vacuously (both leave the books empty). The test does three things: `lg7`
+confirmed on the screen leaves the same `statement_rows` and classifications and
+the same report figures as the command (17 rows); `lg37` confirmed is refused
+with exactly the problems the command prints, the books unchanged; and `lg37`
+with amount and balance swapped is refused with problems of its own. Done when
+5's describes return `ok: false` for the five generated workbooks for the same
+reason, and the screen's web test uses the real `lg37` response and an `ok: true`
+copy of it. Whether Done when 7 should be reworded to `lg7` is the
+orchestrator's to put to the owner.
+
+**Done when 8 (i): memory.** The padded workbook is deflated as it is written
+(`paddedDeflate` in `api/test/helpers/xlsx-file.ts`, 1 MiB of spaces written
+again and again, the CRC carried chunk by chunk), so 200 MiB is never held.
+Peak RSS of the vitest worker, sampled from `/proc/<pid>/status`'s `VmHWM` every
+20 ms: 197 MB running only the 200 MiB test, 188 MB running only "a request with
+no key configured" from the same file (both write the six fixture workbooks in
+`beforeAll`). The 200 MiB test took 1,289 ms, the 40 MiB one 275 ms.
+
+**Folded in, besides the two corrections above:** the import's dry-run report
+said "Run again with --write to import" on the screen too; `importWorkbook`
+takes `via: "screen"`, which says "Confirm to import." instead. `.env.example`
+names the new rate-limit variable. Nothing else was made free.
+
+**Proposed for `tools/ledger/CLAUDE.md`**, not edited (Build 1): its layout table
+says `receipts` is "the receipt reader: a photo in, proposals out; the only
+package that talks to a model". Proposed: "the model calls: the receipt reader
+(a photo in, proposals out) and the layout describer (a workbook's samples in, a
+described layout out, lg-66); the only package that talks to a model". The
+lines in the prose about `receipts` and the paid route ("The one route that
+costs money, a receipt read") would say there are two.
+
+**Awaiting:** Done when 11, the owner's live read through the screen with a key,
+after the merge.

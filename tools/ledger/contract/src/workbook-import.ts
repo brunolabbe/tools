@@ -19,9 +19,10 @@ import { workbookLayoutSchema } from "./layout.ts";
 import type { WorkbookLayout } from "./layout.ts";
 
 /**
- * The upload's bytes, before it is parsed: 4 MiB. A workbook of a household's
- * years is a few hundred kilobytes; the bound on what it inflates to, which is
- * the one that bounds the parse, is the server's (`MAX_WORKBOOK_INFLATED_BYTES`).
+ * The upload's bytes, before it is parsed: 4 MiB. The six measured workbook
+ * fixtures are 10 782 to 21 803 bytes as `exceljs` writes them; the bound on
+ * what a file inflates to, which is the one that bounds the parse, is the
+ * server's (`MAX_WORKBOOK_INFLATED_BYTES`).
  */
 export const MAX_WORKBOOK_BYTES = 4 * 1024 * 1024;
 

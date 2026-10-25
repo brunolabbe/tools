@@ -35,8 +35,8 @@ import { AppError } from "@ledger/contract";
 
 /**
  * What a workbook may inflate to, summed over its entries: 16 MiB. The largest
- * of the six measured workbook fixtures, `lg37`, inflates to under a tenth of
- * it (lg-66's Log has the figure), and `exceljs` held about twice the inflated
+ * of the six measured workbook fixtures, `lg37`, inflates to 90 542 bytes as
+ * `exceljs` writes it, under a hundredth of the bound, and `exceljs` held about twice the inflated
  * size in memory in gate 4's measurement (+79 MB for 40 MiB).
  */
 export const MAX_WORKBOOK_INFLATED_BYTES = 16 * 1024 * 1024;

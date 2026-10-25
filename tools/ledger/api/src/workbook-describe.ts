@@ -58,10 +58,10 @@ import {
 } from "./workbook-zip.ts";
 import type { InflateSpy } from "./workbook-zip.ts";
 
-/** Sheets a workbook may hold. The measured workbooks hold 3 to 9. */
+/** Sheets a workbook may hold. The measured workbooks hold 2 to 9. */
 export const MAX_WORKBOOK_SHEETS = 40;
 
-/** Rows over every sheet, as `exceljs` reads them: `lg37`, the largest measured, holds 337. */
+/** Rows over every sheet, as `exceljs` reads them: `lg37`, the largest measured, holds 320. */
 export const MAX_WORKBOOK_ROWS = 20_000;
 
 /** Cells holding a value or a formula, over every sheet. */
