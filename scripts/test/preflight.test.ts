@@ -2742,9 +2742,10 @@ const CAFE = `caf${String.fromCharCode(0xe9)}`;
 
 test("ciProjects reads a path as its own text, so a directory named ` tools` is no tool (repo-127)", () => {
   const all = allProjects(REPO_ROOT);
-  // Trimmed, ` tools/x.ts` was `tools/x.ts` and gave a narrow list; as written it
-  // is outside `tools/`, a path no tool owns, and runs every project.
-  expect(ciProjects(REPO_ROOT, false, " tools/x.ts\n")).toEqual(all);
+  // Trimmed, ` tools/planner/api/src/a.ts` was `tools/planner/api/src/a.ts` and
+  // gave `planner repo core`; as written it is outside `tools/`, a path no tool
+  // owns, and runs every project.
+  expect(ciProjects(REPO_ROOT, false, " tools/planner/api/src/a.ts\n")).toEqual(all);
   expect(ciProjects(REPO_ROOT, false, "tools/planner/api/src/a.ts\n\n")).toEqual([
     "planner",
     "repo",
