@@ -137,8 +137,9 @@ export function warnIfStale(sharedRoot, options = {}) {
   if (missing === null || missing.length === 0) return 0;
   const remedy = options.worktree
     ? "remedy: the shared checkout this worktree was farmed from is behind its lockfile. " +
-      "Stop and report it to the orchestrator; do not install in a worktree. " +
-      "Once the shared checkout is installed, re-run the farm."
+      "If this branch's own diff adds the package, the one `npm install --ignore-scripts` " +
+      "from `common.md` applies; otherwise, stop and report it to the orchestrator and do not " +
+      "install in a worktree. Once the shared checkout is installed, re-run the farm."
     : `remedy: run \`npm install\` in the shared checkout (${sharedRoot}), then re-run the farm.`;
   process.stderr.write(
     [

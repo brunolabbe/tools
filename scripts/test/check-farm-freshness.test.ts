@@ -629,8 +629,12 @@ test("worktree-farm.sh names a package the worktree's lockfile declares and a he
     expect(result.stdout).toContain("farm built:");
     expect(result.stderr).toContain("@anthropic-ai/sdk");
     expect(result.stderr).toContain(path.join(tree.dir, "package-lock.json"));
-    // common.md forbids an install in a worktree: the remedy is the orchestrator's.
-    expect(result.stderr).toContain("Stop and report");
+    // common.md forbids an install in a worktree except for a dependency this
+    // branch adds, which the lockfile alone cannot tell from a stale shared
+    // checkout: the remedy names both cases (gate 2, the med).
+    expect(result.stderr).toContain("If this branch's own diff adds the package");
+    expect(result.stderr).toContain("npm install --ignore-scripts");
+    expect(result.stderr).toContain("otherwise, stop and report");
     expect(result.stderr).not.toContain("npm install` in the shared checkout");
     expect(result.stderr).not.toContain("npm install` in " + tree.dir);
   } finally {

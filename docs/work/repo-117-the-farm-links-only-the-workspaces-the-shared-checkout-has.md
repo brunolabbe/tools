@@ -167,3 +167,14 @@ directories as real directories; the new links go inside them.
   - **F2**, recorded unfixed on the owner's word. The orchestrator's message pasted three
     of the gate's four lows (F1, F3, F4); F2's text did not reach this builder, so it is
     named here only as left unfixed, and its wording is the gate's own record.
+- 2026-10-25 — Fixed at landing by owner choice: gate 2, the med — "the new
+  `--worktree-packages` pass cannot tell a stale shared checkout from a branch that adds a
+  dependency", applied as option (A): the remedy names both cases. The gate's `adddep.sh`
+  on this tree, before: remedy "Stop and report it to the orchestrator; do not install in a
+  worktree", exit 1. After: remedy "If this branch's own diff adds the package, the one
+  `npm install --ignore-scripts` from `common.md` applies; otherwise, stop and report it to
+  the orchestrator and do not install in a worktree", exit 1 (the warning still fires; only
+  its text changed). `git diff df339907 HEAD -- .claude/scripts/check-farm-freshness.mjs |
+grep -c '^-.*Stop and report it to the orchestrator; do not install'` → `1`. The farm
+  test now asserts the three fragments and still asserts no `npm install` in the shared
+  checkout or in the worktree.
