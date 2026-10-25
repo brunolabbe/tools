@@ -31,6 +31,7 @@ import { JobCard } from "../src/components/JobCard.tsx";
 import { JobList } from "../src/components/JobList.tsx";
 import { reconcileJob } from "../src/lib/job-reducer.ts";
 import { ProgressMessages } from "../src/components/ProgressMessages.tsx";
+import { PROBE_STAGE_PENDING } from "../src/lib/probe-stages.ts";
 import type { StreamState } from "../src/lib/job-stream.ts";
 import { NOW, SOURCE_URL, errorPayload, job, result, variant } from "./fixtures.ts";
 
@@ -99,6 +100,7 @@ function renderList(jobs: readonly Job[], extra: Partial<Parameters<typeof JobLi
       streamStates={{}}
       refusals={{}}
       stages={{}}
+      revealId={null}
       onFollowLink={vi.fn()}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
@@ -215,11 +217,9 @@ test("a preparing job shows how long it has waited, and its figure where the dow
 test("each active status names itself in its pill and its first progress message", () => {
   const cases = [
     ["queued", "Starting", "Opening your download link."],
-    [
-      "probing",
-      "Re-analysing",
-      "Re-analysing the page for fresh stream links — signed links expire within minutes.",
-    ],
+    // Re-analysing has no status line of its own: the stage is the line, and
+    // before the first one lands it is the pending line the analysing panel uses.
+    ["probing", "Re-analysing", PROBE_STAGE_PENDING],
     [
       "downloading",
       "Downloading",
@@ -245,12 +245,9 @@ test("the card draws no step list; the bar and the messages are the progression"
   expect(screen.queryByRole("listitem", { current: "step" })).toBeNull();
 });
 
-test("a re-analysing job says the browser shows nothing until the first bytes", () => {
+test("a re-analysing job before its first stage shows the pending line and nothing else", () => {
   mount(job("probing"));
-  expect(messages()).toEqual([
-    "Re-analysing the page for fresh stream links — signed links expire within minutes.",
-    "Your browser shows the file in its downloads once the first bytes arrive. Until then, this card is the only sign it is working.",
-  ]);
+  expect(messages()).toEqual([PROBE_STAGE_PENDING]);
 });
 
 test("the progress messages are one live region", () => {
@@ -660,7 +657,7 @@ test("an expected size reads as approximate, and leaves the bar indeterminate", 
   expect(screen.queryByText(/%/u)).toBeNull();
 });
 
-test("every progress message leads with a badge that a screen reader skips", () => {
+test("a progress message is its text alone, as the analysing panel's stage line is", () => {
   for (const status of ["queued", "probing", "downloading"] as const) {
     mount(job(status));
     const items = screen
@@ -668,9 +665,8 @@ test("every progress message leads with a badge that a screen reader skips", () 
       .filter((item) => item.classList.contains("job__message"));
     expect(items.length).toBeGreaterThan(0);
     for (const item of items) {
-      const mark = item.querySelector(".job__mark");
-      expect(mark?.getAttribute("aria-hidden")).toBe("true");
-      expect(mark?.querySelector("svg")).not.toBeNull();
+      expect(item.children).toHaveLength(0);
+      expect(item.querySelector("svg")).toBeNull();
     }
     cleanup();
   }
@@ -707,12 +703,12 @@ test("each stat keeps its own column, so an unknown one leaves a gap rather than
   expect(stat("Remaining")).toBeNull();
 });
 
-test("a progress message can lead with text instead of an icon, as dl-108's count will", () => {
+test("progress messages render one line each, in order, in one live region", () => {
   render(
     <ProgressMessages
       messages={[
-        { key: "status", mark: "send", text: "Sending the video." },
-        { key: "connections", mark: { text: "4×" }, text: "Reading on 4 connections." },
+        { key: "status", text: "Sending the video." },
+        { key: "connections", text: "Reading on 4 connections." },
       ]}
     />,
   );
@@ -720,12 +716,8 @@ test("a progress message can lead with text instead of an icon, as dl-108's coun
   const items = screen.getAllByRole("listitem");
   expect(items.map((item) => item.textContent)).toEqual([
     "Sending the video.",
-    "4×Reading on 4 connections.",
+    "Reading on 4 connections.",
   ]);
-  const mark = items[1]?.querySelector(".job__mark");
-  expect(mark?.textContent).toBe("4×");
-  expect(mark?.getAttribute("aria-hidden")).toBe("true");
-  expect(mark?.querySelector("svg")).toBeNull();
   // Both lines in the one live region, so the second is announced when it appears.
   expect(items[0]?.parentElement).toBe(items[1]?.parentElement);
   expect(items[0]?.parentElement?.getAttribute("aria-live")).toBe("polite");
@@ -785,14 +777,10 @@ test("a whitespace-only title is no title: no trailing dash", () => {
 // The re-probe's stages (dl-110)
 // ---------------------------------------------------------------------------
 
-test("a re-analysing card puts the latest stage under the status line, above the browser note", () => {
+test("a re-analysing card's line is the latest stage, and only that", () => {
   mount(job("probing"), { stage: { stage: "page-load", resolver: "browser" } });
 
-  expect(messages()).toEqual([
-    "Re-analysing the page for fresh stream links — signed links expire within minutes.",
-    "Loading the page",
-    "Your browser shows the file in its downloads once the first bytes arrive. Until then, this card is the only sign it is working.",
-  ]);
+  expect(messages()).toEqual(["Loading the page"]);
 });
 
 test("a stage held for a job that is no longer re-analysing is never shown", () => {
@@ -808,13 +796,13 @@ test("a stage held for a job that is no longer re-analysing is never shown", () 
 // dl-108: a source read on parallel connections says so
 // ---------------------------------------------------------------------------
 
-test("a job read on 4 connections adds one message, after the status line, marked 4×", () => {
+test("a job read on 4 connections adds one message, after the status line", () => {
   mount(job("downloading", { progress: { originConnections: 4 } }));
 
   const lines = messages();
   expect(lines).toHaveLength(2);
   expect(lines[0]).toMatch(/^Sending the video/u);
-  expect(lines[1]).toBe("4×Reading on 4 connections. This source throttles each one.");
+  expect(lines[1]).toBe("Reading on 4 connections. This source throttles each one.");
   // It is the live region's own entry, so it is announced when it appears.
   const region = screen.getByText(/Reading on 4 connections/u).closest("ul");
   expect(region?.getAttribute("aria-live")).toBe("polite");
@@ -822,7 +810,7 @@ test("a job read on 4 connections adds one message, after the status line, marke
 
 test("the message follows the count: 2 connections read 2, and it goes when the count falls to 1", () => {
   mount(job("downloading", { progress: { originConnections: 2 } }));
-  expect(messages()[1]).toBe("2×Reading on 2 connections. This source throttles each one.");
+  expect(messages()[1]).toBe("Reading on 2 connections. This source throttles each one.");
   cleanup();
 
   mount(job("downloading", { progress: { originConnections: 1 } }));
@@ -840,7 +828,44 @@ test("one connection, none open between requests, and not measured all say nothi
 
 test("a job that is not downloading shows no connection message, whatever the count says", () => {
   mount(job("probing", { progress: { originConnections: 4 } }));
-  // The card did render, with its own status line and nothing after it.
-  expect(messages()).toHaveLength(2);
+  // The card did render, with its own line and nothing after it.
+  expect(messages()).toEqual([PROBE_STAGE_PENDING]);
   expect(screen.queryByText(/Reading on 4 connections/u)).toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// The card just started is brought into view
+// ---------------------------------------------------------------------------
+
+test("the job just started scrolls its card into view, nearest, and no other card moves", () => {
+  // jsdom has no layout, so the call is what is asserted, not a scroll offset.
+  const scrolled: Element[] = [];
+  const scrollIntoView = vi.fn(function (this: Element) {
+    scrolled.push(this);
+  });
+  Element.prototype.scrollIntoView = scrollIntoView;
+  try {
+    renderList([job("queued", { id: "job-old" }), job("queued", { id: "job-new" })], {
+      revealId: "job-new",
+    });
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    const cards = screen.getByRole("list", { name: "Downloads" }).querySelectorAll(":scope > li");
+    expect(scrolled).toEqual([cards[1]]);
+  } finally {
+    // @ts-expect-error -- jsdom has none, and a later test must not inherit the stub.
+    delete Element.prototype.scrollIntoView;
+  }
+});
+
+test("a list with no job just started scrolls nothing", () => {
+  const scrollIntoView = vi.fn();
+  Element.prototype.scrollIntoView = scrollIntoView;
+  try {
+    renderList([job("queued", { id: "job-1" })]);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  } finally {
+    // @ts-expect-error -- jsdom has none, and a later test must not inherit the stub.
+    delete Element.prototype.scrollIntoView;
+  }
 });

@@ -39,9 +39,14 @@ export function App(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeChoice>(() => loadTheme(storage));
   const [url, setUrl] = useState("");
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
-  const [probeError, setProbeError] = useState<AppErrorPayload | null>(null);
+  // With the address it came from: the field may have been cleared since, and
+  // "Analyse again" retries the page that failed, not whatever is typed now.
+  const [probeError, setProbeError] = useState<{ error: AppErrorPayload; url: string } | null>(
+    null,
+  );
   const [startError, setStartError] = useState<AppErrorPayload | null>(null);
   const [starting, setStarting] = useState(false);
+  const [revealId, setRevealId] = useState<string | null>(null);
   // Bumped on every new analysis so a late response from an abandoned probe
   // cannot overwrite the current one.
   const probeToken = useRef(0);
@@ -61,7 +66,7 @@ export function App(): React.JSX.Element {
       const parsed = sourceUrlSchema.safeParse(candidate);
       if (!parsed.success) {
         setPhase({ kind: "idle" });
-        setProbeError(localErrorPayload("INVALID_URL"));
+        setProbeError({ error: localErrorPayload("INVALID_URL"), url: candidate });
         return;
       }
       const token = probeToken.current + 1;
@@ -110,7 +115,7 @@ export function App(): React.JSX.Element {
       } catch (error) {
         if (probeToken.current !== token) return;
         setPhase({ kind: "idle" });
-        setProbeError(AppError.from(error).toPayload());
+        setProbeError({ error: AppError.from(error).toPayload(), url: parsed.data });
       } finally {
         stream.close();
         if (stageStream.current === stream) stageStream.current = null;
@@ -132,7 +137,8 @@ export function App(): React.JSX.Element {
       setStarting(true);
       setStartError(null);
       try {
-        await jobs.start(phase.url, options, phase.probe.title);
+        const job = await jobs.start(phase.url, options, phase.probe.title);
+        setRevealId(job.id);
       } catch (error) {
         setStartError(AppError.from(error).toPayload());
       } finally {
@@ -181,8 +187,8 @@ export function App(): React.JSX.Element {
 
         {probeError && (
           <ErrorPanel
-            error={probeError}
-            onRetry={() => void analyse(url)}
+            error={probeError.error}
+            onRetry={() => void analyse(probeError.url)}
             onDismiss={() => setProbeError(null)}
             retryLabel="Analyse again"
           />
@@ -220,6 +226,7 @@ export function App(): React.JSX.Element {
           streamStates={jobs.streamStates}
           refusals={jobs.refusals}
           stages={jobs.stages}
+          revealId={revealId}
           onFollowLink={jobs.clearRefusal}
           onCancel={(id) => void jobs.cancel(id)}
           onRemove={jobs.remove}

@@ -26,7 +26,9 @@ export function ProbePanel({
   const [variantId, setVariantId] = useState<string | null>(() =>
     pickDefaultVariantId(probe.variants),
   );
-  const [container, setContainer] = useState<(typeof CONTAINERS)[number]>("mp4");
+  // The source's own container by default: no remux to choose, and where it is
+  // withheld (a WebM that cannot make WebM) the fallback below is MP4.
+  const [container, setContainer] = useState<(typeof CONTAINERS)[number]>("source");
   const [audioOnly, setAudioOnly] = useState(false);
   const [embedSubtitles, setEmbedSubtitles] = useState(probe.subtitles.length > 0);
   const [liveDurationMin, setLiveDurationMin] = useState(5);
@@ -83,9 +85,23 @@ export function ProbePanel({
             depend on the image existing. */}
         <div className="card__headline">
           <Preview path={probe.thumbnailPath} size="panel" />
-          <h2 id="probe-heading" className="card__title">
-            {probe.title}
-          </h2>
+          {/* What was found sits under the title, where the job card keeps its
+              subtitle, so the line is in the same place on both steps. */}
+          <div className="job__titles">
+            <h2 id="probe-heading" className="card__title">
+              {probe.title}
+            </h2>
+            <p className="muted job__subtitle">
+              {probe.durationSec ? `${formatDuration(probe.durationSec)} · ` : ""}
+              {shownRows.length} rendition{shownRows.length === 1 ? "" : "s"}
+              {collapsed > 0
+                ? ` · ${collapsed} duplicate path${collapsed === 1 ? "" : "s"} merged`
+                : ""}
+              {probe.subtitles.length > 0
+                ? ` · ${probe.subtitles.length} subtitle track${probe.subtitles.length === 1 ? "" : "s"}`
+                : ""}
+            </p>
+          </div>
         </div>
         <div className="pills">
           {probe.isLive && <span className="pill pill--warn">Live</span>}
@@ -93,15 +109,6 @@ export function ProbePanel({
           <span className="pill">{probe.resolver}</span>
         </div>
       </div>
-
-      <p className="muted">
-        {probe.durationSec ? `${formatDuration(probe.durationSec)} · ` : ""}
-        {shownRows.length} rendition{shownRows.length === 1 ? "" : "s"}
-        {collapsed > 0 ? ` · ${collapsed} duplicate path${collapsed === 1 ? "" : "s"} merged` : ""}
-        {probe.subtitles.length > 0
-          ? ` · ${probe.subtitles.length} subtitle track${probe.subtitles.length === 1 ? "" : "s"}`
-          : ""}
-      </p>
 
       <VariantTable variants={probe.variants} selectedId={variantId} onSelect={setVariantId} />
 

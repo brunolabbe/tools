@@ -310,3 +310,9 @@ merged in after dl-108 lands.
 - _`stageAfter` exhaustiveness._ The switch ends in a `never` assignment. Deleting its `probed`, `refused` and `heartbeat` cases now fails `tsc -p tools/downloader/web/tsconfig.json` with TS2322; before, it exited 0.
 
 **2026-10-12, landing (fixer).** Gate 2's low on `stageAfter`'s `default` branch (it returned the frame itself, not `undefined`) was fixed at landing, at the owner's choice of "apply at landing", in the commit that carries this line. The `never` assignment stays; the branch now returns `undefined` after it. `node --import tsx <scratch>/gate-2/default-branch.mts <tree>` printed `held -> {"type":"from-the-future",…}` and `is the frame itself: true` before, and `held -> undefined` and `is the frame itself: false` after. With the `heartbeat` case deleted, `npx tsc --build tools/downloader/web/tsconfig.json` exits 2 with TS2322 at the `never` assignment; restored, it exits 0. The other recorded low (`event.jobId`/`event.at`) is left unfixed. The merge from `main` after dl-108 (#451) resolved the expected conflict above by keeping both: `progressMessages(status, stage, originConnections)`.
+
+**2026-10-25**: the owner removed the re-analysing status line and the browser
+note. While re-analysing, the latest stage is now the card's only line, and before
+the first stage it is `PROBE_STAGE_PENDING`, as in the analysing panel (the pull
+request that filed dl-133). Answer 2's "a second message" no longer describes the
+card.
