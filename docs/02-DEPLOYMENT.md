@@ -144,8 +144,10 @@ that came with it is not optional — see
 
 **Every fragment sets `name: webtools`**, so any merge of them is one compose
 project — including [`compose.planner.yaml`](../compose.planner.yaml), which is
-why merging the grounding fragment with the downloader's is an ordinary thing to
-do. It was not before
+why merging the grounding fragment beside the downloader's is an ordinary thing
+to do. It needs the planner's prod fragment too: since
+[pl-63](../tools/planner/docs/work/pl-63-the-planner-reaches-its-grounding-services.md)
+it is an overlay on it, and compose refuses it without. It was not before
 [repo-33](./work/repo-33-adr-004-rename-and-the-project-name.md): the old
 `compose.yaml` set no name, so it took the basename of the host's clone
 directory while the grounding fragment said `webtools`, and the two were
@@ -1160,8 +1162,9 @@ is the one that proposes — what is worth stopping for along this corridor. It
 reads the same extract into a third form, because a graph, a geocoding database
 and a queryable tag index share no artifact between them.
 
-`OVERPASS_URL` is the one address here that may be left unset, and the planner
-starts without it: a deployment can measure and geocode without discovering, and
+`OVERPASS_URL` is the one address here that may be left unset (the fragment
+sets it, so a host that wants it off overrides it empty; see step 3), and the
+planner starts without it: a deployment can measure and geocode without discovering, and
 `nearby` says so once in the log and returns nothing. That is the only optional
 one of the three.
 
@@ -1247,13 +1250,18 @@ first time it starts, which is its own long wait and happens once.
 private network, which is the only way it can resolve the three service names.
 To change one, add it to a host-side override listed after it in `COMPOSE_FILE`:
 
-| Variable                         | Value                   | Required                    |
+| Variable                         | Value                   | Required by the planner     |
 | -------------------------------- | ----------------------- | --------------------------- |
 | `GROUNDING_PROVIDER`             | `valhalla`              | yes                         |
 | `VALHALLA_URL`                   | `http://valhalla:8002`  | yes                         |
 | `GEOCODER_URL`                   | `http://nominatim:8080` | yes                         |
-| `OVERPASS_URL`                   | `http://overpass`       | no — discovery is off unset |
+| `OVERPASS_URL`                   | `http://overpass/api`   | no — discovery is off unset |
 | `GROUNDING_DISCOVERY_TIMEOUT_MS` | `30000` (the default)   | no                          |
+
+The fragment sets the first four. To run without discovery, set `OVERPASS_URL`
+empty in that override (`OVERPASS_URL: ""`). The planner treats an empty value as
+unset. `/api` is part of the address because the planner appends `/interpreter`
+and the Overpass image serves it under `/api/`.
 
 **Point `OVERPASS_URL` at your own instance, not at `overpass-api.de`.** pl-33
 measured the public one with the query this adapter actually sends: 28.7 s for

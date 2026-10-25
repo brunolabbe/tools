@@ -61,6 +61,16 @@ the image ships it.
 3. **No `depends_on` at all.** Same behaviour as 1 in practice, but `docker compose
    up planner` would no longer bring Valhalla up with it.
 
+**When it matters: `docker compose up`, not a reboot.** The gate pointed this
+out. `depends_on` orders what compose starts. After a host reboot, the Docker
+daemon restarts `restart: unless-stopped` containers itself and never reads
+`depends_on`. So option 2 avoids gaps only after an `up -d`, and its coupling
+bites only on an `up -d`: a deploy, a rollback, a config change. Those are the
+moments an operator is already at the keyboard, and also the moments a down
+tunnel is least welcome. After a reboot, options 1 and 2 behave the same. This is
+reasoned from Docker's documented behaviour and was not run, because there is no
+daemon here.
+
 ## Build
 
 1. `compose.planner.yaml` gets a `planner:` block that adds `networks: [edge,
@@ -87,6 +97,37 @@ the image ships it.
    `valhalla-tiles`.
 4. No doc gives a `-f compose.planner.yaml` command on its own.
 5. `npm run check` passes.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-25 · `1bf4f5d5..366cbea8` (the top commit only; `1bf4f5d5` is repo-125, gated separately; the ticket was filed on this branch, so its brief is read at the head down to `## Log`) · Sonnet 5.5, depth medium
+
+| Done when                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Three files give a planner on `edge` and `planner`, with the four variables set | **verified** — `docker compose -f compose.prod.yaml -f compose.planner.prod.yaml -f compose.planner.yaml config --format json`: planner networks `["edge","planner"]`; `GROUNDING_PROVIDER=valhalla`, `VALHALLA_URL=http://valhalla:8002`, `GEOCODER_URL=http://nominatim:8080`, `OVERPASS_URL=http://overpass`. No test on the branch asserts it (F5). |
+| 2. Two files still give a planner on `edge` alone, `GROUNDING_PROVIDER` unset      | **verified** — the same command over the first two files: networks `["edge"]`; env carries only `LOG_LEVEL`, `MODEL_PROVIDER`, `TRUST_PROXY`; no `depends_on` on the planner; services `cloudflared,planner`. Nothing asserts it (F5).                                                                                                                  |
+| 3. `--profile tiles config --services` over the three files lists `valhalla-tiles` | **verified** — output `valhalla planner cloudflared nominatim overpass valhalla-tiles`; the `COMPOSE_FILE=a:b:c` form the guide uses gives the same six. Nothing asserts it (F5).                                                                                                                                                                       |
+| 4. No doc gives a `-f compose.planner.yaml` command on its own                     | **verified** — `grep -rnE "\-f[ =]+\S*compose\.planner\.yaml"` over every tracked file: two hits, both prose that says the command is invalid (the file's own header, guide step 2), plus the ticket. Control: `docker compose -f compose.planner.yaml config` exits 1, `service "planner" has neither an image nor a build context`.                   |
+| 5. `npm run check` passes                                                          | **verified** — run once in the detached tree at `366cbea8`, exit 0 (lint, `oxfmt --check`, `tsc -b`).                                                                                                                                                                                                                                                   |
+
+- **med** · no `Done when` line's words depend on it, but the ticket's title and Why do · F1: `OVERPASS_URL` is shipped as `http://overpass`, and the planner POSTs to `${OVERPASS_URL}/interpreter`, which is `http://overpass/interpreter`. The `wiktorn/overpass-api` image serves the interpreter only under `/api/` (its README: `http://localhost:80/api/interpreter`; its nginx config has `location /api/` rewriting to cgi-bin and `location /` as a static root; this file's own health check hits `/api/status`). Run through the repo's adapter (`ValhallaGroundingProvider.nearby`) against a stand-in for that nginx: `OVERPASS_URL=http://overpass -> POST http://overpass/interpreter -> threw UNREACHABLE {"status":405}`; `OVERPASS_URL=http://overpass/api -> POST http://overpass/api/interpreter -> answered, 0 finds`. The failure is silent by design: `runs/discovery.ts` turns it into `answered []` plus one `warn`, so every plan on a host built from this guide carries the coverage sentence a genuinely empty answer gets. The value is also in the guide's step 3 table and in the base file's old comment, so it predates the branch, but this branch is the one that makes it live. Direction: `http://overpass/api` in `compose.planner.yaml` and the guide's table row; the second run above is that input.
+- **low** · `nfr:maintainability` · F2: two sentences are now false. `compose.planner.yaml`'s "Merging this file with the downloader's is safe, as of repo-33" and the guide's "merging the grounding fragment with the downloader's is an ordinary thing to do". `-f compose.prod.yaml -f compose.downloader.prod.yaml -f compose.planner.yaml config` exits 1 with `service "planner" has neither an image nor a build context`. False in the safe direction: compose refuses and nothing starts.
+- **low** · F3: the guide's step 3 table still marks `GROUNDING_PROVIDER`, `VALHALLA_URL` and `GEOCODER_URL` "Required: yes", and the section above it still says `OVERPASS_URL` "may be left unset", though the file now sets all four on every merge (leaving discovery off now takes an override that sets it empty). False in the safe direction.
+- **low** · F4: `docs/adr/004-one-compose-fragment-per-tool.md` says "The planner waits on `condition: service_healthy`". The build ships `service_started` and neither the commit nor the ticket's Build step 4 touches the ADR. Part of the open decision: whichever option the owner takes, the ADR either stays true or needs a dated note (it already carries one banner of that kind).
+- **low** · F5: nothing on the branch pins Done when 1–3 (no test reads a compose merge). The defect this ticket fixes sat from pl-28 to now for want of one. Direction only: `scripts/test/` could run `docker compose config` over the three files.
+- **dropped** · `tools/planner/api/src/config.ts` comment says "`compose.yaml` now brings up" (a stale filename since repo-33). Predates the branch and is outside the commit's files.
+- **dropped** · the comment block left at the foot of `compose.planner.yaml` ("Why these addresses take no SSRF guard") now sits below the services rather than beside the env block it explains, and lost the `GROUNDING_DISCOVERY_TIMEOUT_MS` sizing sentence; the guide carries both. A placement preference, nothing relies on it.
+- **findings** · the hunt returned 7; 5 carried (F1–F5), 2 dropped.
+- **open decision, premise check (no recommendation, per the dispatch)** · the ticket's chain claim is **right**: with `compose.downloader.prod.yaml`, `compose.planner.prod.yaml`, `compose.ledger.prod.yaml` merged, `cloudflared` carries `depends_on` on all three tools at `service_healthy`, so a `service_healthy` on Valhalla would chain to the tunnel. The ticket's **account of the benefit is incomplete**: `depends_on` orders `docker compose up`. After a host reboot the Docker daemon restarts `restart: unless-stopped` containers itself, without reading it. So option 2's "no gaps after a restart" (and adr/004's stated reason) holds for an `up -d` and, by that reasoning, not for a power cycle; option 1's cost is then the same as option 2's at reboot. Not measured here: there is no daemon. Option 1's "nothing else is coupled" is also unmeasured: whether compose fails the planner's start when a `service_started` dependency exits straight after starting.
+- NFR: security ✓ (no new port; the services stay on the private `planner` network, planner still on loopback 8090) · performance n/a · reliability — F1 above, and the unmeasured daemon behaviour · maintainability — F2–F5 above.
+
+Dispositions, 2026-10-25, on the branch after the gate:
+
+- F1 fixed: `OVERPASS_URL` is `http://overpass/api` in the fragment and in the guide's table. Checked by hand: `valhalla.ts` posts to `${overpassUrl}/interpreter`, the fragment's own health check reads `/api/status`, and pl-33 used `overpass-api.de/api/interpreter`. Not run against the image.
+- F2 fixed: the fragment's header and the guide say that merging beside the downloader's needs the planner's prod fragment too.
+- F3 fixed: the guide's table says which variables the planner requires and which the fragment sets, and how to turn discovery off (an empty override, which `config.ts` treats as unset).
+- F4 held for the open decision. adr/004's `service_healthy` paragraph gets a dated note once the owner answers.
+- F5 accepted, recorded: no test merges compose files. A `scripts/test` case running `docker compose config` would need the compose CLI on every runner, and adds a CI dependency that nothing here has needed so far.
 
 ## Log
 
