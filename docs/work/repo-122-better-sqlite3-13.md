@@ -94,3 +94,14 @@ afterthought.
     --package-lock-only`, which is the command that script regenerates with; unrun against the edited lockfile).
   - **Fold-in:** none made; the `.devcontainer/Dockerfile` and `Dockerfile` comments
     about the compile fallback are unchanged and are now the path every install takes.
+- 2026-10-25: held at 12. The question put to the owner was "How should repo-122 proceed?",
+  with three options: (1) hold at 12, which the builder recommended; (2) take 13 and add a
+  compile toolchain (python3, make, g++) to the Dockerfile; (3) split the install into
+  `npm ci --ignore-scripts` plus an explicit rebuild. The owner chose (1), which matched the
+  builder's recommendation. The bump commit `0cf0f4d3` is reverted by a new commit (no
+  force-push), so the lockfile and the three `api/package.json` files are back at
+  `origin/main`'s shape. The entries above stay as the record of the attempt; 13 is not on
+  `main`. The Done-when line is not met at 12, and this entry does not reword it.
+  - **Reopen when:** npm or better-sqlite3 lets a lockfile install skip the compile. Until
+    then, every `npm ci` of 13 compiles it from source, which is the premise the refutation
+    above measured.
