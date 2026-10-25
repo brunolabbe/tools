@@ -253,7 +253,9 @@ jobs:
             # Only a pull request is filtered; every other event that got this
             # far is a `push` to `main`, which records the merged state whole.
             if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-              projects="$(git diff --no-renames --name-only "${BASE}...${HEAD}" | node scripts/preflight.mjs --ci-projects)"
+              # `core.quotePath=false`: git otherwise quotes a non-ASCII path, and
+              # a path that starts with `"` is read as owned by no tool.
+              projects="$(git -c core.quotePath=false diff --no-renames --name-only "${BASE}...${HEAD}" | node scripts/preflight.mjs --ci-projects)"
             else
               projects="$(node scripts/preflight.mjs --ci-projects --all)"
             fi

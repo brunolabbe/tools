@@ -2735,6 +2735,110 @@ test("ci.yml runs status.test.ts once, in check, and the matrix runs changes' li
   expect(REAL_CI_YAML).toContain("projects: ${{ steps.diff.outputs.projects }}");
 });
 
+// Gate 1's path-reading lows (repo-127). `git diff --name-only` quotes a
+// non-ASCII path unless `core.quotePath=false`, and `ciProjects` once trimmed
+// each line; both made a path read as something other than its own text.
+const CAFE = `caf${String.fromCharCode(0xe9)}`;
+
+test("ciProjects reads a path as its own text, so a directory named ` tools` is no tool (repo-127)", () => {
+  const all = allProjects(REPO_ROOT);
+  // Trimmed, ` tools/x.ts` was `tools/x.ts` and gave a narrow list; as written it
+  // is outside `tools/`, a path no tool owns, and runs every project.
+  expect(ciProjects(REPO_ROOT, false, " tools/x.ts\n")).toEqual(all);
+  expect(ciProjects(REPO_ROOT, false, "tools/planner/api/src/a.ts\n\n")).toEqual([
+    "planner",
+    "repo",
+    "core",
+  ]);
+});
+
+test.skipIf(process.platform === "win32")(
+  "ci.yml's changes step maps a non-ASCII path under tools/planner to planner, repo and core (repo-127)",
+  () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-quote-")));
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", shell: false });
+      if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+      return result.stdout.trim();
+    };
+    const write = (file: string, content: string) => {
+      fs.mkdirSync(path.join(dir, path.dirname(file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), content);
+    };
+    const output = path.join(os.tmpdir(), `${path.basename(dir)}-output`);
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.email", "preflight@example.test");
+      git("config", "user.name", "preflight test");
+      // Quoting is git's default; a global `core.quotePath=false` would hide the fault.
+      git("config", "core.quotePath", "true");
+      for (const script of ["preflight.mjs", "commit-message.mjs", "status.mjs", "markdown.mjs"]) {
+        write(
+          `scripts/${script}`,
+          fs.readFileSync(path.join(REPO_ROOT, "scripts", script), "utf8"),
+        );
+      }
+      for (const tool of ["downloader", "ledger", "planner"])
+        write(`tools/${tool}/api/src/a.ts`, "export {};\n");
+      git("add", "-A");
+      git("commit", "-qm", "base");
+      const base = git("rev-parse", "HEAD");
+      write(`tools/planner/api/src/${CAFE}.ts`, "export {};\n");
+      git("add", "-A");
+      git("commit", "-qm", "a non-ASCII path");
+      const head = git("rev-parse", "HEAD");
+
+      fs.writeFileSync(output, "");
+      const result = spawnSync("bash", ["-c", changesStepScript(REAL_CI_YAML)], {
+        cwd: dir,
+        encoding: "utf8",
+        shell: false,
+        env: {
+          ...process.env,
+          GITHUB_EVENT_NAME: "pull_request",
+          BASE: base,
+          HEAD: head,
+          GITHUB_OUTPUT: output,
+        },
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(0);
+      expect(fs.readFileSync(output, "utf8")).toBe("code=true\nprojects=planner repo core\n");
+    } finally {
+      fs.rmSync(output, { force: true });
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test("preflight plans a non-ASCII path under a tool as that tool's suite, not every project (repo-127)", () => {
+  const repo = makeRepo();
+  fs.writeFileSync(path.join(repo.dir, "release-please-config.json"), RP_CONFIG);
+  try {
+    // Quoting is git's default; a global `core.quotePath=false` would hide the fault.
+    repo.git("config", "core.quotePath", "true");
+    repo.write("tools/downloader/src/a.ts", TLS);
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+    repo.write(`tools/downloader/src/${CAFE}.ts`, TLS);
+    repo.commitAll("fix(downloader): add a non-ASCII file");
+
+    const calls: string[] = [];
+    preflight(repo.dir, {
+      base,
+      run: realRun,
+      buildRun: recordingRun(calls),
+      listOpenHeads: () => [],
+      only: ["check"],
+    });
+    expect(calls).toContain("npm test -- --project downloader");
+    expect(calls).toContain("npm test -- --project repo");
+    expect(calls).not.toContain("npm test");
+  } finally {
+    repo.cleanup();
+  }
+});
+
 // Last in the file on purpose: it reads what every test above left behind, and
 // it is the spec a shim test that stops calling `removeShimDir` turns red.
 test("no preflight-ghshim directory this file made is left behind (repo-110)", () => {

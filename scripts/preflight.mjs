@@ -595,7 +595,10 @@ export function narrowedFilters(repo, tool, toolPaths) {
  * `scripts/test/preflight.test.ts` reads every tool's real package layout
  * (`packageGraph` and `testPlan` against this checkout, repo-102), and `core`
  * because its source scans read every file under `scripts/` and `tools/`
- * (repo-90). An empty list means every path was markdown, and nothing else.
+ * (repo-90). An empty list is what every-path-is-markdown gives, and it is also
+ * what a non-markdown path that no tool owns and no shared rule covers gives
+ * (a file directly under `tools/`, say); `ci.yml`'s `changes` job then fails
+ * red rather than skipping the matrix.
  *
  * **This is the one mapping, and `ci.yml` calls it** (repo-127, through
  * `--ci-projects`), so a pull request's CI and its preflight cannot disagree
@@ -647,10 +650,10 @@ export function allProjects(repo) {
  */
 export function ciProjects(repo, all, stdin) {
   if (all) return allProjects(repo);
-  const paths = stdin
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+  // Empty lines only: a path is its own text. Trimming a line turned a
+  // directory named ` tools` into `tools`, which the rules written for the real
+  // `tools/` then narrowed (repo-127, gate 1).
+  const paths = stdin.split("\n").filter(Boolean);
   return projectsFor(paths) ?? allProjects(repo);
 }
 
@@ -1631,8 +1634,16 @@ export function preflight(repo, options) {
     // `ci.yml`'s `changes` job gives: with rename detection on, `git mv
     // src/a.ts docs/a.md` lists `docs/a.md` alone, so the deleted source would
     // never reach `touchedTools` and its tool's suite would be skipped.
+    //
+    // `-c core.quotePath=false` is load-bearing for `projectsFor` too (repo-127,
+    // gate 1): git quotes a non-ASCII path as `"tools/planner/caf\303\251.ts"`,
+    // which starts with `"` and so reads as owned by no tool.
     diffPaths = lines(
-      run("git", ["diff", "--no-renames", "--name-only", `${base}...HEAD`], { cwd: repo }),
+      run(
+        "git",
+        ["-c", "core.quotePath=false", "diff", "--no-renames", "--name-only", `${base}...HEAD`],
+        { cwd: repo },
+      ),
     );
   } catch (error) {
     throw fail(
