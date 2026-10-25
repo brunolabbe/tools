@@ -6,7 +6,7 @@ kind: work-package
 status: ready
 milestone: P6
 depends_on: []
-difficulty: standard
+difficulty: hard
 ---
 
 # lg-71 — A new household is created by adding its first person
@@ -141,3 +141,9 @@ and the admin can both rename. Until lg-77 lands, every household made here is
   after, and lg-75 marks an email that has never signed in. lg-76 makes `person`
   optional in this create request later, naming the person from the email; build
   it required here.
+- 2026-10-25 — Re-rated `standard` to `hard` on the owner's answer at intake.
+  Asked by the orchestrator, once the seam map found the ticket wider than its
+  rating (the contract schema, a `directory.ts` transaction, the host command,
+  the web form, copy across several screens, and Build 6's design choice), with
+  the options keep `standard` (the orchestrator's recommendation) or re-rate to
+  `hard`. The owner chose **re-rate to `hard`**, overriding the recommendation.
