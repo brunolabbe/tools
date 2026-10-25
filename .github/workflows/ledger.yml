@@ -149,8 +149,15 @@ jobs:
         run: |
           set -euo pipefail
           household() { docker exec ledger node tools/ledger/api/dist/household-ledger.js "$@"; }
-          household add ci "CI household"
-          household member ci someone@example.test someone
+          # `add` makes the household under a generated UUID and prints it; the
+          # steps below name that household by what it printed (lg-71).
+          household add ci@example.test ci | tee /tmp/add.txt
+          id=$(grep '^Created the household ' /tmp/add.txt | grep -oE '[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}' | head -n 1 || true)
+          if [ -z "$id" ]; then
+            echo "add printed no household id"
+            exit 1
+          fi
+          household member "$id" someone@example.test someone
           household list | tee /tmp/list.txt
           grep -q 'someone@example.test' /tmp/list.txt
           household remove someone@example.test
@@ -161,7 +168,7 @@ jobs:
           fi
           curl -fsS http://127.0.0.1:8100/api/health | tee /tmp/health.json
           grep -q '"ok":true' /tmp/health.json
-          docker exec ledger test -f /data/households/ci.db
+          docker exec ledger test -f "/data/households/$id.db"
 
       - if: always()
         run: docker rm -f ledger || true
