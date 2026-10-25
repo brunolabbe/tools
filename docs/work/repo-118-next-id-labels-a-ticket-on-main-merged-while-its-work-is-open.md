@@ -119,7 +119,7 @@ Range: `git diff 3c5edec4...700d5b24`, five files. The head is a merge of `origi
     note, line 3 `on main repo-1`, last row `on main repo-50`.
   - **Build 3, stacked.** `stackPulls` runs after the sources are built. A read pull request
     head that `git merge-base --is-ancestor` puts inside another's is labelled `PR#<n> (stacked
-on PR#<m>)`, and the parent's paths come off its claim. Done when 3 is "a pull request
+    on PR#<m>)`, and the parent's paths come off its claim. Done when 3 is "a pull request
     stacked on another's head reports no clash for the parent's ticket", over a real fixture
     remote, and "two unrelated pull requests that file one id still clash", which keeps the
     check from being a rule about paths. **Removal:** `isAncestor` made to return `false`
@@ -143,7 +143,7 @@ on PR#<m>)`, and the parent's paths come off its claim. Done when 3 is "a pull r
       record it in `concurrency.md` (the coordinator's and the builder's recommendation, both
       the same); fix it now. **Chosen: fix it now**, which overrode both recommendations.
       Built in `e8216ac6` (`fix(repo): take a stacked child's name-derived ids off its
-claim`), which adds `unheldName`. The `concurrency.md` paragraph is updated to say so.
+      claim`), which adds `unheldName`. The `concurrency.md` paragraph is updated to say so.
   - **Q2 fix and its removal.** `unheldName` takes the ids a parent holds off a stacked
     child's branch name. An id the parent does not hold stays, restated on its own. Tests:
     "a stacked child whose branch name carries its parent's id reports no clash for it",
