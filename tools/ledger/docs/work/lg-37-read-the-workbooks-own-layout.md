@@ -6,7 +6,6 @@ kind: fix
 status: done
 milestone: null
 depends_on: [lg-7]
-awaiting: the owner's dry run of npm run import:ledger on the merged code against the corrected workbook, reading no problems (Done when 6)
 ---
 
 # lg-37 — The workbook import refuses the real workbook, whose layout lg-7 guessed wrong
@@ -158,3 +157,23 @@ No `high`. FAIL is the rule's, for two unproven rows: one clause of Done when 5 
   where two deposits landed a day early. Each condition of the match (lead,
   payer, amount) is proven by a mutation that turns a test red. No second
   gate, by the owner's choice: the round is small and mutation-tested.
+
+- 2026-10-25: Done when 6 met, and the `awaiting:` line is removed. The
+  owner ran `npm run import:ledger` as a dry run on main at `13bc4632`
+  (ledger 0.4.1, after lg-68), against the corrected workbook. The reader
+  reported no problems:
+  - all 19 verifications read `ok`: both people's lines against each of the
+    five periods' totals, the eight year-to-year bucket carries, and the
+    running balance through every movement;
+  - the dated repairs and the 13 rows skipped for no amount are what lg-7
+    and this ticket report rather than refuse;
+  - one row is reported dated out of order and imported as typed;
+  - two of the five closed periods read "not paid in the workbook", which
+    Done when 5 makes a report, never a refusal.
+
+  The run was still refused, with four `FAILED` lines, but none of them is
+  the reader's. The owner's local books (`households/home.db`, last written
+  2026-10-22) already hold closed periods, period lines, salaries and a
+  ratio. The import refuses to write over existing records, so the run says
+  nothing about the workbook. A `--write` would need empty books. No figure
+  from the run is recorded here (the ledger's real-data rule).
