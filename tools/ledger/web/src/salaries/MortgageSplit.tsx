@@ -64,6 +64,7 @@ export function MortgageSplitCard(): React.ReactElement {
 
   useEffect(() => {
     const controller = new AbortController();
+    // oxlint-disable-next-line react/set-state-in-effect -- `refresh` sets state only after its request settles; the rule cannot see through the await.
     void refresh(controller.signal);
     return () => controller.abort();
   }, [refresh]);

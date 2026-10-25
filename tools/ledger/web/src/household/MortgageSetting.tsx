@@ -9,7 +9,7 @@
  * charts. What is left in the bucket after it is each person's own money.
  */
 
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { formatCents } from "@ledger/books";
 import { AppError, MORTGAGE_STATES } from "@ledger/contract";
 import type { MortgageResponse, MortgageState } from "@ledger/contract";
@@ -52,11 +52,13 @@ export function MortgageSetting(): React.ReactElement {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const show = (mortgage: MortgageResponse): void => {
+  // Only setters, which React keeps the same, so `show` is built once and the
+  // load effect below can name it without running again.
+  const show = useCallback((mortgage: MortgageResponse): void => {
     setLoad({ state: "ready", mortgage });
     setChoice(mortgage.state);
     setEndedOn(mortgage.endedOn ?? "");
-  };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -67,7 +69,7 @@ export function MortgageSetting(): React.ReactElement {
         setLoad({ state: "failed", message: AppError.from(error).message });
       });
     return () => controller.abort();
-  }, []);
+  }, [show]);
 
   if (load.state === "loading")
     return <p className="muted">Reading what is said of the mortgage…</p>;
