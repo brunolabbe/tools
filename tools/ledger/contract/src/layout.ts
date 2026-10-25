@@ -271,9 +271,14 @@ export const workbookLayoutSchema = z
     salaries: salariesLayoutSchema
       .nullable()
       .describe("The sheet holding each person's salary; null when there is none."),
+    // lg-66, Decision 3 (a): the reader never consults this list, so the text
+    // says so rather than promising a reading it does not do. Editing it moved
+    // the schema's pin in api/test/layout-pins.test.ts.
     ignored: z
       .array(z.string().min(1))
-      .describe("Every other sheet, by name: read as none of the above."),
+      .describe(
+        "Every other sheet, by name. Advisory only: the reader does not consult this list, and a sheet not named as the account, the periods or the salaries is not imported either way.",
+      ),
   })
   .strict();
 export type WorkbookLayout = z.infer<typeof workbookLayoutSchema>;

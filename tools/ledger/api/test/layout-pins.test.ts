@@ -41,8 +41,16 @@ const REQUEST_PINS: Readonly<Record<string, string>> = {
 /** At `53bb5d0f`, 5,842 characters: the schema all 300 runs were sent. */
 const SCHEMA_PIN_AT_BASE = "cbf85552e814c2f9aed91a6678ff87ff3f043c7212331edca255ebebc07ad1b6";
 
-/** The schema sent now. */
-const SCHEMA_PIN = SCHEMA_PIN_AT_BASE;
+/**
+ * The schema sent now, 5,963 characters: `ignored`'s `.describe()` says the list
+ * is advisory and not read (lg-66, Decision 3 (a)), where it said "read as none
+ * of the above". Unmeasured against a model: the 300 runs had the base's.
+ */
+const SCHEMA_PIN = "e5c31565db17908aed3654c0d3e44f2eaaf0ff10124d84568ff462b76add6eb7";
+
+test("the schema's pin moved from the base's, once and on purpose", () => {
+  expect(SCHEMA_PIN).not.toBe(SCHEMA_PIN_AT_BASE);
+});
 
 let fixtures: LayoutFixture[];
 
