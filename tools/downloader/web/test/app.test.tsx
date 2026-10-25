@@ -898,3 +898,62 @@ test("a stage sent back to back with the probing status is not lost to the rende
   });
   expect(cardMessages()).toEqual(["Checking the address directly"]);
 });
+
+// ---------------------------------------------------------------------------
+// The card just started is brought into view; a restored one is not
+// ---------------------------------------------------------------------------
+
+test("a reload scrolls to no card, and pressing Download scrolls to the new one only", async () => {
+  // jsdom has no layout, so the calls are what is asserted, not an offset.
+  const scrolled: Element[] = [];
+  Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+    scrolled.push(this);
+  });
+  try {
+    const restored = job("queued", { id: "job-old" });
+    globalThis.localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify([restored]));
+    const fake = await mountApp(false, {
+      getJob: vi.fn(() => Promise.resolve({ job: restored })),
+      createJob: vi.fn(() => Promise.resolve({ job: job("queued", { id: "job-1" }) })),
+    });
+    await settle();
+    expect(screen.getByRole("list", { name: "Downloads" })).toBeDefined();
+    expect(scrolled).toEqual([]);
+
+    await pressDownload(fake);
+    // The new card is the one named by the page's title; the restored job has none.
+    const card = screen
+      .getByRole("heading", { level: 3, name: "A sample recording" })
+      .closest("li");
+    expect(scrolled).toEqual([card]);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+  } finally {
+    // @ts-expect-error -- jsdom has none, and a later test must not inherit the stub.
+    delete Element.prototype.scrollIntoView;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// A failed analysis retries its own address
+// ---------------------------------------------------------------------------
+
+test("Analyse again retries the page that failed, even after the field was cleared", async () => {
+  const fake = await mountApp(false);
+  analyse(SOURCE_URL);
+  await settle();
+  await act(async () => {
+    fake.probes[0]?.reject(new fake.AppError("UNREACHABLE", "The page did not answer."));
+    await Promise.resolve();
+  });
+  await settle();
+
+  fireEvent.click(screen.getByRole("button", { name: "Clear address" }));
+  expect((screen.getByLabelText("Page address") as HTMLInputElement).value).toBe("");
+
+  fireEvent.click(screen.getByRole("button", { name: "Analyse again" }));
+  await settle();
+  expect(fake.client.probe).toHaveBeenCalledTimes(2);
+  expect(fake.client.probe).toHaveBeenLastCalledWith(expect.objectContaining({ url: SOURCE_URL }));
+  // Not the invalid-address answer an empty field would have given.
+  expect(screen.queryByText(/full http:\/\/ or https:\/\/ address/u)).toBeNull();
+});

@@ -858,7 +858,7 @@ test("the job just started scrolls its card into view, nearest, and no other car
   }
 });
 
-test("a list with no job just started scrolls nothing, as after a reload", () => {
+test("a list with no job just started scrolls nothing", () => {
   const scrollIntoView = vi.fn();
   Element.prototype.scrollIntoView = scrollIntoView;
   try {

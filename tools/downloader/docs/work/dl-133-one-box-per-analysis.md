@@ -53,9 +53,9 @@ Each was put as options with their costs, the recommended one first.
 3. **The address field keeps its address after Analyse.** Answered over
    _empty itself_. The clear button from that pull request is how it is emptied.
 4. **A new box appears directly under the address field; older ones move
-   down.** Answered over _newest at the bottom_, which lands a new box off
-   screen once a few exist — the defect dl-109's gate measured for the card
-   placed above the panel.
+   down.** Answered over _newest at the bottom_, which would land a new box
+   off screen once a few exist — predicted, not measured; the same kind of
+   defect dl-109's gate did measure, for a card placed above the panel.
 5. **A saved box stays until it is dismissed.** Answered over _on the next
    Analyse_ (dl-109's decision 3) and _after a delay_. **This supersedes dl-109
    decision 3**: a saved row no longer leaves when the next analysis starts, so

@@ -32,8 +32,8 @@ export function UrlForm({
         Page address
       </label>
       <div className="urlform__row">
-        {/* The clear button sits inside the field, so a 360 px row still holds
-            the field and Analyse side by side. */}
+        {/* The clear button sits inside the field, so it costs the row no
+            width: the field and Analyse wrap exactly where they did without it. */}
         <div className="urlform__field">
           <input
             ref={input}
