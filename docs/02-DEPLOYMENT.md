@@ -1614,8 +1614,20 @@ docker inspect "$(docker compose ps -q downloader)" \
   --format '{{range .Mounts}}{{.Name}} {{end}}'     # webtools_downloader_storage
 ```
 
-Then open the UI and look for jobs you recognise. `/api/health` answers just as
-well on an empty database.
+`up -d` then prints
+`volume "webtools_downloader_storage" already exists but was not created by Docker Compose`,
+and keeps printing it on every `up`. That is expected: the volume came from
+`docker volume create` and carries none of Compose's labels. It is harmless, and
+it means `docker compose down -v` leaves this volume alone. Do not add
+`external: true` to quiet it. That would change the checked-in fragment for every
+host.
+
+**The mount proves the name, not the data.** A volume that `up -d` created
+empty mounts under the same name. Then open the UI and look for jobs you
+recognise. `/api/health` answers just as well on an empty database. If the job
+list is empty, run step 3's check again. A `jobs.db` of 4096 bytes with a
+`-wal` beside it and no `out/` or `tmp/` is a fresh database, not a copy: go back
+to step 1's "If `up -d` has already run".
 
 ### 5 — Later, remove the old volume
 
@@ -1819,6 +1831,11 @@ docker compose up -d
 docker compose logs -f cloudflared
 docker compose ps                       # every service you expected, and no more
 ```
+
+Compose warns that each volume step 4 created `already exists but was not created
+by Docker Compose`, on this `up` and every one after. That is expected, for the
+reason given in step 4 of
+[Renaming the downloader's volume](#renaming-the-downloaders-volume).
 
 Then open the UI. **The check that matters is data you recognise, not
 `/api/health`** — health answers perfectly against an empty database, which is
