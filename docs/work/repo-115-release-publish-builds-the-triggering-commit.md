@@ -6,7 +6,7 @@ kind: fix
 status: done
 milestone: null
 depends_on: []
-awaiting: the next release run's publish job passing its sha and version check on main
+awaiting: the next release run's publish job on main pushing its image, tagged `sha-` with the released commit's short sha, after passing its sha and version check
 ---
 
 # repo-115 — release publish builds the commit that triggered the run, not the one released
@@ -69,3 +69,16 @@ In `.github/workflows/release.yml`:
   Recovery was left to the owner: rebuild the downloader through the
   `workflow_dispatch` `rebuild` job, which pushes `:0.10.0` and `:latest` from
   `main`. Restoring the original `:0.9.0` tag is optional and done in the GHCR UI.
+- 2026-10-25: the first release under this fix, ledger 0.4.1 (run
+  40208629662, released `b9c6c8be`), passed step 3's check and then failed
+  in `Compute tags` with `Cannot infer ref from detached HEAD`. Step 4 was
+  wrong: checking out a bare sha leaves HEAD detached, and
+  `docker/metadata-action`'s `context: git` refuses that. No image was pushed.
+  Fixed by going back to the default context, writing the `sha-` tag as
+  `type=raw` from the released sha, and overriding
+  `org.opencontainers.image.revision` with a custom label. Read off the
+  action's `src/meta.ts` at the pinned `dc802804`: custom labels go into a
+  `Map` after the generated ones, so the last one wins. The `awaiting:` line now
+  names the pushed image, not just the check. Recovery for 0.4.1 is the
+  owner's: dispatch the `rebuild` job for `ledger`, which builds from `main`
+  and does not use `metadata-action`.
