@@ -184,3 +184,10 @@ measured.
     written for. The import was **not** moved into the top block: repo-127's
     pull request (#658) edits that block.
   - Fold-in: none. Nothing else the work freed was small and already specified.
+- 2026-10-25 — Fixed at landing by owner choice: gate 1, the first low — "the
+  comment above `linuxOnly` says the 34 skipped cases all 'spawn bash', but
+  three of them read files and spawn nothing". The gate counted three; the
+  lander found five (the two `check-main-writes` cases at lines 388 and 505 as
+  well, each only a `readFileSync`), and the comment now says 29 spawn bash and
+  five only read files. `git diff 397d1935 -- scripts/test/hooks.test.ts | grep
+  -c '^-.*34 cases that spawn bash'` → `1`.

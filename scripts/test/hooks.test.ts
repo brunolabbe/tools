@@ -67,8 +67,9 @@ function isSilent({ status, stdout, stderr }: HookRun): boolean {
 
 // The hooks are bash scripts wired in `.claude/settings.json` for the Linux
 // devcontainer harness, and nothing runs them on Windows (repo-128, owner,
-// 2026-10-25): 34 cases that spawn bash, skipped there and reported as skipped.
-// Every one still runs on ubuntu. `test.skipIf` rather than a wrapping
+// 2026-10-25): 34 cases, 29 that spawn bash and five that only read files (the
+// PreToolUse Bash matcher wiring and the header checks), skipped there and
+// reported as skipped. Every one still runs on ubuntu. `test.skipIf` rather than a wrapping
 // `describe`, which would move the helpers below into a closure.
 const linuxOnly = test.skipIf(process.platform === "win32");
 
