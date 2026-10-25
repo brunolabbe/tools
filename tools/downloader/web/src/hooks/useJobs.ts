@@ -6,7 +6,7 @@
  * every non-terminal job is re-fetched before its stream is attached.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppError, TERMINAL_STATUSES } from "@downloader/contract";
 import type {
   AppErrorPayload,
@@ -82,7 +82,13 @@ export function useJobs(api: ApiClient): UseJobs {
   const streams = useRef(new Map<string, JobStream>());
   const jobsRef = useRef(jobs);
 
-  jobsRef.current = jobs;
+  // Synced in a layout effect, which runs inside the commit — before any stream
+  // frame or timer can fire — so a handler reads the jobs the last render drew.
+  // Assigning during render would be the same value a step earlier, and is what
+  // the `refs` rule refuses: a render React discards would leave it ahead.
+  useLayoutEffect(() => {
+    jobsRef.current = jobs;
+  }, [jobs]);
 
   useEffect(() => {
     saveJobs(storage, jobs);
@@ -108,7 +114,7 @@ export function useJobs(api: ApiClient): UseJobs {
 
   const applyEvent = useCallback((jobId: string, event: JobEvent) => {
     if (event.type === "refused") {
-      // `jobsRef` is assigned during render, so this is the same job the
+      // `jobsRef` is synced on every commit, so this is the same job the
       // updater below is about to fold the event onto — and reading it here
       // rather than inside the updater keeps that updater pure.
       const before = jobsRef.current.find((job) => job.id === jobId);

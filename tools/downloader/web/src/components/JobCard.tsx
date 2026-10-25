@@ -277,7 +277,11 @@ function progressMessages(
 function useStepStartedAt(status: JobStatus): number | null {
   const [mark, setMark] = useState(() => ({ status, at: Date.now() }));
   // Derived state, set during render: React re-renders at once with the new
-  // mark, before anything is painted with the old one.
+  // mark, before anything is painted with the old one. The clock read is the
+  // point of the mark — it is when this card saw the status change, and no
+  // prop carries that — so the purity rule is told why it does not apply: the
+  // read runs once per status change, behind the comparison, never per render.
+  // oxlint-disable-next-line react/purity
   if (mark.status !== status) setMark({ status, at: Date.now() });
   return status === "queued" || status === "probing" ? mark.at : null;
 }
