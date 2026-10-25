@@ -2674,7 +2674,9 @@ test.skipIf(process.platform === "win32")(
 
       const script = changesStepScript(REAL_CI_YAML);
       const step = (event: string, from: string, to: string) => {
-        const output = path.join(dir, "..", `${path.basename(dir)}-output`);
+        // Its own directory, so the file's name is not a guessable one in the temp dir.
+        const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-output-"));
+        const output = path.join(outputDir, "output");
         fs.writeFileSync(output, "");
         try {
           const result = spawnSync("bash", ["-c", script], {
@@ -2693,7 +2695,7 @@ test.skipIf(process.platform === "win32")(
           expect(result.status, result.stderr).toBe(0);
           return { log: result.stdout, output: fs.readFileSync(output, "utf8") };
         } finally {
-          fs.rmSync(output, { force: true });
+          fs.rmSync(outputDir, { recursive: true, force: true });
         }
       };
       const every = "projects=core repo downloader ledger planner\n";
@@ -2766,7 +2768,9 @@ test.skipIf(process.platform === "win32")(
       fs.mkdirSync(path.join(dir, path.dirname(file)), { recursive: true });
       fs.writeFileSync(path.join(dir, file), content);
     };
-    const output = path.join(os.tmpdir(), `${path.basename(dir)}-output`);
+    // Its own directory, so the file's name is not a guessable one in the temp dir.
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-output-"));
+    const output = path.join(outputDir, "output");
     try {
       git("init", "-q", "-b", "main");
       git("config", "user.email", "preflight@example.test");
@@ -2806,7 +2810,7 @@ test.skipIf(process.platform === "win32")(
       expect(result.status, result.stderr).toBe(0);
       expect(fs.readFileSync(output, "utf8")).toBe("code=true\nprojects=planner repo core\n");
     } finally {
-      fs.rmSync(output, { force: true });
+      fs.rmSync(outputDir, { recursive: true, force: true });
       fs.rmSync(dir, { recursive: true, force: true });
     }
   },

@@ -236,3 +236,15 @@ Range `7f8d7f48...80ee7306`, two commits on the base (merge-base is the base sha
   runs the projects its paths reach (repo-127)." This supersedes the Build
   entry's "It is not edited here". `git diff 80ee7306 | grep -c '^-CI runs lint'`
   → `2`.
+- 2026-10-25 — Fixed at landing by owner choice: CodeQL on #658 at `4567fe30`,
+  "Insecure temporary file" (high), "Insecure creation of file in the os temp
+  dir", `scripts/test/preflight.test.ts` line 2792. The landing's own test
+  introduced it: commit `8f870cc4` wrote the fake `GITHUB_OUTPUT` as
+  ``path.join(os.tmpdir(), `${path.basename(dir)}-output`)``, a predictable name
+  in the temp dir. The builder's `changes` step test built the same kind of name
+  beside its directory, which CodeQL did not flag; both now create the file in
+  its own `fs.mkdtempSync(path.join(os.tmpdir(), "preflight-output-"))`
+  directory and remove that directory recursively in `finally`, and nothing they
+  assert changed. Proof: `npx vitest run scripts/test/preflight.test.ts -t
+  "changes step"` passes both tests, and CodeQL's reading of the new head is
+  unmeasured here.
