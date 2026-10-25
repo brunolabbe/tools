@@ -77,3 +77,12 @@ where it holds; (b) not now. **Chosen: (a).**
   lg-69 deletes `lg-65-search.test.ts`, the only `vi.mock` in ledger's
   `api` and `books`, which changes which ledger files can go in the
   non-isolated half.
+- 2026-10-25, from repo-128's gate 1 (dropped there as pre-existing, the owner chose to
+  note it here): `scripts/test/preflight.test.ts` › "no preflight-ghshim directory this
+  file made is left behind (repo-110)" fails under
+  `npx vitest run scripts/test/preflight.test.ts --sequence.shuffle --sequence.seed=<n>`
+  with seeds 1 and 2, on main's own copy at 7f8d7f48 as well as on repo-128's branch.
+  Re-run on `origin/main` at 7134af89 with seed 1: `Tests  1 failed | 108 passed (109)`,
+  `AssertionError: expected 0 to be greater than or equal to 3`
+  (`scripts/test/preflight.test.ts:2521`). Done when 1's shuffled runs will hit it: fix it
+  or exclude it, with a reason, before taking those readings.

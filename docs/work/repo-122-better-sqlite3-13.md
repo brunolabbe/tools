@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: standard
+note: held at 12 until a lockfile install can skip the compile
 ---
 
 # repo-122 — better-sqlite3 13 and @types/better-sqlite3 9
@@ -105,3 +106,6 @@ afterthought.
   - **Reopen when:** npm or better-sqlite3 lets a lockfile install skip the compile. Until
     then, every `npm ci` of 13 compiles it from source, which is the premise the refutation
     above measured.
+- 2026-10-25: the owner chose to record the hold as a `note:` line (options were a note
+  line, recommended and chosen; `dropped`; leave it), so `npm run status -- --ready` shows
+  why it should not be started.

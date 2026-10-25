@@ -17,7 +17,15 @@
     "typescript/no-explicit-any": "error",
     "typescript/consistent-type-imports": "error",
     "promise/no-return-wrap": "error",
-    "unicorn/prefer-node-protocol": "error"
+    "unicorn/prefer-node-protocol": "error",
+    // oxlint 1.88 widened this rule to 113 errors here, nearly all helpers
+    // declared inside the `test` body that uses them. Scoping a helper to its
+    // one test keeps it beside the assertion it serves and hides it from the
+    // other tests in the file; hoisting it to module scope moves it away for a
+    // reader and gains nothing at runtime. A readability choice, not a defect
+    // (owner, 2026-10-25, repo-119). The React rules the same release added are
+    // on, because those findings can be bugs.
+    "unicorn/consistent-function-scoping": "off"
   },
   "overrides": [
     {
