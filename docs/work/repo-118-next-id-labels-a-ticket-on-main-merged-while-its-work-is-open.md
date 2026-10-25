@@ -43,7 +43,7 @@ commits.
    sixty lines; keep the claimant rows.
 3. For a `clash` between two pull requests where one branch contains the other's
    head (`git merge-base --is-ancestor`), report the stacked one as `PR#<n> (stacked
-on PR#<m>)` and not as a clash.
+   on PR#<m>)` and not as a clash.
 
 ## Done when
 

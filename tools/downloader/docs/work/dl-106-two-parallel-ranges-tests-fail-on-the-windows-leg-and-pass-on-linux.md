@@ -36,7 +36,7 @@ The three runs, read from the job logs:
 
 2. **Run 38141287195, attempt 2** (job 114495526538, head `6f85fb48`, the
    re-run the owner chose on 2026-10-11): `Tests 2 failed | 5067 passed | 24
-skipped (5093)`. The first is the same test, the same assertion, at
+   skipped (5093)`. The first is the same test, the same assertion, at
    `parallel-ranges.test.ts:568:28`, 2352 ms. The second passed in attempt 1:
 
    ```
@@ -50,9 +50,9 @@ skipped (5093)`. The first is the same test, the same assertion, at
 
 3. **Run 38149758806** (job 114500599619, head `96a3a055`, dl-98's landing
    head, after the second round and gate 3): `Tests 3 failed | 5066 passed | 24
-skipped (5093)`. The first and third are the two above, at the same lines
+   skipped (5093)`. The first and third are the two above, at the same lines
    (`:568:28`, 2297 ms; `:1352:49`, 12539 ms, with `"maxHeldBytes":2736128,
-"deliveredBytes":12042240,"originRequests":5,"maxConcurrentFetches":4`). The
+   "deliveredBytes":12042240,"originRequests":5,"maxConcurrentFetches":4`). The
    second is new, and fails in the opposite direction to F9:
 
    ```
@@ -292,13 +292,13 @@ All runs below are on Linux, in scratch copies of the tree. The test file in eac
   and chose the first: rerun once, and if it failed again, land dl-98 and file
   this ticket with both Windows runs as the reproduction. It failed again. The
   numbers for run 38141287195 are read from `gh run view 38141287195 --attempt 1
---job 114475545565 --log` and `gh run view 38141287195 --job 114495526538
---log` (the latest attempt); each prints the lines quoted. The cause was not
+  --job 114475545565 --log` and `gh run view 38141287195 --job 114495526538
+  --log` (the latest attempt); each prints the lines quoted. The cause was not
   chased.
 - 2026-10-11, widened from two tests to the whole class. dl-98's landing head
   `96a3a055` failed three tests on the informational Windows leg (run
   38149758806, job 114500599619, read from `gh run view 38149758806 --job
-114500599619 --log`), one of them new. The owner was asked "dl-98's landing
+  114500599619 --log`), one of them new. The owner was asked "dl-98's landing
   head failed three tests on the informational Windows leg … What now?" with the
   options "Merge #421; widen dl-106 to the whole class" (recommended), "Hold #421
   unmerged until dl-106 is built" and "Merge #421 as it is", and chose the first.
@@ -318,7 +318,7 @@ All runs below are on Linux, in scratch copies of the tree. The test file in eac
   read from `gh run view <id> --log`.
   - **A Windows timer fires on a ~15.6 ms tick.** Run 38158575134 (head
     `bba22382`), the timer probe: `sleep(0): mean=11.41 p50=15.51`, `sleep(4):
-mean=14.69 p50=15.81 min=4.04`, `sleep(16): mean=26.94 p50=29.67`. Linux, the
+    mean=14.69 p50=15.81 min=4.04`, `sleep(16): mean=26.94 p50=29.67`. Linux, the
     same probe: `sleep(4): mean=4.11`.
   - **So `send()`, which sleeps once per 16 KiB slice, cannot go faster than
     about 1.4 MB/s there, whatever rate it is asked for.** The same run, the
@@ -330,14 +330,14 @@ mean=14.69 p50=15.81 min=4.04`, `sleep(16): mean=26.94 p50=29.67`. Linux, the
     4"): the shared 2 MB/s throttle read 1.12 MB/s on one connection and 1.98 on
     four, a 1.77x speed-up over the 1.5 floor, so the feeder correctly kept the
     split and never fell back (`judge-single rate=1121295`, `judge-split
-rate=1984081 single=1121295`, run 38158575134; the test's `after` list was
+    rate=1984081 single=1121295`, run 38158575134; the test's `after` list was
     empty). F9: a "4 MB/s" origin against 3 MB/s of media is a fixture that
     delivers 1.4 MB/s (the probe line above), which is slow, so the feeder
     correctly split. The held-bytes test failed for a related reason, in the
     bullet on the two further defects below.
   - **Before the fix, in isolation, A and F9 fail every time.** Run 38160856396
     (test file at `bba22382`): `before 1: FAIL`, `before 2: FAIL`, `before 3:
-FAIL`, each with `AssertionError: expected 0 to be greater than 0` (A) and
+    FAIL`, each with `AssertionError: expected 0 to be greater than 0` (A) and
     `... expected 'parallel' to be 'single'` (F9). The ten runs of 38158575134
     failed 10 of 10 (the failing names were lost to a grep bug in the probe).
     Run alone, the file fails the same two tests each time; in CI's full suite
@@ -349,7 +349,7 @@ FAIL`, each with `AssertionError: expected 0 to be greater than 0` (A) and
     can bank is capped at `MAX_CREDIT_MS` (25 ms), so a reader that paused is not
     answered with a burst. Run 38160489106 (head `aa21e562`): the same probe
     with the bucket delivers `asked=2000000 got=1977212`, `asked=4000000
-got=3956421`, `asked=40000000 got=39500682`, four connections at 4 MB/s each
+    got=3956421`, `asked=40000000 got=39500682`, four connections at 4 MB/s each
     `3954745,...`. A, F9 and the held-bytes test were the tests this was found
     for; no production line moved.
   - **Two more defects of the same fixture surfaced once it was fast, and are
@@ -358,20 +358,20 @@ got=3956421`, `asked=40000000 got=39500682`, four connections at 4 MB/s each
     Windows). Delivered in full, the 2 MB the reader takes before it pauses goes
     by inside the 50 ms measuring window, so the split waited for the pause to
     end (`AssertionError: expected 65536 to be greater than or equal to
-12582912`, run 38163890319) or fell back because a copy-bound single
+    12582912`, run 38163890319) or fell back because a copy-bound single
     connection is not 1.5x slower than four (`expected 'fallen-back' to be
-'parallel'`, same run). It now asks for 10 MB/s, a throttle this process can
+    'parallel'`, same run). It now asks for 10 MB/s, a throttle this process can
     outrun. (2) "a cancel after the first byte ... opens no more" measured
     requests from the instant of `abort()`, and a fetch the feeder had already
     written to its socket reaches the origin a few ms later: `AssertionError:
-expected [ { …(7) }, ... ] to deeply equal []` on Windows (run
+    expected [ { …(7) }, ... ] to deeply equal []` on Windows (run
     38160856396, 1 of 10) and, with a late request 3 ms after the abort, on Linux
     on both fixtures (old pacing 1 of 30, bucket 1 of 20 before the fix; on
     Windows that test alone was 0 of 25 on each, run 38162765663; the
     old-pacing log reads `"range": "bytes=1572864-1703935"`). The
     first fix for it, `afterStop()` (head `ba4fb1ec`), is **superseded by the
     entry at the end of this Log**: it took the measuring point after `await
-media.done`, which in the engine test is about 3.1 s after the abort, not 100
+    media.done`, which in the engine test is about 3.1 s after the abort, not 100
     ms, so it left that test and the others blind to a request opened in that
     span, and gate 1 failed it. The Log sentence that said it "waits 100 ms
     before the measuring point" was true of the two feeder tests only.
@@ -385,14 +385,14 @@ media.done`, which in the engine test is about 3.1 s after the abort, not 100
     and 12 to 25, `FAIL` in run 11, 24 of 25 (run 38168166619). Run 11 failed
     two tests that share a runner stall visible in the same log: the proxy test
     (`expected 3 to be greater than 4`, a fallback `no-speedup 1635457 B/s split
-against 1906097 B/s on one`) and F9 (`parallel` for `single`), with
+    against 1906097 B/s on one`) and F9 (`parallel` for `single`), with
     `judge-single rate=305588 activeMs=536` a few seconds earlier and the F9 byte
     counts per second `5062656,5963776,7208960` where every other run has
     `...,5095424,9142272,13189120`. An earlier head (`353a7a53`, run 38166078975) was 13 of 15 on the same file for the same kind of reason (F9's
     `expected 5406720 to be greater than 10000000`, and the proxy test's `expected 0 to
-be greater than 4`, the second not explained: its log was not kept). On Linux
+    be greater than 4`, the second not explained: its log was not kept). On Linux
     the same file is 38 of 38 (`npx vitest run
-tools/downloader/engine/test/parallel-ranges.test.ts`), the cancel/size-cap
+    tools/downloader/engine/test/parallel-ranges.test.ts`), the cancel/size-cap
     tests 40 of 40 and the held-bytes test 40 of 40 after the change.
   - **What I could not show.** Why the full suite changes the timer
     resolution is a hypothesis. The 1-in-25 residual on Windows is attributed to
@@ -484,7 +484,7 @@ tools/downloader/engine/test/parallel-ranges.test.ts`), the cancel/size-cap
   - **Owner's answer, 2026-10-11** (asked by the orchestrator through
     AskUserQuestion; the owner's choice, not an agent's), on the builder's open
     decision about the held-bytes test's 1 in 25 Windows residual (`expected
-'fallen-back' to be 'parallel'`, above). Options: "Leave it at 50
+    'fallen-back' to be 'parallel'`, above). Options: "Leave it at 50
     (Recommended)" (the builder's recommendation; gate 2 gave none), "Raise
     measureMs to 100" and "speedupFloor: 0". Chosen: **Leave it at 50.** Gate 2's
     measured numbers for it, under a 15.6 ms tick model of the test origin's

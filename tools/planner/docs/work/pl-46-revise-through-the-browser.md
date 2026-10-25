@@ -234,7 +234,7 @@ half of the e2e row (no pull request existed yet to check). Nothing above
 low.** Fixed:
 
 - **The base sha was wrong.** The Log above said `02ab751`; `git rev-parse
-b667b78^` is `fb15bc9` (#269), which is also this branch's merge-base with
+  b667b78^` is `fb15bc9` (#269), which is also this branch's merge-base with
   `origin/main`. `02ab751` was this session's own environment snapshot from
   conversation start, taken before the fetch — corrected above rather than
   left standing.

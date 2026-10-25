@@ -245,7 +245,7 @@ have left both defects intact.
   the step exists to fix, surviving inside its own fix. Hoisting the list into
   its own assignment, `prs="$(gh pr list …)"`, makes the same run exit 127. And
   Build step 3 wants every claimant named, but the snippet ends `sort -u -t- -k2
--n`, and `sort -u` dedupes on the **key**, not the line: against a board
+  -n`, and `sort -u` dedupes on the **key**, not the line: against a board
   holding `repo-99` in two different pull requests it printed `PR#901 repo-99`
   once and dropped `PR#903` entirely, and an id held both merged and in a PR lost
   its PR row. The clash the sweep exists to surface was the one thing it erased.
@@ -257,7 +257,7 @@ have left both defects intact.
   **nothing at all** and exited 0. Defect 2, four ways: `gh` missing — old exit 0
   (empty), new **127**; `gh` present but 401 — old exit 0, new **1**; run outside
   a repository — old printed `repo-99` off the PR half under a `fatal: not a git
-repository` line and exited 0, new **128**; `pipefail` with unguarded greps —
+  repository` line and exited 0, new **128**; `pipefail` with unguarded greps —
   the first PR touching no ticket file aborts the loop and takes every later PR's
   ids with it. The failure injection used a stub `gh` on `PATH` (a four-PR board:
   one touching no ticket file, one holding `repo-99`, one re-touching an already
@@ -364,7 +364,7 @@ repository` line and exited 0, new **128**; `pipefail` with unguarded greps —
 
   **Parity with the shell version it replaces was checked, not assumed:** both
   return 30 merged `repo-` ids on this tip, and the new one adds `next free:
-repo-31`. `dl` → `dl-46`, `pl` → `pl-38`.
+  repo-31`. `dl` → `dl-46`, `pl` → `pl-38`.
 
   **The override produced the better artefact, and that is the note worth
   keeping.** The builder recommended filing the lift as a separate ticket and the
@@ -395,7 +395,7 @@ repo-31`. `dl` → `dl-46`, `pl` → `pl-38`.
   and the sweep stopped there, before `gh` — the command the test is about — was
   ever spawned. Reproduced by rebuilding that checkout rather than by reading the
   workflow: `git init`, `git fetch --depth 1 origin <sha>`, `git checkout
-FETCH_HEAD`, no remote-tracking refs at all; the CLI returns **128** with the
+  FETCH_HEAD`, no remote-tracking refs at all; the CLI returns **128** with the
   default rev and **127** with `--rev HEAD`, through the same `PATH` farm.
 
   **The assertion had never once observed what its name describes.** It passed
@@ -417,7 +417,7 @@ FETCH_HEAD`, no remote-tracking refs at all; the CLI returns **128** with the
 
   **Two things folded in, both earned by the incident rather than by tidiness.**
   A failed default-rev `git ls-tree` now appends what to do — `git fetch origin
-main`, or `--rev HEAD` — while keeping git's own 128, because a bare
+  main`, or `--rev HEAD` — while keeping git's own 128, because a bare
   `fatal: Not a valid object name` is the ordinary experience of anyone running
   this in a shallow clone, and legibility on failure is the entire subject of
   this ticket. It **does not** fall back to `HEAD` on its own: answering

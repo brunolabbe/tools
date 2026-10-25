@@ -391,7 +391,7 @@ That is the argument for anchors, made twice over on one page. Unanchored, an of
   merged as it stood. Theirs is merged and belongs to another session; all of
   this batch's branches are unmerged and all its own, so the renumber landed
   here. `node scripts/next-id.mjs repo` was re-run and returned `next free:
-repo-36` — `repo-34` is held by #187 and `repo-35` was taken minutes earlier by
+  repo-36` — `repo-34` is held by #187 and `repo-35` was taken minutes earlier by
   `records/repo-history-tools-09`.
 
   **`next-id.mjs` was not wrong.** The 2026-09-07 entry above records it

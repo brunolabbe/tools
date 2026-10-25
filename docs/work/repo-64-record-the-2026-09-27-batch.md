@@ -85,8 +85,8 @@ fix (`0a6ff8f`), gated by gate 8, and the pull request has since merged as
   it and carry the date and reason.
 - `node scripts/citations-gate.mjs --against origin/main`, `npm run check`,
   and `node scripts/preflight.mjs --base origin/main --title "chore(repo):
-record the 2026-09-27 batch and fold its defects into the rule pages
-(repo-64)"` each exit 0, unpiped.
+  record the 2026-09-27 batch and fold its defects into the rule pages
+  (repo-64)"` each exit 0, unpiped.
 
 ## Review
 
@@ -304,7 +304,7 @@ Two things are still wrong, and both tilt the decision.
   `history.md`'s `wrong findings` cell, item 6, and the "what went right"
   bullet — all three credited the reviewer with originating the correction.
   - **med 2, fixed.** `gh pr checks 298` and `gh pr view 298 --json
-statusCheckRollup` both name `test (windows-latest, informational)`
+    statusCheckRollup` both name `test (windows-latest, informational)`
     directly — reproduced: `gh pr checks 298 | grep -i windows` prints the
     row, `--json statusCheckRollup` returns its `conclusion`. The true
     mechanism is that a gate and preflight run before any CI has results at
@@ -377,7 +377,7 @@ statusCheckRollup` both name `test (windows-latest, informational)`
   Verified after all fixes: `npm run check` exit 0;
   `node scripts/citations-gate.mjs --against origin/main` exit 0;
   `node scripts/preflight.mjs --base origin/main --title "chore(repo): record
-the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
+  the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
   exit 0.
 
 - 2026-09-27 — Gate 2 (CONCERNS) landed. Gate 1 withdrawn and re-landed from
@@ -387,7 +387,7 @@ the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
   sentences this same round _corrected_, not merely moved, so a
   coordinate-only repoint was not the right remedy; the citation goes back to
   the reviewer, per `records.md`'s multi-round paragraph. `review-record.mjs
---verify` on the corrected copy exits 0. Gate 2 itself spliced with
+  --verify` on the corrected copy exits 0. Gate 2 itself spliced with
   `--gate 2`, verbatim; the tool's own disclosure note is non-empty (a blank
   line oxfmt inserted before a bullet list, no word changed):
 
@@ -405,7 +405,7 @@ the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
   ```
 
   `node scripts/review-record.mjs --verify docs/work/repo-64-record-the-2026-09-27-batch.md
-<gate 2 file> --gate 2` exits 0 once committed.
+  <gate 2 file> --gate 2` exits 0 once committed.
 
 - 2026-09-27 — Gate 2 (CONCERNS) fixed. Every finding reproduced before
   changing anything; none refuted.
@@ -477,12 +477,12 @@ the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
   citation, to restore distinctness.
 
   Verified: `npm run check` exit 0; `node scripts/citations-gate.mjs
---against origin/main` exit 0; `node scripts/citations.mjs
-docs/work/repo-64-*.md --section Review --require-anchors
---require-distinct-anchors` exit 0, 0 moved, 0 unanchored, 0 unresolvable;
+  --against origin/main` exit 0; `node scripts/citations.mjs
+  docs/work/repo-64-*.md --section Review --require-anchors
+  --require-distinct-anchors` exit 0, 0 moved, 0 unanchored, 0 unresolvable;
   `node scripts/preflight.mjs --base origin/main --title "chore(repo):
-record the 2026-09-27 batch and fold its defects into the rule pages
-(repo-64)"` exit 0; `node scripts/status.mjs --json` exit 0.
+  record the 2026-09-27 batch and fold its defects into the rule pages
+  (repo-64)"` exit 0; `node scripts/status.mjs --json` exit 0.
 
 - 2026-09-27 — Gate 3 (CONCERNS) landed. Gate 2 withdrawn and re-landed from
   the reviewer's corrected copy (`review-gate2-corrected.md`), turning the
@@ -518,22 +518,22 @@ record the 2026-09-27 batch and fold its defects into the rule pages
   the option (a) bullet, the recommendation, the Why, and both correction Log
   entries to describe each phrase rather than quote it. Verified none of the
   three survives: `grep -cF "reversing an order this skill prescribes
-throughout"`, `grep -cF "commit, every round"` and `grep -cF "in both what
-it selects and what it runs"` over `repo-65` each return `0`. That is what
+  throughout"`, `grep -cF "commit, every round"` and `grep -cF "in both what
+  it selects and what it runs"` over `repo-65` each return `0`. That is what
   makes the two declarations at repo-64 lines 252 and 261 correct rather
   than a rubber stamp: the citations they excuse now fail for the reason a
   declaration exists — no commit in this branch verifies them any more, not
   merely their own coordinate having moved.
 
   Verified: `npm run check` exit 0; `node scripts/citations-gate.mjs
---against origin/main` exit 0; `node scripts/citations.mjs
-docs/work/repo-64-*.md --section Review --require-anchors
---require-distinct-anchors` exit 0, 0 moved, 0 unanchored, 0 unresolvable, 3
+  --against origin/main` exit 0; `node scripts/citations.mjs
+  docs/work/repo-64-*.md --section Review --require-anchors
+  --require-distinct-anchors` exit 0, 0 moved, 0 unanchored, 0 unresolvable, 3
   evidence entries — the three citations the two declarations above excuse;
   `node scripts/preflight.mjs
---base origin/main --title "chore(repo): record the 2026-09-27 batch and
-fold its defects into the rule pages (repo-64)"` exit 0; `node
-scripts/status.mjs --json` exit 0.
+  --base origin/main --title "chore(repo): record the 2026-09-27 batch and
+  fold its defects into the rule pages (repo-64)"` exit 0; `node
+  scripts/status.mjs --json` exit 0.
 
 - 2026-09-27 — **Correction from the orchestrator**, on `repo-65` only, from
   its own direct read of `builder.md`'s _Gates before you report_ on `main`
@@ -545,11 +545,11 @@ scripts/status.mjs --json` exit 0.
   cost only grew. No citation in `repo-64` moved. Verified: `npm run check`
   exit 0; `node scripts/citations-gate.mjs --against origin/main` exit 0;
   `node scripts/citations.mjs docs/work/repo-64-*.md --section Review
---require-anchors --require-distinct-anchors` exit 0, 0 moved, 0 unanchored,
+  --require-anchors --require-distinct-anchors` exit 0, 0 moved, 0 unanchored,
   0 unresolvable, 3 evidence entries (unchanged); `node scripts/preflight.mjs
---base origin/main --title "chore(repo): record the 2026-09-27 batch and
-fold its defects into the rule pages (repo-64)"` exit 0; `node
-scripts/status.mjs --json` exit 0.
+  --base origin/main --title "chore(repo): record the 2026-09-27 batch and
+  fold its defects into the rule pages (repo-64)"` exit 0; `node
+  scripts/status.mjs --json` exit 0.
 
 - 2026-09-27 — **Four process-change tickets filed**, on the owner's decision
   through an `AskUserQuestion` after reading the orchestrator's process
@@ -604,16 +604,16 @@ scripts/status.mjs --json` exit 0.
   Every insertion was appended after the relevant existing bullet or row
   rather than edited in place, and none moved a line any gate record cites
   without pins — confirmed with `node scripts/citations-gate.mjs --against
-origin/main` after the merge, below.
+  origin/main` after the merge, below.
 
 - 2026-09-27 — repo-79's builder repointed this record's two citations that its
   own additions to `scripts/preflight.mjs` and `scripts/test/preflight.test.ts`
   moved — coordinate only, anchor text unchanged. `node
-scripts/citations-gate.mjs --against origin/main` exit 0: 127 enforced, 0
+  scripts/citations-gate.mjs --against origin/main` exit 0: 127 enforced, 0
   failing.
 - 2026-09-28 — repo-79's gate 1 round moved the same two citations again;
   repointed once more, coordinate only. `node scripts/citations-gate.mjs
---against origin/main` exit 0: 127 enforced, 0 failing.
+  --against origin/main` exit 0: 127 enforced, 0 failing.
 - 2026-09-28 — repo-79's gate 2 fixer round moved this record's
   `scripts/preflight.mjs:641` citation again, to `:712` — coordinate only,
   anchor text unchanged. Per the orchestrator's standing rule (repo-29;
@@ -622,16 +622,16 @@ scripts/citations-gate.mjs --against origin/main` exit 0: 127 enforced, 0
 - 2026-09-28 — repo-82's `NPM_ALIASES` and fold-comment edits in
   `scripts/preflight.mjs` moved this record's `:712` citation again, to
   `:725` — coordinate only, anchor text unchanged. `node
-scripts/citations-gate.mjs --against origin/main` named it `moved` at
+  scripts/citations-gate.mjs --against origin/main` named it `moved` at
   exactly this new line before the repoint.
 - 2026-09-28 — repo-82's gate 1 fixer round, fixing the gate's low on uncaught
   `npm` abbreviations, moved this record's `:725` citation again, to `:745`
   — coordinate only, anchor text unchanged. `node scripts/citations-gate.mjs
---against origin/main` named it `moved` at exactly this new line before the
+  --against origin/main` named it `moved` at exactly this new line before the
   repoint.
 - 2026-09-28 — the same fixer round, splitting the docblock the gate's other
   low also named (misplaced above `NPM_ALIASES`, describing `COVERED`) into
   one paragraph beside each, moved this record's citation again, to `:753`
   — coordinate only, anchor text unchanged. `node scripts/citations-gate.mjs
---against origin/main` named it `moved` at exactly this new line before the
+  --against origin/main` named it `moved` at exactly this new line before the
   repoint.

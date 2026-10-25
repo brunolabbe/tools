@@ -107,9 +107,9 @@ gate round 1. Not built against.
   `expect(error.message).not.toMatch(/not set/i)` in dl-83's test "two
   candidates still standing after the choice presses nothing and fails
   AGE_CONFIRMATION_REQUIRED"; before the fix, `npx vitest run
-tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "two
-candidates still standing"` failed with `Received: "This video asks the viewer
-to confirm their age, and this server is not set to confirm it."`, after it
+  tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "two
+  candidates still standing"` failed with `Received: "This video asks the viewer
+  to confirm their age, and this server is not set to confirm it."`, after it
   passes (1 passed, 137 skipped).
 - **New copy**, none of it naming the setting: contract message "This video asks
   the viewer to confirm their age, and the server did not confirm it."; web

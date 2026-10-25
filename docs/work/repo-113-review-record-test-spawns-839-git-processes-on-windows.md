@@ -241,12 +241,12 @@ Stop after step 2 if step 1 prices step 3 at less than it costs to review.
   and rethrows). The gate's probe, every `git commit` refused by a failing
   `pre-commit` hook, run on the spec at `09ded818` and on the fixed spec: before,
   `failed 28 of 64`, 2 naming `git commit -qm the ticket, before any review /
-refused-by-gate-probe`, 17 `git rev-parse HEAD … unknown revision`, 9 other
+  refused-by-gate-probe`, 17 `git rev-parse HEAD … unknown revision`, 9 other
   messages; after, `failed 29 of 64`, `29 x Error: git commit -qm the ticket,
-before any review / refused-by-gate-probe` and no other message (the 29th is
+  before any review / refused-by-gate-probe` and no other message (the 29th is
   the no-`HEAD` test that used to pass). With the real config,
   `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 npx vitest run
-scripts/test/review-record.test.ts` → `Tests  64 passed (64)`, the test names
+  scripts/test/review-record.test.ts` → `Tests  64 passed (64)`, the test names
   unchanged (the diff touches no `test(`/`it(`/`describe(` line).
 
 - 2026-10-21 — Fixed at landing by owner choice: gate 1, second low

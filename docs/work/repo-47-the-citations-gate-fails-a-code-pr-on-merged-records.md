@@ -464,7 +464,7 @@ Round 2 was the owner's choice, made between gates: F1 kept as built, one round 
 
 - **2026-09-30 — built, option B, off `e79b04f`.** `citations-gate.mjs` gains
   `touchedPaths(repo, against, head = null)` — `git merge-base <head|HEAD>
-<against>`, then `git diff --name-only --no-renames -z` from that merge base
+  <against>`, then `git diff --name-only --no-renames -z` from that merge base
   to the working tree (or to `head`) — and `gate()` a fifth parameter,
   `touched`. An enforced record outside it has its `moved` failures taken out
   and returned as `reported`; the CLI prints them under "Moved in records this
@@ -480,7 +480,7 @@ Round 2 was the owner's choice, made between gates: F1 kept as built, one round 
     test "after the merge, a run against the merged tip itself still passes
     and still reports" squash-merges the branch and runs the fixture's own copy
     of the CLI with `--against main`: `0 path(s) changed since the merge base
-with main`, the moved citation under the heading, exit 0. **In a pull
+    with main`, the moved citation under the heading, exit 0. **In a pull
     request run**, `HEAD` is GitHub's merge of the branch into its base, so the
     merge base with the base tip is that tip and the diff is the branch's net
     change as it would land — the same set the local run computes from the
@@ -500,7 +500,7 @@ with main`, the moved citation under the heading, exit 0. **In a pull
     guards, appended to `scripts/test/citations-gate.test.ts` under
     "repo-47". Each builds a repository carrying its own copy of the gate, its
     `GRANDFATHERED` emptied, and runs that CLI end to end with `--against
-main`. `npx vitest run scripts/test/citations-gate.test.ts`: 55 of 55
+    main`. `npx vitest run scripts/test/citations-gate.test.ts`: 55 of 55
     (47 at the base). With the whole change reverted —
     `git show e79b04f:scripts/citations-gate.mjs` written over the file —
     `-t repo-47` gave 7 failed, 1 passed of 8: every fixture fails, and the
@@ -533,8 +533,8 @@ main`. `npx vitest run scripts/test/citations-gate.test.ts`: 55 of 55
     hint would land on a different test. The correct repair is a pin to
     `e79b04f`.
   - **The debt this branch leaves, by B's rule.** `node
-scripts/citations-gate.mjs --against e79b04f` on the tip: `135 enforced,
-0 failing`, `34 moved citation(s) reported in 12 record(s)` — repo-29,
+    scripts/citations-gate.mjs --against e79b04f` on the tip: `135 enforced,
+    0 failing`, `34 moved citation(s) reported in 12 record(s)` — repo-29,
     -31, -34, -41, -50, -51, -64, -65, -67, -75, -79 and -82, almost all of
     them citing `preflight.mjs` or `citations-gate.mjs` lines this change
     shifted. None is repointed, since that is exactly the cost B removed.
@@ -565,7 +565,7 @@ scripts/citations-gate.mjs --against e79b04f` on the tip: `135 enforced,
   demotion's comment now says `moved` covers both. The owner chose fixing the
   five lows now over disclosing them.
   - **F2, reproduced, then fixed.** Replacing the demotion's `const failures =
-result.failures.filter(…)` with `const failures = [];` left 144 of 144
+    result.failures.filter(…)` with `const failures = [];` left 144 of 144
     passing across `citations-gate.test.ts` and `preflight.test.ts`, run by
     `mutate-m6.mjs` in the scratch directory. The new fixture is "an untouched
     record with a moved and an unresolvable fails on the unresolvable alone":
@@ -585,10 +585,10 @@ result.failures.filter(…)` with `const failures = [];` left 144 of 144
     and now passes. My round-1 fold test's regex was widened to cross the new
     line break.
   - **F5, reproduced, then fixed.** `node scripts/citations-gate.mjs --against
-no-such-ref` printed `--against no-such-ref: no merge base with HEAD, …`
+    no-such-ref` printed `--against no-such-ref: no merge base with HEAD, …`
     and exited 1. `touchedPaths` now runs `git rev-parse --verify` first and
     throws `compareAgainst`'s own wording, `no such commit. In CI that means
-the checkout was shallow`. That fixes the CLI and preflight's check 2,
+    the checkout was shallow`. That fixes the CLI and preflight's check 2,
     since both call it before `compareAgainst`. The test "an --against ref
     that does not resolve says so, not that the merge base is missing" was red
     first, on that exact message.
@@ -605,7 +605,7 @@ the checkout was shallow`. That fixes the CLI and preflight's check 2,
     re-pad the Why relayed as cost 2 is now measured: five pins changed 12
     lines of the record, most of them table padding. The gate's exit status
     either way: pinned, `node scripts/citations-gate.mjs --against
-origin/main` exits 0 with `30 moved citation(s) reported in 11 record(s)`.
+    origin/main` exits 0 with `30 moved citation(s) reported in 11 record(s)`.
     With a Log note instead, repo-51 stays untouched, as at `3487667`, which
     exited 0 with 34 in 12 (round 1's measurement, not re-run).
   - **F6, fixed.** Rewrote `ci.yml`'s `fetch-depth: 0` comment, which named

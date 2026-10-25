@@ -372,5 +372,5 @@ becomes a loud error rather than the silent no-op it is now.
   same pin as a shorthand under it. Verified against that commit directly —
   `git show 91c117b:scripts/citations.mjs` — lines 226 and 229 read exactly
   what the 2026-09-03 entry says they did. `node scripts/citations.mjs
-docs/work/repo-14-....md --displaced-since origin/main` now reports 0
+  docs/work/repo-14-....md --displaced-since origin/main` now reports 0
   displaced for this record.

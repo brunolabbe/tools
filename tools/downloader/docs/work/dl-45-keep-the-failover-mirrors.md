@@ -237,7 +237,7 @@ Every other coordinate above was re-resolved line by line against the same tip a
   field and a note on `displayKey`. They are repointed here rather than left to
   rot, which is the whole argument the paragraph above makes: a coordinate is
   only machine-verifiable while it is machine-verified, and `node
-scripts/citations.mjs` on this file reported both as MOVED, with the anchor
+  scripts/citations.mjs` on this file reported both as MOVED, with the anchor
   text unchanged, before this edit. **The gate record above is deliberately not
   repointed.** It is pinned to tip `e3d065e` and names it, so its coordinates are
   correct against the tree it reviewed; rewriting them against a later tree would
@@ -274,7 +274,7 @@ scripts/citations.mjs` on this file reported both as MOVED, with the anchor
   needs it to satisfy its zod counterpart. Nothing beyond that shape was needed,
   so no wider contract question was opened. `mediaVariantSchema` grew the
   matching `z.array(z.string().min(1)).optional()`; the `satisfies
-z.ZodType<MediaVariant>` would have compiled without it and the field would
+  z.ZodType<MediaVariant>` would have compiled without it and the field would
   have been stripped at every boundary the contract guards, silently, including
   the job row read back out of SQLite — so there is a parse test rather than
   only the type.

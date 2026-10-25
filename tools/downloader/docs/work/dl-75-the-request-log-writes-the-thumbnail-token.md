@@ -133,7 +133,7 @@ fix costs one line.
   `npx vitest run tools/downloader/api/test/logging.test.ts` gives
   `Tests  3 failed | 46 passed (49)`, the three being the two new describe tests
   (`expected [ Array(1) ] to deeply equal []`, `expected [ …(3) ] to deeply equal
-[]`) and `redactLoggedUrl > replaces the capability segment and nothing else`
+  []`) and `redactLoggedUrl > replaces the capability segment and nothing else`
   (`expected '/api/thumbnail/abc' to be '/api/thumbnail/[redacted]'`). Restored,
   the file is `49 passed (49)`.
   **Folded in:** the stale "only URL … whose path segment is a secret" sentence in

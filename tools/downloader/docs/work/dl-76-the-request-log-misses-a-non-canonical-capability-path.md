@@ -225,10 +225,10 @@ this ticket.
 
   **Which 404 shapes are covered: all five**, on both routes, by
   `logging.test.ts > a capability token never reaches a log line, however its path is
-spelled` (`a doubled leading slash`, `a doubled slash inside the prefix`, `an
-encoded slash before the token`, `an upper-cased route`, `a doubled slash before
-the token`), plus every other shape above, the wire-only ones under `on a real
-socket`. **Left open, named:** a spelling no normaliser would turn into the route
+  spelled` (`a doubled leading slash`, `a doubled slash inside the prefix`, `an
+  encoded slash before the token`, `an upper-cased route`, `a doubled slash before
+  the token`), plus every other shape above, the wire-only ones under `on a real
+  socket`. **Left open, named:** a spelling no normaliser would turn into the route
   (a NUL or a Unicode confusable inside the route name, more than three layers of
   encoding), which reaches no handler and so can only land a token the caller chose
   to mangle in a 404 line; and a credential carried in the query string, which is
@@ -247,8 +247,8 @@ socket`. **Left open, named:** a spelling no normaliser would turn into the rout
   **Red before green.** 40 of 94 in `logging.test.ts` fail against the base
   `request-log.ts` (restored from `origin/main`, test file as written), 0 of 94
   after. The two the ticket names, `on /api/thumbnail/:token > an encoded first
-letter of the route` and the `files` twin, fail on `expected [ Array(1) ] to deeply
-equal []` with the `request` line's `url":"/api/%74humbnail/<t>"` in it. A first
+  letter of the route` and the `files` twin, fail on `expected [ Array(1) ] to deeply
+  equal []` with the `request` line's `url":"/api/%74humbnail/<t>"` in it. A first
   red run of the socket cases failed for the wrong reason (a misused `waitFor`) and
   was not counted; the 40 is the second run, after that was fixed.
 

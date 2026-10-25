@@ -180,7 +180,7 @@ New, in lines this round touched:
   `unanchored`, exit 0, on both — the coordinates still resolve, so nothing
   noticed the insertion. At head, the same fixture with
   `--displaced-since <the pre-insertion sha>` reports `DISPLACED
-src/tls.ts:2-3`, `exit 128 — 1 displaced`, naming the line and both versions'
+  src/tls.ts:2-3`, `exit 128 — 1 displaced`, naming the line and both versions'
   text. The equivalent gate-level reproduction, a record under
   `tools/planner/docs/work/` (not `docs/work/`, to hit the second half of
   `SCOPE.records`): `checkRecord`/`gate`/the CLI all report the same citation
@@ -188,8 +188,8 @@ src/tls.ts:2-3`, `exit 128 — 1 displaced`, naming the line and both versions'
   Both fixtures are in the test suite, not only here — see `Done when` below —
   and a mutation check confirmed each one goes red: with `checkDisplacement`'s
   call site replaced by a bare `null`, `npx vitest run
-scripts/test/citations.test.ts` failed 2 of 99 and `npx vitest run
-scripts/test/citations-gate.test.ts` failed 3 of 40, all five the tests this
+  scripts/test/citations.test.ts` failed 2 of 99 and `npx vitest run
+  scripts/test/citations-gate.test.ts` failed 3 of 40, all five the tests this
   ticket added; restored, both files are green again (99/99, 40/40).
 
   Fold-in considered and declined: repo-47 ("the citations gate fails a code PR
@@ -209,8 +209,8 @@ scripts/test/citations-gate.test.ts` failed 3 of 40, all five the tests this
   (which was already `moved`, not `unanchored`, so `--displaced-since` would not
   have caught it even if run; `moved` is `citations.mjs`'s pre-existing,
   anchor-based mechanism for exactly this case). `node scripts/citations.mjs
-docs/work/repo-52-....md --section Review --require-anchors
---require-distinct-anchors` reported `0 verified, 7 moved` before repointing
+  docs/work/repo-52-....md --section Review --require-anchors
+  --require-distinct-anchors` reported `0 verified, 7 moved` before repointing
   and `7 verified, 0 moved — exit 0` after; the six distinct `file:line` tokens
   (`scripts/test/citations.test.ts` at 2354, 2370, 2323, 2413 and
   `scripts/citations.mjs` at 1209 twice, 1170) were repointed to the lines the
@@ -228,9 +228,9 @@ docs/work/repo-52-....md --section Review --require-anchors
   smaller, contained correction did not fit a paragraph whose whole reasoning
   was the thing to withdraw, so each is marked as withdrawn in place and stands
   prose instead of marked in the old one. `git fetch
-origin refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back
+  origin refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back
   reachable — confirmed ancestors of `FETCH_HEAD` by `git merge-base
---is-ancestor`, all three.
+  --is-ancestor`, all three.
 
   **Method, corrected.** The first pass copied this branch's `citations.mjs`
   over a `git worktree add --detach` checkout of the historical tip and ran the
@@ -241,14 +241,14 @@ origin refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back
   historical line numbers against content that commit never held, which is
   exactly what produced the bogus `repo-35` figure below. The fix costs nothing
   extra: extract the record's own text at the historical tip with `git show
-<tip>:<path>`, then run this branch's own `citations.mjs` against that
+  <tip>:<path>`, then run this branch's own `citations.mjs` against that
   extracted copy with `--rev <tip> --displaced-since fdafd1a`, from this
   worktree, untouched — `--rev` already resolves every _other_ citation's "now"
   side against `<tip>`'s real tree via `git show`, which is what it is for, and
   nothing in this repository's checkout is overwritten to get there.
 
   **Pin count, corrected.** `git show 44196c1 -- docs/work | grep "^+" | grep -o
-'@fdafd1a' | wc -l` gives **23**, not the ~~5, 1, 2, 7, 6 = 21~~ the first
+  '@fdafd1a' | wc -l` gives **23**, not the ~~5, 1, 2, 7, 6 = 21~~ the first
   pass counted with `grep -c` — which counts _matching lines_, and `repo-35`'s
   diff carries two lines with two pins each. Per record: `repo-21` 5,
   `repo-32` 1, `repo-35` 4, `repo-38` 7, `repo-48` 6. `b07d506` adds one more
@@ -257,7 +257,7 @@ origin refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back
   ticket.
 
   **Displaced count, corrected.** Re-run with the fixed method — `--rev
-5c517d3 --displaced-since fdafd1a` for the first five records' extracted
+  5c517d3 --displaced-since fdafd1a` for the first five records' extracted
   text, `--rev 44196c1 --displaced-since fdafd1a` for `dl-57`'s — reports
   **29** `.claude`-page citations, unchanged from the first pass's total since
   that pass's flaw was confined to `repo-35`'s citations into
@@ -283,13 +283,13 @@ origin refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back
   figure below. The fix costs nothing extra: extract the record's own text at
   the historical tip with `git show <tip>:<path>`, then run this branch's own
   `citations.mjs` against that extracted copy with `--rev <tip>
---displaced-since fdafd1a`, from this worktree, untouched — `--rev` already
+  --displaced-since fdafd1a`, from this worktree, untouched — `--rev` already
   resolves every _other_ citation's "now" side against `<tip>`'s real tree via
   `git show`, which is what it is for, and nothing in this repository's
   checkout is overwritten to get there.
 
   **WITHDRAWN — do not cite this paragraph.** `git show 44196c1 -- docs/work |
-grep "^+" | grep -o '@fdafd1a' | wc -l` gives **23**, not the ~~5, 1, 2, 7,
+  grep "^+" | grep -o '@fdafd1a' | wc -l` gives **23**, not the ~~5, 1, 2, 7,
   6 = 21~~ the first pass counted with `grep -c` — which counts _matching
   lines_, and `repo-35`'s diff carries two lines with two pins each. Per
   record: `repo-21` 5, `repo-32` 1, `repo-35` 4, `repo-38` 7, `repo-48` 6.
@@ -312,9 +312,9 @@ grep "^+" | grep -o '@fdafd1a' | wc -l` gives **23**, not the ~~5, 1, 2, 7,
   exit 0; `npx vitest run --project repo` 481/481 (up from **471**, not 472 —
   `npx vitest run --project repo` at `a1a417b` gives 471, so this branch adds
   10, not 9); `node
-scripts/preflight.mjs --base origin/main` exit 0 after the repo-52 repoint
+  scripts/preflight.mjs --base origin/main` exit 0 after the repo-52 repoint
   (citations gate: `citation gate clean over 113 record(s), 7 grandfathered —
-checked against origin/main`).
+  checked against origin/main`).
 
 - 2026-09-26 — Gate 1 (ticket-reviewer, Opus 5.5, on `347cf4b`) returned FAIL:
   1 high, 2 med, 6 low, 2 dropped. Fixed all named findings; both drops
@@ -329,7 +329,7 @@ checked against origin/main`).
   not new debt the flag created, and failing on it would flood the corpus.
   Reproduced on the gate's own fixture (an anchored Review verifying at the
   tip, a Log citing a line an insertion displaced): `gate()` gave `1 in scope,
-0 failed` before, `1 failed, counts: {displaced: 1}` after — new tests
+  0 failed` before, `1 failed, counts: {displaced: 1}` after — new tests
   `scripts/test/citations-gate.test.ts` "gate() reads the whole record under
   displacedSince, failing only on displaced outside Review" (also asserts the
   unanchored-but-undisplaced half does not fail).
@@ -351,7 +351,7 @@ checked against origin/main`).
   "22 further into `scripts/citations.mjs`" figure for `repo-35`. Corrected
   method: extract the record's text with `git show <tip>:<path>` and run this
   branch's own `citations.mjs` against the extract with `--rev <tip>
---displaced-since fdafd1a`, from this worktree, untouched — `--rev` already
+  --displaced-since fdafd1a`, from this worktree, untouched — `--rev` already
   resolves every other citation's "now" side against `<tip>`'s real tree via
   `git show`. Recounted: `44196c1` pins 23 (`grep -o` on added lines, not
   `grep -c`, since `repo-35` carries two pins on one line), `b07d506` one more
@@ -417,11 +417,11 @@ checked against origin/main`).
 
   Verification, every exit code read directly: `npm run format` (reformatted
   files already touched); `npm run check` exit 0; `npx vitest run
-scripts/test/citations.test.ts scripts/test/citations-gate.test.ts` 144/144
+  scripts/test/citations.test.ts scripts/test/citations-gate.test.ts` 144/144
   (up from 139, five new); `npx vitest run --project repo` 486/486 (up from
   481); `node scripts/citations-gate.mjs --against origin/main` exit 0, 106
   enforced, 0 failing, 0 raised; `node scripts/citations-gate.mjs
---displaced-since origin/main` exit 0, 177 enforced, 0 failing — the three
+  --displaced-since origin/main` exit 0, 177 enforced, 0 failing — the three
   named citations resolved and the high's widened scope reaches the corpus
   clean; `node scripts/preflight.mjs --base origin/main` exit 0.
 
@@ -448,12 +448,12 @@ scripts/test/citations.test.ts scripts/test/citations-gate.test.ts` 144/144
 
   **Low — the flagged run's header and debt line still read for the
   Review-only scope.** Header now says `every section (displaced fatal
-outside "Review")` when the flag widens the read. The debt tally now sums a
+  outside "Review")` when the flag widens the read. The debt tally now sums a
   new `scopedCounts` (counts restricted to the enforced section) rather than
   the whole widened `counts`, so a grandfathered record's own, unrelated Log
   citations no longer inflate its reported debt. New test: a record with one
   real Review debt citation and one unrelated Log citation reports `{
-unanchored: 1 }` either way; reverting the tally to sum `counts` reds it at
+  unanchored: 1 }` either way; reverting the tally to sum `counts` reds it at
   `{ unanchored: 2 }`.
 
   **Low — whether a stale declaration in a Log fails under the flag: docblock
@@ -485,7 +485,7 @@ unanchored: 1 }` either way; reverting the tally to sum `counts` reds it at
   the grown file. Measured against this round's own commit `2eded7d` (this
   Log entry itself lands one commit later, so it is not citing its own sha):
   `node scripts/citations.mjs docs/work/repo-25-....md --displaced-since
-2eded7d` reports 0 displaced, 8 unanchored (of 49 references) — clean. This
+  2eded7d` reports 0 displaced, 8 unanchored (of 49 references) — clean. This
   is necessarily a same-tree comparison today — nothing has touched
   `scripts/citations.mjs` between `2eded7d` and the working tree it is read
   against — so it confirms the mechanism
@@ -499,9 +499,9 @@ unanchored: 1 }` either way; reverting the tally to sum `counts` reds it at
 
   Verification, every exit code read directly: `npm run check` exit 0; the
   two narrow specs 147/147 (up from 144, three new); `npx vitest run
---project repo` 489/489 (up from 486); `node scripts/citations-gate.mjs
---against origin/main` exit 0, 106 enforced, 0 failing, 0 raised; `node
-scripts/citations-gate.mjs --displaced-since origin/main` **exit 1, exactly
+  --project repo` 489/489 (up from 486); `node scripts/citations-gate.mjs
+  --against origin/main` exit 0, 106 enforced, 0 failing, 0 raised; `node
+  scripts/citations-gate.mjs --displaced-since origin/main` **exit 1, exactly
   and only `repo-25` failing** (1 displaced), as expected under option (b);
   `node scripts/preflight.mjs --base origin/main` exit 0.
 
@@ -509,8 +509,8 @@ scripts/citations-gate.mjs --displaced-since origin/main` **exit 1, exactly
   lines, measured — not the 28 first written here — after the imports) moved
   five of this record's `## Review` citations
   again, coordinate only, anchor text unchanged: 1108 (`if (at === -1) return
-null;`) to 1135; 1111 (`const show = (line) => normalize`) to 1138; 1098
+  null;`) to 1135; 1111 (`const show = (line) => normalize`) to 1138; 1098
   (`c.end > before.length`) to 1125; 1064 (`displaced: 128,`) to 1091; and
   1107 (`normalize(line) !== normalize(now`) to 1134. `node
-scripts/citations-gate.mjs --against origin/main` named all five `moved`
+  scripts/citations-gate.mjs --against origin/main` named all five `moved`
   at exactly these new lines before the repoint.

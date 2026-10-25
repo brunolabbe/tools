@@ -152,8 +152,8 @@ narrowly the backtick-info-string rule, not a general CommonMark fence rewrite.
   this way, per the Build's ask: with the pre-fix `extractSections` (copied
   from `origin/main` into scratch and driven directly, since the fix already
   lands in the same file otherwise), `selectSection(level2, "Log")` throws `no
-section matches "Log"`, and `planInsertion` wraps that in `cannot find the
-"## Log" heading to anchor the splice on: …` — a loud, named failure, not a
+  section matches "Log"`, and `planInsertion` wraps that in `cannot find the
+  "## Log" heading to anchor the splice on: …` — a loud, named failure, not a
   silent wrong-place insertion. No change to `review-record.mjs` was needed;
   the underlying `extractSections` fix is what removes the failure mode.
 
@@ -166,7 +166,7 @@ section matches "Log"`, and `planInsertion` wraps that in `cannot find the
   Verified: `npx vitest run scripts/test/citations.test.ts` 108/108;
   `npm run format` then `npm run check` exit 0;
   `node scripts/citations-gate.mjs --against origin/main` — `118 enforced, 0
-failing; 6 grandfathered, holding 1 unresolvable, 19 unanchored. 6
-entr(y/ies) compared against origin/main: 0 raised.`, exit 0;
+  failing; 6 grandfathered, holding 1 unresolvable, 19 unanchored. 6
+  entr(y/ies) compared against origin/main: 0 raised.`, exit 0;
   `npx vitest run --project repo` 506/506;
   `node scripts/preflight.mjs --base origin/main` exit 0.

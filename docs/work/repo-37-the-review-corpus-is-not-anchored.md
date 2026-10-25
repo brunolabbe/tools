@@ -174,7 +174,7 @@ Four checks are worth naming because each one could have failed and did not:
 
 - **The ratchet was made to fail.** Lowering `repo-1`'s entry from 16 to 15 gives
   exit 1 and names the offender — `WORSE … 16 failing, and its GRANDFATHERED
-entry allows 15` — then reverts clean. The bookkeeping is a check, not a habit.
+  entry allows 15` — then reverts clean. The bookkeeping is a check, not a habit.
 - **The repoints were checked for content, not arithmetic.** `pl-17`'s +109
   offset lands on the correct three tests rather than merely a consistent
   distance; `pl-18`'s swap was un-swapped the right way round, its old coordinate

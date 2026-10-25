@@ -173,7 +173,7 @@ charge to anyone.
 - 2026-10-18 — Round 1, gate 1's F1 (med). **The question:** a household that
   _loads_ with one member (or none) still got the two-person form: "This was the
   other person's", "The other's", and a ticked box filed `destination.chargedTo:
-null`, the payer's own shared line, with nothing said. The lines that compute
+  null`, the payer's own shared line, with nothing said. The lines that compute
   it were untouched by this branch (inherited), but it is the same wrong output
   from a partial member list, in the same file. **Options:** (a) fix it on this
   branch, recommended; (b) file it as its own ticket. **Answer:** owner,

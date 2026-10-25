@@ -156,17 +156,17 @@ owner allowed engine options for this on 2026-10-12, with defaults unchanged.**
   are not.
   - **The defaults were pinned first, against unchanged source.**
     `npx vitest run tools/downloader/engine/test/kill-grace.test.ts
-tools/downloader/engine/test/ffmpeg-args.test.ts` printed `Tests  1 failed |
-33 passed (34)`: the three `-reconnect_delay_max 10` pins and the two
+    tools/downloader/engine/test/ffmpeg-args.test.ts` printed `Tests  1 failed |
+    33 passed (34)`: the three `-reconnect_delay_max 10` pins and the two
     default-grace tests passed, and the one test that passes `killGraceMs` failed
     with `expected 3014.937724 to be less than 2000`, because nothing yet read the
     option. After the change all 44 of the three files (`kill-grace`,
     `ffmpeg-args`, `config`) pass.
   - **Each pin can fail.** With the grace constant at 1000 the grace test run
     prints `× is 3000 ms when nothing is passed` and `expected [ 'SIGTERM',
-'SIGKILL' ] to deeply equal [ 'SIGTERM' ]`. With the reconnect constant at 5
+    'SIGKILL' ] to deeply equal [ 'SIGTERM' ]`. With the reconnect constant at 5
     (both mutations in one run) the three files print `Tests  5 failed | 39
-passed (44)`: the config test, the three argv pins and the NaN fallback.
+    passed (44)`: the config test, the three argv pins and the NaN fallback.
     Both restored (`grep -n "DEFAULT_KILL_GRACE_MS =" …/kill.ts` prints
     `= 3000`, and the reconnect constant `= 10`).
     The first version of the grace pin asked whether the child was still alive at

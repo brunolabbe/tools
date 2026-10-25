@@ -246,7 +246,7 @@ Gated by Sonnet 5 (`claude-sonnet-5`). The builder ran Opus — **inferred, not 
   finding.** `dl-32`'s decision was answered by the owner in this session — remove
   the list route — but that answer exists only in a dispatch prompt, not on
   `dl-32`'s page. Its file still reads `## The decision this ticket exists to
-force`. It was left `ready`, which is now the true statement about whether it
+  force`. It was left `ready`, which is now the true statement about whether it
   can be dispatched and the false one about what its page says, and this ticket
   had no authority to write somebody else's answer onto their page along with a
   reason it does not have. It is handed back to the orchestrator as options.
@@ -309,7 +309,7 @@ force`. It was left `ready`, which is now the true statement about whether it
   **Done when 3 was widened, deliberately, and it is the one judgement call
   here.** `--ready` reports **everything** it withheld, not only the rows this
   ticket newly removed: `needs-decision` gets `status is "needs-decision", so it
-waits on a human…` and a dependency-blocked ticket gets `waits on <ids>`. A
+  waits on a human…` and a dependency-blocked ticket gets `waits on <ids>`. A
   notice naming one of two reasons re-creates the defect for the other, and a
   reader would take the list for complete. The cost is one existing test: the
   `test.each` table asserting stderr for every mode beside a dangling dependency
@@ -372,7 +372,7 @@ waits on a human…` and a dependency-blocked ticket gets `waits on <ids>`. A
   decision and an unmet dependency — untested at that function, covered only
   through `--show`'s closing line. Added
   `withheldFromReady reports the decision, not the dependency, when a ticket
-carries both`, and checked it is not tautological by inverting the ternary's
+  carries both`, and checked it is not tautological by inverting the ternary's
   branches and confirming the new test is the one that catches it:
 
   ```

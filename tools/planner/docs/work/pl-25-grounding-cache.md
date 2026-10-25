@@ -393,7 +393,7 @@ Also fixed, all from the gate:
   existed. It names `locateKey` and `travelKey` now — worth doing before the
   migration ships, since a shipped one is never edited again.
 - **A test asserted the opposite of its own name** (`…rather than answering
-null` asserting `toBeNull()`). It is the first thing a pl-27 author would have
+  null` asserting `toBeNull()`). It is the first thing a pl-27 author would have
   read. Gone, along with the "without a cache in the way" test, whose path the
   type system now forbids.
 

@@ -167,10 +167,10 @@ The owner chose on 2026-10-02 to fix H1 in this round rather than file it. The v
   `tailBalanceCents`), and two codes, `STATEMENT_ROW_CONFLICT` and
   `STATEMENT_BEFORE_HISTORY`, both 422 in `api/src/http-errors.ts`.
   - **The suite passes.** `npm test -- --project ledger` → `Test Files 13 passed
-(13)`, `Tests 179 passed (179)`; the four files this ticket touches,
+    (13)`, `Tests 179 passed (179)`; the four files this ticket touches,
     `npx vitest run` on `api/test/statements.test.ts`, `schema.test.ts`,
     `http-errors.test.ts` and `web/test/statement-paste.test.tsx` → `Tests 42
-passed (42)`. `npm run check` exit 0.
+    passed (42)`. `npm run check` exit 0.
   - **The tests can fail.** Each mutation was applied to `api/src/statements.ts`
     alone, run with `npx vitest run tools/ledger/api/test/statements.test.ts`:
     dropping `category` from the compared fields fails 1 of 20 (the category
@@ -209,7 +209,7 @@ passed (42)`. `npm run check` exit 0.
     70 865 bytes (about 140 each, a real description is longer) and the account
     makes about a hundred rows a year, so the old cap held a few years at best
     and the first paste may be the whole history. `a paste bigger than the old
-64 KiB body cap is stored` holds it.
+    64 KiB body cap is stored` holds it.
   - **Error details no longer reach the log as values.** lg-1's gate 1 dropped a
     finding saying the details carry the row's description and that "whether they
     reach a log is lg-2 to decide". They did: the error handler logged
@@ -300,7 +300,7 @@ passed (42)`. `npm run check` exit 0.
     `STATEMENT_ROW_CONFLICT` ("cannot be told apart"). At the new head the same
     probe gives `X, Retour, X` → `200 rowsAdded 3`, and `X` alone → 422
     `STATEMENT_ROW_CONFLICT` naming both readings (`1 already stored and 0 new,
-or 0 already stored and 1 new`), nothing stored. **That second result is
+    or 0 already stored and 1 new`), nothing stored. **That second result is
     a refusal, not a store, on purpose:** the paste opens from the stored tail
     _and_ is the stored first row, which is the ambiguity decision 1 says to
     refuse (the first draft of the new test expected a 200 and was wrong about the
@@ -361,9 +361,9 @@ or 0 already stored and 1 new`), nothing stored. **That second result is
     a shared stretch that is not the stored one) passes on both: it holds the
     old behaviour through the rewrite.
   - **Gates at this head.** `npm test -- --project ledger` exit 0, `Test Files 13
-passed (13)`, `Tests 195 passed (195)`; `npm run check` exit 0; `node
-scripts/citations-gate.mjs --against 24acb04` exit 0, `144 enforced, 0
-failing`, `0 raised`. The probe's `P3d` case throws in its own reading of
+    passed (13)`, `Tests 195 passed (195)`; `npm run check` exit 0; `node
+    scripts/citations-gate.mjs --against 24acb04` exit 0, `144 enforced, 0
+    failing`, `0 raised`. The probe's `P3d` case throws in its own reading of
     `.error.code` now, because one of its three pastes succeeds: that is the fix,
     and the three are asserted in `statements.test.ts` instead.
 
@@ -473,7 +473,7 @@ failing`, `0 raised`. The probe's `P3d` case throws in its own reading of
     row's day, rows running into it" was already the straddling-paste test.
   - **The test can fail.** `npx vitest run tools/ledger/api/test/statements.test.ts`
     with the five new tests and `1234701`'s source: `Tests 1 failed | 39 passed
-(40)`, the H1 case; with the fix, `Tests 40 passed (40)`. The other four are
+    (40)`, the H1 case; with the fix, `Tests 40 passed (40)`. The other four are
     regressions held through the change, not red.
   - **H2, corrected.** Decision 7's entry listed two of F7's costs as costs of the
     oversize mapping. It is rewritten in place and marked corrected, and the two

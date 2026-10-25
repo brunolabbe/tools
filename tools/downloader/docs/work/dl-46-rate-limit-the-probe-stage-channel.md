@@ -294,7 +294,7 @@ unchanged through `76076ac`) · manual defect hunt at medium, self-run (no
 
   - **Behind CGNAT, with `TRUST_PROXY` off, a crowd sharing one address shares
     one bucket.** True, and **this endpoint adds nothing to it**: `POST
-/api/probe` has had the identical key and the identical number since dl-6,
+    /api/probe` has had the identical key and the identical number since dl-6,
     and the two are spent one-for-one, so the analysis behind a throttled
     narration is being refused in the same breath. There is no configuration in
     which this bucket bites a real user that the probe bucket was not already

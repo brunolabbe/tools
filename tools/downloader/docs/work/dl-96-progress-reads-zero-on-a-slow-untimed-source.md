@@ -221,7 +221,7 @@ before it was acted on.
 
 - **F1, fixed.** Reproduced on `ffmpeg-static` 7.0.2 with a noise-corrupted
   H.264 file: `[vist#0:0/h264 @ …] [dec:h264 @ …] [warning] corrupt decoded
-frame`. The prefix group now repeats (`*`). A captured line is pinned by a new
+  frame`. The prefix group now repeats (`*`). A captured line is pinned by a new
   `StderrLevels` test, which fails with the old `?`.
 - **F2, accepted and documented: the owner's decision, 2026-10-07.** A crafted
   metadata key can forge a tagged line for its own job: its failure

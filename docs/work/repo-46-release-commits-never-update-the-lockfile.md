@@ -211,7 +211,7 @@ nothing goes red instead of drifting. D and E are not taken, and B is not taken.
 Two facts changed between filing and answering, both measured on `a084170`:
 
 - **There are three tools now.** `tools/ledger` is a third `release-type:
-simple` package with the same `api/package.json` stamp, so A adds three
+  simple` package with the same `api/package.json` stamp, so A adds three
   lockfile entries, not two.
 - **`jsonpath-plus` reads a bracketed key with `/` in it.** In a scratch
   install of `jsonpath-plus@10`, the range `release-please@latest` declares
@@ -434,7 +434,7 @@ _Re-issued at `f4c6f82` with its words, rows and verdicts unchanged. Round 3 cor
   already matches every `api/package.json` (downloader 0.7.0, planner 0.7.0,
   ledger 0.0.0) — confirmed with a scratch `git archive` extraction and
   `npm install --package-lock-only --offline --ignore-scripts --no-audit
---no-fund`, `diff` against the pre-install copy exits 0. This is the same
+  --no-fund`, `diff` against the pre-install copy exits 0. This is the same
   "in sync only because an unrelated commit rewrote it" state the 2026-09-28
   entry names; #284 and #294 are still open and still touch no lockfile
   (unchanged from that entry), so the drift is still live and will land on
@@ -458,14 +458,14 @@ _Re-issued at `f4c6f82` with its words, rows and verdicts unchanged. Round 3 cor
   committed that as `stale` (simulating a release commit that stamped
   `api/package.json` but not the lockfile), then ran C's two commands.
   Against `stale`: `npm install --package-lock-only --offline
---ignore-scripts --no-audit --no-fund` exits 0 and rewrites the line back to
+  --ignore-scripts --no-audit --no-fund` exits 0 and rewrites the line back to
   `0.7.0`, then `git diff --exit-code package-lock.json` exits 1 (red),
   printing exactly that one-line diff. Committing that fix and re-running
   both commands: `git diff --exit-code package-lock.json` exits 0 (green).
   Left no trace in this worktree — the throwaway repo lived under this
   ticket's scratch directory and this worktree's own `package-lock.json` was
   restored to match `HEAD` before continuing (`git diff --stat
-package-lock.json` prints nothing).
+  package-lock.json` prints nothing).
 
   **Not done, and not this ticket's to do**: `Done when` 1 and 3 need a real
   release PR after this merges, and `Done when` 1 also needs C to have run on
@@ -491,10 +491,10 @@ package-lock.json` prints nothing).
   command it does not already recognise as `npm ci` or `npm run check`
   (repo-82) — measured directly: with the raw line in place,
   `npx vitest run scripts/test/preflight.test.ts -t "deriveExtraCiCommands
-runs only what no other check already covers"` fails with `ci.yml's check
-job runs "npm install --package-lock-only …", an npm step this file does
-not recognise …`, the same error `node scripts/preflight.mjs --base
-origin/main` reported under `== ciCommands ==`. That guard is deliberate
+  runs only what no other check already covers"` fails with `ci.yml's check
+  job runs "npm install --package-lock-only …", an npm step this file does
+  not recognise …`, the same error `node scripts/preflight.mjs --base
+  origin/main` reported under `== ciCommands ==`. That guard is deliberate
   and heavily tested (12+ tests in `scripts/test/preflight.test.ts` defend
   it against exactly this shape of unrecognised npm command), so rather than
   weaken it I wrapped C's two commands, in the same order and with the same
@@ -506,8 +506,8 @@ origin/main` reported under `== ciCommands ==`. That guard is deliberate
   Updated the two tests in `scripts/test/preflight.test.ts` that assert the
   exact command list read off the real `ci.yml`
   (`extractCheckJobCommands reads this repo's own ci.yml check job, in
-order` and `deriveExtraCiCommands runs only what no other check already
-covers`) to include the new step; both pass,
+  order` and `deriveExtraCiCommands runs only what no other check already
+  covers`) to include the new step; both pass,
   `npx vitest run scripts/test/preflight.test.ts` — 87 passed (87).
 
   This is a judgment call, not something I could ask about mid-build, and I
@@ -525,20 +525,20 @@ covers`) to include the new step; both pass,
   that three already-merged records cite by line number** (repo-65, repo-79,
   repo-82), a `+2`-line shift from the two array entries I added. Repointed
   all 25 affected citations (7 + 16 + 2) to `scripts/test/preflight.test.ts@e79b04f:<original
-line>`, `e79b04f` being the base I branched from, which the citations-gate
+  line>`, `e79b04f` being the base I branched from, which the citations-gate
   itself confirms still holds every one of those lines' content unchanged —
   the same repair already applied above to the citations `.github/workflows/ci.yml`
   and `release-please-config.json` displaced. `node
-scripts/citations-gate.mjs --against origin/main`, re-run as the last
+  scripts/citations-gate.mjs --against origin/main`, re-run as the last
   action after the final `npm run format`: `135 enforced, 0 failing; 6
-grandfathered, holding 1 unresolvable, 19 unanchored. 6 entr(y/ies)
-compared against origin/main: 0 raised.`
+  grandfathered, holding 1 unresolvable, 19 unanchored. 6 entr(y/ies)
+  compared against origin/main: 0 raised.`
 
   `npm run check`: exit 0. `npx vitest run --project repo`: 620 passed
   (620). `node scripts/preflight.mjs --base origin/main --title "fix(repo):
-stamp the lockfile on release and catch drift in CI (repo-46)"`: `check`
+  stamp the lockfile on release and catch drift in CI (repo-46)"`: `check`
   ok (`npm run check`, `npm test -- --project repo`, `npm test -- --project
-downloader` all ok — the downloader suite ran because this branch also
+  downloader` all ok — the downloader suite ran because this branch also
   touches `tools/downloader/docs/work/dl-72-…md`), `ciCommands` ok (all
   three commands, including the new script), `citations` ok (0 failing),
   `review` ok, `mergeTree` ok against both open release PRs (#284, #294)
@@ -567,7 +567,7 @@ downloader` all ok — the downloader suite ran because this branch also
 
   1. **Split the dl-72 repoint into its own tiny pull request**, titled with
      a hidden type scoped to downloader (`docs(downloader): repoint dl-72's
-citation displaced by repo-46's config edit`), landing separately from
+     citation displaced by repo-46's config edit`), landing separately from
      this one. Keeps this branch's own title (`fix(repo): …`) accurate and
      clean — its own diff would then touch no `tools/` path at all — at the
      cost of a second small pull request whose merge has to be sequenced so
@@ -609,7 +609,7 @@ citation displaced by repo-46's config edit`), landing separately from
   - **The title decision, answered by the owner:** rebase onto `main` after
     repo-47 merges, drop only the dl-72 repoint (keep the nine `repo-`
     pins), and land as `fix(repo): stamp the lockfile on release and catch
-drift in CI (repo-46)`. repo-47 makes the citations gate enforce only
+    drift in CI (repo-46)`. repo-47 makes the citations gate enforce only
     records a branch changes, so an untouched dl-72 is excused. This
     overrode the builder's option 1 and the gate's option 2 (`ci(repo):`).
     **Not done yet, on purpose:** the rebase waits for repo-47's merge, and
@@ -647,12 +647,12 @@ drift in CI (repo-46)`. repo-47 makes the citations gate enforce only
     and never runs `git`. **Red first against round 1's script**
     (`git show HEAD:scripts/check-lockfile-sync.mjs` swapped in, then
     restored): 5 of 6 fail, `npx vitest run
-scripts/test/check-lockfile-sync.test.ts`. Two of the five (in sync, and
+    scripts/test/check-lockfile-sync.test.ts`. Two of the five (in sync, and
     drifted) fail there with exit 129 because round 1 ran `git diff` in the
     fixture, which is not a git repository; that is not the behaviour they
     are meant to pin, so the honest red cases are the other three — the
     hidden lockfile rewritten (`expected '{ "name": "fx", …' to be
-'sentinel\n'`), the temp-directory case, and the missing spawn-error
+    'sentinel\n'`), the temp-directory case, and the missing spawn-error
     message. Green now: 6 of 6.
   - **L1** Log claims corrected in place above (each marked "corrected in
     round 2"): "two steps" is one step; the dl-72 repoint follows from Build
@@ -675,12 +675,12 @@ scripts/test/check-lockfile-sync.test.ts`. Two of the five (in sync, and
     itself is **unmeasured**: the check job runs on Linux and the tested
     path is the injected error.
   - `npm run check` exit 0. `npx vitest run
-scripts/test/check-lockfile-sync.test.ts scripts/test/preflight.test.ts`:
+    scripts/test/check-lockfile-sync.test.ts scripts/test/preflight.test.ts`:
     93 passed (93). `npm test -- --project repo`: 626 passed (626), 620
     before. `node scripts/citations-gate.mjs --against origin/main` exit 0,
     `135 enforced, 0 failing`. `node scripts/preflight.mjs --base origin/main --title "fix(repo): stamp the lockfile on release and catch drift in CI (repo-46)"` at `d8fdb3d`: exit 8, `title` only
     (the expected dl-72 failure, unchanged); `check`, `ciCommands` (incl. `ok
-node scripts/check-lockfile-sync.mjs`), `citations` and `mergeTree` ok,
+    node scripts/check-lockfile-sync.mjs`), `citations` and `mergeTree` ok,
     `mergeTree` now also against #325. Across that whole run the shared
     `node_modules/.package-lock.json` read `2026-09-30 01:23:14.500764343` /
     `d432f0b6…c80e` before and after.
@@ -693,16 +693,16 @@ node scripts/check-lockfile-sync.mjs`), `citations` and `mergeTree` ok,
     exit 0.
   - **The dl-72 repoint is dropped**, as the owner decided: the file is
     restored to its content on `origin/main`. `git diff --name-only
-origin/main` over the working tree, filtered for `^tools/`, matches 0
+    origin/main` over the working tree, filtered for `^tools/`, matches 0
     lines. Preflight's `title` now reads `ok "fix(repo): stamp the lockfile
-on release and catch drift in CI (repo-46)" — type and paths agree`.
+    on release and catch drift in CI (repo-46)" — type and paths agree`.
     `node scripts/citations-gate.mjs` reports dl-72 as `MOVED`
     (`release-please-config.json:33`) under "Moved in records not changed
     since the merge base", reported and not failed, exactly as the owner's
     dry run predicted.
   - **Pins changed, only what the gate failed in records this branch edits**
     (first run after the merge: 4 records, 20 citations; after: `137
-enforced, 0 failing`). All resolved by running the gate, at the
+    enforced, 0 failing`). All resolved by running the gate, at the
     coordinate it reported. The content is unchanged; repo-47 moved it.
     `scripts/preflight.mjs` ones pinned to `b658179` at the line the gate
     named: repo-65 record lines 173 (`1580`→`1623`), 198 (`1486`→`1529`),
@@ -731,11 +731,11 @@ enforced, 0 failing`). All resolved by running the gate, at the
     bold lead, not a heading). `quietRun` asserts
     `expect(result.error).toBeUndefined()`. **Red before:** `PATH` holding
     only `node` (`/usr/bin/node node_modules/vitest/vitest.mjs run
-scripts/test/check-lockfile-sync.test.ts`): 2 failed, 4 passed, the two
+    scripts/test/check-lockfile-sync.test.ts`): 2 failed, 4 passed, the two
     failures being `expected 1 to be +0` and `expected '' to match`. **After,
     same `PATH`:** 4 failed, 3 passed, all four failures
     `could not start npm: expected Error: spawnSync npm ENOENT … to be
-undefined`. The skip itself is **unmeasured**: it gates on
+    undefined`. The skip itself is **unmeasured**: it gates on
     `process.platform`, which I did not fake, and Windows was not run.
   - **Gate 2's first low, `diff.error`:** new last test, "a git that never
     started says so and fails, instead of reading as a clean diff".
@@ -743,20 +743,20 @@ undefined`. The skip itself is **unmeasured**: it gates on
     `if (false) {`, `npx vitest run scripts/test/check-lockfile-sync.test.ts`:
     1 failed, 6 passed; restored, 7 of 7.
   - `npm run check` exit 0. `npx vitest run
-scripts/test/check-lockfile-sync.test.ts scripts/test/preflight.test.ts`
+    scripts/test/check-lockfile-sync.test.ts scripts/test/preflight.test.ts`
     exit 0, 97 of 97. `npm test -- --project repo` exit 0, 648 of 648
     (before the last lint-only move of a test helper to module scope; the two
     spec files above were re-run after it). `node scripts/citations-gate.mjs
---against origin/main` exit 0, `137 enforced, 0 failing`. `node
-scripts/preflight.mjs --base origin/main --title "fix(repo): stamp the
-lockfile on release and catch drift in CI (repo-46)"` at `d7a9b22`:
+    --against origin/main` exit 0, `137 enforced, 0 failing`. `node
+    scripts/preflight.mjs --base origin/main --title "fix(repo): stamp the
+    lockfile on release and catch drift in CI (repo-46)"` at `d7a9b22`:
     **exit 0**, every check ok, title included, `mergeTree` ok against #294
     and #284 (#325 has merged).
 
 - **2026-10-05 — `awaiting` added, from the review of repo-88's answer (PR
   #357).** Gate 3 left Done when 1 and 3 waiting on a release, and the ticket
   landed `done` with nothing recording that. `git log c07f984..origin/main
---grep='^chore(.*): release'` printed nothing today, so no release has
+  --grep='^chore(.*): release'` printed nothing today, so no release has
   happened since #328 and both lines are still owed. Whoever reads the first
   release commit deletes the line.
 
@@ -769,5 +769,5 @@ lockfile on release and catch drift in CI (repo-46)"` at `d7a9b22`:
   CI run's `check` job ran `node scripts/check-lockfile-sync.mjs` with
   conclusion `success` (`gh run view 37148143142 --json jobs`). **3:** in a
   detached scratch worktree at `b0cb014b`, `npm install --package-lock-only
---ignore-scripts` exited 0 and `git diff --stat` printed nothing. All four
+  --ignore-scripts` exited 0 and `git diff --stat` printed nothing. All four
   later release commits (#294, #337, #369, #360) also touch the lockfile.

@@ -463,10 +463,10 @@ export function packageGraph(repo, tool) {
     }
 
     const pkgRoot = path.join(root, dir);
-    const namePatterns = [...nameToDir].map(([name, other]) => /** @type {const} */ ([
-      new RegExp(`${escapeRegExp(name)}(?![\\w-])`, "u"),
-      other,
-    ]));
+    const namePatterns = [...nameToDir].map(
+      ([name, other]) =>
+        /** @type {const} */ ([new RegExp(`${escapeRegExp(name)}(?![\\w-])`, "u"), other]),
+    );
     for (const file of scannableFiles(pkgRoot)) {
       let text;
       try {

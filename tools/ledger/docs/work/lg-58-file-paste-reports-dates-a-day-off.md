@@ -119,8 +119,8 @@ CI on `add2fb9f`, one read at the end: 9 of 9 pass (`CodeQL`, `changes`, `check`
   Build item 2 and the owner's choice on 2026-10-18 to file a new lg- ticket
   rather than add the field in lg-40's branch or leave it unreported (lg-40's
   Log, round 1). Reproduction on `origin/main`, `git show
-origin/main:tools/ledger/contract/src/api.ts | grep -n -A5
-'ImportStatementReport'`, which lists the interface with the three fields and
+  origin/main:tools/ledger/contract/src/api.ts | grep -n -A5
+  'ImportStatementReport'`, which lists the interface with the three fields and
   no date field. lg-40's branch has the same interface.
 
 - 2026-10-21 — builder (Opus 5.5), built on `main` at `2d1b22bb` (lg-61
@@ -178,7 +178,7 @@ origin/main:tools/ledger/contract/src/api.ts | grep -n -A5
   workbook. The workbook's date was kept." For two or more rows the line
   starts "N rows already stored are". Then a list labelled "Dates that
   differ", one item per row, `-12.34 $: the bank says 2026-03-06, the
-workbook 2026-03-05`. It names both dates: the bank's alone would not say
+  workbook 2026-03-05`. It names both dates: the bank's alone would not say
   what was kept, and the workbook's alone would not find the row on the
   statement. It offers no action, because there is none. A stored row is
   never edited.
@@ -188,8 +188,8 @@ workbook 2026-03-05`. It names both dates: the bank's alone would not say
   other on the stored step.
 
   **Build 5, logs.** No log line was added: `git diff 2d1b22bb --
-tools/ledger/api/src tools/ledger/web/src tools/ledger/contract/src | grep
--cE "^\+.*(log\.|logger|console)"` → 0. The test "no log line carries a date
+  tools/ledger/api/src tools/ledger/web/src tools/ledger/contract/src | grep
+  -cE "^\+.*(log\.|logger|console)"` → 0. The test "no log line carries a date
   the report names as differing" captures every log line at debug, posts a
   day-off paste and then a refused one (so the log is shown carrying this
   route's lines, `STATEMENT_CHAIN_BROKEN`). It finds neither reported date in
@@ -306,9 +306,9 @@ tools/ledger/api/src tools/ledger/web/src tools/ledger/contract/src | grep
   of `readings` in `statements.ts`, state does not hold within a block"; remedy
   B, the three texts narrowed to say a nearby date, comments only.
   `grep -c "each beside the nearest workbook date that cutting allows"
-tools/ledger/api/src/workbook-days.ts` → 0 (1 before), and the ticket above
+  tools/ledger/api/src/workbook-days.ts` → 0 (1 before), and the ticket above
   `## Log` holds none of the old phrases (`awk '/^## Log/{exit} {print}'
-<ticket> | grep -c "nearest workbook date that cutting allows"` → 0). The
+  <ticket> | grep -c "nearest workbook date that cutting allows"` → 0). The
   `matchStretch` and `readings` docs now read "by the pairing `pairAmounts`
   finds", and the header reads "beside a nearby workbook date". No code
   changed.

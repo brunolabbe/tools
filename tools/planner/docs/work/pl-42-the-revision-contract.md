@@ -509,7 +509,7 @@ Measured with a scratch script that is not checked in. For each checked-in trip
 fixture it runs `compose` with `NOTHING_MEASURED`, then appends _n_ copies of
 that revision through `appendRevision`. Each copy has re-keyed ids and a
 `replan` operation, and the chain is validated by `planDetailSchema`. It then
-builds `PlanView` with *n*−1 diffs and validates it by `planViewSchema`. The
+builds `PlanView` with _n_−1 diffs and validates it by `planViewSchema`. The
 empty-diffs column is the smallest a diff can be. The worst-diff column has
 every parent item `removed` and every child item `added`, the largest entry
 list two revisions can produce. `node --import tsx measure.ts` printed:

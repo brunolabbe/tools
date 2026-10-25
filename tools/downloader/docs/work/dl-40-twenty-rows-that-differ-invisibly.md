@@ -165,7 +165,7 @@ and reproduced all four red-run claims plus both rung-mutant claims.**
 1. Tier dedup reverted to `unsorted` → 3 red in `ytdlp.test.ts` (39/42 pass), the
    exact tests asserting 10 URLs / 10 variants.
 2. Codec pass replaced with a no-op → `two profiles of one rung stop rendering as
-the same H.264` fails with `collapsed` reading 1 instead of 0. "Matches
+   the same H.264` fails with `collapsed` reading 1 instead of 0. "Matches
    'Baseline eaten by High' exactly."
 3. `showLanguage` forced false → the per-language test fails with `collapsed` 2
    instead of 0, and the DOM test drops from 4 radios to 2. "Matches 'loses half

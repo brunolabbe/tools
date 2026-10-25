@@ -226,7 +226,7 @@ selectors give, not something observed in a browser.
   - **The fix, `web/src/styles.css`.** `.mortgage-form .choice` becomes `.choice` (still a
     flex row, now with `min-height: 2.75rem` so the label stays the tap target the 44 px
     radio box used to be), and `input[type="radio"]` gets `width: 1.25rem; min-height:
-1.25rem; padding: 0`, the `label.check input` precedent; the global `input, select`
+    1.25rem; padding: 0`, the `label.check input` precedent; the global `input, select`
     rule is untouched. The item's name, `.items .item > input:first-child`, takes
     `flex-basis: 100%`: its own row, with price, deposit and the controls wrapping beneath;
     the 6rem basis still applies to price and deposit.

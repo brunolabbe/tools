@@ -311,7 +311,7 @@ answered 404 with a body.
     (`/api/nope`). It has its own test now.
   - **Done-when 3 was written for a surviving route** and had to be interpreted;
     the reading taken, and the weaker one declined, are recorded under `Done
-when` rather than left implicit.
+    when` rather than left implicit.
   - **`JobStore.list` was kept**, and the ticket says nothing either way. It is
     not a surface, and it is not dead: `pipeline.test.ts:525` needs it to read
     the only job's status before `POST /api/jobs` has returned an id.
@@ -331,7 +331,7 @@ when` rather than left implicit.
   **Red before green, measured rather than asserted:**
 
   - `routes.test.ts:461` — run against the unfixed source: `expected 200 to be
-404`. It reddened on the live route, not on a missing symbol.
+    404`. It reddened on the live route, not on a missing symbol.
   - `downloader/api/test/web-serving.test.ts:92` — same run, same failure: `expected 200 to be 404`.
   - `routes.test.ts:492` (the POST guard) is green before and after by
     construction, so it was **mutation-checked instead**: repointing

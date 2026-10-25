@@ -170,7 +170,7 @@ _Re-issued at `5b8daa3`, the gated sha unchanged: coordinates re-resolved, and t
   "the ledger has none today" as narrowing the Done-when. It does not; "a test
   per tool" includes the planner, whose `REDACT_PATHS` were exercised nowhere
   directly (`grep -rn "headers.authorization\|headers\['x-api-key'\]"
-tools/planner/api/test` matched nothing before this commit). Added
+  tools/planner/api/test` matched nothing before this commit). Added
   `tools/planner/api/test/redaction.test.ts`, a new file so no merged record's
   citation moves: one test per `REDACT_PATHS` entry (7) plus a
   redaction-not-deletion test, 8 in all. Red-green: deleting
@@ -186,7 +186,7 @@ tools/planner/api/test` matched nothing before this commit). Added
   files), 1525 passed / 2 skipped (1527 tests) — the same 47/47 in
   `logging.test.ts` the Done-when asks to stay unchanged, re-run directly
   too. `--project planner` 76 files, 1301 tests, all passed (75/1293 before the planner test above). `--project
-ledger` 5 files (`api/test/{config,health,logging}.test.ts`,
+  ledger` 5 files (`api/test/{config,health,logging}.test.ts`,
   `contract/test/errors.test.ts`, `web/test/vite-config.test.ts`), 25 tests,
   all passed — 4 files / 15 tests before this branch, +1 file / +10 tests from
   the new `logging.test.ts` alone (25 tests after the extension; 20 in the
@@ -218,7 +218,7 @@ ledger` 5 files (`api/test/{config,health,logging}.test.ts`,
   Fold-in: none identified. ~~No other ticket in `docs/work/` or
   `tools/*/docs/work/` names the logger~~ — **WITHDRAWN, do not cite (gate 1,
   F5): false as written.** `grep -l "logger.ts" docs/work/*.md
-tools/*/docs/work/*.md` finds ten other tickets — dl-29, dl-43, dl-53,
+  tools/*/docs/work/*.md` finds ten other tickets — dl-29, dl-43, dl-53,
   dl-56, dl-58, dl-66, pl-39, lg-3, repo-29, repo-48 — the sentence was
   written from the citations gate's output, which reads only `## Review`
   sections, and not from a grep. What stands is the narrower claim: the only
@@ -235,7 +235,7 @@ tools/*/docs/work/*.md` finds ten other tickets — dl-29, dl-43, dl-53,
   - **F1 reproduced, then fixed.** Deleting `headers.authorization`,
     `*.headers.authorization` and `*.authorization` from the downloader's
     `REDACT_PATHS` left `tools/downloader/api/test/logging.test.ts` at `47
-passed / 47`. New file `tools/downloader/api/test/redaction.test.ts` (no
+    passed / 47`. New file `tools/downloader/api/test/redaction.test.ts` (no
     existing downloader test touched): one test per entry (6) plus
     redaction-not-deletion, 7. Per-entry mutation, one entry deleted at a
     time: `*.headers.cookie`, `*.headers.authorization`, `*.cookie` and
@@ -267,19 +267,19 @@ passed / 47`. New file `tools/downloader/api/test/redaction.test.ts` (no
     `8 passed / 8`, ledger `10 passed / 10` when it is deleted).
   - **F5 fixed** above, in place: the withdrawn sentence is struck through and
     kept, with the ten tickets `grep -l "logger.ts" docs/work/*.md
-tools/*/docs/work/*.md` finds, re-derived here (same ten as the gate).
+    tools/*/docs/work/*.md` finds, re-derived here (same ten as the gate).
   - **F4 filed**, not fixed, on the owner's choice:
     `docs/work/repo-85-logger-hook-misses-msg-err-and-bindings.md` (`kind:
-fix`, `status: ready`, `difficulty: standard`, `depends_on: [repo-66]`),
+    fix`, `status: ready`, `difficulty: standard`, `depends_on: [repo-66]`),
     with the reproduction inlined as a script and its output. `node
-scripts/next-id.mjs repo` printed `next free: repo-85` before the file was
+    scripts/next-id.mjs repo` printed `next free: repo-85` before the file was
     written. Run again with the file present but uncommitted it still printed
     `repo-85`, so it does not see an uncommitted file; the id is held from the
     commit that adds it.
 
   `npm run check` exit 0. The four new or edited specs: 4 files / 37 tests
   passed (7 + 12 + 8 + 10). `npm test -- --project downloader --project
-planner --project ledger --project core`: exit 0, 177 files passed / 1
+  planner --project ledger --project core`: exit 0, 177 files passed / 1
   skipped (178), 2894 tests passed / 2 skipped (2896).
   `node scripts/citations-gate.mjs --against origin/main`: exit 0, `135
-enforced, 0 failing`.
+  enforced, 0 failing`.

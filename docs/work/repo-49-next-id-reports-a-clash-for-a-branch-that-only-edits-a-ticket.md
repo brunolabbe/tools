@@ -360,7 +360,7 @@ A re-gate of round 2, scoped to `0d9ddb8..612fb5c`. `origin/main` was still `e79
   - **A third shape was missing entirely.** `pl-46` and `pl-52` clash because
     a pull request and its own head branch are swept as two independent
     sources reading the same commits — confirmed with `gh pr view --json
-headRefName` for both PRs. Added as shape 3, with its own `Done when`
+    headRefName` for both PRs. Added as shape 3, with its own `Done when`
     coverage question, since neither existing candidate touches it.
 
   Re-ran `node scripts/next-id.mjs pl` once more before finalizing the
@@ -388,7 +388,7 @@ headRefName` for both PRs. Added as shape 3, with its own `Done when`
   `npx vitest run scripts/test/next-id.test.ts`:
   - Against the unfixed script: 4 failed of 25. The failures were the orphan
     case, the `pl-50`/`pl-47` case (`expected [ 'pl-50-count-thinking-tokens',
-…(3) ] to deeply equal [ 'pl-50-count-thinking-tokens' ]`), the PR-and-branch
+    …(3) ] to deeply equal [ 'pl-50-count-thinking-tokens' ]`), the PR-and-branch
     case (`expected [ 'PR#276 repo-5', …(4) ]`) and the unread/fork case. The
     rename case passes against the unfixed script, as it should: a bare
     `--name-only` lists a rename's new path.
@@ -455,7 +455,7 @@ headRefName` for both PRs. Added as shape 3, with its own `Done when`
     id that adds a _second_ ticket file under that id still clashes, and a
     name naming an unmerged id still claims it. Against the round-1 script it
     fails with `expected [ { id: 30, … }, …(1) ] to deeply equal
-[ { id: 31, … } ]`. Removing the guard that a name must carry some id
+    [ { id: 31, … } ]`. Removing the guard that a name must carry some id
     fails the unread/fork case (1 of 29). Case 9's `repo-37` name row is
     replaced by a comment on the same line, so its anchored `:277` does not
     move.
@@ -482,7 +482,7 @@ headRefName` for both PRs. Added as shape 3, with its own `Done when`
   - **F6, fixed.** A new case: one branch that edits `repo-5`, adds `repo-52`,
     deletes `repo-6` and renumbers `repo-7` to `repo-70` claims exactly `52`
     and `70`. With `--diff-filter=AD` it fails: `expected [ …(4) ] to deeply
-equal [ …(2) ]`.
+    equal [ …(2) ]`.
   - **Live, against origin with `main` at `e79b04f`.** The owner's deletion
     of `pl-17-image-closure` and `worktree-pl-19-pin-through-the-browser` is
     confirmed by `git ls-remote --heads origin`, which lists neither.

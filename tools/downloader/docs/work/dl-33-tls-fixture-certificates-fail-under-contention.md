@@ -165,7 +165,7 @@ next person does not spend the same hour.
 - **Ruled out, and this time by a reproduction: a PEM read while empty or
   truncated.** The two sightings that name a parse site name an _in-memory_ one
   — `tls-interception.test.ts`'s `leafOf` helper, and the `new tls.TLSSocket({
-cert })` in `egress-proxy.ts` — neither of which reads a file. The original
+  cert })` in `egress-proxy.ts` — neither of which reads a file. The original
   wording is kept below because it is what sent the leading hypothesis in the
   wrong direction. **`ERR_OSSL_ASN1_ILLEGAL_PADDING` is not what a truncated PEM
   produces**: a cut base64 body gives a length overrun, not a malformed
@@ -338,9 +338,9 @@ record, and `npm run status` renders it to readers who never open the file.
   spends a third session on it.
 
   Sighting: `tls-interception.test.ts > two targets get two certificates and one
-key` failed once in three consecutive full `npm test` runs on this devcontainer
+  key` failed once in three consecutive full `npm test` runs on this devcontainer
   (Linux, not Windows), `Error: error:068000DD:asn1 encoding routines::illegal
-padding` out of `new X509Certificate(...)` at the spec's own `leafOf` helper.
+  padding` out of `new X509Certificate(...)` at the spec's own `leafOf` helper.
   It passed in isolation immediately after, and passed on the next two full runs.
   So: **a fifth sighting, and the second on Linux**, which further weakens the
   Windows-only framing this ticket already discarded.
@@ -428,7 +428,7 @@ padding` out of `new X509Certificate(...)` at the spec's own `leafOf` helper.
   forge does normalise, and that is exactly why this survived two disproofs:
   `asn1.toDer` strips **one** redundant leading byte and carries the comment
   `TODO: should all leading bytes be stripped vs just one? .. ex '00 00 01' =>
-'01'?`. So the draw that gets through illegal is the one where forge's single
+  '01'?`. So the draw that gets through illegal is the one where forge's single
   strip is not enough: **first random byte `0x00`, second under `0x80`**. That
   is `1/256 × 1/2`. Measured over 2,000,000 draws: **3,918 illegal, 1 in
   510.5.** Instrumented, one `npm test -- --project downloader` issues **133**
@@ -455,7 +455,7 @@ padding` out of `new X509Certificate(...)` at the spec's own `leafOf` helper.
 
   **Where it lands, and why it looked like load.** Not the fixtures: the throw
   is at `egress-proxy.ts`'s `new tls.TLSSocket(clientSocket, { isServer: true,
-key, cert })`, which arms an intercepted CONNECT — **synchronously, inside a
+  key, cert })`, which arms an intercepted CONNECT — **synchronously, inside a
   `secureConnect` handler**. So it is an unhandled error rather than a failed
   download, the CONNECT never completes, ffmpeg waits, and the run pays a 120 s
   test timeout and then a 60 s hook timeout in `afterAll` while cleanup blocks

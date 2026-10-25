@@ -146,8 +146,8 @@ the rule cannot be scoped to the downloader (see the Log).
 
 1. `compose.downloader.prod.yaml` sets the six values above. Each comment names
    its measurement or the owner's choice. `docker compose -f
-compose.downloader.yaml -f compose.prod.yaml -f compose.downloader.prod.yaml
-config` renders them, quoted in the Log.
+   compose.downloader.yaml -f compose.prod.yaml -f compose.downloader.prod.yaml
+   config` renders them, quoted in the Log.
 2. `docs/02-DEPLOYMENT.md` gives the edge rule's expression, threshold, period
    and action, with the threshold derived from dl-54's per-visit count in a
    sentence.
@@ -360,6 +360,6 @@ Acceptance, re-run on `261dc65`:
 
 - 2026-10-10 — The `awaiting` line closed: the host runs this ticket's
   values. On the host, `docker compose exec downloader printenv
-MAX_JOBS_PER_CLIENT` printed `2`, the value #362 set in
+  MAX_JOBS_PER_CLIENT` printed `2`, the value #362 set in
   `compose.downloader.prod.yaml`. The reading is the owner's, relayed as the
   command and its output.

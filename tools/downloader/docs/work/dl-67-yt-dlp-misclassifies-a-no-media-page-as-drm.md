@@ -314,12 +314,12 @@ redacted form", not because of a measured need. Removed from
   unreachable through this call's current path and kept only because the
   owner's decision names it by name.
   Verification after the fix: `npx vitest run
-tools/downloader/resolvers/test/ytdlp.test.ts` — 65/65 passed; re-ran the
+  tools/downloader/resolvers/test/ytdlp.test.ts` — 65/65 passed; re-ran the
   red-on-`origin/main` check with the corrected spec — **3 of 65 failed**
   against the unfixed source (the reproduction, the encoding-variant test,
   and the exact-href test), not the 2 an earlier version of this entry
   claimed before a re-count; `npm run check` green; `npm test -- --project
-downloader` — 86 files, 1462/1462 passed.
+  downloader` — 86 files, 1462/1462 passed.
 - 2026-09-19 — Owner answered the second Build decision (put to them by the
   orchestrator with `AskUserQuestion`, after the fix above had already been
   built): chose (1), model the measured decode — the same remedy the
@@ -349,7 +349,7 @@ downloader` — 86 files, 1462/1462 passed.
   Verification: `npx vitest run tools/downloader/resolvers/test/ytdlp.test.ts`
   — 65/65 passed with `redactUrl` removed (nothing in the suite depended on
   it, consistent with it having been dead); `npm run check` exit 0; `npm test
--- --project downloader` — 86 files, 1462/1462 passed.
+  -- --project downloader` — 86 files, 1462/1462 passed.
 - 2026-09-19 — Gate 4 (final) on `638dd67` found one med and three lows.
   **Med, CI red**: this branch's `decodeUnreservedEscapes`/`maskRequestUrl`
   addition, inserted above `classifyFailure`, moved

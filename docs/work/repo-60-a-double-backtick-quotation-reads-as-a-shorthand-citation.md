@@ -197,11 +197,11 @@ New, in lines these rounds touched:
 - 2026-09-27 — Built. The Why's reproduction (`exit 128 — 1 displaced` at
   `5ad3286`) does not reproduce against today's `origin/main`: at `5ad3286`,
   `node scripts/citations.mjs docs/work/repo-25-...md --displaced-since
-origin/main` exits 0, not 128. What moved is the ref, not the record —
+  origin/main` exits 0, not 128. What moved is the ref, not the record —
   `origin/main` at the time the Why was written was `1e3204e`, main's tip
   _before_ repo-50's own PR (#291) merged as `9fb2096`. Re-run with
   `--displaced-since 1e3204e` against the same `5ad3286` tree: `exit 128 — 1
-displaced`, matching the quoted output exactly. Once repo-50 merged,
+  displaced`, matching the quoted output exactly. Once repo-50 merged,
   `origin/main` caught up to the tree `docs/work/repo-25-...md` already
   described, so the drift `--displaced-since` was built to catch had nothing
   left to catch it against — until this ticket's fix, which uncovers it
@@ -232,8 +232,8 @@ displaced`, matching the quoted output exactly. Once repo-50 merged,
   record's `<!-- citations: evidence -->` declarations (record lines 130 and 204) naming a location, `` `index.ts:443` `` and
   `` `scripts/citations.mjs:8443` ``, that nothing in the record cites any
   more. `applyDeclarations` correctly refuses that as stale (`exit 8 — 2
-stale evidence declaration`, `... is declared evidence, but this record
-does not cite it`), which is the script's own documented behavior for
+  stale evidence declaration`, `... is declared evidence, but this record
+  does not cite it`), which is the script's own documented behavior for
   exactly this situation ("a citation whose failure was fixed should lose its
   declaration in the same edit"). I trimmed both declarations to drop the
   now-dead entries only (`` `index.ts:440` `` and the other two locations in
@@ -286,7 +286,7 @@ does not cite it`), which is the script's own documented behavior for
   Verified: `npx vitest run scripts/test/citations.test.ts` 105/105 (3 new,
   102 pre-existing), `npm run check` exit 0, `npx vitest run --project repo`
   493/493, `node scripts/citations.mjs docs/work/repo-25-...md
---displaced-since origin/main` exit 0, `node scripts/citations-gate.mjs`
+  --displaced-since origin/main` exit 0, `node scripts/citations-gate.mjs`
   "112 enforced, 0 failing; 7 grandfathered" exit 0.
 
 - 2026-09-27 — Gate 1 (FAIL) fixed. Each finding reproduced before touching
@@ -295,12 +295,12 @@ does not cite it`), which is the script's own documented behavior for
   **High, fixed as the owner's chosen (a): skip a quoted reference only when
   it carries no anchor.** Reproduced first: the unconditional skip dropped 23
   real, anchored citations from `docs/work/repo-31-the-windows-leg-is-almost-
-all-red.md` (3 of them in its Review, where 5 references fell to 2; the
+  all-red.md` (3 of them in its Review, where 5 references fell to 2; the
   whole-record `moved` count went from 6 to 0 — live drift hidden, matching
   the gate's framing exactly). Fixed by moving the `inQuotation` check in the
   `INLINE` and `SHORTHAND` passes to after each match's groups are read, and
   gating the skip on `g.anchor === undefined` (`INLINE`) or `g.inner ===
-undefined && g.outer === undefined` (`SHORTHAND`); `PIN_SHAPED` and
+  undefined && g.outer === undefined` (`SHORTHAND`); `PIN_SHAPED` and
   `SHORTHAND_PIN` are left unconditional, since neither carries an anchor
   concept at all, so the same gate would always be true there. Verified: the
   repo-31 Review section is back to 5/5 `ok`, the whole-record run is back to
@@ -377,7 +377,7 @@ undefined && g.outer === undefined` (`SHORTHAND`); `PIN_SHAPED` and
   Verified after all of the above: `npx vitest run scripts/test/citations.test.ts`
   105/105, `npm run check` exit 0, `npx vitest run --project repo` 493/493,
   `node scripts/citations.mjs docs/work/repo-25-...md --displaced-since
-origin/main` exit 0, `node scripts/citations-gate.mjs` "113 enforced, 0
+  origin/main` exit 0, `node scripts/citations-gate.mjs` "113 enforced, 0
   failing; 6 grandfathered" exit 0.
 
 - 2026-09-27 — Gate 2 (CONCERNS) landed. Gate 1 record replaced by the
@@ -389,7 +389,7 @@ origin/main` exit 0, `node scripts/citations-gate.mjs` "113 enforced, 0
   is low (not med); corrected repo-63 Log entry to show it follows the gate
   recommendation, not against it. **Correction, next round**: that last
   clause is false — `git diff 7bb2d8f d789c86 --
-docs/work/repo-63-...md` is empty, repo-63 was not touched this round.
+  docs/work/repo-63-...md` is empty, repo-63 was not touched this round.
   Left in place rather than rewritten so the mistake stays legible; the
   actual fix is in the entry below.
 
@@ -429,11 +429,11 @@ docs/work/repo-63-...md` is empty, repo-63 was not touched this round.
   at its new line before editing.
 
   Verified the fixer's new test (`"an anchored citation inside a
-double-backtick quotation is still read"`) reds under _each_ half of the
+  double-backtick quotation is still read"`) reds under _each_ half of the
   carve-out mutation independently — dropping the `INLINE` pass's
   `g.anchor === undefined` condition loses the quoted anchored inline
   citation; dropping the `SHORTHAND` pass's `g.inner === undefined &&
-g.outer === undefined` condition loses the quoted anchored shorthand —
+  g.outer === undefined` condition loses the quoted anchored shorthand —
   confirmed by hand in two throwaway mutant copies, matching gate 2's own
   med finding that no test held this before.
 
@@ -444,10 +444,10 @@ g.outer === undefined` condition loses the quoted anchored shorthand —
 
   Verified: `node scripts/citations-gate.mjs --against origin/main` exit 0;
   `node scripts/citations.mjs docs/work/repo-60-*.md --section Review
---require-anchors --require-distinct-anchors` exit 0; `npx vitest run
-scripts/test/citations.test.ts` 106/106; `npm run check` exit 0;
+  --require-anchors --require-distinct-anchors` exit 0; `npx vitest run
+  scripts/test/citations.test.ts` 106/106; `npm run check` exit 0;
   `node scripts/preflight.mjs --base origin/main --title "fix(repo): stop
-reading a double-backtick quotation as a shorthand citation (repo-60)"`
+  reading a double-backtick quotation as a shorthand citation (repo-60)"`
   exit 0.
 
 - 2026-09-27 — Gate 3 (PASS) landed, `scripts/review-record.mjs --gate 3`,
@@ -472,6 +472,6 @@ reading a double-backtick quotation as a shorthand citation (repo-60)"`
   `const inQuotation`, record lines 118 and 178) to 628; 617
   (`g.anchor === undefined) continue;`, record line 144) to 644; 690
   (`g.outer === undefined) continue;`, record line 144) to 717; 372 (`shorter
-run, and its closer can be the tail`, record line 172) to 399; and 374 (`this
-regex reads nothing where CommonMark reads a shorthand`, record line 172) to 401. `node scripts/citations-gate.mjs --against origin/main` named all six
+  run, and its closer can be the tail`, record line 172) to 399; and 374 (`this
+  regex reads nothing where CommonMark reads a shorthand`, record line 172) to 401. `node scripts/citations-gate.mjs --against origin/main` named all six
   `moved` before this repoint, at exactly these new lines.

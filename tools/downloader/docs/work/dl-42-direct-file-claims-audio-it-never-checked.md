@@ -57,7 +57,7 @@ the default `mp4` container — is a byte-for-byte passthrough that never reache
 ### Reproduction
 
 1. Serve a progressive video file **with no audio track** (`ffmpeg -f lavfi -i
-testsrc=d=3 -an silent.mp4` is enough) from the e2e fixture origin.
+   testsrc=d=3 -an silent.mp4` is enough) from the e2e fixture origin.
 2. Paste its URL. The direct tier answers; the row renders as above.
 3. Choose a container that is _not_ the source extension — `mkv` or `webm` —
    so `alreadyInTargetContainer` is false and `needsMux` is true.
@@ -167,7 +167,7 @@ No e2e run for this ticket (grepped the specs for Quality-column/`hasAudio` asse
   **Wrong in one detail, and it matters for grepping.** The failing argument is
   `-map 0:a:0`, not `-map 0:a`: `mux()` always sets `streamIndex: 0`. ffmpeg
   exits **234** with `Stream map '0:a:0' matches no streams. To ignore this, add
-a trailing '?' to the map.` — captured from the pre-fix run of the test below.
+  a trailing '?' to the map.` — captured from the pre-fix run of the test below.
 
   **Missing, and this is the substance of the ticket.** The brief lists four
   sites; there are eight reads of `variant.hasAudio` across four packages, and
@@ -277,7 +277,7 @@ a trailing '?' to the map.` — captured from the pre-fix run of the test below.
   **One disclosure withdrawn.** My build report listed the image-closure
   consequence of the new `api/test` → `@downloader/resolvers` import as an
   unmeasured risk. It is not one: `git diff origin/main...HEAD --
-tools/downloader/api/package.json` is empty, `@downloader/resolvers` was
+  tools/downloader/api/package.json` is empty, `@downloader/resolvers` was
   already at `tools/downloader/api/package.json:19` under `dependencies`, and the `Dockerfile`
   already carries it at lines 40 and 118–119. There is no new workspace
   dependency for the scan to miss.

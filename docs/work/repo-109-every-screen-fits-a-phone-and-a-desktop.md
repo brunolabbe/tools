@@ -235,8 +235,8 @@ Nothing here is `high`. F7 is a `med` that no `Done when` line depends on, so it
   **The check can fail (Done-when 3).** A planted `.panel { width: 400px; }` in
   `tools/planner/web/src/styles.css`, reverted after (`git status` shows the file
   clean), run as `npx playwright test -c tools/planner/playwright.config.ts
-layout.spec.ts`: `5 failed`, each of the form `Error: Trips and plans is 420 px
-wide in a 360 px window` (likewise Question, Checkpoint, Run, Plan). The 1280 px
+  layout.spec.ts`: `5 failed`, each of the form `Error: Trips and plans is 420 px
+  wide in a 360 px window` (likewise Question, Checkpoint, Run, Plan). The 1280 px
   measurement of each passed, so it is the width that fails, not the page.
 
   **What the brief had wrong or left out.**
@@ -262,12 +262,12 @@ wide in a 360 px window` (likewise Question, Checkpoint, Run, Plan). The 1280 px
     each tool's e2e job uploads them (`if: always()`, 7 days), or a gate has nothing
     to open.
   - The farm links no `@webtools/ui` (the shared checkout has none), so `npm run
-build` failed on `@webtools/ui/tokens.css`; linked by hand with
+    build` failed on `@webtools/ui/tokens.css`; linked by hand with
     `ln -s ../../packages/ui node_modules/@webtools/ui` and built clean.
 
   **Locally, `download.spec.ts` fails on a line this branch does not touch**:
   `expect(job).toBeInViewport()` (dl-109), "viewport ratio 0", in `npx playwright
-test -c tools/downloader/playwright.config.ts download.spec.ts` (3 passed, 1
+  test -c tools/downloader/playwright.config.ts download.spec.ts` (3 passed, 1
   failed), and the same in the full run. `main`'s own downloader run is green at
   `6b4c85cc` (run 39362113102), and no downloader source changed here, so it reads as
   this sandbox's rendering; unproven against `main` in a second tree, and CI on this
@@ -290,8 +290,8 @@ test -c tools/downloader/playwright.config.ts download.spec.ts` (3 passed, 1
   entry above.
   - `tools/ledger/CLAUDE.md`, the two lines the branch made false: the layout line
     now reads `Playwright specs — the layout spec; e2e/README.md says what earns the
-next`, and the command line `# the layout spec: every screen at 360px and
-1280px`. A tool's `CLAUDE.md` is otherwise edited only when the Build names it;
+    next`, and the command line `# the layout spec: every screen at 360px and
+    1280px`. A tool's `CLAUDE.md` is otherwise edited only when the Build names it;
     this edit is the owner's.
   - `.claude/rules/planner-e2e.md`, "five specs over three paths": recounted from
     the tree, it is four spec files (`intake` 2 tests, `pin` 2, `revise` 1, and
@@ -323,9 +323,9 @@ next`, and the command line `# the layout spec: every screen at 360px and
   - Proved the way the gate proved the defect, each at `c5baea2e`, with the
     mutation reverted from that commit afterwards (the working tree was clean):
     - **`**/api/stats/**` aborted** (`await page.route("**/api/stats/**", (route) =>
-route.abort())` at the top of `openTab`), `npm run e2e:ledger`: `1 failed, 11
-passed`; Stats red with `Expected pattern: /700\.00 \$/u` against `Mortgage
-paymentThe ledger API is not answering.Own money in the mortgage…`.
+      route.abort())` at the top of `openTab`), `npm run e2e:ledger`: `1 failed, 11
+      passed`; Stats red with `Expected pattern: /700\.00 \$/u` against `Mortgage
+      paymentThe ledger API is not answering.Own money in the mortgage…`.
     - **Empty books** (the seed's guard flipped so it returns before posting):
       `8 failed, 4 passed`. Home, Stats, Period, History, Inbox, Rules, Categories and
       Salaries red, each `toContainText` against `getByRole('main')`. Household and
@@ -337,7 +337,7 @@ paymentThe ledger API is not answering.Own money in the mortgage…`.
     sideways-scrolling ancestor; C: record only). `.claude/rules/responsive-layout.md`
     now says never to put `overflow-x: hidden` on `html` or `body`, because the check
     cannot see content clipped that way (the gate measured `.card { width: 400px; }
-html, body { overflow-x: hidden; }` giving `12 passed`). The specs are not changed
+    html, body { overflow-x: hidden; }` giving `12 passed`). The specs are not changed
     for it.
   - **F5 (low), fixed.** The ledger README said "two rules"; the seed posts three.
   - **Left recorded and not fixed, as the coordinator directed:** F3 (any process

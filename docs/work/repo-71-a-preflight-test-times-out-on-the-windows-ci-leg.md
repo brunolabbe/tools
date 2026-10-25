@@ -315,7 +315,7 @@ ticket is about."
     consecutive `windows-latest` runs of this spec without a timeout. Given
     the 13 s stall above, the leg may still time out on something else.
 - 2026-09-27, after landing: `Done when` 2 met — `test (windows-latest,
-informational)` passed three consecutive times on PR #303 at `818bab2`
+  informational)` passed three consecutive times on PR #303 at `818bab2`
   (run 36344053801, attempts 1–3, jobs 108689610119 / 108703255144 /
   108706939302, each `completed success`, read by the orchestrator with
   `gh run view --json`); gate 1's `unproven (gate)` on that line is
@@ -324,7 +324,7 @@ informational)` passed three consecutive times on PR #303 at `818bab2`
 - 2026-09-27 — repo-79's builder repointed this record's three citations that
   its own additions to `scripts/test/preflight.test.ts` moved — coordinate
   only, anchor text unchanged. `node scripts/citations-gate.mjs --against
-origin/main` exit 0: 127 enforced, 0 failing.
+  origin/main` exit 0: 127 enforced, 0 failing.
 - 2026-09-28 — repo-79's gate 1 round moved the same three citations again;
   repointed once more, coordinate only. `node scripts/citations-gate.mjs
---against origin/main` exit 0: 127 enforced, 0 failing.
+  --against origin/main` exit 0: 127 enforced, 0 failing.

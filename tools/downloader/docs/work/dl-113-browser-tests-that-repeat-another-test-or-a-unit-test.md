@@ -245,7 +245,7 @@ The fold-in is stronger than what it replaced. F2, F3 and F4 pass every floor te
   covered only if a surviving test fails on every mutation it failed on. 38
   mutations, 28 source lines, three files; the runner and the catalogue are
   scratch files (a string replacement in `src/`, then `npx vitest run <file> -t
-<pattern> --reporter=json`, then the file restored). Every mutation that
+  <pattern> --reporter=json`, then the file restored). Every mutation that
   failed a test before still fails one after: no mutation lost its last killer.
   Tests outside `browser-resolver` lost nothing and gained eight (`c15`, the
   REFUSED row for `CONSENT_TEXT_ANYWHERE`, the free-box row, the GEO page test,
@@ -296,9 +296,9 @@ The fold-in is stronger than what it replaced. F2, F3 and F4 pass every floor te
 
   **Vacuous verdicts, proved.** Each test below passed on a copy of `d759b80e`
   with the rule it is named for broken (`npx vitest run
-tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
-"dl-82|dl-93"`, whose mutated run is `mutation M2 [before-A]: 8 failed of 183
-(29 passed)` and so on):
+  tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
+  "dl-82|dl-93"`, whose mutated run is `mutation M2 [before-A]: 8 failed of 183
+  (29 passed)` and so on):
   - "does not press the submit button of a fixed / sticky checkout bar that says
     nothing of consent": M2, every fixed or sticky layer a container whatever it
     says. Neither row is among the eight that failed. The bar is a `<form>`, and
@@ -306,18 +306,18 @@ tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
     silent: only both rules broken together fail it.
   - "a sticky header with a display:none cookie link in its nav is not a
     container": M5, `checkVisibility` dropped. `mutation M5 [before-A]: 0 failed
-of 183 (37 passed)`. The hidden node is an `<a>`, which the link check
+    of 183 (37 passed)`. The hidden node is an `<a>`, which the link check
     excludes first. The visible-link row of the same test does fail M4 and M2, and
     is covered by `c7` in `consent-scope`.
   - "does not press a checkout submit in a bar whose prose says Italian
     'consente'": M6, the end-of-word guard on `consent` dropped. `mutation M6
-[before-A]: 0 failed of 183 (37 passed)`, and the three `CONSENT_WORDING` rows
+    [before-A]: 0 failed of 183 (37 passed)`, and the three `CONSENT_WORDING` rows
     "Il pagamento sicuro consente di ordinare.", "Il pagamento è consentito." and
     "I partner consentono l'ordine." fail it in `provoke.test.ts`. Same `<form>`
     fixture as the first.
   - "a fixed app root whose footer only links a cookie policy is not a container":
     M4, a link's text counted as prose. `mutation M4 [before-A]: 2 failed of 183
-(35 passed)`, and the two are the visible-link row and the bar past a header
+    (35 passed)`, and the two are the visible-link row and the bar past a header
     that links a policy. The root holds an `<h1>`, so M3c (the page-content rule
     off) leaves it passing as well. The Build said the script case it claims
     "is then tested nowhere": the link case is `c1`, `c4`, `c5`, `c6`, `c7`, `c10`
@@ -389,7 +389,7 @@ of 183 (37 passed)`. The hidden node is an `<a>`, which the link check
     it" are the `CONSENT_TEXT` KEPT and ADDED rows ("matches %j"; M20, M20b), with
     "presses \"Sono d'accordo\"" kept as the one end to end. "presses neither a
     pagination link nor a vote button ...": new rows `CONSENT_TEXT_ANYWHERE does
-not match %j either` over REFUSED (M17). "does not press a sticky header's
+    not match %j either` over REFUSED (M17). "does not press a sticky header's
     notice whose prose says Swedish 'pannkakor'": the `CONSENT_WORDING` SILENT rows
     (M7). "a whole file with a resolution suffix in its name is offered":
     `capture-rules` "a numeric id or a resolution suffix does not classify a
@@ -462,11 +462,11 @@ not match %j either` over REFUSED (M17). "does not press a sticky header's
 
   **For dl-114.** Its rows were not touched. By name, with the lines at this
   commit: `adding ?%s= on play is not a departure` 404, `a query key outside the
-exception is still a departure` 415, `a reordered query string is not a
-departure` 426, `a same-document navigation (history.pushState)` 310;
+  exception is still a departure` 415, `a reordered query string is not a
+  departure` 426, `a same-document navigation (history.pushState)` 310;
   `ctl=%s (%s) is pressed but does not hold back the box click` 1883, `ctl=%s is
-a press that counts, so the box is not clicked` 1913, `ctl=%s (%s) is a press
-that counts, so a slow player is not clicked past` 1948. `sameDocument` is
+  a press that counts, so the box is not clicked` 1913, `ctl=%s (%s) is a press
+  that counts, so a slow player is not clicked past` 1948. `sameDocument` is
   `browser.ts:746`, `startsWord` and `isPlayPress` `provoke.ts:848` and `866`.
   `ctl=none`, the first row of the first of those, is gone.
 
@@ -479,13 +479,13 @@ that counts, so a slow player is not clicked past` 1948. `sameDocument` is
 - 2026-10-12 — Merged `origin/main` (`07acbb86`: dl-116, dl-118, repo-102) with
   no conflict. dl-118 edited the dl-83 block and `provoke.test.ts`, which this
   branch also edits, in different places. After `npm run build` and `npx tsc
---build`, `npx vitest run` on the five files: `browser-resolver` 137 passed in
+  --build`, `npx vitest run` on the five files: `browser-resolver` 137 passed in
   391.32 s, `consent-scope` 23 in 45.52 s, `chunk-streams` 3 in 9.43 s,
   `provoke` 264 in 11.32 s (dl-118's cap block added 10 tests), `chunk-sniff` 33.
   The durations in the first entry are the ones measured before the merge and
   are this ticket's alone; the 391 s includes dl-118's saving. Before the
   merge, `npm test -- --project downloader`: `Test Files 114 passed | 1 skipped
-(115)`, `Tests 2425 passed | 2 skipped (2427)`, 418.36 s, exit 0.
+  (115)`, `Tests 2425 passed | 2 skipped (2427)`, 418.36 s, exit 0.
 - 2026-10-12 — **Owner decision on Done-when 3: option A.**
 
   **Question.** Done-when 3 said "No row with a gate or owner decision behind it

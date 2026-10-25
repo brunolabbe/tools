@@ -418,7 +418,7 @@ Branch `dl-55-surface-click-opens-another-video` off `origin/main` at `95c6403`
    ticket's "nothing after it is worth waiting for". After the quiet wait
    (`guard.stop()` unregisters the listener first), a recorded departure throws
    `AppError("NO_MEDIA_FOUND", { details: { reason: "navigated-away", url,
-departedTo } })` even if hits exist, with both URLs through `redactUrl` —
+   departedTo } })` even if hits exist, with both URLs through `redactUrl` —
    **for dl-58's sweep: this is the only new `AppError` this ticket adds with a
    URL in `details`, at `resolvers/src/resolvers/browser.ts`'s departure check
    in `#run`, and both `url` and `departedTo` are already redacted.**
@@ -426,7 +426,7 @@ departedTo } })` even if hits exist, with both URLs through `redactUrl` —
      no dependency on `@downloader/engine` or a pino wrapper), so this adds a
      small structural `BrowserResolverLogger` (`{ warn(message, fields?) }`) as
      a `BrowserResolverOptions.logger`, defaulting to a no-op. `api/src/
-resolvers.ts` now passes its own `AppLogger` in when constructing
+     resolvers.ts` now passes its own `AppLogger` in when constructing
      `BrowserResolver` — not in the ticket's Build steps verbatim, but without
      it the required warn line would never reach a real log, which is the
      acceptance criterion ("diagnosable from the log"). Small enough to fold in
@@ -493,14 +493,14 @@ real decodable media resource this fixture has no reason to carry.
   `frame.locator("video").first()`, guard left in place): "starts the real
   player and never reaches the card's own page or stream"
   (`browser-resolver.test.ts`) went red — `AppError: No downloadable video
-stream was found on that page.` (`NO_MEDIA_FOUND` / `navigated-away`, from
+  stream was found on that page.` (`NO_MEDIA_FOUND` / `navigated-away`, from
   the guard catching the misclick's navigation; the ticket's own prediction —
   "a guard alone would make this page return no video at all" — is exactly
   what happened).
 - Metadata's chooser reverted (`METADATA_SCRIPT` back to
   `document.querySelector('video, audio')`): "reads the chosen player's
   duration, not a related card's" (`provoke.test.ts`) went red — `expected 30
-to be 942`.
+  to be 942`.
 - Guard reverted (the departure check and throw removed from `#run`, selection
   left in place): both guard-fixture tests in `browser-resolver.test.ts` went
   red — `expected undefined to be an instance of AppError` (no error at all;

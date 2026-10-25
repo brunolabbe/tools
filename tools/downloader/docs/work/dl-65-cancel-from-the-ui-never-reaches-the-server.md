@@ -24,7 +24,7 @@ Chromium driving the page:
   `{"code":"INTERNAL","message":"Something went wrong on our end."}`. The log
   line is `request failed` with `code: INTERNAL` — the cancel handler never ran.
 - The same job, left alone, logged `engine download complete` and `job
-completed` 13 s later. The download was never stopped.
+  completed` 13 s later. The download was never stopped.
 - The card had been marked `failed` with that `INTERNAL`, and its event stream
   dropped, so the page showed a dead job while a live one held one of the
   client's `MAX_JOBS_PER_CLIENT` slots until it finished — that is the "won't

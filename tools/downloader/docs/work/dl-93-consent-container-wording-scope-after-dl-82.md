@@ -328,7 +328,7 @@ against a press the repo already calls a defect):
    root whose footer says "cookie" keeps pressing its first widened label, and a
    docked checkout bar that says "cookie" keeps its submit pressed.
 2. **Content landmarks only** (a layer holding `h1, main, article, video, audio,
-[role="main"]` is no container unless a dialog). Fixes a1, not a2. Cost: a
+   [role="main"]` is no container unless a dialog). Fixes a1, not a2. Cost: a
    consent layer with an `h1` title loses its dl-82 phrasings, falling to the old
    pattern as before dl-82.
 3. **A layer that is itself a `<form>` is no container unless a dialog.** Fixes
@@ -451,7 +451,7 @@ and leaves the first low recorded.
    no list, only "one more name here", so it needed no edit. Before the regex
    change, `npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts`:
    `Tests  9 failed | 222 passed (231)`, the nine new rows (`× speaks of consent:
-"Wir nutzen Präferenzcookies."` … `"Wij plaatsen advertentiecookies."`).
+   "Wir nutzen Präferenzcookies."` … `"Wij plaatsen advertentiecookies."`).
    After it: `Test Files  1 passed (1)`, `Tests  231 passed (231)`, which
    includes all 26 `SILENT` rows. Gate 2's regex comparison, run from this
    worktree against the new constant: every one of the nine strings reads

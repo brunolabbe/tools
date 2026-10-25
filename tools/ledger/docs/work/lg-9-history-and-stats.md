@@ -308,7 +308,7 @@ append-only records, so this ticket computes and draws. It stores nothing new.
        (chosen) over "Mark only lasting changes". No code change.
   - **High: a fixed item changed colour when the range dropped an earlier one.**
     Reproduced with the gate's `history.mts`: `FAIL fixed items: Internet keeps its
-place when the range drops Gym: 0 !== 1`; after the fix, the same line reads
+    place when the range drops Gym: 0 !== 1`; after the fix, the same line reads
     `ok   fixed items: Internet keeps its place when the range drops Gym`.
     `fixedItemsByMonth` now returns a line for every label (zeros where the range
     holds none of it), in the order the labels first started, and `FixedBody` assigns

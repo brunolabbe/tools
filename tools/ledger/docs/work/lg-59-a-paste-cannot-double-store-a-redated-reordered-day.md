@@ -447,7 +447,7 @@ No `high`. The only finding above `low` is F2, carried unfixed by the owner's re
     date does not change, or the balances differ.
 
   **The gate's 5-row enumeration** (`gate-lg59-exh.test.ts`, `GATE_MODE=
-tolerance`, head only with `GATE_NOBASE=1`, 20 shards). It ran on this round's
+  tolerance`, head only with `GATE_NOBASE=1`, 20 shards). It ran on this round's
   source before the two header sentences and the `workbookMismatch` wording
   changed, which touch no reading:
 

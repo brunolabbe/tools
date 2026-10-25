@@ -583,7 +583,7 @@ until lg-67" goes with them.
   sample does not show; a detail and a note swapped (lg-66's Notes list it as
   let through). Only the date column is on screen for a CSV (Decision 4).
 - **A footer total under the amount column** is reported by the reader as `an
-amount with no date` whatever a model says, so such a file will not import
+  amount with no date` whatever a model says, so such a file will not import
   (lg-56). `bank-footer` keeps it in the balance column.
 - **Stored from a CSV, then pasted over.** Decision 2 (a) leaves a later AccèsD
   paste that overlaps CSV-stored rows refused `STATEMENT_CHAIN_BROKEN`, whose
@@ -885,10 +885,10 @@ orchestrator:
   the only option that addresses the later-paste direction', at the price of a
   table rebuild"; measured, rows stored in another bank's wording under the
   existing `'workbook'` source take an AccèsD paste of rows 5 to 9 as `stored 2,
-already present 3`. `awk '/^## Log/{exit} {print}' T | grep -c "the only
-option"` → 0; `awk '/^### 2026-10-24 — landing/{exit} {print}' T | grep -c -F
-"the only option"` → 0 (the Log, before this entry); `awk '/^## Log/{exit}
-{print}' T | grep -c -F "(f) (a), with CSV rows stored under the existing"` → 1.
+  already present 3`. `awk '/^## Log/{exit} {print}' T | grep -c "the only
+  option"` → 0; `awk '/^### 2026-10-24 — landing/{exit} {print}' T | grep -c -F
+  "the only option"` → 0 (the Log, before this entry); `awk '/^## Log/{exit}
+  {print}' T | grep -c -F "(f) (a), with CSV rows stored under the existing"` → 1.
 - 2026-10-24 — Fixed at landing by owner choice: gate 2, N2 — "Why, Decision 6
   (a), Notes and the Log say lg-68 'fixes `textOf` for the `.xlsx` path'";
   lg-68's Build 1 says "leave `textOf` as it is" and its branch adds `detailOf`
@@ -896,8 +896,8 @@ option"` → 0; `awk '/^### 2026-10-24 — landing/{exit} {print}' T | grep -c -
   in the books reader" and claims no final scope (lg-68 is still being built).
   The Log's two round-1 sentences stand, each marked "corrected at landing".
   `awk '/^## Log/{exit} {print}' T | grep -c "textOf. fix"` → 0; `awk
-'/^## Log/{exit} {print}' T | grep -c "fixes .textOf."` → 0; `awk
-'/^## Log/{exit} {print}' T | grep -c "detailOf"` → 4.
+  '/^## Log/{exit} {print}' T | grep -c "fixes .textOf."` → 0; `awk
+  '/^## Log/{exit} {print}' T | grep -c "detailOf"` → 4.
 - 2026-10-24 — Fixed at landing by owner choice: gate 2, N3 — "Build 1 says one
   character in U+0080–U+00FF makes the Latin-1 bytes 'not valid UTF-8'. That does
   not follow in general: the Latin-1 text `Ã©` is the valid UTF-8 for `é`." The
@@ -909,7 +909,7 @@ option"` → 0; `awk '/^### 2026-10-24 — landing/{exit} {print}' T | grep -c -
   For a filing PR the record goes on the PR thread." Round 1's entry now carries
   a "corrected at landing" note, and both gates' full reports are posted on #625.
   `awk '/^### 2026-10-24 — landing/{exit} {print}' T | grep -c -F "a filing pull
-request has no"` → 1.
+  request has no"` → 1.
 
 **Cross-references.** Every "Done when N" and "Build N" above `## Log` was re-read
 after the edits (no item was added, removed or renumbered): each

@@ -170,7 +170,7 @@ ticket removed, and the repo's habit is to keep the argument and override it.
 written, and every instruction in it now points the wrong way:
 
 - **Fixtures are exempt.** `npx oxfmt --check
-tools/planner/contract/test/fixtures/road-trip.json` prints "Expected at least
+  tools/planner/contract/test/fixtures/road-trip.json` prints "Expected at least
   one target file. All matched files may have been excluded by ignore rules."
   and exits 2 — how a genuinely ignored file has always read here.
 - **A fixture edit must _not_ be followed by `npm run format`.** Measured, not

@@ -206,8 +206,8 @@ readings were taken would have spoiled them.
   d06865b1 reads 31,289 ms (run 39089694781, `test (ubuntu-latest)`) … Against
   the single 41,634 ms before-reading, the two after-readings give ratios of 0.51
   and 0.75." Checked first: `gh run view 39089694781 --log`, `test
-(ubuntu-latest)` / `Run npm test`: `✓ repo scripts/test/review-record.test.ts
-(64 tests) 31289ms`; the Windows leg of that run reads `124256ms`. The Done-when
+  (ubuntu-latest)` / `Run npm test`: `✓ repo scripts/test/review-record.test.ts
+  (64 tests) 31289ms`; the Windows leg of that run reads `124256ms`. The Done-when
   3 CI paragraph now carries the second reading and both ratios, and says
   "falls by a quarter to a half on two readings; it does not reliably halve".
   `grep -c "Ubuntu halves, as the local pairs" <ticket>` → 0 (1 at d06865b1).

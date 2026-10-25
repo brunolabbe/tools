@@ -132,7 +132,7 @@ and correct a line's spending category.
   lg-18's own Log says so. Only lg-18's F2 and F6 stay recorded.
 - **dropped** · a second category change on a line before the list has re-read
   posts to the superseded id. Probe: `200 404 PERIOD_LINE_NOT_FOUND "… It may
-have been corrected or removed since it was loaded."`. The code and its copy
+  have been corrected or removed since it was loaded."`. The code and its copy
   were written for this case, and the web shows the message as an alert, so it
   is not a defect.
 - **dropped** · the slice and the list disagree. They were enumerated over

@@ -460,7 +460,7 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
     does not read them; numbers stored as text in a workbook are not measured
     either);
   - a footer total under the amount column: the reader reports `an amount with
-no date` whatever a model says, so such a file will not import;
+    no date` whatever a model says, so such a file will not import;
   - Sonnet on the nine fixtures it was not run on, and why masking moved
     `bank-two-dates`.
 - **What the confirmation does not guard, and is not asked to.** lg-38's offline

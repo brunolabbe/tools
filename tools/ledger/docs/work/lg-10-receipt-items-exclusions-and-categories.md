@@ -236,7 +236,7 @@ No `high`, no `med`. Three `low` findings, one of them an open decision for the 
 - **`books`.** `SALES_TAX_RATES` and `ratesOn` replace the two constants
   (decision 2), and `checkReceipt` reads them by the receipt's date.
   `itemsAddUp` is Build 3's reconciliation. `sharedAmount(receipt, excluded,
-rates)` is Build 2, exact in `bigint` hundred-thousandths of a cent and
+  rates)` is Build 2, exact in `bigint` hundred-thousandths of a cent and
   rounded once, half-up and away from zero. `splitReceipt` is the three-way
   split; it computes the other's part exactly as an excluded one.
 - **`receipts`.** The schema and the prompt add the items and a category name

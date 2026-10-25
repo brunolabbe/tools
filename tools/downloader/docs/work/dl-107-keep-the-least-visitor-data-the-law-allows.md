@@ -626,7 +626,7 @@ Nothing in this gate is a `high`.
   - **Low 2:** `savedLabel` tests the trimmed name, so a whitespace-only title
     reads "Saved by your browser" with no trailing dash. Proven by the last test
     in `web/test/job-card.test.tsx`: red without the trim (`Unable to find an
-element with the text: Saved by your browser`, 1 failed of 49), green with it
+    element with the text: Saved by your browser`, 1 failed of 49), green with it
     (49 of 49, `npx vitest run tools/downloader/web/test/job-card.test.tsx`).
   - Gate 1's lows 4, 5 and 6 stay recorded and unfixed: the owner was offered
     them and did not choose them.

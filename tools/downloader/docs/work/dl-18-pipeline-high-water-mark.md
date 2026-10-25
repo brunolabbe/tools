@@ -94,7 +94,7 @@ to the marking logic should leave the state legible to assistive technology too.
    that goes red when it lands. Replace it — do not delete it — with the
    positive claim: after a re-probe, "Downloading" is still marked done. The
    test above it, `the downloading → probing back edge keeps the work, and is
-not an error`, already holds the rest of the card's behaviour and should keep
+   not an error`, already holds the rest of the card's behaviour and should keep
    passing untouched.
 
 **Traps.**

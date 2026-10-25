@@ -339,14 +339,14 @@ Whichever of (a) or (b) is chosen:
   integration test (`scripts/test/preflight.test.ts`, "preflight's check 1
   runs the repo project's suite for an edit still only in the working tree
   (repo-65)") went red — `AssertionError: expected [ 'npm run check' ] to
-include 'npm test -- --project repo'` — and passed again once the one line
+  include 'npm test -- --project repo'` — and passed again once the one line
   was restored to `checkBuild(repo, testSelectionPaths, buildRun)`. Also
   added a pure unit test for `workingTreePaths` itself, against a real
   throwaway repository with a staged rename, an unstaged edit and an
   untracked new directory, both appended to the end of
   `scripts/test/preflight.test.ts` per this branch's append-only rule.
   `npx vitest run scripts/test/preflight.test.ts` → 84 passed (84). `npm run
-check` → exit 0.
+  check` → exit 0.
 
   **Adding `workingTreePaths` to the existing top-of-file `import` block
   would have moved every citation after it.** Tried first, then measured
@@ -407,7 +407,7 @@ check` → exit 0.
   Re-measured: reverting `checkReview`/`checkTitle` to `testSelectionPaths`
   now fails the same assertion with `review`'s `bit: 4`, and the test passes
   at `HEAD` with the real code restored. `npx vitest run
-scripts/test/preflight.test.ts` → 87 passed (87) at the fix, was 84 before
+  scripts/test/preflight.test.ts` → 87 passed (87) at the fix, was 84 before
   the three new lows' own tests (1, 2 and 4) were added.
 
   **Low, reproduced and fixed — untracked visibility.** A repository with
@@ -464,7 +464,7 @@ scripts/test/preflight.test.ts` → 87 passed (87) at the fix, was 84 before
   line 119), which made that anchor indistinct across two lines. Rewritten to
   read the exit bit through a local first, rather than deleting or
   restructuring the assertion. `node scripts/citations-gate.mjs --against
-origin/main` → 131 enforced, 0 failing, both before this collision was
+  origin/main` → 131 enforced, 0 failing, both before this collision was
   introduced and after the rewrite.
 
   `npm run check` → exit 0. `npx vitest run scripts/test/preflight.test.ts` →

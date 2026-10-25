@@ -38,7 +38,7 @@ example).
    - **Charges** are amounts one person owes the other outright. The manual
      form is here; receipt items marked as the other's arrive with lg-10.
    - Net direct value is `r × (A + B) − A + charges A owes B − charges B owes
-A`.
+     A`.
    - Returns: whoever owes deposits `net / (recipient's share)` into the
      buffer, rounded half-up to the cent once, at the end. With no charges, this
      is the matching rule `max(0, B × r/(1 − r) − A)`.
@@ -195,12 +195,12 @@ So the builder's argument holds: chain start never overstates, own time does in 
   `matchDeposits` in `books`; `api/src/periods.ts` and eight routes
   (`GET /api/periods`, `GET /api/periods/open`, `POST /api/periods/close`,
   `POST /api/period-lines`, `/:id` and `/:id/retire`, `GET`/`POST
-/api/recurring` and `POST /api/recurring/:id`), each rate limited; four codes,
+  /api/recurring` and `POST /api/recurring/:id`), each rate limited; four codes,
   `PERIOD_LINE_NOT_FOUND` and `RECURRING_ITEM_NOT_FOUND` (404),
   `PERIOD_NOT_OPEN` (409) and `RATIO_NOT_IN_EFFECT` (422); and in `web` a
   Period tab holding the four parts of Build 6.
   - **The suite passes.** `npm test -- --project ledger` → `Test Files 32 passed
-(32)`, `Tests 465 passed (465)`; `npm run check` exit 0.
+    (32)`, `Tests 465 passed (465)`; `npm run check` exit 0.
   - **Done when, and where each is proved.** (1) `books/test/settlement.test.ts`
     › "at r = 0.6, B spends 100 and A nothing, so A deposits 150.00", and the
     analysis's whole table in "the three ways of settling: only the direct
@@ -228,12 +228,12 @@ So the builder's argument holds: chain start never overstates, own time does in 
     payer's share, `11 failed`; depositing v2's net, `12 failed`, the simulation
     among them; every stretch at the closing ratio, `2 failed`; truncating
     instead of half-up, `4 failed`; per period instead of cumulative, `3
-failed`; a wrong year rollover, `2 failed`; no clamp to a short month, `1
-failed`; two cents of tolerance, `1 failed`; the oldest expectation choosing
+    failed`; a wrong year rollover, `2 failed`; no clamp to a short month, `1
+    failed`; two cents of tolerance, `1 failed`; the oldest expectation choosing
     first, `1 failed`; the first period's start day left out, `1 failed`. In
     `api/test/periods.test.ts` (14 then): no open-period check, `1 failed`; closed
     periods reweighed at today's ratio, `1 failed`; buffer deposits ignored, `2
-failed`; recurring lines left out, `2 failed`. In `web/test/periods.test.tsx`
+    failed`; recurring lines left out, `2 failed`. In `web/test/periods.test.tsx`
     (9 then): the direct amount shown as the deposit, the charge box ignored, and
     folded deposits listed as unseen, `1 failed` each.
   - **The five questions the intake read as unsettled, answered from the
@@ -305,7 +305,7 @@ failed`; recurring lines left out, `2 failed`. In `web/test/periods.test.tsx`
       with what is still owed, and cannot be closed. Found after the first
       preflight: `api/test/periods.test.ts` › "the open period after it is
       empty until tomorrow, and still says what is owed" answered `expected 400
-to be 200` before the change, and the period screen would have shown that
+      to be 200` before the change, and the period screen would have shown that
       400 in place of itself the day of every close.
     - **A recipient whose share is zero** (one salary of zero, which lg-5
       allows) cannot be settled through shared money: the deposit is `null`,
@@ -376,13 +376,13 @@ to be 200` before the change, and the period screen would have shown that
     divide evenly still settles the next close at nothing" (100.01, asked
     150.02, paid 150.02) and › "over many odd amounts and ratios, the next close
     never names a payer at 0.00" (2 000 seeded trials) failed, `2 failed | 20
-passed (22)`, and pass after. Through the API,
+    passed (22)`, and pass after. Through the API,
     `api/test/periods.test.ts` › "settles the next close at nothing, though
     the figure did not divide evenly" failed against the old `books` `dist`
     (`expected { … } to match object { payerId: null, … }`) and passes after
     rebuilding it (`grep -c "depositCents === 0"` in
     `books/dist/settlement.js` → 1). The next close then records `payer
-null`, status `none`, and is never listed as a deposit not seen.
+    null`, status `none`, and is never listed as a deposit not seen.
   - **Med 3, fixed as the owner chose.** A line or a recurring item's month
     dated inside a closed period and **first entered** after that period
     closed is listed in the open period with `late: true`, and the screen
@@ -419,7 +419,7 @@ null`, status `none`, and is never listed as a deposit not seen.
       check; the fixture now is accepted on its own, and asserts so.
     - Low 6: `books/test/periods.test.ts` › "a deposit dated on the period's
       last day is its deposit"; with `>= end` made `> end`, `1 failed | 15
-passed (16)`.
+      passed (16)`.
     - Low 7: `api/test/periods.test.ts` › "a line dated after it is not
       listed"; without `linesThrough`'s `date <= through`, `1 failed`.
   - **Lows left in the record: 8, 9, 10 and 11.** Each states a defect and not
@@ -427,7 +427,7 @@ passed (16)`.
     is ended, not removed; 9: a year typed as 9999; 10: a share of 11 ppm or
     less; 11: a third person, lg-5's open low).
   - **The suite.** `npm test -- --project ledger` → `Test Files 33 passed
-(33)`, `Tests 491 passed (491)` (465 at `0862fd3`, and this round's 26: 7 in `books`, 18 in
+    (33)`, `Tests 491 passed (491)` (465 at `0862fd3`, and this round's 26: 7 in `books`, 18 in
     `api`, 1 in `web`).
 
 - 2026-10-06 — Round 2 after gate 2 (CONCERNS at `86b1c7c`, no high).
@@ -443,7 +443,7 @@ passed (16)`.
     counted it" (the gate's two-close reproduction) and
     `books/test/periods.test.ts` › "enteredLate › not once a later close has
     counted it, though its own period closed before it" answered `2 failed |
-199 passed (201)` across `books/test` and `api/test/periods.test.ts`,
+    199 passed (201)` across `books/test` and `api/test/periods.test.ts`,
     and pass after (`books` `dist` rebuilt; `grep -c lastClose` in
     `books/dist/periods.js` → 2). The holding-period test now reads "dated in
     a closed period and first entered after the last close".

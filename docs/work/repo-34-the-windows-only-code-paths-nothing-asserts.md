@@ -170,7 +170,7 @@ NFR: security ✓ — this branch closes rather than opens a gap in the path-con
 
 - **2026-09-07** — Filed from repo-31's build, on the owner's answer to repo-31
   (option D). Id taken as `repo-34` on instruction: `node scripts/next-id.mjs
-repo` reported `next free: repo-33`, and `repo-33` was held at that moment by
+  repo` reported `next free: repo-33`, and `repo-33` was held at that moment by
   a builder whose branch was not yet pushed, so the script could not see it.
   (That ticket was renumbered to `repo-36` on 2026-09-08, after a peer
   session's own `repo-33` merged first in #192; the measurement above is left as
@@ -203,7 +203,7 @@ repo` reported `next free: repo-33`, and `repo-33` was held at that moment by
   Done-when line asked: changed the fallback literal in `kill.ts` from
   `"C:\\Windows"` to `"C:\\Win"`, ran the file, and the red was
   `AssertionError: expected 'C:\Win/System32/taskkill.exe' to be
-'C:\Windows/System32/taskkill.exe'` on exactly the one test touching that
+  'C:\Windows/System32/taskkill.exe'` on exactly the one test touching that
   branch (27 of 28 still passed). Reverted, reran, 28/28 green.
 
   **Step 2 — `findExecutable`.** Added `platform`/`env` parameters defaulting
@@ -227,7 +227,7 @@ repo` reported `next free: repo-33`, and `repo-33` was held at that moment by
   `assertPathInside(winRoot, candidate)` with no path module — the
   pre-refactor behaviour, since the default is `node:path`, which is POSIX on
   this host), both new cases failed with `expected function to throw an error,
-but it didn't`. Concretely: `path.relative` under POSIX treats a `..\`-style
+  but it didn't`. Concretely: `path.relative` under POSIX treats a `..\`-style
   candidate as one opaque path segment (backslash is not its separator), so
   neither the `relative === ".."` check nor the `relative.startsWith("..{sep}")`
   check ever fires — the exact "fixture never reached the Windows branch" gap
@@ -329,7 +329,7 @@ but it didn't`. Concretely: `path.relative` under POSIX treats a `..\`-style
     that reaches it carries a `skipIf`. Reproduced independently with my own
     instrumentation (`appendFileSync` + a full stack capture in
     `killProcessTree`, reverted before committing): `KILLTRACE=...  npx vitest
-run tools/downloader/engine/test/hls-e2e.test.ts` produced two lines, and
+    run tools/downloader/engine/test/hls-e2e.test.ts` produced two lines, and
     isolating each test individually showed the two distinct stacks —
     `runner.ts:182`'s `onAbort` for "cancelling kills the process tree...",
     `runner.ts:206`'s `SIZE_LIMIT_EXCEEDED` branch for "a runtime size cap
@@ -347,12 +347,12 @@ run tools/downloader/engine/test/hls-e2e.test.ts` produced two lines, and
     the clause, ran `npm test -- --project downloader`, 1204/1204 still green.
     Added a third win32 case (`C:\storage` root, `D:\evil` candidate) and
     confirmed it red-first against the same deletion (`expected function to
-throw an error, but it didn't`), then restored the clause and confirmed
+    throw an error, but it didn't`), then restored the clause and confirmed
     green again.
   - **Finding 3 (med, resolved by the owner).** This branch shifted 11
     citations in the merged `docs/work/repo-31-the-windows-leg-is-almost-all-red.md`
     (26 verified / 2 moved at `b384033`, 15 / 13 at this tip, per `node
-scripts/citations.mjs docs/work/repo-31-the-windows-leg-is-almost-all-red.md`).
+    scripts/citations.mjs docs/work/repo-31-the-windows-leg-is-almost-all-red.md`).
     **The question put to the owner**: repoint the 11 against this tree, or
     pin repo-31's record to the commit it reviewed with `--rev` and say so
     there. **The answer: repoint** — reasoned by the owner as "repo-31 is the
@@ -378,7 +378,7 @@ scripts/citations.mjs docs/work/repo-31-the-windows-leg-is-almost-all-red.md`).
     `:272`, `:273`, `:339`) — `repo-29-citation-anchors` inserts 22 lines into
     that same file and repoints those six itself, to avoid two branches
     fighting over the same target lines. Reran `node scripts/citations.mjs
-docs/work/repo-31-the-windows-leg-is-almost-all-red.md` after the
+    docs/work/repo-31-the-windows-leg-is-almost-all-red.md` after the
     repoint: 20 verified / 8 moved — the 8 remaining are exactly those six
     `ci.yml` citations plus two pre-existing `MOVED`s unrelated to either
     branch (`scripts/test/citations.test.ts@fdafd1a:1319`,
@@ -402,7 +402,7 @@ docs/work/repo-31-the-windows-leg-is-almost-all-red.md` after the
     exactly that distinction. Added the same disclosure as a block comment.
 
   Full suite re-run after all fixes: `npm run build` clean; `npm test
--- --project downloader` 1205/1205, 73 files; `npm test` (full repo) 2317/2317,
+  -- --project downloader` 1205/1205, 73 files; `npm test` (full repo) 2317/2317,
   135 files; `npm run check` exit 0. Diff scope after the gate: `ci.yml`, this
   ticket file, `storage.test.ts`, `ytdlp.test.ts`, and (once finding 3 was
   answered) `docs/work/repo-31-the-windows-leg-is-almost-all-red.md` — no
@@ -417,7 +417,7 @@ docs/work/repo-31-the-windows-leg-is-almost-all-red.md` after the
   throughout, ahead of `repo-29-citation-anchors`' CI enforcement of that on a
   grandfather list this ticket's record was not yet on when that list was
   computed; verified with `node scripts/citations.mjs --require-anchors
---section Review docs/work/repo-34-the-windows-only-code-paths-nothing-asserts.md`,
+  --section Review docs/work/repo-34-the-windows-only-code-paths-nothing-asserts.md`,
   exit 0.
 
   No open decisions remain. Committed, pushed, PR not opened — a second gate

@@ -185,17 +185,17 @@ The round's own lines:
   Commands and their output. Nothing in the source was changed.
   - `gh run view 40046099052 --attempt 1 --job 120728098807 --log-failed`: the
     lines quoted in Why, with `/tmp/review-record-EzRxCH/.git/objects`, `Test Files
-1 failed | 304 passed | 1 skipped (306)` and `Tests 1 failed | 6522 passed | 2
-skipped (6525)`.
+    1 failed | 304 passed | 1 skipped (306)` and `Tests 1 failed | 6522 passed | 2
+    skipped (6525)`.
   - `gh run view 39531046583 --log-failed`: the same test, `/tmp/review-record-PjNSKN/.git/objects`,
     `Test Files 1 failed | 299 passed | 1 skipped (301)` and `Tests 1 failed | 6323
-passed | 2 skipped (6326)`.
+    passed | 2 skipped (6326)`.
   - `gh run list --workflow ci.yml --limit 60 --json databaseId,conclusion,headBranch,createdAt`:
     37 success, 21 cancelled, 1 `failure` (`39531046583`), 1 empty (`40046099052`).
   - `gh pr checks 604`, head `db204337c6510ec44e085c3dd93cf76ce71dc9f0`, read after
     the re-run: `test (ubuntu-latest)` **pending** (job `120751355964`, attempt 2 of
     run `40046099052`); attempt 1's job `120728098807` failed. `test (windows-latest,
-informational)` and the other checks pass.
+    informational)` and the other checks pass.
   - `npx vitest run scripts/test/review-record.test.ts` at `8a6dcf9a`, one run
     (Node `v22.23.3`): `Test Files 1 passed (1)`, `Tests 64 passed (64)`, exit 0,
     33.80 s. This is one reading, and it does not reproduce the failure.
@@ -203,7 +203,7 @@ informational)` and the other checks pass.
 
 - **2026-10-24 — built (builder; no ship authority).** **Cause named and fixed.**
   `git commit` in git 2.55.0, the version the runner has, ends by starting `git
-maintenance run --auto --quiet --detach`. That process takes
+  maintenance run --auto --quiet --detach`. That process takes
   `objects/maintenance.lock`, forks into the background and removes the lock when the
   child next gets the CPU, so `git commit` returns with a regular file in
   `.git/objects` that is gone a moment later. `fs.cpSync` lists `objects`, then
@@ -220,8 +220,8 @@ maintenance run --auto --quiet --detach`. That process takes
 
   **Third occurrence.** `gh run view 40059133782 --log-failed`: a `push` to `main`
   at `a99bde49`, `test (ubuntu-latest)`, the same test, `ENOENT ...
-'/tmp/review-record-74LOcr/.git/objects'`, `Test Files 1 failed | 307 passed | 1
-skipped (309)`, `Tests 1 failed | 6525 passed | 2 skipped (6528)`. The title and the
+  '/tmp/review-record-74LOcr/.git/objects'`, `Test Files 1 failed | 307 passed | 1
+  skipped (309)`, `Tests 1 failed | 6525 passed | 2 skipped (6528)`. The title and the
   Why said "twice"; they now say three times (the filing counted inside a 60-run
   window that closed before this run).
 
@@ -260,18 +260,18 @@ skipped (309)`, `Tests 1 failed | 6525 passed | 2 skipped (6528)`. The title and
   then `rollback_lock_file(&lk)`. `GIT_TRACE2_EVENT` on the fixture's `commit`
   (`trace.mjs`): git 2.43.0 has `child_start ["git","maintenance","run","--auto","--quiet"]`,
   which the commit waits for; git 2.55.0 has `child_start
-["git","maintenance","run","--auto","--quiet","--detach"]`, and that process
+  ["git","maintenance","run","--auto","--quiet","--detach"]`, and that process
   records `region_enter "maintenance"` and then `exit 0` in the parent. Seen
   directly: `lockwatch.mjs <git> 150 40` (build the fixture, then poll `.git/objects`
   for 40 ms after `commit` returns, under 10 busy loops): git 2.55.0 `regular files
-seen directly in objects/ after commit returned: [["maintenance.lock",71]]`, so in
+  seen directly in objects/ after commit returned: [["maintenance.lock",71]]`, so in
   71 of 150 builds; git 2.43.0 `[]`, run straight after under the same loops. With no
   load, 60 builds of each were `[]`: the window is milliseconds, and the runner is
   slower than this machine.
 
   **The hypotheses in "What the code shows".**
   1. _The template's `afterAll` removed it during the test._ **Refuted.** `grep -n
-afterAll scripts/test/review-record.test.ts`, run at `524d6352` (line numbers
+     afterAll scripts/test/review-record.test.ts`, run at `524d6352` (line numbers
      differ from the `8a6dcf9a` ones in Why, which this build moved):
 
      ```
@@ -280,7 +280,7 @@ afterAll scripts/test/review-record.test.ts`, run at `524d6352` (line numbers
      ```
 
      The one hook (322) removes only `ticketRepoTemplate` (`fs.rmSync(ticketRepoTemplate,
-{ recursive: true, force: true })`, lines 323 to 325), and vitest runs it after the
+     { recursive: true, force: true })`, lines 323 to 325), and vitest runs it after the
      file's last test. The failure also names the copy's path, not the template's.
 
   2. _A remover outside the repo deleted `review-record-<random>`._ **Refuted**, as the
@@ -343,7 +343,7 @@ afterAll scripts/test/review-record.test.ts`, run at `524d6352` (line numbers
   1. _Probe count on `main`, with its contention._ `probe.mjs <tree> 20 6 <out>` runs
      `vitest run scripts/test/review-record.test.ts` 20 times one after another, with 6
      busy loops for the length of each run, git 2.43.0: `probe: 0 of 20 runs named
-ENOENT; 0 of 20 exited non-zero`, every run `Tests 64 passed (64)`, 908 s in all.
+     ENOENT; 0 of 20 exited non-zero`, every run `Tests 64 passed (64)`, 908 s in all.
      Also `vitest run scripts/test/` (14 files, no added load, 10 runs): `0 of 10`,
      `Tests 571 passed (571)`, 409 s. A 0 is recorded as 0. This probe cannot see the
      failure: one exposed event per run at roughly 0.1 % per event (the 7 / 8000 above)
@@ -353,7 +353,7 @@ ENOENT; 0 of 20 exited non-zero`, every run `Tests 64 passed (64)`, 908 s in all
   3. _The fixed head._ `probe.mjs <tree> 20 6 <out> <scratch git 2.55.0 bin>` (git 2.55.0
      first on `PATH`; the probe prints `git on the probe's PATH: git version 2.55.0`):
      `probe: 0 of 20 runs named ENOENT; 0 of 20 exited non-zero`, every run `Tests 64
-passed (64)`, 829 s in all. As uninformative as the sweep on `main`; the evidence
+     passed (64)`, 829 s in all. As uninformative as the sweep on `main`; the evidence
      that the line removes the failure is the last row of the table, 0 / 8000 against 7
      / 8000 for the same load, the same git and the same copy. The test names are
      unchanged: no `test(` line was added, removed or renamed.
@@ -374,7 +374,7 @@ passed (64)`, 829 s in all. As uninformative as the sweep on `main`; the evidenc
   built entry above: hypothesis 2 now reads **Refuted**, with gate 1's reproduction
   (14 of 8000 without the fix, 0 of 8000 with it) cited by command and output, and
   hypotheses 1 and 2 carry the real output of `grep -n afterAll …` and `grep -rn
-"review-record-" …` run at `524d6352`. The second grep printed 14 lines (3 in
+  "review-record-" …` run at `524d6352`. The second grep printed 14 lines (3 in
   `scripts/review-record.mjs`, 11 in the test file); gate 1's finding counted "11
   `mkdtemp`/comment hits", which is the test file's share only, and 3 of those 11 are not
   `mkdtemp` or comment lines (the prefix constant, the `startsWith` and the regex).
@@ -397,7 +397,7 @@ passed (64)`, 829 s in all. As uninformative as the sweep on `main`; the evidenc
      corroborated by gate 1's 0 of 8000 and CI on runner git 2.55.0; or have gate 2 re-run
      20 whole-file runs. **Chosen:** accept the builder's sweep.
   3. _The builder's follow-up question._ Whether to file a ticket for `land()`'s `git
-clone --no-hardlinks` being exposed to the same lock. Gate 1 measured no exposure
+     clone --no-hardlinks` being exposed to the same lock. Gate 1 measured no exposure
      (`gc.auto 0` in `land()` leaves the clone's commit with no `child_start` on git
      2.55.0, and nothing copies the clone). **Options:** no ticket; file one anyway.
      **Chosen:** no ticket. The chosen option was labelled "No ticket

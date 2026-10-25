@@ -798,15 +798,14 @@ export function ColumnChart(props: {
           </g>
         </svg>
       </div>
-      {hovering &&
-        centres[index] !== undefined && (
-          // The columns scroll under a fixed box, so the tip sits where the column is on screen.
-          <Tip
-            readout={readout}
-            x={(centres[index] ?? 0) - (scroller.current?.scrollLeft ?? 0)}
-            width={measured}
-          />
-        )}
+      {hovering && centres[index] !== undefined && (
+        // The columns scroll under a fixed box, so the tip sits where the column is on screen.
+        <Tip
+          readout={readout}
+          x={(centres[index] ?? 0) - (scroller.current?.scrollLeft ?? 0)}
+          width={measured}
+        />
+      )}
       <ReadoutSlot readout={readout} sizer={sizer} />
     </div>
   );

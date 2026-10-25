@@ -116,7 +116,7 @@ that does this work has to **rewrite a decline that is still in the tree**:
 3. Chromium loading an ordinary **public** HTTPS page still works with the
    generated root in place — the merge, not the replacement. dl-31 hit the same
    trap on the undici side and its answer was `[...tls.rootCertificates,
-operatorCa]`; the failure mode is that an operator root handed over on its
+   operatorCa]`; the failure mode is that an operator root handed over on its
    own fails every public origin.
 4. The boot line, `.env.example` and `01-ARCHITECTURE.md` say what is true after
    this change, not before it.
@@ -230,7 +230,7 @@ operatorCa]`; the failure mode is that an operator root handed over on its
   the first two things tried do nothing at all and fail silently.
 
   - **Chromium takes `--ignore-certificate-errors-spki-list=<base64 SHA-256 of
-the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
+    the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
     Testing 151.0.7922.34) through a real terminating proxy: no flag →
     `net::ERR_CERT_AUTHORITY_INVALID`; the **leaf's** SPKI listed → page loads;
     the **root's** SPKI listed → page loads. Chromium matches against every SPKI
@@ -260,7 +260,7 @@ the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
   dl-34 built cannot fire. dl-27's answer to that for ffmpeg was the `CONNECT`
   status line, and it half works here: yt-dlp quotes it verbatim
   (`Tunnel connection failed: 502 TLS certificate verification failed
-(DEPTH_ZERO_SELF_SIGNED_CERT)`, measured), and **Chromium collapses every
+  (DEPTH_ZERO_SELF_SIGNED_CERT)`, measured), and **Chromium collapses every
   non-200 `CONNECT` response to `net::ERR_TUNNEL_CONNECTION_FAILED` and keeps
   nothing else** (measured). A refused certificate, a blocked target and a dead
   upstream are one string by the time the browser tier sees them.
@@ -391,7 +391,7 @@ the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
   `egress-proxy.test.ts` are all committed, and the Chromium measurement the
   design rests on is a committed test
   (`egress-proxy.test.ts`'s `"what Chromium reports for a refused CONNECT
-(dl-37)"`) rather than only a docblock's paraphrase of one — the reviewer
+  (dl-37)"`) rather than only a docblock's paraphrase of one — the reviewer
   asked to see the actual output, not a summary of it.
 
   It did not arrive there in one step. The owner's first answer, given the
@@ -460,7 +460,7 @@ the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
     socket error with no `authorizationError`, which is exactly the `onFailed`
     path. Both new tests mutation-verified: removing the `onOtherConnectFailure`
     call from `onFailed` fails the first with `expected [] to deeply equal
-['not-tls.test']`; removing it from the chained-upstream-refusal branch fails
+    ['not-tls.test']`; removing it from the chained-upstream-refusal branch fails
     the second identically for `'chained-refusal.test'`. The stale "three...
     call sites" in the negative test's own comment, and one arithmetic slip
     elsewhere in this Log ("four new call sites" against a paragraph that had
@@ -502,7 +502,7 @@ the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
   removing the `--ignore-certificate-errors-spki-list` push from
   `pool.ts` failed Done-when 1's test, and making the verdict wrapper a no-op
   failed Done-when 2's with `expected 'UNREACHABLE' to be
-'TLS_VERIFICATION_FAILED'` — the exact regression, named by the assertion.
+  'TLS_VERIFICATION_FAILED'` — the exact regression, named by the assertion.
 
   ### What is not measured, stated as unmeasured
   - **No private-root deployment and no container build.** Everything is
