@@ -44,6 +44,7 @@ import type {
 } from "@ledger/contract";
 import type { LayoutAsk, ReceiptReader } from "@ledger/receipts";
 import type { Directory } from "../src/directory.ts";
+import { LAYOUT_PROMPT } from "../src/layout-view.ts";
 import { createLogger } from "../src/logger.ts";
 import { filePhotoStore } from "../src/receipt-photos.ts";
 import { createApp } from "../src/server.ts";
@@ -357,13 +358,19 @@ async function workbookOf(household: Household): Promise<Buffer> {
   ]);
 }
 
+/** Every request the describer was shown, in order, so the sweep can read what leaves the house. */
+const ASKED: string[] = [];
+
 /** A describer that answers the sweep's layout whatever it is shown: the file is what differs. */
-const workbookAsk: LayoutAsk = async () => ({
-  text: JSON.stringify(WORKBOOK_LAYOUT),
-  stopReason: "end_turn",
-  inputTokens: 1,
-  outputTokens: 1,
-});
+const workbookAsk: LayoutAsk = async (request) => {
+  ASKED.push(request);
+  return {
+    text: JSON.stringify(WORKBOOK_LAYOUT),
+    stopReason: "end_turn",
+    inputTokens: 1,
+    outputTokens: 1,
+  };
+};
 
 async function call(
   app: App,
@@ -549,6 +556,7 @@ const WRITES: Write[] = [
   {
     route: "workbookDescribe",
     async run(app, h) {
+      const asked = ASKED.length;
       const response = await call(app, h, "POST", ROUTES.workbookDescribe, {
         file: (await workbookOf(h)).toString("base64"),
         consent: true,
@@ -561,6 +569,19 @@ const WRITES: Write[] = [
       expect(
         marks(other).filter((mark) => response.body.includes(mark)),
         response.body,
+      ).toEqual([]);
+      // What the model was sent, too (gate 1's F4): the caller's own file and
+      // nothing of the other household. The prompt is the same for everyone and
+      // says "samples", which holds home's "sam", so only what follows it is read.
+      const sent = ASKED.slice(asked);
+      expect(sent).toHaveLength(1);
+      const [request = ""] = sent;
+      expect(request.startsWith(LAYOUT_PROMPT)).toBe(true);
+      const shown = request.slice(LAYOUT_PROMPT.length);
+      expect(shown).toContain(h.word);
+      expect(
+        marks(other).filter((mark) => shown.includes(mark)),
+        shown,
       ).toEqual([]);
     },
   },

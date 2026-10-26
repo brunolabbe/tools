@@ -347,7 +347,13 @@ describe("what is refused before the model is asked (Done when 6 and 8)", () => 
     for (const consent of [OMIT, false, "yes", null]) {
       const response = await describeFile(started, fileOf("lg7"), consent);
       expect(response.statusCode).toBe(400);
-      expect(errorOf(response).code).toBe("BAD_REQUEST");
+      // The consent sentence, not the schema's "Choose a workbook to send.":
+      // the person is told why, and that nothing left (gate 1's F5).
+      expect(errorOf(response)).toMatchObject({
+        code: "BAD_REQUEST",
+        message:
+          "The workbook's samples are sent only when you agree to send them. Nothing was sent.",
+      });
     }
     expect(model.requests).toHaveLength(0);
     expect(started.reader.calls).toBe(0);

@@ -405,6 +405,8 @@ const CARDS: Readonly<Record<string, number>> = {
   Salaries: 2,
   Household: 2,
   Admin: 3,
+  // lg-66: the date column, the bucket labels and the checks, once read.
+  "Import (read)": 3,
 };
 
 /** The tabs whose screens carry a radio group, with how many radios each draws. */
