@@ -1502,9 +1502,8 @@ reaches outside the host unless it is given a key to read receipts
   `add` makes a household by adding its first person: it is named "Home", its id
   is a generated UUID that the command prints, and `member` takes that id. A
   household made before lg-71 keeps its one-word id, and `list` prints every id.
-  A household holds two people, each
-  behind any number of addresses, and a name it has held stays one of its two.
-  A household's books file is made by the API the first time it needs it. **On
+  A household holds any number of people, each behind any number of
+  addresses. A household's books file is made by the API the first time it needs it. **On
   the first deploy of the directory (lg-20) it is empty**, so everyone sees the
   "no household" page until the household and its members are added, and the
   API's boot log warns that the directory has no members; and delete

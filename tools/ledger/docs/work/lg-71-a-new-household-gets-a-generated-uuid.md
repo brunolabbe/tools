@@ -253,3 +253,10 @@ and the admin can both rename. Until lg-77 lands, every household made here is
     whether to leave it until lg-77 (the builder's recommendation) or change it
     now; the owner chose **leave until lg-77**. Nothing changed here; lg-77's
     Build 7 carries the line.
+- 2026-10-26 — Fixed at landing by owner choice: gate 2, the low — "`docs/02-DEPLOYMENT.md`,
+  the recovery paragraph the round rewrote, still says 'A household holds two
+  people … a name it has held stays one of its two'. It is false at the head."
+  The sentence now reads "A household holds any number of people, each behind
+  any number of addresses", as `directory.ts` and the README state it.
+  `git diff bd9972ac HEAD -- docs/02-DEPLOYMENT.md | grep -c '^-.*A household holds two people, each'`
+  → `1`.
