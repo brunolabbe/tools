@@ -210,7 +210,7 @@ their name stays required.
        They keep sorting by id: lg-9's rule colours a person by their place in
        the list of ids "so a rename changes no colour" (`people.tsx`), which
        sorting by shown name would break. Reported to the orchestrator as an
-       open decision. The arithmetic's ties keep the id, as the brief says;
+       open decision; the owner chose the id order (entry below). The arithmetic's ties keep the id, as the brief says;
        their comments say "sorts first", still true. Sorted by shown name now:
        `GET /api/people`'s `people` and `retired`, the household and admin
        routes' members and people, the member form's people on both screens,
@@ -249,3 +249,12 @@ their name stays required.
     fails (1 of 3 lg-76 cases); restored from `b7bde38c`, passes. The full
     `npm test -- --project ledger` was not run (a first build runs no full
     suite; CI runs it on the draft).
+- 2026-10-26 — Owner's answer, relayed by the orchestrator in the build's resume.
+  Asked, because Build 4 lists the stats' series and colours (`books/src/stats.ts`)
+  among the places that sort by shown name while lg-9's and lg-33's rule colours a
+  person by their place in the list of ids "so a rename changes no colour"
+  (`web/src/people.tsx`), whether the stats keep their id order. Options: (a) keep
+  the stats ordered by id (the builder's recommendation, and what the build
+  did); (b) sort them by shown name, which recolours a person on a rename. The
+  owner chose **(a)**. No code changes; item 4 of the build entry's "What the
+  brief had wrong" stands as built.
