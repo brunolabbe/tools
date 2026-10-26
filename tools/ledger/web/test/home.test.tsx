@@ -13,6 +13,7 @@ import type { BucketsResponse } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
 import { fetchMortgage } from "../src/api/mortgage.ts";
 import { Home } from "../src/home/Home.tsx";
+import { PeopleNamesProvider } from "../src/people.tsx";
 import { LIVE } from "./mortgage-fixtures.ts";
 
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
@@ -119,4 +120,42 @@ test("between three people, says who has paid the most and by how much over the 
   buckets.mockResolvedValue({ ...FIGURES, mortgage: { ...three, lead: null } });
   render(<Home />);
   expect(await screen.findByText("The two who have paid the most are level.")).toBeTruthy();
+});
+
+// lg-76: a generated id's order means nothing, so the rows a person reads are by shown name.
+test("lists each person's own money and what they put in by shown name, not by id (lg-76)", async () => {
+  const FIRST = "0b9a8c7d-6e5f-4a3b-9c2d-1e0f2a3b4c5d";
+  const SECOND = "6f1c2a3b-0d4e-4f5a-8b6c-7d8e9f0a1b2c";
+  buckets.mockResolvedValue({
+    ...FIGURES,
+    mortgage: {
+      ...FIGURES.mortgage,
+      own: [
+        { personId: FIRST, ownCents: 14999 },
+        { personId: SECOND, ownCents: 5000 },
+      ],
+      lead: { personId: FIRST, byCents: 9999 },
+    },
+    buffer: {
+      balanceCents: 13000,
+      contributions: [
+        { personId: FIRST, contributedCents: 0 },
+        { personId: SECOND, contributedCents: 30000 },
+      ],
+    },
+  });
+
+  render(
+    <PeopleNamesProvider value={{ [FIRST]: "Zoe", [SECOND]: "Alex" }}>
+      <Home />
+    </PeopleNamesProvider>,
+  );
+
+  await screen.findByRole("heading", { name: "Mortgage" });
+  const rows = (name: string): string[] =>
+    section(name)
+      .getAllByRole("listitem")
+      .map((row) => row.textContent ?? "");
+  expect(rows("Mortgage")).toEqual(["Alex50.00 $", "Zoe149.99 $"]);
+  expect(rows("Buffer")).toEqual(["Put in by Alex300.00 $", "Put in by Zoe0.00 $"]);
 });
