@@ -35,7 +35,7 @@ import {
 } from "../api/stats.ts";
 import { formatShare, personLabel, splitLabel, splitShortLabel } from "../labels.ts";
 import { endedSentence, reachesClose, spansClose } from "../mortgage.ts";
-import { shownName, usePeopleNames } from "../people.tsx";
+import { inShownOrder, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 import { ChartCard, ColumnChart, LineChart } from "./Chart.tsx";
 import type { ColumnSeries, LegendItem, LineSeries, TableData } from "./Chart.tsx";
@@ -419,7 +419,7 @@ function ratioWords(
   shares: readonly { personId: string; partsPerMillion: number }[],
   names: ShownNames,
 ): string {
-  return shares
+  return inShownOrder(shares, names, (share) => share.personId)
     .map((share) => `${shownName(names, share.personId)} ${formatShare(share.partsPerMillion)}`)
     .join(", ");
 }

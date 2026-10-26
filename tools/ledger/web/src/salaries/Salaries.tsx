@@ -24,7 +24,7 @@ import type { Ratio, RatioProposal, Salary } from "@ledger/contract";
 import { fetchPeople } from "../api/rules.ts";
 import { confirmRatio, enterSalaries, fetchRatios, fetchSalaries } from "../api/salaries.ts";
 import { formatShare } from "../labels.ts";
-import { shownName, usePeopleNames } from "../people.tsx";
+import { byShownName, inShownOrder, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
 type Load =
@@ -33,7 +33,7 @@ type Load =
   | { state: "ready"; people: string[]; salaries: Salary[]; inEffect: Ratio | null };
 
 function sharesLabel(shares: RatioProposal["shares"], names: ShownNames): string {
-  return shares
+  return inShownOrder(shares, names, (share) => share.personId)
     .map((share) => `${shownName(names, share.personId)} ${formatShare(share.partsPerMillion)}`)
     .join(" · ");
 }
@@ -260,14 +260,20 @@ export function Salaries(): React.ReactElement {
 
       {salaries.length > 0 && (
         <ul className="figures">
-          {salaries.map((salary) => (
-            <li key={salary.id}>
-              <span>
-                {salary.year} · {shownName(names, salary.personId)}
-              </span>
-              <span className="amount">{formatCents(salary.amountCents)}</span>
-            </li>
-          ))}
+          {/* Newest year first, each year's people by shown name (lg-76). */}
+          {salaries
+            .toSorted(
+              (one, other) =>
+                other.year - one.year || byShownName(names)(one.personId, other.personId),
+            )
+            .map((salary) => (
+              <li key={salary.id}>
+                <span>
+                  {salary.year} · {shownName(names, salary.personId)}
+                </span>
+                <span className="amount">{formatCents(salary.amountCents)}</span>
+              </li>
+            ))}
         </ul>
       )}
     </section>

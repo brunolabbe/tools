@@ -663,3 +663,68 @@ describe("no generated id reaches a screen (lg-76)", () => {
     await showsNamesOnly(`${UNNAMED} has paid 1.00 $ more.`, [UNNAMED]);
   });
 });
+
+// lg-76: the books give a ratio's shares and a split's parts in id order, which
+// for generated ids means nothing; a sentence lists them by shown name.
+describe("people listed in a sentence read by shown name (lg-76)", () => {
+  // SAM's id sorts before ALEX's, so the books' order is sam first.
+  const ID_ORDER = [
+    { personId: SAM, partsPerMillion: 400_000, salaryId: 2 },
+    { personId: ALEX, partsPerMillion: 600_000, salaryId: 1 },
+  ];
+
+  test("a ratio's shares on the salaries screen", async () => {
+    expect(SAM < ALEX).toBe(true);
+    const ratio: Ratio = {
+      id: 1,
+      effectiveFrom: "2025-01-01",
+      shares: ID_ORDER,
+      supersedes: null,
+      enteredAt: "2026-10-03T09:30:00.000Z",
+      enteredBy: ALEX,
+    };
+    const salary = (id: number, personId: string): Salary => ({
+      id,
+      personId,
+      year: 2025,
+      amountCents: 100,
+      supersedes: null,
+      enteredAt: "2026-10-03T09:30:00.000Z",
+      enteredBy: ALEX,
+    });
+    vi.mocked(fetchSalaries).mockResolvedValue([salary(2, SAM), salary(1, ALEX)]);
+    vi.mocked(fetchRatios).mockResolvedValue({
+      asOf: "2026-10-03",
+      ratios: [ratio],
+      inEffect: ratio,
+    });
+    render(withNames(<Salaries />));
+
+    await showsNamesOnly("Ratio in effect: Alex 60.0000 % · Sam 40.0000 %, since 2025-01-01.");
+    const records = [...document.querySelectorAll("ul.figures li")].map((item) => item.textContent);
+    expect(records).toEqual([
+      expect.stringContaining("2025 · Alex"),
+      expect.stringContaining("2025 · Sam"),
+    ]);
+  });
+
+  test("a split's parts on the mortgage split card", async () => {
+    const split: MortgageSplit = {
+      id: 1,
+      effectiveFrom: "2026-02-01",
+      mode: "shares",
+      shares: ID_ORDER.map(({ personId, partsPerMillion }) => ({ personId, partsPerMillion })),
+      supersedes: null,
+      enteredAt: "2026-10-03T09:30:00.000Z",
+      enteredBy: ALEX,
+    };
+    vi.mocked(fetchMortgageSplits).mockResolvedValue({
+      asOf: "2026-10-03",
+      splits: [split],
+      inEffect: split,
+    });
+    render(withNames(<MortgageSplitCard />));
+
+    await showsNamesOnly("by shares: Alex 60.0000 % · Sam 40.0000 %");
+  });
+});

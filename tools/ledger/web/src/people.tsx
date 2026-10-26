@@ -33,6 +33,20 @@ export function shownName(names: ShownNames, person: string): string {
 }
 
 /**
+ * `items` in the order a person reads them (lg-76), each by the person `personOf`
+ * gives: a ratio's shares, a split's parts. The books order them by id, which is
+ * fixed but means nothing for a generated one.
+ */
+export function inShownOrder<T>(
+  items: readonly T[],
+  names: ShownNames,
+  personOf: (item: T) => string,
+): T[] {
+  const order = byShownName(names);
+  return items.toSorted((one, other) => order(personOf(one), personOf(other)));
+}
+
+/**
  * The order a person reads a list of people in (lg-76): by how each is shown,
  * then by id where two are shown alike. A generated id's order means nothing.
  */

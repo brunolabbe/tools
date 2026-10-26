@@ -11,7 +11,7 @@ import type {
   SpendingCategorySource,
 } from "@ledger/contract";
 import { formatCents } from "@ledger/books";
-import { shownName } from "./people.tsx";
+import { inShownOrder, shownName } from "./people.tsx";
 import type { ShownNames } from "./people.tsx";
 
 export const BUCKET_LABELS: Record<Bucket, string> = {
@@ -93,7 +93,7 @@ function listOf(items: readonly string[]): string {
 
 /** Each person's part, as the salaries screen shows a ratio's: `alex 60.0000 % · sam 40.0000 %`. */
 export function partsLabel(parts: readonly MortgageSplitPart[], names: ShownNames): string {
-  return parts
+  return inShownOrder(parts, names, (part) => part.personId)
     .map((part) => `${shownName(names, part.personId)} ${formatShare(part.partsPerMillion)}`)
     .join(" · ");
 }
@@ -116,7 +116,9 @@ export function splitLabel(split: MortgageSplitOn, names: ShownNames): string {
   if (split.mode === "ratio" && !split.noRatio) {
     return `at the ratio: ${partsLabel(split.parts, names)}`;
   }
-  const people = split.parts.map((part) => shownName(names, part.personId));
+  const people = inShownOrder(split.parts, names, (part) => part.personId).map((part) =>
+    shownName(names, part.personId),
+  );
   const equally =
     people.length === 1 ? `all to ${listOf(people)}` : `equally between ${listOf(people)}`;
   return split.noRatio ? `${equally}, no ratio being in effect yet` : equally;

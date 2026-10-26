@@ -183,12 +183,19 @@ async function seed(
   // Asked first, since a hook run again finds sam already there.
   const me = (await (await api.get("/api/me")).json()) as { person: { household: string } };
   const members = `/api/households/${me.person.household}/members`;
-  const household = (await (await api.get(`/api/households/${me.person.household}`)).json()) as {
-    members: { address: string }[];
-  };
-  if (!household.members.some((member) => member.address === "sam@example.test")) {
+  const read = async () =>
+    (await (await api.get(`/api/households/${me.person.household}`)).json()) as {
+      members: { address: string; person: string; name: string }[];
+    };
+  if (!(await read()).members.some((member) => member.address === "sam@example.test")) {
     await post(api, members, { address: "sam@example.test", person: "sam" });
   }
+  // lg-76: alex and sam were added by name, so each has a generated id, which
+  // the books store; the seed names each by the id the household answers.
+  const shownAs = new Map((await read()).members.map((member) => [member.name, member.person]));
+  const alex = shownAs.get("alex");
+  const sam = shownAs.get("sam");
+  if (alex === undefined || sam === undefined) throw new Error("alex and sam are not both members");
 
   // Playwright starts a new worker after a failed test and runs this hook in
   // it again, against the same server: the books are already full.
@@ -210,7 +217,7 @@ async function seed(
     descriptionPattern: "Virement entre folios /Caisse du Lac",
     category: null,
     amountCents: 40000,
-    personId: "sam",
+    personId: sam,
     bucket: "current-expenses",
     spendingCategoryId: null,
   });
@@ -218,7 +225,7 @@ async function seed(
     descriptionPattern: "Virement - AccèsD Internet /Caisse du Lac",
     category: null,
     amountCents: null,
-    personId: "alex",
+    personId: alex,
     bucket: "current-expenses",
     spendingCategoryId: null,
   });
@@ -227,8 +234,8 @@ async function seed(
   const { salaries } = (await post(api, "/api/salaries", {
     year: 2026,
     salaries: [
-      { personId: "alex", amountCents: 7_200_000 },
-      { personId: "sam", amountCents: 5_400_000 },
+      { personId: alex, amountCents: 7_200_000 },
+      { personId: sam, amountCents: 5_400_000 },
     ],
   })) as { salaries: { id: number }[] };
   await post(api, "/api/ratios", {
@@ -237,16 +244,16 @@ async function seed(
   });
 
   await post(api, "/api/recurring", {
-    personId: "alex",
+    personId: alex,
     monthlyCents: 8999,
     startDate: "2026-08-15",
     endDate: null,
     label: "Internet and phone",
   });
   const lines = [
-    ["alex", "2026-09-03", -12_345, 1, "Weekly groceries"],
-    ["sam", "2026-09-10", -4_550, 3, "Light bulbs and a mop"],
-    ["sam", "2026-09-21", -9_800, 4, "Pharmacy, the whole month"],
+    [alex, "2026-09-03", -12_345, 1, "Weekly groceries"],
+    [sam, "2026-09-10", -4_550, 3, "Light bulbs and a mop"],
+    [sam, "2026-09-21", -9_800, 4, "Pharmacy, the whole month"],
   ] as const;
   for (const [personId, date, amountCents, spendingCategoryId, note] of lines) {
     await post(api, "/api/period-lines", {
@@ -261,7 +268,7 @@ async function seed(
   }
   await post(api, "/api/periods/close", { start: null, end: "2026-09-30" });
   await post(api, "/api/period-lines", {
-    personId: "alex",
+    personId: alex,
     date: "2026-10-04",
     amountCents: -6_025,
     category: null,
