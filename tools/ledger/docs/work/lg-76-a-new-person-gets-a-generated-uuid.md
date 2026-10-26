@@ -92,12 +92,21 @@ their name stays required.
 ## Done when
 
 - A person added under a new name gets a UUID id and that name as their shown
-  name, in one transaction, proved by a test in `api/test/households.test.ts`;
-  every component the Log's enumeration lists (each `web/src` component that
-  renders a person, found by the grep the Log names) shows the name, proved by a
-  web test covering exactly that list that no UUID is rendered.
+  name, proved by a test in `api/test/households.test.ts`; the two are written in
+  one transaction, proved by `api/test/directory.test.ts` › "the membership and
+  the first shown name are written in one transaction"; every component the
+  Log's enumeration lists (each `web/src` component that renders a person, found
+  by the grep the Log names) shows the name, proved by a web test covering
+  exactly that list that no UUID is rendered.
   - _Superseded 2026-10-26 by the owner's answer below:_ "every screen shows the
     name, proved by a web test that no UUID is rendered."
+  - _Superseded 2026-10-26 by the owner's answer to gate 1's F5 (Log, round
+    1):_ "A person added under a new name gets a UUID id and that name as their
+    shown name, in one transaction, proved by a test in
+    `api/test/households.test.ts`; every component the Log's enumeration lists
+    (each `web/src` component that renders a person, found by the grep the Log
+    names) shows the name, proved by a web test covering exactly that list that
+    no UUID is rendered."
 - Adding an address for an existing person, legacy or UUID, by their shown name
   reuses their id, proved by tests.
 - A household with legacy name ids computes the same buckets, ratios and
@@ -286,10 +295,65 @@ their name stays required.
     `b568490b` both pass (16 of 16 in the file). Per-person rows elsewhere (the
     home screen's own money, the period's "Paid by" groups) still come in the
     API's order, which for two people with generated ids is by id; the e2e
-    expects none of them in an order, and none was changed.
+    expects none of them in an order, and none was changed. _(Corrected
+    2026-10-26, round 1 below: the "Paid by" groups come from `/api/people`,
+    which is by shown name; the home rows are now ordered too.)_
   - **Commands.** `E2E_PORT=8176 npm run e2e:ledger` after `npm run build`: 12
     passed of 12 (this branch's spec has 12 cases; #670 adds a thirteenth). The
     360 px screenshots of Admin, Household, Home, Salaries, Period, Inbox,
     Rules, History, Stats, Receipt and Categories were opened: every person is
     shown as alex or sam, and no UUID is on any of them. `npx vitest run
     tools/ledger/web`: 262 of 262 in 20 files.
+- 2026-10-26 — Round 1, on gate 1's findings (`e34208a3`). Owner's answers,
+  2026-10-26, relayed by the orchestrator in the fixer dispatch: F1, options (a)
+  sort the three render sites by shown name with `inShownOrder` (the gate's
+  recommendation) or (b) leave them and reword Build 4: chosen **(a)**. The
+  lows, options F2 to F5 (recommended), F2 and F5 only, or none: chosen **F2 to
+  F5**; F6 to F8 stay recorded, unfixed.
+  - **F1, fixed (`b1b756d3`).** `inShownOrder` now orders Home's "each person's
+    own money" rows (`mortgage.own`), its "Put in by" rows (`buffer.contributions`)
+    and the deposits `settlementSentence` lists for three people or more
+    (`Periods.tsx`). No amount, colour or books order changes. Tests, each with
+    the rows given in id order and a UUID person sorting first: `home.test.tsx`
+    "lists each person's own money and what they put in by shown name, not by
+    id" (two assertions, one per site) and `periods.test.tsx` "lists three
+    people's deposits by shown name, not by id". With one site's `inShownOrder`
+    removed from the committed tree, exactly that test fails and the other 23 of
+    24 pass: `mortgage.own` ("expected [ 'Zoe149.99 $', 'Alex50.00 $' ] to deeply
+    equal [ 'Alex50.00 $', 'Zoe149.99 $' ]"), `buffer.contributions` (the
+    "Put in by" rows), deposits ("Received: Zoe deposits 10.00 $, Alex deposits
+    20.00 $ and Maya deposits 30.00 $ ..."). The transfers a sentence lists
+    ("Or directly: A pays B ...") are pairs and were not in the finding; they
+    still come in the settlement's order.
+  - **F2, corrected.** The sentence above that says the period's "Paid by"
+    groups "still come in the API's order, which … is by id" is false: they come
+    from `fetchPeople`, which is `/api/people`'s `people`, sorted by shown name
+    in this change (`api/test/households.test.ts` › "people are listed by how
+    they are shown, not by id"). Only a person retired at a close who has a line
+    in the open period is appended after, in line order. The old entry is
+    marked, not rewritten.
+  - **F3, fixed (`bb978490`).** `api/test/spending-backfill.test.ts` › "--as
+    names a person under a generated id by their shown name": a household with a
+    person under a generated id shown as "Casey"; `--as Casey --write` records
+    4 overrides, and a refusal lists the members as shown ("(Casey, alex)") with
+    no UUID in it. With `memberNamed(found, as)` replaced by
+    `found.people.includes(as) ? as : undefined` in
+    `spending-backfill-command.ts` (the gate's plant) the test fails ("--as names
+    "Casey", who is not a member of home ..."), 1 of 9 failed; restored from
+    `bb978490`, 9 of 9 pass.
+  - **F4, fixed (`bb978490`).** `nameFromAddress` cut the local part by UTF-16
+    units. The bound the column holds is in characters: `person_names.name` is
+    `CHECK (length(name) BETWEEN 1 AND 64 ...)` and SQLite's `length()` counts
+    characters of a TEXT, so the cut is now by code points (`firstCharacters`,
+    `Array.from`), for the first cut and the one that makes room for " 2", " 3".
+    Test in `api/test/directory.test.ts`, at the end of "a new person gets a
+    generated id": three addresses whose local part is 63 `e`, an emoji and 5
+    `x`, added with no name; the names are the 63 `e` and the emoji whole, then
+    62 `e` + " 2" and + " 3". Before the fix, on `b1b756d3`'s source: `SqliteError:
+    a shown name is unique in its household`, 1 of 100 failed; after, 100 of 100.
+    The reproduction was run at the Directory, not over HTTP, where the same
+    method answers the 500.
+  - **F5, reworded.** Done when 1 now names `api/test/directory.test.ts` › "the
+    membership and the first shown name are written in one transaction" for the
+    one-transaction clause; the line it supersedes is kept beside it, marked
+    with the owner's answer.
