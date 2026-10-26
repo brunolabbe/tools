@@ -155,7 +155,7 @@ test("lists each person's own money and what they put in by shown name, not by i
   const rows = (name: string): string[] =>
     section(name)
       .getAllByRole("listitem")
-      .map((row) => row.textContent ?? "");
+      .map((row: HTMLElement) => row.textContent ?? "");
   expect(rows("Mortgage")).toEqual(["Alex50.00 $", "Zoe149.99 $"]);
   expect(rows("Buffer")).toEqual(["Put in by Alex300.00 $", "Put in by Zoe0.00 $"]);
 });
