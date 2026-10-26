@@ -65,6 +65,11 @@ export interface WorkbookImportOptions {
   personId: string;
   /** The household's current members' names (lg-20), enrolled as a boot would enrol them. */
   members: readonly string[];
+  /**
+   * How the directory shows each person, by id (lg-76), so a workbook's names
+   * reach a person whose id is generated. None by default.
+   */
+  names?: ReadonlyMap<string, string>;
   corrections: Corrections;
   /** Whether this is meant as the import itself, which only changes what the report says. */
   write: boolean;
@@ -615,7 +620,11 @@ function run(
 ): { ok: boolean; report: string } {
   enrollPeople(db, options.members, options.now());
   const people = knownPeople(db);
-  const reading = readWorkbook(sheets, { people, corrections: options.corrections });
+  const reading = readWorkbook(sheets, {
+    people,
+    corrections: options.corrections,
+    ...(options.names === undefined ? {} : { names: options.names }),
+  });
   const problems = [...reading.problems];
   // None under the household's layout, which names a bucket and a balance
   // column; a row with neither is a statement's, never filed by this import.

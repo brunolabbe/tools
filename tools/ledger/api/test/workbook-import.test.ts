@@ -1200,3 +1200,89 @@ describe("a free-text cell that holds a number or a date (lg-68, round 1)", () =
     expect(ran.out).toContain("Refused: nothing was written.");
   });
 });
+
+// lg-76: a person added since has a generated id, which neither `--as` nor a
+// workbook names; both reach them by how the household shows them.
+describe("the import and a person's shown name (lg-76)", () => {
+  const ALEX_ID = "11111111-1111-4111-8111-111111111111";
+  const SAM_ID = "22222222-2222-4222-8222-222222222222";
+
+  /** The test household with alex and sam added by name, each under a generated id. */
+  function generatedPeople(): void {
+    rmSync(directoryPath);
+    const directory = Directory.open(directoryPath);
+    try {
+      const change = { by: "operator", at: NOW };
+      directory.addHousehold({ id: HOUSEHOLD, name: "Home", ...change });
+      directory.addMemberByName({
+        household: HOUSEHOLD,
+        address: "alex@example.test",
+        person: "alex",
+        ...change,
+        newId: () => ALEX_ID,
+      });
+      directory.addMemberByName({
+        household: HOUSEHOLD,
+        address: "sam@example.test",
+        person: "sam",
+        ...change,
+        newId: () => SAM_ID,
+      });
+    } finally {
+      directory.close();
+    }
+  }
+
+  test("--as and the workbook's names reach people under generated ids by their shown names", async () => {
+    generatedPeople();
+
+    const ran = await run(await workbook(), "--as", "alex", "--write");
+
+    expect(ran.code, ran.out + ran.err).toBe(0);
+    const db = books();
+    expect(db.prepare("SELECT DISTINCT person_id FROM salaries ORDER BY person_id").all()).toEqual([
+      { person_id: ALEX_ID },
+      { person_id: SAM_ID },
+    ]);
+    expect(
+      db
+        .prepare(
+          "SELECT DISTINCT person_id FROM classifications WHERE person_id IS NOT NULL ORDER BY person_id",
+        )
+        .all(),
+    ).toEqual([{ person_id: ALEX_ID }, { person_id: SAM_ID }]);
+    expect(db.prepare("SELECT DISTINCT classified_by FROM classifications").all()).toEqual([
+      { classified_by: ALEX_ID },
+    ]);
+    db.close();
+  });
+
+  test("--as names a person from before lg-76 by their shown name or by their id", async () => {
+    const directory = Directory.open(directoryPath);
+    directory.renamePerson({
+      household: HOUSEHOLD,
+      person: "alex",
+      name: "Alexandre",
+      by: "operator",
+      at: NOW,
+    });
+    directory.close();
+
+    const byShown = await run(await workbook(), "--as", "Alexandre");
+    const byId = await run(await workbook(), "--as", "alex");
+
+    expect(byShown.code, byShown.err).toBe(0);
+    expect(byId.code, byId.err).toBe(0);
+  });
+
+  test("--as that names nobody lists the members as shown, never by a generated id", async () => {
+    generatedPeople();
+
+    const ran = await run(await workbook(), "--as", "kim");
+
+    expect(ran.code).toBe(2);
+    expect(ran.err).toContain(`--as names "kim", who is not a member of ${HOUSEHOLD}`);
+    expect(ran.err).toContain("(alex, sam)");
+    expect(ran.err).not.toContain(ALEX_ID);
+  });
+});

@@ -16,6 +16,7 @@ import type {
   AdminHouseholdsResponse,
   CreateHouseholdResponse,
   ErrorResponse,
+  HouseholdMember,
   HouseholdResponse,
   MeResponse,
   PeopleResponse,
@@ -23,8 +24,19 @@ import type {
 } from "@ledger/contract";
 import { migrateDirectory } from "../src/db/directory-schema.ts";
 import { Directory } from "../src/directory.ts";
+import { enrollPeople } from "../src/people.ts";
 import { ADMIN, ALEX, HOUSEHOLD, SAM } from "./helpers/access.ts";
-import { AWAY, KIM, NOW, directorySnapshot, send, startHouseholds } from "./helpers/households.ts";
+import {
+  AWAY,
+  KIM,
+  NOW,
+  directorySnapshot,
+  generatedId,
+  send,
+  sequentialIds,
+  startHouseholds,
+  twoHouseholds,
+} from "./helpers/households.ts";
 import type { Harness } from "./helpers/households.ts";
 import { VERBS } from "./helpers/routes.ts";
 
@@ -52,7 +64,11 @@ const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9
 describe("an admin", () => {
   // lg-71: made by adding its first person, under a generated UUID and "Home".
   test("creates a household, adds its members, and they sign in to empty books of their own", async () => {
-    const { app, directory } = await start();
+    // lg-76: each new person is given a generated id, and the name typed is
+    // only how they are shown. The household takes the first id, robin the
+    // second and lee the third.
+    const { app, directory } = await start(twoHouseholds(), [ADMIN], sequentialIds());
+    const [cabin, robin, lee] = [generatedId(1), generatedId(2), generatedId(3)];
     const created = await send(app, ADMIN, "POST", ROUTES.adminHouseholds, {
       address: "Robin@Cabin.TEST",
       person: "robin",
@@ -61,21 +77,20 @@ describe("an admin", () => {
     const household = created.json<CreateHouseholdResponse>();
     expect(household.id).toMatch(UUID_SHAPE);
     expect(household).toEqual({
-      id: household.id,
+      id: cabin,
       name: "Home",
-      members: [{ address: "robin@cabin.test", person: "robin", name: "robin" }],
-      people: [{ person: "robin", name: "robin", standing: "in" }],
+      members: [{ address: "robin@cabin.test", person: robin, name: "robin" }],
+      people: [{ person: robin, name: "robin", standing: "in" }],
     });
-    const cabin = household.id;
     const added = await send(app, ADMIN, "POST", of("adminMembers", cabin), {
       address: "Lee@Cabin.TEST",
       person: "lee",
     });
-    expect(added.json()).toEqual({ address: "lee@cabin.test", person: "lee", name: "lee" });
+    expect(added.json()).toEqual({ address: "lee@cabin.test", person: lee, name: "lee" });
 
     const me = await send(app, "robin@cabin.test", "GET", ROUTES.me);
     expect(me.json<MeResponse>().person).toEqual({
-      id: "robin",
+      id: robin,
       email: "robin@cabin.test",
       household: cabin,
     });
@@ -84,7 +99,7 @@ describe("an admin", () => {
     });
     expect(
       (await send(app, "robin@cabin.test", "GET", ROUTES.people)).json<PeopleResponse>(),
-    ).toEqual({ people: ["lee", "robin"], retired: [], names: { lee: "lee", robin: "robin" } });
+    ).toEqual({ people: [lee, robin], retired: [], names: { [lee]: "lee", [robin]: "robin" } });
 
     // Books of its own: a rule filed there is not home's, and home's file is untouched.
     const rule = await send(app, "robin@cabin.test", "POST", ROUTES.rules, {
@@ -96,7 +111,7 @@ describe("an admin", () => {
       spendingCategoryId: null,
     });
     expect(rule.statusCode, rule.body).toBe(200);
-    expect(rule.json<Rule>().createdBy).toBe("robin");
+    expect(rule.json<Rule>().createdBy).toBe(robin);
     expect(app.books.of(cabin).prepare("SELECT count(*) AS n FROM rules").get()).toEqual({
       n: 1,
     });
@@ -108,18 +123,20 @@ describe("an admin", () => {
     expect(directory.history(cabin)).toEqual([
       {
         address: "robin@cabin.test",
-        person: "robin",
+        person: robin,
         action: "add",
         at: NOW.toISOString(),
         by: ADMIN,
       },
       {
         address: "lee@cabin.test",
-        person: "lee",
+        person: lee,
         action: "add",
         at: NOW.toISOString(),
         by: ADMIN,
       },
+      { action: "name", person: robin, name: "robin", at: NOW.toISOString(), by: ADMIN },
+      { action: "name", person: lee, name: "lee", at: NOW.toISOString(), by: ADMIN },
     ]);
   });
 
@@ -220,7 +237,11 @@ describe("an admin", () => {
     });
 
     expect(third.statusCode, third.body).toBe(200);
-    expect(directory.membershipOf(CASEY)).toEqual({ household: HOUSEHOLD, person: "casey" });
+    // lg-76: a new name is a new person under a generated id, shown under it.
+    const casey = directory.membershipOf(CASEY);
+    expect(casey?.household).toBe(HOUSEHOLD);
+    expect(casey?.person).toMatch(UUID_SHAPE);
+    expect(directory.names(HOUSEHOLD).get(casey?.person ?? "")).toBe("casey");
   });
 
   test("is refused a household or a member that is not there, and nothing changes", async () => {
@@ -517,7 +538,7 @@ describe("a household made by adding its first person", () => {
     expect(directorySnapshot(directory)).toBe(before);
   });
 
-  test("is refused when the request still names an id or a name, or lacks the person", async () => {
+  test("is refused when the request still names an id or a name, or lacks the email", async () => {
     const { app, directory } = await start();
     const before = directorySnapshot(directory);
 
@@ -525,7 +546,7 @@ describe("a household made by adding its first person", () => {
       { address: CASEY, person: "casey", id: "cabin" },
       { address: CASEY, person: "casey", name: "The cabin" },
       { id: "cabin", name: "The cabin" },
-      { address: CASEY },
+      // lg-76: the person may be left out; the email may not.
       { person: "casey" },
     ]) {
       const response = await send(app, ADMIN, "POST", ROUTES.adminHouseholds, body);
@@ -558,5 +579,151 @@ describe("a household made by adding its first person", () => {
     expect(directory.households().map((household) => household.id)).toEqual(
       expect.arrayContaining([AWAY, HOUSEHOLD, ...ids]),
     );
+  });
+});
+
+// lg-76: the name typed in a request is matched against how the household
+// shows its people; a name nobody has is a new person under a generated id.
+describe("a person added by name (lg-76)", () => {
+  async function startWithIds(): Promise<Harness> {
+    return await start(twoHouseholds(), [ADMIN], sequentialIds());
+  }
+
+  async function add(
+    app: Harness["app"],
+    as: string,
+    body: Record<string, unknown>,
+    household = HOUSEHOLD,
+  ): Promise<HouseholdMember> {
+    const route = as === ADMIN ? of("adminMembers", household) : of("householdMembers", household);
+    const response = await send(app, as, "POST", route, body);
+    expect(response.statusCode, response.body).toBe(200);
+    return response.json<HouseholdMember>();
+  }
+
+  test("a member adds a new name: a person under a generated id, shown under the name, in one step", async () => {
+    const { app, directory } = await startWithIds();
+
+    const added = await add(app, ALEX, { address: CASEY, person: "Casey" });
+
+    expect(added).toEqual({ address: CASEY, person: generatedId(1), name: "Casey" });
+    expect(directory.membershipOf(CASEY)).toEqual({ household: HOUSEHOLD, person: generatedId(1) });
+    expect(directory.names(HOUSEHOLD)).toEqual(new Map([[generatedId(1), "Casey"]]));
+    const household = (
+      await send(app, ALEX, "GET", of("household", HOUSEHOLD))
+    ).json<HouseholdResponse>();
+    expect(household.history.at(-1)).toEqual({
+      action: "name",
+      person: generatedId(1),
+      name: "Casey",
+      at: NOW.toISOString(),
+      by: ALEX,
+    });
+  });
+
+  test("an address for an existing person, by their shown name, reuses their id, legacy or generated", async () => {
+    const { app, directory } = await startWithIds();
+    // alex is a person from before lg-76, renamed since; casey is one since.
+    await send(app, ADMIN, "POST", ROUTES.adminPersonRename.replace(":id", HOUSEHOLD), {
+      person: "alex",
+      name: "Alexandre",
+    });
+    const casey = await add(app, ADMIN, { address: CASEY, person: "casey" });
+
+    const alexByName = await add(app, SAM, { address: "alex@work.test", person: "Alexandre" });
+    const alexById = await add(app, ADMIN, { address: "alex@phone.test", person: "alex" });
+    const samByName = await add(app, ALEX, { address: "sam@work.test", person: "sam" });
+    const caseyByName = await add(app, ALEX, { address: "casey@work.test", person: "casey" });
+
+    expect(casey.person).toBe(generatedId(1));
+    expect(alexByName).toEqual({ address: "alex@work.test", person: "alex", name: "Alexandre" });
+    expect(alexById).toEqual({ address: "alex@phone.test", person: "alex", name: "Alexandre" });
+    expect(samByName).toEqual({ address: "sam@work.test", person: "sam", name: "sam" });
+    expect(caseyByName).toEqual({
+      address: "casey@work.test",
+      person: generatedId(1),
+      name: "casey",
+    });
+    expect(directory.heldPeople(HOUSEHOLD)).toEqual([generatedId(1), "alex", "sam"]);
+  });
+
+  test("with no name, the person is shown under the email's part before the @, numbered when taken", async () => {
+    const { app, directory } = await startWithIds();
+
+    // Two addresses with one local part, in one household, and one taken by an id.
+    const first = await add(app, ALEX, { address: "robin@one.test" });
+    const second = await add(app, ADMIN, { address: "robin@two.test" });
+    const third = await add(app, ALEX, { address: "sam@other.test" });
+
+    expect(first).toEqual({ address: "robin@one.test", person: generatedId(1), name: "robin" });
+    expect(second).toEqual({ address: "robin@two.test", person: generatedId(2), name: "robin 2" });
+    expect(third).toEqual({ address: "sam@other.test", person: generatedId(3), name: "sam 2" });
+    expect(directory.people(HOUSEHOLD)).toHaveLength(5);
+  });
+
+  test("a household made with no name shows its first person under the email's part before the @", async () => {
+    const { app } = await startWithIds();
+
+    const created = await send(app, ADMIN, "POST", ROUTES.adminHouseholds, {
+      address: "Robin@Cabin.TEST",
+    });
+
+    expect(created.statusCode, created.body).toBe(200);
+    expect(created.json<CreateHouseholdResponse>()).toEqual({
+      id: generatedId(1),
+      name: "Home",
+      members: [{ address: "robin@cabin.test", person: generatedId(2), name: "robin" }],
+      people: [{ person: generatedId(2), name: "robin", standing: "in" }],
+    });
+  });
+
+  test("an empty name is refused, as it was", async () => {
+    const { app, directory } = await startWithIds();
+    const before = directorySnapshot(directory);
+
+    for (const person of ["", "   ", "x".repeat(65)]) {
+      const response = await send(app, ADMIN, "POST", of("adminMembers", HOUSEHOLD), {
+        address: CASEY,
+        person,
+      });
+      expect(response.statusCode, JSON.stringify(person)).toBe(400);
+    }
+    expect(directorySnapshot(directory)).toBe(before);
+  });
+
+  test("people are listed by how they are shown, not by id", async () => {
+    const { app } = await startWithIds();
+    await send(app, ADMIN, "POST", ROUTES.adminPersonRename.replace(":id", HOUSEHOLD), {
+      person: "alex",
+      name: "Zoé",
+    });
+    await add(app, ALEX, { address: CASEY, person: "casey" });
+
+    const people = (await send(app, ALEX, "GET", ROUTES.people)).json<PeopleResponse>();
+    const admin = (
+      await send(app, ADMIN, "GET", ROUTES.adminHouseholds)
+    ).json<AdminHouseholdsResponse>();
+    const home = admin.households.find((household) => household.id === HOUSEHOLD);
+
+    expect(people.people.map((person) => people.names[person])).toEqual(["casey", "sam", "Zoé"]);
+    expect(home?.members.map((member) => member.name)).toEqual(["casey", "sam", "Zoé"]);
+    expect(home?.people.map((person) => person.name)).toEqual(["casey", "sam", "Zoé"]);
+  });
+
+  test("a person with a generated id who shares a name with an id only the books hold is numbered, never shown by id", async () => {
+    const { app } = await startWithIds();
+    // jordan is a person an old rule named, whom no membership has: the
+    // directory cannot see them, so it lets a new person be named jordan too.
+    enrollPeople(app.books.of(HOUSEHOLD), ["jordan"], NOW);
+    await add(app, ALEX, { address: "jordan@example.test", person: "jordan" });
+
+    const people = (await send(app, ALEX, "GET", ROUTES.people)).json<PeopleResponse>();
+
+    expect(people.names).toEqual({
+      alex: "alex",
+      jordan: "jordan",
+      sam: "sam",
+      [generatedId(1)]: "jordan 2",
+    });
   });
 });

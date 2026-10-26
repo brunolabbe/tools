@@ -34,6 +34,20 @@ export function twoHouseholds(): Directory {
   return directory;
 }
 
+/**
+ * Generated ids a test can name (lg-76): the `n`th id `sequentialIds` hands
+ * out, a lowercase version-4 UUID as `randomUUID()` prints one.
+ */
+export function generatedId(n: number): string {
+  return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+}
+
+/** A `newId` that hands out `generatedId(1)`, `generatedId(2)` … in order. */
+export function sequentialIds(): () => string {
+  let n = 0;
+  return () => generatedId(++n);
+}
+
 export interface Harness {
   app: App;
   directory: Directory;
@@ -42,6 +56,7 @@ export interface Harness {
 export async function startHouseholds(
   directory: Directory = twoHouseholds(),
   admins: readonly string[] = [ADMIN],
+  newId?: () => string,
 ): Promise<Harness> {
   const app = await createApp({
     directory,
@@ -53,6 +68,7 @@ export async function startHouseholds(
     },
     logger: createLogger({ level: "silent" }),
     now: () => NOW,
+    ...(newId === undefined ? {} : { newId }),
     fetch: jwksFetch(() => [KEY]).fetch,
   });
   return { app, directory };

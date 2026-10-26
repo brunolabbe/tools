@@ -36,7 +36,6 @@
  * the member who made it.
  */
 
-import { randomUUID } from "node:crypto";
 import {
   AppError,
   ROUTES,
@@ -58,7 +57,7 @@ import type {
 } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
-import { shownName } from "../directory.ts";
+import { byShownName, shownName } from "../directory.ts";
 import type { Directory, Household, Member } from "../directory.ts";
 import { adminOf, memberOf } from "../identity.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
@@ -69,10 +68,13 @@ function householdIdOf(request: FastifyRequest): string {
   return typeof id === "string" ? id : "";
 }
 
+/** A household's members, by how their person is shown, then by address (lg-76). */
 function membersOf(directory: Directory, household: string): HouseholdMember[] {
   const names = directory.names(household);
+  const order = byShownName(names);
   return directory
     .members(household)
+    .toSorted((one, other) => order(one.person, other.person))
     .map(({ address, person }) => ({ address, person, name: shownName(names, person) }));
 }
 
@@ -84,15 +86,19 @@ function memberOfHousehold(directory: Directory, member: Member): HouseholdMembe
 
 /**
  * Everyone the household has named, a member who has left included, with how
- * each is shown and where they stand in the books (lg-35), by id.
+ * each is shown and where they stand in the books (lg-35), by how each is
+ * shown (lg-76).
  */
 function peopleOf(directory: Directory, household: string): AdminPerson[] {
   const names = directory.names(household);
-  return [...directory.standings(household)].map(([person, standing]) => ({
-    person,
-    name: shownName(names, person),
-    standing,
-  }));
+  const order = byShownName(names);
+  return [...directory.standings(household)]
+    .toSorted(([one], [other]) => order(one, other))
+    .map(([person, standing]) => ({
+      person,
+      name: shownName(names, person),
+      standing,
+    }));
 }
 
 /** A household as the admin's list shows it: its members, and everyone it has named. */
@@ -111,7 +117,8 @@ function namedHousehold(directory: Directory, id: string): Household {
   return household;
 }
 
-const ADD_MEMBER_SHAPE = "Send an address and the person's name it stands under.";
+const ADD_MEMBER_SHAPE =
+  "Send an email, and the name of the person it stands under if you give one.";
 
 /** A household route's guard, as a hook: the caller is a member of the household the path names. */
 async function asMember(request: FastifyRequest): Promise<void> {
@@ -139,11 +146,13 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
     const draft = addMemberRequestSchema.safeParse(request.body);
     if (!draft.success) throw new AppError("BAD_REQUEST", ADD_MEMBER_SHAPE);
     try {
-      const added = directory.addMember({
+      // lg-76: `person` is a name as typed; a new one is a person under a UUID.
+      const added = directory.addMemberByName({
         household: id,
         ...draft.data,
         by: caller.email.toLowerCase(),
         at: context.now(),
+        newId: context.newId,
       });
       const body: HouseholdMember = memberOfHousehold(directory, added);
       return body;
@@ -172,13 +181,17 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
     const admin = adminOf(request);
     const draft = createHouseholdRequestSchema.safeParse(request.body);
     if (!draft.success) {
-      throw new AppError("BAD_REQUEST", "Send the first person's email and their name.");
+      throw new AppError(
+        "BAD_REQUEST",
+        "Send the first person's email, and their name if you give one.",
+      );
     }
     const { household } = directory.createHousehold({
-      id: randomUUID(),
+      id: context.newId(),
       ...draft.data,
       by: admin,
       at: context.now(),
+      newId: context.newId,
     });
     const body: CreateHouseholdResponse = adminHousehold(directory, household);
     return body;
@@ -189,11 +202,12 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
     const id = householdIdOf(request);
     const draft = addMemberRequestSchema.safeParse(request.body);
     if (!draft.success) throw new AppError("BAD_REQUEST", ADD_MEMBER_SHAPE);
-    const added = directory.addMember({
+    const added = directory.addMemberByName({
       household: id,
       ...draft.data,
       by: admin,
       at: context.now(),
+      newId: context.newId,
     });
     const body: HouseholdMember = memberOfHousehold(directory, added);
     return body;

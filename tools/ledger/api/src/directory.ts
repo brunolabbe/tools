@@ -19,9 +19,10 @@
  * character in one (lg-52).
  */
 
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { AppError } from "@ledger/contract";
+import { AppError, GENERATED_ID } from "@ledger/contract";
 import type { PersonStanding } from "@ledger/contract";
 import Database from "better-sqlite3";
 import { migrateDirectory } from "./db/directory-schema.ts";
@@ -34,8 +35,6 @@ import { migrateDirectory } from "./db/directory-schema.ts";
  * Neither can hold a path separator, a dot, a `:` or an `@`.
  */
 const LEGACY_HOUSEHOLD_ID = /^[a-z]{1,32}$/u;
-const GENERATED_HOUSEHOLD_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 /** The names Windows keeps for devices, which no file may take whatever its extension. */
 const RESERVED_IDS = new Set(["con", "prn", "aux", "nul"]);
 
@@ -76,10 +75,7 @@ function readStoredAddress(raw: string): string | undefined {
 }
 
 export function isHouseholdId(value: string): boolean {
-  return (
-    GENERATED_HOUSEHOLD_ID.test(value) ||
-    (LEGACY_HOUSEHOLD_ID.test(value) && !RESERVED_IDS.has(value))
-  );
+  return GENERATED_ID.test(value) || (LEGACY_HOUSEHOLD_ID.test(value) && !RESERVED_IDS.has(value));
 }
 
 export interface Household {
@@ -106,9 +102,13 @@ export interface MembershipChange {
   by: string;
 }
 
-/** A person given a shown name, as the directory recorded it (lg-33). */
+/**
+ * A person given a shown name, as the directory recorded it (lg-33): `rename`
+ * by an admin, or `name`, the first name a person with a generated id is given
+ * in the transaction that adds them (lg-76).
+ */
 export interface PersonRename {
-  action: "rename";
+  action: "name" | "rename";
   person: string;
   name: string;
   at: string;
@@ -138,10 +138,50 @@ export function shownName(names: ReadonlyMap<string, string>, person: string): s
   return names.get(person) ?? person;
 }
 
+/**
+ * The order a person reads a list of people in (lg-76): by how each is shown,
+ * then by id where two are shown alike. An id may be a generated UUID, whose
+ * order means nothing to anyone reading.
+ */
+export function byShownName(
+  names: ReadonlyMap<string, string>,
+): (one: string, other: string) => number {
+  return (one, other) =>
+    shownName(names, one).localeCompare(shownName(names, other)) ||
+    (one < other ? -1 : one > other ? 1 : 0);
+}
+
 interface Change {
   /** Who made it: an address, or `OPERATOR`. */
   by: string;
   at: Date;
+}
+
+/**
+ * Where a new person's id comes from (lg-76): `randomUUID()`, unless a test
+ * hands in one of its own, as it hands in `at`.
+ */
+interface NewId {
+  newId?: (() => string) | undefined;
+}
+
+/** The most a person's shown name holds, as `person_names` checks it. */
+const NAME_LENGTH = 64;
+
+/**
+ * The name a person added with no name is shown under (lg-76): the address's
+ * part before the `@`, cut to what a name holds, with " 2", " 3" … the lowest
+ * free, after it when `taken` says someone in the household is shown under it
+ * or has it as their id.
+ */
+export function nameFromAddress(address: string, taken: (name: string) => boolean): string {
+  const local = address.slice(0, address.lastIndexOf("@")).slice(0, NAME_LENGTH).trim();
+  if (!taken(local)) return local;
+  for (let n = 2; ; n++) {
+    const suffix = ` ${String(n)}`;
+    const name = `${local.slice(0, NAME_LENGTH - suffix.length).trimEnd()}${suffix}`;
+    if (!taken(name)) return name;
+  }
 }
 
 function refuse(message: string): never {
@@ -232,6 +272,9 @@ export class Directory {
          FROM memberships WHERE household_id = ? ORDER BY id`,
       )
       .all(household) as MembershipChange[];
+    // lg-76: a person with a generated id is given their first shown name in
+    // the transaction that adds them, so that record is a name and no rename.
+    const named = new Set<string>();
     const renames = (
       this.#db
         .prepare(
@@ -239,7 +282,11 @@ export class Directory {
            FROM person_names WHERE household_id = ? ORDER BY id`,
         )
         .all(household) as Omit<PersonRename, "action">[]
-    ).map((rename): PersonRename => ({ action: "rename", ...rename }));
+    ).map((rename): PersonRename => {
+      const first = GENERATED_ID.test(rename.person) && !named.has(rename.person);
+      named.add(rename.person);
+      return { action: first ? "name" : "rename", ...rename };
+    });
     const merged: (MembershipChange | PersonRename)[] = [];
     let m = 0;
     let r = 0;
@@ -522,23 +569,29 @@ export class Directory {
    * The caller gives the id, which must be a UUID's shape: the route and the
    * host command a `randomUUID()`, a test a fixed one. `addHousehold` stays, for
    * the tests that make households under readable words.
+   *
+   * The first person is a new one, as `addMemberByName` makes one (lg-76): a
+   * generated id, shown under `person`, or under the address's part before the
+   * `@` when no person is given.
    */
-  createHousehold(household: { id: string; address: string; person: string } & Change): {
+  createHousehold(
+    household: { id: string; address: string; person?: string | undefined } & Change & NewId,
+  ): {
     household: Household;
     member: Member;
   } {
-    if (typeof household.id !== "string" || !GENERATED_HOUSEHOLD_ID.test(household.id)) {
+    if (typeof household.id !== "string" || !GENERATED_ID.test(household.id)) {
       refuse("A new household's id is a lowercase UUID.");
     }
     refuseUnlessChange(household);
-    const draft = this.#readMember(household);
+    const draft = this.#readNamedMember(household);
     return this.#db
       .transaction(() => {
         const made = this.#insertHousehold(
           { id: household.id, name: NEW_HOUSEHOLD_NAME },
           household,
         );
-        const member = this.#admit({ household: made.id, ...draft }, household);
+        const member = this.#admitByName({ household: made.id, ...draft }, household);
         return { household: made, member };
       })
       .immediate();
@@ -555,11 +608,17 @@ export class Directory {
   }
 
   /**
-   * Adds an address to a household under a person's name. Refused as
+   * Adds an address to a household under a person's id, as given: a new one
+   * becomes a person whose id is that text, the shape every person made before
+   * lg-76 has. Refused as
    * `ADDRESS_ALREADY_A_MEMBER` when the address is in a household already —
    * this one included — a sentence for an admin or the operator; a member is
    * not told it (`routes/households.ts`). A household holds any number of
    * people (lg-23), so a new name is never refused for being one more.
+   *
+   * Nothing a person reaches calls it since lg-76: the routes and the host
+   * command call `addMemberByName`. It stays, as `addHousehold` stays for lg-71,
+   * for the tests that make people under readable ids.
    */
   addMember(member: { household: string; address: string; person: string } & Change): Member {
     // lg-25: a caller past the request schema can pass anything, and each of these
@@ -583,6 +642,95 @@ export class Directory {
       .immediate();
   }
 
+  /**
+   * Adds an address to a household as the person a name names (lg-76): the
+   * person the household shows under `person`, or failing that the one whose id
+   * it is, which is how a person added before lg-76 is named by the id they
+   * were added under. The two cannot disagree: no shown name is another
+   * person's id, and no new id is another person's shown name (lg-33's
+   * `person_names_unique` and `memberships_person_not_shown_as_another`).
+   *
+   * A name that names nobody is a new person: an id from `newId`, a
+   * `randomUUID()` by default, and `person` as their first shown name, written
+   * in the same transaction as the membership, so no person with a generated
+   * id is ever without a name. With no `person`, the new person is shown under
+   * the address's part before the `@` (`nameFromAddress`).
+   */
+  addMemberByName(
+    member: { household: string; address: string; person?: string | undefined } & Change & NewId,
+  ): Member {
+    refuseUnlessChange(member);
+    const household: unknown = member.household;
+    if (household !== undefined && household !== null && typeof household !== "string") {
+      refuse("The household is not a string.");
+    }
+    const draft = this.#readNamedMember(member);
+    return this.#db
+      .transaction(() => {
+        if (this.household(member.household) === undefined) {
+          throw new AppError("HOUSEHOLD_NOT_FOUND", `There is no household "${member.household}".`);
+        }
+        return this.#admitByName({ household: member.household, ...draft }, member);
+      })
+      .immediate();
+  }
+
+  /** `#readMember`, with the person's name left out allowed (lg-76). */
+  #readNamedMember(member: { address: unknown; person?: unknown }): {
+    address: string;
+    name: string | undefined;
+  } {
+    if (member.person === undefined) {
+      if (typeof member.address !== "string") refuse("The address is not a string.");
+      const address = readAddress(member.address);
+      if (address === undefined) refuse(NOT_AN_ADDRESS);
+      return { address, name: undefined };
+    }
+    const { address, person } = this.#readMember({
+      address: member.address,
+      person: member.person,
+    });
+    return { address, name: person };
+  }
+
+  /**
+   * The person `name` names in the household, or a new one, inside the caller's
+   * transaction; then `#admit`. A new person's first shown name is written after
+   * their membership, since `person_names_held` refuses a name for a person no
+   * membership has named.
+   */
+  #admitByName(
+    member: { household: string; address: string; name: string | undefined },
+    change: Change & NewId,
+  ): Member {
+    const { household, address } = member;
+    const held = this.heldPeople(household);
+    const names = this.names(household);
+    if (member.name !== undefined) {
+      const typed = member.name;
+      const found =
+        held.find((person) => shownName(names, person) === typed) ??
+        held.find((person) => person === typed);
+      if (found !== undefined) return this.#admit({ household, address, person: found }, change);
+    }
+    const shownAs = new Set(held.map((person) => shownName(names, person)));
+    const name =
+      member.name ??
+      nameFromAddress(address, (candidate) => shownAs.has(candidate) || held.includes(candidate));
+    const person = (change.newId ?? randomUUID)();
+    if (!GENERATED_ID.test(person) || held.includes(person)) {
+      throw new AppError("INTERNAL", "A new person's id is not a fresh lowercase UUID.");
+    }
+    const added = this.#admit({ household, address, person }, change);
+    this.#db
+      .prepare(
+        `INSERT INTO person_names (household_id, person, name, named_at, named_by)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(household, person, name, change.at.toISOString(), change.by);
+    return added;
+  }
+
   /** An added member's address and person, read and refused before any statement runs. */
   #readMember(member: { address: unknown; person: unknown }): { address: string; person: string } {
     if (typeof member.address !== "string") refuse("The address is not a string.");
@@ -602,12 +750,7 @@ export class Directory {
   #admit(member: Member, change: Change): Member {
     const { address, household, person } = member;
     const standing = this.membershipOf(address);
-    if (standing !== undefined) {
-      throw new AppError(
-        "ADDRESS_ALREADY_A_MEMBER",
-        `That email already belongs to the household "${standing.household}", as ${standing.person}. Remove it first.`,
-      );
-    }
+    if (standing !== undefined) this.#refuseTaken(standing);
     // A household holds any number of names (lg-23): nothing is counted. A
     // new one is not a name another person is shown under (lg-33).
     if (!this.heldPeople(household).includes(person)) {
@@ -695,18 +838,26 @@ export class Directory {
           throw new AppError("MEMBER_NOT_FOUND");
         }
         const taken = this.membershipOf(to);
-        if (taken !== undefined) {
-          throw new AppError(
-            "ADDRESS_ALREADY_A_MEMBER",
-            `That email already belongs to the household "${taken.household}", as ${taken.person}. Remove it first.`,
-          );
-        }
+        if (taken !== undefined) this.#refuseTaken(taken);
         this.#record({ address: from, ...standing }, "remove", change);
         const moved = { address: to, ...standing };
         this.#record(moved, "add", change);
         return moved;
       })
       .immediate();
+  }
+
+  /**
+   * `ADDRESS_ALREADY_A_MEMBER`, naming the person as they are shown, since an id
+   * may be a UUID (lg-76). The household is still named by its id; lg-77 names
+   * it by its name.
+   */
+  #refuseTaken(standing: Membership): never {
+    const shown = shownName(this.names(standing.household), standing.person);
+    throw new AppError(
+      "ADDRESS_ALREADY_A_MEMBER",
+      `That email already belongs to the household "${standing.household}", as ${shown}. Remove it first.`,
+    );
   }
 
   #record(member: Member, action: "add" | "remove", change: Change): void {

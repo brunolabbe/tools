@@ -118,9 +118,21 @@ export interface HouseholdSummary {
 }
 
 /**
+ * The shape of an id the API generates: a lowercase version-4 UUID, as
+ * `crypto.randomUUID()` prints it. A household made since lg-71 has one, and so
+ * does a person added since lg-76; a person added before keeps the name typed
+ * as their id. A person's id of this shape is never a name, so it is never
+ * printed: a screen with no shown name for one says "Someone" instead.
+ */
+export const GENERATED_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
+/**
  * An address in a household now, and the person it stands under (lg-22):
  * `person` is the id the books store, which never changes, and `name` is how
- * the person is shown (lg-33), the id until an admin renames them.
+ * the person is shown (lg-33). A person added since lg-76 has a generated id
+ * and the name typed for them as their first shown name; one added before is
+ * shown under their id until an admin renames them.
  */
 export interface HouseholdMember {
   address: string;
@@ -152,26 +164,36 @@ export interface HouseholdResponse {
 }
 
 /**
- * A person given a shown name by an admin (lg-33): `person` is their id, which
- * the books keep, and `name` is what every screen shows from then on.
+ * A person given a shown name (lg-33): `person` is their id, which the books
+ * keep, and `name` is what every screen shows from then on. `rename` is an
+ * admin's; `name` is the one a person with a generated id is given when they
+ * are added (lg-76), written with that add, so it is no change a screen lists.
  */
 export interface PersonNameRecord {
-  action: "rename";
+  action: "name" | "rename";
   person: string;
   name: string;
   at: string;
   by: string;
 }
 
-/** `POST /api/households/:id/members` and its admin twin: an address, as a person. */
+/**
+ * `POST /api/households/:id/members` and its admin twin: an address, as a
+ * person (lg-76). `person` is a name as typed: the person the household shows
+ * under it, or one whose id it is (a person added before lg-76, whose id is the
+ * name first typed for them); any other name is a new person, given a generated
+ * id and shown under that name. Left out, the new person is shown under the
+ * address's part before the `@`, numbered when someone in the household already
+ * is or has it as their id.
+ */
 export interface AddMemberRequest {
   address: string;
-  person: string;
+  person?: string | undefined;
 }
 
 export const addMemberRequestSchema = z.strictObject({
   address: z.string().min(1).max(320),
-  person: z.string().min(1).max(64),
+  person: z.string().min(1).max(64).optional(),
 }) satisfies z.ZodType<AddMemberRequest>;
 
 /** `POST /api/admin/households/:id/members/remove`: the address to take out. */
@@ -227,12 +249,12 @@ export interface PersonName {
  */
 export interface CreateHouseholdRequest {
   address: string;
-  person: string;
+  person?: string | undefined;
 }
 
 export const createHouseholdRequestSchema = z.strictObject({
   address: z.string().min(1).max(320),
-  person: z.string().min(1).max(64),
+  person: z.string().min(1).max(64).optional(),
 }) satisfies z.ZodType<CreateHouseholdRequest>;
 
 /**
