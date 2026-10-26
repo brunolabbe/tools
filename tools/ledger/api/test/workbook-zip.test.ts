@@ -214,3 +214,32 @@ describe("the number of entries (lg-66 gate 1, F2)", () => {
     expect(thrown).toMatchObject({ code: "WORKBOOK_TOO_LARGE", details: { bound: "entries" } });
   });
 });
+
+describe("the directory's own entries, and the bytes they point at (round 1's sweep)", () => {
+  // Three guards gate 1 did not list, which no test reached until round 1.
+  const SHEET = { name: "xl/worksheets/sheet1.xml", data: Buffer.from("<x/>") };
+
+  test("a directory entry whose signature is not a central header's is not an .xlsx", () => {
+    const zip = rawZip(workbook(SHEET));
+    const offset = zip.readUInt32LE(zip.length - 22 + 16);
+    // The third entry's header: after the first two, each 46 bytes and its name.
+    const third = offset + 46 + "[Content_Types].xml".length + 46 + "xl/workbook.xml".length;
+    expect(zip.readUInt32LE(third)).toBe(0x02014b50);
+    zip.writeUInt32LE(0, third);
+    expect(codeOf(() => workbookEntries(zip))).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("a directory entry whose name runs past the directory is not an .xlsx", () => {
+    const honest = rawZip(workbook(SHEET));
+    const size = honest.readUInt32LE(honest.length - 22 + 12);
+    // Three bytes short: the last header fits, its name does not.
+    const zip = rawZip(workbook(SHEET), { size: size - 3 });
+    expect(codeOf(() => workbookEntries(zip))).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("an entry whose compressed bytes run past the end of the file is not an .xlsx", async () => {
+    const zip = rawZip(workbook({ ...SHEET, method: 0, compressedSize: 1_000_000 }));
+    const entries = workbookEntries(zip);
+    expect(await codeOfAsync(() => countInflated(zip, entries, BIG))).toBe("WORKBOOK_NOT_XLSX");
+  });
+});
