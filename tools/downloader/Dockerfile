@@ -108,7 +108,7 @@ RUN apt-get update \
 # missing binary does (2025.09.26 stopped resolving YouTube). The same test
 # holds every YTDLP_VERSION in the repo to one value.
 ARG INSTALL_YTDLP=true
-ARG YTDLP_VERSION=2026.08.19
+ARG YTDLP_VERSION=2026.10.21
 RUN if [ "${INSTALL_YTDLP}" = "true" ]; then \
   curl -fsSL -o /usr/local/bin/yt-dlp \
   "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux" \
