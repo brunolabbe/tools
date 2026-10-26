@@ -16,6 +16,7 @@
  * directory refused the change, 2 when the command could not run at all.
  */
 
+import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import { AppError } from "@ledger/contract";
 import { loadApiConfig } from "./config.ts";
@@ -25,15 +26,22 @@ import type { CommandIo } from "./import-command.ts";
 const USAGE = `Usage: npm run household:ledger -- <command>
 
 Changes who belongs to which household, in the ledger's directory (DIRECTORY_PATH).
-  add <household> <display name>        create a household; its id is one lowercase word
-  member <household> <address> <person> add an address to a household, as that person
-  remove <address>                      take an address out of its household
+  add <email> <person>                  create a household by adding its first person;
+                                        it is named "Home" and its id is a generated UUID
+  member <household> <email> <person>   add an email to a household, as that person
+  remove <email>                        take an email out of its household
   list                                  every household and its members
 
-A household holds any number of people, each behind any number of addresses,
-and a name stays in its books once there. Every address must also be on the
-ledger's Access policy, which is a dashboard edit.
+A household holds any number of people, each behind any number of emails,
+and a name stays in its books once there. Every email must also be on the
+ledger's Access policy, which is a dashboard edit. An older household keeps
+the one-word id it was made with; list prints every id.
 `;
+
+/** Said whenever an email joins a household, which Access must admit as well. */
+const ACCESS_POLICY_REMINDER =
+  `Add the email to the ledger's Access policy too, in the Zero Trust dashboard ` +
+  `(docs/02-DEPLOYMENT.md, step 2): until it is there, Access will not let it reach the ledger.\n`;
 
 function usage(io: CommandIo, message: string): number {
   io.stderr(`${message}\n\n${USAGE}`);
@@ -77,7 +85,7 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
   }
   const [command, ...args] = positionals;
   const arity: Record<string, (count: number) => boolean> = {
-    add: (count) => count >= 2,
+    add: (count) => count === 2,
     member: (count) => count === 3,
     remove: (count) => count === 1,
     list: (count) => count === 0,
@@ -108,9 +116,19 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
   try {
     switch (command) {
       case "add": {
-        const [id = "", ...name] = args;
-        const household = directory.addHousehold({ id, name: name.join(" "), ...change });
-        io.stdout(`Created the household ${household.id}, "${household.name}".\n`);
+        // lg-71: the household and its first person in one transaction, under a
+        // UUID the operator copies from here to name it in `member`.
+        const [address = "", person = ""] = args;
+        const { household, member } = directory.createHousehold({
+          id: randomUUID(),
+          address,
+          person,
+          ...change,
+        });
+        io.stdout(
+          `Created the household ${household.id}, "${household.name}", with ${member.address} as ${member.person}.\n` +
+            ACCESS_POLICY_REMINDER,
+        );
         return 0;
       }
       case "member": {
@@ -118,8 +136,7 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
         const member = directory.addMember({ household, address, person, ...change });
         io.stdout(
           `Added ${member.address} to ${member.household}, as ${member.person}.\n` +
-            `Add the address to the ledger's Access policy too, in the Zero Trust dashboard ` +
-            `(docs/02-DEPLOYMENT.md, step 2): until it is there, Access will not let it reach the ledger.\n`,
+            ACCESS_POLICY_REMINDER,
         );
         return 0;
       }

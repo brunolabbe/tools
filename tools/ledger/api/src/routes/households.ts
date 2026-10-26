@@ -9,7 +9,8 @@
  *   it goes through an admin (`docs/00-ANALYSIS.md` §7).
  * - **The admin's**, under `/api/admin/`, for an address in `LEDGER_ADMINS` only
  *   (`adminOf`), who need not be in any household: every household and its
- *   members, a new household, adding or removing any member, changing a
+ *   members, a new household made by adding its first person (lg-71), adding
+ *   or removing any member, changing a
  *   member's address in one step (lg-34), and giving a person a shown name
  *   (lg-33); neither of those two changes an id, so neither touches the books.
  *   Retiring a person, or bringing them back (lg-35), is a request the
@@ -35,6 +36,7 @@
  * the member who made it.
  */
 
+import { randomUUID } from "node:crypto";
 import {
   AppError,
   ROUTES,
@@ -46,11 +48,12 @@ import {
   retirePersonRequestSchema,
 } from "@ledger/contract";
 import type {
+  AdminHousehold,
   AdminHouseholdsResponse,
   AdminPerson,
+  CreateHouseholdResponse,
   HouseholdMember,
   HouseholdResponse,
-  HouseholdSummary,
   PersonName,
 } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -90,6 +93,15 @@ function peopleOf(directory: Directory, household: string): AdminPerson[] {
     name: shownName(names, person),
     standing,
   }));
+}
+
+/** A household as the admin's list shows it: its members, and everyone it has named. */
+function adminHousehold(directory: Directory, household: Household): AdminHousehold {
+  return {
+    ...household,
+    members: membersOf(directory, household.id),
+    people: peopleOf(directory, household.id),
+  };
 }
 
 /** The household an admin named, or `HOUSEHOLD_NOT_FOUND`. */
@@ -148,26 +160,27 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
   app.get(ROUTES.adminHouseholds, { onRequest: adminRead }, async (request) => {
     adminOf(request);
     const body: AdminHouseholdsResponse = {
-      households: directory.households().map((household) => ({
-        ...household,
-        members: membersOf(directory, household.id),
-        people: peopleOf(directory, household.id),
-      })),
+      households: directory.households().map((household) => adminHousehold(directory, household)),
     };
     return body;
   });
 
+  // lg-71: a household is made by adding its first person, under a generated
+  // UUID and the name "Home", in one transaction; the strict schema refuses a
+  // request that still names an id or a name.
   app.post(ROUTES.adminHouseholds, { onRequest: adminWrite }, async (request) => {
     const admin = adminOf(request);
     const draft = createHouseholdRequestSchema.safeParse(request.body);
     if (!draft.success) {
-      throw new AppError("BAD_REQUEST", "Send the new household's id and its name.");
+      throw new AppError("BAD_REQUEST", "Send the first person's email and their name.");
     }
-    const body: HouseholdSummary = directory.addHousehold({
+    const { household } = directory.createHousehold({
+      id: randomUUID(),
       ...draft.data,
       by: admin,
       at: context.now(),
     });
+    const body: CreateHouseholdResponse = adminHousehold(directory, household);
     return body;
   });
 

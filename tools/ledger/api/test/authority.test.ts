@@ -78,7 +78,8 @@ const ADMIN_PROBES: Probe[] = [
     route: "adminHouseholds",
     method: "POST",
     url: at("adminHouseholds"),
-    payload: { id: "third", name: "A third household" },
+    // lg-71: a household is made by adding its first person.
+    payload: { address: "robin@third.test", person: "robin" },
   },
   {
     route: "adminMembers",

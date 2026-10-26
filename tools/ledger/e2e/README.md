@@ -35,9 +35,12 @@ API usually is, and not the downloader's 8099 or the planner's 8098 — over its
 own data directory under `e2e/.artifacts/`, so nothing needs to be running first.
 The server's command (`e2e:ledger:serve` in the root `package.json`) makes the
 household first: the API refuses `DEV_IDENTITY` unless the directory already holds
-that address, so `home`, `alex` and `sam` are added by the household command
-before the API boots, and every request is `alex`, who `LEDGER_ADMINS` makes an
-admin too, so the household and admin screens exist to be looked at.
+that address, so the household command makes the household with its first
+person, `alex`, before the API boots. The household's id is a generated UUID
+(lg-71), which the script cannot pass to a second command, so the spec's seed
+adds `sam` through the API as `alex`. Every request is `alex`, who
+`LEDGER_ADMINS` makes an admin too, so the household and admin screens exist to
+be looked at.
 
 It runs in the `e2e` job of `.github/workflows/ledger.yml`, which also uploads the
 screenshots, and **not** in `npm test`.

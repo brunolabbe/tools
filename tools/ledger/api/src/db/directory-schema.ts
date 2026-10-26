@@ -318,6 +318,74 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
       )
     BEGIN SELECT RAISE(ABORT, 'an address is added under a retired person only once their return is applied'); END;
   `,
+  // 7 — a household's id may be a UUID (lg-71).
+  `
+  -- A household made since lg-71 is given a lowercase UUID as its id, which
+  -- migration 1's CHECK refuses: it has digits and hyphens. A CHECK cannot be
+  -- altered, so the table is rebuilt with one that takes either shape. Every
+  -- word id it held stays valid and stays: nothing is migrated to a UUID.
+  --
+  -- The rebuild is the one lg-24 measured to apply (migration 3's comment):
+  -- the rows are copied aside, the table dropped, made again and the rows
+  -- copied back, with the foreign keys of memberships, person_names and
+  -- retirements deferred to the commit, where every one finds its household
+  -- again. Renaming the old table instead would carry those references with it.
+  -- DROP TABLE fires no trigger, so households_never_deleted does not refuse
+  -- it, and the rows go back before the triggers are made again, so a row a
+  -- directory made before migration 3 holds with a NULL id goes back too.
+  PRAGMA defer_foreign_keys = ON;
+
+  CREATE TEMP TABLE households_aside AS
+    SELECT rowid AS position, id, name, created_at, created_by FROM households;
+  DROP TABLE households;
+
+  -- A household. Its id is a file name, a directory name and the prefix of a
+  -- rate-limit key (lg-21): either a plain lowercase word, never one of the four
+  -- Windows keeps for a device, as every household before lg-71 has; or a
+  -- lowercase UUID, 8-4-4-4-12 hex digits, as every household since is given.
+  -- Neither shape holds a separator, a dot, a ':' or an '@'.
+  CREATE TABLE households (
+    id TEXT PRIMARY KEY CHECK (
+      -- length() and GLOB stop at a NUL, so 'ho' || char(0) || 'me' reads as
+      -- 'ho'; the byte count is the length of the whole value.
+      length(CAST(id AS BLOB)) = length(id)
+      AND (
+        (
+          length(id) BETWEEN 1 AND 32
+          AND id NOT GLOB '*[^a-z]*'
+          AND id NOT IN ('con', 'prn', 'aux', 'nul')
+        )
+        OR (
+          length(id) = 36
+          AND substr(id, 9, 1) = '-' AND substr(id, 14, 1) = '-'
+          AND substr(id, 19, 1) = '-' AND substr(id, 24, 1) = '-'
+          AND length(replace(id, '-', '')) = 32
+          AND replace(id, '-', '') NOT GLOB '*[^0-9a-f]*'
+        )
+      )
+    ),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 80 AND name = trim(name)),
+    created_at TEXT NOT NULL,
+    -- Who created it: an address, or 'operator' for the host command.
+    created_by TEXT NOT NULL
+  );
+
+  INSERT INTO households (id, name, created_at, created_by)
+    SELECT id, name, created_at, created_by FROM households_aside ORDER BY position;
+  DROP TABLE temp.households_aside;
+
+  -- Migrations 1 to 3's triggers on the table, as they were: dropped with it.
+  CREATE TRIGGER households_never_updated BEFORE UPDATE ON households
+    BEGIN SELECT RAISE(ABORT, 'a household is appended, never edited'); END;
+  CREATE TRIGGER households_never_deleted BEFORE DELETE ON households
+    BEGIN SELECT RAISE(ABORT, 'a household is appended, never deleted'); END;
+  CREATE TRIGGER households_never_replaced BEFORE INSERT ON households
+    WHEN EXISTS (SELECT 1 FROM households WHERE id = NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'a household is appended, never replaced'); END;
+  CREATE TRIGGER households_id_not_null BEFORE INSERT ON households
+    WHEN NEW.id IS NULL
+    BEGIN SELECT RAISE(ABORT, 'a household has an id'); END;
+  `,
 ];
 
 /** Brings a directory up to `target`, every migration by default. */

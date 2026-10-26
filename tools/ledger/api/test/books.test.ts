@@ -13,8 +13,9 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
-import type { ErrorResponse, PeopleResponse } from "@ledger/contract";
+import type { ErrorResponse, MeResponse, PeopleResponse } from "@ledger/contract";
 import { householdBooksPath } from "../src/books.ts";
+import { receiptPhotoPath } from "../src/receipt-photos.ts";
 import { configure, migrate } from "../src/db/schema.ts";
 import { Directory } from "../src/directory.ts";
 import { runHouseholdCommand } from "../src/household-command.ts";
@@ -259,13 +260,14 @@ describe("the boot and enrol path (lg-20's gate, F4, F5, F8)", () => {
     expect(run("member", HOUSEHOLD, SAM, "sam")).toBe(0);
     expect((await send(target, SAM, ROUTES.me)).statusCode).toBe(200);
 
-    // And a household the command adds gets its books on its first request.
-    expect(run("add", "away", "Away")).toBe(0);
-    expect(run("member", "away", KIM, "kim")).toBe(0);
+    // And a household the command adds gets its books on its first request. Since
+    // lg-71 the command makes it with its first person, under a generated UUID.
+    expect(run("add", KIM, "kim")).toBe(0);
     const kim = await send(target, KIM, ROUTES.people);
     expect(kim.statusCode, kim.body).toBe(200);
     expect(kim.json<PeopleResponse>()).toMatchObject({ people: ["kim"] });
-    expect(existsSync(householdBooksPath(dir, "away"))).toBe(true);
+    const away = (await send(target, KIM, ROUTES.me)).json<MeResponse>().person.household;
+    expect(existsSync(householdBooksPath(dir, away))).toBe(true);
   });
 });
 
@@ -332,4 +334,31 @@ describe("the first open of a household whose books another process holds locked
       }
     },
   );
+});
+
+// lg-71: a household made by adding its first person has a UUID for its id,
+// which names its books file and its photo directory as a word did.
+describe("a household whose id is a UUID", () => {
+  const UUID = "0f8fad5b-d9cb-469f-a165-70867728950e";
+  const ROBIN = "robin@cabin.test";
+
+  test("has its books at households/<uuid>.db, made and opened on first use, and its photos beside", async () => {
+    const directory = memberDirectory();
+    const target = await start(directory);
+    directory.createHousehold({ id: UUID, address: ROBIN, person: "robin", ...CHANGE });
+    const books = householdBooksPath(dir, UUID);
+    expect(books).toBe(path.join(dir, "households", `${UUID}.db`));
+    expect(existsSync(books)).toBe(false);
+
+    const response = await send(target, ROBIN, ROUTES.people);
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json<PeopleResponse>()).toMatchObject({ people: ["robin"] });
+    expect(existsSync(books)).toBe(true);
+    expect(version(books)).toBe(version(householdBooksPath(dir, HOUSEHOLD)));
+    expect(people(books)).toEqual(["robin"]);
+    const photo = "7c9e6679-7425-40de-944b-e07fc1f90ae7.jpg";
+    expect(receiptPhotoPath(dir, UUID, photo)).toBe(path.join(dir, "receipts", UUID, photo));
+    expect(() => householdBooksPath(dir, UUID.toUpperCase())).toThrow(/households/u);
+  });
 });

@@ -100,8 +100,8 @@ export default defineConfig({
       WEB_DIR: path.join(root, "web/dist/app"),
       // The data directory: each household's books are a file in it (lg-21).
       DATABASE_PATH: storage,
-      // Every request is alex, who `e2e:ledger:serve` has made a member of the
-      // household `home`. He is an admin too, so the household and admin screens
+      // Every request is alex, who `e2e:ledger:serve` has made the first person of
+      // a household, "Home" under a generated UUID (lg-71). He is an admin too, so the household and admin screens
       // exist to be looked at.
       DEV_IDENTITY: "alex@example.test",
       LEDGER_ADMINS: "alex@example.test",

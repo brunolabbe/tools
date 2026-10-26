@@ -32,7 +32,8 @@ import type { Enroller } from "./people.ts";
 
 /**
  * The file a household's books are in. The id is the directory's, which lg-20
- * already restricts to one lowercase word; the resolved path is checked to sit
+ * restricts to one lowercase word and lg-71 to that or a lowercase UUID; the
+ * resolved path is checked to sit
  * directly inside `households/` all the same, so a check loosened in one place
  * cannot turn an id into a path somewhere else.
  */

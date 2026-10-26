@@ -187,7 +187,7 @@ describe("the directory's retirements", () => {
     try {
       expect(() =>
         held.retirePerson({ household: HOUSEHOLD, person: "casey", action: "retire", ...at }),
-      ).toThrow(/Remove every address under casey first/u);
+      ).toThrow(/Remove every email under casey first/u);
       expect(held.retirements(HOUSEHOLD)).toEqual([]);
 
       held.removeMember({ address: CASEY, household: HOUSEHOLD, ...at });

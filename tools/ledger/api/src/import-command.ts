@@ -185,7 +185,10 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
     return usage(io, "Name the household whose books the import writes, with --household.");
   }
   if (!isHouseholdId(household)) {
-    return usage(io, `--household is a household's id, one lowercase word; "${household}" is not.`);
+    return usage(
+      io,
+      `--household is a household's id, as household:ledger list prints it; "${household}" is not.`,
+    );
   }
   const personId = values.as?.trim();
   if (personId === undefined || personId === "") {

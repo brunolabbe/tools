@@ -81,7 +81,7 @@ test("adds a member, tells them the address must be admitted on Access, and show
   await screen.findByRole("heading", { name: "Household" });
   expect(screen.getByText(/must also be admitted on the ledger.s Access policy/u)).toBeTruthy();
 
-  fireEvent.change(screen.getByLabelText("Address"), {
+  fireEvent.change(screen.getByLabelText("Email"), {
     target: { value: "sam.phone@example.test" },
   });
   fireEvent.change(screen.getByLabelText("Person"), { target: { value: "sam" } });
@@ -103,11 +103,11 @@ test("puts the server's one sentence in front of a refused address", async () =>
   render(<Household id="home" />);
   await screen.findByRole("heading", { name: "Household" });
 
-  fireEvent.change(screen.getByLabelText("Address"), { target: { value: "kim@away.test" } });
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "kim@away.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Add member" }));
 
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "That address cannot be added to this household.",
+    "That email cannot be added to this household.",
   );
 });
 
@@ -160,7 +160,7 @@ test("shows a renamed person by name, and the rename as its own line", async () 
   );
 
   // The form offers Alex and sends the id.
-  fireEvent.change(screen.getByLabelText("Address"), {
+  fireEvent.change(screen.getByLabelText("Email"), {
     target: { value: "alex.phone@example.test" },
   });
   fireEvent.change(screen.getByLabelText("Person"), { target: { value: "Alex" } });
@@ -175,4 +175,16 @@ test("shows a renamed person by name, and the rename as its own line", async () 
   expect((await screen.findByRole("status")).textContent).toContain(
     "Added alex.phone@example.test as Alex.",
   );
+});
+
+// lg-71, Build 7: the member form's address field says Email, and no field on the
+// household page is labelled with the word address.
+test("labels no address field Address", async () => {
+  render(<Household id="home" />);
+  await screen.findByRole("heading", { name: "Household" });
+
+  const labels = [...document.querySelectorAll("label")].map((label) => label.textContent ?? "");
+  expect(labels).toContain("Email");
+  expect(labels.filter((text) => /address/iu.test(text))).toEqual([]);
+  expect(screen.queryAllByLabelText(/address/iu)).toEqual([]);
 });
