@@ -9,8 +9,8 @@
  * full-page screenshot of each — a passing assertion over an empty page is the
  * failure to avoid, so look at them.
  *
- * **A screen is a tab.** The shell has no router (`App.tsx`): the twelve tabs
- * are the twelve top-level screens, and the list below is the one
+ * **A screen is a tab.** The shell has no router (`App.tsx`): the thirteen tabs
+ * are the thirteen top-level screens, and the list below is the one
  * `docs/work/repo-109-…` names. A new tab is a new line here, in the pull
  * request that adds it.
  *
@@ -418,6 +418,8 @@ const CARDS: Readonly<Record<string, number>> = {
   Salaries: 2,
   Household: 2,
   Admin: 3,
+  // lg-66: the date column, the bucket labels and the checks, once read.
+  "Import (read)": 3,
 };
 
 /** The tabs whose screens carry a radio group, with how many radios each draws. */
@@ -535,3 +537,37 @@ async function fits(field: Locator, text: string): Promise<{ text: number; box: 
     };
   }, text);
 }
+
+/**
+ * lg-66: the import screen, before the samples are sent and after the read.
+ * The e2e server has no key, so the describe request is answered here with
+ * what the API answers for lg-38's `lg37` fixture (`web/test/fixtures/`), as if
+ * every verification held, so the Confirm control is on the screen measured.
+ * The bytes chosen are never read: nothing reaches the server but this route.
+ */
+const DESCRIBED = JSON.parse(
+  fs.readFileSync(path.join(here, "../web/test/fixtures/lg37-describe.json"), "utf8"),
+) as { ok: boolean; problems: string[] };
+
+test("Import fits a phone and a desktop, before sending and once read", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/api/workbook/describe", async (route) => {
+    await route.fulfill({ json: { ...DESCRIBED, ok: true, problems: [] } });
+  });
+  await openTab(page, "Import");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "classeur.xlsx",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("PK\u0003\u0004 a workbook's bytes"),
+  });
+  await expect(page.getByRole("note", { name: "What is sent" })).toBeVisible();
+  await fitsBothWidths(page, testInfo, "Import (before sending)");
+
+  await page.getByRole("button", { name: "Send the samples and describe" }).click();
+  await expect(page.getByRole("button", { name: "Confirm and import" })).toBeVisible();
+  await expect(page.getByRole("main")).toContainText(/Paiement prêt/u);
+  // The report open, its longest lines wrapping inside the card.
+  await page.getByText("The dry run’s report").click();
+  await fitsBothWidths(page, testInfo, "Import (read)");
+});

@@ -25,19 +25,16 @@
  */
 
 import { Buffer } from "node:buffer";
-import Anthropic, {
-  APIConnectionError,
-  APIConnectionTimeoutError,
-  APIError,
-  APIUserAbortError,
-  InternalServerError,
-  RateLimitError,
-} from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Message } from "@anthropic-ai/sdk/resources/messages/messages";
 import { AppError, MAX_RECEIPT_ITEMS } from "@ledger/contract";
 import type { ReceiptItem, ReceiptMediaType, ReceiptProposal } from "@ledger/contract";
 import { z } from "zod";
+import { failure } from "./failure.ts";
+import type { FailureWords, ReaderLogger } from "./failure.ts";
+
+export type { ReaderLogger } from "./failure.ts";
 
 /** A photo as it was uploaded: its bytes, and the type its first bytes say it is. */
 export interface ReceiptPhoto {
@@ -198,11 +195,6 @@ function toProposal(read: ReadReceipt, categories: ReadonlyMap<string, number>):
   };
 }
 
-/** The part of `api`'s logger this needs. The reader owns no logger. */
-export interface ReaderLogger {
-  error(message: string, fields?: Record<string, unknown>): void;
-}
-
 export interface ModelReaderOptions {
   /** Anthropic is the one provider: the owner's choice, measured. */
   provider: "anthropic";
@@ -282,7 +274,7 @@ export function createModelReader(options: ModelReaderOptions): ReceiptReader {
           signal === undefined ? {} : { signal },
         );
       } catch (error: unknown) {
-        throw failure(error, logger);
+        throw failure(error, logger, RECEIPT_FAILURES);
       }
       const byName = new Map(categories.map((category) => [folded(category.name), category.id]));
       return reading(message, logger, byName);
@@ -320,42 +312,10 @@ function reading(
   return checked.data.receipts.map((receipt) => toProposal(receipt, categories));
 }
 
-/**
- * An SDK failure as this tool's error. The SDK has already retried a dropped
- * connection, a timeout, a 429 and a 5xx by the time one arrives here.
- *
- * - The caller hung up: `CANCELED`.
- * - No answer in time: `TIMEOUT`; no connection, or the service busy or failing:
- *   `UNREACHABLE`. All three are worth the person trying again.
- * - Anything else — a key refused, a request the API would not take — is this
- *   service's fault, not the person's: `INTERNAL`, with the status and the
- *   API's error type logged for the operator. Never its message, which can
- *   quote the request.
- */
-function failure(error: unknown, logger: ReaderLogger | undefined): AppError {
-  if (error instanceof APIUserAbortError)
-    return new AppError("CANCELED", undefined, { cause: error });
-  if (error instanceof APIConnectionTimeoutError) {
-    return new AppError("TIMEOUT", "The receipt took too long to read. Try again.", {
-      cause: error,
-    });
-  }
-  if (error instanceof APIConnectionError) {
-    return new AppError("UNREACHABLE", "The receipt reader could not be reached. Try again.", {
-      cause: error,
-    });
-  }
-  if (error instanceof RateLimitError || error instanceof InternalServerError) {
-    return new AppError("UNREACHABLE", "The receipt reader is busy. Try again in a moment.", {
-      cause: error,
-      retryable: true,
-    });
-  }
-  if (error instanceof APIError) {
-    logger?.error("the receipt reader refused the request", {
-      status: error.status,
-      type: (error.error as { error?: { type?: unknown } } | undefined)?.error?.type,
-    });
-  }
-  return new AppError("INTERNAL", undefined, { cause: error });
-}
+/** What a receipt read says when the SDK fails (`failure.ts`). */
+const RECEIPT_FAILURES: FailureWords = {
+  timeout: "The receipt took too long to read. Try again.",
+  unreachable: "The receipt reader could not be reached. Try again.",
+  busy: "The receipt reader is busy. Try again in a moment.",
+  refused: "the receipt reader refused the request",
+};

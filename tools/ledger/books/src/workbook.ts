@@ -52,10 +52,10 @@ import type {
   SheetSelector,
   WorkbookLayout,
 } from "@ledger/contract";
-import { AppError, workbookLayoutSchema } from "@ledger/contract";
+import { AppError, readerFolded, workbookLayoutSchema } from "@ledger/contract";
 import { bufferAsOf, mortgageAsOf } from "./buckets.ts";
 import type { FiledRow, MortgagePosition } from "./buckets.ts";
-import { daysInMonth, fold } from "./months.ts";
+import { daysInMonth } from "./months.ts";
 import { PARTS_PER_MILLION } from "./ratio.ts";
 import type { Share } from "./ratio.ts";
 
@@ -346,7 +346,7 @@ function dateOf(cell: Cell | null): string | null {
 
 /** Lower case, accents, dots and repeated spaces folded away: `Dép. Courantes` is `dep courantes`. */
 function folded(text: string): string {
-  return fold(text).toLowerCase().replace(/[.]/gu, " ").replace(/\s+/gu, " ").trim();
+  return readerFolded(text);
 }
 
 /**
@@ -1325,6 +1325,23 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
         `The workbook has ${String(before.year)} and ${String(year.year)}, and nothing between them.`,
       );
     }
+  }
+  // A description that reads not one row of the account proves nothing: every
+  // check below passes over nothing, and a model's answer pointing the amount
+  // at empty columns would import an empty account cleanly (lg-66, Build 2.2;
+  // lg-38's gate 1 measured it on `csv-balance`, lg-56 on `empty-columns-csv`).
+  // Only when nothing has refused the reading already: a row refused at its
+  // cell is a row the description did reach, and its problem says why.
+  if (
+    years.length > 0 &&
+    years.every((year) => year.rows.length === 0) &&
+    out.problems.length === 0 &&
+    people.problems.length === 0
+  ) {
+    const names = years.map((year) => `"${year.label}"`).join(", ");
+    out.problems.push(
+      `The layout reads no row of the account from ${names}: ${String(out.skipped.length)} dated rows were skipped for having no amount, and none was read.`,
+    );
   }
   verifyYears(years, plan, out);
   out.carryOvers = years.flatMap((year) => year.carryOvers);
