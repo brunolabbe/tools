@@ -160,21 +160,28 @@ export interface MembershipRecord {
 export interface HouseholdResponse {
   household: HouseholdSummary;
   members: HouseholdMember[];
-  history: (MembershipRecord | PersonNameRecord)[];
+  history: (MembershipRecord | PersonNameRecord | PersonFirstNameRecord)[];
 }
 
 /**
- * A person given a shown name (lg-33): `person` is their id, which the books
- * keep, and `name` is what every screen shows from then on. `rename` is an
- * admin's; `name` is the one a person with a generated id is given when they
- * are added (lg-76), written with that add, so it is no change a screen lists.
+ * A person given a shown name by an admin (lg-33): `person` is their id, which
+ * the books keep, and `name` is what every screen shows from then on.
  */
 export interface PersonNameRecord {
-  action: "name" | "rename";
+  action: "rename";
   person: string;
   name: string;
   at: string;
   by: string;
+}
+
+/**
+ * The name a person with a generated id is given when they are added (lg-76),
+ * written with that add: no change a screen lists, and what a later rename
+ * renames them from.
+ */
+export interface PersonFirstNameRecord extends Omit<PersonNameRecord, "action"> {
+  action: "name";
 }
 
 /**

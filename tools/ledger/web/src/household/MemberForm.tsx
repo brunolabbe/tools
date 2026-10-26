@@ -4,9 +4,10 @@
  * new one: a household holds any number of people (lg-23).
  *
  * A person already there is offered by the name they are shown under, and the
- * form sends their id, which is what the directory and the books key on
- * (lg-33). Text that is no one's shown name is sent as it was typed, and is
- * the new person's id.
+ * form sends the name as typed (lg-76): the API finds the person shown under
+ * it, or one added before lg-76 whose id it is. Text that names nobody is a new
+ * person, whom the API gives a generated id and shows under that text; left
+ * empty, under the email's part before the @, numbered if someone already is.
  *
  * Whoever adds an address is told it must also be admitted on the ledger's
  * Access policy, which the operator does in the Cloudflare dashboard
@@ -32,9 +33,17 @@ export interface MemberFormProps {
   onAdd: (member: AddMemberRequest) => Promise<HouseholdMember>;
 }
 
-/** The id of the person shown as `typed`, or what was typed: a new person's id. */
-function personFor(typed: string, people: readonly string[], names: ShownNames): string {
-  return people.find((person) => shownName(names, person) === typed) ?? typed;
+/**
+ * What the Person field says it does when left empty (lg-76): the name the API
+ * will show a new person under, from the email typed so far.
+ */
+export function emptyNameHint(address: string): string {
+  const typed = address.trim().toLowerCase();
+  const at = typed.lastIndexOf("@");
+  const local = at > 0 ? typed.slice(0, at) : "";
+  return local === ""
+    ? "Person may be left empty: they are then shown under the email's part before the @, numbered if someone here already is."
+    : `Person may be left empty: they are then shown as ${local}, numbered if someone here already is.`;
 }
 
 export function MemberForm({ people, names, onAdd }: MemberFormProps): React.ReactElement {
@@ -64,12 +73,13 @@ export function MemberForm({ people, names, onAdd }: MemberFormProps): React.Rea
   const submit = (event: React.SyntheticEvent): void => {
     event.preventDefault();
     setNotice(null);
-    if (address.trim() === "" || person.trim() === "") {
-      setProblem("Give the email and the person's name it stands under.");
+    if (address.trim() === "") {
+      setProblem("Give the email, and the person's name it stands under if you like.");
       return;
     }
     setProblem(null);
-    void add({ address: address.trim(), person: personFor(person.trim(), people, names) });
+    const named = person.trim();
+    void add({ address: address.trim(), ...(named === "" ? {} : { person: named }) });
   };
 
   return (
@@ -93,6 +103,7 @@ export function MemberForm({ people, names, onAdd }: MemberFormProps): React.Rea
         value={person}
         onChange={(event) => setPerson(event.target.value)}
       />
+      <p className="muted hint">{emptyNameHint(address)}</p>
       <datalist id={`${id}-people`}>
         {people.map((one) => (
           <option key={one} value={shownName(names, one)}>

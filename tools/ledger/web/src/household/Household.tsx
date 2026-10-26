@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppError } from "@ledger/contract";
 import type { AddMemberRequest, HouseholdResponse } from "@ledger/contract";
 import { addHouseholdMember, fetchHousehold } from "../api/households.ts";
-import { shownName, usePeopleNames } from "../people.tsx";
+import { byShownName, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 import { MemberForm } from "./MemberForm.tsx";
 import { MortgageSetting } from "./MortgageSetting.tsx";
@@ -26,14 +26,20 @@ type HistoryRecord = HouseholdResponse["history"][number];
 
 /**
  * Each record in words, oldest first. A person is named as they are shown now,
- * and a rename by what they were shown as before it and what after (lg-33).
+ * and a rename by what they were shown as before it and what after (lg-33). A
+ * person's first name, given with the add that made them (lg-76), is no change
+ * of its own: it is `null`, and only tells a later rename what they were.
  */
-function describeAll(history: readonly HistoryRecord[], names: ShownNames): string[] {
+function describeAll(history: readonly HistoryRecord[], names: ShownNames): (string | null)[] {
   const before = new Map<string, string>();
   return history.map((record) => {
     const by = record.by === "operator" ? "the operator" : record.by;
+    if (record.action === "name") {
+      before.set(record.person, record.name);
+      return null;
+    }
     if (record.action === "rename") {
-      const was = before.get(record.person) ?? record.person;
+      const was = before.get(record.person) ?? shownName({}, record.person);
       before.set(record.person, record.name);
       return `${was} renamed ${record.name}, by ${by}`;
     }
@@ -76,15 +82,28 @@ export function Household({ id }: { id: string }): React.ReactElement {
   }
 
   const { household, members, history } = load.household;
-  // The shell's map, with the members' own names over it: this answer is the
-  // newer of the two.
+  // The shell's map, with the history's names over it, then the members' own:
+  // this answer is the newer, and its history names everyone the household has
+  // held, a person who left before the books ever enrolled them included (lg-76).
   const names: ShownNames = {
     ...shown,
+    ...Object.fromEntries(
+      history.flatMap((record) =>
+        record.action === "name" || record.action === "rename"
+          ? [[record.person, record.name]]
+          : [],
+      ),
+    ),
     ...Object.fromEntries(members.map((member) => [member.person, member.name])),
   };
-  // Every person the household has held, since a person once in the books can return.
-  const people = [...new Set(history.map((record) => record.person))].toSorted();
-  const described = describeAll(history, names);
+  // Every person the household has held, since a person once in the books can
+  // return, in the order a person reads them (lg-76).
+  const people = [...new Set(history.map((record) => record.person))].toSorted(byShownName(names));
+  // Newest first, and only the records that are a change of their own.
+  const described = describeAll(history, names)
+    .map((text, index) => ({ text, at: history[index]?.at ?? "", index }))
+    .filter((line): line is { text: string; at: string; index: number } => line.text !== null)
+    .toReversed();
   const add = async (member: AddMemberRequest) => {
     const added = await addHouseholdMember(id, member);
     await refresh();
@@ -99,11 +118,13 @@ export function Household({ id }: { id: string }): React.ReactElement {
 
         <h3>Members</h3>
         <ul className="members">
-          {members.map((member) => (
-            <li key={member.address}>
-              <strong>{shownName(names, member.person)}</strong> <span>{member.address}</span>
-            </li>
-          ))}
+          {members
+            .toSorted((one, other) => byShownName(names)(one.person, other.person))
+            .map((member) => (
+              <li key={member.address}>
+                <strong>{shownName(names, member.person)}</strong> <span>{member.address}</span>
+              </li>
+            ))}
         </ul>
 
         <h3>Add a member</h3>
@@ -115,10 +136,9 @@ export function Household({ id }: { id: string }): React.ReactElement {
 
         <h3>History</h3>
         <ol className="members">
-          {history.toReversed().map((record, index) => (
-            <li key={`${String(history.length - index)}`}>
-              <span className="muted">{record.at.slice(0, 10)}</span>{" "}
-              <span>{described[history.length - 1 - index]}</span>
+          {described.map((line) => (
+            <li key={String(line.index)}>
+              <span className="muted">{line.at.slice(0, 10)}</span> <span>{line.text}</span>
             </li>
           ))}
         </ol>

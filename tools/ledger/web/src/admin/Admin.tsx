@@ -30,8 +30,8 @@ import {
   createHousehold,
   fetchAdminHouseholds,
 } from "../api/households.ts";
-import { ACCESS_POLICY_NOTE, MemberForm } from "../household/MemberForm.tsx";
-import { shownName } from "../people.tsx";
+import { ACCESS_POLICY_NOTE, MemberForm, emptyNameHint } from "../household/MemberForm.tsx";
+import { byShownName, shownName } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
 type Load =
@@ -141,14 +141,16 @@ function HouseholdCard(props: {
   const [editing, setEditing] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Who an address can be added for: the people who have one now.
-  const people = [...new Set(household.members.map((member) => member.person))].toSorted();
   // The listing's own names: an admin may be in no household, so has no other map.
   // Everyone the household has named is in `people` (lg-35), a member who has left included.
   const names: ShownNames = Object.fromEntries([
     ...household.people.map((one) => [one.person, one.name]),
     ...household.members.map((member) => [member.person, member.name]),
   ]);
+  // Who an address can be added for: the people who have one now, by shown name (lg-76).
+  const people = [...new Set(household.members.map((member) => member.person))].toSorted(
+    byShownName(names),
+  );
   const label = householdLabel(household, names);
 
   const add = async (member: AddMemberRequest) => {
@@ -506,7 +508,9 @@ function RenamePerson(props: {
 /**
  * A new household, made by adding its first person (lg-71): the email they sign
  * in with and their name, and nothing else. The API gives the household its id
- * and calls it "Home". With no household yet it is the screen's only form.
+ * and calls it "Home". With no household yet it is the screen's only form. The
+ * name may be left empty (lg-76): the API shows the person under the email's
+ * part before the @.
  */
 function NewHousehold(props: {
   first: boolean;
@@ -535,12 +539,13 @@ function NewHousehold(props: {
 
   const submit = (event: React.SyntheticEvent): void => {
     event.preventDefault();
-    if (address.trim() === "" || person.trim() === "") {
-      setProblem("Give the first person's email and their name.");
+    if (address.trim() === "") {
+      setProblem("Give the first person's email, and their name if you like.");
       return;
     }
     setProblem(null);
-    void create({ address: address.trim(), person: person.trim() });
+    const named = person.trim();
+    void create({ address: address.trim(), ...(named === "" ? {} : { person: named }) });
   };
 
   return (
@@ -570,6 +575,7 @@ function NewHousehold(props: {
           value={person}
           onChange={(event) => setPerson(event.target.value)}
         />
+        <p className="muted hint">{emptyNameHint(address)}</p>
         {problem !== null && (
           <p className="bad" role="alert">
             {problem}
