@@ -86,6 +86,10 @@ export const ROUTES = {
   receiptRead: `${API_PREFIX}/receipts/:id/read`,
   receiptMatches: `${API_PREFIX}/receipts/:id/matches`,
   receiptFile: `${API_PREFIX}/receipts/:id/file`,
+  // lg-66: a workbook the reader does not know, described by a model when the
+  // person asks, then imported on confirmation.
+  workbookDescribe: `${API_PREFIX}/workbook/describe`,
+  workbookConfirm: `${API_PREFIX}/workbook/confirm`,
 } as const;
 
 /**

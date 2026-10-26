@@ -49,7 +49,7 @@ import type {
   WorkbookFigures,
   WorkbookReading,
 } from "@ledger/books";
-import type { Bucket, OwnMoney, SettlementFigures } from "@ledger/contract";
+import type { Bucket, OwnMoney, SettlementFigures, WorkbookLayout } from "@ledger/contract";
 import { applyMigrations } from "./db/schema.ts";
 import type { Database } from "better-sqlite3";
 import { classifyRow } from "./classifications.ts";
@@ -76,6 +76,14 @@ export interface WorkbookImportOptions {
   /** Whether to keep it, once every verification holds. Without it, all is rolled back. */
   commit: boolean;
   now: () => Date;
+  /**
+   * How the workbook is laid out: the household's own (`HOUSEHOLD_LAYOUT`)
+   * when absent, which is what `import:ledger` reads; a described one from the
+   * import screen (lg-66).
+   */
+  layout?: WorkbookLayout | undefined;
+  /** Who reads the report: the command's terminal (the default) or the import screen (lg-66). */
+  via?: "command" | "screen" | undefined;
 }
 
 export interface WorkbookImportResult {
@@ -85,6 +93,10 @@ export interface WorkbookImportResult {
   written: boolean;
   /** What to print, before anything is kept. */
   report: string;
+  /** Each verification that failed, as the report lists it (lg-66). */
+  problems: string[];
+  /** What the workbook read as, through the layout (lg-66). */
+  reading: WorkbookReading;
 }
 
 interface StoredColumns {
@@ -597,16 +609,16 @@ export function importWorkbook(
   try {
     // Inside the transaction, so a refused import leaves the schema as it was.
     applyMigrations(db);
-    const { ok, report } = run(db, sheets, options);
+    const { ok, report, problems, reading } = run(db, sheets, options);
     if (options.commit && ok) {
       db.exec("COMMIT");
-      return { ok, written: true, report: `${report}\nWritten.\n` };
+      return { ok, written: true, report: `${report}\nWritten.\n`, problems, reading };
     }
     db.exec("ROLLBACK");
     const outcome = ok
-      ? "Every verification held. This was a dry run: nothing was written. Run again with --write to import."
+      ? `Every verification held. This was a dry run: nothing was written. ${options.via === "screen" ? "Confirm to import." : "Run again with --write to import."}`
       : "Refused: nothing was written.";
-    return { ok, written: false, report: `${report}\n${outcome}\n` };
+    return { ok, written: false, report: `${report}\n${outcome}\n`, problems, reading };
   } catch (error: unknown) {
     if (db.inTransaction) db.exec("ROLLBACK");
     throw error;
@@ -617,17 +629,19 @@ function run(
   db: Database,
   sheets: readonly Sheet[],
   options: WorkbookImportOptions,
-): { ok: boolean; report: string } {
+): { ok: boolean; report: string; problems: string[]; reading: WorkbookReading } {
   enrollPeople(db, options.members, options.now());
   const people = knownPeople(db);
   const reading = readWorkbook(sheets, {
     people,
     corrections: options.corrections,
     ...(options.names === undefined ? {} : { names: options.names }),
+    ...(options.layout === undefined ? {} : { layout: options.layout }),
   });
   const problems = [...reading.problems];
   // None under the household's layout, which names a bucket and a balance
   // column; a row with neither is a statement's, never filed by this import.
+  // A described layout can name neither (lg-66), and is refused here.
   if (reading.unfiled.length > 0) {
     problems.push(
       `${String(reading.unfiled.length)} rows have no bucket or no balance, and this import files every row it stores.`,
@@ -814,5 +828,5 @@ function run(
   say("Verifications");
   for (const check of [...reading.checks, ...passed]) say(`  ok      ${check}`);
   for (const problem of problems) say(`  FAILED  ${problem}`);
-  return { ok: problems.length === 0, report: out.join("\n") };
+  return { ok: problems.length === 0, report: out.join("\n"), problems, reading };
 }

@@ -43,6 +43,23 @@ const rowNumber = z.number().int().min(1).describe("A spreadsheet row number, th
 
 const label = z.string().trim().min(1);
 
+/**
+ * A label as the reader compares it: accents, case, dots and repeated spaces
+ * folded away, so `Dép. Courantes` is `dep courantes`. The reader's own
+ * folding (`books`' `folded` in `workbook.ts` calls this), so the schema and
+ * the reader cannot disagree about which labels are one.
+ */
+export function readerFolded(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toUpperCase()
+    .toLowerCase()
+    .replace(/[.]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
 /** Which sheets a part of the workbook is read from. */
 export const sheetSelectorSchema = z
   .discriminatedUnion("by", [
@@ -199,7 +216,10 @@ export const accountLayoutSchema = z
       }
       named.add(entry.bucket);
       for (const text of entry.labels) {
-        const key = text.toLowerCase();
+        // Folded as the reader folds a bucket's text (`books`' `folded`), so
+        // two labels the reader cannot tell apart are refused here rather than
+        // both filed under the later bucket (lg-66, Build 2.3).
+        const key = readerFolded(text);
         const other = labelled.get(key);
         if (other !== undefined && other !== entry.bucket) {
           context.addIssue({
@@ -271,9 +291,14 @@ export const workbookLayoutSchema = z
     salaries: salariesLayoutSchema
       .nullable()
       .describe("The sheet holding each person's salary; null when there is none."),
+    // lg-66, Decision 3 (a): the reader never consults this list, so the text
+    // says so rather than promising a reading it does not do. Editing it moved
+    // the schema's pin in api/test/layout-pins.test.ts.
     ignored: z
       .array(z.string().min(1))
-      .describe("Every other sheet, by name: read as none of the above."),
+      .describe(
+        "Every other sheet, by name. Advisory only: the reader does not consult this list, and a sheet not named as the account, the periods or the salaries is not imported either way.",
+      ),
   })
   .strict();
 export type WorkbookLayout = z.infer<typeof workbookLayoutSchema>;

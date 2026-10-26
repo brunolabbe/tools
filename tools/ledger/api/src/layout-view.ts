@@ -9,9 +9,18 @@
  * amount by how the figures follow one another, and in a CSV nothing else
  * tells them apart. `figures: "masked"` replaces every number with `#`, so the
  * measurement can say what that costs; dates and text are never masked.
+ *
+ * **Moved here from `api/test/layout/view.ts` by lg-66**, so the product sends
+ * what lg-38 and lg-56 measured and there is one copy: the measurement harness
+ * imports it back. What it makes is pinned by sha256, fixture by fixture, in
+ * `api/test/layout-pins.test.ts`; a change to what is sent is a deliberate
+ * edit of a pin. It lives in `api` rather than beside the model call in
+ * `@ledger/receipts` because it reads the books' cell grids, which `receipts`
+ * has no reason to know: that package is handed the text and nothing else.
  */
 
 import type { Cell, Sheet } from "@ledger/books";
+import { LAYOUT_SAMPLE_ROWS } from "@ledger/contract";
 
 export interface ViewOptions {
   firstRows: number;
@@ -22,11 +31,19 @@ export interface ViewOptions {
   figures: "shown" | "masked";
 }
 
+/**
+ * The longest text of a cell that is sent (lg-66, Build 3.3): a longer one is
+ * cut there, with `…`, and the file is still read in full. The 40 the
+ * measurement ran with.
+ */
+export const MAX_CELL_TEXT = 40;
+
+/** What was measured; the screen states the same numbers from the contract. */
 export const DEFAULT_VIEW: ViewOptions = {
-  firstRows: 12,
-  sampleRows: 6,
-  lastRows: 3,
-  maxText: 40,
+  firstRows: LAYOUT_SAMPLE_ROWS.first,
+  sampleRows: LAYOUT_SAMPLE_ROWS.middle,
+  lastRows: LAYOUT_SAMPLE_ROWS.last,
+  maxText: MAX_CELL_TEXT,
   figures: "shown",
 };
 

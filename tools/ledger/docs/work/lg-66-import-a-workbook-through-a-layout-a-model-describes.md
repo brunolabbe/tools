@@ -3,10 +3,11 @@ id: lg-66
 tool: ledger
 title: Import a workbook the reader does not know, through a layout Haiku 5.5 describes and the person confirms
 kind: work-package
-status: ready
+status: done
 milestone: P6
-depends_on: [lg-38]
+depends_on: []
 difficulty: hard
+awaiting: Done when 11 — the owner's paid live read of one synthetic fixture through the Import screen with a key, after the merge, is a Log entry recording input tokens and cost against the ~0.1-cent mean
 ---
 
 # lg-66 — Import a workbook the reader does not know, through a layout a model describes
@@ -107,13 +108,36 @@ screen" and "a confirmation screen".
   becomes "in the terminal". Under (b) Build steps 3 and 4 and Done when 5 to
   9, 11 and 13 are rewritten around the command.
 
+_Note, 2026-10-26 (lg-66's round 1, gate 1's F2 and F6; the answer above is
+unchanged)._ Two things (a) says turned out otherwise. **The inflated size is
+the second bound Build 3.3 lists, not the sixth**, and the build refuses on
+seven (bytes, the zip's entries, the inflated size, sheets, rows, cells, the
+request's estimate) and cuts one (a cell's text). **And the inflated-size bound
+did not bound the parse as cheaply as (a) implies:** the 40 MiB figure was
+whitespace, which `exceljs` reads for little, while cells cost it 20 to 27 MB
+of memory per MiB inflated. At the build's 16 MiB, a 1.7 MB upload of dense
+cells cost +301 MB and 2.4 s through the describe route before the cells bound
+refused it, a 3-column sheet +335 MB and 2.5 s, and 44,016 one-byte entries
+8.4 s; the ledger's container holds 512 MB. By the owner's answer B of
+2026-10-26 the bound is now 4 MiB and a zip holds 1,000 entries at most: those
+four uploads are refused in 60 to 84 ms, before `exceljs`, and a sheet just
+under the new bound costs +99 to +109 MB and 0.7 to 1.1 s. The Log's entry of
+2026-10-26 has the measurement. _(Corrected in round 2, 2026-10-26, gate 2's
+F2: "a zip holds 1,000 entries at most" held only for a zip whose end record
+counts its directory honestly. One that counted 6 of its 7 entries hid a
+200 MiB sheet from both bounds and reached the model at +428 MB, because
+`jszip`, which `exceljs` calls, reads the directory past the count. Since round
+2 a directory the end record's count does not fill exactly, or that ends
+before the end record, is refused before `exceljs`, so both bounds now hold
+for every zip that reaches it.)_
+
 ### 2. Which files
 
 **Answered: (b), bank CSVs too** (this overrode the recommendation, (a)). The
 owner was then asked how to carry it out, and chose **"Split: file lg-67 for
 CSVs"**: lg-66 is the `.xlsx` build below, and a CSV is refused with the plain
-message until lg-67, which serves bank CSVs (to be filed after this pull
-request merges; it depends on lg-66 and is not in this ticket's `depends_on`).
+message until lg-67, which serves bank CSVs (filed, `ready`; it depends on
+lg-66 and is not in this ticket's `depends_on`).
 
 Of the 13 measured fixtures, six are workbooks and seven are bank CSVs. A CSV
 has no bucket column: the reader returns its rows as `unfiled`, and
@@ -243,7 +267,7 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
       `.xlsx` is read** (Decision 2, split): both requests refuse anything
       else, a CSV included, with a typed error and a plain message, judged from
       the bytes and not from the file's name. A CSV is refused this way until
-      lg-67, which serves bank CSVs (to be filed). The judgement is the zip's own
+      lg-67, which serves bank CSVs (filed). The judgement is the zip's own
       structure: the file opens with `PK`, has a readable end-of-central-directory
       record and central directory, and holds the workbook's own entries,
       `[Content_Types].xml` and `xl/workbook.xml`. It is made from the central
@@ -266,6 +290,10 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
       can be known, in this order:
       - **The upload's bytes** are checked before the workbook is parsed; over
         the bound is a typed refusal.
+      - **The zip's entries** are counted from its end-of-central-directory
+        record before the directory is walked; over the bound is a typed
+        refusal. _(Added 2026-10-26 by the owner's answer B, gate 1's F2: a zip
+        of many tiny entries costs time per entry whatever their size.)_
       - **The workbook's inflated size** is checked before exceljs inflates
         anything. The central directory gives each entry's declared uncompressed
         size; the total over the bound is a typed refusal. **A zip can declare
@@ -281,6 +309,15 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
         avoid importing jszip, a dependency the api does not declare. The
         builder states the bound with the inflated size of the largest of the
         six workbook fixtures beside it, and names the chunk by which a stop may overshoot.
+        _(Note, 2026-10-26, round 2, gate 2's F2: "whatever the zip
+        declared" held for what the directory declares of each entry's size,
+        not for what its end record declares of the number of entries. The
+        count passes over the entries the end record counts, and `jszip`
+        reads every entry the directory holds, so a record that counted fewer
+        hid the rest from the count. By the owner's answer of 2026-10-26 the
+        directory must fill exactly: the walk of the counted entries ends
+        where the directory ends, and the directory where the end record
+        starts, or the upload is not an `.xlsx`.)_
       - **The number of sheets, and the rows and cells read,** need the parsed
         file. Over either is a typed refusal before anything is sent.
       - **The length of a cell's text sent** is a truncation, not a refusal: the
@@ -378,16 +415,29 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
    each time, the fake was called once each time, and the books are unchanged.
 6. The fake is called once per describe request, and zero times for: a request
    without the consent field; a request with no key configured; a file over each
-   of the five bounds of Build 3.3 that refuse (bytes, inflated size, sheets,
-   rows and cells, the request's size estimate), one test per bound; a file that
-   reads as 0 sheets; and a confirm request.
-   Each refusal is a typed error.
-7. The confirm request given `lg37`'s fixture and its correct description
+   of the seven bounds of Build 3.3 that refuse (bytes, the zip's entries,
+   inflated size, sheets, rows, cells, the request's size estimate), one test
+   per bound; a file that reads as 0 sheets; and a confirm request.
+   Each refusal is a typed error. _(Reworded 2026-10-26 under the owner's
+   answers B and D: gate 1's F6 found the bounds counted three ways, and B added
+   the entries bound. **Superseded:** "a file over each of the five bounds of
+   Build 3.3 that refuse (bytes, inflated size, sheets, rows and cells, the
+   request's size estimate), one test per bound".)_
+7. The confirm request given `lg7`'s fixture and its correct description
    leaves the books as `import:ledger --write` on the same workbook leaves them
-   (the same movements and the same report figures); given a description that
-   fails the verifications (the pinned wrong description of `lg37` with amount
-   and balance swapped, outcome `refused`), it refuses, and the books are
-   unchanged.
+   (the same rows, the same classifications and the same report figures).
+   Given `lg37`'s fixture and its correct description, it is refused with
+   exactly the problems `import:ledger --write` prints on the same workbook,
+   and the books are unchanged; given a description that fails the
+   verifications (the pinned wrong description of `lg37` with amount and
+   balance swapped, outcome `refused`), it refuses, and the books are
+   unchanged. _(Reworded by the owner's answer of 2026-10-26, A in the Log.
+   **Superseded:** "The confirm request given `lg37`'s fixture and its correct
+   description leaves the books as `import:ledger --write` on the same workbook
+   leaves them (the same movements and the same report figures); given a
+   description that fails the verifications (the pinned wrong description of
+   `lg37` with amount and balance swapped, outcome `refused`), it refuses, and
+   the books are unchanged.")_
 8. An upload over the byte bound is refused before the workbook is parsed (a
    test where the sheet reader is a spy that is never called). Two tests bound
    the inflate. (i) A real one-sheet workbook whose sheet XML is padded with
@@ -437,7 +487,7 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
     entry), return the same typed error with the same plain message that only
     an `.xlsx` is read, the fake is not called, the sheet reader is not called,
     and the books are unchanged. That holds until lg-67, which serves bank CSVs
-    (to be filed). A zip with the workbook's two entries and no sheet
+    (filed). A zip with the workbook's two entries and no sheet
     (its `xl/workbook.xml` a valid workbook with an empty `<sheets/>`; an empty
     file or text there fails in the parser, not at the 0-sheet refusal) reads as
     0 sheets and is a typed refusal with the fake uncalled, and the test asserts
@@ -484,6 +534,91 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
   needs one, and name it in the Log.
 - A new `scripts/*.mjs` needs an `include` line in `scripts/test/tsconfig.json`;
   a new workspace costs the lines `.claude/rules/image-closure.md` lists.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-26 · `53bb5d0f..e02ec781` (the merge-base with the base is `53bb5d0f`, so the range carries no `main` files) · Sonnet 5.5, depth full
+
+Graded against the owner's answers of 2026-10-25/26: Done when 7's positive case reads as `lg7` (`lg37` stays "refused with exactly the problems the command prints, books unchanged"); Done when 11 is `awaiting`; the `tools/ledger/CLAUDE.md` change is applied at landing and its absence is not a finding. CI on `e02ec781`, read with `gh pr view 670`: every check `SUCCESS`, the informational Windows leg included (it had finished when read); the verdict depends on no running leg.
+
+| Done when                                                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Ledger project passes; 13 request pins and the schema pin fail when a hash differs                                                   | `api/test/layout-pins.test.ts` › "the request is the one lg-66's base sent" (13 cases) and "the answer's schema, as the structured output's format, is the pinned one" ✓. I re-hashed `layoutRequest` for the 13 fixtures and the format schema at `53bb5d0f` in a second tree: 13 of 13 equal the pins, schema `cbf85552…` (5,842 characters) equals `SCHEMA_PIN_AT_BASE`; at the head `e5c31565…` (5,963) equals `SCHEMA_PIN`. The two schemas differ in exactly one line, `ignored`'s `.describe()`. `npm test -- --project ledger` locally: 84 files, 1,753 of 1,753 passed. Own red/green of the pin tests not run (the assertion is `toBe(pin)`; the Log reports the red run). |
+| 2. `importWorkbook` with no `layout` as before; the `unfiled` refusal named                                                             | `api/test/workbook-import.test.ts` › "a described layout (lg-66)" › "under which a row has no bucket or no balance, the import is refused with the unfiled message" (`csv-balance`, `csv-no-balance`, books empty) ✓. The diff of that file and of `books/test/workbook.test.ts`: additions only, no case edited ✓                                                                                                                                                                                                                                                                                                                                                                   |
+| 3. `empty-columns-csv` reports a problem; the two pins updated; Log lists each entry                                                    | `api/test/layout.test.ts` › "empty-columns-csv, withdrawal and deposit pointing at empty columns: refused" and "empty-columns-csv: a layout that reads empty columns reads no row, and that is a problem…" ✓. Cross-run: the base's `layout.test.ts` against the head's reader fails exactly those 2 of 64; the head's against the base's reader fails exactly those 2 of 64. The Log's 27-row table counts 16/10/1 before and 17/9/1 after, which I recounted from it ✓                                                                                                                                                                                                             |
+| 4. Schema refuses `Hypothèque`/`Hypotheque`, still refuses case-only                                                                    | `contract/test/layout.test.ts` › "refuses Hypothèque and Hypotheque named for two different buckets" and "still refuses two labels that differ only in case" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 5. Fake model on the six workbooks; three bad answers; books unchanged                                                                  | `api/test/workbook-describe.test.ts` › "describing a workbook (Done when 5)": six cases assert the description, `dateColumn.column`, 3 oldest and 3 newest, every label, a report, one model call and equal row counts; three cases assert 422 `LAYOUT_UNREADABLE`, one call, books equal ✓                                                                                                                                                                                                                                                                                                                                                                                          |
+| 6. Fake called once, and zero times for each refusal                                                                                    | Same file, "what is refused before the model is asked": consent (4 values), no key, bytes, sheets, rows, cells, request estimate, 0 sheets (Done when 13's test), confirm; inflated size by the 40 and 200 MiB tests and the lying zip. Each asserts the typed code and zero requests ✓. Positive control: deleting each check in turn (bytes, declared size, counted pass, sheets, rows, cells, request, cell text, 0-sheet refusal, required entries) turned exactly one named test red each time; deleting the explicit consent check turned none red (see F5)                                                                                                                    |
+| 7. (as reworded) `lg7` confirm leaves the books as `import:ledger --write`; `lg37` refused as the command refuses; wrong `lg37` refused | `workbook-describe.test.ts` › "confirming (Done when 7)": the `lg7` case compares `statement_rows` and classifications row for row (17 rows) and the report's figures with the command's output; the `lg37` correct case asserts the 422 problems equal the command's `FAILED` lines and the books unchanged; the swapped case asserts problems of its own and the books unchanged ✓                                                                                                                                                                                                                                                                                                 |
+| 8. Bounds before anything is inflated or sent                                                                                           | Byte bound ✓ (spy 0, inflate spy empty); (i) padded workbook at 40 and 200 MiB ✓ (declared sizes, spy 0, reader 0); (ii) lying zip ✓ (spy over the bound and at most bound plus 16 KiB, reader 0); sheets, rows, cells, request one test each ✓; cell-text cut with the file read in full ✓; estimate formula and the word "estimate" ✓; the log test ✓ (a companion asserts the lines exist). The 200 MiB test run once: whole file 32 of 32 in 5.19 s. My six crafted zips and the red/green of every bound are in the full report. **One clause is unasserted: F1.**                                                                                                              |
+| 9. Web tests; e2e at 360 and 1280                                                                                                       | `web/test/import.test.tsx` (7 tests: the statement before the button and the fake uncalled; letter, header and 3 + 3 dates; each label with bucket, count and 3 rows; no Confirm when a verification fails, Confirm when all hold) ✓; the fixture is held to the API's answer by `workbook-describe.test.ts` › "web/test/fixtures/lg37-describe.json is what Describe answers for lg37" ✓. `e2e/layout.spec.ts` › "Import fits a phone and a desktop, before sending and once read" passed in the `ledger` e2e job on this head (13 passed); I read its 360 px screenshots: no overflow ✓                                                                                            |
+| 10. `swapped-labels` mapping swapped shows `Compte 2` under `current-expenses` with the loan payments                                   | `workbook-describe.test.ts` › "swapped-labels with the mapping swapped lists Compte 2 under current-expenses…" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 11. Owner's live read after the merge                                                                                                   | **awaiting** — the owner's paid read of one synthetic fixture through the Import screen with a key, after the merge; the reading is the Log entry recording input tokens and cost against the ~0.1-cent mean. No test calls a model (the real client was exercised against a stub `fetch` only, no network)                                                                                                                                                                                                                                                                                                                                                                          |
+| 12. `npm run check`, lockfile sync, image closure                                                                                       | `check` job `SUCCESS` on `e02ec781`; `node scripts/check-lockfile-sync.mjs` exit 0 and `packages/core/test/image-closure.test.ts` 8 of 8 locally; `docker` job `SUCCESS`; no file under `tools/ledger/api` imports `@anthropic-ai/sdk` (grep exit 1) ✓                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 13. Non-workbooks refused alike; 0 sheets; names do not decide                                                                          | `workbook-describe.test.ts` › "a bank CSV, a CSV whose first header is PK ID, and a zip that is not a workbook get one refusal" (both routes: 415, one message, fake 0, reader 0, books equal) and "a zip with the workbook's two entries and no sheet reads as 0 sheets, a refusal of its own" (`WORKBOOK_NO_SHEETS`, own message) ✓; the name half by "the file's name never reaches the server" (a `name` field is 400) with the web test "a file's name decides nothing". My 5 shapes × 2 routes matched                                                                                                                                                                         |
+
+- **med** (F1) · no `Done when` line depends on it as worded; the orchestrator's reading of "content" in Done when 8 (ii) decides · `api/src/workbook-zip.ts` has no test file of its own and none of its guards is asserted. I deleted each in turn and ran `workbook-describe.test.ts`, `xlsx.test.ts` and `workbook-import.test.ts`: the stored-entry count, the encrypted-or-odd-method refusal, the zip64 sentinels, the deflate-error refusal, the split-disk and entry-count checks, the directory-window check and the local-header check **all survived (72 passed, 1 skipped, each time)**. The stored-entry one matters: with it deleted, a 3 MB upload of 40 overlapping stored entries, each declaring 0 bytes, passes the counted inflate (the spy reads 125,829,432 bytes, 120 MiB) and reaches the sheet reader (reader calls 1); unmutated, the same zip is refused with the reader at 0. Done when 8 (ii) says "inflate", and its one test is a deflated entry, so I read the line as met; a stored entry that understates its size is the same hole. Fix: one test per guard, starting with the stored-overlap zip above (refused, reader 0), which fails with the guard deleted and passes with it.
+- **med** (F2) · no `Done when` line depends on it, but Decision 1 (a)'s premise does · **open decision.** The 16 MiB inflated bound does not bound what `exceljs` costs, and the shipped comment says it does: `workbook-zip.ts`'s header on `MAX_WORKBOOK_INFLATED_BYTES` says `exceljs` "held about twice the inflated size in memory (+79 MB for 40 MiB)", a figure measured on whitespace. Through the describe route, at this head: a 1.7 MB upload whose sheet inflates to 15.0 MiB of dense cells (589,800 cells) costs +299 MB resident and 2.4 s before the cells bound refuses it; with 3 columns (157,019 rows) +431 MB and 2.5 s; a 3.98 MB zip of 44,000 one-byte entries takes 8.4 s on describe (+112 MB) and 8.9 s on confirm, then 422 `WORKBOOK_NO_SHEETS`; a 15 MiB `sharedStrings.xml` with one cell passes every bound, reaches the model call (+108 MB, 1.2 s). That is 19 to 27 times the inflated size, against "about twice". The falsehood runs in the unsafe direction (it understates the cost a reader sizes a container by), which is why this could be graded `high`; I read the text as the rationale for a constant, not a promise, and graded `med`. Options: **(a) tighten**: lower `MAX_WORKBOOK_INFLATED_BYTES` (the largest fixture inflates to 90,542 bytes) and cap the zip's entry count (a workbook holds tens), then re-measure with the probes in the full report; **(b) keep the constants and correct the text** in the comment and Decision 1 to the measured costs, accepting up to about 430 MB and 9 s per request from a signed-in household member. Recommendation: (a), then state the re-measured figures; neither was run, so the size of the new constants is unmeasured.
+- **low** (F3) · no live call site · `workbook-zip.ts`'s header and the Log say a stop overshoots the bound by at most `INFLATE_CHUNK_BYTES`. For a stored entry the pass adds the entry's whole length: 40 overlapping stored entries of 3 MiB stopped at 18,874,680 counted bytes: 2,097,464 over the bound and 2,081,080 over the bound plus the chunk (16,793,600); the most it can be over is the byte bound. Nothing is inflated or allocated for a stored entry, so the cost is nil; the text is false in the safe direction.
+- **low** (F4) · no live call site · the isolation sweep never reads what the model is sent. I planted three leaks in `isolation.test.ts`'s run: the other household's people enrolled into the caller's dry run was caught (`expected [ 'kim' ] to deeply equal []`), the other household's words appended to the report was caught (`[ 'Chalet', 'kim' ]`), and the other household's names appended to the request passed (4 of 4), because the fake describer ignores its argument. The request is built from the upload only, so nothing reaches it today. `examples` rather than `sample` is right: the sweep's `sam` mark would match the latter.
+- **low** (F5) · no live call site · the consent branch of `describeWorkbook` is redundant with `describeWorkbookRequestSchema`'s `z.literal(true)`: deleting it changes no test (its mutant survived), and a request without consent is then told "Choose a workbook to send." instead of the consent sentence, which no test reads. The web always sends `consent: true`.
+- **low** (F6) · wording, the owner's to reword at landing with Done when 7 · the ticket counts the bounds three ways: Decision 1 (a) calls the inflated size "the sixth bound of Build 3.3" (Build 3.3 lists it second), Done when 6 says "five bounds … that refuse" (rows and cells counted as one), and the code refuses on six (bytes, inflated, sheets, rows, cells, request) and truncates one (cell text). Each has its own test and each test goes red when its bound is removed.
+- **low** (F7) · `e2e/layout.spec.ts`'s `CARDS` does not list "Import (read)" (three cards), so lg-70's "at least this many cards" guard compares nothing there; the gap-between-cards check still ran and passed.
+- **dropped** · "a 0-row reading passes silently in some combination of the guard's conditions": none found. The guard is skipped only when `out.problems` or `people.problems` is non-empty, and both end up in the reading's problems, so a skipped guard is a refused reading; nine combinations (empty columns plus a missing salaries sheet, an account selector matching nothing, `yearPerSheet` on a non-year sheet, order flipped, date column empty, a sheet with no dated row, `csv-balance` read correctly with 40 unfiled rows) each ended refused or read rows. A second, empty account sheet beside one that reads rows is not flagged, which Build 2.2 ("across all the sheets") says.
+- **dropped** · "the env variable `RATE_LIMIT_WORKBOOK_DESCRIBES_PER_MINUTE` is untested in `config.test.ts`": the receipt reader's sibling is untested there too, and my parse probe passed the environment as the overrides argument, so it measured nothing. The limiter itself was exercised (see the full report).
+- **findings** · the hunt returned 9; 7 carried (F1 to F7), 2 dropped.
+- NFR: security — F1, F2 (parse cost); authority, consent, logs and the client's request clean · performance — F2 · reliability ✓ (the counted pass stops at the bound; every crafted zip refused, none crashed) · maintainability — F1, F6, F7.
+
+### Gate 2
+
+**Gate: FAIL** — 2026-10-26 · `e02ec781..5db37436` (eight first-parent commits, no merge from `main`; the base is still `53bb5d0f`) · Sonnet 5.5, depth narrow
+
+Graded against the owner's answers A to E of 2026-10-26 as the dispatch states them. CI on `5db37436`, read with `gh pr view 670`: `headRefOid` is `5db3743694a45fe93fd15abe56df210060868f3a`; `check` (CI), `e2e` (ledger), `check` (pr-title), `codeql`, `changes`, `docker` (ledger), `dependency-review`, `test (ubuntu-latest)`, `test (windows-latest, informational)` and `CodeQL` are all `SUCCESS`. The verdict depends on no CI leg. It depends on one measurement no CI leg runs: **F2's remaining clause, which is a `high`** and leaves Done when 8 not met. Everything else in the round is `low`.
+
+**The owner's answers as applied.** A ✓ (Done when 7 reads `lg7` as the positive case, `lg37` as "refused with exactly the problems the command prints, books unchanged", the swapped `lg37` kept, the superseded line beside it). B applied as stated (4 MiB, 1,000 entries, re-measured) and holds for every zip whose end record counts honestly; **not for one that understates its count (F2)**. C ✓ in part (F1). D ✓ (F3 to F7 each fixed). E ✓ (the `receipts` row is worded as the Log quotes it; "two routes that cost money" names both buckets, both five a minute, matching `config.ts` and `.env.example`).
+
+| Done when                                                                    | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1 to 5, 9, 10, 12, 13                                                        | Stand as gate 1 graded them: the round touched no code or test under them. Re-checked only where the round reached: 9's e2e case and 12's `check` and `docker` are `SUCCESS` on `5db37436` (the `CARDS` edit ran in that e2e job); the `errors.ts` change is a comment.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 6. Fake called once, zero times for each refusal (as reworded: seven bounds) | `workbook-describe.test.ts` › "what is refused before the model is asked (Done when 6 and 8)" (consent now asserts the sentence for an omitted field, `false`, `"yes"` and `null`), › "the zip's entries, counted before anything is inflated (lg-66 gate 1, F2)" › "a workbook of more entries than the bound is refused before the inflate and the sheet reader" (both routes, inflate spy empty, reader 0, model 0); the other six bounds' tests are unchanged and green (control run 96 passed, 1 skipped). Deleting the entries check turns exactly that test and `workbook-zip.test.ts` › "the number of entries (lg-66 gate 1, F2)" › "one entry more is refused as too large…" red. The superseded wording is kept beside the new. **Proven for the zips the tests build; the crafted-end-record input of row 8 falsifies the inflated and entries clauses (the model is called once for a file that inflates to 200 MiB).** |
+| 7. (as reworded)                                                             | `workbook-describe.test.ts` › "confirming (Done when 7)": unchanged by the round and green in the control run; the wording now matches what its three cases assert (`lg7` row for row and report figures, `lg37` refused with the command's problems and the books unchanged, swapped `lg37` refused). The superseded line is kept beside it ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 8. Bounds before anything is inflated or sent                                | The named tests all pass (byte bound; (i) padded at 40 MiB, the 200 MiB case not re-run as instructed; (ii) the lying zip, now stopped at 4,194,616 counted bytes, inside bound plus chunk; sheets, rows, cells, request; cell text; estimate; the log test). **Not met in property:** a 210,316-byte upload whose end record states fewer entries than the directory holds reaches `exceljs` and the model with a 200 MiB sheet (F2). Build 3.3's "whatever the zip declared" is false for it.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 11. Owner's live read after the merge                                        | Unchanged by the round. **awaiting** — the owner's paid read of one synthetic fixture through the Import screen with a key, after the merge; the reading is the Log entry recording input tokens and cost against the ~0.1-cent mean.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+- **high** (F2, fixed in part) · Done when 8 depends on it · **open decision (the remedy), one tried** · The owner's answer B is applied for honest zips and measured: dense 15 MiB (100 columns and 3 columns), a 15 MiB `sharedStrings.xml` and 44,000 one-byte entries are each refused in 59 to 62 ms with the sheet reader at 0 on both routes (the Log's note says 60 to 84), and a sheet just under 4 MiB costs +89 MB and 740 ms (100 columns, the model called) or +106 MB and 761 ms (3 columns, refused on `rows`), at or under the Log's +99 to +109 MB. **The remaining clause:** `workbookEntries` walks as many central-directory entries as the end record's `count` field says, and sums, counts and caps only those. `jszip` 3.10.2, which `exceljs` calls, ignores that field and walks the directory while each header's signature matches (`readCentralDir`). So entries past `count` are read by `exceljs` and seen by none of the bounds. Reproduction (`gate2-probe.test.ts`, cases "D1" and "D2", one vitest process each): the lg7-sized one-sheet workbook with the sheet padded to 200 MiB by `paddedDeflate`, the sheet ordered after the first six entries, written with `rawZip(entries, { count: 6, onDisk: 6 })`. Result: **210,316 bytes, status 200 on describe, counted inflate 2,471 bytes, sheet reader called once, model called once, 2,110 ms, +447 MB resident** (confirm: 422 from the fixture, 1,981 ms, +206 MB). The same construction with the honest count: 413 `inflated`, counted 0, reader 0, 28 ms (the harness can refuse it). A second input, 44,000 one-byte entries with `count` 2 (4,070,284 bytes): passes every bound (422 `WORKBOOK_NO_SHEETS` from the parser, 2.2 s, +76 MB on describe and +114 MB on confirm); with the honest count, 413 `entries` in 61 ms. The ledger's container holds 512 MB beside a process that stood near 100 MB (`workbook-zip.ts`'s own comment); whether one request kills it is unmeasured (no container run). The falsehood runs in the unsafe direction: `workbook-zip.ts`'s header ("The number of entries is bounded too"), Build 3.3 ("whatever the zip declared") and Decision 1's dated note ("a zip holds 1,000 entries at most"). The walk is unchanged by the round, so the hole predates it (not run at `e02ec781`); the round's cap reads the same field, and its re-measure covered honest zips only. **Remedy tried:** after the walk, `if (at !== offset + size || offset + size !== end) throw notXlsx();`. D1 and D2 become 415 with the reader at 0 (31 ms and 70 ms), 1,000 honest entries and the 4 MiB sheet are still read, and `workbook-zip`, `workbook-describe` (less the 200 MiB case), `xlsx` and `workbook-import` give 96 passed, 1 skipped. Unmeasured: workbooks saved by Excel, LibreOffice or Google Sheets (only `exceljs`-written ones were read). **Options:** (a) that equality line, which also closes a directory placed away from the end record, where `jszip` shifts its offsets; (b) count by walking the directory as `jszip` does and cap the walked count. Recommendation: (a), with one test per input above.
+- **F1 (med), fixed in part** · no Done when depends on it · The ten guards (gate 1's seven and the three the round added) each turn named tests red when deleted: stored-entry count 2, encrypted or odd method 2, the three zip64 sentinels 3, the deflate error 1, the split-disk and count checks 4, the directory window 3, the local-header check 2, a central header's signature 1, a name past the directory 1, bytes past the file 1 (control 96 passed, 1 skipped). **Two clauses in the same file survive:** the `at + 46 > offset + size` half of the walk's first check (deleted: 96 passed), and the cap's position before the walk (moved after it: 96 passed, though the test is titled "…before the directory is walked" and asserts only the code on an honest zip). Both low: the first is covered by the signature check except in a gap case that would end in a thrown `RangeError` rather than a refusal (reasoned, not run), the second costs a walk of at most 65,534 headers.
+- **F3 (low), fixed** · a stored entry is counted a chunk at a time: the 3 MB stored zip (Z4) now stops at 4,194,616 counted bytes, as the deflated zips do (bound plus 312, inside bound plus chunk); reverting the loop turns the two stored-entry tests red. Legitimate stored workbooks (`lg7`, `lg37`, `moved`, `english`, every entry method 0, `lg37`'s largest entry 20,359 bytes) answer exactly as their deflated twins on both routes, counted bytes equal.
+- **F4 (low), fixed** · the sweep reads what the model is sent. The other household's names appended to the request: red (`expected [ 'Chalet', 'kim', 'alex@away.test' ] to deeply equal []`); the same placed right after the prompt, inside the part the sweep reads: red; inside the prompt's own text or before it: red on the `startsWith` assertion. A change to the shared prompt itself (same for every caller) passes the sweep by design and turns 13 of 16 `layout-pins` tests red.
+- **F5 (low), fixed** · deleting the consent branch turns "a request without the consent field" red; the branch and `z.literal(true)` accept the same single value, and the branch runs first, so the consent sentence is what the person reads for any request without it.
+- **F6 (low), fixed** · Done when 6 counts seven, Build 3.3 has the entries bullet marked as answer B's, the option text in Decision 1 ("the sixth bound") is left as put and a dated note under it corrects it without touching the answer; the note's costs hold on honest zips, and its "1,000 entries at most" is the F2 clause.
+- **F7 (low), fixed** · `CARDS` lists "Import (read)": 3 and the ledger e2e job is `SUCCESS` on `5db37436`; not re-run locally.
+- **dropped** · a signature planted in the last 21 bytes of a file (past the 22-byte reach of `endOfDirectory`, inside `jszip`'s) makes the two parsers pick different end records, but `jszip` throws on it: a 522-byte file reaches the reader once and is refused in 34 ms. Fails safe. And the entries sentence for a zip whose record overstates its count ("made of 65534 parts" for three): a crafted file, refused either way, no live call site. Neither is a defect with a caller.
+- **findings** · the narrow hunt returned 5; 3 carried (one under F2, two under F1), 2 dropped.
+- NFR: security — F2 · performance — F2 · reliability ✓ (every honest-count crafted zip refused before the reader, stored workbooks read identically) · maintainability — F1.
+
+### Gate 3
+
+**Gate: PASS** — 2026-10-26 · `5db37436..28d2f0cb` (`git log --first-parent --no-merges`: 458f44db, 8b1fcb2e, 28d2f0cb; the merge `c0b653dd` of `be8d9c0e` is outside the round and was read only for the five overlapping files) · Sonnet 5.5, depth narrow
+
+CI on `28d2f0cb`, read with `gh pr view 670`: `headRefOid` is `28d2f0cb83e80d5a1387e6cb6e049ecbd80bff53`; `check` (CI), `e2e` (ledger), `check` (pr-title), `codeql`, `changes`, `docker` (ledger), `dependency-review`, `test (ubuntu-latest)`, `test (windows-latest, informational)` and `CodeQL` are all `SUCCESS`, nothing running. The verdict rests on my own measurements for Done when 8 and on the `e2e`, `check` and `docker` legs for Done when 9 and 12; no leg is red or pending. **Nothing I found is a `high`, and no `med`.** Gate 2's `high` (F2) and its `med` (F1) are each fixed.
+
+| Done when                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 8. Bounds before anything is inflated or sent                                 | `workbook-describe.test.ts` › "an end record and a directory that disagree (lg-66 gate 2, F2)" › "a sheet padded past the inflated bound, left out of the end record's count, is refused", "44,000 entries under an end record that counts 2 are refused", "a directory that ends before the end record's stated position is refused": each through both routes, 415, sheet reader 0, model 0. With the new line deleted 4 of 102 go red (those three and `workbook-zip.test.ts` › "a directory entry whose name runs past the directory is not an .xlsx"). Gate 2's probe on the new head: D1 415 reader 0 model 0 (32 / 11 ms), D2 415 (73 / 67 ms), D3 415, D4 415; D4b reaches the reader once, model 0, refused 415 there (gate 2 dropped it; unchanged). **Met in property for every zip I built; workbooks saved by Excel, LibreOffice or Google Sheets are unmeasured, below.** |
+| 9. Import fits a phone and a desktop (the merge touched `e2e/layout.spec.ts`) | `e2e/layout.spec.ts` › "Import fits a phone and a desktop, before sending and once read": local run, 13 passed of 13 including "Admin fits a phone and a desktop" (lg-71's `/Home: alex and sam/` entry); `e2e` (ledger) `SUCCESS` on the head.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 1 to 7, 10, 12, 13                                                            | Stand as gate 2 graded them. The round's code is `workbook-zip.ts`; control run over `workbook-zip`, `workbook-describe` (less the 200 MiB case), `xlsx` and `workbook-import`: 102 passed, 1 skipped (103). 12's `check` and `docker` are `SUCCESS` on the head.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 11. Owner's live read after the merge                                         | Unchanged by the round. **awaiting** — the owner's paid read of one synthetic fixture through the Import screen with a key, after the merge; the reading is the Log entry recording input tokens and cost against the ~0.1-cent mean.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+- **F2 (gate 2's high), fixed** · Done when 8 depended on it · the owner's option (a) is in place and does what it claims. D1 (a 200 MiB sheet left out of an end record counting 6 of 7): 415, counted 0, reader 0, model 0, 32 ms; with the line deleted the same file is **200, reader 1, model 1, +424 and +439 MB in two runs** (the harness can produce the failure; the header's and the note's "+428 MB" sits between them). D2 (44,000 entries, count 2): 415, reader 0, 73 ms; line deleted: 422 from the reader, reader 1. Attacks on the line itself, each a 64 MiB padded sheet declared as 100 bytes, both routes: extra-field and comment lengths that differ between central and local header (valid extra fields, so `jszip` accepts them): 413 `inflated` at 4,194,616 counted, reader 0; names with `..`, a leading `/` and a folder name: 413, reader 0; the sheet under a name ending in `/`: 413, reader 0; duplicate names, the huge one last (`jszip` keeps the last) and first: 413 both; a directory that fills exactly with the huge sheet inside a second, fully valid directory in the end record's comment: 413 at 4,194,616, reader 0; the same with the second directory leaving the huge sheet out: both parsers took the last record (422 from the reader, counted 524, 4 ms, no inflate of the sheet). None defeats the line.
+- **F1 (gate 2's med), fixed** · each surviving clause now turns a named test red: `at + 46 > offset + size` deleted: 1 failed, `workbook-zip.test.ts` › "what the walk may read, and when the entries bound is read (lg-66 gate 2, F1)" › "a counted header that starts in the directory's last four bytes is not an .xlsx", failing on a thrown `RangeError [ERR_OUT_OF_RANGE]`; the entries cap moved after the walk: 1 failed, › "the entries bound is read off the end record before a single header is walked". The cap deleted: 3 failed. The new line: whole 4 failed, first half (`at !== offset + size`) 2 failed, second half (`offset + size !== end`) 1 failed. S6 (the window line) deleted: 2 failed (the offset sentinel, which is a thrown `RangeError`, and › "a directory that runs past the end record, ending in a header's signature, is not an .xlsx"); only its `offset + size > end` term deleted: 1 failed, the same new test, so S6 still has a red. The Log's table agrees with mine row for row.
+- **The removed name-past-directory check**, refused still · a header whose name length runs past the directory, count honest, in the last header (65535, and 40 bytes over the room), in the first header, and a counted header of only 40 bytes: 415 `WORKBOOK_NOT_XLSX` on both routes, reader 0, none a `RangeError` (which would answer 500). The refusal is the new line's, and round 1's test for it goes red with the line deleted.
+- **The merge**, both sides kept · `git diff be8d9c0e 28d2f0cb` shows no change to any of lg-71's other files (Admin, directory, households, its ticket: empty diff). In the five overlapping files the head has only additions and rewordings of lines lg-8, lg-63 and lg-66 own; lg-71's `email` messages, `CreateHouseholdResponse` and the `address`/`person` schema, its `household:ledger -- add alex@example.test alex` lines in `.env.example` and `CLAUDE.md`, and its seed and `/Home: alex and sam/` case in `layout.spec.ts` are all present.
+- **The three corrected sentences** · Build 3.3's note and Decision 1's note are true at the head (the walk ends where the directory ends, the directory where the end record starts, else not an `.xlsx`; refused before `exceljs`). The header of `workbook-zip.ts` is true but for one clause, below.
+- **low** · no `Done when` line depends on it · `workbook-zip.ts`'s header ends its new paragraph "and the two parsers read the same entries". For a file with a record signature in its last 21 bytes `jszip` reads none: it picks that truncated record and throws (D4b, the file reaches the reader once and is refused there, model 0). False in the safe direction, nothing relies on it; "or `jszip` refuses the file" would make it exact. The following sentence ("The parse is by hand rather than through `jszip`…") now runs on from that paragraph without a break.
+- **dropped** · (1) duplicate names with the huge entry first and a tiny one last: refused 413, though `jszip` would read only the tiny one; over-counting a crafted file, safe, no live call site. (2) D4b reaching the reader: gate 2's dropped item, outside the round's lines, fails safe, unchanged.
+- **unmeasured** · workbooks saved by Excel, LibreOffice or Google Sheets (none at hand; the line now refuses a writer that leaves bytes between its directory and the end record, and the Log reports Info-ZIP and CPython `zipfile` files passing, which I did not re-run); a local header whose name length differs from the central one and two directory entries sharing a local header (reasoned from `jszip`, not run); the 200 MiB test in `workbook-describe.test.ts` (not run, as instructed); whether one request kills a 512 MB container.
+- **findings** · the narrow attacks returned 3; 1 carried, 2 dropped.
+- NFR: security ✓ (the entries and inflated bounds hold for every shape tried) · performance ✓ (every crafted file refused in 1 to 82 ms) · reliability ✓ (no `RangeError` reachable on the shapes tried) · maintainability — the low above.
 
 ## Log
 
@@ -771,3 +906,517 @@ lg-67. The options are as the Decision section states them.
    schema pin moves with a deliberate edit). (b) the schema refuses a layout that
    names a sheet as ignored and as an account, period or salaries sheet. (c) the
    reader honours `ignored`. **Chosen: (a). It took the recommendation.**
+
+### 2026-10-25 — the build
+
+Built on `53bb5d0f`, in five commits: `47d98627` (Build 1), `8a213224` (Build
+2.4), `bda7ab3e` (Build 2.1 to 2.3), `35f876ee` (Build 3), `ad268ddd` (Build 4).
+No test calls a model; Done when 11 is the owner's, after the merge.
+
+**Corrected on this page, as fold-ins, with no older entry rewritten:**
+`depends_on` named lg-38, which is done, and is now `[]`; Decision 2, Build 3.1
+and Done when 13 said lg-67 was "to be filed", and it is filed and `ready`
+(`npm run status -- --show lg-67`), so they now say "filed".
+
+**Build 1: the 14 hashes at the base**, taken at `53bb5d0f` before anything
+moved, by a script that imported `api/test/layout/view.ts` and
+`zodOutputFormat(workbookLayoutSchema)` from that tree (characters, then sha256):
+
+| What                  | Characters | sha256                                                             |
+| --------------------- | ---------- | ------------------------------------------------------------------ |
+| `lg7`                 | 5,363      | `57c9385c3f7fc1a27cb68a54b58d928d318ac3202befb017ef313b40dc4d260b` |
+| `lg37`                | 10,518     | `79dc3826e8f2576897fa8b7989ac523aacce22cb2b6e9fad93414f295e007d2e` |
+| `moved`               | 8,446      | `502035573fdbc86af43eb93b924c7bde8d8993b9b94eb51af696d12bb216b885` |
+| `english`             | 8,161      | `e95f911fc6a89d97024dad1bb341809112a7b5b789cc4a99d224626251b69524` |
+| `csv-balance`         | 3,110      | `4b6d2fdb139ba08018cd3840c711b1ad43f095392d839e0cef2aa037710ba2fe` |
+| `csv-no-balance`      | 2,857      | `2e711e2626d3326d7d75af5d0902a912d583cfdf7338369bb78b5982a2b7d220` |
+| `swapped-labels`      | 5,661      | `e21a2ad77293b92abfe8bcd6102934ec9ca4d1eac60107208c5f4e7e51bbb139` |
+| `empty-columns-carry` | 5,841      | `13ab93b615909dee2384ef90b9357024b18762687d29b2da6a587752d12b24ea` |
+| `empty-columns-csv`   | 3,115      | `9dd3898b7b7fe83a77817df4416f256f36dbc856e086b517dfc071d1daa3e8b7` |
+| `bank-preamble`       | 2,975      | `bb09bba739c1a40cb0eed108469d7f92b59d3c47b664b1ff04ac10a26cc4d858` |
+| `bank-two-dates`      | 3,740      | `e12bac7945aa5c645a9257b65ff1b4311fe30bf1d8367a083c99f12eb8e09c27` |
+| `bank-footer`         | 3,039      | `f68253f5f453bff2395865016b207649610b3d2ed987e5f61885c77338769921` |
+| `bank-wide`           | 4,861      | `6bc675ba868b27bbc853a3c56efa8265d84c59cf6e032c525ae78b878f3b54a8` |
+| format schema         | 5,842      | `cbf85552e814c2f9aed91a6678ff87ff3f043c7212331edca255ebebc07ad1b6` |
+
+`api/test/layout-pins.test.ts` pins all 14 and passed after the move (15 of 15
+at `47d98627`). **The schema pin moved once, on purpose**, with Build 2.4: it is
+now `e5c31565db17908aed3654c0d3e44f2eaaf0ff10124d84568ff462b76add6eb7`, 5,963
+characters, because `ignored`'s `.describe()` now reads "Every other sheet, by
+name. Advisory only: the reader does not consult this list, and a sheet not
+named as the account, the periods or the salaries is not imported either way."
+Before the pin was updated the run read 1 of 15 failed, `Expected: "cbf85552…"`,
+`Received: "e5c31565…"`, the 13 request pins passing. The four-characters
+estimate of the schema is 1,491 tokens now (1,461 at the base). Its effect on
+what Haiku answers is unmeasured, as Decision 3 (a) says.
+
+**Where things went.** The view, the prompt, `layoutRequest`, `DEFAULT_VIEW`
+and `estimateTokens` are `api/src/layout-view.ts`: they read `books`' cell
+grids, and `receipts` has no reason to know a sheet, so it is handed the text
+and gains no workspace dependency. The model call is `createLayoutAsk` in
+`receipts/src/layout.ts`, with the measured client options, `max_tokens` 16 000,
+`effort: "medium"`, `claude-haiku-5-5` and `layoutOutputFormat()`
+(`zodOutputFormat(workbookLayoutSchema)`); the harness calls it with the model
+and effort it measures. The SDK failure mapping moved to `receipts/src/failure.ts`,
+shared with the receipt reader, whose wording is unchanged. The view's sample
+sizes (12, 6, 3) are `LAYOUT_SAMPLE_ROWS` in the contract, which `DEFAULT_VIEW`
+and the screen's statement both read; the 13 request pins held after that.
+
+**Build 5: nothing to declare.** No file under `tools/ledger/api` imports
+`@anthropic-ai/sdk` any more (`grep -rln "@anthropic-ai/sdk" tools/ledger/api
+--include=*.ts` prints nothing, exit 1): `layout.test.ts` reads the format
+through `layoutOutputFormat()`. So no `npm install` ran, the lockfile is
+unchanged, and `node scripts/check-lockfile-sync.mjs` exits 0.
+
+**Build 2.2, and what the brief had to give.** "0 rows read is one problem"
+would add a line to three of `books/test/workbook.test.ts`'s cases, whose
+readings are already refused at a cell (a name nobody configured, an amount that
+is text, a split amount finer than a cent): Done when 2 says that suite passes
+with no case edited. So the problem is raised only when nothing else refused
+the reading. It reads `The layout reads no row of the account from
+"chequing-activity.csv": 32 dated rows were skipped for having no amount, and
+none was read.` Done when 3's `MISTAKES`, all 27 entries of the two tables in
+`layout.test.ts`, before and after:
+
+| Fixture               | Mistake                                              | Before          | After       |
+| --------------------- | ---------------------------------------------------- | --------------- | ----------- |
+| lg37                  | amount and balance swapped                           | refused         | refused     |
+| lg37                  | order flipped                                        | refused         | refused     |
+| lg37                  | person and detail swapped                            | refused         | refused     |
+| lg37                  | no summary rows                                      | refused         | refused     |
+| lg37                  | no carry-overs, no year per sheet                    | refused         | refused     |
+| lg37                  | periods' first line one row low                      | refused         | refused     |
+| lg37                  | periods' names row wrong                             | refused         | refused     |
+| lg37                  | the two buckets' labels swapped                      | let-through     | let-through |
+| lg37                  | detail and note swapped                              | let-through     | let-through |
+| lg37                  | no person column                                     | let-through     | let-through |
+| lg37                  | the period sheets missed                             | let-through     | let-through |
+| lg37                  | the salaries missed                                  | let-through     | let-through |
+| lg37                  | a sheet left out of ignored                          | same-import     | same-import |
+| moved                 | order flipped                                        | refused         | refused     |
+| english               | amount and balance swapped                           | refused         | refused     |
+| english               | deposit label wrong                                  | refused         | refused     |
+| csv-balance           | withdrawal and deposit swapped                       | refused         | refused     |
+| csv-balance           | order flipped                                        | refused         | refused     |
+| csv-no-balance        | order flipped                                        | let-through     | let-through |
+| csv-no-balance        | amount and detail swapped                            | refused         | refused     |
+| swapped-labels        | the two buckets' labels swapped                      | let-through     | let-through |
+| empty-columns-carry   | the amount column pointing at the empty one          | refused         | refused     |
+| **empty-columns-csv** | **withdrawal and deposit pointing at empty columns** | **let-through** | **refused** |
+| bank-preamble         | order flipped                                        | refused         | refused     |
+| bank-two-dates        | the date read from the transaction date's column     | let-through     | let-through |
+| bank-footer           | amount and balance swapped                           | refused         | refused     |
+| bank-wide             | the detail read from the currency column             | let-through     | let-through |
+
+One changed of 27: 16 refused, 10 let through and 1 the same import before; 17,
+9 and 1 after. With the reader changed and the pins not yet, exactly the two
+pins Done when 3 names failed (`npx vitest run tools/ledger/api/test/layout.test.ts
+tools/ledger/books/test`: 2 failed, 477 passed, of 479).
+
+**Build 2.3.** `readerFolded` in the contract is the reader's folding (accents,
+case, dots, spaces), and `books`' `folded` now calls it, so the two cannot
+disagree. Red: with the schema's key put back to the base's `text.toLowerCase()`,
+`contract/test/layout.test.ts` read 1 failed of 9 ("refuses Hypothèque and
+Hypotheque named for two different buckets"); restored from `35f876ee`, 9 of 9.
+
+**The error codes**, all ledger codes, none core (Build 3.5):
+`WORKBOOK_NOT_XLSX` (415), `WORKBOOK_NO_SHEETS` (422), `WORKBOOK_TOO_LARGE`
+(413, `details.bound` one of `inflated`, `sheets`, `rows`, `cells`, `request`),
+`LAYOUT_READER_UNCONFIGURED` (503), `LAYOUT_UNREADABLE` (422),
+`WORKBOOK_IMPORT_REFUSED` (422, `details.problems`). The byte bound is core's
+`SIZE_LIMIT_EXCEEDED` (413, `details.bound: "bytes"`), as a receipt photo's is:
+it is the size of what was sent, and Fastify's body cap raises the same code
+for a body far over it. A request without consent, or a confirm whose
+description does not validate, is `BAD_REQUEST`.
+
+**The bounds** (Build 3.3), in the order they are checked:
+
+- bytes: `MAX_WORKBOOK_BYTES`, 4 MiB, decoded size computed from the base64's
+  length before decoding. The six workbook fixtures are 10,782 to 21,803 bytes
+  as `exceljs` writes them.
+- the zip's structure, from the central directory, inflating nothing
+  (`api/src/workbook-zip.ts`, a hand parse; no `jszip`).
+- inflated size: `MAX_WORKBOOK_INFLATED_BYTES`, 16 MiB, first from the declared
+  sizes, then counted as `node:zlib`'s `createInflateRaw` produces it, every
+  chunk discarded. The largest workbook fixture, `lg37`, inflates to 90,542
+  bytes. **The chunk a stop may overshoot by is `INFLATE_CHUNK_BYTES`, 16 KiB**
+  (the inflater's `chunkSize`). Every accepted file is inflated once here and
+  once more by `exceljs`.
+- sheets: 40 (the workbook fixtures hold 2 to 9); rows: 20,000 over every sheet
+  (`lg37` holds 320); cells holding a value: 200,000 (`lg37` holds 1,533).
+- cell text: 40 characters, `MAX_CELL_TEXT`, the measured `maxText`, a cut
+  with `…`, never a refusal.
+- the request: **an estimate**, `ceil((ceil(request / 4) + ceil(schema / 4)) ×
+  2.32)`, refused over `MAX_REQUEST_TOKENS`, 24,000. `lg37`'s request estimates
+  at `ceil((2,630 + 1,491) × 2.32)` = 9,561 (the API counted 9,468 at the base's
+  schema). The largest request the bounds allow is 24,000 estimated tokens:
+  `24,000 / 2.32` = 10,344 four-character tokens, less the schema's 1,491, is
+  8,853, so about 35,400 characters of request, 2.5 times `lg37`'s input, plus
+  the answer's 16,000 tokens at most.
+
+The describe route has its own bucket, `RATE_LIMIT_WORKBOOK_DESCRIBES_PER_MINUTE`,
+5 a minute per person by default, as a receipt read has; confirm takes `write`.
+
+**The client's retries.** `createLayoutAsk` keeps the measured `maxRetries: 2`
+and a 180 s timeout: the SDK retries a dropped connection, a 429 or a 5xx on
+its own. That is the transport, under the one model call the route makes;
+nothing retries an answer.
+
+**The confirmation (Build 4.2).** The date column's header is the nearest text
+above the first row read in that column, on the first sheet that has a row read.
+**The rule for a label's 3 rows**: the newest row of each of its 3 most frequent
+details, most frequent first, then the newest rows not yet shown. On
+`swapped-labels` that puts the monthly `Paiement prêt` in `Compte 2`'s three
+(Done when 10). The field is `examples`, not `sample`: the isolation sweep
+marks "sam" as the other household's person, and "sample" contains it.
+
+**What the brief had wrong: lg37 does not import, through the command or the
+screen.** lg-38's generator opens every generated workbook at 1,200.00 (mortgage)
+and 300.00 (buffer), and `importWorkbook` refuses money carried in before the
+books' first row. `import:ledger --write` on `lg37` written as an `.xlsx`, into
+fresh books, exits 1 with three `FAILED` lines, ending "The first year carries in
+1200.00 $ (mortgage) and 300.00 $ (buffer) from before the workbook, and the
+books count nothing before their first row." Of the six workbook fixtures only
+`lg7` imports. So Done when 7's first half, read on `lg37`, holds only
+vacuously (both leave the books empty). The test does three things: `lg7`
+confirmed on the screen leaves the same `statement_rows` and classifications and
+the same report figures as the command (17 rows); `lg37` confirmed is refused
+with exactly the problems the command prints, the books unchanged; and `lg37`
+with amount and balance swapped is refused with problems of its own. Done when
+5's describes return `ok: false` for the five generated workbooks for the same
+reason, and the screen's web test uses the real `lg37` response and an `ok: true`
+copy of it. Whether Done when 7 should be reworded to `lg7` is the
+orchestrator's to put to the owner.
+
+**Done when 8 (i): memory.** The padded workbook is deflated as it is written
+(`paddedDeflate` in `api/test/helpers/xlsx-file.ts`, 1 MiB of spaces written
+again and again, the CRC carried chunk by chunk), so 200 MiB is never held.
+Peak RSS of the vitest worker, sampled from `/proc/<pid>/status`'s `VmHWM` every
+20 ms: 197 MB running only the 200 MiB test, 188 MB running only "a request with
+no key configured" from the same file (both write the six fixture workbooks in
+`beforeAll`). The 200 MiB test took 1,289 ms, the 40 MiB one 275 ms.
+
+**Folded in, besides the two corrections above:** the import's dry-run report
+said "Run again with --write to import" on the screen too; `importWorkbook`
+takes `via: "screen"`, which says "Confirm to import." instead. `.env.example`
+names the new rate-limit variable. Nothing else was made free.
+
+**Proposed for `tools/ledger/CLAUDE.md`**, not edited (Build 1): its layout table
+says `receipts` is "the receipt reader: a photo in, proposals out; the only
+package that talks to a model". Proposed: "the model calls: the receipt reader
+(a photo in, proposals out) and the layout describer (a workbook's samples in, a
+described layout out, lg-66); the only package that talks to a model". The
+lines in the prose about `receipts` and the paid route ("The one route that
+costs money, a receipt read") would say there are two.
+
+**Awaiting:** Done when 11, the owner's live read through the screen with a key,
+after the merge.
+
+### 2026-10-26 — round 1: gate 1 returned CONCERNS at `e02ec781`; the owner's answers
+
+Gate 1 (on PR #670, `53bb5d0f..e02ec781`) returned CONCERNS: no high, two med
+(F1, F2), five low (F3 to F7). Its record is for this ticket's `## Review`.
+
+**The owner's answers, 2026-10-26**, put by the orchestrator. The options are as
+they were put; the one chosen is marked.
+
+- **A. Done when 7.** Options: reword the positive case to `lg7` (the
+  builder's recommendation); change lg-38's generator so `lg37` opens at zero.
+  **Chosen: reword to `lg7`.** Done when 7 now says that `lg7` confirmed on the
+  screen leaves the same rows, classifications and report figures as
+  `import:ledger --write`, that `lg37` is refused with exactly the problems the
+  command prints and the books unchanged, and keeps the swapped-`lg37` case. The
+  superseded line is kept beside it. The tests already did this (the build's
+  entry, "What the brief had wrong").
+- **B. Gate 1 F2 (open decision).** Options: (a) tighten the bounds (the gate's
+  recommendation); (b) keep the constants and correct the text. **Chosen:
+  (a).**
+- **C. Gate 1 F1.** Options: one test per `workbook-zip.ts` guard in the round
+  (recommended); record only. **Chosen: in the round.**
+- **D. Gate 1 lows F3 to F7.** Options: all five in the round (recommended);
+  F3, F6 and F7 only; none. **Chosen: all five.**
+- **E. `tools/ledger/CLAUDE.md`.** The owner chose "Yes" on the build's
+  proposal: the `receipts` row of the layout table becomes "the model calls:
+  the receipt reader (a photo in, proposals out) and the layout describer (a
+  workbook's samples in, a described layout out, lg-66); the only package that
+  talks to a model", and the prose that calls a receipt read "the one route
+  that costs money" says there are two. Applied in this round, in its own
+  commit.
+
+### 2026-10-26 — round 1: the fixes for gate 1's seven findings
+
+Continued from `e02ec781` on `53bb5d0f` (`origin/main` had not moved). Eight
+commits: the answers above (`4f4e7c2d`), `tools/ledger/CLAUDE.md` (`2bd5e2b7`,
+answer E, as worded there; the paragraph that introduces `receipts` as "the
+receipt reader (lg-8)" was not part of the answer and is unchanged), F1's tests
+(`40838f68`), F3 (`945aa851`), F2 (`c02e3506`), F4, F5 and F7's tests
+(`59f904d3`), three guards gate 1 did not list (`696e0cbd`), and this entry.
+
+**F2 (med): reproduced, and tightened as the owner chose (a).** Measured with
+scratch scripts that build each upload, then read it in a fresh process
+(`exceljs` alone, peak RSS sampled every 5 ms over the RSS before the read) and
+send it through both routes (`createApp` with a spy reader and a fake model,
+one vitest run per upload and route). What `exceljs` costs is 20 to 27 MB of
+memory per MiB of cells: read alone, 100 numeric columns cost +37 MB at 1 MiB
+inflated, +98 at 4, +188 at 8 and +287 at 15; 3 columns +42, +109, +231 and
++321 MB; a shared-strings table of 1, 4, 8 and 15 MiB with one cell +25, +34,
++56 and +94 MB. The gate's "about twice" was gate 4's whitespace. The ledger's
+container is limited to 512 MB (`compose.ledger.prod.yaml`), and the process
+measured near 100 MB before each read.
+
+| Upload (the gate's four, then under the new bound) | At 16 MiB, no entry bound (describe / confirm)                 | At 4 MiB and 1,000 entries (describe / confirm)    |
+| -------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------- |
+| 100 columns, 15.0 MiB, 1,680,107 bytes             | 413 `cells`: 2,352 / 2,305 ms, +301 / +295 MB                  | 413 `inflated`, reader 0: 69 / 69 ms, +17 / +15 MB |
+| 3 columns, 15.0 MiB, 1,699,024 bytes               | 413 `rows`: 2,483 / 2,662 ms, +335 / +326 MB                   | 413 `inflated`, reader 0: 60 / 69 ms, +15 / +15 MB |
+| 44,016 one-byte entries, 3,988,180 bytes           | 200 (the model called) / 422: 8,388 / 9,979 ms, +188 / +184 MB | 413 `entries`, reader 0: 84 / 84 ms, +32 / +31 MB  |
+| 15 MiB `sharedStrings.xml`, one cell               | 200 (the model called) / 422: 1,125 / 1,101 ms, +99 / +102 MB  | 413 `inflated`, reader 0: 60 / 68 ms, +16 / +15 MB |
+| 100 columns, 4,186,894 bytes inflated              | 200 / 422: 731 / 788 ms, +100 / +99 MB                         | 200 / 422: 1,108 / 696 ms, +104 / +99 MB           |
+| 3 columns, 4,188,200 inflated                      | 413 `rows`: 769 / 672 ms, +108 / +109 MB                       | 413 `rows`: 662 / 672 ms, +109 / +108 MB           |
+| `sharedStrings.xml`, 4,188,216 inflated            | 200 / 422: 373 / 367 ms, +25 / +22 MB                          | 200 / 422: 393 / 475 ms, +22 / +23 MB              |
+| 15,000 rows laid out as `lg37`, 4,114,119 inflated | 200 / 422: 708 / 683 ms, +73 / +85 MB                          | 200 / 422: 727 / 707 ms, +71 / +86 MB              |
+| 1,000 entries                                      | 200 / 422: 288 / 319 ms, +33 / +36 MB                          | 200 / 422: 331 / 321 ms, +36 / +38 MB              |
+| 1,001 entries                                      | 200 / 422: 304 / 323 ms, +35 / +36 MB                          | 413 `entries`, reader 0: 39 / 57 ms, +3 / +3 MB    |
+
+(Confirm's 422 is the fixture's description refused on these files, not a
+bound. My 44,000-entry zip holds a real sheet, so at the old bounds it reached
+the model where the gate's, with none, read as 0 sheets.)
+
+**Where the 44,000 entries' 8.4 s went:** read apart, the counted inflate took
+6,131 ms of it (one inflater per entry, 0.14 ms each) and `exceljs` 1,750 ms
+(+165 MB); the directory 29 ms.
+
+**How the constants were sized.** `MAX_WORKBOOK_INFLATED_BYTES` is 4 MiB: a
+request at the bound costs about +110 MB, so two people's at once stay inside
+the 512 MB container beside the idle process, where 8 MiB would be +460 MB for
+two. It still holds a household's workbook with room over: `lg37`, the largest
+fixture, inflates to 90,542 bytes (46 times under), and a sheet laid out as
+`lg37`'s, written by `exceljs`, takes about 275 bytes a row, so 15,000 rows
+(47 times `lg37`'s 320) fit, at +71 to +86 MB. A real file saved by Excel
+carries more per cell and styles of its own, which nothing here measures.
+`MAX_WORKBOOK_ENTRIES` is 1,000: the six fixtures hold 17 to 24 entries, and a
+workbook at the sheets bound with a chart and a comment on every sheet holds
+about 400 by the parts Excel writes for each (a reckoning, not a measurement);
+1,000 cost 0.3 s through the route. Over it is `WORKBOOK_TOO_LARGE` with
+`details.bound` `entries`, checked from the end record before the directory is
+walked. The bounds list in the build's entry above (16 MiB) is superseded by
+this one. Decision 1 carries a dated note with the same figures; the owner's
+answer there is unchanged. The test that compared the fixtures with the bound
+now reads `MAX_WORKBOOK_INFLATED_BYTES / 40` (it was `/ 100`, which `lg37` is
+over at 4 MiB).
+
+New tests: `workbook-describe.test.ts` › "the zip's entries, counted before
+anything is inflated" › "a workbook of more entries than the bound is refused
+before the inflate and the sheet reader" (both routes, inflate spy empty, reader
+0, model 0), and `workbook-zip.test.ts` › "the number of entries" (exactly the
+bound is read; one more is refused naming `entries`).
+
+**F1 (med): fixed, one test per guard**, in a new
+`api/test/workbook-zip.test.ts` over a zip written byte by byte (`rawZip` in
+`api/test/helpers/xlsx-file.ts`), with a control that reads the same zip
+unbroken, plus the gate's stored-overlap zip through both routes in
+`workbook-describe.test.ts` › "stored entries, counted before the sheet reader"
+(413 `inflated`, reader 0, model 0). Sweeping the file's other checks the
+same way found three more that no test reached (a central header's signature,
+an entry's name running past the directory, an entry's bytes running past the
+file): each now has a test, S8 to S10 below. Each guard deleted in turn at `696e0cbd`,
+the five specs `workbook-zip`, `workbook-describe` (less the 200 MiB case),
+`isolation`, `xlsx` and `workbook-import` run, the file restored from that
+commit:
+
+| Guard deleted (`workbook-zip.ts` unless named)                                                      | Result at `696e0cbd`  | Tests that went red                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| none (the control)                                                                                  | 100 passed, 1 skipped | none                                                                                                                                                                        |
+| S1 a stored entry counted (`total += size`)                                                         | 2 failed              | "stored entries are counted too" › "forty directory entries over one stored entry…"; "stored entries, counted before the sheet reader" › "…refused before the sheet reader" |
+| S2 encrypted or a method other than 0 and 8                                                         | 2 failed              | "an entry encrypted (flag bit 0)…", "an entry compressed by a method exceljs does not read (12, bzip2)…"                                                                    |
+| S3 the three zip64 sentinels in an entry                                                            | 3 failed              | "a zip64 sentinel in an entry's compressed size / uncompressed size / local header's offset…"                                                                               |
+| S4 an inflate error turned into a resolve                                                           | 1 failed              | "a deflated entry that will not inflate is not an .xlsx"                                                                                                                    |
+| S5 the split-disk and count checks                                                                  | 4 failed              | "an end record where this disk's number is not 0 / the directory's disk is not 0 / the entries on this disk are not all of them / the count is zip64's 0xffff…"             |
+| S6 the directory's window                                                                           | 3 failed              | "an end record where the directory's offset is zip64's 0xffffffff / the directory's size is zip64's 0xffffffff / the directory runs into the end record…"                   |
+| S7 the local header's signature and room                                                            | 2 failed              | "an entry whose local header has no signature…", "…would start past the file's last 30 bytes…"                                                                              |
+| S8 a central header's signature (not in the gate's list)                                            | 1 failed              | "a directory entry whose signature is not a central header's is not an .xlsx"                                                                                               |
+| S9 an entry's name past the directory (not in the gate's list)                                      | 1 failed              | "a directory entry whose name runs past the directory is not an .xlsx"                                                                                                      |
+| S10 an entry's bytes past the file (not in the gate's list)                                         | 1 failed              | "an entry whose compressed bytes run past the end of the file is not an .xlsx"                                                                                              |
+| F3 a stored entry counted whole again                                                               | 2 failed              | the two S1 tests                                                                                                                                                            |
+| F2 the entries bound                                                                                | 2 failed              | "a workbook of more entries than the bound is refused before the inflate and the sheet reader"; "one entry more is refused as too large…"                                   |
+| F5 `describeWorkbook`'s consent branch (`workbook-describe.ts`)                                     | 1 failed              | "a request without the consent field"                                                                                                                                       |
+| F4 the gate's plant 3, the other household's names appended to the request (`workbook-describe.ts`) | 1 failed              | `isolation.test.ts` › "each household reads its own records through every read route, and nothing of the other's"                                                           |
+
+**F3 (low): fixed in the code rather than the text.** A stored entry is now
+counted a chunk of `INFLATE_CHUNK_BYTES` at a time, so the stop overshoots by
+one chunk whichever kind of entry it falls in, as the header says. Red before
+the fix: `workbook-zip.test.ts` › "stored entries are counted too" read
+`expected 1200312 to be less than or equal to 1064960` (forty names over one
+block of 300,000 bytes, a bound of 1 MiB); green after. The block is not a
+divisor of the bound on purpose: a first try with 64 KiB blocks passed before
+the fix, because sixteen of them plus the two small entries crossed the bound
+by 312 bytes.
+
+**F4 (low): fixed.** The sweep's describer keeps every request it is shown, and
+the describe step reads the one its request made: the caller's word in it, and
+none of the other household's marks. The prompt is cut off first: it says
+"samples", which holds home's mark `sam`. The gate's plant 3 (the other
+household's names appended to the request) now goes red: `expected [ 'Chalet',
+'kim', 'alex@away.test' ] to deeply equal []`.
+
+**F5 (low): kept the branch, and a test reads its sentence.** The branch is the
+one place a request without consent is told why and that nothing was sent
+("The workbook's samples are sent only when you agree to send them. Nothing was
+sent."); without it the schema answers "Choose a workbook to send.", which says
+neither. `workbook-describe.test.ts` › "a request without the consent field"
+now asserts the sentence for an omitted field, `false`, `"yes"` and `null`.
+With the branch deleted it goes red (`expected { code: 'BAD_REQUEST', …(2) } to
+match object { code: 'BAD_REQUEST', …(1) }`), where gate 1's mutant survived.
+
+**F6 (low): fixed in the wording.** Done when 6 counts the seven bounds the code
+refuses on (bytes, the zip's entries, inflated size, sheets, rows, cells, the
+request's estimate) with the superseded line beside it; Build 3.3 gains the
+entries bullet, marked as answer B's; Decision 1's "sixth bound" is corrected
+in a dated note under it, the option text left as it was put.
+
+**F7 (low): fixed.** `e2e/layout.spec.ts`'s `CARDS` lists `"Import (read)": 3`
+(the date column, the bucket labels, the checks). With it at 4 the spec read
+1 failed, 12 passed, "Import (read) at 360 px: the cards … Expected: >= 4,
+Received: 3" and the same at 1280 px; at 3, 13 passed (`E2E_PORT=8167 npx
+playwright test -c tools/ledger/playwright.config.ts
+tools/ledger/e2e/layout.spec.ts`).
+
+**Memory of the large tests**, peak resident memory of the vitest worker
+(`VmHWM` sampled every 20 ms, one test alone): the 200 MiB padding 196 MB (197
+in the build), the stored-overlap zip 217 MB, the zip over the entries bound 209 MB,
+against 193 MB for "a request with no key configured" from the same file; the
+whole of `workbook-zip.test.ts` 101 MB.
+
+### 2026-10-26 — round 2: gate 2 returned FAIL at `5db37436`; the owner's answers
+
+Gate 2 (narrow, on PR #670, `e02ec781..5db37436`) returned FAIL: one high, F2
+fixed in part (a zip whose end record states fewer entries than its directory
+holds is read by `exceljs` past every bound), and F1 fixed in part (two clauses
+of `workbook-zip.ts` no test reaches). F3 to F7 it graded fixed.
+
+**The owner's answers, 2026-10-26**, put by the orchestrator. The options are as
+they were put; the one chosen is marked.
+
+1. **The remedy for the high.** Options: (a) the directory must fill exactly,
+   the walk ending where the directory ends and the directory ending where the
+   end record starts (gate 2's recommendation); (b) walk the directory as
+   `jszip` does and cap the walked count. **Chosen: (a).** One test per input:
+   an understated count with a padded sheet (gate 2's D1), 44,000 entries with
+   a count of 2 (D2), and a directory placed before the end record's stated
+   position, each refused with the sheet reader at 0 and each red with the line
+   removed. The three sentences gate 2 names as false are corrected
+   (`workbook-zip.ts`'s header; Build 3.3's "whatever the zip declared", by a
+   marked note; Decision 1's dated note). A zip from a writer other than
+   `exceljs`, if one is at hand without an install, is checked to still read.
+2. **The round's scope.** Options: resume the builder with everything
+   (recommended); a fresh fixer with the fix and the merge only. **Chosen:
+   resume, all in**: the two surviving F1 clauses get tests too (the gap case
+   of the walk's `at + 46 > offset + size`, and a test that the entries cap
+   refuses before the directory is walked), each red under its mutant.
+3. **`main` moved**: #669 (lg-71) merged as `be8d9c0e`. Merged into this branch
+   (a merge, not a rebase), keeping both sides of the overlapping files. The
+   merge was clean.
+
+### 2026-10-26 — round 2: the directory must fill exactly
+
+`origin/main` was merged first (`c0b653dd`, #669 lg-71, clean, no file needed
+a hand; the build ran after it). Then the answers above (`458f44db`), the fix
+and its tests (`8b1fcb2e`), and this entry.
+
+**F2's remaining clause (high): reproduced, and fixed as the owner chose (a).**
+Gate 2's own probe (`gate2-probe.test.ts`, one vitest process per case) at the
+merged head, before the fix: D1, the one-sheet workbook with its sheet padded
+to 200 MiB and an end record counting 6 of its 7 entries, 210,315 bytes,
+describe **200, counted inflate 2,471 bytes, sheet reader called once, model
+called once, 1,945 ms, +428 MB** (confirm 422 from the fixture, 1,898 ms,
++219 MB); its control with the honest count 413 `inflated` with the reader at
+0 in 28 ms. D2, 44,000 one-byte entries under a record counting 2: 422
+`WORKBOOK_NO_SHEETS` from the parser, reader called once, 4,590 ms; honest, 413
+`entries` in 67 ms. After the fix, the same
+probe: D1 415 `WORKBOOK_NOT_XLSX` on both routes, counted 0, reader 0, model 0,
+32 and 11 ms; D2 415 on both, reader 0, 66 and 47 ms; the honest 1,000-entry
+zip still reaches the reader (422 `WORKBOOK_NO_SHEETS`, it has no sheet), and a
+sheet just under 4 MiB is still described (200, 680 ms, +90 MB).
+
+The fix is gate 2's line, after the walk in `workbookEntries`: `if (at !==
+offset + size || offset + size !== end) throw notXlsx();`. The walk of the
+counted entries must end where the directory ends, and the directory where the
+end record starts, so `jszip` (which reads headers while their signature
+matches, whatever the count, and shifts every offset by any gap before the end
+record) and this parse read the same entries. A name that ran past the
+directory was refused by its own check (round 1's S9); that check is now
+redundant, since such a name either leaves no room for the next header or ends
+the walk past the directory, so it is gone, and its test still passes.
+
+One test per input, each through both routes, refused 415 `WORKBOOK_NOT_XLSX`
+with the sheet reader at 0 and the model uncalled, in
+`workbook-describe.test.ts` › "an end record and a directory that disagree
+(lg-66 gate 2, F2)":
+
+- "a sheet padded past the inflated bound, left out of the end record's count,
+  is refused" (D1 at twice the bound rather than 200 MiB, which costs the test
+  nothing to prove and keeps its memory down);
+- "44,000 entries under an end record that counts 2 are refused" (D2, the
+  entries stored and empty);
+- "a directory that ends before the end record's stated position is refused"
+  (sixteen bytes between them).
+
+`reEnded` in `api/test/helpers/xlsx-file.ts` rewrites an end record for them.
+
+**Other writers.** `lg37` written by `exceljs`, unzipped, and zipped again by
+Info-ZIP's `zip` 3.0 (deflated, with its extra fields; with an archive comment;
+stored) and by CPython 3.12's `zipfile` (deflated; with a comment): all six
+files pass `workbookEntries` and the counted inflate (24 entries, 90,542 bytes)
+and `exceljs` reads 9 sheets and 320 rows from each. Files saved by Excel,
+LibreOffice or Google Sheets are not at hand here and are unmeasured.
+
+**The two F1 clauses (low): each has a test now**, in `workbook-zip.test.ts` ›
+"what the walk may read, and when the entries bound is read (lg-66 gate 2, F1)":
+
+- "a counted header that starts in the directory's last four bytes is not an
+  .xlsx": a central signature in the last four bytes of the directory, counted.
+  Without `at + 46 > offset + size` its fields are read past the end of the
+  file and the walk throws a `RangeError` instead of refusing.
+- "the entries bound is read off the end record before a single header is
+  walked": three headers under a record that counts 1,001. Moved after the
+  walk, the bound never runs: the fourth header is the end record, refused as
+  not a zip.
+- And for round 1's directory window, which the new line made redundant for
+  the cases its tests built: "a directory that runs past the end record,
+  ending in a header's signature, is not an .xlsx". Without the window check
+  the same `RangeError` is reached.
+
+Each guard deleted, changed or moved in turn at `8b1fcb2e`, the five specs
+`workbook-zip`, `workbook-describe` (less the 200 MiB case), `isolation`,
+`xlsx` and `workbook-import` run, the file restored from that commit:
+
+| Mutation (`workbook-zip.ts` unless named)                               | Result at `8b1fcb2e`  | Tests that went red                                                                                                                                                     |
+| ----------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| none (the control)                                                      | 106 passed, 1 skipped | none                                                                                                                                                                    |
+| the line after the walk deleted                                         | 4 failed              | the three round-2 route tests; round 1's "a directory entry whose name runs past the directory…"                                                                        |
+| only its first half (`at !== offset + size`) deleted                    | 2 failed              | "a sheet padded past the inflated bound, left out of the end record's count…", "44,000 entries under an end record that counts 2…"                                      |
+| only its second half (`offset + size !== end`) deleted                  | 1 failed              | "a directory that ends before the end record's stated position is refused"                                                                                              |
+| the header's room (`at + 46 > offset + size`) deleted                   | 1 failed              | "a counted header that starts in the directory's last four bytes…"                                                                                                      |
+| the entries bound moved after the walk                                  | 1 failed              | "the entries bound is read off the end record before a single header is walked"                                                                                         |
+| the entries bound deleted                                               | 3 failed              | the route test, "one entry more is refused…", and the test above                                                                                                        |
+| S1 a stored entry counted / F3 counted whole again                      | 2 failed each         | the two stored-entry tests                                                                                                                                              |
+| S2 encrypted or odd method                                              | 2 failed              | its two                                                                                                                                                                 |
+| S3 the zip64 sentinels                                                  | 3 failed              | its three                                                                                                                                                               |
+| S4 an inflate error turned into a resolve                               | 1 failed              | its one                                                                                                                                                                 |
+| S5 the split-disk and count checks                                      | 4 failed              | its four                                                                                                                                                                |
+| S6 the directory's window                                               | 2 failed              | "a directory that runs past the end record, ending in a header's signature…", "…the directory's offset is zip64's 0xffffffff…" (its other two now fall to the new line) |
+| S7 the local header                                                     | 2 failed              | its two                                                                                                                                                                 |
+| S8 a central header's signature                                         | 1 failed              | its one                                                                                                                                                                 |
+| S10 an entry's bytes past the file                                      | 1 failed              | its one                                                                                                                                                                 |
+| F5 the consent branch (`workbook-describe.ts`)                          | 1 failed              | "a request without the consent field"                                                                                                                                   |
+| F4 the other household appended to the request (`workbook-describe.ts`) | 1 failed              | `isolation.test.ts`'s sweep                                                                                                                                             |
+
+**The three sentences gate 2 named.** `workbook-zip.ts`'s header now says the
+two bounds hold only because the directory must fill exactly, and why;
+Build 3.3's "whatever the zip declared" carries a marked note; Decision 1's
+dated note carries a correction of its "a zip holds 1,000 entries at most".
+
+### 2026-10-26 — landing: gate 3 returned PASS at `28d2f0cb`; its one low fixed
+
+- 2026-10-26 — Fixed at landing by owner choice: gate 3, the low — "`workbook-zip.ts`'s header ends its new paragraph 'and the two parsers read the same entries'", false for a file with a record signature in its last 21 bytes. The header now ends "or `jszip` refuses the file", and a blank comment line separates the paragraph from "The parse is by hand". Comment only.
+  `git diff 28d2f0cb HEAD -- tools/ledger/api/src/workbook-zip.ts | grep -c '^-.*two parsers read the same entries\.'`
+  → 1.

@@ -2,7 +2,8 @@
  * The shell: the home screen and the salaries (lg-5), the paste screen (lg-2),
  * the inbox and the rules (lg-4), the period (lg-6), and the spending
  * categories (lg-15) and the history's charts (lg-9), and a receipt photographed
- * and filed (lg-8).
+ * and filed (lg-8), and a workbook imported through a layout a model describes
+ * (lg-66).
  *
  * The books arrive with their design — `docs/00-ANALYSIS.md` first, then the
  * tickets it produces — and a screen guessed at before its ticket is one more
@@ -37,6 +38,7 @@ import { fetchPeopleNames } from "./api/people.ts";
 import { History } from "./history/History.tsx";
 import { Home } from "./home/Home.tsx";
 import { Household } from "./household/Household.tsx";
+import { ImportWorkbook } from "./import/ImportWorkbook.tsx";
 import { Inbox } from "./inbox/Inbox.tsx";
 import { NoHousehold } from "./NoHousehold.tsx";
 import { PeopleNamesProvider } from "./people.tsx";
@@ -61,6 +63,7 @@ type Tab =
   | "rules"
   | "spending"
   | "salaries"
+  | "import"
   | "household"
   | "admin";
 
@@ -187,6 +190,9 @@ export function App(): React.ReactElement {
         <button type="button" aria-pressed={tab === "salaries"} onClick={() => setTab("salaries")}>
           Salaries
         </button>
+        <button type="button" aria-pressed={tab === "import"} onClick={() => setTab("import")}>
+          Import
+        </button>
         {me !== null && (
           <button
             type="button"
@@ -224,6 +230,7 @@ export function App(): React.ReactElement {
               <MortgageSplitCard />
             </>
           )}
+          {tab === "import" && <ImportWorkbook />}
           {tab === "household" && me !== null && <Household id={me.person.household} />}
           {tab === "admin" && me?.admin === true && <Admin />}
         </PeopleNamesProvider>

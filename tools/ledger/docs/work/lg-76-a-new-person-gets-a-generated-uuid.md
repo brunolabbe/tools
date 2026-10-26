@@ -431,3 +431,24 @@ CI at `66479a7d`: ten of ten entries of `statusCheckRollup` SUCCESS (`check`, `t
   surrogate in an address's local part (a 500 from `POST
   /api/households/:id/members`, nothing lost), stays recorded: the owner chose
   to leave it.
+- 2026-10-26 — `origin/main` (`02ecde16`, with #670, lg-66) merged into the
+  branch, a merge and not a rebase, so the head moves past the gated
+  `d4578eeb`; the gates read the code before it. Two files conflicted and both
+  were additive on each side, so both sides were kept and no behaviour was
+  chosen between them. **`api/src/workbook-import.ts`, `run()`**: the options
+  object handed to `readWorkbook` holds lg-76's `names` line and lg-66's `layout`
+  line, in that order; the rest of the function (the unfiled refusal, the `--as`
+  check against `knownPeople`, the `via: "screen"` message in `importWorkbook`)
+  merged without a hunk. **`api/test/workbook-import.test.ts`, end of file**: lg-76's
+  `describe("the import and a person's shown name (lg-76)")` and lg-66's
+  `describe("a described layout (lg-66)")` both stood in the same place; each
+  keeps its own closing `});`, in that order, and the imports (`layoutFixtures`,
+  `NO_CORRECTIONS`, `importWorkbook`, lg-76's `Directory`) merged without a hunk.
+  `ledger/e2e/layout.spec.ts`, `CLAUDE.md`, `.env.example` and the contract files
+  auto-merged. Counts: `workbook-import.test.ts` has 40 `test(` calls, main's 37
+  (36 + lg-66's one) plus lg-76's 3, none dropped; `npx vitest run
+  tools/ledger/api/test/workbook-import.test.ts` 40 of 40; `npm test -- --project
+  ledger` 1840 of 1840 in 86 files; `E2E_PORT=18476 npx playwright test -c
+  tools/ledger/playwright.config.ts tools/ledger/e2e/layout.spec.ts` 13 of 13,
+  lg-66's "Import fits a phone and a desktop, before sending and once read"
+  included; no UUID appears in its 360 px screenshots (before sending, read).

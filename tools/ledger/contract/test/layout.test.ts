@@ -152,3 +152,47 @@ describe("the workbook layout schema", () => {
     ]);
   });
 });
+
+/** A description with a bucket column, its two buckets labelled as given. */
+function bucketed(mortgage: string[], expenses: string[]): unknown {
+  return {
+    account: {
+      sheets: { by: "year" },
+      yearPerSheet: true,
+      order: "newest-first",
+      columns: [
+        { role: "date", column: "B" },
+        { role: "bucket", column: "C" },
+        { role: "balance", column: "F" },
+        { role: "amount", column: "G" },
+      ],
+      buckets: [
+        { bucket: "mortgage", labels: mortgage },
+        { bucket: "current-expenses", labels: expenses },
+      ],
+      carryOverLabel: null,
+      summary: null,
+    },
+    periods: null,
+    salaries: null,
+    ignored: [],
+  };
+}
+
+// lg-66, Build 2.3: the reader files a row by its bucket text folded for
+// accents as well as case, so two labels it cannot tell apart are refused.
+describe("bucket labels the reader cannot tell apart (lg-66)", () => {
+  test("refuses Hypothèque and Hypotheque named for two different buckets", () => {
+    expect(messages(bucketed(["Hypothèque"], ["Hypotheque"]))).toEqual([
+      '"Hypotheque" names both mortgage and current-expenses.',
+    ]);
+  });
+
+  test("still refuses two labels that differ only in case", () => {
+    expect(messages(bucketed(["Maison"], ["MAISON"]))).toEqual([
+      '"MAISON" names both mortgage and current-expenses.',
+    ]);
+    // And takes two that differ by more than the folding.
+    expect(messages(bucketed(["Hypothèque"], ["Dép. Courantes"]))).toEqual([]);
+  });
+});

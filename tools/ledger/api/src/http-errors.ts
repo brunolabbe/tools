@@ -84,6 +84,17 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   // lg-63: shares naming other people than the books hold on their day, a
   // conflict with what is stored, as a ratio naming a retired person is.
   MORTGAGE_SHARES_WRONG_PEOPLE: 409,
+  // lg-66: a file that is not a workbook is a media type refused, as a photo
+  // that is not an image is; one over a bound is too large, as a body over the
+  // cap is; no model configured is the service unable to do this one thing; and
+  // an answer that is no layout, a workbook with no sheet and an import the
+  // verifications refuse are the file, not the request.
+  WORKBOOK_NOT_XLSX: 415,
+  WORKBOOK_NO_SHEETS: 422,
+  WORKBOOK_TOO_LARGE: 413,
+  LAYOUT_READER_UNCONFIGURED: 503,
+  LAYOUT_UNREADABLE: 422,
+  WORKBOOK_IMPORT_REFUSED: 422,
 };
 
 /**

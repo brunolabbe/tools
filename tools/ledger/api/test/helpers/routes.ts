@@ -65,4 +65,7 @@ export const VERBS = {
     `${ROUTES.receiptMatches.replace(":id", "1")}?amountCents=2650&date=2026-10-04`,
   ],
   receiptFile: ["POST", ROUTES.receiptFile.replace(":id", "1")],
+  // lg-66: a workbook described by a model when asked, then imported on confirmation.
+  workbookDescribe: ["POST", ROUTES.workbookDescribe],
+  workbookConfirm: ["POST", ROUTES.workbookConfirm],
 } as const satisfies Record<keyof typeof ROUTES, readonly ["GET" | "POST", string]>;

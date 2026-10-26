@@ -21,7 +21,7 @@ by hand. Both people use it, mostly from a phone.
 ```
 contract     types, error taxonomy, zod schemas — no logic
 books        pure: the statement parser, its proofs and the rule matching; no model, network or clock
-receipts     the receipt reader: a photo in, proposals out; the only package that talks to a model
+receipts     the model calls: the receipt reader (a photo in, proposals out) and the layout describer (a workbook's samples in, a described layout out, lg-66); the only package that talks to a model
 api          Fastify, persistence, HTTP — the only place that reads process.env
 web          React + Vite UI, mobile-first
 e2e          Playwright specs — the layout spec; e2e/README.md says what earns the next
@@ -136,8 +136,10 @@ each have an alex (lg-21). An admin route takes `.adminRead` or `.adminWrite`
 instead, keyed on the admin's address, since an admin may have no person; it asks
 `adminOf` first and never logs the address (lg-22). A route added without one is unlimited, and
 `api/test/route-limits.test.ts` walks `ROUTES` so that it fails instead. The
-one route that costs money, a receipt read, takes a bucket of its own instead,
-five a minute (`RATE_LIMIT_RECEIPT_READS_PER_MINUTE`, lg-8).
+two routes that cost money, a receipt read and a workbook's description, each
+take a bucket of their own instead, five a minute
+(`RATE_LIMIT_RECEIPT_READS_PER_MINUTE`, lg-8;
+`RATE_LIMIT_WORKBOOK_DESCRIBES_PER_MINUTE`, lg-66).
 
 **Never log a request's headers.** Behind Access every request carries a signed
 identity token in a header and a cookie, and `logger.ts` censors both as a

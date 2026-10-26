@@ -9,8 +9,10 @@
 
 import { randomUUID } from "node:crypto";
 import { AppError } from "@ledger/contract";
-import { createModelReader } from "@ledger/receipts";
-import type { ReceiptReader } from "@ledger/receipts";
+import type { Buffer } from "node:buffer";
+import type { Sheet } from "@ledger/books";
+import { LAYOUT_MODEL, createLayoutAsk, createModelReader } from "@ledger/receipts";
+import type { LayoutAsk, ReceiptReader } from "@ledger/receipts";
 import { RateLimiter } from "@webtools/core/rate-limit";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
@@ -42,6 +44,9 @@ import { registerSpendingCategoryRoutes } from "./routes/spending-categories.ts"
 import { registerStatsRoutes } from "./routes/stats.ts";
 import { registerStatementRoutes } from "./routes/statements.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
+import { registerWorkbookRoutes } from "./routes/workbook.ts";
+import type { InflateSpy } from "./workbook-zip.ts";
+import { readSheets } from "./xlsx.ts";
 
 export interface CreateAppOptions {
   config?: Partial<ApiConfig>;
@@ -73,6 +78,16 @@ export interface CreateAppOptions {
   receiptReader?: ReceiptReader | null;
   /** Where receipt photos are kept; by default files in the data directory, or the process under `:memory:`. */
   photos?: PhotoStore;
+  /**
+   * What describes a workbook's layout (lg-66). Tests hand in a fake, and no
+   * test reaches a model; `null` is none, as with no key. Left out, the model's
+   * is built from the receipt reader's key when there is one.
+   */
+  layoutAsk?: LayoutAsk | null;
+  /** What reads an uploaded workbook's sheets: `xlsx.ts`'s, unless a test spies on it. */
+  workbookSheets?: (bytes: Buffer) => Promise<Sheet[]>;
+  /** Told each chunk the upload's counted inflate produces; a test reads it. */
+  inflateSpy?: InflateSpy;
 }
 
 export interface App {
@@ -197,6 +212,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       options.photos ??
       (config.dataDir === ":memory:" ? memoryPhotoStore() : filePhotoStore(config.dataDir)),
   });
+  registerWorkbookRoutes(server, context, {
+    ask: layoutAskFor(options.layoutAsk, config, logger),
+    readSheets: options.workbookSheets ?? readSheets,
+    inflateSpy: options.inflateSpy,
+  });
   // After the API routes, so a file in the bundle can never answer where a
   // route should have, and before the not-found handler, which needs the
   // static plugin's `reply.sendFile` to exist.
@@ -239,6 +259,28 @@ function receiptReaderFor(
   }
   logger.info("receipts are read by a model when a person asks", { model });
   return createModelReader({ provider: "anthropic", apiKey, model, logger });
+}
+
+/**
+ * The describer handed in, or the measured model's when a key is configured,
+ * or none (lg-66). The key is the receipt reader's; the model is not
+ * `RECEIPT_MODEL` but the one measured, a constant.
+ */
+function layoutAskFor(
+  given: LayoutAsk | null | undefined,
+  config: ApiConfig,
+  logger: AppLogger,
+): LayoutAsk | undefined {
+  if (given !== undefined) return given ?? undefined;
+  const { apiKey } = config.receiptReader;
+  if (apiKey === undefined) {
+    logger.info("no layout describer: ANTHROPIC_API_KEY is not set, so no workbook is described");
+    return undefined;
+  }
+  logger.info("a workbook's layout is described by a model when a person asks", {
+    model: LAYOUT_MODEL,
+  });
+  return createLayoutAsk({ apiKey, logger });
 }
 
 /**

@@ -1,0 +1,203 @@
+{
+  "layout": {
+    "account": {
+      "sheets": {
+        "by": "year"
+      },
+      "yearPerSheet": true,
+      "order": "newest-first",
+      "columns": [
+        {
+          "role": "date",
+          "column": "B"
+        },
+        {
+          "role": "bucket",
+          "column": "C"
+        },
+        {
+          "role": "detail",
+          "column": "D"
+        },
+        {
+          "role": "person",
+          "column": "E"
+        },
+        {
+          "role": "balance",
+          "column": "F"
+        },
+        {
+          "role": "amount",
+          "column": "G"
+        },
+        {
+          "role": "note",
+          "column": "H"
+        }
+      ],
+      "buckets": [
+        {
+          "bucket": "mortgage",
+          "labels": [
+            "Hypothèque"
+          ]
+        },
+        {
+          "bucket": "current-expenses",
+          "labels": [
+            "Dép. Courantes"
+          ]
+        }
+      ],
+      "carryOverLabel": "Solde reporté",
+      "summary": {
+        "column": "C",
+        "labels": [
+          "Solde",
+          "Total"
+        ]
+      }
+    },
+    "periods": {
+      "sheets": {
+        "by": "prefix",
+        "prefix": "$"
+      },
+      "namesRow": 1,
+      "datesRow": 6,
+      "firstLine": 8,
+      "totalLabel": "Total",
+      "depositLabel": "Montant à déposer"
+    },
+    "salaries": {
+      "sheet": "Accueil",
+      "label": "Salaires bruts"
+    },
+    "ignored": [
+      "Labels",
+      "Budget"
+    ]
+  },
+  "ok": false,
+  "problems": [
+    "The books would show 1804.68 $ for the mortgage balance, and the workbook 3004.68 $.",
+    "The books would show 7096.57 $ for the buffer balance, and the workbook 7396.57 $.",
+    "The first year carries in 1200.00 $ (mortgage) and 300.00 $ (buffer) from before the workbook, and the books count nothing before their first row."
+  ],
+  "report": "Dry run: nothing will be written.\n\nRows\n  movements read  233\n  imported        233\n  already stored  0 (from pastes: checked, not imported)\n  repaired        1\n  skipped         1\n  corrected       0\n  repaired: 2023 row 51, 2013-05-20 → 2023-05-20 (the sheet's year)\n  skipped: 2023 row 5, no amount\n\nPeriods\n  $ (Avril-Août): 2022-04-01 to 2022-08-31, 14 lines, v1, sam deposited 80.81 $\n  $ (Sept-Mars): 2022-08-31 to 2023-03-31, 17 lines, v2, alex deposited 111.55 $\n  not paid in the workbook: $ (Avril-Août) asked sam for 80.81 $, and no deposit of that amount by sam is in the year sheets from 2022-08-17; check it before --write\n  not paid in the workbook: $ (Sept-Mars) asked alex for 111.55 $, and no deposit of that amount by alex is in the year sheets from 2023-03-17; check it before --write\n  $ (Avril - …): open since 2023-03-31, 6 lines\n  salaries (Accueil): alex 60000.00 $, sam 40000.00 $\n  not imported: Labels, Budget\n  ratio from 2022-01-01: alex 60.0000 %, sam 40.0000 % (Accueil's salaries)\n  the open period's lines are dated 2023-04-01, the day after the last closed period\n\nFigures over the workbook's rows, through 2024-12-20\n                                    workbook           books\n  mortgage: alex's own money       4502.34 $       4502.34 $\n  mortgage: sam's own money       -2697.66 $      -2697.66 $\n  mortgage gap (alex − sam)        7200.00 $       7200.00 $\n  mortgage balance                 3004.68 $       1804.68 $   DIFFERS\n  buffer balance                   7396.57 $       7096.57 $   DIFFERS\n\nThe open period as of 2024-12-20, everything since the two were last even:\n  books (cumulative, the catch-up folded in): alex deposits 201.11 $ (net 80.44 $), v3\n  workbook ($ (Avril - …), this period alone, v2): alex deposits 49.71 $\n\nVerifications\n  ok      $ (Avril-Août): alex's lines add up to the sheet's total, 1330.51.\n  ok      $ (Avril-Août): sam's lines add up to the sheet's total, 752.32.\n  ok      $ (Sept-Mars): alex's lines add up to the sheet's total, 1235.08.\n  ok      $ (Sept-Mars): sam's lines add up to the sheet's total, 1009.30.\n  ok      $ (Avril - …): alex's lines add up to the sheet's total, 369.02.\n  ok      $ (Avril - …): sam's lines add up to the sheet's total, 328.86.\n  ok      2023 carries 1801.56 into the mortgage bucket, as 2022 closed it.\n  ok      2023 carries 1832.07 into the current-expenses bucket, as 2022 closed it.\n  ok      2024 carries 2403.12 into the mortgage bucket, as 2023 closed it.\n  ok      2024 carries 4622.40 into the current-expenses bucket, as 2023 closed it.\n  ok      The running balance follows from row to row through all 233 movements, from the 1500.00 the first year carried in.\n  FAILED  The books would show 1804.68 $ for the mortgage balance, and the workbook 3004.68 $.\n  FAILED  The books would show 7096.57 $ for the buffer balance, and the workbook 7396.57 $.\n  FAILED  The first year carries in 1200.00 $ (mortgage) and 300.00 $ (buffer) from before the workbook, and the books count nothing before their first row.\nRefused: nothing was written.\n",
+  "confirmation": {
+    "dateColumn": {
+      "column": "B",
+      "header": "Date",
+      "oldest": [
+        {
+          "sheet": "2022",
+          "row": 83,
+          "date": "2022-01-01",
+          "detail": "Dépôt",
+          "amountCents": 30000
+        },
+        {
+          "sheet": "2022",
+          "row": 82,
+          "date": "2022-01-01",
+          "detail": "Dépôt",
+          "amountCents": 20000
+        },
+        {
+          "sheet": "2022",
+          "row": 81,
+          "date": "2022-01-05",
+          "detail": "Versement",
+          "amountCents": 65000
+        }
+      ],
+      "newest": [
+        {
+          "sheet": "2024",
+          "row": 5,
+          "date": "2024-12-10",
+          "detail": "Entretien chauffage",
+          "amountCents": -36800
+        },
+        {
+          "sheet": "2024",
+          "row": 4,
+          "date": "2024-12-16",
+          "detail": "Assurance habitation",
+          "amountCents": -20228
+        },
+        {
+          "sheet": "2024",
+          "row": 3,
+          "date": "2024-12-20",
+          "detail": "Paiement prêt",
+          "amountCents": -104987
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "label": "Hypothèque",
+        "bucket": "mortgage",
+        "rows": 108,
+        "examples": [
+          {
+            "sheet": "2024",
+            "row": 6,
+            "date": "2024-12-05",
+            "detail": "Versement",
+            "amountCents": 45000
+          },
+          {
+            "sheet": "2024",
+            "row": 3,
+            "date": "2024-12-20",
+            "detail": "Paiement prêt",
+            "amountCents": -104987
+          },
+          {
+            "sheet": "2024",
+            "row": 7,
+            "date": "2024-12-05",
+            "detail": "Versement",
+            "amountCents": 65000
+          }
+        ]
+      },
+      {
+        "label": "Dép. Courantes",
+        "bucket": "current-expenses",
+        "rows": 125,
+        "examples": [
+          {
+            "sheet": "2024",
+            "row": 8,
+            "date": "2024-12-01",
+            "detail": "Dépôt",
+            "amountCents": 20000
+          },
+          {
+            "sheet": "2024",
+            "row": 4,
+            "date": "2024-12-16",
+            "detail": "Assurance habitation",
+            "amountCents": -20228
+          },
+          {
+            "sheet": "2024",
+            "row": 5,
+            "date": "2024-12-10",
+            "detail": "Entretien chauffage",
+            "amountCents": -36800
+          }
+        ]
+      }
+    ]
+  },
+  "usage": {
+    "inputTokens": 9468,
+    "outputTokens": 512
+  }
+}

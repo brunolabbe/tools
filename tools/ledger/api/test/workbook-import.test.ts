@@ -35,6 +35,9 @@ import { HOUSEHOLD, writeMemberDirectory } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import { asTwo } from "./helpers/settlement.ts";
 import { history, render } from "./helpers/workbook.ts";
+import { layoutFixtures } from "./layout/fixtures.ts";
+import { importWorkbook } from "../src/workbook-import.ts";
+import { NO_CORRECTIONS } from "@ledger/books";
 import type { Fixture } from "./helpers/workbook.ts";
 
 const NOW = new Date("2026-10-07T12:00:00.000Z");
@@ -1284,5 +1287,37 @@ describe("the import and a person's shown name (lg-76)", () => {
     expect(ran.err).toContain(`--as names "kim", who is not a member of ${HOUSEHOLD}`);
     expect(ran.err).toContain("(alex, sam)");
     expect(ran.err).not.toContain(ALEX_ID);
+  });
+});
+
+// lg-66, Build 2.1: `importWorkbook` takes a described layout, so the guard on
+// rows it cannot file is reachable, and tested (lg-38's gate 1).
+describe("a described layout (lg-66)", () => {
+  test("under which a row has no bucket or no balance, the import is refused with the unfiled message", async () => {
+    const fixtures = await layoutFixtures();
+    const db = new Database(":memory:");
+    migrate(db);
+    for (const name of ["csv-balance", "csv-no-balance"]) {
+      const fixture = fixtures.find((candidate) => candidate.name === name);
+      if (fixture === undefined) throw new Error(`no fixture ${name}`);
+      const result = importWorkbook(db, fixture.sheets, {
+        personId: "alex",
+        members: ["alex", "sam"],
+        corrections: NO_CORRECTIONS,
+        write: true,
+        commit: true,
+        now: () => NOW,
+        layout: fixture.layout,
+      });
+      expect(result.ok, name).toBe(false);
+      expect(result.written, name).toBe(false);
+      expect(result.report, name).toMatch(
+        /FAILED {2}\d+ rows have no bucket or no balance, and this import files every row it stores\./u,
+      );
+    }
+    expect((db.prepare("SELECT COUNT(*) AS n FROM statement_rows").get() as { n: number }).n).toBe(
+      0,
+    );
+    db.close();
   });
 });
