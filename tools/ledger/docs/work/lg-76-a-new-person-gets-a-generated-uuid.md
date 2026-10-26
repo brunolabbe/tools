@@ -124,3 +124,128 @@ their name stays required.
   exactly that list; the gate grades against the list and re-runs the grep. The
   Done when line is reworded to name that list; the line it supersedes is kept
   beside it.
+- 2026-10-26 — Built on branch `lg-76-person-uuid`, cut from lg-71's landed head
+  `680e6c55` while #669 was open; #669 merged as `be8d9c0e` during the build and
+  was merged in (`f901793e`, a merge: the squash's tree equals `680e6c55`, so every
+  conflict resolved to this branch's side and the merge changed no file).
+  - **The screen list, enumerated (the owner's answer above).** The grep, from the
+    repository root:
+    `grep -rlE "shownName|usePeopleNames|personLabel|answerLabel|historyLabel|partsLabel|splitLabel|endedSentence" tools/ledger/web/src | sort`
+    finds 20 files: `people.tsx` (`shownName` itself), `labels.ts` and
+    `mortgage.ts` (helpers built on it, no component), and 17 component files.
+    A second grep for a person field printed raw in JSX or a template,
+    `grep -rnE "\{[a-zA-Z.?]*(personId|\.person|payerId|payer|chargedTo|classifiedBy|enteredBy|uploadedBy|recordedBy|createdBy|\.by)\}" tools/ledger/web/src`,
+    finds no person id printed outside `shownName`: its 18 hits are React keys,
+    a select's or an option's value, element ids and one component prop. The list, file and component, each a case of
+    `web/test/generated-ids.test.tsx` named after it:
+    1. `home/Home.tsx` — `Home`
+    2. `history/History.tsx` — `History`
+    3. `inbox/Inbox.tsx` — `Inbox`, `InboxItem`
+    4. `inbox/AutoFiled.tsx` — `AutoFiled`, `AutoFiledItem`
+    5. `rules/Rules.tsx` — `Rules`
+    6. `rules/RuleForm.tsx` — `RuleForm`
+    7. `periods/Periods.tsx` — `Periods`
+    8. `periods/LineForm.tsx` — `LineForm`
+    9. `periods/Recurring.tsx` — `Recurring`
+    10. `salaries/Salaries.tsx` — `Salaries`
+    11. `salaries/MortgageSplit.tsx` — `MortgageSplitCard`
+    12. `receipts/Receipts.tsx` — `Receipts`
+    13. `stats/Cards.tsx` — `MortgageOwnCard`, `ContributionCards`, `SalaryCards`, `SettlementsCard`
+    14. `stats/PeriodLines.tsx` — `PeriodLines`
+    15. `admin/Admin.tsx` — `Admin`, `HouseholdCard`, `RenamePerson`
+    16. `household/Household.tsx` — `Household`
+    17. `household/MemberForm.tsx` — `MemberForm`
+
+    Each case renders the component with alex and sam under generated ids, waits
+    for a sentence naming someone, and reads the text, every field's value and
+    every `aria-label`, `title`, `placeholder` and `alt`: no UUID, and the names.
+    `LineForm` and `Recurring` are rendered inside `Periods`, `RuleForm` by
+    opening a rule to edit, `AutoFiled` by opening the review, as a person
+    reaches them: 13 cases for the 17 files. A fourteenth holds `people.tsx`'s fallback (below).
+    Measured: with `shownName` mutated to print the id, 14 of 14 fail; restored
+    from `7f1916e3`, 14 of 14 pass.
+
+  - **Build 2: no migration.** `person_names_held` asks that a membership name the
+    person, so the name is written after the membership, in the same
+    `.immediate()` transaction; `person_names_unique` refuses a name another
+    person is shown under or has as an id, which the resolution below has
+    already ruled out; `memberships_person_not_shown_as_another` cannot meet a
+    UUID; and both `person` columns take 1 to 64 trimmed characters, which a
+    36-character UUID is. `directory.test.ts`, "a name nobody has is a person
+    under a generated id, shown under that name", runs it against the real
+    triggers; "the membership and the first shown name are written in one
+    transaction" plants a trigger refusing the name and finds no membership
+    left.
+  - **Build 3: how the request tells a legacy id from a typed name.** It does not
+    need to. `person` is matched against the household's shown names first, then
+    against the ids of the people it has held; a legacy person's id is the name
+    first typed for them, so typing it reaches them, renamed or not. The two
+    matches cannot disagree: lg-33's triggers keep every shown name off every
+    other person's id and every new id off every shown name. A generated id
+    typed in full also matches, which is what an open tab built before lg-76
+    sends. Text that matches nobody is a new person.
+  - **What the brief had wrong.**
+    1. `addMember` does not generate the id; a new method, `addMemberByName`,
+       does, and the routes and the host command call it. `addMember` stays as
+       it was, as lg-71 kept `addHousehold`: 69 calls in `directory.test.ts`,
+       `api/test/helpers/households.ts` (which the dispatch asked to keep
+       working) and every suite built on it make people under readable ids, and
+       those are the legacy households whose books must compute as before.
+    2. The household's history needed a third record. The first shown name is a
+       `person_names` row, which `history()` read as a rename, so the household
+       screen would have printed "<uuid> renamed casey". The contract gains
+       `PersonFirstNameRecord` (`action: "name"`), the first `person_names` row of
+       a person whose id is generated; the screen prints no line for it and uses
+       it to name the person, including one removed before the books ever
+       enrolled them.
+    3. "A UUID must never reach a screen" reaches past `shownName` falling back to
+       the id. Before `GET /api/people` answers, or when it fails, every screen
+       printed ids (lg-33's note in `people.tsx`). `shownName` in the web now
+       says "Someone" for a generated id the map lacks; a legacy id is still
+       shown as itself. And `distinctNames` (`routes/rules.ts`, lg-33's gate 1,
+       F3) shows a person under their id when a book-only id shares their name,
+       which a person added by name can now do; a generated id takes the lowest
+       free " 2", " 3" there instead. Both are tested.
+    4. Build 4 names the stats' series and colours among the lists to sort.
+       They keep sorting by id: lg-9's rule colours a person by their place in
+       the list of ids "so a rename changes no colour" (`people.tsx`), which
+       sorting by shown name would break. Reported to the orchestrator as an
+       open decision. The arithmetic's ties keep the id, as the brief says;
+       their comments say "sorts first", still true. Sorted by shown name now:
+       `GET /api/people`'s `people` and `retired`, the household and admin
+       routes' members and people, the member form's people on both screens,
+       the household screen's members, and `fetchPeople(…, "everyone")`.
+    5. `GENERATED_ID` moved to the contract: the API checks a generated id with
+       it, and the web needs the same shape for the fallback above.
+    6. `ADDRESS_ALREADY_A_MEMBER` printed the person's id ("as <uuid>") on the
+       admin screen and in the host command; it prints the shown name. The
+       household is still named by its id, which is lg-77's Build 7.
+    7. The import's `--as` and the workbook reader resolve shown names as the
+       brief says; the report the import prints still names people by id in its
+       figures (an operator's console, not a screen, and the import is lg-7's
+       one-off for a legacy household). Not changed.
+  - **Fold-in.** `spending-backfill-command.ts`'s `--as` resolved ids the way the
+    import's did, through the same `directoryPeople`; it now takes a shown name
+    too (`memberNamed`). The host command's `remove` and `add` print the shown
+    name; `README.md` and `docs/02-DEPLOYMENT.md` show `[person]` as optional.
+    The household id for a create comes from the same injected generator as a
+    person's (`AppContext.newId`), so one test hands both in.
+    `tools/ledger/CLAUDE.md`'s paragraph and §7 are rewritten per Build 7.
+  - **Existing tests whose expectations changed**, because each asserted the old
+    behaviour this ticket replaces (a new name became the id): in
+    `directory.test.ts` one (lg-71's `createHousehold` test), in
+    `household-command.test.ts` seven, in `households.test.ts` three, in
+    `books.test.ts` two, in `web/test/admin.test.tsx` one (the refusal
+    sentence) and in `web/test/household.test.tsx` one (the form sends the name
+    as typed). No suite of the buckets, ratios, settlements, periods, salaries
+    or stats changed.
+  - **Commands.** `npm run check`: exit 0.
+    `npx vitest run tools/ledger/api/test tools/ledger/books/test`: 1,446 of
+    1,448 in 59 files, the two `books.test.ts` cases above; after their fix
+    `books.test.ts` 11 of 11. `npx vitest run tools/ledger/web`: 260 of 260 in
+    20 files. Import mutation: with the workbook reader's shown-name lookup
+    disabled and `books` rebuilt, `workbook-import.test.ts`'s "--as and the
+    workbook's names reach people under generated ids by their shown names"
+    fails (1 of 3 lg-76 cases); restored from `b7bde38c`, passes. The full
+    `npm test -- --project ledger` was not run (a first build runs no full
+    suite; CI runs it on the draft).

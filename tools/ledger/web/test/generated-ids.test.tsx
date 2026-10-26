@@ -538,11 +538,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     // Each card has drawn its chart before the page is read.
     await waitFor(
       () => {
-        for (const title of [
-          "Own money in the mortgage",
-          "Salaries by year",
-          "Settlements",
-        ]) {
+        for (const title of ["Own money in the mortgage", "Salaries by year", "Settlements"]) {
           const card = screen.getAllByRole("heading", { name: title })[0]?.closest("section");
           if (card === null || card === undefined) throw new Error(`no card for ${title}`);
           within(card).getAllByRole("slider");

@@ -227,12 +227,16 @@ and `settlement_transfers` beside it. Each household's
 `people` table (lg-5), in its own books, is filled from its members' names when
 the file is opened and whenever a request shows a name it lacks
 (`createEnroller` in `api/src/people.ts`, never waiting on another process's
-write lock: a name the books cannot take refuses only that person, lg-21), and
-a person's id is
-that name — the text lg-4 stores on rules and classifications — so it must stay
-that name. Migration 3 also enrols the person ids lg-4 had already stored on
-rules and classifications, and nothing else. Why a name is permanent is in
-`docs/00-ANALYSIS.md` §7. `ACCESS_PEOPLE` is retired: boot refuses it.
+write lock: a name the books cannot take refuses only that person, lg-21). **A
+person's id is what the books store on every rule, classification, salary and
+share, so it never changes.** A person added since lg-76 has a generated UUID
+for an id, and the name typed for them is only their first shown name
+(`addMemberByName` in `api/src/directory.ts`); a person added before has the
+name first typed for them as their id, and keeps it. A UUID is never printed:
+every screen prints a person through `shownName`. Migration 3 also enrols the
+person ids lg-4 had already stored on rules and classifications, and nothing
+else. Why an id is permanent is in `docs/00-ANALYSIS.md` §7. `ACCESS_PEOPLE` is
+retired: boot refuses it.
 
 **Rules live in the database only.** Caisse names identify a household, so no
 rule is seeded from the repository: not in a migration, not in a fixture. A test

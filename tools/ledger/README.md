@@ -91,8 +91,8 @@ screen but remove nobody (lg-22). The first household and its first member, and 
 recovery, are written from the host:
 
 ```bash
-npm run household:ledger -- add <email> <person>                 # a household, by its first person
-npm run household:ledger -- member <household> <email> <person>   # an email, as that person
+npm run household:ledger -- add <email> [person]                 # a household, by its first person
+npm run household:ledger -- member <household> <email> [person]   # an email, as that person
 npm run household:ledger -- remove <email>
 npm run household:ledger -- list
 ```
@@ -101,6 +101,12 @@ npm run household:ledger -- list
 empty (lg-71). It is called "Home", and its id is a generated UUID, which `add`
 prints and `member` takes; a household made before lg-71 keeps the one-word id
 it was given.
+
+A person is named as the household shows them, or by the id a person added
+before lg-76 has. A name nobody has is a new person, given a generated UUID for
+an id and shown under that name; with no name, under the email's part before the
+`@`, numbered if someone already is (lg-76). `list` prints each person as shown,
+with their id beside the name where the two differ.
 
 A household holds any number of people, each behind any number of addresses,
 and a name it has held stays in its books. Every address must also be on the ledger's

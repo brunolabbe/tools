@@ -265,7 +265,10 @@ describe("the boot and enrol path (lg-20's gate, F4, F5, F8)", () => {
     expect(run("add", KIM, "kim")).toBe(0);
     const kim = await send(target, KIM, ROUTES.people);
     expect(kim.statusCode, kim.body).toBe(200);
-    expect(kim.json<PeopleResponse>()).toMatchObject({ people: ["kim"] });
+    // lg-76: kim is a new person, under a generated id, shown as kim.
+    const { people: kims, names } = kim.json<PeopleResponse>();
+    expect(kims).toHaveLength(1);
+    expect(names[kims[0] ?? ""]).toBe("kim");
     const away = (await send(target, KIM, ROUTES.me)).json<MeResponse>().person.household;
     expect(existsSync(householdBooksPath(dir, away))).toBe(true);
   });
@@ -345,7 +348,15 @@ describe("a household whose id is a UUID", () => {
   test("has its books at households/<uuid>.db, made and opened on first use, and its photos beside", async () => {
     const directory = memberDirectory();
     const target = await start(directory);
-    directory.createHousehold({ id: UUID, address: ROBIN, person: "robin", ...CHANGE });
+    // lg-76: robin is a new person, under a generated id of their own.
+    const robin = "6ec0bd7f-11c0-43da-975e-2a8ad9ebae0b";
+    directory.createHousehold({
+      id: UUID,
+      address: ROBIN,
+      person: "robin",
+      ...CHANGE,
+      newId: () => robin,
+    });
     const books = householdBooksPath(dir, UUID);
     expect(books).toBe(path.join(dir, "households", `${UUID}.db`));
     expect(existsSync(books)).toBe(false);
@@ -353,10 +364,13 @@ describe("a household whose id is a UUID", () => {
     const response = await send(target, ROBIN, ROUTES.people);
 
     expect(response.statusCode, response.body).toBe(200);
-    expect(response.json<PeopleResponse>()).toMatchObject({ people: ["robin"] });
+    expect(response.json<PeopleResponse>()).toMatchObject({
+      people: [robin],
+      names: { [robin]: "robin" },
+    });
     expect(existsSync(books)).toBe(true);
     expect(version(books)).toBe(version(householdBooksPath(dir, HOUSEHOLD)));
-    expect(people(books)).toEqual(["robin"]);
+    expect(people(books)).toEqual([robin]);
     const photo = "7c9e6679-7425-40de-944b-e07fc1f90ae7.jpg";
     expect(receiptPhotoPath(dir, UUID, photo)).toBe(path.join(dir, "receipts", UUID, photo));
     expect(() => householdBooksPath(dir, UUID.toUpperCase())).toThrow(/households/u);

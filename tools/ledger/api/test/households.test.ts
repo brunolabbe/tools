@@ -304,7 +304,7 @@ describe("a member", () => {
     expect(
       body.history.map((record) => [
         record.action,
-        record.action === "rename" ? null : record.address,
+        "address" in record ? record.address : null,
         record.by,
       ]),
     ).toEqual([
