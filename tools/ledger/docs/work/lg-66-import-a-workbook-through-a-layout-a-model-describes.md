@@ -382,12 +382,21 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
    rows and cells, the request's size estimate), one test per bound; a file that
    reads as 0 sheets; and a confirm request.
    Each refusal is a typed error.
-7. The confirm request given `lg37`'s fixture and its correct description
+7. The confirm request given `lg7`'s fixture and its correct description
    leaves the books as `import:ledger --write` on the same workbook leaves them
-   (the same movements and the same report figures); given a description that
-   fails the verifications (the pinned wrong description of `lg37` with amount
-   and balance swapped, outcome `refused`), it refuses, and the books are
-   unchanged.
+   (the same rows, the same classifications and the same report figures).
+   Given `lg37`'s fixture and its correct description, it is refused with
+   exactly the problems `import:ledger --write` prints on the same workbook,
+   and the books are unchanged; given a description that fails the
+   verifications (the pinned wrong description of `lg37` with amount and
+   balance swapped, outcome `refused`), it refuses, and the books are
+   unchanged. _(Reworded by the owner's answer of 2026-10-26, A in the Log.
+   **Superseded:** "The confirm request given `lg37`'s fixture and its correct
+   description leaves the books as `import:ledger --write` on the same workbook
+   leaves them (the same movements and the same report figures); given a
+   description that fails the verifications (the pinned wrong description of
+   `lg37` with amount and balance swapped, outcome `refused`), it refuses, and
+   the books are unchanged.")_
 8. An upload over the byte bound is refused before the workbook is parsed (a
    test where the sheet reader is a spy that is never called). Two tests bound
    the inflate. (i) A real one-sheet workbook whose sheet XML is padded with
@@ -976,3 +985,34 @@ costs money, a receipt read") would say there are two.
 
 **Awaiting:** Done when 11, the owner's live read through the screen with a key,
 after the merge.
+
+### 2026-10-26 — round 1: gate 1 returned CONCERNS at `e02ec781`; the owner's answers
+
+Gate 1 (on PR #670, `53bb5d0f..e02ec781`) returned CONCERNS: no high, two med
+(F1, F2), five low (F3 to F7). Its record is for this ticket's `## Review`.
+
+**The owner's answers, 2026-10-26**, put by the orchestrator. The options are as
+they were put; the one chosen is marked.
+
+- **A. Done when 7.** Options: reword the positive case to `lg7` (the
+  builder's recommendation); change lg-38's generator so `lg37` opens at zero.
+  **Chosen: reword to `lg7`.** Done when 7 now says that `lg7` confirmed on the
+  screen leaves the same rows, classifications and report figures as
+  `import:ledger --write`, that `lg37` is refused with exactly the problems the
+  command prints and the books unchanged, and keeps the swapped-`lg37` case. The
+  superseded line is kept beside it. The tests already did this (the build's
+  entry, "What the brief had wrong").
+- **B. Gate 1 F2 (open decision).** Options: (a) tighten the bounds (the gate's
+  recommendation); (b) keep the constants and correct the text. **Chosen:
+  (a).**
+- **C. Gate 1 F1.** Options: one test per `workbook-zip.ts` guard in the round
+  (recommended); record only. **Chosen: in the round.**
+- **D. Gate 1 lows F3 to F7.** Options: all five in the round (recommended);
+  F3, F6 and F7 only; none. **Chosen: all five.**
+- **E. `tools/ledger/CLAUDE.md`.** The owner chose "Yes" on the build's
+  proposal: the `receipts` row of the layout table becomes "the model calls:
+  the receipt reader (a photo in, proposals out) and the layout describer (a
+  workbook's samples in, a described layout out, lg-66); the only package that
+  talks to a model", and the prose that calls a receipt read "the one route
+  that costs money" says there are two. Applied in this round, in its own
+  commit.
