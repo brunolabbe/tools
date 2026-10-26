@@ -21,7 +21,7 @@ import { shownName } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
 export const ACCESS_POLICY_NOTE =
-  "Every address must also be admitted on the ledger's Access policy, which whoever runs the ledger does in the Cloudflare dashboard. Until it is, that address cannot sign in.";
+  "Every email must also be admitted on the ledger's Access policy, which whoever runs the ledger does in the Cloudflare dashboard. Until it is, that email cannot sign in.";
 
 export interface MemberFormProps {
   /** The person ids the household holds, offered to pick from by their shown names. */
@@ -65,7 +65,7 @@ export function MemberForm({ people, names, onAdd }: MemberFormProps): React.Rea
     event.preventDefault();
     setNotice(null);
     if (address.trim() === "" || person.trim() === "") {
-      setProblem("Give the address and the person's name it stands under.");
+      setProblem("Give the email and the person's name it stands under.");
       return;
     }
     setProblem(null);
@@ -74,7 +74,7 @@ export function MemberForm({ people, names, onAdd }: MemberFormProps): React.Rea
 
   return (
     <form className="member-form" onSubmit={submit}>
-      <label htmlFor={`${id}-address`}>Address</label>
+      <label htmlFor={`${id}-address`}>Email</label>
       <input
         id={`${id}-address`}
         type="email"

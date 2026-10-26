@@ -84,7 +84,10 @@ export function runSpendingBackfillCommand(argv: readonly string[], io: CommandI
     return usage(io, "Name the household whose books it writes, with --household.");
   }
   if (!isHouseholdId(household)) {
-    return usage(io, `--household is a household's id, one lowercase word; "${household}" is not.`);
+    return usage(
+      io,
+      `--household is a household's id, as household:ledger list prints it; "${household}" is not.`,
+    );
   }
   const personId = values.as?.trim();
   if (personId === undefined || personId === "") {

@@ -61,18 +61,44 @@ function read<T>(look: (directory: Directory) => T): T {
   }
 }
 
+/**
+ * A household under a one-word id, as the command made them before lg-71 and
+ * no longer can: the verbs other than `add` still take one.
+ */
+function legacy(id: string): void {
+  const directory = Directory.open(directoryPath);
+  try {
+    directory.addHousehold({ id, name: "Home", by: "operator", at: NOW });
+  } finally {
+    directory.close();
+  }
+}
+
+/** A lowercase UUID as `crypto.randomUUID()` prints it (lg-71). */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/u;
+
 describe("the household command", () => {
-  test("creates a household, with a display name of several words", () => {
-    const ran = run("add", "home", "The", "Test", "Household");
+  // lg-71: `add <address> <person>` makes the household and its first member at once.
+  test("creates a household by adding its first person, named Home under a UUID it prints", () => {
+    const ran = run("add", "Alex@Example.TEST", "alex");
 
     expect(ran.code, ran.err).toBe(0);
-    expect(read((directory) => directory.households())).toEqual([
-      { id: "home", name: "The Test Household" },
+    const households = read((directory) => directory.households());
+    expect(households).toHaveLength(1);
+    const [household] = households;
+    expect(household?.id).toMatch(new RegExp(`^${UUID.source}$`, "u"));
+    expect(household?.name).toBe("Home");
+    expect(read((directory) => directory.members())).toEqual([
+      { address: ALEX, household: household?.id, person: "alex" },
     ]);
+    expect(ran.out).toContain(
+      `Created the household ${household?.id ?? ""}, "Home", with ${ALEX} as alex.`,
+    );
+    expect(ran.out).toMatch(/Access policy/u);
   });
 
   test("adds a member, and reminds the operator of the Access policy", () => {
-    run("add", "home", "Home");
+    legacy("home");
 
     const ran = run("member", "home", ALEX, "alex");
 
@@ -85,7 +111,7 @@ describe("the household command", () => {
   });
 
   test("removes a member", () => {
-    run("add", "home", "Home");
+    legacy("home");
     run("member", "home", ALEX, "alex");
     run("member", "home", SAM, "sam");
 
@@ -101,7 +127,7 @@ describe("the household command", () => {
 
   test("lists every household and its members", () => {
     expect(run("list").out).toContain("No households yet.");
-    run("add", "home", "Home");
+    legacy("home");
     run("member", "home", ALEX, "alex");
     run("member", "home", SAM, "sam");
 
@@ -116,20 +142,25 @@ describe("the household command", () => {
   // lg-21: each household has books of its own, so a second one is allowed. What
   // keeps them apart is `isolation.test.ts`.
   test("creates a second household beside the first", () => {
-    run("add", "home", "Home");
+    legacy("home");
 
-    const ran = run("add", "other", "Other");
+    const ran = run("add", SAM, "sam");
 
     expect(ran.code, ran.err).toBe(0);
-    expect(read((directory) => directory.households())).toEqual([
-      { id: "home", name: "Home" },
-      { id: "other", name: "Other" },
-    ]);
+    const households = read((directory) => directory.households());
+    expect(households).toHaveLength(2);
+    expect(households).toContainEqual({ id: "home", name: "Home" });
+    const other = households.find((household) => household.id !== "home");
+    expect(other?.id).toMatch(UUID);
+    expect(read((directory) => directory.membershipOf(SAM))).toEqual({
+      household: other?.id,
+      person: "sam",
+    });
   });
 
   // lg-23: lg-20 refused a third person here; a household now holds any number.
   test("adds a third person to a household, and says a household holds any number", () => {
-    run("add", "home", "Home");
+    legacy("home");
     run("member", "home", ALEX, "alex");
     run("member", "home", SAM, "sam");
 
@@ -144,7 +175,7 @@ describe("the household command", () => {
   });
 
   test("refuses what the directory refuses with exit 1, and a malformed command with 2", () => {
-    expect(run("add", "Not A Word", "Home").code).toBe(1);
+    expect(run("add", "not an email", "alex").code).toBe(1);
     expect(run("member", "nowhere", ALEX, "alex").code).toBe(1);
     expect(run("remove", ALEX).code).toBe(1);
 
@@ -152,6 +183,22 @@ describe("the household command", () => {
     expect(run("rename", "home").code).toBe(2);
     expect(run("member", "home", ALEX).code).toBe(2);
     expect(run("list", "extra").code).toBe(2);
+    // lg-71: `add` takes an address and a person, and nothing else.
+    expect(run("add", ALEX).code).toBe(2);
+    expect(run("add", "home", "The", "Test", "Household").code).toBe(2);
+    expect(read((directory) => directory.households())).toEqual([]);
+  });
+
+  // lg-71: one transaction, so a refused first address leaves no household.
+  test("makes no household when the first address is refused", () => {
+    legacy("home");
+    run("member", "home", ALEX, "alex");
+
+    const ran = run("add", ALEX, "alex");
+
+    expect(ran.code).toBe(1);
+    expect(ran.err).toContain(`That email already belongs to the household "home", as alex.`);
+    expect(read((directory) => directory.households())).toEqual([{ id: "home", name: "Home" }]);
   });
 
   test("names what it needs before it creates anything", () => {
@@ -192,7 +239,7 @@ describe("the household command and a control character", () => {
   ])(
     "refuses an address with %s on the member verb, exits non-zero and writes no row",
     (_label, address) => {
-      run("add", "home", "Home");
+      legacy("home");
 
       const ran = run("member", "home", address, "sam");
 
@@ -204,7 +251,7 @@ describe("the household command and a control character", () => {
   );
 
   test("still removes a row that already holds a NUL, which the schema let in", () => {
-    run("add", "home", "Home");
+    legacy("home");
     const db = new Database(directoryPath);
     db.prepare(
       `INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
@@ -231,7 +278,7 @@ describe("the household command and a C1 control or a zero-width character", () 
   ])(
     "refuses an address with %s on the member verb, exits non-zero and writes no row",
     (_label, address) => {
-      run("add", "home", "Home");
+      legacy("home");
 
       const ran = run("member", "home", address, "sam");
 
@@ -243,7 +290,7 @@ describe("the household command and a C1 control or a zero-width character", () 
   );
 
   test("still removes a row that already holds a U+0085 or a U+200B, which the schema let in", () => {
-    run("add", "home", "Home");
+    legacy("home");
     const db = new Database(directoryPath);
     const insert = db.prepare(
       `INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)

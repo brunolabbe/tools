@@ -9,9 +9,7 @@ export function NoHousehold(): React.ReactElement {
   return (
     <section aria-labelledby="no-household">
       <h2 id="no-household">No household</h2>
-      <p>
-        This address does not belong to a household in the ledger, so there are no books to show.
-      </p>
+      <p>This email does not belong to a household in the ledger, so there are no books to show.</p>
       <p className="muted">
         If it should, ask whoever runs the ledger to add it, then reload this page.
       </p>

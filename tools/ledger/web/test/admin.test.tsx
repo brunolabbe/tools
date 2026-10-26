@@ -77,7 +77,7 @@ test("shows every household with its members, and every address to admit on Acce
   expect(
     within(card("The test household")).getByText("sam@example.test", { exact: false }),
   ).toBeTruthy();
-  const admit = screen.getByRole("list", { name: "Addresses to admit" });
+  const admit = screen.getByRole("list", { name: "Emails to admit" });
   expect([...admit.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
     "kim@away.test",
     "alex@example.test",
@@ -88,43 +88,56 @@ test("shows every household with its members, and every address to admit on Acce
   ).not.toHaveLength(0);
 });
 
-test("creates a household, adds a member to it and shows the list again", async () => {
-  vi.mocked(createHousehold).mockResolvedValue({ id: "cabin", name: "The cabin" });
+// lg-71: a household is made by adding its first person; the answer is its card.
+const CABIN: AdminHousehold = {
+  id: "0f8fad5b-d9cb-469f-a165-70867728950e",
+  name: "Home",
+  members: [{ address: "robin@cabin.test", person: "robin", name: "robin" }],
+  people: [{ person: "robin", name: "robin", standing: "in" }],
+};
+
+test("creates a household from its first person, shows its card without asking again, and adds a member", async () => {
+  vi.mocked(createHousehold).mockResolvedValue(CABIN);
   render(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   const fresh = card("New household");
-  fireEvent.change(within(fresh).getByLabelText("Id"), { target: { value: "cabin" } });
-  fireEvent.change(within(fresh).getByLabelText("Name"), { target: { value: "The cabin" } });
-  vi.mocked(fetchAdminHouseholds).mockResolvedValue([
-    ...HOUSEHOLDS,
-    { id: "cabin", name: "The cabin", members: [], people: [] },
-  ]);
+  fireEvent.change(within(fresh).getByLabelText("Email"), {
+    target: { value: " robin@cabin.test " },
+  });
+  fireEvent.change(within(fresh).getByLabelText("Person"), { target: { value: "robin" } });
   fireEvent.click(within(fresh).getByRole("button", { name: "Create household" }));
 
-  expect(await screen.findByRole("heading", { name: /^The cabin/u })).toBeTruthy();
-  expect(vi.mocked(createHousehold)).toHaveBeenCalledWith({ id: "cabin", name: "The cabin" });
-  expect(within(card("The cabin")).getByText("Nobody yet.")).toBeTruthy();
-
-  vi.mocked(adminAddMember).mockResolvedValue({
+  expect(await screen.findByRole("heading", { name: "Home: robin" })).toBeTruthy();
+  expect(vi.mocked(createHousehold)).toHaveBeenCalledWith({
     address: "robin@cabin.test",
     person: "robin",
-    name: "robin",
   });
-  const cabin = card("The cabin");
-  fireEvent.change(within(cabin).getByLabelText("Address"), {
-    target: { value: "robin@cabin.test" },
+  expect(vi.mocked(fetchAdminHouseholds)).toHaveBeenCalledTimes(1);
+  // The UUID is nowhere on the screen.
+  expect(document.body.textContent).not.toContain(CABIN.id);
+  expect(within(card("Emails to admit")).getByText("robin@cabin.test")).toBeTruthy();
+  expect((within(fresh).getByLabelText("Email") as HTMLInputElement).value).toBe("");
+
+  vi.mocked(adminAddMember).mockResolvedValue({
+    address: "lee@cabin.test",
+    person: "lee",
+    name: "lee",
   });
-  fireEvent.change(within(cabin).getByLabelText("Person"), { target: { value: "robin" } });
+  const cabin = card("Home: robin");
+  fireEvent.change(within(cabin).getByLabelText("Email"), {
+    target: { value: "lee@cabin.test" },
+  });
+  fireEvent.change(within(cabin).getByLabelText("Person"), { target: { value: "lee" } });
   fireEvent.click(within(cabin).getByRole("button", { name: "Add member" }));
 
   await waitFor(() =>
-    expect(vi.mocked(adminAddMember)).toHaveBeenCalledWith("cabin", {
-      address: "robin@cabin.test",
-      person: "robin",
+    expect(vi.mocked(adminAddMember)).toHaveBeenCalledWith(CABIN.id, {
+      address: "lee@cabin.test",
+      person: "lee",
     }),
   );
-  await waitFor(() => expect(vi.mocked(fetchAdminHouseholds)).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(vi.mocked(fetchAdminHouseholds)).toHaveBeenCalledTimes(2));
 });
 
 test("removes a member only once the removal is confirmed", async () => {
@@ -154,14 +167,14 @@ test("puts the server's own sentence in front of a refused address", async () =>
   vi.mocked(adminAddMember).mockRejectedValue(
     new AppError(
       "ADDRESS_ALREADY_A_MEMBER",
-      'That address already belongs to the household "away", as kim. Remove it first.',
+      'That email already belongs to the household "away", as kim. Remove it first.',
     ),
   );
   render(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
 
   const home = card("The test household");
-  fireEvent.change(within(home).getByLabelText("Address"), { target: { value: "kim@away.test" } });
+  fireEvent.change(within(home).getByLabelText("Email"), { target: { value: "kim@away.test" } });
   fireEvent.click(within(home).getByRole("button", { name: "Add member" }));
 
   expect((await within(home).findByRole("alert")).textContent).toContain('household "away"');
@@ -174,7 +187,9 @@ test("renames a person, and prints the shown name after the rename, not the id",
   render(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const home = card("The test household");
-  const people = within(home).getByRole("list", { name: "People in The test household" });
+  const people = within(home).getByRole("list", {
+    name: "People in The test household: alex and sam",
+  });
   expect([...people.querySelectorAll("strong")].map((name) => name.textContent)).toEqual([
     "alex",
     "sam",
@@ -265,7 +280,7 @@ test("edits a member's address in one request, and lists the new address under t
       people: (HOUSEHOLDS[1] as AdminHousehold).people,
     },
   ]);
-  fireEvent.change(within(home).getByLabelText("New address for sam@example.test"), {
+  fireEvent.change(within(home).getByLabelText("New email for sam@example.test"), {
     target: { value: " sam.new@example.test " },
   });
   fireEvent.click(within(home).getByRole("button", { name: "Save" }));
@@ -295,7 +310,7 @@ test("puts the server's sentence in front of a refused new address, and keeps th
   vi.mocked(adminChangeAddress).mockRejectedValue(
     new AppError(
       "ADDRESS_ALREADY_A_MEMBER",
-      'That address already belongs to the household "away", as kim. Remove it first.',
+      'That email already belongs to the household "away", as kim. Remove it first.',
     ),
   );
   render(<Admin />);
@@ -303,7 +318,7 @@ test("puts the server's sentence in front of a refused new address, and keeps th
   const home = card("The test household");
 
   fireEvent.click(within(home).getByRole("button", { name: "Edit sam@example.test" }));
-  fireEvent.change(within(home).getByLabelText("New address for sam@example.test"), {
+  fireEvent.change(within(home).getByLabelText("New email for sam@example.test"), {
     target: { value: "kim@away.test" },
   });
   fireEvent.click(within(home).getByRole("button", { name: "Save" }));
@@ -311,7 +326,7 @@ test("puts the server's sentence in front of a refused new address, and keeps th
   expect((await within(home).findByRole("alert")).textContent).toContain('household "away"');
   // The form stays open on what was typed, and the old address is still the one listed.
   expect(
-    (within(home).getByLabelText("New address for sam@example.test") as HTMLInputElement).value,
+    (within(home).getByLabelText("New email for sam@example.test") as HTMLInputElement).value,
   ).toBe("kim@away.test");
   const listed = within(home)
     .getAllByRole("listitem")
@@ -343,7 +358,7 @@ test("lists everyone the household has named with where they stand, and retires 
   render(<Admin />);
   await screen.findByRole("heading", { name: "Households" });
   const people = within(card("The test household")).getByRole("list", {
-    name: "People in The test household",
+    name: "People in The test household: alex, Casey, and sam",
   });
   // casey has no address and is still listed, under the shown name.
   expect([...people.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
@@ -371,7 +386,7 @@ test("puts the server's sentence in front of a refused retirement", async () => 
   vi.mocked(adminRetirePerson).mockRejectedValue(
     new AppError(
       "BAD_REQUEST",
-      "Remove every address under sam first: nobody who can sign in is retired.",
+      "Remove every email under sam first: nobody who can sign in is retired.",
     ),
   );
   render(<Admin />);
@@ -381,6 +396,105 @@ test("puts the server's sentence in front of a refused retirement", async () => 
   fireEvent.click(within(home).getByRole("button", { name: "Retire sam" }));
 
   expect((await within(home).findByRole("alert")).textContent).toContain(
-    "Remove every address under sam first",
+    "Remove every email under sam first",
   );
+});
+
+// lg-71: the New household form holds the first person's Email and Person, and
+// nothing else; with no household yet it is the only form on the screen.
+test("asks a new household for its first person's email and name, and for no id or name", async () => {
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue([]);
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+
+  const forms = document.querySelectorAll("form");
+  expect(forms).toHaveLength(1);
+  const fresh = card("New household");
+  expect(fresh.contains(forms[0] ?? null)).toBe(true);
+  const labels = [...fresh.querySelectorAll("label")].map((label) => label.textContent);
+  expect(labels).toEqual(["Email", "Person"]);
+  expect(within(fresh).queryByLabelText("Id")).toBeNull();
+  expect(within(fresh).queryByLabelText("Name")).toBeNull();
+  expect(within(fresh).getByText(/There is no household yet/u)).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Emails to admit" })).toBeNull();
+
+  fireEvent.click(within(fresh).getByRole("button", { name: "Create household" }));
+  expect(within(fresh).getByRole("alert").textContent).toBe(
+    "Give the first person's email and their name.",
+  );
+  expect(vi.mocked(createHousehold)).not.toHaveBeenCalled();
+});
+
+test("puts the server's sentence in front of a refused first address, and adds no card", async () => {
+  vi.mocked(createHousehold).mockRejectedValue(
+    new AppError(
+      "ADDRESS_ALREADY_A_MEMBER",
+      'That email already belongs to the household "away", as kim. Remove it first.',
+    ),
+  );
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+  const fresh = card("New household");
+
+  fireEvent.change(within(fresh).getByLabelText("Email"), { target: { value: "kim@away.test" } });
+  fireEvent.change(within(fresh).getByLabelText("Person"), { target: { value: "kim" } });
+  fireEvent.click(within(fresh).getByRole("button", { name: "Create household" }));
+
+  expect((await within(fresh).findByRole("alert")).textContent).toContain("That email");
+  expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
+    "The other household: kim",
+    "The test household: alex and sam",
+    "New household",
+    "Emails to admit",
+  ]);
+});
+
+// lg-71, Build 6: every new household is "Home" and its id is a UUID, so a card
+// is told apart by the people the household has named, under their shown names.
+test("tells two Home cards apart by their people, and shows no id but for a household that has named nobody", async () => {
+  const twoHomes: AdminHousehold[] = [
+    CABIN,
+    {
+      id: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      name: "Home",
+      members: [{ address: "lee@lake.test", person: "lee", name: "Lee" }],
+      // A member who has left still names the household.
+      people: [
+        { person: "lee", name: "Lee", standing: "in" },
+        { person: "jo", name: "Jo", standing: "retired" },
+      ],
+    },
+    { id: "empty", name: "Old", members: [], people: [] },
+  ];
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue(twoHomes);
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+
+  expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
+    "Home: robin",
+    "Home: Lee and Jo",
+    "Old (empty)",
+    "New household",
+    "Emails to admit",
+  ]);
+  expect(
+    within(card("Home: Lee and Jo")).getByRole("list", { name: "People in Home: Lee and Jo" }),
+  ).toBeTruthy();
+  expect(document.body.textContent).not.toContain(CABIN.id);
+  expect(document.body.textContent).not.toContain("7c9e6679");
+});
+
+// lg-71, Build 7: every field that takes an address says Email. The fields on the
+// admin's screen are the New household form's, each card's member form, and a
+// member's address opened in place; all three are open here at once.
+test("labels no address field Address, the change-address form included", async () => {
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+  fireEvent.click(screen.getByRole("button", { name: "Edit sam@example.test" }));
+
+  const labels = [...document.querySelectorAll("label")].map((label) => label.textContent ?? "");
+  expect(labels.filter((text) => /address/iu.test(text))).toEqual([]);
+  expect(labels.filter((text) => text === "Email")).toHaveLength(3);
+  expect(labels).toContain("New email for sam@example.test");
+  expect(screen.queryAllByLabelText(/address/iu)).toEqual([]);
 });

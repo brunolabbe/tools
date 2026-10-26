@@ -11,7 +11,8 @@
  *
  * Every write is checked here first, so a refusal carries a sentence an
  * operator can act on. The schema checks less (`db/directory-schema.ts`): a
- * household id's shape, a household name's and a person's length and trim, that
+ * household id's shape (a word or a UUID's, lg-71), a household name's and a
+ * person's length and trim, that
  * an address is lower-cased, trimmed and has an `@` with something either side,
  * and the membership rules its triggers hold. It does not check an address's
  * character set, so a writer that skips this class is not refused for a control
@@ -25,10 +26,21 @@ import type { PersonStanding } from "@ledger/contract";
 import Database from "better-sqlite3";
 import { migrateDirectory } from "./db/directory-schema.ts";
 
-/** A household id: a plain lowercase word, because lg-21 makes it a file name. */
-const HOUSEHOLD_ID = /^[a-z]{1,32}$/u;
+/**
+ * A household id, which lg-21 makes a file name, a directory name and the
+ * prefix of a rate-limit key: either a plain lowercase word, which every
+ * household made before lg-71 has and keeps, or a lowercase UUID as
+ * `crypto.randomUUID()` prints it, which every household made since is given.
+ * Neither can hold a path separator, a dot, a `:` or an `@`.
+ */
+const LEGACY_HOUSEHOLD_ID = /^[a-z]{1,32}$/u;
+const GENERATED_HOUSEHOLD_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 /** The names Windows keeps for devices, which no file may take whatever its extension. */
 const RESERVED_IDS = new Set(["con", "prn", "aux", "nul"]);
+
+/** What every household made by adding its first person is called (lg-71). */
+export const NEW_HOUSEHOLD_NAME = "Home";
 
 /** One `@`, something either side, and nothing a list or a shell would split on. */
 const ADDRESS_SHAPE = /^[^\s@,;]+@[^\s@,;]+$/u;
@@ -64,7 +76,10 @@ function readStoredAddress(raw: string): string | undefined {
 }
 
 export function isHouseholdId(value: string): boolean {
-  return HOUSEHOLD_ID.test(value) && !RESERVED_IDS.has(value);
+  return (
+    GENERATED_HOUSEHOLD_ID.test(value) ||
+    (LEGACY_HOUSEHOLD_ID.test(value) && !RESERVED_IDS.has(value))
+  );
 }
 
 export interface Household {
@@ -438,7 +453,7 @@ export class Directory {
             refuse(`${shown} is already retired, or retiring at the next close.`);
           }
           if (this.members(request.household).some((member) => member.person === person)) {
-            refuse(`Remove every address under ${shown} first: nobody who can sign in is retired.`);
+            refuse(`Remove every email under ${shown} first: nobody who can sign in is retired.`);
           }
         } else if (standing === "in" || standing === "returning") {
           refuse(`${shown} is not retired, so there is nothing to bring them back from.`);
@@ -481,7 +496,7 @@ export class Directory {
   addHousehold(household: Household & Change): Household {
     const notAnId = (shown: string): never =>
       refuse(
-        `A household id is one lowercase word of a to z, at most 32 letters, and not con, prn, aux or nul; ${shown} is not.`,
+        `A household id is a lowercase UUID, or one lowercase word of a to z, at most 32 letters, and not con, prn, aux or nul; ${shown} is not.`,
       );
     const notAName = (): never => refuse("A household's name is 1 to 80 characters.");
     // Typed strings, but a caller past the request schema can pass null, which
@@ -496,15 +511,47 @@ export class Directory {
     const name = household.name.trim();
     if (!isHouseholdId(id)) notAnId(`"${id}"`);
     if (name === "" || name.length > 80) notAName();
+    return this.#db.transaction(() => this.#insertHousehold({ id, name }, household)).immediate();
+  }
+
+  /**
+   * Creates a household by adding its first person (lg-71): the household, named
+   * `NEW_HOUSEHOLD_NAME`, and its first membership in one transaction, so an
+   * address the directory refuses — in a household already, not an email, an
+   * unseen character — leaves no household behind, and none is ever made empty.
+   * The caller gives the id, which must be a UUID's shape: the route and the
+   * host command a `randomUUID()`, a test a fixed one. `addHousehold` stays, for
+   * the tests that make households under readable words.
+   */
+  createHousehold(household: { id: string; address: string; person: string } & Change): {
+    household: Household;
+    member: Member;
+  } {
+    if (typeof household.id !== "string" || !GENERATED_HOUSEHOLD_ID.test(household.id)) {
+      refuse("A new household's id is a lowercase UUID.");
+    }
+    refuseUnlessChange(household);
+    const draft = this.#readMember(household);
     return this.#db
       .transaction(() => {
-        if (this.household(id) !== undefined) refuse(`There is already a household "${id}".`);
-        this.#db
-          .prepare("INSERT INTO households (id, name, created_at, created_by) VALUES (?, ?, ?, ?)")
-          .run(id, name, household.at.toISOString(), household.by);
-        return { id, name };
+        const made = this.#insertHousehold(
+          { id: household.id, name: NEW_HOUSEHOLD_NAME },
+          household,
+        );
+        const member = this.#admit({ household: made.id, ...draft }, household);
+        return { household: made, member };
       })
       .immediate();
+  }
+
+  #insertHousehold(household: Household, change: Change): Household {
+    if (this.household(household.id) !== undefined) {
+      refuse(`There is already a household "${household.id}".`);
+    }
+    this.#db
+      .prepare("INSERT INTO households (id, name, created_at, created_by) VALUES (?, ?, ?, ?)")
+      .run(household.id, household.name, change.at.toISOString(), change.by);
+    return { id: household.id, name: household.name };
   }
 
   /**
@@ -525,50 +572,66 @@ export class Directory {
     if (household !== undefined && household !== null && typeof household !== "string") {
       refuse("The household is not a string.");
     }
+    const draft = this.#readMember(member);
+    return this.#db
+      .transaction(() => {
+        if (this.household(member.household) === undefined) {
+          throw new AppError("HOUSEHOLD_NOT_FOUND", `There is no household "${member.household}".`);
+        }
+        return this.#admit({ household: member.household, ...draft }, member);
+      })
+      .immediate();
+  }
+
+  /** An added member's address and person, read and refused before any statement runs. */
+  #readMember(member: { address: unknown; person: unknown }): { address: string; person: string } {
     if (typeof member.address !== "string") refuse("The address is not a string.");
     if (typeof member.person !== "string") refuse("The person's name is not a string.");
     const address = readAddress(member.address);
     if (address === undefined) refuse(NOT_AN_ADDRESS);
     const person = member.person.trim();
     if (person === "" || person.length > 64) refuse("A person's name is 1 to 64 characters.");
-    return this.#db
-      .transaction(() => {
-        if (this.household(member.household) === undefined) {
-          throw new AppError("HOUSEHOLD_NOT_FOUND", `There is no household "${member.household}".`);
-        }
-        const standing = this.membershipOf(address);
-        if (standing !== undefined) {
-          throw new AppError(
-            "ADDRESS_ALREADY_A_MEMBER",
-            `That address already belongs to the household "${standing.household}", as ${standing.person}. Remove it first.`,
-          );
-        }
-        // A household holds any number of names (lg-23): nothing is counted. A
-        // new one is not a name another person is shown under (lg-33).
-        if (!this.heldPeople(member.household).includes(person)) {
-          const shownAs = [...this.names(member.household).values()];
-          if (shownAs.includes(person)) {
-            throw new AppError(
-              "PERSON_NAME_TAKEN",
-              `Another person in this household is shown as "${person}". Pick them from the list to add an address for them.`,
-            );
-          }
-        }
-        // lg-35's gate 1, F1: nobody signs in under a person whose retirement
-        // waits or holds, until a close has applied their return.
-        const retirement = this.standings(member.household).get(person) ?? "in";
-        if (retirement !== "in") {
-          const shown = shownName(this.names(member.household), person);
-          refuse(
-            retirement === "retiring"
-              ? `${shown} is retiring at the next close. Keep them in first, then add the address.`
-              : `${shown} is retired from the books. Bring them back, and add the address once the next close has applied the return.`,
-          );
-        }
-        this.#record({ address, household: member.household, person }, "add", member);
-        return { address, household: member.household, person };
-      })
-      .immediate();
+    return { address, person };
+  }
+
+  /**
+   * Records an add into a household that stands, inside the caller's
+   * transaction: what `addMember` does, and what lg-71's `createHousehold` does
+   * once it has inserted the household.
+   */
+  #admit(member: Member, change: Change): Member {
+    const { address, household, person } = member;
+    const standing = this.membershipOf(address);
+    if (standing !== undefined) {
+      throw new AppError(
+        "ADDRESS_ALREADY_A_MEMBER",
+        `That email already belongs to the household "${standing.household}", as ${standing.person}. Remove it first.`,
+      );
+    }
+    // A household holds any number of names (lg-23): nothing is counted. A
+    // new one is not a name another person is shown under (lg-33).
+    if (!this.heldPeople(household).includes(person)) {
+      const shownAs = [...this.names(household).values()];
+      if (shownAs.includes(person)) {
+        throw new AppError(
+          "PERSON_NAME_TAKEN",
+          `Another person in this household is shown as "${person}". Pick them from the list to add an email for them.`,
+        );
+      }
+    }
+    // lg-35's gate 1, F1: nobody signs in under a person whose retirement
+    // waits or holds, until a close has applied their return.
+    const retirement = this.standings(household).get(person) ?? "in";
+    if (retirement !== "in") {
+      const shown = shownName(this.names(household), person);
+      refuse(
+        retirement === "retiring"
+          ? `${shown} is retiring at the next close. Keep them in first, then add the email.`
+          : `${shown} is retired from the books. Bring them back, and add the email once the next close has applied the return.`,
+      );
+    }
+    this.#record(member, "add", change);
+    return { address, household, person };
   }
 
   /**
@@ -587,7 +650,7 @@ export class Directory {
       .transaction(() => {
         const standing = this.membershipOf(address);
         if (standing === undefined) {
-          throw new AppError("MEMBER_NOT_FOUND", "That address belongs to no household.");
+          throw new AppError("MEMBER_NOT_FOUND", "That email belongs to no household.");
         }
         if (member.household !== undefined && standing.household !== member.household) {
           throw new AppError("MEMBER_NOT_FOUND");
@@ -621,7 +684,7 @@ export class Directory {
     if (from === undefined) refuse(NOT_AN_ADDRESS);
     const to = readAddress(change.to);
     if (to === undefined) refuse(NOT_AN_ADDRESS);
-    if (from === to) refuse("The new address is the one the person has already.");
+    if (from === to) refuse("The new email is the one the person has already.");
     return this.#db
       .transaction(() => {
         if (this.household(change.household) === undefined) {
@@ -635,7 +698,7 @@ export class Directory {
         if (taken !== undefined) {
           throw new AppError(
             "ADDRESS_ALREADY_A_MEMBER",
-            `That address already belongs to the household "${taken.household}", as ${taken.person}. Remove it first.`,
+            `That email already belongs to the household "${taken.household}", as ${taken.person}. Remove it first.`,
           );
         }
         this.#record({ address: from, ...standing }, "remove", change);

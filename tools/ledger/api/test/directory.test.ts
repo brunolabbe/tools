@@ -14,7 +14,7 @@ import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
 import { AppError } from "@ledger/contract";
 import { migrateDirectory } from "../src/db/directory-schema.ts";
-import { Directory, isHouseholdId, readAddress } from "../src/directory.ts";
+import { Directory, NEW_HOUSEHOLD_NAME, isHouseholdId, readAddress } from "../src/directory.ts";
 import { ALEX, SAM, STRANGER } from "./helpers/access.ts";
 import { WRITES_IN_PLACE } from "./helpers/append-only.ts";
 
@@ -225,7 +225,7 @@ describe("membership", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(6);
+    expect(db.pragma("user_version", { simple: true })).toBe(7);
     expect(db.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(before);
     insert(db, { address: CASEY, person: "casey" });
     expect(db.prepare("SELECT person FROM current_members ORDER BY person").all()).toEqual([
@@ -394,7 +394,7 @@ describe("a record is never replaced", () => {
         "INSERT OR REPLACE INTO households (id, name, created_at, created_by) VALUES ('home', 'Elsewhere', 'x', 'raw')",
       ),
     ).toThrow(/appended, never replaced/u);
-    expect(db.pragma("user_version", { simple: true })).toBe(6);
+    expect(db.pragma("user_version", { simple: true })).toBe(7);
     db.close();
   });
 
@@ -498,7 +498,7 @@ describe("a household id is never NULL", () => {
       directory.close();
 
       const after = new Database(file);
-      expect(after.pragma("user_version", { simple: true })).toBe(6);
+      expect(after.pragma("user_version", { simple: true })).toBe(7);
       expect(after.prepare("SELECT * FROM households ORDER BY id").all()).toEqual(households);
       expect(after.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(memberships);
       refusesNullIds(after);
@@ -1153,5 +1153,161 @@ describe("changeAddress and a stored row holding a C1 control or a zero-width ch
 
     expect(stateOf(directory)).toEqual(before);
     directory.close();
+  });
+});
+
+// lg-71: a household made since is given a UUID and made by adding its first
+// person; every word id made before stays valid.
+describe("a household id that is a UUID", () => {
+  const UUID = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
+  test("is a household id to the code and the schema, in lowercase only, beside the words", () => {
+    expect(isHouseholdId(UUID)).toBe(true);
+    expect(isHouseholdId("home")).toBe(true);
+    const refused = [
+      UUID.toUpperCase(),
+      `${UUID}.db`,
+      UUID.replaceAll("-", ""),
+      `{${UUID}}`,
+      UUID.replace("-", ":"),
+      UUID.replace("-", "/"),
+    ];
+    for (const id of refused) expect(isHouseholdId(id), id).toBe(false);
+
+    const directory = Directory.open(":memory:");
+    expect(directory.addHousehold({ id: UUID, name: "Home", ...CHANGE })).toEqual({
+      id: UUID,
+      name: "Home",
+    });
+    // The legacy refusals hold: a reserved word is still no id.
+    expect(code(() => directory.addHousehold({ id: "con", name: "Home", ...CHANGE }))).toBe(
+      "BAD_REQUEST",
+    );
+    directory.close();
+
+    const db = raw();
+    const insertHousehold = db.prepare(
+      "INSERT INTO households (id, name, created_at, created_by) VALUES (?, 'n', 'x', 'operator')",
+    );
+    insertHousehold.run("7c9e6679-7425-40de-944b-e07fc1f90ae7");
+    for (const id of [...refused, "con", `${UUID.slice(0, 35)}g`, `${UUID}\u0000`]) {
+      expect(() => insertHousehold.run(id), id).toThrow(/CHECK/u);
+    }
+    db.close();
+  });
+
+  test("createHousehold makes the household Home and its first member in one step", () => {
+    const directory = Directory.open(":memory:");
+
+    const made = directory.createHousehold({
+      id: UUID,
+      address: " Alex@Example.TEST ",
+      person: "alex",
+      ...CHANGE,
+    });
+
+    expect(made).toEqual({
+      household: { id: UUID, name: NEW_HOUSEHOLD_NAME },
+      member: { address: ALEX, household: UUID, person: "alex" },
+    });
+    expect(NEW_HOUSEHOLD_NAME).toBe("Home");
+    expect(directory.households()).toEqual([{ id: UUID, name: "Home" }]);
+    expect(directory.membershipOf(ALEX)).toEqual({ household: UUID, person: "alex" });
+    expect(directory.history(UUID)).toEqual([
+      { address: ALEX, person: "alex", action: "add", at: AT.toISOString(), by: "operator" },
+    ]);
+    directory.close();
+  });
+
+  test("createHousehold leaves no household behind when the first address is refused", () => {
+    const directory = withHousehold();
+    directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
+    const before = directory.households();
+
+    const refusals = [
+      // In a household already: refused inside the transaction, after the insert.
+      { address: ALEX, expected: "ADDRESS_ALREADY_A_MEMBER" },
+      { address: "not an email", expected: "BAD_REQUEST" },
+      { address: "sam@b\u200bc.test", expected: "BAD_REQUEST" },
+    ];
+    for (const { address, expected } of refusals) {
+      expect(
+        code(() => directory.createHousehold({ id: UUID, address, person: "sam", ...CHANGE })),
+        address,
+      ).toBe(expected);
+    }
+    expect(
+      code(() => directory.createHousehold({ id: UUID, address: SAM, person: " ", ...CHANGE })),
+    ).toBe("BAD_REQUEST");
+    // A word is an older household's id, never a new one's.
+    expect(
+      code(() =>
+        directory.createHousehold({ id: "cabin", address: SAM, person: "sam", ...CHANGE }),
+      ),
+    ).toBe("BAD_REQUEST");
+
+    expect(directory.households()).toEqual(before);
+    expect(directory.household(UUID)).toBeUndefined();
+    expect(directory.history(UUID)).toEqual([]);
+    directory.close();
+  });
+
+  test("migration 7 takes a directory at migration 6 with its records unchanged, and its refusals kept", () => {
+    const db = new Database(":memory:");
+    migrateDirectory(db, 6);
+    db.exec(`
+      INSERT INTO households (id, name, created_at, created_by) VALUES ('home', 'Home', 'x', 'operator');
+      INSERT INTO households (id, name, created_at, created_by) VALUES ('away', 'Away', 'y', 'operator');
+      INSERT INTO households (id, name, created_at, created_by) VALUES ('cabin', 'Cabin', 'z', 'operator');
+    `);
+    insert(db, { address: ALEX, person: "alex" });
+    insert(db, { address: SAM, person: "sam", household: "away" });
+    db.exec(`
+      INSERT INTO person_names (household_id, person, name, named_at, named_by)
+        VALUES ('home', 'alex', 'Alex', 'x', 'operator');
+    `);
+    insert(db, { address: CASEY, person: "casey" });
+    insert(db, { address: CASEY, person: "casey", action: "remove" });
+    db.exec(`
+      INSERT INTO retirements (household_id, person, action, recorded_at, recorded_by)
+        VALUES ('home', 'casey', 'retire', 'x', 'operator');
+      INSERT INTO retirements_applied (retirement_id, from_date, applied_at)
+        VALUES (1, '2026-10-01', 'x');
+    `);
+    const tables = [
+      "households",
+      "memberships",
+      "person_names",
+      "retirements",
+      "retirements_applied",
+    ];
+    const read = () => tables.map((table) => db.prepare(`SELECT * FROM ${table}`).all());
+    const before = read();
+    const addUuid = `INSERT INTO households VALUES ('${UUID}', 'Home', 'x', 'operator')`;
+    expect(() => db.exec(addUuid)).toThrow(/CHECK/u);
+
+    migrateDirectory(db);
+
+    expect(db.pragma("user_version", { simple: true })).toBe(7);
+    expect(read()).toEqual(before);
+    expect(db.pragma("foreign_key_check")).toEqual([]);
+    expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
+    db.exec(addUuid);
+    // Migrations 1 to 3's triggers, made again on the new table.
+    expect(() => db.exec("UPDATE households SET name = 'Elsewhere' WHERE id = 'home'")).toThrow(
+      /never edited/u,
+    );
+    expect(() => db.exec("DELETE FROM households WHERE id = 'cabin'")).toThrow(/never deleted/u);
+    expect(() =>
+      db.exec("INSERT OR REPLACE INTO households VALUES ('home', 'Again', 'x', 'operator')"),
+    ).toThrow(/never replaced/u);
+    expect(() =>
+      db.exec("INSERT INTO households VALUES (NULL, 'Nobody', 'x', 'operator')"),
+    ).toThrow(/a household has an id/u);
+    // The references still reach the table: a membership of no household is refused.
+    expect(() =>
+      insert(db, { address: "kim@example.test", person: "kim", household: "nowhere" }),
+    ).toThrow(/FOREIGN KEY/u);
+    db.close();
   });
 });
