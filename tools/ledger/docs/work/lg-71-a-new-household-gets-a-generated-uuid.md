@@ -151,6 +151,30 @@ and the admin can both rename. Until lg-77 lands, every household made here is
 - **CI** · `gh pr checks 669` and `gh pr view 669 --json statusCheckRollup` at `fb78e9a5`: every check green except `docker` of ledger.yml. The verdict depends on that one check going green on a head that fixes the step above; nothing else on this head is pending.
 - NFR: security ✓ (only an admin creates; a UUID cannot leave `households/`) · performance n/a · reliability — above (CI) · maintainability — above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-26 · `fb78e9a5..bd9972ac` (the round: `0d002845`, `94a6119f`, `bd9972ac`; base `53bb5d0f`) · Sonnet 5.5, depth narrow
+
+| Done when                                                                | Proof                                                                                                                                                                                                |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 to 4 (create route, refused first address, host `add`, legacy word id) | stands from Gate 1. The round touched no code a Done when test reads: one workflow step, four comments and docs, two ticket files. `tools/ledger/playwright.config.ts` changed by comment lines only |
+| 5 · admin form, no "Address" label, `e2e/layout.spec.ts`                 | stands from Gate 1; CI `e2e` of ledger.yml SUCCESS on `bd9972ac` (run 40247237415)                                                                                                                   |
+| 6 · `npm run check` and `npm test -- --project ledger`                   | CI `check` and `test (ubuntu-latest)` SUCCESS on `bd9972ac`. Not re-run locally (the round cannot reach either)                                                                                      |
+
+- **fixed** · Gate 1's **med** (the `docker` step of ledger.yml ran the old verb shape). The step's text was run verbatim against the built CLI, with `docker` and `curl` stood in by scripts that run the same CLI on a scratch data dir: real output, exit 0, every later command names the printed UUID, and the closing `test -f "/data/households/$id.db"` passes; an `add` that prints nothing, an `add` that prints a one-word id, and an `add` refused (address taken) each exit 1. CI: the `docker` check of ledger.yml is SUCCESS on `bd9972ac`, and its step "The household command runs inside the image, and a household gets its books" is `success` (it was red on `fb78e9a5`).
+- **fixed** · Gate 1's **low** (the old `add <household> <display name>` recipe in `docs/02-DEPLOYMENT.md` and `tools/ledger/.env.example`). Both now show `add <address> <person>` / `add alex@example.test alex`, and the deployment sentences are true at the head (a household is "Home" under a printed UUID, `member` takes it, `list` prints a UUID and a legacy `home` alike). Ran through `npm run household:ledger` and then `DEV_IDENTITY=alex@example.test` on the API: `/api/me` answers 200 with the UUID household; a non-member `DEV_IDENTITY` is refused at start.
+- **fixed** · Gate 1's **low** (`playwright.config.ts` named household `home`). The comment is true: `e2e:ledger:serve` runs `add alex@example.test alex`.
+- **owner answer 1, applied as stated** · `tools/ledger/CLAUDE.md` now shows `npm run household:ledger -- add alex@example.test alex` then `DEV_IDENTITY=…`; the sentences around it are still true.
+- **owner answer 2, applied as stated** · `lg-77` gains Build 7 (`ADDRESS_ALREADY_A_MEMBER` names the household by its name); the diff is those four lines. Its Done when, frontmatter and Log are unchanged.
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · `docs/02-DEPLOYMENT.md`, the recovery paragraph the round rewrote, still says "A household holds two people … a name it has held stays one of its two". A third `member` on the new household was accepted (exit 0), and `directory.ts` says "A household holds any number of names (lg-23)". The sentence pre-dates the round and the README already says "any number"; the round dropped the clause before it and left it standing. False in the safe direction: nobody relies on a cap that does not exist. No live call site.
+- **dropped** · the second comment line in `playwright.config.ts` now runs to 115 columns; oxfmt does not wrap comments and `check` is green. Cosmetic.
+- **dropped** · `tools/ledger/README.md`'s import example `--household home` is not an old-shape `add` recipe and is valid for a legacy id; the round did not touch it.
+- **dropped** · Build 7 of lg-77 names `contract/src/errors.ts` beside `api/src/directory.ts`; the id-bearing message is raised at two sites in `directory.ts`, the contract holds the generic default. Both files are named, so a builder finds both.
+- **findings** · the hunt returned 4 new candidates; 1 carried, 3 dropped. Gate 1's three findings are given verdicts above, not counted.
+- **CI** · `gh pr view 669` at `bd9972ac`: every check SUCCESS except `test (windows-latest, informational)` (run 40247237333), 1 of 314 files failed: downloader `resolvers/test/browser/browser-resolver-capture.test.ts`, `net::ERR_NO_BUFFER_SPACE` on `page.goto`, in code this diff cannot reach. The latest push reading of that leg on `main` with the matrix run is `f69e9b2c`, success (`53bb5d0f` skipped it). Informational; not a finding against this diff.
+- **No `high`; no third gate asked for.**
+- NFR: security n/a · performance n/a · reliability ✓ (the image step now fails on a missing id, a failed `add` and a missing books file) · maintainability — above.
+
 ## Log
 
 - 2026-10-25 — Filed from the owner's question on the admin page ("why does a
