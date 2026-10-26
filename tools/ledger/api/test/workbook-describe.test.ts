@@ -46,7 +46,7 @@ import {
   testKey,
   writeMemberDirectory,
 } from "./helpers/access.ts";
-import { entriesOf, paddedDeflate, xlsxOf, zipOf } from "./helpers/xlsx-file.ts";
+import { entriesOf, paddedDeflate, rawZip, xlsxOf, zipOf } from "./helpers/xlsx-file.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
 import type { LayoutFixture } from "./layout/fixtures.ts";
 
@@ -808,5 +808,53 @@ describe("the web's fixture (Done when 9)", () => {
       readFileSync(new URL("../../web/test/fixtures/lg37-describe.json", import.meta.url), "utf8"),
     );
     expect(response.json()).toEqual(kept);
+  });
+});
+
+describe("stored entries, counted before the sheet reader (lg-66 gate 1, F1)", () => {
+  test("forty directory entries over one stored block, each declaring 0, are refused before the sheet reader", async () => {
+    // Nothing inflates a stored entry, so only the count stands between these
+    // forty names over one block and a reader that reads each of them whole.
+    const block = Buffer.alloc(Math.ceil(MAX_WORKBOOK_INFLATED_BYTES / 8), 0x20);
+    const zip = rawZip([
+      {
+        name: "[Content_Types].xml",
+        data: Buffer.from(
+          '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+        ),
+      },
+      {
+        name: "xl/workbook.xml",
+        data: Buffer.from(
+          '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets/></workbook>',
+        ),
+      },
+      ...Array.from({ length: 40 }, (_, index) => ({
+        name: `xl/worksheets/sheet${String(index + 1)}.xml`,
+        data: block,
+        method: 0,
+        declaredSize: 0,
+        ...(index === 0 ? {} : { sameAs: 2 }),
+      })),
+    ]);
+    expect(zip.length).toBeLessThan(MAX_WORKBOOK_BYTES);
+    const model = fake(answering(fixture("lg7").layout));
+    const started = await start({ ask: model.ask });
+
+    for (const response of [
+      await describeFile(started, zip),
+      await confirmFile(started, zip, fixture("lg7").layout),
+    ]) {
+      expect(response.statusCode).toBe(413);
+      expect(errorOf(response)).toMatchObject({
+        code: "WORKBOOK_TOO_LARGE",
+        details: { bound: "inflated" },
+      });
+    }
+    expect(started.inflated.reduce((sum, bytes) => sum + bytes, 0)).toBeGreaterThan(
+      2 * MAX_WORKBOOK_INFLATED_BYTES,
+    );
+    expect(started.reader.calls).toBe(0);
+    expect(model.requests).toHaveLength(0);
   });
 });

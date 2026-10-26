@@ -149,3 +149,95 @@ export async function paddedDeflate(
   await ended;
   return { bytes: Buffer.concat(out), crc, size: head.length + padding + tail.length };
 }
+
+/** One entry as `rawZip` writes it, with every field a test may set wrong. */
+export interface RawEntry {
+  name: string;
+  /** What it inflates to. */
+  data: Buffer;
+  /** 0 stored, 8 deflated, or anything else a test wants refused. */
+  method?: number;
+  /** The general-purpose flags; bit 0 is "encrypted". */
+  flags?: number;
+  /** The directory's sizes and offset, when a test sets them by hand. */
+  compressedSize?: number;
+  declaredSize?: number;
+  localHeaderOffset?: number;
+  /** The local header's signature, when a test breaks it. */
+  localSignature?: number;
+  /** The compressed bytes themselves, when a test writes ones that do not inflate. */
+  compressed?: Buffer;
+  /** Another entry's index: the directory points at that one's local header and bytes. */
+  sameAs?: number;
+}
+
+/** The end record's fields, when a test sets one wrong. */
+export interface RawEnd {
+  disk?: number;
+  directoryDisk?: number;
+  onDisk?: number;
+  count?: number;
+  size?: number;
+  offset?: number;
+}
+
+/**
+ * A zip written byte by byte, every field of which a test may set wrong: what
+ * `workbook-zip.ts` must refuse, one field at a time (lg-66, gate 1's F1).
+ */
+export function rawZip(entries: readonly RawEntry[], end: RawEnd = {}): Buffer {
+  const locals: Buffer[] = [];
+  const offsets: number[] = [];
+  const stored: { method: number; bytes: Buffer }[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const method = entry.method ?? 8;
+    const bytes = entry.compressed ?? (method === 0 ? entry.data : deflateRawSync(entry.data));
+    stored.push({ method, bytes });
+    if (entry.sameAs !== undefined) {
+      offsets.push(offsets[entry.sameAs] ?? 0);
+      continue;
+    }
+    const name = Buffer.from(entry.name, "utf8");
+    const header = Buffer.alloc(30);
+    header.writeUInt32LE(entry.localSignature ?? 0x04034b50, 0);
+    header.writeUInt16LE(20, 4);
+    header.writeUInt16LE(entry.flags ?? 0, 6);
+    header.writeUInt16LE(method, 8);
+    header.writeUInt32LE(crc32(entry.data) >>> 0, 14);
+    header.writeUInt32LE(bytes.length, 18);
+    header.writeUInt32LE(entry.data.length, 22);
+    header.writeUInt16LE(name.length, 26);
+    offsets.push(offset);
+    locals.push(header, name, bytes);
+    offset += header.length + name.length + bytes.length;
+  }
+  const centrals: Buffer[] = [];
+  for (const [index, entry] of entries.entries()) {
+    const source = stored[entry.sameAs ?? index] ?? { method: 8, bytes: Buffer.alloc(0) };
+    const sourceEntry = entries[entry.sameAs ?? index] ?? entry;
+    const name = Buffer.from(entry.name, "utf8");
+    const header = Buffer.alloc(46);
+    header.writeUInt32LE(0x02014b50, 0);
+    header.writeUInt16LE(20, 4);
+    header.writeUInt16LE(20, 6);
+    header.writeUInt16LE(entry.flags ?? 0, 8);
+    header.writeUInt16LE(source.method, 10);
+    header.writeUInt32LE(crc32(sourceEntry.data) >>> 0, 16);
+    header.writeUInt32LE(entry.compressedSize ?? source.bytes.length, 20);
+    header.writeUInt32LE(entry.declaredSize ?? sourceEntry.data.length, 24);
+    header.writeUInt16LE(name.length, 28);
+    header.writeUInt32LE(entry.localHeaderOffset ?? offsets[index] ?? 0, 42);
+    centrals.push(header, name);
+  }
+  const directory = Buffer.concat(centrals);
+  const record = Buffer.alloc(22);
+  record.writeUInt32LE(0x06054b50, 0);
+  record.writeUInt16LE(end.disk ?? 0, 4);
+  record.writeUInt16LE(end.directoryDisk ?? 0, 6);
+  record.writeUInt16LE(end.onDisk ?? end.count ?? entries.length, 8);
+  record.writeUInt16LE(end.count ?? entries.length, 10);
+  record.writeUInt32LE(end.size ?? directory.length, 12);
+  record.writeUInt32LE(end.offset ?? offset, 16);
+  return Buffer.concat([...locals, directory, record]);
+}
