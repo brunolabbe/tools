@@ -6472,3 +6472,45 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - A lander that counted for itself instead of transcribing: repo-128's stopped on "31 of 34" (my arithmetic from the gate's three) and found five read-only cases.
 - A scratch merge of two sibling heads before marking ready (#658 × #660, 275 of 275), so the owner could merge them in either order.
 - Re-asking on a gate's corrected numbers: rule (i)'s cost was 4 full runs in 100, not 10; the owner kept it.
+
+### Batch 2026-10-25 (tools-a2, lg-66 lg-71 lg-76) — base 53bb5d0f
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | ae0a17fbc2c4b6ff1 | seam-mapper, six ledger candidates | 1m18s / 1m18s | 0 | $0.3063 |
+| #669 | merged be8d9c0e | Opus 5.5 / high | a1df6e7cee7bdc9cf | builder-hard, lg-71 (re-rated hard by the owner at intake) | 27m47s / 27m11s | 0 | $9.4208 |
+| #669 | merged be8d9c0e | Sonnet 5.5 / xhigh | ab7e16cd789a47013 | ticket-reviewer-sonnet, lg-71 gate 1 | 16m47s / 15m52s | 0 | $3.2667 |
+| #669 | merged be8d9c0e | Sonnet 5.5 / high | a632eb598726a1564 | fixer, lg-71 round 1 (med + two lows + two owner answers) | 5m12s / 4m49s | 0 | $0.5500 |
+| #669 | merged be8d9c0e | Sonnet 5.5 / xhigh | aa910fe7a2d7c756b | ticket-reviewer-sonnet, lg-71 gate 2 (narrow) | 7m45s / 7m45s | 0 | $1.3397 |
+| #669 | merged be8d9c0e | Sonnet 5.5 / high | a85ce49ed961cfeec | fixer, lg-71 one low at landing + landing | 7m33s / 17m01s | 0 | $0.5494 |
+| #670 | merged 02ecde16 | Opus 5.5 / high | a7c7a6062d2340117 | builder-hard, lg-66 | 50m40s / 50m04s | 0 | $19.2996 |
+| #670 | merged 02ecde16 | Sonnet 5.5 / xhigh | a66da0ebde99bea6d | ticket-reviewer-sonnet, lg-66 gate 1 | 23m08s / 21m07s | 0 | $4.4052 |
+| #670 | merged 02ecde16 | Opus 5.5 / high | ae9dcdfc18ca12a88 | builder-hard (fresh, first builder past $15), lg-66 rounds 1 and 2 + merge of main | 36m33s / 54m48s | 0 | $15.3331 |
+| #670 | merged 02ecde16 | Sonnet 5.5 / xhigh | a5d18bddceae72653 | ticket-reviewer-sonnet, lg-66 gate 2 (narrow) | 16m38s / 15m49s | 0 | $2.9263 |
+| #670 | merged 02ecde16 | Sonnet 5.5 / xhigh | a6bcbf129db206201 | ticket-reviewer-sonnet, lg-66 gate 3 (narrow, on gate 2's high) | 12m22s / 11m13s | 0 | $2.1151 |
+| #670 | merged 02ecde16 | Sonnet 5.5 / high | af0fd0e77546ab5de | fixer, lg-66 one low at landing + landing (resumed once for the PR steps) | 6m22s / 6m15s | 0 | $0.5322 |
+| #672 | open, ready, green at 397e45dc | Opus 5.5 / high | a57335d72eb728e06 | builder-hard, lg-76 (cut from lg-71's landed head) + one resume (e2e seed, owner answer) | 42m15s / 47m14s | 0 | $20.1357 |
+| #672 | as above | Sonnet 5.5 / xhigh | a7a3f5dcbd410ee08 | ticket-reviewer-sonnet, lg-76 gate 1 | 18m12s / 17m56s | 0 | $3.5775 |
+| #672 | as above | Sonnet 5.5 / high | a52cae48916102a77 | fixer, lg-76 round 1 (med + four lows) | 9m44s / 9m40s | 0 | $1.2477 |
+| #672 | as above | Sonnet 5.5 / xhigh | aefaf3b0221841f4b | ticket-reviewer-sonnet, lg-76 gate 2 (narrow) | 9m54s / 9m31s | 0 | $1.7067 |
+| #672 | as above | Sonnet 5.5 / high | a5ab66271eba5897a | fixer, lg-76 one low at landing + landing, held as a draft for merge order | 9m55s / 7m25s | 0 | $0.4800 |
+| #672 | as above | Sonnet 5.5 / high | ac0a1372f85bb12fa | fixer, merge of main after #670 (two additive conflicts), ready | 8m17s / 7m39s | 0 | $0.6317 |
+| — | — | Opus 5.5 / medium | orchestrator af6e383f | orchestrator (floor) | 2h31m48s / 4h30m17s | 0 | $7.5275 |
+| | | | | **total** (rates read 2026-10-10; one synthetic record skipped) | 7h42m11s | 0 | **$95.3512** |
+
+**Tickets:**
+- lg-71 → #669: owner re-rated `standard` → `hard` at intake, over my "keep". Builder's two open decisions answered before the gate (CLAUDE.md recipe fixed in the PR; the member error's household naming deferred to lg-77, carried as its Build 7). Gate 1 CONCERNS: a med the branch introduced (ledger.yml's `docker` step still ran the old `add` shape, red at fb78e9a5), two lows; owner chose a round. Gate 2 PASS, one new low fixed at landing by owner choice. Total $15.13.
+- lg-66 → #670: builder's open decision on Done when 7 (lg37 cannot import; reworded to lg7) answered before the gate. Gate 1 CONCERNS: two meds (zip guards untested; the 16 MiB bound did not bound exceljs, +431 MB, an open decision) and five lows; owner chose (a) tighten, guard tests and all lows, on a fresh builder (the first was at $19.30). Gate 2 FAIL: a high that predates the round (an end record that understates its count passes every bound; 210 KB upload → 200 MiB sheet, +447 MB); owner chose (a) the directory must fill exactly; same builder resumed with the merge of main. Gate 3 PASS, one low fixed at landing. Done when 11 `awaiting` the owner's paid read. Total $44.61.
+- lg-76 → #672: started at lg-71's landing, cut from its landed head before #669 merged; main merged in by the builder after. Builder's open decision (stats order) answered before the gate (id order kept). Gate 1 CONCERNS: a med (three per-person lists in id order, an open decision) and seven lows; owner chose (a) and F2–F5. Gate 2 PASS, two lows: pairs order reworded in Build 4 at landing by owner choice; lone surrogate recorded unfixed. Held as a draft until #670 merged, then main merged in (two additive conflicts in workbook-import.ts and its test). Total $27.73.
+
+**Defects in the skill:**
+
+1. `roles/common.md`, _Reading a pull request's checks_ — names `gh pr checks <n>` first, which prints no workflow, so same-named checks of different tools cannot be told apart; #669 had three `docker` rows, one failing. Reproduction: `gh pr view 669 --json statusCheckRollup --jq '.statusCheckRollup[] | [.name, .workflowName, .conclusion] | @tsv'` → `docker	ledger	FAILURE` beside `docker	downloader	SUCCESS` and `docker	planner	SUCCESS` (read by me at fb78e9a5, 2026-10-25; that head is now superseded, so a re-run shows the landed head).
+2. `reference/records.md`, _Fixed at landing_ — the wording-fix proof is `grep -c '^-.*<fragment>'`, which reads a removed line; a fix that only adds a sentence (lg-76's Build 4 pairs sentence) has none, and with `^+` the entry's own quotation counts too. lg-76's lander used `^+` with a bracketed fragment (`pair[s]`) — relayed, not re-run by me. Reproduction of the page text: `sed -n 132,136p .claude/skills/orchestrate-tickets/reference/records.md` → "It reads the removed line, so the entry's own quotation cannot count".
+3. `roles/common.md`, _Your scratch directory_ — says running a scratch `.mts` with the worktree as the working directory fixes `ERR_MODULE_NOT_FOUND` for bare packages; a bare import written inside the scratch file itself still resolves from the file's location. Relayed from lg-66's builder, not re-run by me: `node --import tsx <scratch>/lg-66/build/base-hashes.mts <worktree>` from the worktree root, with `await import("@anthropic-ai/sdk/helpers/zod")` in the file → `Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@anthropic-ai/sdk' imported from …/scratchpad/lg-66/build/base-hashes.mts`.
+
+**Worked, and worth keeping:**
+- Every builder's open decision went to the owner before its gate; no gate graded `unproven (open decision)`.
+- Gate 3, narrow and needing no owner answer, ran on gate 2's high only and passed in 12 minutes.
+- Retiring lg-66's builder at $19.30 for a fresh one: the fresh builder's two rounds cost $15.33.
+- Starting lg-76 from lg-71's landed head, before the merge, kept three tickets moving; the merge of main afterwards needed no choice.
