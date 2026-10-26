@@ -219,3 +219,37 @@ and the admin can both rename. Until lg-77 lands, every household made here is
     1,701 passed of 1,701 in 81 files, once `authority.test.ts`'s admin
     probe of `POST adminHouseholds` sent `{ address, person }` (its first run
     was 1 failed of 1,701, that probe still sending `{ id, name }`).
+- 2026-10-25 — Round 1, after gate 1 (head `fb78e9a5`), by the fixer.
+  - **Gate 1's med, fixed in `0d002845`.** `.github/workflows/ledger.yml`'s step
+    "The household command runs inside the image, and a household gets its
+    books" still ran `household add ci "CI household"`, which fails on its
+    first line with "That is not an email address." (run 40245252055). The
+    owner chose a fix in a round (2026-10-25). The step now runs
+    `household add ci@example.test ci | tee /tmp/add.txt`, takes the UUID from
+    the `Created the household` line with `grep -oE` on an 8-4-4-4-12 lowercase
+    hex pattern, fails with "add printed no household id" if it finds none,
+    names that id in `member`, and asserts `test -f "/data/households/$id.db"`.
+    The parse was run on the command's real output from the built
+    `household-ledger.js` (a UUID found) and on lines naming a one-word id and
+    on empty input (nothing found, so the step would exit 1); docker was not
+    available here, so the job itself is read from the pull request's checks.
+  - **Gate 1's two lows, fixed in `94a6119f`.** `docs/02-DEPLOYMENT.md`'s
+    recovery block now shows `add <address> <person>` and says the household
+    is named "Home" under a generated UUID the command prints, that `member`
+    takes that id, and that an older household keeps its one-word id.
+    `tools/ledger/.env.example`'s `DEV_IDENTITY` comment shows the one-line
+    `add alex@example.test alex`. `tools/ledger/playwright.config.ts`'s comment
+    no longer says household `home`.
+  - **`tools/ledger/CLAUDE.md`'s dev recipe, fixed in `94a6119f`, on the
+    owner's answer of 2026-10-25.** Asked, because the Build entry above left
+    the recipe stale on purpose, whether to fix it in lg-71's PR (the
+    recommendation), have the owner edit it, or file a ticket; the owner chose
+    **fix in lg-71's PR**. The two lines `add home "Test household"` and
+    `member home alex@example.test alex` became
+    `npm run household:ledger -- add alex@example.test alex`; no adjacent
+    sentence in that file said anything the change made false.
+  - **`ADDRESS_ALREADY_A_MEMBER` names the household by id, on the owner's
+    answer of 2026-10-25.** Asked, because for a new household that id is a UUID,
+    whether to leave it until lg-77 (the builder's recommendation) or change it
+    now; the owner chose **leave until lg-77**. Nothing changed here; lg-77's
+    Build 7 carries the line.

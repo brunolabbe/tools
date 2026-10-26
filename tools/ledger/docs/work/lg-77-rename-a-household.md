@@ -60,6 +60,10 @@ land in separate pull requests.
    `e2e/layout.spec.ts` at 360 px.
 6. **Host command** (`api/src/household-command.ts`): no new verb unless the
    build finds the operator needs one; say which in the Log.
+7. **`ADDRESS_ALREADY_A_MEMBER`** (`contract/src/errors.ts`, raised in
+   `api/src/directory.ts`): once households have names, its message names the
+   household by its name rather than its id (from lg-71's gate, owner answer
+   2026-10-25).
 
 ## Done when
 
