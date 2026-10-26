@@ -1183,3 +1183,33 @@ tools/ledger/e2e/layout.spec.ts`).
 in the build), the stored-overlap zip 217 MB, the zip over the entries bound 209 MB,
 against 193 MB for "a request with no key configured" from the same file; the
 whole of `workbook-zip.test.ts` 101 MB.
+
+### 2026-10-26 — round 2: gate 2 returned FAIL at `5db37436`; the owner's answers
+
+Gate 2 (narrow, on PR #670, `e02ec781..5db37436`) returned FAIL: one high, F2
+fixed in part (a zip whose end record states fewer entries than its directory
+holds is read by `exceljs` past every bound), and F1 fixed in part (two clauses
+of `workbook-zip.ts` no test reaches). F3 to F7 it graded fixed.
+
+**The owner's answers, 2026-10-26**, put by the orchestrator. The options are as
+they were put; the one chosen is marked.
+
+1. **The remedy for the high.** Options: (a) the directory must fill exactly,
+   the walk ending where the directory ends and the directory ending where the
+   end record starts (gate 2's recommendation); (b) walk the directory as
+   `jszip` does and cap the walked count. **Chosen: (a).** One test per input:
+   an understated count with a padded sheet (gate 2's D1), 44,000 entries with
+   a count of 2 (D2), and a directory placed before the end record's stated
+   position, each refused with the sheet reader at 0 and each red with the line
+   removed. The three sentences gate 2 names as false are corrected
+   (`workbook-zip.ts`'s header; Build 3.3's "whatever the zip declared", by a
+   marked note; Decision 1's dated note). A zip from a writer other than
+   `exceljs`, if one is at hand without an install, is checked to still read.
+2. **The round's scope.** Options: resume the builder with everything
+   (recommended); a fresh fixer with the fix and the merge only. **Chosen:
+   resume, all in**: the two surviving F1 clauses get tests too (the gap case
+   of the walk's `at + 46 > offset + size`, and a test that the entries cap
+   refuses before the directory is walked), each red under its mutant.
+3. **`main` moved**: #669 (lg-71) merged as `be8d9c0e`. Merged into this branch
+   (a merge, not a rebase), keeping both sides of the overlapping files. The
+   merge was clean.
