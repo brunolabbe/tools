@@ -70,6 +70,10 @@ their name stays required.
    UUID but fixed, which is what they need, and changing them would move
    amounts already computed for legacy ids. Update the comments that say the tie
    goes to the person "whose id sorts first" only if they become wrong.
+   _(Added at landing, 2026-10-26, owner's answer: a list of pairs — the
+   settlement's "Or directly: A pays B" and "Paid directly:", and Stats `who` —
+   keeps the settlement's order, and a console list, the CLI `--as` refusal
+   list, is not a screen.)_
 5. **Host command and import**: `household-command.ts`'s `member` and
    `import-command.ts`'s `--as` take a shown name and resolve it, still
    accepting a legacy id; `list` prints shown names beside ids.
@@ -357,3 +361,16 @@ their name stays required.
     membership and the first shown name are written in one transaction" for the
     one-transaction clause; the line it supersedes is kept beside it, marked
     with the owner's answer.
+- 2026-10-26 — Fixed at landing by owner choice: gate 2, the transfer-pairs
+  low — "(b) reword Build 4 to say a list of pairs keeps the settlement's
+  order". Owner's answer, 2026-10-26, on the options reword Build 4 at landing
+  (recommended), order the pairs by shown name in a new round, leave recorded:
+  chosen the reword. Build 4 now carries a marked, dated sentence naming the
+  pairs ("Or directly: A pays B", "Paid directly:", Stats `who`) and saying a
+  console list, the CLI `--as` refusal list, is not a screen. No code changed,
+  so `membersListed` stays in `heldPeople` order. Proof: `git diff 66479a7d HEAD
+  -- tools/ledger/docs/work/lg-76-a-new-person-gets-a-generated-uuid.md | grep
+  -c '^+.*answer: a list of pair[s]'` → 1. Gate 2's other low, the lone
+  surrogate in an address's local part (a 500 from `POST
+  /api/households/:id/members`, nothing lost), stays recorded: the owner chose
+  to leave it.
