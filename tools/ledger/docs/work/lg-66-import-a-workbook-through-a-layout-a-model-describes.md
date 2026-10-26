@@ -7,6 +7,7 @@ status: ready
 milestone: P6
 depends_on: []
 difficulty: hard
+awaiting: Done when 11 — the owner's paid live read of one synthetic fixture through the Import screen with a key, after the merge, is a Log entry recording input tokens and cost against the ~0.1-cent mean
 ---
 
 # lg-66 — Import a workbook the reader does not know, through a layout a model describes
