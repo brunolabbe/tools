@@ -108,7 +108,7 @@ export function settlementSentence(
     };
   }
   const into = listed(
-    inShownOrder(deposits, shown, (deposit) => deposit.personId).map(
+    inShownOrder(deposits, shown, (owed) => owed.personId).map(
       ({ personId, depositCents }) => `${as(personId)} deposits ${formatCents(depositCents)}`,
     ),
   );
