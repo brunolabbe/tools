@@ -258,3 +258,38 @@ their name stays required.
   did); (b) sort them by shown name, which recolours a person on a rename. The
   owner chose **(a)**. No code changes; item 4 of the build entry's "What the
   brief had wrong" stands as built.
+- 2026-10-26 — Round after CI at `8ec55069`, on the orchestrator's resume.
+  - **The ledger e2e failed in its seed** (run 40257617170, job 121362759490):
+    `layout.spec.ts`'s `beforeAll` posted rules, salaries, a recurring item and
+    period lines naming `"alex"` and `"sam"`, and both are now added by name
+    (alex by `e2e:ledger:serve`'s `add alex@example.test alex`, sam by the
+    seed's own member request), so each has a generated id and `/api/rules`
+    answered "That person is not one of the household." The build's Log had
+    named `layout.spec.ts`'s Admin and Household expectations but not its
+    seed, and the e2e suite was not run before the push. The seed now reads the
+    household's members after adding sam and names each person by the id the
+    household answers for the name; the screens' expectations, which read
+    names, are unchanged.
+  - **The next e2e run found a sentence in id order.** With the seed fixed, 11 of
+    12 passed and Salaries failed: "Ratio in effect: sam 42.8571 % · alex
+    57.1429 %". A ratio's shares (and a split's parts) come from the books in
+    person-id order, and sam's UUID sorted first. Build 4's rule, lists a person
+    reads sort by shown name, covers a sentence listing people, so
+    `inShownOrder` (`web/src/people.tsx`) now orders the ratio's shares on the
+    salaries screen and the stats' ratio text, a split's parts and the people of
+    an equal split (`labels.ts`), and the salaries screen's records within a
+    year. The books and every amount are untouched, and the charts keep their
+    id order (the owner's answer above). `web/test/generated-ids.test.tsx`
+    gains "a ratio's shares on the salaries screen" and "a split's parts on the
+    mortgage split card", whose shares are given in id order; with
+    `inShownOrder` mutated to keep the given order both fail, and restored from
+    `b568490b` both pass (16 of 16 in the file). Per-person rows elsewhere (the
+    home screen's own money, the period's "Paid by" groups) still come in the
+    API's order, which for two people with generated ids is by id; the e2e
+    expects none of them in an order, and none was changed.
+  - **Commands.** `E2E_PORT=8176 npm run e2e:ledger` after `npm run build`: 12
+    passed of 12 (this branch's spec has 12 cases; #670 adds a thirteenth). The
+    360 px screenshots of Admin, Household, Home, Salaries, Period, Inbox,
+    Rules, History, Stats, Receipt and Categories were opened: every person is
+    shown as alex or sam, and no UUID is on any of them. `npx vitest run
+    tools/ledger/web`: 262 of 262 in 20 files.
