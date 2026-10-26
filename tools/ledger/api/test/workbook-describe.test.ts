@@ -851,9 +851,10 @@ describe("stored entries, counted before the sheet reader (lg-66 gate 1, F1)", (
         details: { bound: "inflated" },
       });
     }
-    expect(started.inflated.reduce((sum, bytes) => sum + bytes, 0)).toBeGreaterThan(
-      2 * MAX_WORKBOOK_INFLATED_BYTES,
-    );
+    // Two requests, each stopped past the bound by one chunk at most.
+    const counted = started.inflated.reduce((sum, bytes) => sum + bytes, 0);
+    expect(counted).toBeGreaterThan(2 * MAX_WORKBOOK_INFLATED_BYTES);
+    expect(counted).toBeLessThanOrEqual(2 * (MAX_WORKBOOK_INFLATED_BYTES + INFLATE_CHUNK_BYTES));
     expect(started.reader.calls).toBe(0);
     expect(model.requests).toHaveLength(0);
   });

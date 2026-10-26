@@ -9,7 +9,7 @@
 import { Buffer } from "node:buffer";
 import { describe, expect, test } from "vitest";
 import { AppError } from "@ledger/contract";
-import { countInflated, workbookEntries } from "../src/workbook-zip.ts";
+import { INFLATE_CHUNK_BYTES, countInflated, workbookEntries } from "../src/workbook-zip.ts";
 import type { ZipEntry } from "../src/workbook-zip.ts";
 import { rawZip } from "./helpers/xlsx-file.ts";
 import type { RawEntry } from "./helpers/xlsx-file.ts";
@@ -148,8 +148,9 @@ describe("the entries' bytes, found through their local headers", () => {
 describe("stored entries are counted too", () => {
   test("forty directory entries over one stored entry, each declaring 0, are stopped at the bound", async () => {
     // Nothing inflates a stored entry, but a reader that follows the directory
-    // reads each name's bytes: forty names over one 64 KiB block are 2.5 MiB.
-    const block = Buffer.alloc(64 * 1024, 0x20);
+    // reads each name's bytes: forty names over one block of 300 000 are 12 MB.
+    // Not a divisor of the bound, so a stop on a whole entry would overshoot.
+    const block = Buffer.alloc(300_000, 0x20);
     const sheets: RawEntry[] = Array.from({ length: 40 }, (_, index) => ({
       name: `xl/worksheets/sheet${String(index + 1)}.xml`,
       data: block,
@@ -170,6 +171,10 @@ describe("stored entries are counted too", () => {
     );
 
     expect(code).toBe("WORKBOOK_TOO_LARGE");
-    expect(counted.reduce((sum, bytes) => sum + bytes, 0)).toBeGreaterThan(bound);
+    // Counted a chunk at a time, as an inflate is (gate 1's F3): the stop
+    // overshoots by one chunk at most, not by a whole stored entry.
+    const total = counted.reduce((sum, bytes) => sum + bytes, 0);
+    expect(total).toBeGreaterThan(bound);
+    expect(total).toBeLessThanOrEqual(bound + INFLATE_CHUNK_BYTES);
   });
 });

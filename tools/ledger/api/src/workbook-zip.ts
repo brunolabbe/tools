@@ -20,8 +20,9 @@
  * 2. a zip can declare less than it holds, so every entry is then inflated
  *    once here, by `node:zlib`, counting the bytes as they come out and
  *    keeping none, and the count passing the bound stops the inflate at once.
- *    A stop overshoots the bound by at most one output chunk,
- *    `INFLATE_CHUNK_BYTES`.
+ *    A stored entry, which has nothing to inflate, is counted a chunk at a
+ *    time all the same, so a stop overshoots the bound by at most one chunk,
+ *    `INFLATE_CHUNK_BYTES`, whichever kind of entry it falls in.
  *
  * The second pass inflates every accepted file once more than `exceljs` does,
  * which at the bound is a fraction of a second; it holds one chunk at a time.
@@ -175,9 +176,14 @@ export async function countInflated(
   for (const entry of entries) {
     const compressed = compressedOf(bytes, entry);
     if (entry.method === 0) {
-      total += compressed.length;
-      produced(compressed.length);
-      if (total > bound) throw tooLarge();
+      // Nothing to inflate, but counted a chunk at a time as an inflate is, so
+      // a stop overshoots by one chunk here too, not by the whole entry.
+      for (let at = 0; at < compressed.length; at += INFLATE_CHUNK_BYTES) {
+        const size = Math.min(INFLATE_CHUNK_BYTES, compressed.length - at);
+        total += size;
+        produced(size);
+        if (total > bound) throw tooLarge();
+      }
       continue;
     }
     // One entry at a time, so the bound is checked between chunks of each.
