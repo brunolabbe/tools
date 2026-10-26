@@ -1328,3 +1328,9 @@ Each guard deleted, changed or moved in turn at `8b1fcb2e`, the five specs
 two bounds hold only because the directory must fill exactly, and why;
 Build 3.3's "whatever the zip declared" carries a marked note; Decision 1's
 dated note carries a correction of its "a zip holds 1,000 entries at most".
+
+### 2026-10-26 — landing: gate 3 returned PASS at `28d2f0cb`; its one low fixed
+
+- 2026-10-26 — Fixed at landing by owner choice: gate 3, the low — "`workbook-zip.ts`'s header ends its new paragraph 'and the two parsers read the same entries'", false for a file with a record signature in its last 21 bytes. The header now ends "or `jszip` refuses the file", and a blank comment line separates the paragraph from "The parse is by hand". Comment only.
+  `git diff 28d2f0cb HEAD -- tools/ledger/api/src/workbook-zip.ts | grep -c '^-.*two parsers read the same entries\.'`
+  → 1.

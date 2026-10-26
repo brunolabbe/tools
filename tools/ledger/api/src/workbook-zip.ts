@@ -38,7 +38,8 @@
  * 210,316 bytes reached the model and cost +428 MB. So the walk of `count`
  * entries must end exactly where the directory ends, and the directory exactly
  * where the end record starts; anything else is `WORKBOOK_NOT_XLSX`, and the
- * two parsers read the same entries.
+ * two parsers read the same entries, or `jszip` refuses the file.
+ *
  * The parse is by hand rather than through `jszip`, which `exceljs` carries
  * but this package does not declare.
  */
