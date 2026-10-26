@@ -16,7 +16,7 @@ import {
   workbookEntries,
 } from "../src/workbook-zip.ts";
 import type { ZipEntry } from "../src/workbook-zip.ts";
-import { rawZip } from "./helpers/xlsx-file.ts";
+import { rawZip, reEnded } from "./helpers/xlsx-file.ts";
 import type { RawEntry } from "./helpers/xlsx-file.ts";
 
 const TYPES = Buffer.from(
@@ -241,5 +241,30 @@ describe("the directory's own entries, and the bytes they point at (round 1's sw
     const zip = rawZip(workbook({ ...SHEET, method: 0, compressedSize: 1_000_000 }));
     const entries = workbookEntries(zip);
     expect(await codeOfAsync(() => countInflated(zip, entries, BIG))).toBe("WORKBOOK_NOT_XLSX");
+  });
+});
+
+describe("what the walk may read, and when the entries bound is read (lg-66 gate 2, F1)", () => {
+  const SHEET = { name: "xl/worksheets/sheet1.xml", data: Buffer.from("<x/>") };
+  /** A central header's signature alone, four bytes before the end record. */
+  const SIGNATURE = Buffer.from([0x50, 0x4b, 0x01, 0x02]);
+
+  test("a counted header that starts in the directory's last four bytes is not an .xlsx", () => {
+    // Its 46 bytes would run 24 past the file: refused, never a RangeError.
+    const zip = reEnded(rawZip(workbook(SHEET)), { count: 1, extra: 4, insert: SIGNATURE });
+    expect(codeOf(() => workbookEntries(zip))).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("a directory that runs past the end record, ending in a header's signature, is not an .xlsx", () => {
+    const zip = reEnded(rawZip(workbook(SHEET)), { count: 1, extra: 1_004, insert: SIGNATURE });
+    expect(codeOf(() => workbookEntries(zip))).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("the entries bound is read off the end record before a single header is walked", () => {
+    // Three headers and a record that counts the bound and one more: walked,
+    // the fourth would be the end record itself and refused as not a zip.
+    const zip = reEnded(rawZip(workbook(SHEET)), { count: MAX_WORKBOOK_ENTRIES - 2 });
+    expect(zip.readUInt16LE(zip.length - 22 + 10)).toBe(MAX_WORKBOOK_ENTRIES + 1);
+    expect(codeOf(() => workbookEntries(zip))).toBe("WORKBOOK_TOO_LARGE");
   });
 });

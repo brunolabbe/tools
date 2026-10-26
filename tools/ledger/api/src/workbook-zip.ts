@@ -28,6 +28,17 @@
  * 35 ms at the bound; it holds one chunk at a time. **The number of entries
  * is bounded too** (`MAX_WORKBOOK_ENTRIES`), since a zip of many tiny entries
  * costs time per entry whatever their size.
+ *
+ * **Both bounds hold only because the directory must fill exactly** (lg-66,
+ * round 2, gate 2's F2). This parse reads as many entries as the end record
+ * counts; `jszip`, which `exceljs` calls, ignores that count and reads every
+ * header that follows while its signature matches, and when the directory ends
+ * short of the end record it shifts every offset by the gap. Until round 2 an
+ * end record that counted 6 of 7 entries hid a 200 MiB sheet from both bounds:
+ * 210,316 bytes reached the model and cost +428 MB. So the walk of `count`
+ * entries must end exactly where the directory ends, and the directory exactly
+ * where the end record starts; anything else is `WORKBOOK_NOT_XLSX`, and the
+ * two parsers read the same entries.
  * The parse is by hand rather than through `jszip`, which `exceljs` carries
  * but this package does not declare.
  */
@@ -124,9 +135,10 @@ function endOfDirectory(bytes: Buffer): number {
  * The upload's entries, or `WORKBOOK_NOT_XLSX`. Reads only the directory;
  * inflates nothing. A zip64 archive, a split one, an encrypted entry or a
  * compression `exceljs` cannot read are refused the same way: none is a
- * workbook a household saves. A readable directory of more than
- * `MAX_WORKBOOK_ENTRIES` entries is `WORKBOOK_TOO_LARGE`, `details.bound`
- * `entries`, before it is walked.
+ * workbook a household saves, and so is a directory that the end record's
+ * count does not fill exactly, or that ends before the end record starts. A
+ * readable directory of more than `MAX_WORKBOOK_ENTRIES` entries is
+ * `WORKBOOK_TOO_LARGE`, `details.bound` `entries`, before it is walked.
  */
 export function workbookEntries(bytes: Buffer): ZipEntry[] {
   if (bytes.length < END_OF_DIRECTORY_SIZE || bytes.readUInt32LE(0) !== LOCAL_HEADER) {
@@ -163,8 +175,9 @@ export function workbookEntries(bytes: Buffer): ZipEntry[] {
     const extraLength = bytes.readUInt16LE(at + 30);
     const commentLength = bytes.readUInt16LE(at + 32);
     const localHeaderOffset = bytes.readUInt32LE(at + 42);
+    // A name past the window is caught by the next header's room, or by the
+    // check after the walk that it ended where the directory does.
     const next = at + 46 + nameLength + extraLength + commentLength;
-    if (next > offset + size) throw notXlsx();
     // Bit 0: encrypted. Sizes of 0xffffffff: zip64, carried in an extra field.
     if ((flags & 1) !== 0 || (method !== 0 && method !== 8)) throw notXlsx();
     if (
@@ -183,6 +196,9 @@ export function workbookEntries(bytes: Buffer): ZipEntry[] {
     });
     at = next;
   }
+  // The two parsers must read the same entries: `jszip` walks headers past
+  // `count` and shifts its offsets when the directory ends short of the record.
+  if (at !== offset + size || offset + size !== end) throw notXlsx();
   const names = new Set(entries.map((entry) => entry.name));
   if (!WORKBOOK_ENTRIES.every((name) => names.has(name))) throw notXlsx();
   return entries;

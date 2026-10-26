@@ -50,7 +50,7 @@ import {
   testKey,
   writeMemberDirectory,
 } from "./helpers/access.ts";
-import { entriesOf, paddedDeflate, rawZip, xlsxOf, zipOf } from "./helpers/xlsx-file.ts";
+import { entriesOf, paddedDeflate, rawZip, reEnded, xlsxOf, zipOf } from "./helpers/xlsx-file.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
 import type { LayoutFixture } from "./layout/fixtures.ts";
 
@@ -898,5 +898,67 @@ describe("the zip's entries, counted before anything is inflated (lg-66 gate 1, 
     expect(started.inflated).toEqual([]);
     expect(started.reader.calls).toBe(0);
     expect(model.requests).toHaveLength(0);
+  });
+});
+
+describe("an end record and a directory that disagree (lg-66 gate 2, F2)", () => {
+  // `jszip`, which exceljs calls, reads every header that follows while its
+  // signature matches, whatever the end record counts, and shifts its offsets
+  // when the directory ends short of the record. These are each refused before
+  // the sheet reader, so neither parser reads what the other does not.
+  const TYPES =
+    '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>';
+  const NO_SHEETS =
+    '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets/></workbook>';
+
+  async function refusedBeforeTheReader(file: Buffer): Promise<void> {
+    expect(file.length).toBeLessThan(MAX_WORKBOOK_BYTES);
+    const model = fake(answering(fixture("lg7").layout));
+    const started = await start({ ask: model.ask });
+    for (const response of [
+      await describeFile(started, file),
+      await confirmFile(started, file, fixture("lg7").layout),
+    ]) {
+      expect(response.statusCode).toBe(415);
+      expect(errorOf(response).code).toBe("WORKBOOK_NOT_XLSX");
+    }
+    expect(started.reader.calls).toBe(0);
+    expect(model.requests).toHaveLength(0);
+  }
+
+  test("a sheet padded past the inflated bound, left out of the end record's count, is refused", async () => {
+    // Gate 2's D1 at twice the bound rather than 200 MiB: the sheet is last,
+    // and the record counts every entry but it.
+    const entries = entriesOf(await smallWorkbook());
+    const sheet = entries.find((entry) => entry.name === "xl/worksheets/sheet1.xml");
+    const others = entries.filter((entry) => entry !== sheet);
+    const padded = await paddedDeflate(
+      sheet?.data ?? Buffer.alloc(0),
+      2 * MAX_WORKBOOK_INFLATED_BYTES,
+    );
+    const zip = zipOf([...others, { name: "xl/worksheets/sheet1.xml", deflated: padded }]);
+    await refusedBeforeTheReader(reEnded(zip, { count: -1 }));
+  });
+
+  test("44,000 entries under an end record that counts 2 are refused", async () => {
+    // Gate 2's D2: stored and empty, so the file stays under the byte bound.
+    const zip = rawZip([
+      { name: "[Content_Types].xml", data: Buffer.from(TYPES) },
+      { name: "xl/workbook.xml", data: Buffer.from(NO_SHEETS) },
+      ...Array.from({ length: 44_000 }, (_, index) => ({
+        name: `p/${String(index)}`,
+        data: Buffer.alloc(0),
+        method: 0,
+      })),
+    ]);
+    await refusedBeforeTheReader(reEnded(zip, { count: 2 - 44_002 }));
+  });
+
+  test("a directory that ends before the end record's stated position is refused", async () => {
+    // Sixteen bytes between the directory and the record: `jszip` would read
+    // every offset sixteen bytes on from where this parse reads it.
+    await refusedBeforeTheReader(
+      reEnded(await smallWorkbook(), { insert: Buffer.alloc(16, 0x20) }),
+    );
   });
 });

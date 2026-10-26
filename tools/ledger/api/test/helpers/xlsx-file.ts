@@ -241,3 +241,22 @@ export function rawZip(entries: readonly RawEntry[], end: RawEnd = {}): Buffer {
   record.writeUInt32LE(end.offset ?? offset, 16);
   return Buffer.concat([...locals, directory, record]);
 }
+
+/**
+ * `zip` with its end record rewritten: `count` more entries counted, `extra`
+ * bytes more of directory, and `insert` placed between the directory and the
+ * end record. What a test needs to make the end record and the directory
+ * disagree (lg-66, gate 2's F2).
+ */
+export function reEnded(
+  zip: Buffer,
+  change: { count?: number; extra?: number; insert?: Buffer },
+): Buffer {
+  const end = zip.length - 22;
+  const record = Buffer.from(zip.subarray(end));
+  const count = record.readUInt16LE(10) + (change.count ?? 0);
+  record.writeUInt16LE(count, 8);
+  record.writeUInt16LE(count, 10);
+  record.writeUInt32LE(record.readUInt32LE(12) + (change.extra ?? 0), 12);
+  return Buffer.concat([zip.subarray(0, end), change.insert ?? Buffer.alloc(0), record]);
+}
