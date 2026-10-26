@@ -35,7 +35,11 @@ import {
   MAX_WORKBOOK_SHEETS,
   estimatedRequestTokens,
 } from "../src/workbook-describe.ts";
-import { INFLATE_CHUNK_BYTES, MAX_WORKBOOK_INFLATED_BYTES } from "../src/workbook-zip.ts";
+import {
+  INFLATE_CHUNK_BYTES,
+  MAX_WORKBOOK_ENTRIES,
+  MAX_WORKBOOK_INFLATED_BYTES,
+} from "../src/workbook-zip.ts";
 import { readSheets } from "../src/xlsx.ts";
 import {
   HOUSEHOLD,
@@ -489,7 +493,8 @@ describe("the inflated size, bounded before exceljs inflates anything (Done when
         (sum, entry) => sum + (entry.data?.length ?? 0),
         0,
       );
-      expect(total, name).toBeLessThan(MAX_WORKBOOK_INFLATED_BYTES / 100);
+      // lg37, the largest, is 90 542 bytes: 46 times under the bound (round 1, F2).
+      expect(total, name).toBeLessThan(MAX_WORKBOOK_INFLATED_BYTES / 40);
     }
   });
 
@@ -815,7 +820,8 @@ describe("stored entries, counted before the sheet reader (lg-66 gate 1, F1)", (
   test("forty directory entries over one stored block, each declaring 0, are refused before the sheet reader", async () => {
     // Nothing inflates a stored entry, so only the count stands between these
     // forty names over one block and a reader that reads each of them whole.
-    const block = Buffer.alloc(Math.ceil(MAX_WORKBOOK_INFLATED_BYTES / 8), 0x20);
+    // Three tenths of the bound: a stop on a whole entry would overshoot by a fifth.
+    const block = Buffer.alloc(Math.floor(MAX_WORKBOOK_INFLATED_BYTES * 0.3), 0x20);
     const zip = rawZip([
       {
         name: "[Content_Types].xml",
@@ -855,6 +861,35 @@ describe("stored entries, counted before the sheet reader (lg-66 gate 1, F1)", (
     const counted = started.inflated.reduce((sum, bytes) => sum + bytes, 0);
     expect(counted).toBeGreaterThan(2 * MAX_WORKBOOK_INFLATED_BYTES);
     expect(counted).toBeLessThanOrEqual(2 * (MAX_WORKBOOK_INFLATED_BYTES + INFLATE_CHUNK_BYTES));
+    expect(started.reader.calls).toBe(0);
+    expect(model.requests).toHaveLength(0);
+  });
+});
+
+describe("the zip's entries, counted before anything is inflated (lg-66 gate 1, F2)", () => {
+  test("a workbook of more entries than the bound is refused before the inflate and the sheet reader", async () => {
+    const tiny = Buffer.from("x");
+    const over = zipOf([
+      ...entriesOf(await smallWorkbook()),
+      ...Array.from({ length: MAX_WORKBOOK_ENTRIES }, (_, index) => ({
+        name: `xl/media/part${String(index)}.bin`,
+        data: tiny,
+      })),
+    ]);
+    const model = fake(answering(fixture("lg7").layout));
+    const started = await start({ ask: model.ask });
+
+    for (const response of [
+      await describeFile(started, over),
+      await confirmFile(started, over, fixture("lg7").layout),
+    ]) {
+      expect(response.statusCode).toBe(413);
+      expect(errorOf(response)).toMatchObject({
+        code: "WORKBOOK_TOO_LARGE",
+        details: { bound: "entries" },
+      });
+    }
+    expect(started.inflated).toEqual([]);
     expect(started.reader.calls).toBe(0);
     expect(model.requests).toHaveLength(0);
   });

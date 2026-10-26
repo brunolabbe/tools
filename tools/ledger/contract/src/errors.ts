@@ -242,9 +242,9 @@ export const LEDGER_ERROR_CODES = [
   /** The workbook reads as no sheet at all, so there is nothing to describe. */
   "WORKBOOK_NO_SHEETS",
   /**
-   * The workbook is over one of the import's bounds — what it inflates to, its
-   * sheets, its rows or cells, or the request it would make — named in
-   * `details.bound`. Nothing was sent.
+   * The workbook is over one of the import's bounds — the entries its zip
+   * holds, what it inflates to, its sheets, its rows or cells, or the request
+   * it would make — named in `details.bound`. Nothing was sent.
    */
   "WORKBOOK_TOO_LARGE",
   /**

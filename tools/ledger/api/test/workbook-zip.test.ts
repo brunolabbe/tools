@@ -9,7 +9,12 @@
 import { Buffer } from "node:buffer";
 import { describe, expect, test } from "vitest";
 import { AppError } from "@ledger/contract";
-import { INFLATE_CHUNK_BYTES, countInflated, workbookEntries } from "../src/workbook-zip.ts";
+import {
+  INFLATE_CHUNK_BYTES,
+  MAX_WORKBOOK_ENTRIES,
+  countInflated,
+  workbookEntries,
+} from "../src/workbook-zip.ts";
 import type { ZipEntry } from "../src/workbook-zip.ts";
 import { rawZip } from "./helpers/xlsx-file.ts";
 import type { RawEntry } from "./helpers/xlsx-file.ts";
@@ -176,5 +181,36 @@ describe("stored entries are counted too", () => {
     const total = counted.reduce((sum, bytes) => sum + bytes, 0);
     expect(total).toBeGreaterThan(bound);
     expect(total).toBeLessThanOrEqual(bound + INFLATE_CHUNK_BYTES);
+  });
+});
+
+describe("the number of entries (lg-66 gate 1, F2)", () => {
+  /** A workbook's two entries and enough empty ones to make `count`. */
+  function entries(count: number): RawEntry[] {
+    return workbook(
+      ...Array.from({ length: count - 2 }, (_, index) => ({
+        name: `xl/media/part${String(index)}.bin`,
+        data: Buffer.alloc(0),
+        method: 0,
+      })),
+    );
+  }
+
+  test("a directory of exactly the bound is read", () => {
+    expect(workbookEntries(rawZip(entries(MAX_WORKBOOK_ENTRIES)))).toHaveLength(
+      MAX_WORKBOOK_ENTRIES,
+    );
+  });
+
+  test("one entry more is refused as too large, naming the bound, before the directory is walked", () => {
+    const zip = rawZip(entries(MAX_WORKBOOK_ENTRIES + 1));
+    let thrown: unknown;
+    try {
+      workbookEntries(zip);
+    } catch (error: unknown) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(AppError);
+    expect(thrown).toMatchObject({ code: "WORKBOOK_TOO_LARGE", details: { bound: "entries" } });
   });
 });

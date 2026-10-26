@@ -16,8 +16,9 @@
  * two.
  *
  * **The bounds**, each where it can first be known, in this order: the bytes
- * (before anything is parsed); the zip's own structure (`workbook-zip.ts`); the
- * inflated size, declared and then counted, before `exceljs` sees the file;
+ * (before anything is parsed); the zip's own structure and its number of
+ * entries (`workbook-zip.ts`); the inflated size, declared and then counted,
+ * before `exceljs` sees the file;
  * the sheets, then the rows and cells, once parsed; and the request's size, an
  * estimate, before the call. A cell's text is never refused: the view cuts it
  * at `MAX_CELL_TEXT`, and the file is still read in full.

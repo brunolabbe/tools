@@ -25,7 +25,9 @@
  *    `INFLATE_CHUNK_BYTES`, whichever kind of entry it falls in.
  *
  * The second pass inflates every accepted file once more than `exceljs` does,
- * which at the bound is a fraction of a second; it holds one chunk at a time.
+ * 35 ms at the bound; it holds one chunk at a time. **The number of entries
+ * is bounded too** (`MAX_WORKBOOK_ENTRIES`), since a zip of many tiny entries
+ * costs time per entry whatever their size.
  * The parse is by hand rather than through `jszip`, which `exceljs` carries
  * but this package does not declare.
  */
@@ -35,12 +37,47 @@ import { createInflateRaw } from "node:zlib";
 import { AppError } from "@ledger/contract";
 
 /**
- * What a workbook may inflate to, summed over its entries: 16 MiB. The largest
- * of the six measured workbook fixtures, `lg37`, inflates to 90 542 bytes as
- * `exceljs` writes it, under a hundredth of the bound, and `exceljs` held about twice the inflated
- * size in memory in gate 4's measurement (+79 MB for 40 MiB).
+ * What a workbook may inflate to, summed over its entries: 4 MiB, sized by what
+ * `exceljs` costs to read it (lg-66, round 1 on gate 1's F2, 2026-10-26).
+ *
+ * **What `exceljs` costs is 20 to 27 MB of memory per MiB of cells.** Read
+ * alone, in a fresh process, a sheet of 100 numeric columns cost +37 MB at
+ * 1 MiB inflated, +98 MB at 4 MiB, +188 MB at 8 MiB and +287 MB at 15 MiB; a
+ * sheet of 3 columns +42, +109, +231 and +321 MB; a 15 MiB shared-strings
+ * table with one cell +94 MB. (Whitespace costs far less, which is why gate 4's
+ * +79 MB for 40 MiB of padding understated it.) Through the describe route at
+ * the old bound of 16 MiB, the 100-column sheet cost +301 MB and 2.4 s before
+ * the cells bound refused it, and the 3-column one +335 MB and 2.5 s.
+ *
+ * **4 MiB keeps one request near +110 MB**, and two people's at once inside
+ * the ledger's 512 MB container (`compose.ledger.prod.yaml`) beside a process
+ * that stood near 100 MB here before the read. Through the route, a sheet just
+ * under 4 MiB cost +99 to +104 MB and 0.7 to 1.1 s with 100 columns, +108 to
+ * +109 MB and 0.7 s with 3. At 8 MiB two would be +460 MB.
+ *
+ * **And it holds a household's workbook with room over.** The largest of the
+ * six measured fixtures, `lg37`, inflates to 90 542 bytes, 46 times under the
+ * bound. A ledger sheet laid out as `lg37`'s (date, bucket, detail, person,
+ * balance as a formula, amount, a note on one row in ten), written by
+ * `exceljs`, takes about 275 bytes a row: 15 000 rows inflate to 4 114 119
+ * bytes, under the bound, and cost +71 to +86 MB and 0.7 s through the route,
+ * 47 times `lg37`'s 320 rows. A real file saved by Excel carries more per cell
+ * and styles of its own, which no measurement here covers.
  */
-export const MAX_WORKBOOK_INFLATED_BYTES = 16 * 1024 * 1024;
+export const MAX_WORKBOOK_INFLATED_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Entries a workbook's zip may hold: 1 000. A workbook holds tens (the six
+ * fixtures hold 17 to 24), and by the parts Excel writes for each sheet (the
+ * sheet, its relations, a drawing and its relations, a chart with its style
+ * and colours, comments and their drawing), one at the sheets bound with a
+ * chart and a comment on every sheet holds about 400: a reckoning, not a
+ * measurement. The cost is per entry, not per byte: 44 016 one-byte entries
+ * took 8.4 s through the describe route at the old bounds; measured apart, the
+ * counted inflate took 6.1 s of it (one inflater per entry) and `exceljs`
+ * 1.8 s. 1 000 entries take 0.3 s through the route.
+ */
+export const MAX_WORKBOOK_ENTRIES = 1_000;
 
 /** The inflate's output chunk, and so the most a stop at the bound overshoots it by. */
 export const INFLATE_CHUNK_BYTES = 16 * 1024;
@@ -87,7 +124,9 @@ function endOfDirectory(bytes: Buffer): number {
  * The upload's entries, or `WORKBOOK_NOT_XLSX`. Reads only the directory;
  * inflates nothing. A zip64 archive, a split one, an encrypted entry or a
  * compression `exceljs` cannot read are refused the same way: none is a
- * workbook a household saves.
+ * workbook a household saves. A readable directory of more than
+ * `MAX_WORKBOOK_ENTRIES` entries is `WORKBOOK_TOO_LARGE`, `details.bound`
+ * `entries`, before it is walked.
  */
 export function workbookEntries(bytes: Buffer): ZipEntry[] {
   if (bytes.length < END_OF_DIRECTORY_SIZE || bytes.readUInt32LE(0) !== LOCAL_HEADER) {
@@ -103,6 +142,14 @@ export function workbookEntries(bytes: Buffer): ZipEntry[] {
   const offset = bytes.readUInt32LE(end + 16);
   if (disk !== 0 || directoryDisk !== 0 || onDisk !== count || count === 0xffff) throw notXlsx();
   if (offset === 0xffffffff || size === 0xffffffff || offset + size > end) throw notXlsx();
+  // Before the directory is walked: the cost is per entry (`MAX_WORKBOOK_ENTRIES`).
+  if (count > MAX_WORKBOOK_ENTRIES) {
+    throw new AppError(
+      "WORKBOOK_TOO_LARGE",
+      `That workbook is made of ${String(count)} parts; this import reads ${String(MAX_WORKBOOK_ENTRIES)} at most.`,
+      { details: { bound: "entries" } },
+    );
+  }
 
   const entries: ZipEntry[] = [];
   let at = offset;
