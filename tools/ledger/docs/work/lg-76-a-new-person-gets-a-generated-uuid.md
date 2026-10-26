@@ -93,7 +93,11 @@ their name stays required.
 
 - A person added under a new name gets a UUID id and that name as their shown
   name, in one transaction, proved by a test in `api/test/households.test.ts`;
-  every screen shows the name, proved by a web test that no UUID is rendered.
+  every component the Log's enumeration lists (each `web/src` component that
+  renders a person, found by the grep the Log names) shows the name, proved by a
+  web test covering exactly that list that no UUID is rendered.
+  - _Superseded 2026-10-26 by the owner's answer below:_ "every screen shows the
+    name, proved by a web test that no UUID is rendered."
 - Adding an address for an existing person, legacy or UUID, by their shown name
   reuses their id, proved by tests.
 - A household with legacy name ids computes the same buckets, ratios and
@@ -109,3 +113,14 @@ their name stays required.
 - 2026-10-25 — Filed from the owner's question while lg-71 was re-scoped: "why
   not a UUID for a person, as for a household?" lg-74 waits on it, so a person
   added without an email gets a UUID from the start.
+- 2026-10-26 — Owner's answer, relayed by the orchestrator in the build
+  dispatch (asked 2026-10-25 at intake). The Done when line "every screen shows
+  the name, proved by a web test that no UUID is rendered" named no screens,
+  and Build 4 says about a dozen places. Options: the builder enumerates first
+  (the orchestrator's recommendation); a fixed list now; not running lg-76. The
+  owner chose **the builder enumerates first**: grep every
+  `tools/ledger/web/src` component that renders a person, list them (file and
+  component) in the Log with the grep that found them, and the web test covers
+  exactly that list; the gate grades against the list and re-runs the grep. The
+  Done when line is reworded to name that list; the line it supersedes is kept
+  beside it.
