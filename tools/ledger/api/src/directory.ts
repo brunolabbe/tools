@@ -165,8 +165,16 @@ interface NewId {
   newId?: (() => string) | undefined;
 }
 
-/** The most a person's shown name holds, as `person_names` checks it. */
+/**
+ * The most a person's shown name holds, as `person_names` checks it: SQLite's
+ * length() counts characters, not UTF-16 units, so a cut is by characters too.
+ */
 const NAME_LENGTH = 64;
+
+/** The first `count` characters of `text`, never half of one that takes two UTF-16 units. */
+function firstCharacters(text: string, count: number): string {
+  return Array.from(text).slice(0, count).join("");
+}
 
 /**
  * The name a person added with no name is shown under (lg-76): the address's
@@ -175,11 +183,11 @@ const NAME_LENGTH = 64;
  * or has it as their id.
  */
 export function nameFromAddress(address: string, taken: (name: string) => boolean): string {
-  const local = address.slice(0, address.lastIndexOf("@")).slice(0, NAME_LENGTH).trim();
+  const local = firstCharacters(address.slice(0, address.lastIndexOf("@")), NAME_LENGTH).trim();
   if (!taken(local)) return local;
   for (let n = 2; ; n++) {
     const suffix = ` ${String(n)}`;
-    const name = `${local.slice(0, NAME_LENGTH - suffix.length).trimEnd()}${suffix}`;
+    const name = `${firstCharacters(local, NAME_LENGTH - suffix.length).trimEnd()}${suffix}`;
     if (!taken(name)) return name;
   }
 }

@@ -373,4 +373,31 @@ describe("npm run backfill-spending:ledger (lg-53)", () => {
     expect(ran.err).toContain('--as names "sam"');
     expect(overrides()).toEqual({ n: 0 });
   });
+
+  // lg-76's gate 1, F3: --as reaches a person under a generated id by how they are
+  // shown, and a refusal lists the members as shown, never by that id.
+  test("--as names a person under a generated id by their shown name", () => {
+    const casey = "6f1c2a3b-0d4e-4f5a-8b6c-7d8e9f0a1b2c";
+    const directory = Directory.open(directoryPath);
+    directory.addMemberByName({
+      household: "home",
+      address: "casey@example.test",
+      person: "Casey",
+      by: "operator",
+      at: NOW,
+      newId: () => casey,
+    });
+    directory.close();
+
+    const refused = run("--household", "home", "--as", "sam", "--write");
+    expect(refused.code).toBe(2);
+    expect(refused.err).toContain("(Casey, alex)");
+    expect(refused.err).not.toContain(casey);
+    expect(overrides()).toEqual({ n: 0 });
+
+    const ran = run("--household", "home", "--as", "Casey", "--write");
+
+    expect(ran.code, ran.err).toBe(0);
+    expect(overrides()).toEqual({ n: 4 });
+  });
 });

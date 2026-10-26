@@ -1535,4 +1535,33 @@ describe("a new person gets a generated id (lg-76)", () => {
     expect(directory.names("home").get(FIRST)).toBe("Case");
     directory.close();
   });
+
+  // lg-76's gate 1, F4: the cut was by UTF-16 units, so an emoji across the 64th
+  // was split, stored as U+FFFD, and the next such address met person_names_unique.
+  test("a name from an email with an emoji at the cut is cut by characters, and numbered when taken", () => {
+    const directory = withHousehold();
+    const local = `${"e".repeat(63)}\u{1F600}${"x".repeat(5)}`;
+    const add = (domain: string, newId: string) =>
+      directory.addMemberByName({
+        household: "home",
+        address: `${local}@${domain}`,
+        ...CHANGE,
+        newId: ids(newId),
+      });
+
+    add("one.test", FIRST);
+    add("two.test", SECOND);
+    add("three.test", THIRD);
+
+    const whole = `${"e".repeat(63)}\u{1F600}`;
+    expect(directory.names("home")).toEqual(
+      new Map([
+        [FIRST, whole],
+        [SECOND, `${"e".repeat(62)} 2`],
+        [THIRD, `${"e".repeat(62)} 3`],
+      ]),
+    );
+    expect(nameFromAddress(`${local}@x.test`, () => false)).toBe(whole);
+    directory.close();
+  });
 });
