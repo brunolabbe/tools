@@ -121,7 +121,14 @@ refused it, a 3-column sheet +335 MB and 2.5 s, and 44,016 one-byte entries
 2026-10-26 the bound is now 4 MiB and a zip holds 1,000 entries at most: those
 four uploads are refused in 60 to 84 ms, before `exceljs`, and a sheet just
 under the new bound costs +99 to +109 MB and 0.7 to 1.1 s. The Log's entry of
-2026-10-26 has the measurement.
+2026-10-26 has the measurement. _(Corrected in round 2, 2026-10-26, gate 2's
+F2: "a zip holds 1,000 entries at most" held only for a zip whose end record
+counts its directory honestly. One that counted 6 of its 7 entries hid a
+200 MiB sheet from both bounds and reached the model at +428 MB, because
+`jszip`, which `exceljs` calls, reads the directory past the count. Since round
+2 a directory the end record's count does not fill exactly, or that ends
+before the end record, is refused before `exceljs`, so both bounds now hold
+for every zip that reaches it.)_
 
 ### 2. Which files
 
@@ -301,6 +308,15 @@ and in the Log, and `status` is `ready`, as `docs/01-TICKETS.md` says.
         avoid importing jszip, a dependency the api does not declare. The
         builder states the bound with the inflated size of the largest of the
         six workbook fixtures beside it, and names the chunk by which a stop may overshoot.
+        _(Note, 2026-10-26, round 2, gate 2's F2: "whatever the zip
+        declared" held for what the directory declares of each entry's size,
+        not for what its end record declares of the number of entries. The
+        count passes over the entries the end record counts, and `jszip`
+        reads every entry the directory holds, so a record that counted fewer
+        hid the rest from the count. By the owner's answer of 2026-10-26 the
+        directory must fill exactly: the walk of the counted entries ends
+        where the directory ends, and the directory where the end record
+        starts, or the upload is not an `.xlsx`.)_
       - **The number of sheets, and the rows and cells read,** need the parsed
         file. Over either is a typed refusal before anything is sent.
       - **The length of a cell's text sent** is a truncation, not a refusal: the
@@ -1213,3 +1229,102 @@ they were put; the one chosen is marked.
 3. **`main` moved**: #669 (lg-71) merged as `be8d9c0e`. Merged into this branch
    (a merge, not a rebase), keeping both sides of the overlapping files. The
    merge was clean.
+
+### 2026-10-26 — round 2: the directory must fill exactly
+
+`origin/main` was merged first (`c0b653dd`, #669 lg-71, clean, no file needed
+a hand; the build ran after it). Then the answers above (`458f44db`), the fix
+and its tests (`8b1fcb2e`), and this entry.
+
+**F2's remaining clause (high): reproduced, and fixed as the owner chose (a).**
+Gate 2's own probe (`gate2-probe.test.ts`, one vitest process per case) at the
+merged head, before the fix: D1, the one-sheet workbook with its sheet padded
+to 200 MiB and an end record counting 6 of its 7 entries, 210,315 bytes,
+describe **200, counted inflate 2,471 bytes, sheet reader called once, model
+called once, 1,945 ms, +428 MB** (confirm 422 from the fixture, 1,898 ms,
++219 MB); its control with the honest count 413 `inflated` with the reader at
+0 in 28 ms. D2, 44,000 one-byte entries under a record counting 2: 422
+`WORKBOOK_NO_SHEETS` from the parser, reader called once, 4,590 ms; honest, 413
+`entries` in 67 ms. After the fix, the same
+probe: D1 415 `WORKBOOK_NOT_XLSX` on both routes, counted 0, reader 0, model 0,
+32 and 11 ms; D2 415 on both, reader 0, 66 and 47 ms; the honest 1,000-entry
+zip still reaches the reader (422 `WORKBOOK_NO_SHEETS`, it has no sheet), and a
+sheet just under 4 MiB is still described (200, 680 ms, +90 MB).
+
+The fix is gate 2's line, after the walk in `workbookEntries`: `if (at !==
+offset + size || offset + size !== end) throw notXlsx();`. The walk of the
+counted entries must end where the directory ends, and the directory where the
+end record starts, so `jszip` (which reads headers while their signature
+matches, whatever the count, and shifts every offset by any gap before the end
+record) and this parse read the same entries. A name that ran past the
+directory was refused by its own check (round 1's S9); that check is now
+redundant, since such a name either leaves no room for the next header or ends
+the walk past the directory, so it is gone, and its test still passes.
+
+One test per input, each through both routes, refused 415 `WORKBOOK_NOT_XLSX`
+with the sheet reader at 0 and the model uncalled, in
+`workbook-describe.test.ts` › "an end record and a directory that disagree
+(lg-66 gate 2, F2)":
+
+- "a sheet padded past the inflated bound, left out of the end record's count,
+  is refused" (D1 at twice the bound rather than 200 MiB, which costs the test
+  nothing to prove and keeps its memory down);
+- "44,000 entries under an end record that counts 2 are refused" (D2, the
+  entries stored and empty);
+- "a directory that ends before the end record's stated position is refused"
+  (sixteen bytes between them).
+
+`reEnded` in `api/test/helpers/xlsx-file.ts` rewrites an end record for them.
+
+**Other writers.** `lg37` written by `exceljs`, unzipped, and zipped again by
+Info-ZIP's `zip` 3.0 (deflated, with its extra fields; with an archive comment;
+stored) and by CPython 3.12's `zipfile` (deflated; with a comment): all six
+files pass `workbookEntries` and the counted inflate (24 entries, 90,542 bytes)
+and `exceljs` reads 9 sheets and 320 rows from each. Files saved by Excel,
+LibreOffice or Google Sheets are not at hand here and are unmeasured.
+
+**The two F1 clauses (low): each has a test now**, in `workbook-zip.test.ts` ›
+"what the walk may read, and when the entries bound is read (lg-66 gate 2, F1)":
+
+- "a counted header that starts in the directory's last four bytes is not an
+  .xlsx": a central signature in the last four bytes of the directory, counted.
+  Without `at + 46 > offset + size` its fields are read past the end of the
+  file and the walk throws a `RangeError` instead of refusing.
+- "the entries bound is read off the end record before a single header is
+  walked": three headers under a record that counts 1,001. Moved after the
+  walk, the bound never runs: the fourth header is the end record, refused as
+  not a zip.
+- And for round 1's directory window, which the new line made redundant for
+  the cases its tests built: "a directory that runs past the end record,
+  ending in a header's signature, is not an .xlsx". Without the window check
+  the same `RangeError` is reached.
+
+Each guard deleted, changed or moved in turn at `8b1fcb2e`, the five specs
+`workbook-zip`, `workbook-describe` (less the 200 MiB case), `isolation`,
+`xlsx` and `workbook-import` run, the file restored from that commit:
+
+| Mutation (`workbook-zip.ts` unless named)                               | Result at `8b1fcb2e`  | Tests that went red                                                                                                                                                     |
+| ----------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| none (the control)                                                      | 106 passed, 1 skipped | none                                                                                                                                                                    |
+| the line after the walk deleted                                         | 4 failed              | the three round-2 route tests; round 1's "a directory entry whose name runs past the directory…"                                                                        |
+| only its first half (`at !== offset + size`) deleted                    | 2 failed              | "a sheet padded past the inflated bound, left out of the end record's count…", "44,000 entries under an end record that counts 2…"                                      |
+| only its second half (`offset + size !== end`) deleted                  | 1 failed              | "a directory that ends before the end record's stated position is refused"                                                                                              |
+| the header's room (`at + 46 > offset + size`) deleted                   | 1 failed              | "a counted header that starts in the directory's last four bytes…"                                                                                                      |
+| the entries bound moved after the walk                                  | 1 failed              | "the entries bound is read off the end record before a single header is walked"                                                                                         |
+| the entries bound deleted                                               | 3 failed              | the route test, "one entry more is refused…", and the test above                                                                                                        |
+| S1 a stored entry counted / F3 counted whole again                      | 2 failed each         | the two stored-entry tests                                                                                                                                              |
+| S2 encrypted or odd method                                              | 2 failed              | its two                                                                                                                                                                 |
+| S3 the zip64 sentinels                                                  | 3 failed              | its three                                                                                                                                                               |
+| S4 an inflate error turned into a resolve                               | 1 failed              | its one                                                                                                                                                                 |
+| S5 the split-disk and count checks                                      | 4 failed              | its four                                                                                                                                                                |
+| S6 the directory's window                                               | 2 failed              | "a directory that runs past the end record, ending in a header's signature…", "…the directory's offset is zip64's 0xffffffff…" (its other two now fall to the new line) |
+| S7 the local header                                                     | 2 failed              | its two                                                                                                                                                                 |
+| S8 a central header's signature                                         | 1 failed              | its one                                                                                                                                                                 |
+| S10 an entry's bytes past the file                                      | 1 failed              | its one                                                                                                                                                                 |
+| F5 the consent branch (`workbook-describe.ts`)                          | 1 failed              | "a request without the consent field"                                                                                                                                   |
+| F4 the other household appended to the request (`workbook-describe.ts`) | 1 failed              | `isolation.test.ts`'s sweep                                                                                                                                             |
+
+**The three sentences gate 2 named.** `workbook-zip.ts`'s header now says the
+two bounds hold only because the directory must fill exactly, and why;
+Build 3.3's "whatever the zip declared" carries a marked note; Decision 1's
+dated note carries a correction of its "a zip holds 1,000 entries at most".
