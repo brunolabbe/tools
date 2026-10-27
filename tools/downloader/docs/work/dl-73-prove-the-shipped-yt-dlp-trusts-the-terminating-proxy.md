@@ -6,7 +6,6 @@ kind: work-package
 status: done
 milestone: null
 depends_on: [dl-72]
-awaiting: Done when 2 — the first real ytdlp-bump.yml pull request shows the docker check running the trust step before it is merged
 ---
 
 # dl-73 — the shipped yt-dlp, a real TLS fetch, and a gate that runs it
@@ -413,3 +412,12 @@ So the control cannot pass on a bundle that was not found, on a `TMPDIR` that di
   --state all --search "yt-dlp in:title"` showed no bump pull request today, so
   the clause is still owed. Whoever reads that pull request's checks deletes
   the line.
+
+- **2026-10-27, `awaiting` cleared** — the first real `ytdlp-bump.yml` pull
+  request, #674 (`2026.08.19` → `2026.10.21`), ran the `docker` check before
+  merge, and its trust step printed `PASS: /usr/local/bin/yt-dlp verified the
+  proxy's leaf through SSL_CERT_FILE (1 variant(s)), and refused it once that
+  file named an unrelated root.` (run 40339310886). Done when 2 is met; the
+  line is deleted. What that pull request does not prove is unchanged: nothing
+  in CI runs yt-dlp against a real site, so a YouTube probe on the released
+  image is the next check, once release #653 lands.
