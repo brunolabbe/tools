@@ -242,6 +242,24 @@ designed:
    the web, and end with the build decision as options. →
    [pl-57](./work/pl-57-measure-invention.md)
 
+**Both measurements are in, and neither became a check pass.** On opening
+hours, the owner chose on 2026-10-17 not to build from OSM yet. No hours build
+tickets are filed, and the question reopens only if the deployed
+`OSM_EXTRACT_URL` holds the cities (pl-56's Log). On existence, pl-57 found
+the problem was vagueness rather than invention: lodging and food proposals
+named a kind of place far more often than a premises. That made the next items
+about specificity and discovery:
+
+10. **Lodging and food name a premises**, re-measured. →
+    [pl-58](./work/pl-58-specific-lodging-food-proposals.md)
+11. **Lodging chooses among establishments a town query found**, a discovery
+    pass before the fan-out, chosen by the owner over a check pass. →
+    [pl-60](./work/pl-60-lodging-discovery.md)
+12. **Food does the same around the trip's towns.** →
+    [pl-62](./work/pl-62-food-discovery-around-the-trips-towns.md)
+13. **A deployed planner reaches its three grounding services.** →
+    [pl-63](./work/pl-63-the-planner-reaches-its-grounding-services.md)
+
 ## Phase 4 — Revision is the product
 
 Pin an item, name the days a re-plan may touch, re-run a slice with two
@@ -284,6 +302,28 @@ pieces in parallel:
 7. **Change the dates or the budget from the plan page**, and one more step in
    pl-46's browser walk. → [pl-48](./work/pl-48-change-dates-and-budget-on-the-page.md)
 
+## Phase 5 — Used for a real trip
+
+Every proof so far has been either a scripted model in a browser or a real
+model in a harness over fixture briefs. Nobody has yet planned a trip they are
+taking, through the page, on a real model, and production still runs
+`scripted`. Phase 5 starts by doing exactly that, and its build tickets come
+out of what happens.
+
+**Chosen by the owner on 2026-10-27** over exports and a share link, grounding
+prices, and reopening opening hours, all of which stay candidates. The trial
+runs locally, not on production, and the trip is a road trip through several
+towns, because that shape covers corridor and town discovery, travel time and
+day re-plans together.
+
+1. **The trial.** The owner plans the trip end to end, every run is costed,
+   and each problem is sorted into a defect (filed with its reproduction),
+   content (filed), a missing capability (listed below), or not a problem. →
+   [pl-66](./work/pl-66-a-real-road-trip-planned-end-to-end.md)
+
+**Candidates**, from pl-66's debrief. The owner chooses which become build
+tickets: _none yet_.
+
 ## Later, and not soon
 
 Exports (PDF, calendar, share link), several people editing one plan, accounts.
@@ -313,6 +353,9 @@ authority for backcountry, marine or winter motorised travel. The reasons are in
 - **P3 — The plan is true.** Grounded facts with provenance, against a real model,
   with the run's bill bounded.
 - **P4 — The plan is revisable.** Pin, re-plan a slice, read the diff.
+- **P5 — It survived a real trip.** One real trip has been planned and revised
+  through the page on a real model, and every problem it surfaced is either
+  filed or recorded as not a problem.
 
 ## Still open
 
@@ -337,7 +380,9 @@ Short, and each one is a real decision someone has to make rather than a gap:
   invents a place before either shape is built. Two facts from its filing weaken
   this sentence. Corridor finds reach 2 of the 544 candidates written by the
   specialists shown them, and most proposals name a kind of place rather than a
-  premises.
+  premises. **For lodging and food it was answered by neither shape**: pl-60
+  and pl-62 give those specialists a town discovery pass to choose from before
+  they propose, the direction pl-29 opened. For everything else it stays open.
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough — pl-5 built exactly that and pl-16 now
