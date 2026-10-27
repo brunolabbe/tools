@@ -1235,7 +1235,7 @@ function readSalaries(sheet: Sheet, label: string, people: People, out: Workbook
       if (!salaries || salary === null || head === undefined) continue;
       if (found.has(head)) {
         out.problems.push(
-          `${cellRef(sheet.name, index + 1, column + 1)}: a second salary for ${head}.`,
+          `${cellRef(sheet.name, index + 1, column + 1)}: a second salary for ${people.shown(head)}.`,
         );
       }
       found.set(head, toCents(salary));
@@ -1432,7 +1432,7 @@ function applyRatios(ratios: readonly PeriodRatio[], people: People, out: Workbo
     const named = shares.map((share) => share.personId).toSorted();
     if (named[0] === named[1] || (household.length === 2 && named.join() !== household.join())) {
       out.problems.push(
-        `${where} names ${named.join(" and ")}; a ratio is between the two people Accueil names (${household.join(" and ")}).`,
+        `${where} names ${named.map((id) => people.shown(id)).join(" and ")}; a ratio is between the two people Accueil names (${household.map((id) => people.shown(id)).join(" and ")}).`,
       );
       continue;
     }

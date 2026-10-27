@@ -1046,4 +1046,36 @@ describe("a household whose people have generated ids (lg-79)", () => {
     );
     expect(body.problems.join("\n")).not.toContain(ALEX_ID);
   });
+
+  test("a second salary is refused naming the person as shown, never by a generated id", async () => {
+    const sheets = fixture("lg7").sheets.map((sheet) =>
+      sheet.name === "Accueil"
+        ? {
+            ...sheet,
+            rows: [
+              ...sheet.rows,
+              [
+                null,
+                { value: { kind: "text" as const, text: "Salaires bruts" }, formula: null },
+                { value: { kind: "number" as const, number: 123 }, formula: null },
+              ],
+            ],
+          }
+        : sheet,
+    );
+    const accueil = sheets.find((sheet) => sheet.name === "Accueil");
+    const started = await start({
+      directory: generatedDirectory(),
+      ask: fake(answering(validLayout())).ask,
+    });
+
+    const described = await describeFile(started, await xlsxOf(sheets));
+
+    expect(described.statusCode, described.body).toBe(200);
+    const body = described.json<DescribeWorkbookResponse>();
+    expect(body.problems).toContain(
+      `Accueil!C${String(accueil?.rows.length ?? 0)}: a second salary for alex.`,
+    );
+    for (const id of [ALEX_ID, SAM_ID]) expect(body.problems.join("\n")).not.toContain(id);
+  });
 });

@@ -50,7 +50,8 @@ uploaded to `/api/workbook/describe` with its correct description answered:
    household with word ids prints the same text. That is `run`, `compare`,
    `gapOf` and `describeSettlement` in `api/src/workbook-import.ts`, and the
    period sheet's per-person check lines through `People.shown` in
-   `books/src/workbook.ts`.
+   `books/src/workbook.ts`. After gate 2, also `readSalaries`' second-salary
+   problem and `applyRatios`' ratio problem in the same file.
 
 ## Done when
 
@@ -66,7 +67,12 @@ uploaded to `/api/workbook/describe` with its correct description answered:
 4. Added after gate 1: on that household the describe report and the confirm
    report each print `salaries (Accueil): alex ` and neither holds either UUID,
    asserted in the first test. Those assertions fail with Build 3 reverted.
-5. `npm run check` and the ledger suite pass.
+5. Added after gate 2: `lg7` with a second `Salaires bruts` row on `Accueil`,
+   described on that household, is refused with "a second salary for alex" and
+   no UUID in any problem: the same block › "a second salary is refused naming
+   the person as shown, never by a generated id". It fails with
+   `books/src/workbook.ts` at `3fd14e19`.
+6. `npm run check` and the ledger suite pass.
 
 ## Review
 
@@ -83,6 +89,20 @@ alone turns the first test red.
   the screen left it out without a type error. Every production caller passes
   it now, and `WorkbookCaller.names` is required, so a new screen caller fails
   typecheck.
+
+**Gate 2: CONCERNS** at `3fd14e19`, 2026-10-27, Sonnet 5.5. Done when 4 and 5 (as
+they stood) proven. The host import on a word-id household printed
+byte-identical output at `a018ffcf` and at `3fd14e19` over seven scenarios,
+17,831 bytes each. No screen report over the six workbook fixtures held a UUID.
+
+- **F1 (med), fixed at landing under the owner's gate 1 choice:** two ids still
+  printed from `books/src/workbook.ts` outside `People`. `readSalaries`' "a
+  second salary for <id>" reached the screen; `applyRatios`' ratio problem
+  reached only the host command's corrections. Build 3, Done when 5. The gate
+  recommended fixing at landing without a third gate, and gave the fix.
+- The gate confirmed the Log's reasoning for leaving `noteOf` and the `--as`
+  line, and added one cost: on the host, a generated-id household's corrected
+  note stores the UUID.
 
 ## Log
 
@@ -109,3 +129,10 @@ Only the host command's corrections file makes a correction, and the note is
 stored, so changing its text would change what later imports store.
 `run`'s `--as names …` line prints the id the command was given; the screen's
 caller is always a member, so it never reaches it.
+
+### 2026-10-27 — landing: gate 2's F1 fixed
+
+Both sites print through `People.shown`. The new test failed with only
+`books/src/workbook.ts` at `3fd14e19` and passes with the fix. `npm run check`
+exits 0 and the ledger suite passes, 1,843 of 1,843. No third gate, as gate 2
+recommended: the fix is the one it stated and ran.
