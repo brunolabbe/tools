@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.1](https://github.com/brunolabbe/tools/compare/planner-v0.10.0...planner-v0.10.1) (2026-10-27)
+
+
+### Fixes
+
+* **planner:** clear oxlint 1.88's React findings in the plan view (repo-119) ([#655](https://github.com/brunolabbe/tools/issues/655)) ([2cb890f](https://github.com/brunolabbe/tools/commit/2cb890f7e101963384991a769fd6503078c838b1))
+* **planner:** merging compose.planner.yaml points the planner at its grounding services (pl-63) ([#644](https://github.com/brunolabbe/tools/issues/644)) ([ffb5fd5](https://github.com/brunolabbe/tools/commit/ffb5fd59634dd5ae8389951b96cac2b10af2776c))
+
 ## [0.10.0](https://github.com/brunolabbe/tools/compare/planner-v0.9.0...planner-v0.10.0) (2026-10-25)
 
 
