@@ -30,5 +30,10 @@ export interface AppContext {
   startedAt: Date;
   /** Injected in tests so anything time-dependent is assertable. */
   now: () => Date;
+  /**
+   * A new household's id (lg-71) and a new person's (lg-76): `randomUUID()`,
+   * injected in tests so an id is assertable.
+   */
+  newId: () => string;
   isShuttingDown: () => boolean;
 }

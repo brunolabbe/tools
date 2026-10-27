@@ -599,15 +599,20 @@ entirely.
   table seeded from the repository. Who is an admin is configuration
   (`LEDGER_ADMINS`). An address that is neither is refused, and the page says it
   belongs to no household.
-- **A person's name is permanent within a household.** _Decided by the owner
+- **A person's id is permanent within a household.** _Decided by the owner
   on 2026-10-05, in lg-5, for the names `ACCESS_PEOPLE` held then; the directory
-  replaced that setting in lg-20._ The books name people by that name: lg-4
+  replaced that setting in lg-20._ The books name people by their id: lg-4
   stores it on rules and classifications, and lg-5's `people` table holds every
-  name the household's members have stood under, and the person ids already
+  id the household's members have stood under, and the person ids already
   stored on rules and classifications, and nothing else. Nothing removes one,
   so a departed person stays a person the books name. Removing an address never
-  removes a name from the books (lg-23). Changing an address is safe; changing
-  the name it stands under is not.
+  removes a person from the books (lg-23). Changing an address is safe; changing
+  the id it stands under is not. **A person added since lg-76 has a generated
+  id**, a lowercase UUID (_the owner, 2026-10-25_): the name typed for them is
+  only their first shown name (below), so a typo or a nickname is never
+  written into the books. A person added before keeps the name first typed for
+  them as their id, since moving them would rewrite every record that names
+  them; both shapes stay valid.
 - **A person is retired from the books at the next close.** _Decided by the
   owner on 2026-10-17, in lg-35; built in lg-35._ An admin records "retire at
   the next close" in the directory (`retirements`, directory migration 6),
@@ -642,21 +647,33 @@ entirely.
   period's first day, and a member recording it.
 - **The id is permanent; the name a person is shown under is not.** _Decided by
   the owner on 2026-10-17, in lg-33, reversing lg-5's "kept as built" for the
-  display name only._ The name a membership first gave a person stays their id,
-  on every rule, classification, salary and share, and nothing the books store
-  is ever rewritten. An admin gives a person a shown name on top of it, and
-  every screen prints that name through one map `GET /api/people` answers; a
-  person with none is shown under their id, so a household no admin has touched
-  reads as it always did. The record is in the **directory**, not the books:
+  display name only._ A person's id stays on every rule, classification, salary
+  and share, and nothing the books store is ever rewritten. An admin gives a
+  person a shown name on top of it, and every screen prints that name through
+  one map `GET /api/people` answers. A person added since lg-76 is given the
+  name typed for them as their first shown name, in the transaction that adds
+  them, or, when none is typed, the email's part before the `@`, numbered when
+  someone in the household is already shown under it or has it as their id; a
+  generated id is never printed, and a screen whose map lacks one says
+  "Someone". A person added before with no shown name is shown under their id,
+  so a household no admin has touched reads as it always did. The record is in
+  the **directory**, not the books:
   an admin who renames reads no books and may be in no household, and the
   directory is what already says who a household holds. Like a membership it
   is appended, never edited, and the latest record stands. A shown name is
   unique in its household, against every other person's shown name and every
   person id it has held, so no two people are ever shown alike; only a person a
   membership has named can be renamed, so an id the books hold only from an
-  old rule keeps showing as itself. What still takes the id is what writes it:
-  the import's `--as`, the host command's `member`, and the member form, which
-  offers existing people by their shown name and sends the id.
+  old rule keeps showing as itself. Since lg-76 nothing a person types takes an
+  id: the member forms, the host command's `add` and `member`, and the import's
+  and the backfill's `--as` take a name and resolve it to the person shown under
+  it, or to one added before lg-76 whose id it is; the two cannot disagree,
+  since no shown name is another person's id. A name that names nobody is a new
+  person. A workbook's names reach a person by their shown name as well as their
+  id. Lists a person reads sort by shown name; the arithmetic's ties (the odd
+  cent, a ratio's rounding) and a chart's colours keep sorting by id, which is
+  fixed for a UUID though it means nothing, so no amount already computed moves
+  and a rename changes no colour.
 
 The list above describes the tool as built, with the directory (lg-20), a
 books file per household (lg-21) and the directory managed from the app

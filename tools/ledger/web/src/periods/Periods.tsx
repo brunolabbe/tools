@@ -30,7 +30,7 @@ import {
   fetchRecurring,
   retireLine,
 } from "../api/periods.ts";
-import { shownName, usePeopleNames } from "../people.tsx";
+import { inShownOrder, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 import { LineForm } from "./LineForm.tsx";
 import { Recurring } from "./Recurring.tsx";
@@ -108,7 +108,7 @@ export function settlementSentence(
     };
   }
   const into = listed(
-    deposits.map(
+    inShownOrder(deposits, shown, (owed) => owed.personId).map(
       ({ personId, depositCents }) => `${as(personId)} deposits ${formatCents(depositCents)}`,
     ),
   );

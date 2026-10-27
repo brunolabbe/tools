@@ -65,6 +65,11 @@ export interface WorkbookImportOptions {
   personId: string;
   /** The household's current members' names (lg-20), enrolled as a boot would enrol them. */
   members: readonly string[];
+  /**
+   * How the directory shows each person, by id (lg-76), so a workbook's names
+   * reach a person whose id is generated. None by default.
+   */
+  names?: ReadonlyMap<string, string>;
   corrections: Corrections;
   /** Whether this is meant as the import itself, which only changes what the report says. */
   write: boolean;
@@ -630,6 +635,7 @@ function run(
   const reading = readWorkbook(sheets, {
     people,
     corrections: options.corrections,
+    ...(options.names === undefined ? {} : { names: options.names }),
     ...(options.layout === undefined ? {} : { layout: options.layout }),
   });
   const problems = [...reading.problems];

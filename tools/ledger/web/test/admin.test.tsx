@@ -419,8 +419,9 @@ test("asks a new household for its first person's email and name, and for no id 
   expect(screen.queryByRole("heading", { name: "Emails to admit" })).toBeNull();
 
   fireEvent.click(within(fresh).getByRole("button", { name: "Create household" }));
+  // lg-76: the email is asked for; the name may be left empty.
   expect(within(fresh).getByRole("alert").textContent).toBe(
-    "Give the first person's email and their name.",
+    "Give the first person's email, and their name if you like.",
   );
   expect(vi.mocked(createHousehold)).not.toHaveBeenCalled();
 });

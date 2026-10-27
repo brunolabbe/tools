@@ -23,7 +23,7 @@ import { checkDataDir, householdBooksPath } from "./books.ts";
 import { loadApiConfig } from "./config.ts";
 import { migrate } from "./db/schema.ts";
 import { isHouseholdId } from "./directory.ts";
-import { copyBooks, directoryPeople } from "./import-command.ts";
+import { copyBooks, directoryPeople, memberNamed, membersListed } from "./import-command.ts";
 import type { CommandIo } from "./import-command.ts";
 import { knownPeople } from "./people.ts";
 import { backfillSpending } from "./spending-backfill.ts";
@@ -89,8 +89,8 @@ export function runSpendingBackfillCommand(argv: readonly string[], io: CommandI
       `--household is a household's id, as household:ledger list prints it; "${household}" is not.`,
     );
   }
-  const personId = values.as?.trim();
-  if (personId === undefined || personId === "") {
+  const as = values.as?.trim();
+  if (as === undefined || as === "") {
     return usage(io, "Name the person it is recorded under, with --as.");
   }
 
@@ -100,11 +100,13 @@ export function runSpendingBackfillCommand(argv: readonly string[], io: CommandI
       return usage(io, "DATABASE_PATH is :memory:, which holds no books to fill.");
     }
     checkDataDir(config.dataDir);
-    const members = directoryPeople(config.directoryPath, household);
-    if (!members.includes(personId)) {
+    // lg-76: by the name the household shows them under, or an older person's id.
+    const found = directoryPeople(config.directoryPath, household);
+    const personId = memberNamed(found, as);
+    if (personId === undefined) {
       return usage(
         io,
-        `--as names "${personId}", who is not a member of ${household} in the household directory (${members.join(", ") || "it has none"}).`,
+        `--as names "${as}", who is not a member of ${household} in the household directory (${membersListed(found) || "it has none"}).`,
       );
     }
     const booksPath = householdBooksPath(config.dataDir, household);

@@ -77,6 +77,26 @@ function legacy(id: string): void {
 /** A lowercase UUID as `crypto.randomUUID()` prints it (lg-71). */
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/u;
 
+/**
+ * The address's household and how its person is shown (lg-76), and whether
+ * that person's id is a generated one: a person the command adds under a new
+ * name has a UUID for an id and the name as their shown name.
+ */
+function shownAs(
+  address: string,
+): { household: string; name: string; generated: boolean } | undefined {
+  return read((directory) => {
+    const membership = directory.membershipOf(address);
+    if (membership === undefined) return undefined;
+    const names = directory.names(membership.household);
+    return {
+      household: membership.household,
+      name: names.get(membership.person) ?? membership.person,
+      generated: new RegExp(`^${UUID.source}$`, "u").test(membership.person),
+    };
+  });
+}
+
 describe("the household command", () => {
   // lg-71: `add <address> <person>` makes the household and its first member at once.
   test("creates a household by adding its first person, named Home under a UUID it prints", () => {
@@ -88,9 +108,7 @@ describe("the household command", () => {
     const [household] = households;
     expect(household?.id).toMatch(new RegExp(`^${UUID.source}$`, "u"));
     expect(household?.name).toBe("Home");
-    expect(read((directory) => directory.members())).toEqual([
-      { address: ALEX, household: household?.id, person: "alex" },
-    ]);
+    expect(shownAs(ALEX)).toEqual({ household: household?.id, name: "alex", generated: true });
     expect(ran.out).toContain(
       `Created the household ${household?.id ?? ""}, "Home", with ${ALEX} as alex.`,
     );
@@ -104,10 +122,8 @@ describe("the household command", () => {
 
     expect(ran.code, ran.err).toBe(0);
     expect(ran.out).toMatch(/Access policy/u);
-    expect(read((directory) => directory.membershipOf(ALEX))).toEqual({
-      household: "home",
-      person: "alex",
-    });
+    expect(ran.out).toContain(`Added ${ALEX} to home, as alex.`);
+    expect(shownAs(ALEX)).toEqual({ household: "home", name: "alex", generated: true });
   });
 
   test("removes a member", () => {
@@ -119,10 +135,8 @@ describe("the household command", () => {
 
     expect(ran.code, ran.err).toBe(0);
     expect(read((directory) => directory.membershipOf(ALEX))).toBeUndefined();
-    expect(read((directory) => directory.membershipOf(SAM))).toEqual({
-      household: "home",
-      person: "sam",
-    });
+    expect(ran.out).toContain("where it was alex.");
+    expect(shownAs(SAM)).toEqual({ household: "home", name: "sam", generated: true });
   });
 
   test("lists every household and its members", () => {
@@ -135,8 +149,9 @@ describe("the household command", () => {
 
     expect(ran.code).toBe(0);
     expect(ran.out).toContain("home  Home");
-    expect(ran.out).toContain(`  alex  ${ALEX}`);
-    expect(ran.out).toContain(`  sam  ${SAM}`);
+    // lg-76: a person is listed as shown, their generated id beside the name.
+    expect(ran.out).toMatch(new RegExp(`  alex \\(${UUID.source}\\)  ${ALEX}`, "u"));
+    expect(ran.out).toMatch(new RegExp(`  sam \\(${UUID.source}\\)  ${SAM}`, "u"));
   });
 
   // lg-21: each household has books of its own, so a second one is allowed. What
@@ -152,10 +167,7 @@ describe("the household command", () => {
     expect(households).toContainEqual({ id: "home", name: "Home" });
     const other = households.find((household) => household.id !== "home");
     expect(other?.id).toMatch(UUID);
-    expect(read((directory) => directory.membershipOf(SAM))).toEqual({
-      household: other?.id,
-      person: "sam",
-    });
+    expect(shownAs(SAM)).toEqual({ household: other?.id, name: "sam", generated: true });
   });
 
   // lg-23: lg-20 refused a third person here; a household now holds any number.
@@ -167,9 +179,10 @@ describe("the household command", () => {
     const ran = run("member", "home", "casey@example.test", "casey");
 
     expect(ran.code, ran.err).toBe(0);
-    expect(read((directory) => directory.membershipOf("casey@example.test"))).toEqual({
+    expect(shownAs("casey@example.test")).toEqual({
       household: "home",
-      person: "casey",
+      name: "casey",
+      generated: true,
     });
     expect(run().err).toMatch(/any number of people/u);
   });
@@ -181,10 +194,12 @@ describe("the household command", () => {
 
     expect(run().code).toBe(2);
     expect(run("rename", "home").code).toBe(2);
-    expect(run("member", "home", ALEX).code).toBe(2);
+    expect(run("member", "home").code).toBe(2);
+    expect(run("member", "home", ALEX, "alex", "extra").code).toBe(2);
     expect(run("list", "extra").code).toBe(2);
-    // lg-71: `add` takes an address and a person, and nothing else.
-    expect(run("add", ALEX).code).toBe(2);
+    // lg-71: `add` takes an address and a person, and nothing else; lg-76
+    // makes the person optional.
+    expect(run("add").code).toBe(2);
     expect(run("add", "home", "The", "Test", "Household").code).toBe(2);
     expect(read((directory) => directory.households())).toEqual([]);
   });
@@ -307,5 +322,73 @@ describe("the household command and a C1 control or a zero-width character", () 
     expect(first.code, first.err).toBe(0);
     expect(second.code, second.err).toBe(0);
     expect(read((directory) => directory.members())).toEqual([]);
+  });
+});
+
+// lg-76: `member` and `add` take a name as the household shows it, and an
+// older person's id; a name nobody has is a new person under a generated id.
+describe("the household command and a person's name (lg-76)", () => {
+  /** A legacy household holding alex, a person from before lg-76, renamed Alexandre. */
+  function legacyAlex(): void {
+    const directory = Directory.open(directoryPath);
+    try {
+      const change = { by: "operator", at: NOW };
+      directory.addHousehold({ id: "home", name: "Home", ...change });
+      directory.addMember({ household: "home", address: ALEX, person: "alex", ...change });
+      directory.renamePerson({ household: "home", person: "alex", name: "Alexandre", ...change });
+    } finally {
+      directory.close();
+    }
+  }
+
+  test("member resolves a shown name, an older person's id, and a person with a generated id", () => {
+    legacyAlex();
+    expect(run("member", "home", "casey@example.test", "casey").code).toBe(0);
+    const casey = read((directory) => directory.membershipOf("casey@example.test")?.person);
+    expect(casey).toMatch(UUID);
+
+    const byShown = run("member", "home", "alex@work.test", "Alexandre");
+    const byId = run("member", "home", "alex@phone.test", "alex");
+    const byGenerated = run("member", "home", "casey@work.test", "casey");
+
+    expect(byShown.code, byShown.err).toBe(0);
+    expect(byShown.out).toContain("Added alex@work.test to home, as Alexandre.");
+    expect(byId.code, byId.err).toBe(0);
+    expect(byGenerated.code, byGenerated.err).toBe(0);
+    expect(read((directory) => directory.membershipOf("alex@work.test")?.person)).toBe("alex");
+    expect(read((directory) => directory.membershipOf("alex@phone.test")?.person)).toBe("alex");
+    expect(read((directory) => directory.membershipOf("casey@work.test")?.person)).toBe(casey);
+    expect(read((directory) => directory.heldPeople("home"))).toHaveLength(2);
+  });
+
+  test("with no name, the person is shown under the email's part before the @, numbered when taken", () => {
+    legacyAlex();
+
+    const first = run("member", "home", "alex@other.test");
+    const second = run("add", "robin@cabin.test");
+
+    expect(first.code, first.err).toBe(0);
+    // "alex" is alex's id, so the new person is the next free one.
+    expect(first.out).toContain("Added alex@other.test to home, as alex 2.");
+    expect(second.code, second.err).toBe(0);
+    expect(second.out).toMatch(
+      new RegExp(
+        `Created the household ${UUID.source}, "Home", with robin@cabin.test as robin\\.`,
+        "u",
+      ),
+    );
+    // The household's is the one UUID on the line, which the image's CI step reads.
+    expect(second.out.split("\n")[2]?.match(new RegExp(UUID.source, "gu"))).toHaveLength(1);
+  });
+
+  test("list prints each person as shown, with a generated or renamed person's id beside the name", () => {
+    legacyAlex();
+    run("member", "home", "sam@example.test", "sam");
+
+    const ran = run("list");
+
+    expect(ran.code).toBe(0);
+    expect(ran.out).toContain(`  Alexandre (alex)  ${ALEX}`);
+    expect(ran.out).toMatch(new RegExp(`  sam \\(${UUID.source}\\)  sam@example\\.test`, "u"));
   });
 });

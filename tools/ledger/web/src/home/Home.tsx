@@ -15,7 +15,7 @@ import { AppError } from "@ledger/contract";
 import type { BucketsResponse } from "@ledger/contract";
 import { fetchBuckets } from "../api/buckets.ts";
 import { endedSentence, showsHomeSection, useMortgage } from "../mortgage.ts";
-import { shownName, usePeopleNames } from "../people.tsx";
+import { inShownOrder, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
 type Load =
@@ -75,7 +75,7 @@ export function Home(): React.ReactElement {
           <h2 id="mortgage-heading">Mortgage</h2>
           <p className="muted hint">Each person&rsquo;s own money in the bucket.</p>
           <ul className="figures">
-            {mortgage.own.map((person) => (
+            {inShownOrder(mortgage.own, names, (person) => person.personId).map((person) => (
               <li key={person.personId}>
                 <span>{shownName(names, person.personId)}</span>
                 <span className="amount">{formatCents(person.ownCents)}</span>
@@ -95,7 +95,7 @@ export function Home(): React.ReactElement {
           <span className="amount">{formatCents(buffer.balanceCents)}</span>
         </p>
         <ul className="figures muted">
-          {buffer.contributions.map((person) => (
+          {inShownOrder(buffer.contributions, names, (person) => person.personId).map((person) => (
             <li key={person.personId}>
               <span>Put in by {shownName(names, person.personId)}</span>
               <span className="amount">{formatCents(person.contributedCents)}</span>

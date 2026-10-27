@@ -44,7 +44,7 @@ import Database from "better-sqlite3";
 import { loadApiConfig } from "./config.ts";
 import { configure } from "./db/schema.ts";
 import { checkDataDir, householdBooksPath } from "./books.ts";
-import { Directory, isHouseholdId } from "./directory.ts";
+import { Directory, isHouseholdId, shownName } from "./directory.ts";
 import { importWorkbook } from "./workbook-import.ts";
 import { readSheets } from "./xlsx.ts";
 
@@ -55,6 +55,8 @@ export interface CommandIo {
   /** Where relative paths on the command line are resolved from. */
   cwd: string;
   now: () => Date;
+  /** A new household's or person's id (lg-76): `randomUUID()` unless a test hands in its own. */
+  newId?: () => string;
 }
 
 const USAGE = `Usage: npm run import:ledger -- <workbook.xlsx> --household <id> --as <person> [--corrections <file.json>] [--write]
@@ -63,7 +65,8 @@ Imports a household's old workbook into that household's books, in the ledger's
 data directory (DATABASE_PATH). Without --write it is a dry run: the report is
 printed and nothing is written.
   --household    the household whose books the import writes, by its id in the directory
-  --as           the person the import is recorded under, one of that household's members
+  --as           the person the import is recorded under, one of that household's members,
+                 by the name the household shows them under or by their id
   --corrections  the owner's corrections, a JSON file kept outside the repository
   --write        perform the import, if every verification holds
 `;
@@ -109,13 +112,37 @@ function openReal(databasePath: string): Database.Database {
 }
 
 /**
- * The names the household's current members stand under. Read, never written:
+ * The ids the household's current members stand under, and how each person
+ * the household has named is shown (lg-76). Read, never written:
  * the file is opened read-only, and a missing one is refused rather than
  * created, because an import into books whose household has no members would
  * be recorded under a name nobody can sign in as; so is a household the
  * directory does not hold, which has no books to import into.
  */
-export function directoryPeople(directoryPath: string, household: string): string[] {
+export interface DirectoryPeople {
+  /** The current members' person ids. */
+  people: string[];
+  /** Every person the household has named, by id, to how they are shown. */
+  names: Map<string, string>;
+}
+
+/**
+ * The member `--as` names (lg-76): the one shown under it, or failing that the
+ * one whose id it is, as the directory resolves an added member's name.
+ */
+export function memberNamed(found: DirectoryPeople, typed: string): string | undefined {
+  return (
+    found.people.find((person) => shownName(found.names, person) === typed) ??
+    found.people.find((person) => person === typed)
+  );
+}
+
+/** The current members as a sentence names them: shown, never by a generated id. */
+export function membersListed(found: DirectoryPeople): string {
+  return found.people.map((person) => shownName(found.names, person)).join(", ");
+}
+
+export function directoryPeople(directoryPath: string, household: string): DirectoryPeople {
   if (directoryPath !== ":memory:" && !existsSync(directoryPath)) {
     throw new AppError(
       "BAD_REQUEST",
@@ -130,7 +157,13 @@ export function directoryPeople(directoryPath: string, household: string): strin
         `--household names "${household}", which the household directory does not hold.`,
       );
     }
-    return directory.people(household);
+    const names = directory.names(household);
+    return {
+      people: directory.people(household),
+      names: new Map(
+        directory.heldPeople(household).map((person) => [person, shownName(names, person)]),
+      ),
+    };
   } finally {
     directory.close();
   }
@@ -190,8 +223,8 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
       `--household is a household's id, as household:ledger list prints it; "${household}" is not.`,
     );
   }
-  const personId = values.as?.trim();
-  if (personId === undefined || personId === "") {
+  const as = values.as?.trim();
+  if (as === undefined || as === "") {
     return usage(io, "Name the person the import is recorded under, with --as.");
   }
 
@@ -204,11 +237,12 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
       );
     }
     checkDataDir(config.dataDir);
-    const members = directoryPeople(config.directoryPath, household);
-    if (!members.includes(personId)) {
+    const found = directoryPeople(config.directoryPath, household);
+    const personId = memberNamed(found, as);
+    if (personId === undefined) {
       return usage(
         io,
-        `--as names "${personId}", who is not a member of ${household} in the household directory (${members.join(", ") || "it has none"}).`,
+        `--as names "${as}", who is not a member of ${household} in the household directory (${membersListed(found) || "it has none"}).`,
       );
     }
     // The one file this command opens to write, and only with --write.
@@ -231,7 +265,8 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
 
     const options = {
       personId,
-      members,
+      members: found.people,
+      names: found.names,
       corrections,
       write: values.write,
       now: io.now,

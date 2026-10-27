@@ -2,6 +2,7 @@
 
 import { ROUTES } from "@ledger/contract";
 import type { PeopleResponse, Rule, RuleDraft, RulesResponse } from "@ledger/contract";
+import { byShownName } from "../people.tsx";
 import { requestJson } from "./client.ts";
 
 /** `:id` in a route pattern is filled in here; the pattern itself lives in the contract. */
@@ -23,7 +24,10 @@ export async function fetchPeople(
   who: "in" | "everyone" = "in",
 ): Promise<string[]> {
   const answer = await requestJson<PeopleResponse>(ROUTES.people, { signal });
-  return who === "in" ? answer.people : [...answer.people, ...answer.retired].toSorted();
+  // Each list comes by shown name (lg-76); the two together are put back in that order.
+  return who === "in"
+    ? answer.people
+    : [...answer.people, ...answer.retired].toSorted(byShownName(answer.names));
 }
 
 export async function createRule(draft: RuleDraft): Promise<Rule> {

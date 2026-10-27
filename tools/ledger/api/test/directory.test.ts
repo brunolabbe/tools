@@ -14,7 +14,13 @@ import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
 import { AppError } from "@ledger/contract";
 import { migrateDirectory } from "../src/db/directory-schema.ts";
-import { Directory, NEW_HOUSEHOLD_NAME, isHouseholdId, readAddress } from "../src/directory.ts";
+import {
+  Directory,
+  NEW_HOUSEHOLD_NAME,
+  isHouseholdId,
+  nameFromAddress,
+  readAddress,
+} from "../src/directory.ts";
 import { ALEX, SAM, STRANGER } from "./helpers/access.ts";
 import { WRITES_IN_PLACE } from "./helpers/append-only.ts";
 
@@ -1199,22 +1205,27 @@ describe("a household id that is a UUID", () => {
   test("createHousehold makes the household Home and its first member in one step", () => {
     const directory = Directory.open(":memory:");
 
+    // lg-76: the first person is a new one, under a generated id of their own.
+    const PERSON = "6ec0bd7f-11c0-43da-975e-2a8ad9ebae0b";
     const made = directory.createHousehold({
       id: UUID,
       address: " Alex@Example.TEST ",
       person: "alex",
       ...CHANGE,
+      newId: () => PERSON,
     });
 
     expect(made).toEqual({
       household: { id: UUID, name: NEW_HOUSEHOLD_NAME },
-      member: { address: ALEX, household: UUID, person: "alex" },
+      member: { address: ALEX, household: UUID, person: PERSON },
     });
     expect(NEW_HOUSEHOLD_NAME).toBe("Home");
     expect(directory.households()).toEqual([{ id: UUID, name: "Home" }]);
-    expect(directory.membershipOf(ALEX)).toEqual({ household: UUID, person: "alex" });
+    expect(directory.membershipOf(ALEX)).toEqual({ household: UUID, person: PERSON });
+    expect(directory.names(UUID)).toEqual(new Map([[PERSON, "alex"]]));
     expect(directory.history(UUID)).toEqual([
-      { address: ALEX, person: "alex", action: "add", at: AT.toISOString(), by: "operator" },
+      { address: ALEX, person: PERSON, action: "add", at: AT.toISOString(), by: "operator" },
+      { action: "name", person: PERSON, name: "alex", at: AT.toISOString(), by: "operator" },
     ]);
     directory.close();
   });
@@ -1309,5 +1320,248 @@ describe("a household id that is a UUID", () => {
       insert(db, { address: "kim@example.test", person: "kim", household: "nowhere" }),
     ).toThrow(/FOREIGN KEY/u);
     db.close();
+  });
+});
+
+// lg-76: a person added under a name nobody has is a new person, under a
+// generated id, and the name typed is only how they are shown.
+describe("a new person gets a generated id (lg-76)", () => {
+  const FIRST = "11111111-1111-4111-8111-111111111111";
+  const SECOND = "22222222-2222-4222-8222-222222222222";
+  const THIRD = "33333333-3333-4333-8333-333333333333";
+  const GENERATED = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
+  /** A `newId` that hands these out in order, and fails a test that asks for more. */
+  function ids(...given: string[]): () => string {
+    return () => {
+      const next = given.shift();
+      if (next === undefined) throw new Error("no generated id was expected here");
+      return next;
+    };
+  }
+
+  test("a name nobody has is a person under a generated id, shown under that name", () => {
+    const directory = withHousehold();
+
+    const added = directory.addMemberByName({
+      household: "home",
+      address: " Casey@Example.TEST ",
+      person: " Casey ",
+      ...CHANGE,
+      newId: ids(FIRST),
+    });
+
+    expect(added).toEqual({ address: CASEY, household: "home", person: FIRST });
+    expect(directory.membershipOf(CASEY)).toEqual({ household: "home", person: FIRST });
+    expect(directory.names("home")).toEqual(new Map([[FIRST, "Casey"]]));
+    expect(directory.history("home")).toEqual([
+      { address: CASEY, person: FIRST, action: "add", at: AT.toISOString(), by: "operator" },
+      { action: "name", person: FIRST, name: "Casey", at: AT.toISOString(), by: "operator" },
+    ]);
+    directory.close();
+  });
+
+  test("by default the id is a fresh randomUUID", () => {
+    const directory = withHousehold();
+
+    const one = directory.addMemberByName({ household: "home", address: CASEY, ...CHANGE });
+    const two = directory.addMemberByName({ household: "home", address: ALEX, ...CHANGE });
+
+    expect(one.person).toMatch(GENERATED);
+    expect(two.person).toMatch(GENERATED);
+    expect(one.person).not.toBe(two.person);
+    directory.close();
+  });
+
+  test("the membership and the first shown name are written in one transaction", () => {
+    // A trigger planted to refuse the name, so the membership written before it
+    // in the same call must roll back with it.
+    const db = raw();
+    db.exec(`CREATE TRIGGER refuse_names BEFORE INSERT ON person_names
+             BEGIN SELECT RAISE(ABORT, 'planted'); END`);
+    const directory = new Directory(db);
+    const add = () =>
+      directory.addMemberByName({
+        household: "home",
+        address: CASEY,
+        person: "casey",
+        ...CHANGE,
+        newId: ids(FIRST),
+      });
+
+    expect(add).toThrow(/planted/u);
+    expect(directory.members()).toEqual([]);
+    expect(db.prepare("SELECT count(*) AS n FROM memberships").get()).toEqual({ n: 0 });
+
+    db.exec("DROP TRIGGER refuse_names");
+    add();
+    expect(directory.membershipOf(CASEY)).toEqual({ household: "home", person: FIRST });
+    directory.close();
+  });
+
+  test("an id from the generator that is not a fresh UUID writes nothing", () => {
+    const directory = withHousehold();
+    directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
+
+    for (const id of ["alex", "not-a-uuid", "0F8FAD5B-D9CB-469F-A165-70867728950E"]) {
+      expect(
+        code(() =>
+          directory.addMemberByName({
+            household: "home",
+            address: CASEY,
+            person: "casey",
+            ...CHANGE,
+            newId: ids(id),
+          }),
+        ),
+        id,
+      ).toBe("INTERNAL");
+    }
+    expect(directory.membershipOf(CASEY)).toBeUndefined();
+    directory.close();
+  });
+
+  test("an existing person is named by their shown name, or by the id they were added under", () => {
+    const directory = withHousehold();
+    // A person from before lg-76, under the name typed, then renamed.
+    directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
+    directory.renamePerson({ household: "home", person: "alex", name: "Alexandre", ...CHANGE });
+    directory.addMemberByName({
+      household: "home",
+      address: CASEY,
+      person: "casey",
+      ...CHANGE,
+      newId: ids(FIRST),
+    });
+    const add = (address: string, person: string) =>
+      directory.addMemberByName({ household: "home", address, person, ...CHANGE, newId: ids() })
+        .person;
+
+    expect(add("alex@work.test", "Alexandre")).toBe("alex");
+    expect(add("alex@phone.test", "alex")).toBe("alex");
+    expect(add("casey@work.test", "casey")).toBe(FIRST);
+    // The id itself still names a person with a generated id, as the form sent it before lg-76.
+    expect(add("casey@phone.test", FIRST)).toBe(FIRST);
+    expect(directory.heldPeople("home")).toEqual([FIRST, "alex"]);
+    // The first shown name is not written again for an email added later.
+    expect(directory.history("home").filter((record) => record.action === "name")).toHaveLength(1);
+    directory.close();
+  });
+
+  test("with no name, a new person is shown under the email's part before the @, numbered when taken", () => {
+    const directory = withHousehold();
+    // A person from before lg-76 whose id is "alex".
+    directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
+    const add = (address: string, newId: string) =>
+      directory.addMemberByName({ household: "home", address, ...CHANGE, newId: ids(newId) });
+
+    add("alex@other.test", FIRST);
+    add("sam@one.test", SECOND);
+    add("sam@two.test", THIRD);
+
+    expect(directory.names("home")).toEqual(
+      new Map([
+        [FIRST, "alex 2"],
+        [SECOND, "sam"],
+        [THIRD, "sam 2"],
+      ]),
+    );
+    directory.close();
+  });
+
+  test("a name from a long email is cut to the 64 a name holds, the number included", () => {
+    const long = `${"a".repeat(70)}@example.test`;
+    expect(nameFromAddress(long, () => false)).toBe("a".repeat(64));
+    const taken = new Set(["a".repeat(64), `${"a".repeat(62)} 2`]);
+    expect(nameFromAddress(long, (name) => taken.has(name))).toBe(`${"a".repeat(62)} 3`);
+  });
+
+  test("createHousehold with no name shows its first person under the email's part before the @", () => {
+    const directory = Directory.open(":memory:");
+
+    const made = directory.createHousehold({
+      id: FIRST,
+      address: "Robin@Cabin.TEST",
+      ...CHANGE,
+      newId: ids(SECOND),
+    });
+
+    expect(made.member).toEqual({ address: "robin@cabin.test", household: FIRST, person: SECOND });
+    expect(directory.names(FIRST)).toEqual(new Map([[SECOND, "robin"]]));
+    directory.close();
+  });
+
+  test("an email in a household already is refused naming its person as shown, never the id", () => {
+    const directory = withHousehold();
+    directory.addMemberByName({
+      household: "home",
+      address: CASEY,
+      person: "casey",
+      ...CHANGE,
+      newId: ids(FIRST),
+    });
+
+    let message = "";
+    try {
+      directory.addMemberByName({ household: "home", address: CASEY, person: "kim", ...CHANGE });
+    } catch (error) {
+      message = error instanceof Error ? error.message : "";
+    }
+
+    expect(message).toBe(
+      `That email already belongs to the household "home", as casey. Remove it first.`,
+    );
+    directory.close();
+  });
+
+  test("a person with a generated id renamed later reads as a rename after their first name", () => {
+    const directory = withHousehold();
+    directory.addMemberByName({
+      household: "home",
+      address: CASEY,
+      person: "casey",
+      ...CHANGE,
+      newId: ids(FIRST),
+    });
+    directory.renamePerson({ household: "home", person: FIRST, name: "Case", ...CHANGE });
+
+    expect(
+      directory
+        .history("home")
+        .flatMap((record) =>
+          record.action === "name" || record.action === "rename" ? [record.action] : [],
+        ),
+    ).toEqual(["name", "rename"]);
+    expect(directory.names("home").get(FIRST)).toBe("Case");
+    directory.close();
+  });
+
+  // lg-76's gate 1, F4: the cut was by UTF-16 units, so an emoji across the 64th
+  // was split, stored as U+FFFD, and the next such address met person_names_unique.
+  test("a name from an email with an emoji at the cut is cut by characters, and numbered when taken", () => {
+    const directory = withHousehold();
+    const local = `${"e".repeat(63)}\u{1F600}${"x".repeat(5)}`;
+    const add = (domain: string, newId: string) =>
+      directory.addMemberByName({
+        household: "home",
+        address: `${local}@${domain}`,
+        ...CHANGE,
+        newId: ids(newId),
+      });
+
+    add("one.test", FIRST);
+    add("two.test", SECOND);
+    add("three.test", THIRD);
+
+    const whole = `${"e".repeat(63)}\u{1F600}`;
+    expect(directory.names("home")).toEqual(
+      new Map([
+        [FIRST, whole],
+        [SECOND, `${"e".repeat(62)} 2`],
+        [THIRD, `${"e".repeat(62)} 3`],
+      ]),
+    );
+    expect(nameFromAddress(`${local}@x.test`, () => false)).toBe(whole);
+    directory.close();
   });
 });

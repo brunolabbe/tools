@@ -10,16 +10,50 @@
  * screen rendered without one shows every person under their id, as every
  * screen did before lg-33. A chart colours a person by their place in the list
  * of ids, never by their name, so a rename changes no colour.
+ *
+ * A person added since lg-76 has a generated id, a UUID, which is never
+ * printed: one the map has not heard of, before it answers or when it fails, is
+ * "Someone". A person added before keeps their name as their id, and is shown
+ * under it as ever.
  */
 
 import { createContext, useContext } from "react";
+import { GENERATED_ID } from "@ledger/contract";
 
 /** Person id to shown name, as `PeopleResponse.names` carries it. */
 export type ShownNames = Readonly<Record<string, string>>;
 
-/** How `person` is shown: their name in `names`, or their id. */
+/** Said for a person with a generated id whom `names` does not hold (lg-76). */
+export const UNNAMED = "Someone";
+
+/** How `person` is shown: their name in `names`, or their id, unless it is a generated one. */
 export function shownName(names: ShownNames, person: string): string {
-  return Object.hasOwn(names, person) ? (names[person] ?? person) : person;
+  if (Object.hasOwn(names, person)) return names[person] ?? person;
+  return GENERATED_ID.test(person) ? UNNAMED : person;
+}
+
+/**
+ * `items` in the order a person reads them (lg-76), each by the person `personOf`
+ * gives: a ratio's shares, a split's parts. The books order them by id, which is
+ * fixed but means nothing for a generated one.
+ */
+export function inShownOrder<T>(
+  items: readonly T[],
+  names: ShownNames,
+  personOf: (item: T) => string,
+): T[] {
+  const order = byShownName(names);
+  return items.toSorted((one, other) => order(personOf(one), personOf(other)));
+}
+
+/**
+ * The order a person reads a list of people in (lg-76): by how each is shown,
+ * then by id where two are shown alike. A generated id's order means nothing.
+ */
+export function byShownName(names: ShownNames): (one: string, other: string) => number {
+  return (one, other) =>
+    shownName(names, one).localeCompare(shownName(names, other)) ||
+    (one < other ? -1 : one > other ? 1 : 0);
 }
 
 const PeopleNames = createContext<ShownNames>({});

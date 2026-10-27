@@ -7,6 +7,7 @@
  * ports, timeouts or teardown races.
  */
 
+import { randomUUID } from "node:crypto";
 import { AppError } from "@ledger/contract";
 import type { Buffer } from "node:buffer";
 import type { Sheet } from "@ledger/books";
@@ -51,6 +52,12 @@ export interface CreateAppOptions {
   config?: Partial<ApiConfig>;
   logger?: AppLogger;
   now?: () => Date;
+  /**
+   * Where a generated id comes from: a new household's (lg-71) and a new
+   * person's (lg-76). `randomUUID()` unless a test hands in its own, as it
+   * hands in `now`; each must be a lowercase version-4 UUID.
+   */
+  newId?: () => string;
   /**
    * What fetches Access's signing keys. Injected in tests, which serve their
    * own key set and never reach Cloudflare; the URL it is called with is still
@@ -110,6 +117,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const config = loadApiConfig(options.config ?? {});
   const logger = options.logger ?? createLogger({ level: config.logLevel });
   const now = options.now ?? (() => new Date());
+  const newId = options.newId ?? (() => randomUUID());
 
   checkDataDir(config.dataDir);
   const directory = options.directory ?? Directory.open(config.directoryPath);
@@ -154,6 +162,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     },
     startedAt: now(),
     now,
+    newId,
     isShuttingDown: () => shuttingDown,
   };
 

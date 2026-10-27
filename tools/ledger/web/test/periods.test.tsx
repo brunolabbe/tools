@@ -29,7 +29,7 @@ import {
   retireLine,
 } from "../src/api/periods.ts";
 import { PeopleNamesProvider } from "../src/people.tsx";
-import { Periods } from "../src/periods/Periods.tsx";
+import { Periods, settlementSentence } from "../src/periods/Periods.tsx";
 
 vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
 vi.mock("../src/api/spending.ts", () => ({ fetchSpendingCategories: vi.fn() }));
@@ -625,4 +625,35 @@ test("lists a retired person's late line under them, and offers only the people 
   expect(screen.getByText("Paid by alex")).toBeTruthy();
   const form = screen.getByRole("form", { name: "Add a line" });
   expect(within(form).queryByLabelText("This was casey's")).toBeNull();
+});
+
+// lg-76: the deposits are listed by shown name, whatever order the books give them in.
+test("lists three people's deposits by shown name, not by id (lg-76)", () => {
+  const FIRST = "0b9a8c7d-6e5f-4a3b-9c2d-1e0f2a3b4c5d";
+  const SECOND = "6f1c2a3b-0d4e-4f5a-8b6c-7d8e9f0a1b2c";
+  const THIRD = "a1b2c3d4-0000-4000-8000-000000000003";
+  const settlement: SettlementFigures = {
+    ...OWED,
+    shares: [
+      { personId: FIRST, partsPerMillion: 400_000, salaryId: 1 },
+      { personId: SECOND, partsPerMillion: 300_000, salaryId: 2 },
+      { personId: THIRD, partsPerMillion: 300_000, salaryId: 3 },
+    ],
+    deposits: [
+      { personId: FIRST, depositCents: 1_000 },
+      { personId: SECOND, depositCents: 2_000 },
+      { personId: THIRD, depositCents: 3_000 },
+    ],
+    transfers: [],
+  };
+
+  const { lead } = settlementSentence(settlement, {
+    [FIRST]: "Zoe",
+    [SECOND]: "Alex",
+    [THIRD]: "Maya",
+  });
+
+  expect(lead).toBe(
+    "Alex deposits 20.00 $, Maya deposits 30.00 $ and Zoe deposits 10.00 $ into the buffer.",
+  );
 });

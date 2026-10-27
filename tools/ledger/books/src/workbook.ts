@@ -371,21 +371,37 @@ function formatCentsPlain(cents: number): string {
 /**
  * A workbook name to the person id the books use: the corrections file's map
  * first, then a person id that equals the name once case and accents are
- * folded. Anything else is a problem the owner settles in the map.
+ * folded, then a person whose shown name does (lg-76: a person added since has
+ * a generated id, which no workbook names). Anything else is a problem the
+ * owner settles in the map.
  */
 class People {
   readonly #ids: ReadonlyMap<string, string>;
   readonly #names: ReadonlyMap<string, string>;
+  readonly #shown: ReadonlyMap<string, string>;
+  /** Everyone, as the problems name them: by shown name, never a generated id. */
+  readonly #listed: string;
   readonly problems: string[] = [];
   readonly #reported = new Set<string>();
 
-  constructor(people: readonly string[], names: ReadonlyMap<string, string>) {
+  constructor(
+    people: readonly string[],
+    names: ReadonlyMap<string, string>,
+    shown: ReadonlyMap<string, string>,
+  ) {
     this.#ids = new Map(people.map((id) => [folded(id), id]));
+    const byShown = new Map<string, string>();
+    for (const id of people) {
+      const name = shown.get(id);
+      if (name !== undefined && !byShown.has(folded(name))) byShown.set(folded(name), id);
+    }
+    this.#shown = byShown;
+    this.#listed = people.map((id) => shown.get(id) ?? id).join(", ");
     const mapped = new Map<string, string>();
     for (const [name, id] of names) {
       if (!people.includes(id)) {
         this.problems.push(
-          `The corrections file maps "${name}" to "${id}", who is not one of the household (${people.join(", ") || "nobody is configured"}).`,
+          `The corrections file maps "${name}" to "${id}", who is not one of the household (${this.#listed || "nobody is configured"}).`,
         );
         continue;
       }
@@ -397,11 +413,11 @@ class People {
   /** The person id for `name`, or `undefined`, reported once per name, when there is none. */
   resolve(name: string, where: string): string | undefined {
     const key = folded(name);
-    const id = this.#names.get(key) ?? this.#ids.get(key);
+    const id = this.peek(name);
     if (id === undefined && !this.#reported.has(key)) {
       this.#reported.add(key);
       this.problems.push(
-        `${where} names "${name}", who is not one of the household (${[...this.#ids.values()].join(", ") || "nobody is configured"}). Map the name to a person in the corrections file's "people".`,
+        `${where} names "${name}", who is not one of the household (${this.#listed || "nobody is configured"}). Map the name to a person in the corrections file's "people".`,
       );
     }
     return id;
@@ -410,7 +426,7 @@ class People {
   /** Like `resolve`, without reporting: for cells that may hold a name or anything else. */
   peek(name: string): string | undefined {
     const key = folded(name);
-    return this.#names.get(key) ?? this.#ids.get(key);
+    return this.#names.get(key) ?? this.#ids.get(key) ?? this.#shown.get(key);
   }
 }
 
@@ -1230,6 +1246,11 @@ function readSalaries(sheet: Sheet, label: string, people: People, out: Workbook
 export interface ReadOptions {
   /** Every person id the books may name. */
   people: readonly string[];
+  /**
+   * How the household shows each of them, by id, as the directory names them
+   * (lg-76): a workbook name is matched against these as well as the ids.
+   */
+  names?: ReadonlyMap<string, string>;
   corrections?: Corrections;
   /** How the workbook is laid out; the household's own when absent (lg-38). */
   layout?: WorkbookLayout;
@@ -1284,7 +1305,7 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
   const layout = checked.data;
   const plan = accountPlan(layout.account);
   const corrections = options.corrections ?? NO_CORRECTIONS;
-  const people = new People(options.people, corrections.people);
+  const people = new People(options.people, corrections.people, options.names ?? new Map());
 
   const years: YearRead[] = [];
   const periods: WorkbookPeriod[] = [];

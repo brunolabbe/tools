@@ -20,22 +20,25 @@ import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import { AppError } from "@ledger/contract";
 import { loadApiConfig } from "./config.ts";
-import { Directory, OPERATOR } from "./directory.ts";
+import { Directory, OPERATOR, shownName } from "./directory.ts";
 import type { CommandIo } from "./import-command.ts";
 
 const USAGE = `Usage: npm run household:ledger -- <command>
 
 Changes who belongs to which household, in the ledger's directory (DIRECTORY_PATH).
-  add <email> <person>                  create a household by adding its first person;
+  add <email> [person]                  create a household by adding its first person;
                                         it is named "Home" and its id is a generated UUID
-  member <household> <email> <person>   add an email to a household, as that person
+  member <household> <email> [person]   add an email to a household, as that person
   remove <email>                        take an email out of its household
   list                                  every household and its members
 
-A household holds any number of people, each behind any number of emails,
-and a name stays in its books once there. Every email must also be on the
-ledger's Access policy, which is a dashboard edit. An older household keeps
-the one-word id it was made with; list prints every id.
+A person is named as the household shows them, or by the id an older one was
+added under. A name nobody has is a new person, given a generated id and shown
+under that name; with no name, under the email's part before the @, numbered
+if someone already has it. A household holds any number of people, each behind
+any number of emails, and a person stays in its books once there. Every email
+must also be on the ledger's Access policy, which is a dashboard edit. An older
+household keeps the one-word id it was made with; list prints every id.
 `;
 
 /** Said whenever an email joins a household, which Access must admit as well. */
@@ -54,7 +57,14 @@ function list(directory: Directory): string {
   return households
     .map((household) => {
       const members = directory.members(household.id);
-      const lines = members.map((member) => `  ${member.person}  ${member.address}`);
+      const names = directory.names(household.id);
+      // lg-76: a person is listed as they are shown, with their id beside it
+      // when it differs, as a generated one always does.
+      const lines = members.map((member) => {
+        const shown = shownName(names, member.person);
+        const who = shown === member.person ? shown : `${shown} (${member.person})`;
+        return `  ${who}  ${member.address}`;
+      });
       return [
         `${household.id}  ${household.name}`,
         ...(lines.length > 0 ? lines : ["  (no members)"]),
@@ -85,8 +95,8 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
   }
   const [command, ...args] = positionals;
   const arity: Record<string, (count: number) => boolean> = {
-    add: (count) => count === 2,
-    member: (count) => count === 3,
+    add: (count) => count === 1 || count === 2,
+    member: (count) => count === 2 || count === 3,
     remove: (count) => count === 1,
     list: (count) => count === 0,
   };
@@ -112,30 +122,34 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
     return 2;
   }
 
-  const change = { by: OPERATOR, at: io.now() };
+  const change = { by: OPERATOR, at: io.now(), newId: io.newId };
+  const shown = (member: { household: string; person: string }): string =>
+    shownName(directory.names(member.household), member.person);
   try {
     switch (command) {
       case "add": {
         // lg-71: the household and its first person in one transaction, under a
-        // UUID the operator copies from here to name it in `member`.
-        const [address = "", person = ""] = args;
+        // UUID the operator copies from here to name it in `member`. The person
+        // is printed as shown, so the household's is the one UUID on the line.
+        const [address = "", person] = args;
         const { household, member } = directory.createHousehold({
-          id: randomUUID(),
+          id: (io.newId ?? randomUUID)(),
           address,
           person,
           ...change,
         });
         io.stdout(
-          `Created the household ${household.id}, "${household.name}", with ${member.address} as ${member.person}.\n` +
+          `Created the household ${household.id}, "${household.name}", with ${member.address} as ${shown(member)}.\n` +
             ACCESS_POLICY_REMINDER,
         );
         return 0;
       }
       case "member": {
-        const [household = "", address = "", person = ""] = args;
-        const member = directory.addMember({ household, address, person, ...change });
+        // lg-76: `person` is a name as shown, or an older person's id.
+        const [household = "", address = "", person] = args;
+        const member = directory.addMemberByName({ household, address, person, ...change });
         io.stdout(
-          `Added ${member.address} to ${member.household}, as ${member.person}.\n` +
+          `Added ${member.address} to ${member.household}, as ${shown(member)}.\n` +
             ACCESS_POLICY_REMINDER,
         );
         return 0;
@@ -144,7 +158,7 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
         const [address = ""] = args;
         const removed = directory.removeMember({ address, ...change });
         io.stdout(
-          `Removed ${removed.address} from ${removed.household}, where it was ${removed.person}. ` +
+          `Removed ${removed.address} from ${removed.household}, where it was ${shown(removed)}. ` +
             `Its records keep the name. Take it off the ledger's Access policy too, if nothing else needs it there.\n`,
         );
         return 0;

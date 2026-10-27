@@ -159,7 +159,8 @@ test("shows a renamed person by name, and the rename as its own line", async () 
     "2026-10-01 alex@example.test added as Alex, by the operator",
   );
 
-  // The form offers Alex and sends the id.
+  // The form offers Alex and sends the name as typed, which the API resolves to
+  // the person shown under it (lg-76; it sent the id before).
   fireEvent.change(screen.getByLabelText("Email"), {
     target: { value: "alex.phone@example.test" },
   });
@@ -169,7 +170,7 @@ test("shows a renamed person by name, and the rename as its own line", async () 
   await waitFor(() =>
     expect(vi.mocked(addHouseholdMember)).toHaveBeenCalledWith("home", {
       address: "alex.phone@example.test",
-      person: "alex",
+      person: "Alex",
     }),
   );
   expect((await screen.findByRole("status")).textContent).toContain(
