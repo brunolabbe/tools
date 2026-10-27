@@ -106,6 +106,12 @@ export interface WorkbookCaller {
   personId: string;
   /** The household's current members' names (lg-20). */
   members: readonly string[];
+  /**
+   * How the directory shows each person, by id (lg-76): a person added since
+   * has a UUID for an id, so the workbook's names reach them only through this,
+   * as the host import's do (lg-79).
+   */
+  names: ReadonlyMap<string, string>;
   now: () => Date;
 }
 
@@ -235,6 +241,7 @@ export async function describeWorkbook(
   const result = importWorkbook(caller.db, sheets, {
     personId: caller.personId,
     members: caller.members,
+    names: caller.names,
     corrections: NO_CORRECTIONS,
     write: false,
     commit: false,
@@ -268,6 +275,7 @@ export async function confirmWorkbook(
   const result = importWorkbook(caller.db, sheets, {
     personId: caller.personId,
     members: caller.members,
+    names: caller.names,
     corrections: NO_CORRECTIONS,
     write: true,
     commit: true,

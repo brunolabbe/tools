@@ -379,6 +379,8 @@ class People {
   readonly #ids: ReadonlyMap<string, string>;
   readonly #names: ReadonlyMap<string, string>;
   readonly #shown: ReadonlyMap<string, string>;
+  /** Each id's shown name, as the directory gives it. */
+  readonly #shownById: ReadonlyMap<string, string>;
   /** Everyone, as the problems name them: by shown name, never a generated id. */
   readonly #listed: string;
   readonly problems: string[] = [];
@@ -396,6 +398,7 @@ class People {
       if (name !== undefined && !byShown.has(folded(name))) byShown.set(folded(name), id);
     }
     this.#shown = byShown;
+    this.#shownById = shown;
     this.#listed = people.map((id) => shown.get(id) ?? id).join(", ");
     const mapped = new Map<string, string>();
     for (const [name, id] of names) {
@@ -421,6 +424,11 @@ class People {
       );
     }
     return id;
+  }
+
+  /** How a check or a problem prints `id`: by shown name, never a generated id (lg-79). */
+  shown(id: string): string {
+    return this.#shownById.get(id) ?? id;
   }
 
   /** Like `resolve`, without reporting: for cells that may hold a name or anything else. */
@@ -1094,11 +1102,11 @@ function readPeriod(
       .reduce((s, line) => s + line.amountCents, 0);
     if (sum === total) {
       out.checks.push(
-        `${sheet.name}: ${personId}'s lines add up to the sheet's total, ${formatCentsPlain(total)}.`,
+        `${sheet.name}: ${people.shown(personId)}'s lines add up to the sheet's total, ${formatCentsPlain(total)}.`,
       );
     } else {
       out.problems.push(
-        `${cellRef(sheet.name, totalRow, column)}: ${personId}'s lines add up to ${formatCentsPlain(sum)}, but the sheet's total says ${formatCentsPlain(total)}.`,
+        `${cellRef(sheet.name, totalRow, column)}: ${people.shown(personId)}'s lines add up to ${formatCentsPlain(sum)}, but the sheet's total says ${formatCentsPlain(total)}.`,
       );
     }
   }
@@ -1227,7 +1235,7 @@ function readSalaries(sheet: Sheet, label: string, people: People, out: Workbook
       if (!salaries || salary === null || head === undefined) continue;
       if (found.has(head)) {
         out.problems.push(
-          `${cellRef(sheet.name, index + 1, column + 1)}: a second salary for ${head}.`,
+          `${cellRef(sheet.name, index + 1, column + 1)}: a second salary for ${people.shown(head)}.`,
         );
       }
       found.set(head, toCents(salary));
@@ -1424,7 +1432,7 @@ function applyRatios(ratios: readonly PeriodRatio[], people: People, out: Workbo
     const named = shares.map((share) => share.personId).toSorted();
     if (named[0] === named[1] || (household.length === 2 && named.join() !== household.join())) {
       out.problems.push(
-        `${where} names ${named.join(" and ")}; a ratio is between the two people Accueil names (${household.join(" and ")}).`,
+        `${where} names ${named.map((id) => people.shown(id)).join(" and ")}; a ratio is between the two people Accueil names (${household.map((id) => people.shown(id)).join(" and ")}).`,
       );
       continue;
     }
