@@ -23,6 +23,7 @@ import type {
 } from "@ledger/contract";
 import type { LayoutAnswer, LayoutAsk } from "@ledger/receipts";
 import { householdBooksPath } from "../src/books.ts";
+import { Directory } from "../src/directory.ts";
 import { runImportCommand } from "../src/import-command.ts";
 import { MAX_CELL_TEXT, layoutRequest } from "../src/layout-view.ts";
 import { createLogger } from "../src/logger.ts";
@@ -153,6 +154,8 @@ interface Started {
 async function start(
   options: {
     people?: readonly string[];
+    /** A directory of the test's own, in place of one under `people`'s readable ids. */
+    directory?: Directory;
     ask?: LayoutAsk | null;
     sheets?: Sheet[];
   } = {},
@@ -161,7 +164,9 @@ async function start(
   const reader = spyReader(options.sheets);
   const inflated: number[] = [];
   app = await createApp({
-    directory: memberDirectory(people.map((person) => [`${person}@example.test`, person])),
+    directory:
+      options.directory ??
+      memberDirectory(people.map((person) => [`${person}@example.test`, person])),
     config: {
       dataDir: ":memory:",
       access: accessConfig(),
@@ -960,5 +965,78 @@ describe("an end record and a directory that disagree (lg-66 gate 2, F2)", () =>
     await refusedBeforeTheReader(
       reEnded(await smallWorkbook(), { insert: Buffer.alloc(16, 0x20) }),
     );
+  });
+});
+
+describe("a household whose people have generated ids (lg-79)", () => {
+  const ALEX_ID = "4f9c2d8e-1b3a-4c5d-9e6f-7a8b9c0d1e2f";
+  const SAM_ID = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+
+  /** alex and sam as lg-76 adds them: a UUID each, the name typed only shown. */
+  function generatedDirectory(
+    people: readonly (readonly [string, string])[] = [
+      ["alex", ALEX_ID],
+      ["sam", SAM_ID],
+    ],
+  ): Directory {
+    const directory = Directory.open(":memory:");
+    const change = { by: "operator", at: NOW };
+    directory.addHousehold({ id: HOUSEHOLD, name: "Home", ...change });
+    for (const [person, id] of people) {
+      directory.addMemberByName({
+        household: HOUSEHOLD,
+        address: `${person}@example.test`,
+        person,
+        ...change,
+        newId: () => id,
+      });
+    }
+    return directory;
+  }
+
+  test("the workbook's names reach them by their shown names, on describe and on confirm", async () => {
+    const started = await start({
+      directory: generatedDirectory(),
+      ask: fake(answering(validLayout())).ask,
+    });
+
+    const described = await describeFile(started, fileOf("lg7"));
+
+    expect(described.statusCode, described.body).toBe(200);
+    const body = described.json<DescribeWorkbookResponse>();
+    expect(body.ok, body.problems.join("\n")).toBe(true);
+
+    const confirmed = await confirmFile(started, fileOf("lg7"), body.layout);
+
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const db = started.app.books.of(HOUSEHOLD);
+    expect(db.prepare("SELECT DISTINCT person_id FROM salaries ORDER BY person_id").all()).toEqual([
+      { person_id: ALEX_ID },
+      { person_id: SAM_ID },
+    ]);
+    expect(
+      db
+        .prepare(
+          "SELECT DISTINCT person_id FROM classifications WHERE person_id IS NOT NULL ORDER BY person_id",
+        )
+        .all(),
+    ).toEqual([{ person_id: ALEX_ID }, { person_id: SAM_ID }]);
+  });
+
+  test("a name the household lacks is refused naming the household as shown, never by a generated id", async () => {
+    const started = await start({
+      directory: generatedDirectory([["alex", ALEX_ID]]),
+      ask: fake(answering(validLayout())).ask,
+    });
+
+    const described = await describeFile(started, fileOf("lg7"));
+
+    expect(described.statusCode, described.body).toBe(200);
+    const body = described.json<DescribeWorkbookResponse>();
+    expect(body.ok).toBe(false);
+    expect(body.problems).toContain(
+      `2022!E6 names "Sam", who is not one of the household (alex). Map the name to a person in the corrections file's "people".`,
+    );
+    expect(body.problems.join("\n")).not.toContain(ALEX_ID);
   });
 });

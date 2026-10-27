@@ -31,6 +31,7 @@ function callerOf(context: AppContext, request: FastifyRequest): WorkbookCaller 
     personId: person.id,
     // The household as it stands, as an import from the host enrols it.
     members: context.directory.people(person.household),
+    names: context.directory.names(person.household),
     now: context.now,
   };
 }
