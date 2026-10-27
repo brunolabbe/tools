@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0](https://github.com/brunolabbe/tools/compare/downloader-v0.10.0...downloader-v0.11.0) (2026-10-27)
+
+
+### Features
+
+* **downloader:** a clear button on the address, keep source by default, and plainer job lines ([#646](https://github.com/brunolabbe/tools/issues/646)) ([66fae93](https://github.com/brunolabbe/tools/commit/66fae93594da1337bcd808e0077b12c576bb5c82))
+
+
+### Fixes
+
+* **downloader:** bump yt-dlp to 2026.10.21 ([#674](https://github.com/brunolabbe/tools/issues/674)) ([cf3a85f](https://github.com/brunolabbe/tools/commit/cf3a85f8e5bfd850f7dc3c9c08092f305b3f5746))
+* **downloader:** clear oxlint 1.88's React findings in the web UI (repo-119) ([#654](https://github.com/brunolabbe/tools/issues/654)) ([802a69f](https://github.com/brunolabbe/tools/commit/802a69f17f0c7e065c9125ede1ab079541c04c8a))
+
 ## [0.10.0](https://github.com/brunolabbe/tools/compare/downloader-v0.9.0...downloader-v0.10.0) (2026-10-22)
 
 
