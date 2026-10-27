@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/brunolabbe/tools/compare/ledger-v0.4.1...ledger-v0.5.0) (2026-10-27)
+
+
+### Features
+
+* **ledger:** a new household is created by adding its first person, under a UUID (lg-71) ([#669](https://github.com/brunolabbe/tools/issues/669)) ([be8d9c0](https://github.com/brunolabbe/tools/commit/be8d9c0e7260fb7678df579b3665fffa13ca1198))
+* **ledger:** a new person gets a generated UUID; the name typed is only how they are shown (lg-76) ([#672](https://github.com/brunolabbe/tools/issues/672)) ([207df04](https://github.com/brunolabbe/tools/commit/207df04a109dca68625faf552d25a765eb0700b9))
+* **ledger:** import a workbook through a layout a model describes (lg-66) ([#670](https://github.com/brunolabbe/tools/issues/670)) ([02ecde1](https://github.com/brunolabbe/tools/commit/02ecde1600cd8690465abb9b19300e8d572fa485))
+
+
+### Fixes
+
+* **ledger:** clear oxlint 1.88's React findings in the web UI (repo-119) ([#656](https://github.com/brunolabbe/tools/issues/656)) ([7134af8](https://github.com/brunolabbe/tools/commit/7134af894efa3c34c07af16420933038c8f58404))
+* **ledger:** space Admin's cards and restore the stats gridlines (lg-70) ([#664](https://github.com/brunolabbe/tools/issues/664)) ([f69e9b2](https://github.com/brunolabbe/tools/commit/f69e9b2c3bb88b4905cf96733633ead7b65c363b))
+* **ledger:** the Import screen reaches people under generated ids by their shown names (lg-79) ([#677](https://github.com/brunolabbe/tools/issues/677)) ([f05108d](https://github.com/brunolabbe/tools/commit/f05108d22cf9c395314ad3075fb04ce326cf990e))
+
 ## [0.4.1](https://github.com/brunolabbe/tools/compare/ledger-v0.4.0...ledger-v0.4.1) (2026-10-25)
 
 
