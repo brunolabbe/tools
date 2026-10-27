@@ -1006,9 +1006,16 @@ describe("a household whose people have generated ids (lg-79)", () => {
     const body = described.json<DescribeWorkbookResponse>();
     expect(body.ok, body.problems.join("\n")).toBe(true);
 
+    // The report names them as shown, as every screen does, and never by id.
+    expect(body.report).toContain("salaries (Accueil): alex ");
+    for (const id of [ALEX_ID, SAM_ID]) expect(body.report).not.toContain(id);
+
     const confirmed = await confirmFile(started, fileOf("lg7"), body.layout);
 
     expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const report = confirmed.json<ConfirmWorkbookResponse>().report;
+    expect(report).toContain("salaries (Accueil): alex ");
+    for (const id of [ALEX_ID, SAM_ID]) expect(report).not.toContain(id);
     const db = started.app.books.of(HOUSEHOLD);
     expect(db.prepare("SELECT DISTINCT person_id FROM salaries ORDER BY person_id").all()).toEqual([
       { person_id: ALEX_ID },

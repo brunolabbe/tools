@@ -53,6 +53,7 @@ import type { Bucket, OwnMoney, SettlementFigures, WorkbookLayout } from "@ledge
 import { applyMigrations } from "./db/schema.ts";
 import type { Database } from "better-sqlite3";
 import { classifyRow } from "./classifications.ts";
+import { shownName } from "./directory.ts";
 import { enrollPeople, knownPeople } from "./people.ts";
 import { openPeriod } from "./periods.ts";
 import type { RuleContext } from "./rules.ts";
@@ -533,11 +534,14 @@ function money(cents: number): string {
   return formatCents(cents);
 }
 
-function gapOf(own: readonly OwnMoney[]): { label: string; cents: number } | null {
+/** A person as the report prints them: by shown name, never a generated id (lg-79). */
+type Shown = (person: string) => string;
+
+function gapOf(own: readonly OwnMoney[], shown: Shown): { label: string; cents: number } | null {
   const [first, second] = own;
   if (own.length !== 2 || first === undefined || second === undefined) return null;
   return {
-    label: `${first.personId} − ${second.personId}`,
+    label: `${shown(first.personId)} − ${shown(second.personId)}`,
     cents: first.ownCents - second.ownCents,
   };
 }
@@ -546,14 +550,15 @@ function gapOf(own: readonly OwnMoney[]): { label: string; cents: number } | nul
 function compare(
   expected: WorkbookFigures,
   ledger: LedgerFigures,
+  shown: Shown,
 ): { lines: string[]; failed: string[] } {
   const rows: [string, number, number][] = [];
   for (const person of expected.mortgage.own) {
     const found = ledger.own.find((entry) => entry.personId === person.personId)?.ownCents ?? 0;
-    rows.push([`mortgage: ${person.personId}'s own money`, person.ownCents, found]);
+    rows.push([`mortgage: ${shown(person.personId)}'s own money`, person.ownCents, found]);
   }
-  const gapExpected = gapOf(expected.mortgage.own);
-  const gapLedger = gapOf(ledger.own);
+  const gapExpected = gapOf(expected.mortgage.own, shown);
+  const gapLedger = gapOf(ledger.own, shown);
   if (gapExpected !== null) {
     rows.push([`mortgage gap (${gapExpected.label})`, gapExpected.cents, gapLedger?.cents ?? 0]);
   }
@@ -576,7 +581,7 @@ function compare(
   };
 }
 
-function describeSettlement(figures: SettlementFigures | null): string {
+function describeSettlement(figures: SettlementFigures | null, shown: Shown): string {
   if (figures === null) return "no ratio in effect";
   const { deposits, transfers } = figures;
   if (deposits !== null && deposits.length === 0 && transfers.length === 0) return "nobody owes";
@@ -585,18 +590,20 @@ function describeSettlement(figures: SettlementFigures | null): string {
   const [deposit, another] = deposits ?? [];
   const onePayer = deposit === undefined || only === undefined || deposit.personId === only.fromId;
   if (more === undefined && another === undefined && (deposit ?? only) !== undefined && onePayer) {
-    const payer = deposit?.personId ?? only?.fromId ?? "";
+    const payer = shown(deposit?.personId ?? only?.fromId ?? "");
     const what =
       deposit === undefined ? "pays directly" : `deposits ${money(deposit.depositCents)}`;
     return `${payer} ${what} (net ${money(only?.cents ?? 0)}), ${figures.formula}`;
   }
   const direct = transfers
-    .map((transfer) => `${transfer.fromId} to ${transfer.toId} ${money(transfer.cents)}`)
+    .map(
+      (transfer) => `${shown(transfer.fromId)} to ${shown(transfer.toId)} ${money(transfer.cents)}`,
+    )
     .join(", ");
   const asked =
     deposits === null
       ? `pays directly: ${direct}`
-      : `${deposits.map((each) => `${each.personId} deposits ${money(each.depositCents)}`).join(", ")} (net ${direct === "" ? "nothing" : direct})`;
+      : `${deposits.map((each) => `${shown(each.personId)} deposits ${money(each.depositCents)}`).join(", ")} (net ${direct === "" ? "nothing" : direct})`;
   return `${asked}, ${figures.formula}`;
 }
 
@@ -632,6 +639,8 @@ function run(
 ): { ok: boolean; report: string; problems: string[]; reading: WorkbookReading } {
   enrollPeople(db, options.members, options.now());
   const people = knownPeople(db);
+  const names = options.names ?? new Map<string, string>();
+  const shown: Shown = (person) => shownName(names, person);
   const reading = readWorkbook(sheets, {
     people,
     corrections: options.corrections,
@@ -649,7 +658,7 @@ function run(
   }
   if (!people.includes(options.personId)) {
     problems.push(
-      `--as names "${options.personId}", who is not one of the household (${people.join(", ") || "nobody is in the directory"}).`,
+      `--as names "${options.personId}", who is not one of the household (${people.map(shown).join(", ") || "nobody is in the directory"}).`,
     );
   }
   alreadyHeld(db, problems);
@@ -698,7 +707,7 @@ function run(
     const was = movement.workbook;
     if (was === null) continue;
     say(
-      `  corrected: ${movement.sheet} row ${String(movement.row)}, ${was.bucket} ${was.personId ?? "joint"} → ${movement.bucket} ${movement.personId ?? "joint"}: ${movement.correction ?? ""}`,
+      `  corrected: ${movement.sheet} row ${String(movement.row)}, ${was.bucket} ${was.personId === null ? "joint" : shown(was.personId)} → ${movement.bucket} ${movement.personId === null ? "joint" : shown(movement.personId)}: ${movement.correction ?? ""}`,
     );
   }
   if (placement !== null) {
@@ -717,11 +726,11 @@ function run(
         ? "no settlement read"
         : settlement.payerId === null
           ? `${settlement.formula}, nobody owed`
-          : `${settlement.formula}, ${settlement.payerId} deposited ${money(settlement.depositCents)}`;
+          : `${settlement.formula}, ${shown(settlement.payerId)} deposited ${money(settlement.depositCents)}`;
     const ratio =
       period.ratio === null
         ? ""
-        : `, settled at ${period.ratio.map((share) => `${share.personId} ${percent(share.partsPerMillion)}`).join(", ")}`;
+        : `, settled at ${period.ratio.map((share) => `${shown(share.personId)} ${percent(share.partsPerMillion)}`).join(", ")}`;
     say(
       `  ${period.sheet}: ${period.start} to ${period.end ?? ""}, ${String(period.lines.length)} lines, ${asked}${ratio}`,
     );
@@ -730,8 +739,8 @@ function run(
   for (const deposit of reading.deposits) {
     say(
       deposit.paid === null
-        ? `  not paid in the workbook: ${deposit.sheet} asked ${deposit.payerId} for ${money(deposit.askedCents)}, and no deposit of that amount by ${deposit.payerId} is in the year sheets from ${deposit.from}; check it before --write`
-        : `  paid: ${deposit.sheet}'s ${money(deposit.askedCents)} by ${deposit.payerId}, ${deposit.paid.sheet} row ${String(deposit.paid.row)}, ${deposit.paid.date}`,
+        ? `  not paid in the workbook: ${deposit.sheet} asked ${shown(deposit.payerId)} for ${money(deposit.askedCents)}, and no deposit of that amount by ${shown(deposit.payerId)} is in the year sheets from ${deposit.from}; check it before --write`
+        : `  paid: ${deposit.sheet}'s ${money(deposit.askedCents)} by ${shown(deposit.payerId)}, ${deposit.paid.sheet} row ${String(deposit.paid.row)}, ${deposit.paid.date}`,
     );
   }
   if (reading.open !== null) {
@@ -741,7 +750,7 @@ function run(
   }
   if (reading.salaries.length > 0) {
     say(
-      `  salaries (Accueil): ${reading.salaries.map((salary) => `${salary.personId} ${money(salary.amountCents)}`).join(", ")}`,
+      `  salaries (Accueil): ${reading.salaries.map((salary) => `${shown(salary.personId)} ${money(salary.amountCents)}`).join(", ")}`,
     );
   }
   if (reading.ignored.length > 0) say(`  not imported: ${reading.ignored.join(", ")}`);
@@ -757,7 +766,7 @@ function run(
     const written = writeAll(db, reading, placement, context);
     for (const ratio of written.ratios) {
       say(
-        `  ratio from ${ratio.from}: ${ratio.shares.map((share) => `${share.personId} ${percent(share.partsPerMillion)}`).join(", ")} (${ratio.accueil ? "Accueil's salaries" : "the corrections file"})`,
+        `  ratio from ${ratio.from}: ${ratio.shares.map((share) => `${shown(share.personId)} ${percent(share.partsPerMillion)}`).join(", ")} (${ratio.accueil ? "Accueil's salaries" : "the corrections file"})`,
       );
     }
     if (
@@ -771,7 +780,7 @@ function run(
     }
 
     const ledger = ledgerFigures(db, placement.lastSeq, people);
-    const { lines, failed } = compare(expected, ledger);
+    const { lines, failed } = compare(expected, ledger, shown);
     say();
     say(`Figures over the workbook's rows, through ${expected.asOf}`);
     for (const line of lines) say(line);
@@ -789,7 +798,7 @@ function run(
           (row.bucket !== movement.bucket || row.person_id !== movement.personId)
         ) {
           problems.push(
-            `The stored row ${describeStored(row)} is filed ${row.bucket} ${row.person_id ?? "joint"}; the workbook files it ${movement.bucket} ${movement.personId ?? "joint"}.`,
+            `The stored row ${describeStored(row)} is filed ${row.bucket} ${row.person_id === null ? "joint" : shown(row.person_id)}; the workbook files it ${movement.bucket} ${movement.personId === null ? "joint" : shown(movement.personId)}.`,
           );
         }
       }
@@ -807,11 +816,13 @@ function run(
       const open = openPeriod(db, { end });
       say();
       say(`The open period as of ${end}, everything since the two were last even:`);
-      say(`  books (cumulative, the catch-up folded in): ${describeSettlement(open.settlement)}`);
+      say(
+        `  books (cumulative, the catch-up folded in): ${describeSettlement(open.settlement, shown)}`,
+      );
       const asked = reading.open?.settlement ?? null;
       if (asked !== null) {
         say(
-          `  workbook (${reading.open?.sheet ?? ""}, this period alone, ${asked.formula}): ${asked.payerId === null ? "nobody owes" : `${asked.payerId} deposits ${money(asked.depositCents)}`}`,
+          `  workbook (${reading.open?.sheet ?? ""}, this period alone, ${asked.formula}): ${asked.payerId === null ? "nobody owes" : `${shown(asked.payerId)} deposits ${money(asked.depositCents)}`}`,
         );
       }
     }
@@ -819,7 +830,7 @@ function run(
     say();
     say(`The workbook's figures as of ${expected.asOf}`);
     for (const person of expected.mortgage.own) {
-      say(`  mortgage: ${person.personId}'s own money  ${money(person.ownCents)}`);
+      say(`  mortgage: ${shown(person.personId)}'s own money  ${money(person.ownCents)}`);
     }
     say(`  buffer balance  ${money(expected.bufferBalanceCents)}`);
   }

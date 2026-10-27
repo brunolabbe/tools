@@ -45,6 +45,12 @@ uploaded to `/api/workbook/describe` with its correct description answered:
    of its `importWorkbook` calls pass it, as the host import does.
 2. `callerOf` in `api/src/routes/workbook.ts` fills it from
    `context.directory.names(person.household)`.
+3. Added after gate 1, by owner choice: every person the import's report and
+   problems print goes through the shown name, falling back to the id, so a
+   household with word ids prints the same text. That is `run`, `compare`,
+   `gapOf` and `describeSettlement` in `api/src/workbook-import.ts`, and the
+   period sheet's per-person check lines through `People.shown` in
+   `books/src/workbook.ts`.
 
 ## Done when
 
@@ -57,7 +63,26 @@ uploaded to `/api/workbook/describe` with its correct description answered:
    and no UUID in any problem: the same block › "a name the household lacks is
    refused naming the household as shown, never by a generated id".
 3. Both tests fail with the two source files at `a018ffcf`.
-4. `npm run check` and the ledger suite pass.
+4. Added after gate 1: on that household the describe report and the confirm
+   report each print `salaries (Accueil): alex ` and neither holds either UUID,
+   asserted in the first test. Those assertions fail with Build 3 reverted.
+5. `npm run check` and the ledger suite pass.
+
+## Review
+
+**Gate 1: CONCERNS** at `a34a9c41`, 2026-10-27, Sonnet 5.5. Done when 1 to 4 (as
+they stood) proven; the gate reverted the two files itself and each call site
+alone turns the first test red.
+
+- **F1 (med), fixed by owner choice:** once names resolve, the describe and
+  confirm reports each printed 17 lines naming a person by UUID, against
+  `tools/ledger/CLAUDE.md`'s "a UUID is never printed". lg-76's Log had left it
+  as an operator's console; lg-66's screen made that untrue. Build 3, Done
+  when 4.
+- **F2 (low), left:** `WorkbookImportOptions.names` stays optional, which is how
+  the screen left it out without a type error. Every production caller passes
+  it now, and `WorkbookCaller.names` is required, so a new screen caller fails
+  typecheck.
 
 ## Log
 
@@ -69,3 +94,18 @@ listing the UUID), and pass with the fix. The household list in the refusal
 comes from `People` in `books/src/workbook.ts`, which already prints a shown
 name when it has `names`, so the second test needed no change there. lg-78,
 which asks what to do with a name the household lacks, is unchanged by this.
+
+### 2026-10-27 — round 1: gate 1's F1 fixed
+
+The owner chose to fix F1 here rather than file it. Build 3 and Done when 4
+are new. The two new assertions failed with only `workbook-import.ts` and
+`books/src/workbook.ts` reverted, and pass with them. No existing test changed,
+which is what the fallback to the id promises for word-id households.
+`npm run check` exits 0 and the ledger suite passes, 1,842 of 1,842.
+
+**Left, out of the screen's reach:** `noteOf` in `books/src/workbook.ts` writes
+a corrected row's note as "Corrected on import from <bucket>, <person id>".
+Only the host command's corrections file makes a correction, and the note is
+stored, so changing its text would change what later imports store.
+`run`'s `--as names …` line prints the id the command was given; the screen's
+caller is always a member, so it never reaches it.

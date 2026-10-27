@@ -379,6 +379,8 @@ class People {
   readonly #ids: ReadonlyMap<string, string>;
   readonly #names: ReadonlyMap<string, string>;
   readonly #shown: ReadonlyMap<string, string>;
+  /** Each id's shown name, as the directory gives it. */
+  readonly #shownById: ReadonlyMap<string, string>;
   /** Everyone, as the problems name them: by shown name, never a generated id. */
   readonly #listed: string;
   readonly problems: string[] = [];
@@ -396,6 +398,7 @@ class People {
       if (name !== undefined && !byShown.has(folded(name))) byShown.set(folded(name), id);
     }
     this.#shown = byShown;
+    this.#shownById = shown;
     this.#listed = people.map((id) => shown.get(id) ?? id).join(", ");
     const mapped = new Map<string, string>();
     for (const [name, id] of names) {
@@ -421,6 +424,11 @@ class People {
       );
     }
     return id;
+  }
+
+  /** How a check or a problem prints `id`: by shown name, never a generated id (lg-79). */
+  shown(id: string): string {
+    return this.#shownById.get(id) ?? id;
   }
 
   /** Like `resolve`, without reporting: for cells that may hold a name or anything else. */
@@ -1094,11 +1102,11 @@ function readPeriod(
       .reduce((s, line) => s + line.amountCents, 0);
     if (sum === total) {
       out.checks.push(
-        `${sheet.name}: ${personId}'s lines add up to the sheet's total, ${formatCentsPlain(total)}.`,
+        `${sheet.name}: ${people.shown(personId)}'s lines add up to the sheet's total, ${formatCentsPlain(total)}.`,
       );
     } else {
       out.problems.push(
-        `${cellRef(sheet.name, totalRow, column)}: ${personId}'s lines add up to ${formatCentsPlain(sum)}, but the sheet's total says ${formatCentsPlain(total)}.`,
+        `${cellRef(sheet.name, totalRow, column)}: ${people.shown(personId)}'s lines add up to ${formatCentsPlain(sum)}, but the sheet's total says ${formatCentsPlain(total)}.`,
       );
     }
   }
