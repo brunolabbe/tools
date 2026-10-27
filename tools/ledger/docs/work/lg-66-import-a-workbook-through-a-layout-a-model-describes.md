@@ -7,7 +7,6 @@ status: done
 milestone: P6
 depends_on: []
 difficulty: hard
-awaiting: Done when 11 — the owner's paid live read of one synthetic fixture through the Import screen with a key, after the merge, is a Log entry recording input tokens and cost against the ~0.1-cent mean
 ---
 
 # lg-66 — Import a workbook the reader does not know, through a layout a model describes
@@ -1420,3 +1419,48 @@ dated note carries a correction of its "a zip holds 1,000 entries at most".
 - 2026-10-26 — Fixed at landing by owner choice: gate 3, the low — "`workbook-zip.ts`'s header ends its new paragraph 'and the two parsers read the same entries'", false for a file with a record signature in its last 21 bytes. The header now ends "or `jszip` refuses the file", and a blank comment line separates the paragraph from "The parse is by hand". Comment only.
   `git diff 28d2f0cb HEAD -- tools/ledger/api/src/workbook-zip.ts | grep -c '^-.*two parsers read the same entries\.'`
   → 1.
+
+### 2026-10-27 — Done when 11: the owner's live read through the Import screen
+
+**Met.** One live read of `lg7` through the Import screen, with the owner's
+key, returned a description that confirmed and imported. The owner asked for
+the read on 2026-10-27 and supplied the key; the session ran it.
+
+**How it ran.** `lg7`'s sheets were written to an `.xlsx` by `xlsxOf`, as
+`api/test/workbook-describe.test.ts` writes its uploads. The API at `a018ffcf`
+served the built UI from scratch storage under `DEV_IDENTITY`, and headless
+Chromium chose the file, pressed "Send the samples and describe", and then
+"Confirm and import". The model was `claude-haiku-5-5`, priced at $0.10 in and
+$0.50 out per million tokens, as lg-56 priced it.
+
+| Read | Household                                         | Input tokens | Output tokens | Cost      | Outcome                                    |
+| ---- | ------------------------------------------------- | ------------ | ------------- | --------- | ------------------------------------------ |
+| 1    | made by `household:ledger add`: alex under a UUID | 6,225        | 1,255         | $0.001250 | refused, 14 problems, all from names       |
+| 2    | `alex` and `sam` under word ids, as the owner's   | 6,225        | 1,689         | $0.001467 | 0 problems; confirmed; 17 movements stored |
+
+Against the means: lg-38 measured Haiku on `lg7` at 6,190 input and 1,214
+output tokens, $0.0012 a run, and about a tenth of a cent across its fixtures.
+Both reads sit within 1% of that input mean, and read 2's extra output is
+$0.00024. The two reads cost $0.0027 together.
+
+**Read 2's import.** The report: 17 movements read and imported, 1 repaired
+(2022 row 3's year), 1 skipped (2022 row 4, no amount), and both periods with
+their deposits. The description matched the hand-written one in every field
+`scoreLayout` compares. It wrote the period sheets as prefix `"$ ("`, where the
+fixture says `"$"`.
+
+**Read 1 was refused by names, not by the model.** Its description also scores
+`matched`, with 0 problems over the fixture's own sheets. Through the screen,
+problems 1 to 5 were "Alex" and "Sam" naming no one in the household. The
+other nine were balances, carries and salaries; read 1's description over the
+fixture's sheets with `alex` and `sam` resolved gives none of them. The household command
+gives a new person a UUID since lg-76 (#672, merged after this ticket). The host
+import resolves workbook names by shown name through `directoryPeople`, but
+the screen's describe and confirm hand `importWorkbook` no `names`. So a
+household created since lg-76 cannot import from the screen any workbook that
+names people. The owner chose to file it as lg-79 and fix it now. Sam's absence
+from that scratch household is a setup gap of mine, not part of the defect.
+
+**The key.** The key in `tools/ledger/.env` was refused (401) by Anthropic
+before any token was spent. The owner's new key replaced it there, and it
+answers 200. No key was printed or logged.
