@@ -101,3 +101,15 @@ in `tools/planner/web/src`. The command was `npx tsc -p tools/planner/web/tsconf
 
 The probe was deleted before any commit. `vitest.config.ts` at `d7cd223f` carries no `define`
 (`git grep -n define d7cd223f -- vitest.config.ts` lists only the `defineConfig` import).
+
+### 2026-10-31 — Gate 1 on this correction is on the pull request thread (lander)
+
+Claim: this pull request files a one-line brief correction and closes no ticket, so
+its gate record is the full report on the thread of PR #695, not a `## Review`
+section. Gate 1 graded CONCERNS at `d1040cb5` (F1 medium, F2 and F3 low), and
+nothing was fixed at landing. F1, that the ledger sibling lg-72 carries the same
+line, is already met on lg-72's own branch (PR #694). The command was
+`git show origin/lg-72-shared-header-footer-terms:tools/ledger/docs/work/lg-72-the-shared-header-footer-and-a-terms-page.md | grep -n TOOL_VERSION`.
+Its first line of output:
+
+    34:2. Render `AppFooter` with `tool="ledger"`, `version={TOOL_VERSION}` (imported
