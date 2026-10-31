@@ -145,3 +145,19 @@ the owner noted that most likely one member of a house keeps the ledger.
     were opened and show the person by name with "no email" and nothing to
     admit. Five `user_version` assertions moved from 7 to 8; lg-75 and lg-77
     move them again.
+- 2026-10-31 — The owner's answers, recorded at landing. The builder raised as
+  an open decision that the response field `HouseholdMember.address` becomes
+  nullable for a person with no email, which the 2026-10-25 Decision (request
+  schema only) did not name. Options: (a) keep the one field as `string | null`,
+  so each list reads one array and the type checker found every reader; (b)
+  leave `HouseholdMember` as it was and add a separate no-email list to
+  `HouseholdResponse` and `AdminHousehold`. The owner chose (a), the builder's
+  recommendation, overriding no one's.
+  - The owner declined the builder's proposed `tools/ledger/CLAUDE.md` line; it
+    goes to the next review session instead.
+  - Gate 1, F2 (`Directory.openReadOnly` does not migrate, so the import command
+    against a directory the API has not booted on migration 8 dies with a raw
+    SQLite "no such table" error): the owner chose (b) accept, "a deploy boots
+    the API, which migrates, before an import runs", over (a) file a ticket for
+    a typed `user_version` check in `openReadOnly`, the gate's recommendation,
+    overridden by the owner.
