@@ -8,6 +8,7 @@ import { ROUTES } from "@ledger/contract";
 import type {
   ConfirmWorkbookResponse,
   DescribeWorkbookResponse,
+  NameAnswer,
   WorkbookLayout,
 } from "@ledger/contract";
 import { requestJson } from "./client.ts";
@@ -29,13 +30,17 @@ export async function describeWorkbook(file: string): Promise<DescribeWorkbookRe
   });
 }
 
-/** The confirmation: the only call that imports anything. */
+/**
+ * The confirmation: the only call that imports anything. `names` answers each
+ * name Describe listed as resolving to no one (lg-78).
+ */
 export async function confirmWorkbook(
   file: string,
   layout: WorkbookLayout,
+  names: readonly NameAnswer[] = [],
 ): Promise<ConfirmWorkbookResponse> {
   return await requestJson<ConfirmWorkbookResponse>(ROUTES.workbookConfirm, {
     method: "POST",
-    body: { file, layout },
+    body: { file, layout, names },
   });
 }

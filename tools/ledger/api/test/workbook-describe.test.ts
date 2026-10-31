@@ -1017,7 +1017,9 @@ describe("a household whose people have generated ids (lg-79)", () => {
     ).toEqual([{ person_id: ALEX_ID }, { person_id: SAM_ID }]);
   });
 
-  test("a name the household lacks is refused naming the household as shown, never by a generated id", async () => {
+  // lg-78: the name is listed for the screen to ask about, and the household it
+  // may be answered as is named as shown, never by a generated id.
+  test("a name the household lacks is listed, with the household as shown, never by a generated id", async () => {
     const started = await start({
       directory: generatedDirectory([["alex", ALEX_ID]]),
       ask: fake(answering(validLayout())).ask,
@@ -1027,11 +1029,10 @@ describe("a household whose people have generated ids (lg-79)", () => {
 
     expect(described.statusCode, described.body).toBe(200);
     const body = described.json<DescribeWorkbookResponse>();
-    expect(body.ok).toBe(false);
-    expect(body.problems).toContain(
-      `2022!E6 names "Sam", who is not one of the household (alex). Map the name to a person in the corrections file's "people".`,
-    );
-    expect(body.problems.join("\n")).not.toContain(ALEX_ID);
+    if (body.kind !== "xlsx") throw new Error("not a workbook's answer");
+    expect(body.unresolved).toEqual([{ name: "Sam", where: "2022!E6", rows: 5 }]);
+    expect(body.held).toEqual([{ person: ALEX_ID, name: "alex" }]);
+    expect(`${body.problems.join("\n")}\n${body.report}`).not.toContain(ALEX_ID);
   });
 
   test("a second salary is refused naming the person as shown, never by a generated id", async () => {

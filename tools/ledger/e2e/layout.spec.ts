@@ -437,6 +437,8 @@ const CARDS: Readonly<Record<string, number>> = {
   "Household (long household name)": 2,
   "Household (renaming)": 2,
   "Admin (renaming)": 3,
+  // lg-78: the date column, the bucket labels, the names to answer and the checks.
+  "Import (names)": 4,
 };
 
 /** The tabs whose screens carry a radio group, with how many radios each draws. */
@@ -908,4 +910,49 @@ test("Admin fits a phone and a desktop with a household's rename open", async ({
   await page.getByRole("button", { name: "Rename Home: alex and sam" }).click();
   await expect(page.getByLabel("New name for Home: alex and sam")).toHaveValue("Home");
   await fitsBothWidths(page, testInfo, "Admin (renaming)");
+});
+
+/**
+ * lg-78: the same screen when the workbook names people the household lacks,
+ * each with its choice. Two names, one long enough to wrap, the long one
+ * answered as a new person so its name field is drawn too; Confirm is offered
+ * once both are answered.
+ */
+test("Import fits a phone and a desktop with names to answer", async ({ page }, testInfo) => {
+  const long = "Marie-Ève Bélanger-Lacroix de Saint-Jean-sur-Richelieu-et-Environs";
+  await page.route("**/api/workbook/describe", async (route) => {
+    await route.fulfill({
+      json: {
+        ...DESCRIBED,
+        ok: true,
+        problems: [],
+        unresolved: [
+          { name: "Sam", where: "2022!E6", rows: 5 },
+          { name: long, where: "'$ (Avril-Août)'!E12", rows: 1 },
+        ],
+        held: [
+          { person: "00000000-0000-4000-8000-0000000000aa", name: "alex" },
+          { person: "00000000-0000-4000-8000-0000000000bb", name: long },
+        ],
+      },
+    });
+  });
+  await openTab(page, "Import");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "classeur.xlsx",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("PK\u0003\u0004 a workbook's bytes"),
+  });
+  await page.getByRole("button", { name: "Send the samples and describe" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Names the household does not have" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Confirm and import" })).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Who is “Sam”?" }).selectOption({ label: "alex" });
+  await page
+    .getByRole("combobox", { name: `Who is “${long}”?` })
+    .selectOption({ label: "A new person" });
+  await expect(page.getByRole("textbox", { name: "The new person’s name" })).toHaveValue(long);
+  await expect(page.getByRole("button", { name: "Confirm and import" })).toBeVisible();
+  await fitsBothWidths(page, testInfo, "Import (names)");
 });

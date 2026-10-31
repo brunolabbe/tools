@@ -385,6 +385,25 @@ input[type="radio"] {
   font-size: 1rem;
 }
 
+/* lg-78: the names an import asks about, one box each; a long name wraps
+   anywhere rather than pushing a phone's screen wide. */
+.names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--gap);
+}
+
+.names li {
+  overflow-wrap: anywhere;
+}
+
+.names label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
 .inbox,
 .rules,
 .matching {

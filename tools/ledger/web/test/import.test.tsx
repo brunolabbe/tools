@@ -129,6 +129,7 @@ test("has a confirm control when every verification holds, which sends the file 
   expect(confirmWorkbook).toHaveBeenCalledWith(
     btoa("PK\u0003\u0004\u0001\u0002\u0003"),
     HOLDS.layout,
+    [],
   );
   expect(describeWorkbook).toHaveBeenCalledTimes(1);
 });
@@ -235,6 +236,7 @@ test("csv: the first import says so, and offers Confirm, which reports the rows 
   expect(confirmWorkbook).toHaveBeenCalledWith(
     btoa(String.fromCharCode(...csvBytes())),
     CSV.layout,
+    [],
   );
 });
 

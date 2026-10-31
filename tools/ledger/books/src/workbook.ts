@@ -50,6 +50,7 @@ import type {
   PeriodsLayout,
   SettlementFormula,
   SheetSelector,
+  UnresolvedName,
   WorkbookLayout,
 } from "@ledger/contract";
 import { AppError, readerFolded, workbookLayoutSchema } from "@ledger/contract";
@@ -248,6 +249,12 @@ export interface WorkbookReading {
   checks: string[];
   /** Each one that did not, or anything unreadable, naming its cell. Nothing is written while any is left. */
   problems: string[];
+  /**
+   * Each name that resolves to no one, in the order first read, with its first
+   * cell and how many times it is named (lg-78): the names behind `problems`'
+   * "who is not one of the household" lines, for a screen to ask about.
+   */
+  unresolved: UnresolvedName[];
 }
 
 // --- The household's layout ---
@@ -384,7 +391,8 @@ class People {
   /** Everyone, as the problems name them: by shown name, never a generated id. */
   readonly #listed: string;
   readonly problems: string[] = [];
-  readonly #reported = new Set<string>();
+  /** Each name `resolve` found no one for, by its folded form (lg-78). */
+  readonly #unresolved = new Map<string, UnresolvedName>();
 
   constructor(
     people: readonly string[],
@@ -413,17 +421,29 @@ class People {
     this.#names = mapped;
   }
 
-  /** The person id for `name`, or `undefined`, reported once per name, when there is none. */
+  /**
+   * The person id for `name`, or `undefined`, reported once per name, when
+   * there is none; each time it is named is counted (lg-78).
+   */
   resolve(name: string, where: string): string | undefined {
     const key = folded(name);
     const id = this.peek(name);
-    if (id === undefined && !this.#reported.has(key)) {
-      this.#reported.add(key);
-      this.problems.push(
-        `${where} names "${name}", who is not one of the household (${this.#listed || "nobody is configured"}). Map the name to a person in the corrections file's "people".`,
-      );
+    if (id !== undefined) return id;
+    const seen = this.#unresolved.get(key);
+    if (seen !== undefined) {
+      seen.rows += 1;
+      return undefined;
     }
-    return id;
+    this.#unresolved.set(key, { name, where, rows: 1 });
+    this.problems.push(
+      `${where} names "${name}", who is not one of the household (${this.#listed || "nobody is configured"}). Map the name to a person in the corrections file's "people".`,
+    );
+    return undefined;
+  }
+
+  /** Every name `resolve` found no one for, in the order first read (lg-78). */
+  unresolved(): UnresolvedName[] {
+    return [...this.#unresolved.values()].map((entry) => ({ ...entry }));
   }
 
   /** How a check or a problem prints `id`: by shown name, never a generated id (lg-79). */
@@ -1294,6 +1314,7 @@ function emptyReading(): WorkbookReading {
     ignored: [],
     checks: [],
     problems: [],
+    unresolved: [],
   };
 }
 
@@ -1400,6 +1421,7 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
   applyRatios(corrections.ratios, people, out);
 
   out.problems.unshift(...people.problems);
+  out.unresolved = people.unresolved();
   return out;
 }
 

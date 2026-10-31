@@ -10,6 +10,11 @@
  * - **Confirm** takes the file and the description again, and imports only when
  *   every verification holds. It calls no model.
  *
+ * **A name the household lacks is answered on screen** (lg-78): Describe lists
+ * each name the file uses that resolves to no one, and Confirm takes an answer
+ * for each, a person held or a new person without an email, beside the file
+ * and the description.
+ *
  * **A bank CSV comes through the same two requests** (lg-67): the server tells
  * one from a workbook by its bytes, reads it as one sheet named
  * `CSV_SHEET_NAME`, and stores its rows as a statement's, after the stored
@@ -57,8 +62,38 @@ export const describeWorkbookRequestSchema = z
   .strict();
 export type DescribeWorkbookRequest = z.infer<typeof describeWorkbookRequestSchema>;
 
+/**
+ * What the person answered for one name the file uses that resolves to no one
+ * (lg-78): the same as a person the household holds, by id, or **a new
+ * person** with no email (lg-74), shown under `shownAs`: the file's name, or
+ * another typed. `name` is the name as `UnresolvedName` gave it, matched folded
+ * for case and accents, as the reader matches every name. Two new answers
+ * under names that fold alike are one new person.
+ */
+export const nameAnswerSchema = z.discriminatedUnion("as", [
+  z.object({ name: z.string().min(1), as: z.literal("held"), person: z.string().min(1) }).strict(),
+  z.object({ name: z.string().min(1), as: z.literal("new"), shownAs: z.string() }).strict(),
+]);
+export type NameAnswer = z.infer<typeof nameAnswerSchema>;
+
+/** The answers a request may carry: past this many, it is not a list of names. */
+export const MAX_NAME_ANSWERS = 1_000;
+
 export const confirmWorkbookRequestSchema = z
-  .object({ file, layout: workbookLayoutSchema })
+  .object({
+    file,
+    layout: workbookLayoutSchema,
+    /**
+     * One answer for each name Describe listed as resolving to no one (lg-78);
+     * none, or left out, when it listed none. An answer for a name that
+     * resolves when Confirm reads the file again is not used: a second
+     * Confirm, after one that added its people and then failed, finds them
+     * held. A CSV names no one, so its answers are never used. Two answers for
+     * one name (folded alike) are not an error: the first wins and the later
+     * ones are ignored without a word.
+     */
+    names: z.array(nameAnswerSchema).max(MAX_NAME_ANSWERS).optional(),
+  })
   .strict();
 export type ConfirmWorkbookRequest = z.infer<typeof confirmWorkbookRequestSchema>;
 
@@ -128,9 +163,47 @@ interface DescribedFile {
   usage: { inputTokens: number; outputTokens: number };
 }
 
+/**
+ * A name the file uses that resolves to no one the household holds (lg-78),
+ * by the reader's own match (`People` in `books`): a person's id, then their
+ * shown name, each folded for case and accents. Spellings that fold alike are
+ * one name, under the first one read.
+ */
+export interface UnresolvedName {
+  /** As the file first spells it. */
+  name: string;
+  /** The first cell that names it, as a problem names a cell: `2024!E14`. */
+  where: string;
+  /** How many rows name it. */
+  rows: number;
+}
+
+/** A person a name may be answered as: their id, and how the household shows them. */
+export interface HeldName {
+  person: string;
+  name: string;
+}
+
 /** What Describe answers, for a workbook or for a CSV (lg-67), told by `kind`. */
 export type DescribeWorkbookResponse =
-  | (DescribedFile & { kind: "xlsx" })
+  | (DescribedFile & {
+      kind: "xlsx";
+      /**
+       * Every name the file's person column uses that resolves to no one, in
+       * the order first read; empty when every name resolves (lg-78). While
+       * any is listed, `ok`, `problems`, the report and the confirmation are
+       * the reading with each of them taken as a new person, so a problem
+       * listed is one no answer removes; Confirm checks again with the
+       * answers. A CSV has no such list: a description of one naming a person
+       * column is refused (`LAYOUT_NOT_FOR_CSV`).
+       */
+      unresolved: UnresolvedName[];
+      /**
+       * Everyone a name may be answered as: each person the books may name, a
+       * member who has left included, in the order a person reads them.
+       */
+      held: HeldName[];
+    })
   | (DescribedFile & {
       kind: "csv";
       /** `null` when the reading has a problem, so no row was placed. */

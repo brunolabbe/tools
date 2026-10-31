@@ -85,6 +85,12 @@ export interface WorkbookImportOptions {
   layout?: WorkbookLayout | undefined;
   /** Who reads the report: the command's terminal (the default) or the import screen (lg-66). */
   via?: "command" | "screen" | undefined;
+  /**
+   * Run once every verification has held and the writes are made, just before
+   * the books commit, and only with `commit` (lg-78: the import screen adds its
+   * new people to the directory here). If it throws, nothing is committed.
+   */
+  beforeCommit?: (() => void) | undefined;
 }
 
 export interface WorkbookImportResult {
@@ -618,6 +624,7 @@ export function importWorkbook(
     applyMigrations(db);
     const { ok, report, problems, reading } = run(db, sheets, options);
     if (options.commit && ok) {
+      options.beforeCommit?.();
       db.exec("COMMIT");
       return { ok, written: true, report: `${report}\nWritten.\n`, problems, reading };
     }
