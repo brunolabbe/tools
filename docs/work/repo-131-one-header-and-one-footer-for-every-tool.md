@@ -337,3 +337,48 @@ orchestrator before round 1.** Each was chosen from the options shown.
   `docs(planner)` pull request; this branch does not touch either ticket.
 - **F5** (`cookieDomain` has no public-suffix list) stays recorded as the
   gate wrote it, not fixed.
+
+**2026-10-31 — round 1, gate 1's findings.** Each was reproduced before the fix.
+
+- **F1, the header wrapped in CI.** `layout.spec.ts`'s 44 px case now checks
+  the name twice: once as rendered, and once widened by a CSSOM
+  `letter-spacing: 0.2em` until it is at least 158.7 px on one line. A
+  `<style>` would be refused by `style-src 'self'`; a CSSOM write is not.
+  Against the old `chrome.css` (at `6dec1bdd`) it failed 3 of 3 with
+  `Expected: >= 61.1875  Received: 34.59375`, CI's own numbers. (A first try
+  at `0.15em` gave 158.67 px, just under the precondition.) With the owner's
+  (A) in `packages/ui/src/chrome.css` (`flex-wrap: nowrap` on the bar,
+  `flex: 1 1 0` on the name) it passed 3 of 3. The case also asserts that
+  the page does not overflow with the wide name.
+- **F2, CodeQL "Bad HTML filtering regexp".** `terms-page.test.ts` now
+  counts opening `<script` tags and checks that the one tag is followed
+  directly by `</script>`. No regexp pairs a close tag any more. With
+  `<script>x</script >` planted before `</body>` the case went red (1
+  failed, 7 passed); restored, it passed 8 of 8.
+- **F3.** Done when 5 is reworded to say Chromium (the old line is kept and
+  marked). The comments on the `render-blocking-entry` plugin in
+  `vite.config.ts` and above `stampThemeArrival` in `csp.spec.ts` now say
+  that holding the paint is the engine's choice, and that only Chromium is
+  measured. The plugin comment also says it matches a literal of Vite's
+  output, so a change there makes it a silent no-op.
+- **F4.** The terms-page case now holds `/theme.js` back 300 ms with
+  `page.route`. With `blocking="render"` removed from `terms.html` it
+  failed 5 of 5 (`Expected: < 44..56  Received: 331..341`); with the
+  attribute it passes.
+- **F6.** I checked whether the downloader reads or logs the cookie. Fastify's
+  logger is off (`logger: false`, `server.ts`). The one request line
+  (`request-log.ts`) carries method, URL, status, duration and the shortened
+  address, and no header. The only visitor request headers the app reads are
+  `origin`, `accept` and `x-request-id`. The egress proxy reads headers too,
+  but it is ffmpeg's own loopback listener, not the visitor's. pino's redact paths cover
+  `headers.cookie` and `*.cookie` anyway, and `redactHeaders` in
+  `@webtools/core` lists `cookie` and `set-cookie`. The sentence is now
+  rewritten to those facts. A new test,
+  `terms-page.test.ts` › "the theme cookie it says the service never logs
+  reaches no log line (repo-131)", sends `Cookie: webtools-theme=dark` to
+  `/`, `/terms.html`, health, a miss and a refused probe, and finds no log
+  line naming it. It went red (1 failed) when `request-log.ts` was made to
+  log the header, and green once restored.
+
+**For lg-72:** the round changed `packages/ui/src/chrome.css`, which lg-72
+inherits. The export paths and the `/theme.js` mechanism are unchanged.
