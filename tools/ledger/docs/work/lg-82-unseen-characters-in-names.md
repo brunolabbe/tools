@@ -795,8 +795,10 @@ waits for a separate answer.
     only.** M1, M2 and M3 are unreachable at T6 and are neither escaped nor tested. The
     proof: `grep -n "renamePerson\|addPerson\|retirePerson\|addPeople" *.ts routes/*.ts`
     in `tools/ledger/api/src`, leaving out `directory.ts`, finds `renamePerson`,
-    `addPerson` and `retirePerson` called only from `routes/households.ts` (lines 111,
-    344 and 363), so no host command builds M1, M2 or M3; and the (a) refusal tests in
+    `addPerson` and `retirePerson` called directly only from `routes/households.ts`
+    (lines 111, 344 and 363); `addPeople`, which calls `addPerson`, is reached only from
+    `routes/workbook.ts` and `workbook-describe.ts`, also routes. So no host command
+    builds M1, M2 or M3; and the (a) refusal tests in
     `directory.test.ts` ("renamePerson refuses each as BAD_REQUEST…" and "addPerson
     refuses each as BAD_REQUEST…") show that M1 and M2, which quote the typed name,
     cannot carry a character of P, since the name is refused before the sentence is
@@ -807,8 +809,8 @@ waits for a separate answer.
   rows are left as question 2's answer (i) says, and the (b) sink tests prove that a
   stored row prints escaped. No measurement is taken, so the Log carries no counts.
 - **Added 2026-10-31 by the owner's second answer (below).** The stored address printed
-  at `list`, `remove` and M5 prints no character of P raw, with one test per sink
-  through `runHouseholdCommand` and an address stored past `Directory`, as a pre-lg-52 or
+  at `list` and `remove` prints no character of P raw (M5 prints no address), with one
+  test per sink through `runHouseholdCommand` and an address stored past `Directory`, as a pre-lg-52 or
   pre-lg-57 row holds one; each test red against `d7cd223f`, and green with the escape.
 - lg-77 has merged before the build starts (`depends_on`).
 - `npm run check` and `npm test -- --project ledger` pass on the build's branch.
@@ -929,8 +931,8 @@ waits for a separate answer.
   (`readStoredAddress` admits it so the row can be removed). That is the same class of
   defect for another field, found by reading, not run; it needs its own reproduction and a
   question about whether the address is escaped or only shown, so it is not folded.
-- **Verification.** Red then green: 16 of the new tests (every one of them but the
-  population count) fail on the base sources (`git checkout d7cd223f -- <the six source
+- **Verification.** Red then green: 19 of the first round's 20 new tests (every one of
+  them but the population count; the builder wrote 16, gate 1 measured 19) fail on the base sources (`git checkout d7cd223f -- <the six source
   files>`, `books` rebuilt, and `escapeUnseen` absent from `books/dist/workbook.js`, then
   restored from `4ae0e27e`) and pass on the build. The two tests added after that run (the
   id one and the Confirm one) were not run against the base, except the Confirm one against
@@ -967,3 +969,39 @@ waits for a separate answer.
   existing defect, not this ticket's (a row nobody can remove); it is not fixed here and is
   named in the report.
 - **Second round, verification.** `npm test -- --project ledger` exit 0, 92 files, 2020 tests (2018 before the two address tests); `npm run check` exit 0 at the final head, and `npx oxfmt --check` on this ticket reports `All matched files use the correct format.`
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, L1 — "The escape is ambiguous. A
+  name typed as the six literal characters `\u001b` passes (a) … The comment on
+  `escapeUnseen` says it 'shows what is there'." The owner chose option (1): the escape is
+  left as it is and the comment says a literal escape prints the same. `escapeUnseen`'s doc
+  comment in `books/src/unseen.ts` now says so, and nothing else in the file changed. The
+  proof is `git diff c6c68679 -- tools/ledger/books/src/unseen.ts | grep -c '^-.*Text with
+  none of them comes back as it was'` → `1`. Option (2), escaping `\` as well, was not taken.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, L3 — "the proof sentence in the
+  twice-reworded Done when line is inexact … `addPerson` is not 'called only from
+  `routes/households.ts`'". The sentence now says `renamePerson`, `addPerson` and
+  `retirePerson` are called directly only from `routes/households.ts`, and that `addPeople`,
+  which calls `addPerson`, is reached only from `routes/workbook.ts` and
+  `workbook-describe.ts`, also routes. The proof is the same diff on the ticket,
+  `grep -c '^-.*called only from .routes/households.ts'` → `1`.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, L4 — "the added Done when line
+  names M5 as an address sink, but `#refuseTaken` prints no address". The line now reads
+  "prints no character of P raw (M5 prints no address)" and names `list` and `remove`
+  only. The proof is the same diff, `grep -c '^-.*remove. and M5 prints no character of P
+  raw'` → `1`.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, L5 — "the Log says '16 of the new
+  tests … fail on the base sources' without a denominator". The Verification entry now
+  says 19 of the first round's 20 new tests, with the builder's 16 and the gate's 19 both
+  named. The gate also measured 23 of the branch's 24 new tests failing against `d7cd223f`,
+  the one that passes being the population count; the lander did not re-measure it. The
+  proof is the same diff, `grep -c '^-.*16 of the new tests'` → `1`.
+- 2026-10-31 — Recorded at landing by owner choice: gate 1, L2 — the import screen's web
+  text changes for a stored name holding a character of P. The describe and Confirm
+  responses now show such a name's unseen characters escaped, through `People.shown` and
+  `#listed` in `books/src/workbook.ts` and the T8 closure in `workbook-import.ts`. It is in
+  the safe direction (an escape on screen instead of an invisible character). The owner
+  chose to keep it, rather than escape the whole report only at `import-command.ts`'s
+  `print`. No code changed for this entry.
+- 2026-10-31 — Recorded at landing by owner choice: gate 1, L6 — a stored address that
+  holds a character of `\s` can be listed and cannot be removed by the command (Log, second
+  round, "What the reading had wrong, 2"). The owner chose to file a ticket: lg-83. Nothing
+  changed here for it.

@@ -26,7 +26,9 @@ export function hasUnseen(text: string): boolean {
 /**
  * `text` with each character of the set written as its six-character escape,
  * `\u001b` for ESC, so a terminal or a log shows what is there and runs nothing.
- * Text with none of them comes back as it was.
+ * Text with none of them comes back as it was. The escape is ambiguous: a name
+ * typed as the six literal characters `\u001b` is accepted and prints the same as a
+ * stored ESC. That is safe, since neither runs anything on a terminal.
  */
 export function escapeUnseen(text: string): string {
   return text.replace(
