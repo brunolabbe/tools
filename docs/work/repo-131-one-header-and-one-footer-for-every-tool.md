@@ -164,7 +164,12 @@ ticket blocks the other. Whichever lands second rebases.
 - The downloader's built bundle contains the version from
   `tools/downloader/api/package.json`. A test or build assertion shows it.
 - `e2e/csp.spec.ts` still passes, and a case in it, or a new one, shows that a
-  stored `dark` applies before first paint with no CSP violation.
+  stored `dark` applies before first paint with no CSP violation. _Superseded
+  by the owner, 2026-10-31 (Log), and kept for the record; the line that binds
+  is:_
+- `e2e/csp.spec.ts` still passes, and a case in it, or a new one, shows that on
+  Chromium, the engine the e2e suite runs, a stored `dark` applies before first
+  paint with no CSP violation. Other engines are not measured.
 - The downloader's `e2e/layout.spec.ts` passes at 360 px with the new header,
   and covers `terms.html`.
 - Each theme segment is at least 44px tall at 360 px, and the layout spec says
@@ -310,3 +315,112 @@ passed and 2 skipped of 2,726 (139 files passed, 1 skipped), 97.85 s.
 built bundle shows `v0.10.0`, linked to `downloader-v0.10.0`), and the
 `layout.spec.ts` 44 px case. The screenshots in `e2e/.artifacts/layout/` were
 opened and show the header on one line at 360 px.
+
+**2026-10-31 — the owner's answers to gate 1 (at `17b45fd8`), relayed by the
+orchestrator before round 1.** Each was chosen from the options shown.
+
+- **F1, the header wraps in CI.** (A) keep one row, with `flex-wrap: nowrap`
+  on `.app-header__bar` and `flex: 1 1 0` on `.app-header__name` in
+  `packages/ui/src/chrome.css`; or (B) allow the wrap and drop the "beside
+  the name" assertion. The owner chose **(A)**, in the shared sheet, because
+  lg-72 and pl-65 inherit it.
+- **F3, first paint proven on Chromium only.** (1) accept Chromium, reword
+  Done when 5 and say in the comments in `vite.config.ts` and `csp.spec.ts`
+  that the hold is an engine's choice; or (2) a synchronous classic script.
+  The owner chose **(1)**. Done when 5 is reworded above; the old line is kept
+  and marked.
+- **F6, the terms page's sentence about where the theme is kept.** Reword it
+  in this round, or record it and have the owner reword it later. The owner
+  chose **reword it in this round**, after checking whether the service logs
+  the `Cookie` header. The owner reviews the wording on the pull request.
+- **F7, lg-72's and pl-65's `__TOOL_VERSION__`.** The owner chose a separate
+  `docs(planner)` pull request; this branch does not touch either ticket.
+- **F5** (`cookieDomain` has no public-suffix list) stays recorded as the
+  gate wrote it, not fixed.
+
+**2026-10-31 — round 1, gate 1's findings.** Each was reproduced before the fix.
+
+- **F1, the header wrapped in CI.** `layout.spec.ts`'s 44 px case now checks
+  the name twice: once as rendered, and once widened by a CSSOM
+  `letter-spacing: 0.2em` until it is at least 158.7 px on one line. A
+  `<style>` would be refused by `style-src 'self'`; a CSSOM write is not.
+  Against the old `chrome.css` (at `6dec1bdd`) it failed 3 of 3 with
+  `Expected: >= 61.1875  Received: 34.59375`, CI's own numbers. (A first try
+  at `0.15em` gave 158.67 px, just under the precondition.) With the owner's
+  (A) in `packages/ui/src/chrome.css` (`flex-wrap: nowrap` on the bar,
+  `flex: 1 1 0` on the name) it passed 3 of 3. The case also asserts that
+  the page does not overflow with the wide name.
+- **F2, CodeQL "Bad HTML filtering regexp".** `terms-page.test.ts` now
+  counts opening `<script` tags and checks that the one tag is followed
+  directly by `</script>`. No regexp pairs a close tag any more. With
+  `<script>x</script >` planted before `</body>` the case went red (1
+  failed, 7 passed); restored, it passed 8 of 8.
+- **F3.** Done when 5 is reworded to say Chromium (the old line is kept and
+  marked). The comments on the `render-blocking-entry` plugin in
+  `vite.config.ts` and above `stampThemeArrival` in `csp.spec.ts` now say
+  that holding the paint is the engine's choice, and that only Chromium is
+  measured. The plugin comment also says it matches a literal of Vite's
+  output, so a change there makes it a silent no-op.
+- **F4.** The terms-page case now holds `/theme.js` back 300 ms with
+  `page.route`. With `blocking="render"` removed from `terms.html` it
+  failed 5 of 5 (`Expected: < 44..56  Received: 331..341`); with the
+  attribute it passes.
+- **F6.** I checked whether the downloader reads or logs the cookie. Fastify's
+  logger is off (`logger: false`, `server.ts`). The one request line
+  (`request-log.ts`) carries method, URL, status, duration and the shortened
+  address, and no header. The only visitor request headers the app reads are
+  `origin`, `accept` and `x-request-id`. The egress proxy reads headers too,
+  but it is ffmpeg's own loopback listener, not the visitor's. pino's redact paths cover
+  `headers.cookie` and `*.cookie` anyway, and `redactHeaders` in
+  `@webtools/core` lists `cookie` and `set-cookie`. The sentence is now
+  rewritten to those facts. A new test,
+  `terms-page.test.ts` › "the theme cookie it says the service never logs
+  reaches no log line (repo-131)", sends `Cookie: webtools-theme=dark` to
+  `/`, `/terms.html`, health, a miss and a refused probe, and finds no log
+  line naming it. It went red (1 failed) when `request-log.ts` was made to
+  log the header, and green once restored.
+
+**For lg-72:** the round changed `packages/ui/src/chrome.css`, which lg-72
+inherits. The export paths and the `/theme.js` mechanism are unchanged.
+
+**2026-10-31 — round 1, the owner's addition: the plugin moves to
+`@webtools/ui`.** lg-72's builder copied the downloader's
+`render-blocking-entry` plugin into the ledger's config, and pl-65 would have
+made a third copy. The options were (a) lift it into `@webtools/ui` as an
+exported Vite plugin in this round, with both tools importing it, or (b) keep
+one copy per tool. The owner chose **(a)**, because the ledger is the second
+real consumer.
+
+- **Import path:** `import { renderBlockingEntry } from "@webtools/ui/vite";`,
+  then `plugins: [react(), renderBlockingEntry()]`. The module is
+  `packages/ui/src/vite.ts` and imports only a type from `vite`. The
+  downloader's local copy is gone.
+- **Gate 1's maintainability note is answered in code, not only in a test.**
+  The plugin now matches any external module script (`type="module"` with a
+  `src`, in any attribute order, without `blocking`) instead of a literal of
+  Vite's output, and it is `apply: "build"`. When it finds nothing to mark,
+  it calls `this.error` and fails the build. So a change in how Vite writes
+  the tag stops `vite build` instead of quietly dropping the hold.
+- **Pinned once, in `packages/ui/test/vite-plugin.test.ts`.** The test runs a
+  real `vite build` of a one-entry fixture, plus attribute-order,
+  leave-alone and fail-loudly cases. With the matcher made to miss Vite's tag
+  (`src=` changed to `srcx=`), the real build failed with
+  `render-blocking-entry: no external module script in the built HTML`, and
+  2 of the 4 tests went red. Restored, all 4 passed.
+- **A tool's config loads it with no build step.** With `packages/ui/dist`
+  deleted, `vite build` in `tools/downloader/web` exited 0 and wrote
+  `<script blocking="render" type="module" crossorigin src="/assets/index-….js">`.
+  `npm run check` exited 0 with the import in place: `../vite.config.ts` is in
+  `web/test/tsconfig.json`'s program and resolves through `dist/vite.d.ts`.
+- **One e2e failure was not this change.** After the lift, the fast suite ran
+  18 of 19. `refused-download.spec.ts` failed 3 times in a row at line 83:
+  the refused job's second link never showed "Saved by your browser" within
+  120 s. In the same window, the downloader config from `fca27ebc`, with the
+  local plugin, passed it once. The two configs' `dist/app` trees differ only
+  in the order of attributes on the entry tag (`diff -r`). Then HEAD passed 2
+  of 2 at 39 s each. The cause, environmental or a flake, is not measured.
+- **CodeQL at `46b89313`** flagged one new alert, "Bad HTML filtering
+  regexp" ("does not match upper case <SCRIPT> tags"), on
+  `packages/ui/test/vite-plugin.test.ts` line 65. That regexp and the plugin's
+  two matchers now carry the `i` flag, and the attribute-order case now
+  includes an upper-case `<SCRIPT>`.

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
+import { renderBlockingEntry } from "@webtools/ui/vite";
 import { defineConfig } from "vite";
 
 // Pinned to this file's directory rather than process.cwd(), so the config
@@ -51,26 +52,11 @@ const HOST = process.env["HOST"] ?? false;
 
 export default defineConfig({
   root,
-  plugins: [
-    react(),
-    {
-      // The bundle sets the theme before React renders, but a module script is
-      // deferred, so a browser may paint the page once before it runs: a light
-      // flash for a reader who chose dark (repo-131, measured). `blocking="render"`
-      // holds the first paint until the entry has run. Vite writes the built
-      // entry's tag itself and drops the attribute from `index.html`'s, so it is
-      // put back here.
-      name: "render-blocking-entry",
-      transformIndexHtml: {
-        order: "post",
-        handler: (html) =>
-          html.replace(
-            '<script type="module" crossorigin',
-            '<script type="module" blocking="render" crossorigin',
-          ),
-      },
-    },
-  ],
+  // `renderBlockingEntry` holds the first paint until the entry has applied the
+  // stored theme, on an engine that honours `blocking="render"` (Chromium,
+  // measured by `e2e/csp.spec.ts`; others are not measured). Its docblock in
+  // `packages/ui/src/vite.ts` has the reasons (repo-131).
+  plugins: [react(), renderBlockingEntry()],
   define: { __TOOL_VERSION__: JSON.stringify(TOOL_VERSION) },
   server: {
     host: HOST,
