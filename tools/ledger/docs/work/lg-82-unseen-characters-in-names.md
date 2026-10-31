@@ -719,6 +719,18 @@ source change.
   owner runs it after merge, as an `awaiting:` line": the owner chose **reword**, the
   orchestrator's recommendation. Under (i) the stored rows are left, and the (b) sink
   tests prove that a stored row prints escaped. No measurement is taken.
+- **Second round, 2026-10-31, the owner's answers to the builder's two open decisions.**
+  - **M1–M3 escaped nowhere**, chosen from "leave them; reword the line" (the builder's and
+    the orchestrator's recommendation) and "escape in the `directory.ts` sentence builders"
+    (the option declined at intake): the owner chose **leave them; reword the line**. The
+    Done when clause is reworded above. It follows from the T6 answer.
+  - **Addresses printed raw** (`list`, `remove` and M5 print `member.address`
+    unescaped), chosen from "fold into lg-82" (the orchestrator's recommendation, which
+    overrode the builder's), "file a ticket with a reproduction" (the builder's) and
+    "leave it unrecorded": the owner chose **fold into lg-82**. Build: reproduce first, on
+    `d7cd223f`, with a failing test per sink and an address holding a character of P stored
+    the way an older row would be; then escape at the three call sites. If no stored
+    address can hold one, stop and report. A Done when line is added above.
 - **Rating**: the ticket's `difficulty: standard` was a placeholder for the owner. The
   owner rated it **standard**, the orchestrator's recommendation.
 
@@ -779,11 +791,25 @@ waits for a separate answer.
     proven where the answer puts the escape, at T6, through `runHouseholdCommand` with
     a captured `io` and a stored name that holds a character of P. That follows from
     the owner's choice of the host command's stderr over the sentence builders.
+  - **Superseded again 2026-10-31 by the owner's second answer (below), for M1–M3
+    only.** M1, M2 and M3 are unreachable at T6 and are neither escaped nor tested. The
+    proof: `grep -n "renamePerson\|addPerson\|retirePerson\|addPeople" *.ts routes/*.ts`
+    in `tools/ledger/api/src`, leaving out `directory.ts`, finds `renamePerson`,
+    `addPerson` and `retirePerson` called only from `routes/households.ts` (lines 111,
+    344 and 363), so no host command builds M1, M2 or M3; and the (a) refusal tests in
+    `directory.test.ts` ("renamePerson refuses each as BAD_REQUEST…" and "addPerson
+    refuses each as BAD_REQUEST…") show that M1 and M2, which quote the typed name,
+    cannot carry a character of P, since the name is refused before the sentence is
+    built. M4 and M5 stay proven at T6. This follows from the T6 answer.
 - ~~The stored rows are handled as question 2's answer says, with a test, and the
   measurement's counts, one per table listed under question 2, are in the Log.~~
   **Superseded 2026-10-31 by the owner's answer ("reword").** It now reads: the stored
   rows are left as question 2's answer (i) says, and the (b) sink tests prove that a
   stored row prints escaped. No measurement is taken, so the Log carries no counts.
+- **Added 2026-10-31 by the owner's second answer (below).** The stored address printed
+  at `list`, `remove` and M5 prints no character of P raw, with one test per sink
+  through `runHouseholdCommand` and an address stored past `Directory`, as a pre-lg-52 or
+  pre-lg-57 row holds one; each test red against `d7cd223f`, and green with the escape.
 - lg-77 has merged before the build starts (`depends_on`).
 - `npm run check` and `npm test -- --project ledger` pass on the build's branch.
 
