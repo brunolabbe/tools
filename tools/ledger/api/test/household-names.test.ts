@@ -193,7 +193,7 @@ describe("migration 9", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.pragma("user_version", { simple: true })).toBe(10);
     expect(read()).toEqual(before);
     const directory = new Directory(db);
     expect(directory.households()).toEqual([{ id: "home", name: "Home" }]);

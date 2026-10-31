@@ -79,7 +79,9 @@ export function Admin(): React.ReactElement {
   const { households } = load;
   // lg-74: a person without an email signs in nowhere, so Access has nothing to admit.
   const addresses = households.flatMap((household) =>
-    household.members.flatMap((member) => (member.address === null ? [] : [member.address])),
+    household.members.flatMap((member) =>
+      member.address === null ? [] : [{ address: member.address, firstSignIn: member.firstSignIn }],
+    ),
   );
   // lg-71: the answer to a create is the new card, so it goes in without asking
   // for the list again, where the list puts it: the API orders households by id.
@@ -113,8 +115,18 @@ export function Admin(): React.ReactElement {
             <p className="muted">No emails yet.</p>
           ) : (
             <ul className="members" aria-label="Emails to admit">
-              {addresses.map((address) => (
-                <li key={address}>{address}</li>
+              {addresses.map(({ address, firstSignIn }) => (
+                <li key={address}>
+                  <span>
+                    {address}
+                    {firstSignIn === null && (
+                      <>
+                        {" "}
+                        <NeverSignedIn />
+                      </>
+                    )}
+                  </span>
+                </li>
               ))}
             </ul>
           )}
@@ -137,6 +149,15 @@ function householdLabel(household: AdminHousehold, names: ShownNames): string {
   const people = household.people.map((one) => shownName(names, one.person));
   if (people.length === 0) return `${household.name} (${household.id})`;
   return `${household.name}: ${new Intl.ListFormat("en", { type: "conjunction" }).format(people)}`;
+}
+
+/**
+ * The mark on an email nobody has signed in with (lg-75). Access vouches for
+ * whoever signs in, so a mistyped address is never refused and never confirmed;
+ * this is the only sign of it. Changing the address (lg-34) is the fix.
+ */
+function NeverSignedIn(): React.ReactElement {
+  return <span className="never-signed-in">Never signed in</span>;
 }
 
 function HouseholdCard(props: {
@@ -218,6 +239,12 @@ function HouseholdCard(props: {
               <li key={address}>
                 <span>
                   <strong>{shownName(names, member.person)}</strong> {address}
+                  {member.firstSignIn === null && (
+                    <>
+                      {" "}
+                      <NeverSignedIn />
+                    </>
+                  )}
                 </span>
                 {editing === address ? (
                   <ChangeAddress

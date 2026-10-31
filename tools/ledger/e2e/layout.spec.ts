@@ -439,6 +439,10 @@ const CARDS: Readonly<Record<string, number>> = {
   "Admin (renaming)": 3,
   // lg-78: the date column, the bucket labels, the names to answer and the checks.
   "Import (names)": 4,
+  // lg-75: the Admin cards with an email marked never signed in.
+  "Admin (never signed in)": 3,
+  // lg-74: the Admin cards with a person who has no email.
+  "Admin (no email)": 3,
 };
 
 /** The tabs whose screens carry a radio group, with how many radios each draws. */
@@ -955,4 +959,48 @@ test("Import fits a phone and a desktop with names to answer", async ({ page }, 
   await expect(page.getByRole("textbox", { name: "The new person’s name" })).toHaveValue(long);
   await expect(page.getByRole("button", { name: "Confirm and import" })).toBeVisible();
   await fitsBothWidths(page, testInfo, "Import (names)");
+});
+
+/**
+ * lg-75: the mark on an email nobody has signed in with, on the card and in the
+ * list to admit. In the seed sam never makes a request, so the real answer
+ * already marks sam; the listing is also given a member whose person name and
+ * address are both long, the shape that made a row wider than a phone, so the
+ * mark is measured wrapping beside them.
+ */
+test("Admin fits a phone and a desktop with an email marked never signed in, beside long names", async ({
+  page,
+}, testInfo) => {
+  const longPerson = "Robin-Alexandrine de la Montagne-Verte-et-des-Vallees-Lointaines";
+  const longAddress = `${"a-very-long-local-part-".repeat(3)}x@an-equally-long-domain-name.example.test`;
+  await page.route("**/api/admin/households", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const body = (await (await route.fetch()).json()) as {
+      households: { members: unknown[] }[];
+    };
+    await route.fulfill({
+      json: {
+        households: body.households.map((household) => ({
+          ...household,
+          members: [
+            ...household.members,
+            {
+              address: longAddress,
+              person: "00000000-0000-4000-8000-0000000000ef",
+              name: longPerson,
+              firstSignIn: null,
+            },
+          ],
+        })),
+      },
+    });
+  });
+
+  await openTab(page, "Admin");
+  const admit = page.getByRole("list", { name: "Emails to admit" });
+  await expect(admit).toContainText(longAddress);
+  // sam (real) and the long address (given): two marks on the card and in the list.
+  await expect(admit.getByText("Never signed in")).toHaveCount(2);
+  await expect(page.getByText("Never signed in")).toHaveCount(4);
+  await fitsBothWidths(page, testInfo, "Admin (never signed in)");
 });

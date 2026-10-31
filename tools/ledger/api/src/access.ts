@@ -308,7 +308,26 @@ export function createIdentityVerifier(options: {
       membership === undefined
         ? null
         : { id: membership.person, email, household: membership.household };
+    if (membership !== undefined) noteSignIn(address);
     return { email, admin, person };
+  };
+
+  // lg-75: the first request from a member's address is recorded, so the admin's
+  // screen can mark an email that has never been used. What is recorded is kept
+  // in memory, so every request after the first writes nothing; a write that
+  // fails, the directory busy included, is not remembered as done and costs the
+  // request nothing, so the next one tries again.
+  const signedIn = new Set<string>();
+  const noteSignIn = (address: string): void => {
+    if (signedIn.has(address)) return;
+    try {
+      directory.recordFirstSignIn(address, now());
+      signedIn.add(address);
+    } catch (error: unknown) {
+      logger.warn("first sign-in not recorded", {
+        code: (error as { code?: unknown } | null)?.code ?? "unknown",
+      });
+    }
   };
 
   if (config.devIdentity !== undefined) {

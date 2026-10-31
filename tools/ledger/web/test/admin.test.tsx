@@ -34,19 +34,22 @@ vi.mock("../src/api/households.ts", () => ({
   adminRetirePerson: vi.fn(),
 }));
 
+/** When the invented addresses that have signed in did, first (lg-75). */
+const SIGNED_IN = "2026-10-30T08:00:00.000Z";
+
 const HOUSEHOLDS: AdminHousehold[] = [
   {
     id: "away",
     name: "The other household",
-    members: [{ address: "kim@away.test", person: "kim", name: "kim" }],
+    members: [{ address: "kim@away.test", person: "kim", name: "kim", firstSignIn: SIGNED_IN }],
     people: [{ person: "kim", name: "kim", standing: "in" }],
   },
   {
     id: "home",
     name: "The test household",
     members: [
-      { address: "alex@example.test", person: "alex", name: "alex" },
-      { address: "sam@example.test", person: "sam", name: "sam" },
+      { address: "alex@example.test", person: "alex", name: "alex", firstSignIn: SIGNED_IN },
+      { address: "sam@example.test", person: "sam", name: "sam", firstSignIn: null },
     ],
     people: [
       { person: "alex", name: "alex", standing: "in" },
@@ -83,7 +86,7 @@ test("shows every household with its members, and every address to admit on Acce
   expect([...admit.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
     "kim@away.test",
     "alex@example.test",
-    "sam@example.test",
+    "sam@example.test Never signed in",
   ]);
   expect(
     screen.getAllByText(/must also be admitted on the ledger.s Access policy/u),
@@ -94,7 +97,7 @@ test("shows every household with its members, and every address to admit on Acce
 const CABIN: AdminHousehold = {
   id: "0f8fad5b-d9cb-469f-a165-70867728950e",
   name: "Home",
-  members: [{ address: "robin@cabin.test", person: "robin", name: "robin" }],
+  members: [{ address: "robin@cabin.test", person: "robin", name: "robin", firstSignIn: null }],
   people: [{ person: "robin", name: "robin", standing: "in" }],
 };
 
@@ -205,8 +208,8 @@ test("renames a person, and prints the shown name after the rename, not the id",
       id: "home",
       name: "The test household",
       members: [
-        { address: "alex@example.test", person: "alex", name: "Alex" },
-        { address: "sam@example.test", person: "sam", name: "sam" },
+        { address: "alex@example.test", person: "alex", name: "Alex", firstSignIn: SIGNED_IN },
+        { address: "sam@example.test", person: "sam", name: "sam", firstSignIn: null },
       ],
       people: [
         { person: "alex", name: "Alex", standing: "in" },
@@ -278,8 +281,8 @@ test("edits a member's address in one request, and lists the new address under t
       id: "home",
       name: "The test household",
       members: [
-        { address: "alex@example.test", person: "alex", name: "alex" },
-        { address: "sam.new@example.test", person: "sam", name: "sam" },
+        { address: "alex@example.test", person: "alex", name: "alex", firstSignIn: SIGNED_IN },
+        { address: "sam.new@example.test", person: "sam", name: "sam", firstSignIn: null },
       ],
       people: (HOUSEHOLDS[1] as AdminHousehold).people,
     },
@@ -464,7 +467,7 @@ test("tells two Home cards apart by their people, and shows no id but for a hous
     {
       id: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
       name: "Home",
-      members: [{ address: "lee@lake.test", person: "lee", name: "Lee" }],
+      members: [{ address: "lee@lake.test", person: "lee", name: "Lee", firstSignIn: SIGNED_IN }],
       // A member who has left still names the household.
       people: [
         { person: "lee", name: "Lee", standing: "in" },
@@ -516,7 +519,10 @@ test("lists a person without an email by name with no email, with nothing to edi
     away,
     {
       ...home,
-      members: [...home.members, { address: null, person: ROBIN, name: "Robin" }],
+      members: [
+        ...home.members,
+        { address: null, person: ROBIN, name: "Robin", firstSignIn: null },
+      ],
       people: [...home.people, { person: ROBIN, name: "Robin", standing: "in" }],
     },
   ]);
@@ -527,7 +533,7 @@ test("lists a person without an email by name with no email, with nothing to edi
   const rows = [...(homeCard.querySelector("ul.members")?.querySelectorAll(":scope > li") ?? [])];
   expect(rows.map((row) => row.textContent)).toEqual([
     "alex alex@example.testEditRemove",
-    "sam sam@example.testEditRemove",
+    "sam sam@example.test Never signed inEditRemove",
     "Robin no email",
   ]);
   expect(within(rows[2] as HTMLElement).queryAllByRole("button")).toEqual([]);
@@ -536,7 +542,7 @@ test("lists a person without an email by name with no email, with nothing to edi
   expect([...admit.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
     "kim@away.test",
     "alex@example.test",
-    "sam@example.test",
+    "sam@example.test Never signed in",
   ]);
   // Offered to pick, so an email can be given to them later.
   const options = [...homeCard.querySelectorAll("datalist option")].map((one) => one.textContent);
@@ -615,4 +621,45 @@ test("a refused household rename shows the server's sentence on its card, and Ca
   fireEvent.click(within(awayCard).getByRole("button", { name: "Cancel" }));
   expect(within(awayCard).queryByLabelText(/^New name for/u)).toBeNull();
   expect(card("The other household")).toBe(awayCard);
+});
+
+// lg-75: an email nobody has signed in with is marked, beside its person on the
+// card and in the list to admit; one that has, and a person with no email, are not.
+test("marks an email that has never signed in, on its card and in the emails to admit, and no other", async () => {
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue([
+    ...HOUSEHOLDS,
+    {
+      id: "lake",
+      name: "Lake",
+      members: [
+        { address: "lee@lake.test", person: "lee", name: "Lee", firstSignIn: SIGNED_IN },
+        { address: null, person: "robin", name: "Robin", firstSignIn: null },
+      ],
+      people: [
+        { person: "lee", name: "Lee", standing: "in" },
+        { person: "robin", name: "Robin", standing: "in" },
+      ],
+    },
+  ]);
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+
+  const rowOf = (scope: ReturnType<typeof within>, text: string): HTMLElement => {
+    const row = scope.getByText(text, { exact: false }).closest("li");
+    if (row === null) throw new Error(`no row for ${text}`);
+    return row;
+  };
+  // On the card, beside the person the email stands under.
+  const home = within(card("The test household"));
+  expect(rowOf(home, "sam@example.test").textContent).toContain("Never signed in");
+  expect(rowOf(home, "alex@example.test").textContent).not.toContain("Never signed in");
+  expect(within(card("The other household")).queryByText("Never signed in")).toBeNull();
+  // A person with no email never signs in: nothing to mark.
+  expect(within(card("Lake")).queryByText("Never signed in")).toBeNull();
+
+  // In the list to admit.
+  const admit = within(screen.getByRole("list", { name: "Emails to admit" }));
+  expect(admit.getAllByText("Never signed in")).toHaveLength(1);
+  expect(rowOf(admit, "sam@example.test").textContent).toBe("sam@example.test Never signed in");
+  expect(rowOf(admit, "lee@lake.test").textContent).toBe("lee@lake.test");
 });

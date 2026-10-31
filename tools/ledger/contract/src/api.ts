@@ -368,9 +368,22 @@ export interface AdminPerson {
   standing: PersonStanding;
 }
 
+/**
+ * A member as an admin sees them (lg-75), and for an address when it first
+ * signed in. `firstSignIn` is `null` for an address that never has, which the
+ * screen marks, since a mistyped email is neither confirmed nor refused. It is
+ * also `null` for a person with no address (`address: null`), who never signs in
+ * and is not to be marked. Only the admin's listing carries it: a household's own
+ * route answers a plain `HouseholdMember`.
+ */
+export interface AdminHouseholdMember extends HouseholdMember {
+  /** An ISO timestamp: the first request seen from the address as a member's. */
+  firstSignIn: string | null;
+}
+
 /** A household and its members, as an admin sees it. */
 export interface AdminHousehold extends HouseholdSummary {
-  members: HouseholdMember[];
+  members: AdminHouseholdMember[];
   /** Everyone the household has named, with where they stand (lg-35). */
   people: AdminPerson[];
 }

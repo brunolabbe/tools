@@ -228,7 +228,7 @@ describe("membership", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.pragma("user_version", { simple: true })).toBe(10);
     expect(db.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(before);
     insert(db, { address: CASEY, person: "casey" });
     expect(db.prepare("SELECT person FROM current_members ORDER BY person").all()).toEqual([
@@ -397,7 +397,7 @@ describe("a record is never replaced", () => {
         "INSERT OR REPLACE INTO households (id, name, created_at, created_by) VALUES ('home', 'Elsewhere', 'x', 'raw')",
       ),
     ).toThrow(/appended, never replaced/u);
-    expect(db.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.pragma("user_version", { simple: true })).toBe(10);
     db.close();
   });
 
@@ -501,7 +501,7 @@ describe("a household id is never NULL", () => {
       directory.close();
 
       const after = new Database(file);
-      expect(after.pragma("user_version", { simple: true })).toBe(9);
+      expect(after.pragma("user_version", { simple: true })).toBe(10);
       expect(after.prepare("SELECT * FROM households ORDER BY id").all()).toEqual(households);
       expect(after.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(memberships);
       refusesNullIds(after);
@@ -1296,7 +1296,7 @@ describe("a household id that is a UUID", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.pragma("user_version", { simple: true })).toBe(10);
     expect(read()).toEqual(before);
     expect(db.pragma("foreign_key_check")).toEqual([]);
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -1727,7 +1727,7 @@ describe("a person without an email (lg-74)", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(9);
+    expect(db.pragma("user_version", { simple: true })).toBe(10);
     expect(read()).toEqual(before);
     // Migration 5's refusals, made again, still refuse.
     expect(() =>
