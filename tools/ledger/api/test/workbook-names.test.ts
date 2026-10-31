@@ -369,4 +369,31 @@ describe("what Confirm refuses, adding no one (lg-78)", () => {
     ).toThrow(expect.objectContaining({ code: "PERSON_NAME_TAKEN" }));
     expect(people(directory)).toEqual(before);
   });
+
+  test("a verification that fails with a new person answered adds no one and writes nothing", async () => {
+    const directory = directoryOf();
+    const started = await start(directory);
+    const before = { books: counts(started), directory: people(directory) };
+    // 2023 carries in a cent more than 2022 left, so its carry-over check fails.
+    const broken = history();
+    const second = broken.years[1];
+    if (second === undefined) throw new Error("no second year");
+    second.carry.mortgage += 0.01;
+
+    const response = await started.server.inject({
+      method: "POST",
+      url: ROUTES.workbookConfirm,
+      headers: as(ALEX),
+      payload: {
+        file: (await render(broken)).toString("base64"),
+        layout,
+        names: [{ name: "Sam", as: "new", shownAs: "Sam" }],
+      },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(errorOf(response).code).toBe("WORKBOOK_IMPORT_REFUSED");
+    expect(people(directory)).toEqual(before.directory);
+    expect(counts(started)).toEqual(before.books);
+  });
 });
