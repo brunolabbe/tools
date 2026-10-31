@@ -1,0 +1,19 @@
+{
+  // The `web` surface (Bundler + DOM + JSX), for the first suite under
+  // `packages/` that renders a component (repo-131). Copied from the tools'
+  // `web/test` projects; `tokens.test.ts` and its support module read files
+  // with `node:fs` and compile here unchanged.
+  "extends": "../../../tsconfig.tests.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "types": ["node"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  // Restated, not inherited: the root excludes `packages/ui/test/**` to keep
+  // these files out of its own program.
+  "exclude": [],
+  "references": [{ "path": ".." }]
+}

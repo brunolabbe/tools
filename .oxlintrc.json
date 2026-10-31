@@ -29,7 +29,7 @@
   },
   "overrides": [
     {
-      "files": ["tools/*/web/**/*.{ts,tsx}"],
+      "files": ["tools/*/web/**/*.{ts,tsx}", "packages/ui/**/*.{ts,tsx}"],
       "plugins": ["react", "jsx-a11y"],
       "env": { "browser": true },
       "rules": {

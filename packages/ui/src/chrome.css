@@ -1,0 +1,115 @@
+/*
+ * The header, the theme switch and the footer every tool shares (repo-131),
+ * moved from the downloader's `.topbar`, `.themetoggle` and `.footer`.
+ *
+ * A tool imports it after the tokens and before its own stylesheet, so its own
+ * rules load last and can still override these:
+ *
+ *     import "@webtools/ui/tokens.css";
+ *     import "@webtools/ui/chrome.css";
+ *     import "./styles.css";
+ *
+ * Built on the shared token names only (`tokens.css`'s header); the values are
+ * each tool's. No colour value here, for the same reason there is none there.
+ */
+
+/* --- header --- */
+
+.app-header {
+  margin-bottom: 1.5rem;
+}
+
+/*
+ * Glyph, name and the theme switch on one line, at any width and in any font:
+ * the row never wraps, and the name takes the room left between the glyph and
+ * the switch, wrapping inside its own box when it needs more (gate 1, F1). A
+ * wrapping row put the switch under the name on CI's font at 360 px, where the
+ * name is about 159 px against the 146 px it has (owner, 2026-10-31).
+ */
+.app-header__bar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+}
+
+.app-header__glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--accent);
+}
+
+.app-header__glyph svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.app-header__name {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.app-header__tagline {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+}
+
+/* --- theme switch --- */
+
+.theme-toggle {
+  display: flex;
+  flex: none;
+  gap: 0;
+  min-inline-size: 0;
+  margin: 0 0 0 auto;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+/*
+ * 44 px both ways: the tap-target floor repo-130 sets for every button and
+ * field (owner, 2026-10-25). The tool's layout spec measures it at 360 px.
+ */
+.theme-toggle label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.theme-toggle label:hover {
+  color: var(--text);
+}
+
+.theme-toggle label:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.theme-toggle label.theme-toggle__on {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* --- footer --- */
+
+.app-footer {
+  margin-block-start: 2rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.app-footer a {
+  color: var(--text-muted);
+}

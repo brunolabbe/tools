@@ -10,9 +10,11 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { ROUTES } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { API_DEFAULTS } from "../src/config.ts";
 import { FINISHED_JOB_CLEAR_AFTER_MS, JOB_RETENTION_DAYS } from "../src/jobs/links.ts";
+import { createLogger } from "../src/logger.ts";
 import { createHarness } from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
 
@@ -78,14 +80,27 @@ describe("served by the API", () => {
     expect(css.headers["content-type"]).toContain("text/css");
   });
 
-  test("the page needs nothing the policy refuses: no script, no <style>, no style attribute", async () => {
+  test("the page needs nothing the policy refuses: no inline script, no <style>, no style attribute", async () => {
     const text = await page();
 
-    expect(text).not.toMatch(/<script/iu);
+    // One script, the theme module the web build writes beside the page
+    // (repo-131), by a same-origin path and with no body: `script-src 'self'`.
+    // Opening tags are counted, never paired with a closing one: a closing tag
+    // has spellings a pattern misses (`</script >`), and a second script hidden
+    // behind one would go uncounted (gate 1, F2).
+    const opening = [...text.matchAll(/<script\b[^>]*>/giu)];
+    expect(opening.map((match) => match[0])).toHaveLength(1);
+    const tag = opening[0]?.[0] ?? "";
+    expect(tag).toContain('type="module"');
+    expect(tag).toContain('src="/theme.js"');
+    // Empty: the very next characters close it.
+    const after = text.slice((opening[0]?.index ?? 0) + tag.length);
+    expect(after.toLowerCase().startsWith("</script>")).toBe(true);
     expect(text).not.toMatch(/<style/iu);
     expect(text).not.toMatch(/\sstyle=/iu);
-    // The one stylesheet it links is a same-origin path.
+    // What it links, the stylesheet and the icon, are same-origin paths.
     expect([...text.matchAll(/<link[^>]*href="([^"]+)"/giu)].map((match) => match[1])).toEqual([
+      "/favicon.svg",
       "/terms.css",
     ]);
   });
@@ -146,5 +161,42 @@ describe("what it says", () => {
     expect(text).toMatch(/Use it for video you have the right to save/u);
     // The page links back to the app and the app links to the page.
     expect(text).toContain('href="/"');
+  });
+
+  test("the theme cookie it says the service never logs reaches no log line (repo-131)", async () => {
+    // The page says the cookie goes with every request and the service does not
+    // write it to its log. Every door a browser can send it through: the page,
+    // the static terms file, the API, a miss.
+    const text = (await page()).replace(/\s+/gu, " ");
+    expect(text).toContain("webtools-theme");
+    expect(text).toContain("does not write it to its log");
+
+    const raw: string[] = [];
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "downloader-terms-"));
+    await fs.writeFile(path.join(root, "index.html"), "<!doctype html><title>Downloader</title>");
+    await fs.copyFile(new URL("terms.html", PUBLIC), path.join(root, "terms.html"));
+    webDir = root;
+    harness = await createHarness({
+      config: { webDir: root },
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+    });
+    const cookie = "webtools-theme=dark";
+    for (const url of ["/", "/terms.html", ROUTES.health, "/api/no-such-route"]) {
+      await harness.app.server.inject({
+        method: "GET",
+        url,
+        headers: { cookie, accept: "text/html" },
+      });
+    }
+    await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      headers: { cookie },
+      payload: { url: "not a url" },
+    });
+
+    // Something was logged, so an empty log is not what passes this.
+    expect(raw.filter((line) => line.includes('"msg":"request"')).length).toBeGreaterThan(0);
+    expect(raw.filter((line) => line.includes("webtools-theme"))).toEqual([]);
   });
 });

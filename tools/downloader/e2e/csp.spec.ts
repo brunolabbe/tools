@@ -165,19 +165,19 @@ test("the app's own page raises no violation, theme toggle included", async ({ p
   // unstyled and this heading would not be here.
   await expect(page.getByRole("heading", { name: /downloader/iu })).toBeVisible();
 
-  // `lib/theme.ts` writes `root.style.colorScheme`, the only CSSOM style write
-  // in the app, and it runs on mount. CSP governs the `style` *content
-  // attribute* and not `CSSStyleDeclaration` — but "should not be blocked" is
-  // exactly the kind of claim this ticket exists to stop taking on trust, so
-  // the write is read back from the live document.
+  // `@webtools/ui`'s `theme.ts` writes `root.style.colorScheme`, the only CSSOM
+  // style write in the app, and it runs before the first render. CSP governs the
+  // `style` *content attribute* and not `CSSStyleDeclaration` — but "should not
+  // be blocked" is exactly the kind of claim this ticket exists to stop taking
+  // on trust, so the write is read back from the live document.
   expect(await page.evaluate(() => document.documentElement.style.colorScheme)).toBe("light dark");
 
   // And again down the other branch, driven from the UI. The radio itself is
-  // `visually-hidden` (1px, `clip-path: inset(50%)`), so the label is the hit
-  // target — clicking the input directly is a pointer-events failure, not a
-  // CSP one.
-  await page.getByText("dark", { exact: true }).click();
-  await expect(page.getByRole("radio", { name: "dark" })).toBeChecked();
+  // `.sr-only` (1px, `clip-path: inset(50%)`), so the label is the hit target —
+  // clicking the input directly is a pointer-events failure, not a CSP one. The
+  // label shows an icon; its `title` is the name it can be found by.
+  await page.getByTitle("Dark").click();
+  await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
   expect(await page.evaluate(() => document.documentElement.style.colorScheme)).toBe("dark");
 
   expect(await cspViolationsOn(page)).toEqual([]);
@@ -264,4 +264,99 @@ test("a script from any other origin is still refused, before it is fetched", as
   const violations = (await cspViolationsOn(page)).filter((v) => v.blockedURI === FOREIGN_URL);
   expect(violations).toHaveLength(1);
   expect(violations[0]?.effectiveDirective.startsWith("script-src")).toBe(true);
+});
+
+/**
+ * repo-131: a stored `dark` is on the document before the browser paints it,
+ * from a same-origin module rather than an inline script.
+ *
+ * The OS is emulated as light, so `dark` can only have come from the cookie.
+ * "Before first paint" is measured, not inferred: an init script stamps the
+ * moment `data-theme` arrives on `<html>`, and the browser's own `first-paint`
+ * entry says when it painted. The stamp is taken in a `MutationObserver`
+ * callback, a microtask after the write, so it can only read late, never early.
+ *
+ * Calling `bootTheme` before `createRoot` is not enough by itself: a module
+ * script is deferred, and without `blocking="render"` on the entry Chromium
+ * painted at 28 ms and the theme arrived at 68 ms (repo-131's build, this test
+ * red). The attribute is what makes the order hold, on the engine that honours
+ * it: this suite runs Chromium only, so that is what these cases prove. Holding
+ * the paint is each engine's choice, and the others are not measured (owner,
+ * 2026-10-31: Chromium accepted).
+ */
+async function stampThemeArrival(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const stamped = window as unknown as { themeSetAt?: number };
+    // On the document, not `<html>`: an init script can run before the parser
+    // has made the root element.
+    new MutationObserver(() => {
+      if (stamped.themeSetAt === undefined && document.documentElement.dataset["theme"]) {
+        stamped.themeSetAt = performance.now();
+      }
+    }).observe(document, { attributes: true, subtree: true, attributeFilter: ["data-theme"] });
+  });
+}
+
+async function themeTimings(
+  page: Page,
+): Promise<{ themeSetAt: number | undefined; firstPaint: number | undefined }> {
+  // The paint entry is queued after the frame, so wait for one more.
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))),
+  );
+  return await page.evaluate(() => ({
+    themeSetAt: (window as unknown as { themeSetAt?: number }).themeSetAt,
+    firstPaint: performance.getEntriesByName("first-paint")[0]?.startTime,
+  }));
+}
+
+/** `--bg` in the downloader's dark palette, as `getComputedStyle` reports it. */
+const DARK_BG = "rgb(16, 19, 23)";
+
+test("a stored dark theme applies before the first paint, with no violation", async ({
+  page,
+  baseURL,
+}) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.context().addCookies([{ name: "webtools-theme", value: "dark", url: baseURL ?? "" }]);
+  await collectCspViolations(page);
+  await stampThemeArrival(page);
+
+  await page.goto("/");
+  await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
+
+  const { themeSetAt, firstPaint } = await themeTimings(page);
+  expect(themeSetAt, "data-theme never arrived").toBeDefined();
+  expect(firstPaint, "the browser reported no first-paint entry").toBeDefined();
+  expect(themeSetAt ?? Infinity).toBeLessThan(firstPaint ?? -Infinity);
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(DARK_BG);
+  expect(await cspViolationsOn(page)).toEqual([]);
+});
+
+test("the static terms page takes the same stored theme from its module, with no violation", async ({
+  page,
+  baseURL,
+}) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.context().addCookies([{ name: "webtools-theme", value: "dark", url: baseURL ?? "" }]);
+  await collectCspViolations(page);
+  await stampThemeArrival(page);
+  // The page and its module are small enough that the order held here even
+  // without `blocking="render"` (gate 1, F4). Held back 300 ms, the module
+  // arrives after the first paint unless the attribute holds the paint for it,
+  // so this case can tell the two apart.
+  await page.route("**/theme.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.continue();
+  });
+
+  const response = await page.goto("/terms.html");
+
+  // The page is a document, so it carries the policy its script has to pass.
+  expect(response?.headers()["content-security-policy"]).toBe(EXPECTED_POLICY);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const { themeSetAt, firstPaint } = await themeTimings(page);
+  expect(themeSetAt ?? Infinity).toBeLessThan(firstPaint ?? -Infinity);
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(DARK_BG);
+  expect(await cspViolationsOn(page)).toEqual([]);
 });

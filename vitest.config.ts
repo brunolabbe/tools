@@ -40,7 +40,10 @@ export default defineConfig({
       {
         test: {
           name: "core",
-          include: ["packages/*/test/**/*.test.ts"],
+          // `.tsx` for `@webtools/ui`'s components (repo-131), which take a DOM
+          // per file from a `@vitest-environment jsdom` docblock, as the tools'
+          // `web` suites do; everything else here stays on node.
+          include: ["packages/*/test/**/*.test.{ts,tsx}"],
           environment: "node",
           globals: false,
         },

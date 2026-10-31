@@ -120,55 +120,7 @@ code {
   font-size: 0.85rem;
 }
 
-/* --- top bar --- */
-
-.topbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
-}
-
-.topbar h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  letter-spacing: -0.01em;
-}
-
-.themetoggle {
-  display: flex;
-  gap: 0;
-  margin: 0;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-}
-
-.themetoggle label {
-  padding: 0.25rem 0.75rem;
-  border-radius: 999px;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  text-transform: capitalize;
-  cursor: pointer;
-}
-
-.themetoggle label:hover {
-  color: var(--text);
-}
-
-.themetoggle label:has(:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.themetoggle__on {
-  background: var(--accent);
-  color: var(--accent-text) !important;
-}
+/* The header, the theme switch and the footer are `@webtools/ui/chrome.css` (repo-131). */
 
 /* --- layout --- */
 
@@ -950,15 +902,4 @@ code {
   .card {
     padding: 0.9rem;
   }
-}
-
-/* The link to the terms page (dl-54). */
-.footer {
-  margin-block-start: 2rem;
-  font-size: 0.85rem;
-  text-align: center;
-}
-
-.footer a {
-  color: var(--text-muted);
 }

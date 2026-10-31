@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <title>Terms and what this service records · Downloader</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/terms.css" />
+    <!-- The visitor's chosen theme, from the cookie every tool shares (repo-131).
+         A same-origin module the build writes beside this page, never an inline
+         script: the policy is `script-src 'self'`. -->
+    <script type="module" src="/theme.js" blocking="render"></script>
   </head>
   <body>
     <main>
@@ -85,8 +90,13 @@
         that, neither says which page, and neither says which person.
       </p>
       <p>
-        Your browser keeps your list of downloads and your light or dark choice in its own storage
-        on your device. The service does not read them. The service is reached through Cloudflare, a
+        Your browser keeps your list of downloads in its own storage on your device, and the service
+        does not read it. If you choose light or dark, your browser keeps that choice for a year in
+        a cookie named <code>webtools-theme</code>, set for <code>oludoi.com</code> so that the
+        tools there can share it. It holds only the word <code>light</code> or <code>dark</code>,
+        and your browser sends it with requests to <code>oludoi.com</code> addresses, this service
+        included. The service does not read it and does not write it to its log; the page reads it
+        in your browser. Choosing "System" deletes it. The service is reached through Cloudflare, a
         company based in the United States, which handles the connection and keeps its own records
         under its own terms; when the check that you are a person is switched on, Cloudflare runs it
         in your browser.

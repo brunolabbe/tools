@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- The header's glyph (src/components/Glyph.tsx), repo-131. A favicon has no
+       currentColor to inherit, so it takes the scheme's accent from a query. -->
+  <style>
+    path { stroke: #2f5fe0; }
+    @media (prefers-color-scheme: dark) { path { stroke: #7aa2ff; } }
+  </style>
+  <path d="M8 1.5v8.5M4.5 6.5 8 10l3.5-3.5M2 11v2.5h12V11" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
