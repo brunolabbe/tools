@@ -161,3 +161,9 @@ the owner noted that most likely one member of a house keeps the ledger.
     the API, which migrates, before an import runs", over (a) file a ticket for
     a typed `user_version` check in `openReadOnly`, the gate's recommendation,
     overridden by the owner.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, F3 — "stale comments.
+  `Books.forMember`'s doc and the `api/src/people.ts` header say the books
+  enrol the names of current members". Both comments now also name the people
+  held without an email who stand. `git diff defd5294 -- tools/ledger/api/src/books.ts | grep -c '^-.*current members stand under enrolled into'`
+  → `1`, and `git diff defd5294 -- tools/ledger/api/src/people.ts | grep -c '^-.*current members stand under that the table does not hold'`
+  → `1`.
