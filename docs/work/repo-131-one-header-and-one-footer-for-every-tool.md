@@ -118,6 +118,11 @@ Asked as options in the session that filed this ticket.
    configs deliberately share nothing through a package (repo-5; see the
    `HOST` docblock), so each config carries its own two lines.
 
+   _Narrowed by the owner, 2026-10-31 (Log):_ this ticket adds the `define` to
+   `tools/downloader/web/vite.config.ts` only. "Each tool's" above is
+   superseded and kept for the record; the ledger's and the planner's configs
+   are lg-72's and pl-65's.
+
 6. **Styles.** Move `.topbar`, `.themetoggle` and `.footer` out of the
    downloader's `styles.css` into a stylesheet exported from `packages/ui`,
    built on the shared token names only. A tool's own stylesheet loads after it
@@ -172,3 +177,23 @@ ticket blocks the other. Whichever lands second rebases.
 owner set the 44px tap-target floor for the theme control too. Build 2 and the
 acceptance line above say so, and the control hides its radios with the shared
 `.sr-only`.
+
+**2026-10-31 — the owner's answer at intake, before any build.** The
+orchestrator asked the owner: "repo-131 leaves lg-72's two inputs unnamed: the
+stylesheet export path, and a theme module a static terms.html can load. Its
+step 5 also reads as 'every tool's vite.config'. How should it be settled?" The
+options were:
+
+1. **Builder names both, downloader only.** repo-131 touches only the
+   downloader's vite config, as in its step 7 and Done when. The builder records
+   the export path and the terms-page theme module in its Log, and lg-72 builds
+   on what lands. No Done when line changes.
+2. Add both as repo-131 Done when lines.
+3. Every tool's vite.config in repo-131.
+
+The owner chose **option 1** (the orchestrator's recommendation). So Build 5's
+`define` goes into `tools/downloader/web/vite.config.ts` only (the step is
+marked above), and the build's Log entry names, for lg-72, the exact
+`@webtools/ui` export a tool's `main.tsx` imports the header and footer
+stylesheet from, and the file a static `web/public/terms.html` loads to take the
+shared theme.
