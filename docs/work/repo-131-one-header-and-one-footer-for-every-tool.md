@@ -431,3 +431,10 @@ real consumer.
   `tools/downloader/web/public/terms.html` only.
   `git diff 3eb342af -- tools/downloader/web/public/terms.html | grep -c '^-.*so that every'`
   → `1`, and the same with `'^-.*sends it with every request to any'` → `1`.
+
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, N2 — "`packages/ui/package.json`
+  declares neither `vite` nor a peer for it". `vite` is now a `peerDependency`
+  and a `devDependency` of `@webtools/ui` at `^8.3.4`, the range the three web
+  packages lock. `git diff 3eb342af HEAD -- package-lock.json | grep -c '^[-+] '`
+  → `6` lines (the `packages/ui` entry only, no version moved), and
+  `node scripts/check-lockfile-sync.mjs` exits 0.
