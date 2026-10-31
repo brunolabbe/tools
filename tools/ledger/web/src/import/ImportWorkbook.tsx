@@ -20,6 +20,12 @@
  * leaves the house for either. For a CSV the confirmation is the date column
  * alone (it has no bucket label), with where its rows go against the stored
  * history: the first import, or after the stored balance on its date.
+ *
+ * **A name the household does not have** (lg-78) is asked about before any
+ * Confirm control: each name the workbook uses that resolves to no one, with a
+ * choice of someone held or a new person without an email (`NameAnswers`).
+ * Confirm is offered only once every name is answered, and sends the answers
+ * beside the file and the description. A refused Confirm lists what failed.
  */
 
 import { useId, useState } from "react";
@@ -33,11 +39,19 @@ import type {
 } from "@ledger/contract";
 import { base64Of, confirmWorkbook, describeWorkbook } from "../api/workbook.ts";
 import { BUCKET_LABELS } from "../labels.ts";
+import { NameAnswers, answersOf, initialChoices } from "./NameAnswers.tsx";
+import type { NameChoice } from "./NameAnswers.tsx";
 
 type Stage =
   | { step: "choose" }
   | { step: "chosen"; file: string }
-  | { step: "read"; file: string; described: DescribeWorkbookResponse }
+  | {
+      step: "read";
+      file: string;
+      described: DescribeWorkbookResponse;
+      /** One per name the reading lists as resolving to no one (lg-78). */
+      choices: NameChoice[];
+    }
   | { step: "imported"; done: ConfirmWorkbookResponse };
 
 /** Where a CSV's rows go, as the checks card says it (lg-67, Build 6.2); `null` when they cannot go. */
@@ -74,12 +88,22 @@ export function ImportWorkbook(): React.ReactElement {
   const [stage, setStage] = useState<Stage>({ step: "choose" });
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  /** What a refused request named as failing, when it named anything (lg-78). */
+  const [failed, setFailed] = useState<string[]>([]);
 
   const run = (work: () => Promise<void>): void => {
     setBusy(true);
     setProblem(null);
+    setFailed([]);
     work()
-      .catch((error: unknown) => setProblem(AppError.from(error).message))
+      .catch((error: unknown) => {
+        const refused = AppError.from(error);
+        setProblem(refused.message);
+        const problems = refused.details?.["problems"];
+        if (Array.isArray(problems)) {
+          setFailed(problems.filter((line): line is string => typeof line === "string"));
+        }
+      })
       .finally(() => setBusy(false));
   };
 
@@ -100,14 +124,24 @@ export function ImportWorkbook(): React.ReactElement {
 
   const cancel = (): void => {
     setProblem(null);
+    setFailed([]);
     setStage({ step: "choose" });
   };
 
   const problemLine =
     problem === null ? null : (
-      <p className="bad" role="alert">
-        {problem}
-      </p>
+      <div role="alert">
+        <p className="bad">{problem}</p>
+        {failed.length > 0 && (
+          <ul aria-label="What the import refused">
+            {failed.map((line) => (
+              <li key={line} className="bad">
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     );
 
   if (stage.step === "choose" || stage.step === "imported") {
@@ -144,7 +178,8 @@ export function ImportWorkbook(): React.ReactElement {
     const describe = (): void => {
       void run(async () => {
         const described = await describeWorkbook(stage.file);
-        setStage({ step: "read", file: stage.file, described });
+        const choices = described.kind === "xlsx" ? initialChoices(described.unresolved) : [];
+        setStage({ step: "read", file: stage.file, described, choices });
       });
     };
     return (
@@ -179,12 +214,15 @@ export function ImportWorkbook(): React.ReactElement {
     );
   }
 
-  const { described, file } = stage;
+  const { described, file, choices } = stage;
   const { dateColumn, buckets } = described.confirmation;
   const placed = described.kind === "csv" ? placementLine(described.placement) : null;
+  const unresolved = described.kind === "xlsx" ? described.unresolved : [];
+  const answers = answersOf(unresolved, choices);
   const confirm = (): void => {
+    if (answers === null) return;
     void run(async () => {
-      const done = await confirmWorkbook(file, described.layout);
+      const done = await confirmWorkbook(file, described.layout, answers);
       setStage({ step: "imported", done });
     });
   };
@@ -224,11 +262,25 @@ export function ImportWorkbook(): React.ReactElement {
           ))}
         </section>
       )}
+      {described.kind === "xlsx" && unresolved.length > 0 && (
+        <NameAnswers
+          unresolved={unresolved}
+          held={described.held}
+          choices={choices}
+          onChange={(next) => setStage({ ...stage, choices: next })}
+          disabled={busy}
+        />
+      )}
       <section className="card" aria-labelledby={`${id}-checks`}>
         <h2 id={`${id}-checks`}>The checks</h2>
         {placed !== null && <p>{placed}</p>}
         {described.ok ? (
-          <p>Every verification held on a dry run. Nothing has been written yet.</p>
+          <p>
+            Every verification held on a dry run
+            {unresolved.length > 0 && ", with each name above read as a new person"}. Nothing has
+            been written yet.
+            {unresolved.length > 0 && " Confirm checks every one again with your answers."}
+          </p>
         ) : (
           <>
             <p className="bad">
@@ -248,8 +300,11 @@ export function ImportWorkbook(): React.ReactElement {
           <summary>The dry run&rsquo;s report</summary>
           <pre className="report">{described.report}</pre>
         </details>
+        {described.ok && answers === null && (
+          <p className="muted">Say who each name above is to confirm the import.</p>
+        )}
         <div className="actions">
-          {described.ok && (
+          {described.ok && answers !== null && (
             <button type="button" disabled={busy} onClick={confirm}>
               {busy ? "Importing…" : "Confirm and import"}
             </button>

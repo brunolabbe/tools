@@ -33,6 +33,19 @@ function callerOf(context: AppContext, request: FastifyRequest): WorkbookCaller 
     members: context.directory.people(person.household),
     names: context.directory.names(person.household),
     now: context.now,
+    newId: context.newId,
+    // lg-78: a member may add a person (lg-22), so the import's new people are
+    // added as the household page adds one, signed by the caller.
+    addPeople: (people) => {
+      context.directory.addPeople(
+        people.map((added) => ({
+          household: person.household,
+          person: added.name,
+          newId: () => added.id,
+        })),
+        { by: person.email.toLowerCase(), at: context.now() },
+      );
+    },
   };
 }
 

@@ -176,6 +176,44 @@ export function shownName(names: ReadonlyMap<string, string>, person: string): s
 }
 
 /**
+ * How each of `people` is shown, with no two alike (lg-33's gate 1, F3; option
+ * 2, chosen by the owner on 2026-10-18). The directory refuses a shown name
+ * another person holds or has as an id, but it cannot see an id the books hold
+ * only from an old rule, so a rename can take one, and so can a person added
+ * under that name since lg-76. Here, with the books, every person whose shown
+ * name another shares is shown under their id instead, or, when their id is a
+ * generated one that is never shown (lg-76), under the name with the lowest
+ * free " 2", " 3" … after it. Ids are unique and every suffix is taken free, so
+ * the loop ends; it runs again in case a fallback meets a name still standing.
+ * Here since lg-78, whose import screen lists the same people to choose from.
+ */
+export function distinctNames(
+  people: readonly string[],
+  names: ReadonlyMap<string, string>,
+): Record<string, string> {
+  const shown = new Map(people.map((person) => [person, shownName(names, person)]));
+  for (;;) {
+    const count = new Map<string, number>();
+    for (const name of shown.values()) count.set(name, (count.get(name) ?? 0) + 1);
+    const alike = [...shown].filter(
+      ([person, name]) => name !== person && (count.get(name) ?? 0) > 1,
+    );
+    if (alike.length === 0) break;
+    for (const [person, name] of alike) {
+      if (!GENERATED_ID.test(person)) {
+        shown.set(person, person);
+        continue;
+      }
+      const taken = new Set([...shown.values(), ...people]);
+      let n = 2;
+      while (taken.has(`${name} ${String(n)}`)) n++;
+      shown.set(person, `${name} ${String(n)}`);
+    }
+  }
+  return Object.fromEntries(shown);
+}
+
+/**
  * The order a person reads a list of people in (lg-76): by how each is shown,
  * then by id where two are shown alike. An id may be a generated UUID, whose
  * order means nothing to anyone reading.
@@ -933,6 +971,20 @@ export class Directory {
           .run(person.household, id, name, at, person.by);
         return { household: person.household, person: id, name };
       })
+      .immediate();
+  }
+
+  /**
+   * Adds every person in `people` as `addPerson` adds one, in one transaction:
+   * all of them, or, when one is refused, none (lg-78, the import screen's new
+   * people). Each takes the id its own `newId` gives.
+   */
+  addPeople(
+    people: readonly ({ household: string; person: string } & NewId)[],
+    change: Change,
+  ): HeldPerson[] {
+    return this.#db
+      .transaction(() => people.map((person) => this.addPerson({ ...person, ...change })))
       .immediate();
   }
 
