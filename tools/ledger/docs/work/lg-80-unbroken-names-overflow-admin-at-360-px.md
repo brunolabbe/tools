@@ -151,9 +151,12 @@ a 64-character member name does not overflow (probe below).
 
 2. Find each element on Admin that is wider than the window at 360 px: on `main`'s
    styles `nameIsWhole` names them (the `h3`, and for the person also the two
-   `<strong>`s), so the fix goes on every element it names and not on a container
-   that already fits. The title and the member rows are different elements, and a
-   fix on the member rows alone leaves the person case red because the title
+   `<strong>`s), so the fix goes on the elements it names and not on a container
+   that already fits. For the break shape, `.card h3 { overflow-wrap: anywhere }`
+   alone turns the person case green, because the column narrows and the
+   `<strong>`s follow it; `.card strong { overflow-wrap: anywhere }` alone leaves
+   it red (763 at 360 px). The title and the member rows are different elements,
+   and a fix on the member rows alone leaves the person case red because the title
    carries the same name. The 1280 px overflow is only on the household's title.
 3. Fix it in `tools/ledger/web/src/styles.css` (or `Admin.tsx`, if the element is
    there). `responsive-layout.md` allows two shapes: let the name break
@@ -518,8 +521,8 @@ file, extracted by script, on `main`'s styles at `f05108d2` (the farm and
   (`18 passed`), and their output matches the sections above line for line.
   (c) The process narration is gone, as are the "did not finish" paragraph (an exit
   1 with no summary on one background run, never reproduced; `common.md` notes a
-  probe spec can exit 1 after writing its results) and the sha that exists only on
-  this branch (`bf3ca7d2`).
+  probe spec can exit 1 after writing its results) and a sha that existed only on
+  this branch.
 - **F6: fixed.** Each new case takes its own `screen` label, so none overwrites
   `Admin-360.png`, and `Done when` 3 and Build 4 name the new files. The ticket
   file is now `lg-80-unbroken-names-overflow-admin-at-360-px.md`.
@@ -544,3 +547,16 @@ answer, relayed by the coordinator:
 - Chosen: **(A)**, the gate's recommendation.
 - Done: `Done when` 3 now says the assertion proves that part, and that the two
   360 px screenshots, opened and read, are the proof for anything else.
+
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, F3 — "Build 2 still says
+  the fix 'goes on every element it names'". Build 2 now says the fix goes on the
+  elements it names, with the measured case (`.card h3` alone turns the person
+  case green, `.card strong` alone leaves it red at 763). Proof:
+  `git diff 0ea1c790 HEAD -- tools/ledger/docs/work/lg-80-unbroken-names-overflow-admin-at-360-px.md | grep -c '^-.*goes on every element it names'`
+  → `1`.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, F5 — "The Log's F5(c)
+  bullet also still names" a sha that exists only on this branch. The sha is
+  removed from that bullet. Proof:
+  `git diff 0ea1c790 HEAD -- tools/ledger/docs/work/lg-80-unbroken-names-overflow-admin-at-360-px.md | grep -c '^-.*and the sha that exists only on'`
+  → `1`. The other F5 clause (the hook-variant harness is not in the ticket) is
+  left as gate 2 recorded it, unfixed.
