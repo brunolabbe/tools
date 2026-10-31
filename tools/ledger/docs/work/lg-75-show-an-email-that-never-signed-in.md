@@ -146,3 +146,16 @@ a repeat of what Access already proves). The owner chose **the mark**.
   owner chose (a), per address, as built. A removed and re-added address keeps its first instant,
   in the same household and in another; no source change. Pinned by `api/test/first-sign-in.test.ts`
   › "keeps the instant it first signed in, in the same household and in another", at the end of the file.
+- 2026-10-31 — Layout gap, found in review of this branch: `fitsBothWidths` asserts
+  `CARDS[screen] ?? 0`, and two Admin cases had no `CARDS` key, so their card floor was 0:
+  `"Admin (never signed in)"` (this ticket's case) and `"Admin (no email)"` (lg-74's, on `main`).
+  Owner's answer, 2026-10-31, chosen from: fix both on #689 now (recommended); fix lg-75's
+  only; merge as is. Chosen: fix both now. The fold-in is lg-74's key, added beside this
+  ticket's: `"Admin (never signed in)": 3` and `"Admin (no email)": 3` at the end of `CARDS`
+  in `tools/ledger/e2e/layout.spec.ts`, each with a one-line comment naming its ticket.
+  Control, on a scratch mutation to 99 that was restored byte-identical from a backup and
+  never committed: `-g "never signed in"` → `1 failed`, `Admin (never signed in) at 360 px:
+  the cards`, `Received: 3` (and the same at 1280 px); `-g "with a person who has no email"`
+  → `1 failed`, `Admin (no email) at 360 px: the cards`, `Received: 3` (and at 1280 px). So the
+  keys are read, and both Admin screens draw 3 cards. Whole layout spec on port 8312:
+  `22 passed (31.5s)`, exit 0. `npm run check` exit 0 (oxlint warnings all outside `tools/ledger`).

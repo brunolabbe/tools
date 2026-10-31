@@ -439,6 +439,10 @@ const CARDS: Readonly<Record<string, number>> = {
   "Admin (renaming)": 3,
   // lg-78: the date column, the bucket labels, the names to answer and the checks.
   "Import (names)": 4,
+  // lg-75: the Admin cards with an email marked never signed in.
+  "Admin (never signed in)": 3,
+  // lg-74: the Admin cards with a person who has no email.
+  "Admin (no email)": 3,
 };
 
 /** The tabs whose screens carry a radio group, with how many radios each draws. */
