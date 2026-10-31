@@ -26,9 +26,13 @@ export const ROUTES = {
   // directory, for an admin. Neither reads any books.
   household: `${API_PREFIX}/households/:id`,
   householdMembers: `${API_PREFIX}/households/:id/members`,
+  // lg-77: a household renamed, by one of its members.
+  householdRename: `${API_PREFIX}/households/:id/rename`,
   adminHouseholds: `${API_PREFIX}/admin/households`,
   adminMembers: `${API_PREFIX}/admin/households/:id/members`,
   adminMemberRemove: `${API_PREFIX}/admin/households/:id/members/remove`,
+  // lg-77: any household renamed, by an admin.
+  adminHouseholdRename: `${API_PREFIX}/admin/households/:id/rename`,
   // lg-34: a member's address, changed in one step by an admin only.
   adminMemberAddress: `${API_PREFIX}/admin/households/:id/members/address`,
   // lg-33: a person's shown name, changed by an admin only; their id never changes.
@@ -115,7 +119,10 @@ export interface MeResponse {
   admin: boolean;
 }
 
-/** A household, as the directory names it (lg-20). */
+/**
+ * A household, as the directory names it (lg-20): `name` is what it is called
+ * now, its latest rename or the name it was created with (lg-77).
+ */
 export interface HouseholdSummary {
   id: string;
   name: string;
@@ -169,8 +176,41 @@ export interface MembershipRecord {
 export interface HouseholdResponse {
   household: HouseholdSummary;
   members: HouseholdMember[];
-  history: (MembershipRecord | PersonAddedRecord | PersonNameRecord | PersonFirstNameRecord)[];
+  history: (
+    | MembershipRecord
+    | PersonAddedRecord
+    | PersonNameRecord
+    | PersonFirstNameRecord
+    | HouseholdNameRecord
+  )[];
 }
+
+/**
+ * The household renamed (lg-77), by one of its members or an admin: `name` is
+ * what it is called from then on, and `by` the address that renamed it, or
+ * `operator`. It names no person, so a list of the household's people reads
+ * past it.
+ */
+export interface HouseholdNameRecord {
+  action: "rename-household";
+  name: string;
+  at: string;
+  by: string;
+}
+
+/**
+ * `POST /api/households/:id/rename`, for its members, and
+ * `POST /api/admin/households/:id/rename`, for an admin (lg-77): the name to call
+ * the household by, trimmed and 1 to 80 characters, as a new household's is. The
+ * answer is the household under its new name.
+ */
+export interface RenameHouseholdRequest {
+  name: string;
+}
+
+export const renameHouseholdRequestSchema = z.strictObject({
+  name: z.string().min(1).max(80),
+}) satisfies z.ZodType<RenameHouseholdRequest>;
 
 /**
  * A person added without an email (lg-74): `person` is their generated id, and

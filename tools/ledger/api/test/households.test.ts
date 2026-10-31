@@ -19,6 +19,7 @@ import type {
   ErrorResponse,
   HouseholdMember,
   HouseholdResponse,
+  HouseholdSummary,
   MeResponse,
   PeopleResponse,
   PersonName,
@@ -28,7 +29,7 @@ import type {
 import { migrateDirectory } from "../src/db/directory-schema.ts";
 import { Directory } from "../src/directory.ts";
 import { enrollPeople } from "../src/people.ts";
-import { ADMIN, ALEX, HOUSEHOLD, SAM } from "./helpers/access.ts";
+import { ADMIN, ALEX, HOUSEHOLD, SAM, STRANGER } from "./helpers/access.ts";
 import {
   AWAY,
   KIM,
@@ -230,7 +231,8 @@ describe("an admin", () => {
     expect(taken.statusCode).toBe(409);
     expect(taken.json<ErrorResponse>().error).toMatchObject({
       code: "ADDRESS_ALREADY_A_MEMBER",
-      message: expect.stringContaining(`"${HOUSEHOLD}"`),
+      // lg-77: by its name, never its id.
+      message: expect.stringContaining(`"The test household"`),
     });
     expect(directorySnapshot(directory)).toBe(before);
 
@@ -533,7 +535,7 @@ describe("a household made by adding its first person", () => {
     expect(taken.statusCode).toBe(409);
     expect(taken.json<ErrorResponse>().error.code).toBe("ADDRESS_ALREADY_A_MEMBER");
     expect(taken.json<ErrorResponse>().error.message).toBe(
-      `That email already belongs to the household "${AWAY}", as kim. Remove it first.`,
+      `That email already belongs to the household "The other household", as kim. Remove it first.`,
     );
     expect(notOne.statusCode).toBe(400);
     expect(unseen.statusCode).toBe(400);
@@ -915,5 +917,140 @@ describe("a person without an email (lg-74)", () => {
     const people = (await send(app, ALEX, "GET", ROUTES.people)).json<PeopleResponse>();
     expect(people.retired).toEqual([robin.person]);
     expect(people.people).not.toContain(robin.person);
+  });
+});
+
+describe("a household renamed (lg-77)", () => {
+  const RENAME_OWN = ROUTES.householdRename.replace(":id", HOUSEHOLD);
+  const renameAsAdmin = (id: string) => ROUTES.adminHouseholdRename.replace(":id", id);
+
+  test("by a member of it, signed with their address, and every listing shows the new name", async () => {
+    const { app } = await start();
+
+    const renamed = await send(app, SAM, "POST", RENAME_OWN, { name: "  Our place  " });
+
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    expect(renamed.json<HouseholdSummary>()).toEqual({ id: HOUSEHOLD, name: "Our place" });
+    const household = (
+      await send(app, ALEX, "GET", of("household", HOUSEHOLD))
+    ).json<HouseholdResponse>();
+    expect(household.household).toEqual({ id: HOUSEHOLD, name: "Our place" });
+    expect(household.history.at(-1)).toEqual({
+      action: "rename-household",
+      name: "Our place",
+      at: NOW.toISOString(),
+      by: SAM,
+    });
+    const listed = (
+      await send(app, ADMIN, "GET", ROUTES.adminHouseholds)
+    ).json<AdminHouseholdsResponse>();
+    expect(listed.households.map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: AWAY, name: "The other household" },
+      { id: HOUSEHOLD, name: "Our place" },
+    ]);
+  });
+
+  test("by an admin, any household, signed with the admin's address", async () => {
+    const { app, directory } = await start();
+
+    const renamed = await send(app, ADMIN, "POST", renameAsAdmin(AWAY), { name: "Le chalet" });
+
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    expect(renamed.json<HouseholdSummary>()).toEqual({ id: AWAY, name: "Le chalet" });
+    expect(directory.household(AWAY)).toEqual({ id: AWAY, name: "Le chalet" });
+    const own = (await send(app, KIM, "GET", of("household", AWAY))).json<HouseholdResponse>();
+    expect(own.household.name).toBe("Le chalet");
+    expect(own.history.at(-1)).toEqual({
+      action: "rename-household",
+      name: "Le chalet",
+      at: NOW.toISOString(),
+      by: ADMIN,
+    });
+  });
+
+  test("is a household_names row, and the households row is as it was made", async () => {
+    const file = new Database(":memory:");
+    migrateDirectory(file);
+    const directory = new Directory(file);
+    const change = { by: "operator", at: new Date("2026-10-01T00:00:00Z") };
+    directory.addHousehold({ id: HOUSEHOLD, name: "Home", ...change });
+    directory.addMember({ household: HOUSEHOLD, address: ALEX, person: "alex", ...change });
+    const { app } = await start(directory);
+    const before = file.prepare("SELECT * FROM households").all();
+
+    const own = await send(app, ALEX, "POST", RENAME_OWN, { name: "Our place" });
+    const admin = await send(app, ADMIN, "POST", renameAsAdmin(HOUSEHOLD), { name: "Chez nous" });
+
+    expect([own.statusCode, admin.statusCode]).toEqual([200, 200]);
+    expect(file.prepare("SELECT * FROM households").all()).toEqual(before);
+    expect(before).toEqual([
+      { id: HOUSEHOLD, name: "Home", created_at: change.at.toISOString(), created_by: "operator" },
+    ]);
+    expect(
+      file.prepare("SELECT household_id, name, named_by FROM household_names ORDER BY id").all(),
+    ).toEqual([
+      { household_id: HOUSEHOLD, name: "Our place", named_by: ALEX },
+      { household_id: HOUSEHOLD, name: "Chez nous", named_by: ADMIN },
+    ]);
+    expect(directory.household(HOUSEHOLD)).toEqual({ id: HOUSEHOLD, name: "Chez nous" });
+  });
+
+  test("is refused to a member of another household and to a caller who is neither, with the same 403", async () => {
+    const { app, directory } = await start();
+    const before = directorySnapshot(directory);
+
+    const otherMember = await send(app, KIM, "POST", RENAME_OWN, { name: "Mine now" });
+    const adminOnOwnRoute = await send(app, ADMIN, "POST", RENAME_OWN, { name: "Mine now" });
+    const memberOnAdminRoute = await send(app, ALEX, "POST", renameAsAdmin(HOUSEHOLD), {
+      name: "Mine now",
+    });
+    const stranger = await send(app, STRANGER, "POST", RENAME_OWN, { name: "Mine now" });
+
+    for (const refused of [otherMember, adminOnOwnRoute, memberOnAdminRoute, stranger]) {
+      expect(refused.statusCode, refused.body).toBe(403);
+      expect(refused.json<ErrorResponse>().error.code).toBe("FORBIDDEN");
+    }
+    expect(directorySnapshot(directory)).toBe(before);
+  });
+
+  test("refuses a name that is empty, blank, over 80 characters or beside another field, and a household that is not there", async () => {
+    const { app, directory } = await start();
+    const before = directorySnapshot(directory);
+
+    const refusals = [
+      await send(app, ALEX, "POST", RENAME_OWN, { name: "" }),
+      await send(app, ALEX, "POST", RENAME_OWN, { name: "   " }),
+      await send(app, ALEX, "POST", RENAME_OWN, { name: "H".repeat(81) }),
+      await send(app, ALEX, "POST", RENAME_OWN, { name: "Ours", id: "elsewhere" }),
+      await send(app, ADMIN, "POST", renameAsAdmin(HOUSEHOLD), {}),
+    ];
+    const nowhere = await send(app, ADMIN, "POST", renameAsAdmin("nowhere"), { name: "Ours" });
+
+    expect(refusals.map((response) => response.statusCode)).toEqual([400, 400, 400, 400, 400]);
+    expect(nowhere.statusCode).toBe(404);
+    expect(nowhere.json<ErrorResponse>().error.code).toBe("HOUSEHOLD_NOT_FOUND");
+    expect(directorySnapshot(directory)).toBe(before);
+
+    const longest = await send(app, ALEX, "POST", RENAME_OWN, { name: "H".repeat(80) });
+
+    expect(longest.statusCode, longest.body).toBe(200);
+    expect(directory.household(HOUSEHOLD)?.name).toBe("H".repeat(80));
+  });
+
+  test("names the household by its new name when an admin is told an address is taken", async () => {
+    const { app } = await start();
+    await send(app, KIM, "POST", ROUTES.householdRename.replace(":id", AWAY), {
+      name: "Le chalet",
+    });
+
+    const taken = await send(app, ADMIN, "POST", of("adminMembers", HOUSEHOLD), {
+      address: KIM,
+      person: "kim",
+    });
+
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json<ErrorResponse>().error.message).toBe(
+      `That email already belongs to the household "Le chalet", as kim. Remove it first.`,
+    );
   });
 });

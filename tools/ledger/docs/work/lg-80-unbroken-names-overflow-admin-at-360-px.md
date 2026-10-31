@@ -3,7 +3,7 @@ id: lg-80
 tool: ledger
 title: Unbroken 64- or 80-character names overflow the Admin screen
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -54,9 +54,15 @@ person who has an email, on `main`. The layout spec does not catch it, because i
 Admin case reads the seeded names (`alex`, `sam`), which are short, and passes on
 `main` (control, below).
 
-**Not measured:** whether the Household screen shows the household's own name, and
-so whether an 80-character household name overflows there. The Household screen with
-a 64-character member name does not overflow (probe below).
+**Measured by gate 1, not fixed here:** the Household screen draws the household's
+own name in a `<p className="muted">` inside its `.card`, which this ticket's rule
+does not reach. With an 80-character unbroken name stubbed into
+`GET /api/households/:id`, `scrollWidth` is **894** at 360 px on `main` and on this
+head alike, and 1280 px fits. lg-77 (pull request #686) closes it: it replaces that
+`<p>` with a `.titled > h2` carrying `overflow-wrap: anywhere`, and its layout case
+"Household fits a phone and a desktop titled by an 80-character household name, and
+renaming it" stubs the same name. The Household screen with a 64-character member
+name does not overflow (probe below).
 
 ## Build
 
@@ -428,6 +434,27 @@ npx playwright test -c tools/ledger/playwright.config.ts tools/ledger/e2e/layout
 
 It runs `Admin fits a phone and a desktop` at both widths with the seeded names.
 
+## Review
+
+**Gate: CONCERNS** — 2026-10-31 · `c7bdef21..02218799` · Opus 5.5, depth medium (dispatched as "standard")
+
+e2e graded from a local run of the whole ledger suite with `RATE_LIMIT_READS_PER_MINUTE=0` exported in the shell, on a private `E2E_PORT` (the dispatch's first option, not a scratch merge of lg-81). CI's `e2e` on `02218799` is red only from the read limit: its one failure (`Admin fits … 80-character unbroken household name`, a 60 s wait on the Admin tab) follows the run's only server line, `"msg":"rate limited"`; the other 17 passed.
+
+| Done when                                                                                                                                                | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Person case: 64-character name, both widths, `nameIsWhole`, length asserted; red on `main`'s styles at 763, green on the branch; both runs in the Log | `e2e/layout.spec.ts` › "Admin fits a phone and a desktop with a 64-character unbroken person name": `expect(NAME).toHaveLength(64)`, `fitsBothWidths`' `scrollWidth` assertion and `nameIsWhole`. **verified**: the gate's run on `c7bdef21`'s `styles.css` failed with `is 763 px wide in a 360 px window` and the hook's 746/667/667; at the head it passes, locally and in CI's `e2e` on `02218799`. Both runs are in the Log                                                                                                                                                                                     |
+| 2. Household case: 80 characters, red at 1005 and 1341, green on the branch; spaced control green before and after; both runs in the Log                 | the same spec › "… with an 80-character unbroken household name" and "… 80-character household name spaced every ten". **verified**: on `main`'s styles the gate's run read 1005 at 360 and 1341 at 1280 (and the hook's 988 and 1324); the control passed on both styles; all three pass at the head (local run)                                                                                                                                                                                                                                                                                                    |
+| 3. Names whole or in their own scroll box, not clipped; `nameIsWhole` for the sideways part, the two 360 px screenshots for the rest                     | **verified**: `nameIsWhole` green at both widths at the head and red on `main`'s styles. Positive control: an ellipsis clip on `.card h3` (plant A) fails the household cases on `nameIsWhole` alone (`<h3> cuts the name (it ends at 1098, the box at 327)`) while `scrollWidth` stays green. With `.card { overflow-x: auto }` added (plant B) the hook still reports the `h3` clip. A nowrap title in a scrolling card (plant C) passes, as the brief intends. The two screenshots, opened: the 64 R's on three lines in the title, the member row and People; the 80 H's on four lines in the title; nothing cut |
+| 4. `npm run check` passes; `npm run e2e:ledger` passes with the new cases and every existing one                                                         | **verified**: `npm run check` exit 0; the layout spec `18 passed (28.0s)` locally at the head with the read limit off. CI's red `e2e` on this head is the read limit (lg-81, settled)                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+- **med** · no `Done when` line depends on it · **open decision** · the Household screen has the same overflow, and the branch leaves it. `Household.tsx` draws the household's name in a `<p className="muted">` inside its `.card`, which the new rule does not reach. With an 80-character unbroken name stubbed into `GET /api/households/:id`, `scrollWidth` is **894** at 360 px, on both the base's styles and the head's. 1280 px fits. The brief left this "not measured" in its Why and its Log, and it is measured now. Options: (1) fold it into lg-80: a fourth case on Household plus a rule reaching that `<p>`. This remedy has not been run. (2) File it as its own `lg-` ticket, with this probe as its reproduction. lg-77, which is `ready`, already plans to make that heading the household's name. Either way, the ticket's two "Not measured" sentences need correcting. Recommendation: (2). It is another screen with its own case, and lg-77 is rewriting the element.
+- **low** · `nfr:maintainability` · the new rule's comment says it is "set on the elements a name is drawn in". In fact no `.card h2` shows a name today (32 distinct static titles across the suite), and `.card strong` also shows amounts, counts, percentages and a file name. The Log gives lg-77 (`ready`, not built) as the reason for `h2`. This is false in the safe direction: across all 278 elements the reach probe read, none reflowed.
+- **dropped** · a flex readout row (`.readout-rows li`) might squeeze its amount now that `overflow-wrap: anywhere` lowers the `<strong>`'s min-content. Measured with a 38-character spaced label beside `-12345.67 $`: identical on the base and the head (width 70, the figure on one line). Not a defect on what was measured.
+- **dropped** · `Stats-360.png` and `Stats-1280.png` differ byte for byte between the base and the head runs. The cause is the seed's member order, which is `sam, alex` in one run and `alex, sam` in the other, not CSS: the reach probe found 0 changed elements on Stats.
+- **findings** · the hunt returned 4; 2 carried, 2 dropped.
+- Reach (attack 1): every `.card h2/h3/strong` under `main` in all 18 cases (21 screen labels) × 2 widths, 278 elements (76 `h2`, 58 `h3`, 144 `strong`), read on the base and the head. Only the 8 elements holding the stubbed long names changed line count or broke mid-token. No amount, date or label broke. 36 of 42 screenshots are byte-identical; 4 are the long-name cases and 2 are Stats (seed order).
+- NFR: security n/a (CSS and a spec) · performance n/a · reliability: the three cases push the suite past the 120-reads-a-minute limit (lg-81, settled) · maintainability: above.
+
 ## Log
 
 **2026-10-31 — filed.** Found by lg-74's gate 1 (pull request #680), which dropped it
@@ -465,8 +492,10 @@ lg-80, filed as `lg-81`, or recorded only. The answer, relayed by the coordinato
   and the Done when each carry the household case, and its measured numbers replace
   the "not measured" sentences that stood here before.
 
-Not measured, and still open: whether the Household screen shows the household's
-own name, and whether an 80-character household name overflows there.
+WITHDRAWN — do not cite this paragraph: "Not measured, and still open: whether the
+Household screen shows the household's own name, and whether an 80-character
+household name overflows there." Gate 1 measured it (894 at 360 px on `main` and on
+this head); see the 2026-10-31 entries at the end of this Log.
 
 **2026-10-31 — gate 1 (CONCERNS, `330ce54b`): F1 to F6 fixed in this round.** No
 code; the ticket is the only file changed, and its file was renamed on this unmerged
@@ -560,3 +589,109 @@ answer, relayed by the coordinator:
   `git diff 0ea1c790 HEAD -- tools/ledger/docs/work/lg-80-unbroken-names-overflow-admin-at-360-px.md | grep -c '^-.*and the sha that exists only on'`
   → `1`. The other F5 clause (the hook-variant harness is not in the ticket) is
   left as gate 2 recorded it, unfixed.
+
+**2026-10-31 — built (builder, branch `lg-80-admin-name-wraps`, base `c7bdef21`).**
+Measured on `main` at `c7bdef21` (lg-74 and lg-67 merged since the ticket's
+`f05108d2`) before any style change, with the three new cases and `nameIsWhole` as
+the Build gives it (the body is the ticket's, unchanged, so its variants were not
+re-run). `E2E_PORT=8281 npx playwright test -c tools/ledger/playwright.config.ts
+tools/ledger/e2e/layout.spec.ts -g "Admin fits a phone and a desktop with"`:
+
+```
+person, 360 px:     the name reaches 746, 667, 667 px in a 360 px window; Admin (long person name) is 763 px wide
+household, 360 px:  the name reaches 988 px in a 360 px window; Admin (long household name) is 1005 px wide
+household, 1280 px: the name reaches 1324 px in a 1280 px window; Admin (long household name) is 1341 px wide
+control (spaced):   passed
+  2 failed, 1 passed
+```
+
+Every number is the ticket's, so the lg-74 row (an address-less member row, a
+`<strong>` too) changed nothing here. Fix, in `tools/ledger/web/src/styles.css`:
+**the break shape**, `overflow-wrap: anywhere` on `.card h2`, `.card h3` and
+`.card strong`. Chosen over a scroll box because a name that scrolls sideways
+inside a card the thumb is also scrolling down is harder to read than one that
+wraps, and the card's other text already wraps (`.members li`). It is on the
+elements a name is drawn in, not on `.card` (it would change every card's
+min-content) and not on a wrapper, so a Rename button or a "never signed in"
+mark beside the name (lg-77, lg-75) does not defeat it; `.card h2` is there
+because lg-77 makes the Household heading the household's name. The same
+command on the fixed styles: `3 passed (7.5s)`. Screenshots opened
+(`e2e/.artifacts/layout/Admin (long person name)-360.png`, `Admin (long household
+name)-360.png`): the 64 `R`s show whole on three lines in the card title, in the
+member row and in the People list, and the 80 `H`s show whole on four lines in
+the title; nothing is cut at the right edge, and the Edit/Remove and
+Rename/Retire buttons wrap under the name. The Person input of the add-member
+form holds the first member's `R`s and scrolls inside its own field, as a field
+does.
+
+**What the brief did not say: the e2e server's read limit.** The full ledger
+suite (`E2E_PORT=8282 npx playwright test -c tools/ledger/playwright.config.ts`)
+failed twice, the same case each time, with the new styles in:
+
+```
+1) layout.spec.ts:809:1 › Admin fits … spaced every ten
+   locator.click: Test timeout of 60000ms exceeded. waiting for … getByRole('button', { name: 'Admin' })
+   {"scope":"reads", … "msg":"rate limited"}   (2 and 5 of them in the two runs)
+  1 failed / 17 passed (1.4m)
+```
+
+One browser is one key, the API allows a key 120 reads a minute
+(`API_DEFAULTS.rateLimitReadsPerMinute`), and 18 cases each reloading the shell
+reach it: the shell is refused its household and draws no Admin tab. The base's
+15 cases sit under it. So the planner's and the downloader's e2e configs already
+switch their limiters off (`RATE_LIMIT_RUNS_PER_MINUTE`, `RATE_LIMIT_PROBE_PER_MINUTE`),
+and `tools/ledger/playwright.config.ts` now sets `RATE_LIMIT_READS_PER_MINUTE: "0"`
+(**superseded: that line moved to lg-81, see the next entry; it is no longer on this
+branch**);
+the limiter has its own tests in `api` (`route-limits.test.ts`). Result, the same
+command: `18 passed (26.6s)`, no `rate limited` line (before: 1.4 min). It
+matters for the siblings: every case they add counts against the same 120.
+
+`npm run check`: exit 0 (its warnings are in files this branch does not touch).
+
+**2026-10-31 — owner's answer: the e2e read limit is split out to lg-81.** The
+builder's report put an open decision: the line `RATE_LIMIT_READS_PER_MINUTE: "0"`
+in `tools/ledger/playwright.config.ts`, outside this ticket's Build, which Done when
+4 needs. The coordinator put it to the owner, who answered (relayed by the
+coordinator, 2026-10-31):
+
+- Options: (1) keep it in lg-80's pull request, the builder's and the coordinator's
+  recommendation; (2) split it into its own pull request.
+- Chosen: **(2) split**, which **overrode both recommendations**.
+- Consequence: lg-81, on branch `lg-81-e2e-reads-unthrottled`, carries the line and
+  merges before this pull request. The line and its comment are removed from this
+  branch, so `tools/ledger/playwright.config.ts` no longer differs from `origin/main`
+  here. **Done when 4's `e2e:ledger` is red on CI on this branch until lg-81
+  merges** (the 18th case is refused its reads, as measured above); after that
+  merge it is the 18 of 18 measured above. The local `18 passed (26.6s)` run above
+  used the setting; this branch alone has not been run to 18 of 18, and the
+  measurement stays as a record of the cause: `1 failed / 17 passed (1.4m)` without
+  the line, `18 passed (26.6s)` with it.
+
+**2026-10-31 — gate 1 (CONCERNS, `02218799`): the med, the owner's answer.** Gate 1
+measured what the brief left open: the Household screen, which draws the household's
+name in a `<p className="muted">` inside its `.card`, overflows at 360 px with an
+80-character unbroken name (`scrollWidth` 894, on `main` and on this head alike;
+1280 px fits). The "Not measured" sentences in the Why and in the Log above are
+corrected for it (the Log's is withdrawn in place). The question and the answer
+(relayed by the orchestrator):
+
+- Options: (1) fold it into lg-80, a fourth case on Household and a rule reaching
+  that `<p>`, not run; (2) file it as its own `lg-` ticket with the gate's probe as
+  its reproduction, the gate's recommendation; (3) covered by lg-77, which replaces
+  that `<p>` with a `.titled > h2` carrying `overflow-wrap: anywhere`, and whose
+  layout case "Household fits a phone and a desktop titled by an 80-character
+  household name, and renaming it" passed in its gate 1 local run, 17 of 17, with
+  the read limit off. The orchestrator's recommendation.
+- Chosen: **(3) covered by lg-77**, which **overrode the gate's recommendation of
+  (2)**. Nothing is filed, and this branch changes no Household code.
+- Consequence: the Household screen's overflow stays on `main` until lg-77 (pull
+  request #686) merges, and lg-77's case is what closes it.
+
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the low — "the new rule's
+  comment says it is 'set on the elements a name is drawn in'". The comment in
+  `tools/ledger/web/src/styles.css` now says what the rule reaches (headings and
+  `strong` elements in a card, amounts and counts among them) and why that is safe
+  (the gate's reach probe: 278 elements, only the 8 holding a stubbed name reflowed).
+  No declaration changed. Proof: the diff of that file against `02218799`, piped
+  through `grep -c '^-.*Set on the elements a'`, → `1`.

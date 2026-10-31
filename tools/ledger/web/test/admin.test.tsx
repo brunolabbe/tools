@@ -15,6 +15,7 @@ import {
   adminAddMember,
   adminChangeAddress,
   adminRemoveMember,
+  adminRenameHousehold,
   adminRenamePerson,
   adminRetirePerson,
   createHousehold,
@@ -28,6 +29,7 @@ vi.mock("../src/api/households.ts", () => ({
   adminAddMember: vi.fn(),
   adminChangeAddress: vi.fn(),
   adminRemoveMember: vi.fn(),
+  adminRenameHousehold: vi.fn(),
   adminRenamePerson: vi.fn(),
   adminRetirePerson: vi.fn(),
 }));
@@ -167,7 +169,7 @@ test("puts the server's own sentence in front of a refused address", async () =>
   vi.mocked(adminAddMember).mockRejectedValue(
     new AppError(
       "ADDRESS_ALREADY_A_MEMBER",
-      'That email already belongs to the household "away", as kim. Remove it first.',
+      'That email already belongs to the household "The other household", as kim. Remove it first.',
     ),
   );
   render(<Admin />);
@@ -177,7 +179,9 @@ test("puts the server's own sentence in front of a refused address", async () =>
   fireEvent.change(within(home).getByLabelText("Email"), { target: { value: "kim@away.test" } });
   fireEvent.click(within(home).getByRole("button", { name: "Add member" }));
 
-  expect((await within(home).findByRole("alert")).textContent).toContain('household "away"');
+  expect((await within(home).findByRole("alert")).textContent).toContain(
+    'household "The other household"',
+  );
 });
 
 // lg-33: a Rename beside each person, which sends their id and the new name, and
@@ -310,7 +314,7 @@ test("puts the server's sentence in front of a refused new address, and keeps th
   vi.mocked(adminChangeAddress).mockRejectedValue(
     new AppError(
       "ADDRESS_ALREADY_A_MEMBER",
-      'That email already belongs to the household "away", as kim. Remove it first.',
+      'That email already belongs to the household "The other household", as kim. Remove it first.',
     ),
   );
   render(<Admin />);
@@ -323,7 +327,9 @@ test("puts the server's sentence in front of a refused new address, and keeps th
   });
   fireEvent.click(within(home).getByRole("button", { name: "Save" }));
 
-  expect((await within(home).findByRole("alert")).textContent).toContain('household "away"');
+  expect((await within(home).findByRole("alert")).textContent).toContain(
+    'household "The other household"',
+  );
   // The form stays open on what was typed, and the old address is still the one listed.
   expect(
     (within(home).getByLabelText("New email for sam@example.test") as HTMLInputElement).value,
@@ -430,7 +436,7 @@ test("puts the server's sentence in front of a refused first address, and adds n
   vi.mocked(createHousehold).mockRejectedValue(
     new AppError(
       "ADDRESS_ALREADY_A_MEMBER",
-      'That email already belongs to the household "away", as kim. Remove it first.',
+      'That email already belongs to the household "The other household", as kim. Remove it first.',
     ),
   );
   render(<Admin />);
@@ -564,4 +570,49 @@ test("a new household still needs its first person's email", async () => {
     "Give the first person's email, and their name if you like.",
   );
   expect(vi.mocked(createHousehold)).not.toHaveBeenCalled();
+});
+
+// lg-77: the admin renames any household from its card, as its members can.
+test("renames a household from its card, the field opening on its name alone", async () => {
+  vi.mocked(adminRenameHousehold).mockResolvedValue({ id: "home", name: "Our place" });
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+  const homeCard = card("The test household");
+
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue(
+    HOUSEHOLDS.map((household) =>
+      household.id === "home" ? { ...household, name: "Our place" } : household,
+    ),
+  );
+  fireEvent.click(
+    within(homeCard).getByRole("button", { name: "Rename The test household: alex and sam" }),
+  );
+  const field = within(homeCard).getByLabelText(
+    "New name for The test household: alex and sam",
+  ) as HTMLInputElement;
+  expect(field.value).toBe("The test household");
+  fireEvent.change(field, { target: { value: "Our place" } });
+  fireEvent.click(within(homeCard).getByRole("button", { name: "Save" }));
+
+  expect(await screen.findByRole("heading", { name: "Our place: alex and sam" })).toBeTruthy();
+  expect(vi.mocked(adminRenameHousehold)).toHaveBeenCalledWith("home", { name: "Our place" });
+  expect(vi.mocked(fetchAdminHouseholds)).toHaveBeenCalledTimes(2);
+  expect(card("The other household")).toBeTruthy();
+});
+
+test("a refused household rename shows the server's sentence on its card, and Cancel closes it", async () => {
+  vi.mocked(adminRenameHousehold).mockRejectedValue(new AppError("HOUSEHOLD_NOT_FOUND"));
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+  const awayCard = card("The other household");
+
+  fireEvent.click(within(awayCard).getByRole("button", { name: /^Rename The other household/u }));
+  fireEvent.click(within(awayCard).getByRole("button", { name: "Save" }));
+
+  expect((await within(awayCard).findByRole("alert")).textContent).toBe(
+    "There is no such household.",
+  );
+  fireEvent.click(within(awayCard).getByRole("button", { name: "Cancel" }));
+  expect(within(awayCard).queryByLabelText(/^New name for/u)).toBeNull();
+  expect(card("The other household")).toBe(awayCard);
 });

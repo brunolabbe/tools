@@ -68,6 +68,13 @@ const HOUSEHOLD_PROBES: Probe[] = [
     url: at("householdMembers"),
     payload: { address: NEW_ADDRESS, person: "sam" },
   },
+  // lg-77: a member renames their own household, and nobody else's.
+  {
+    route: "householdRename",
+    method: "POST",
+    url: at("householdRename"),
+    payload: { name: "Our place" },
+  },
 ];
 
 /** Every admin route, each a request an admin would see succeed. */
@@ -114,6 +121,13 @@ const ADMIN_PROBES: Probe[] = [
     url: at("adminPersonRetire"),
     payload: { person: "robin", action: "retire" },
     setup: robinHasLeft,
+  },
+  // lg-77: a member of the household renames it through its own route, never this one.
+  {
+    route: "adminHouseholdRename",
+    method: "POST",
+    url: at("adminHouseholdRename"),
+    payload: { name: "Our place" },
   },
 ];
 
@@ -182,7 +196,7 @@ describe("the sweep", () => {
       (route) => isAdminRoute(route) || isHouseholdRoute(route),
     );
 
-    expect(routes.length).toBe(8);
+    expect(routes.length).toBe(10);
     expect(new Set(probes.map((probe) => probe.route))).toEqual(new Set(routes));
     for (const route of routes) {
       for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const) {

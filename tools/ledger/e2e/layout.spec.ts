@@ -429,6 +429,14 @@ const CARDS: Readonly<Record<string, number>> = {
   "Import (read)": 3,
   // lg-67: a CSV has no bucket label, so the date column and the checks.
   "Import CSV (read)": 2,
+  // lg-80: the same Admin cards, over a stubbed directory.
+  "Admin (long person name)": 3,
+  "Admin (long household name)": 3,
+  "Admin (spaced household name)": 3,
+  // lg-77: the household page titled by a long name, and a rename open on each screen.
+  "Household (long household name)": 2,
+  "Household (renaming)": 2,
+  "Admin (renaming)": 3,
   // lg-78: the date column, the bucket labels, the names to answer and the checks.
   "Import (names)": 4,
 };
@@ -676,6 +684,232 @@ test("Import fits a phone and a desktop once a CSV is read", async ({ page }, te
   await expect(page.getByRole("main")).not.toContainText("Which bucket each label files in");
   await page.getByText("The dry run’s report").click();
   await fitsBothWidths(page, testInfo, "Import CSV (read)");
+});
+
+/**
+ * lg-80: a name with no space in it, at the length the product allows (64 for a
+ * person, 80 for a household), on the Admin screen. `scrollWidth` cannot tell a
+ * name that wrapped or scrolls from one an ancestor clipped (`.card { overflow:
+ * hidden }` turns it to 360 and the name stays cut), so `nameIsWhole` walks the
+ * text nodes that hold the name, takes the box of the text itself, and climbs the
+ * ancestors: one that clips (`hidden`, `clip`) must contain it, one that scrolls
+ * (`auto`, `scroll`) is a box the name may scroll in, and the window holds what is
+ * left. It proves the name is not cut sideways; whether it is hidden vertically or
+ * visually (a line clamp, `visibility`, a tiny font) is for the screenshot.
+ */
+async function nameProblems(page: Page, name: string): Promise<string[]> {
+  return page.locator("main").evaluate((main, needle) => {
+    const problems: string[] = [];
+    let drawn = 0;
+    const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      if (!(node.nodeValue ?? "").includes(needle)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const text = range.getBoundingClientRect();
+      // An <option> is in the page and has no box: it is not on the screen.
+      if (text.width === 0) continue;
+      drawn += 1;
+      let { left, right } = text;
+      for (let el = node.parentElement; el !== null; el = el.parentElement) {
+        const overflow = getComputedStyle(el).overflowX;
+        if (overflow === "visible") continue;
+        const box = el.getBoundingClientRect();
+        // hidden and clip cut what lies outside the box; auto and scroll let it be scrolled to.
+        if (
+          (overflow === "hidden" || overflow === "clip") &&
+          (right > box.right + 0.5 || left < box.left - 0.5)
+        ) {
+          problems.push(
+            `<${el.tagName.toLowerCase()}> cuts the name (it ends at ${String(Math.round(right))}, the box at ${String(Math.round(box.right))})`,
+          );
+        }
+        // From here out only the box itself can be seen.
+        ({ left, right } = box);
+      }
+      if (right > window.innerWidth + 0.5 || left < -0.5) {
+        problems.push(
+          `the name reaches ${String(Math.round(right))} px in a ${String(window.innerWidth)} px window`,
+        );
+      }
+    }
+    if (drawn === 0) problems.push("the name is not drawn on the screen");
+    return problems;
+  }, name);
+}
+
+function nameIsWhole(name: string, screen: string) {
+  return async (page: Page, width: number): Promise<void> => {
+    expect
+      .soft(await nameProblems(page, name), `${screen} at ${String(width)} px: the name`)
+      .toEqual([]);
+  };
+}
+
+type AdminHouseholds = {
+  households: {
+    name: string;
+    members: { address: string | null; person: string; name: string }[];
+    people: { person: string; name: string; standing: string }[];
+  }[];
+};
+
+/** Admin over the seeded books, with `change` applied to what the directory answers. */
+async function openAdminWith(
+  page: Page,
+  change: (households: AdminHouseholds["households"]) => AdminHouseholds["households"],
+): Promise<void> {
+  await page.route("**/api/admin/households", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const body = (await (await route.fetch()).json()) as AdminHouseholds;
+    await route.fulfill({ json: { ...body, households: change(body.households) } });
+  });
+  await openTab(page, "Admin");
+}
+
+test("Admin fits a phone and a desktop with a 64-character unbroken person name", async ({
+  page,
+}, testInfo) => {
+  const NAME = "R".repeat(64);
+  expect(NAME).toHaveLength(64);
+  await openAdminWith(page, (households) =>
+    households.map((household) => {
+      const first = household.members[0]?.person;
+      return {
+        ...household,
+        members: household.members.map((one) =>
+          one.person === first ? { ...one, name: NAME } : one,
+        ),
+        people: household.people.map((one) =>
+          one.person === first ? { ...one, name: NAME } : one,
+        ),
+      };
+    }),
+  );
+  await expect(page.getByRole("main")).toContainText(NAME);
+  await fitsBothWidths(
+    page,
+    testInfo,
+    "Admin (long person name)",
+    nameIsWhole(NAME, "Admin (long person name)"),
+  );
+});
+
+test("Admin fits a phone and a desktop with an 80-character unbroken household name", async ({
+  page,
+}, testInfo) => {
+  const NAME = "H".repeat(80);
+  expect(NAME).toHaveLength(80);
+  await openAdminWith(page, (households) =>
+    households.map((household) => ({ ...household, name: NAME })),
+  );
+  await expect(page.getByRole("main")).toContainText(NAME);
+  await fitsBothWidths(
+    page,
+    testInfo,
+    "Admin (long household name)",
+    nameIsWhole(NAME, "Admin (long household name)"),
+  );
+});
+
+test("Admin fits a phone and a desktop with an 80-character household name spaced every ten", async ({
+  page,
+}, testInfo) => {
+  // Nine H's and a space, seven times, then ten H's: the control, which fits before the fix too.
+  const NAME = `${"H".repeat(9)} `.repeat(7) + "H".repeat(10);
+  expect(NAME).toHaveLength(80);
+  await openAdminWith(page, (households) =>
+    households.map((household) => ({ ...household, name: NAME })),
+  );
+  await expect(page.getByRole("main")).toContainText(NAME);
+  await fitsBothWidths(
+    page,
+    testInfo,
+    "Admin (spaced household name)",
+    nameIsWhole(NAME, "Admin (spaced household name)"),
+  );
+});
+
+/**
+ * lg-77: the household page is titled by the household's name, with a Rename
+ * beside it, and both screens open a field to rename it. The longest name the
+ * API takes, 80 characters with no space to break at, is the one a title
+ * overflows on (lg-80 measured it on the Admin card). The seed's household is
+ * shared by the run, so the long name is the household answer's, given here,
+ * and no rename is saved.
+ */
+const LONG_HOUSEHOLD_NAME = "H".repeat(80);
+
+/**
+ * The title holding `name` is drawn inside the window: `scrollWidth` reads a
+ * title an ancestor cut at its edge as fitting, so the text's own box is read
+ * (a `Range`, which counts text spilling out of its element).
+ */
+function titleInsideWindow(name: string, screen: string) {
+  return async (page: Page, width: number): Promise<void> => {
+    const boxes = await page.getByRole("heading", { name }).evaluateAll((headings) =>
+      headings.map((heading) => {
+        const range = document.createRange();
+        range.selectNodeContents(heading);
+        const { left, right } = range.getBoundingClientRect();
+        return { left, right, inner: window.innerWidth };
+      }),
+    );
+    const at = `${screen} at ${String(width)} px`;
+    expect(boxes.length, `${at}: the title`).toBeGreaterThan(0);
+    for (const box of boxes) {
+      expect
+        .soft(box.left, `${at}: the title starts at ${String(box.left)}`)
+        .toBeGreaterThanOrEqual(0);
+      expect
+        .soft(box.right, `${at}: the title ends at ${String(box.right)} in ${String(box.inner)}`)
+        .toBeLessThanOrEqual(box.inner);
+    }
+  };
+}
+
+test("Household fits a phone and a desktop titled by an 80-character household name, and renaming it", async ({
+  page,
+}, testInfo) => {
+  expect(LONG_HOUSEHOLD_NAME).toHaveLength(80);
+  await page.route("**/api/households/*", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const body = (await (await route.fetch()).json()) as { household: { id: string } };
+    await route.fulfill({
+      json: { ...body, household: { ...body.household, name: LONG_HOUSEHOLD_NAME } },
+    });
+  });
+
+  await openTab(page, "Household");
+  await expect(page.getByRole("main")).toContainText(/sam@example\.test added as sam/u);
+  await expect(page.getByRole("heading", { name: LONG_HOUSEHOLD_NAME, level: 2 })).toBeVisible();
+  await fitsBothWidths(
+    page,
+    testInfo,
+    "Household (long household name)",
+    titleInsideWindow(LONG_HOUSEHOLD_NAME, "Household (long household name)"),
+  );
+
+  await page.getByRole("button", { name: `Rename ${LONG_HOUSEHOLD_NAME}` }).click();
+  await expect(page.getByLabel(`New name for ${LONG_HOUSEHOLD_NAME}`)).toHaveValue(
+    LONG_HOUSEHOLD_NAME,
+  );
+  await fitsBothWidths(
+    page,
+    testInfo,
+    "Household (renaming)",
+    titleInsideWindow(LONG_HOUSEHOLD_NAME, "Household (renaming)"),
+  );
+});
+
+test("Admin fits a phone and a desktop with a household's rename open", async ({
+  page,
+}, testInfo) => {
+  await openTab(page, "Admin");
+  await expect(page.getByRole("main")).toContainText(/Home: alex and sam/u);
+  await page.getByRole("button", { name: "Rename Home: alex and sam" }).click();
+  await expect(page.getByLabel("New name for Home: alex and sam")).toHaveValue("Home");
+  await fitsBothWidths(page, testInfo, "Admin (renaming)");
 });
 
 /**

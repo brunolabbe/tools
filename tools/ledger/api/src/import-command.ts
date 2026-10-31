@@ -151,7 +151,7 @@ export function directoryPeople(directoryPath: string, household: string): Direc
   }
   const directory = Directory.openReadOnly(directoryPath);
   try {
-    if (directory.household(household) === undefined) {
+    if (!directory.holdsHousehold(household)) {
       throw new AppError(
         "BAD_REQUEST",
         `--household names "${household}", which the household directory does not hold.`,

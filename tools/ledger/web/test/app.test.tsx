@@ -249,6 +249,7 @@ test("any other failure of /api/me leaves the screens as they are (lg-20)", asyn
 vi.mock("../src/api/households.ts", () => ({
   fetchHousehold: vi.fn(),
   addHouseholdMember: vi.fn(),
+  renameHousehold: vi.fn(),
   fetchAdminHouseholds: vi.fn(),
   createHousehold: vi.fn(),
   adminAddMember: vi.fn(),
@@ -270,7 +271,8 @@ test("a member has a household tab showing their own household, and no admin tab
 
   fireEvent.click(await screen.findByRole("button", { name: "Household" }));
 
-  expect(await screen.findByRole("heading", { name: "Household" })).toBeTruthy();
+  // lg-77: the screen is titled by the household's name.
+  expect(await screen.findByRole("heading", { name: "The test household" })).toBeTruthy();
   expect(vi.mocked(fetchHousehold).mock.calls[0]?.[0]).toBe("home");
   expect(screen.queryByRole("button", { name: "Admin" })).toBeNull();
 });

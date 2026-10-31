@@ -480,6 +480,42 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
       )
     BEGIN SELECT RAISE(ABORT, 'a retirement is for a person the household has held'); END;
   `,
+  // 9 — a household renamed (lg-77).
+  `
+  -- A household's name, as its members or an admin change it. The households
+  -- row stays as it was made, and households_never_updated still refuses any
+  -- change to it: its name is the one the household was created with. A rename
+  -- is a record here, the latest one stands, and a household with none is
+  -- called by the name it was created with. Built the way person_names is.
+  CREATE TABLE household_names (
+    id INTEGER PRIMARY KEY,
+    household_id TEXT NOT NULL REFERENCES households (id),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 80 AND name = trim(name)),
+    named_at TEXT NOT NULL,
+    -- Who renamed it: a member's or an admin's address, or 'operator'.
+    named_by TEXT NOT NULL
+  );
+
+  CREATE INDEX household_names_household ON household_names (household_id, id);
+
+  -- What each renamed household is called now: its latest record, by id, which
+  -- only ever grows, as current_person_names is ordered.
+  CREATE VIEW current_household_names AS
+    SELECT household_id, name, named_at, named_by
+    FROM household_names
+    WHERE id = (
+      SELECT max(id) FROM household_names later
+      WHERE later.household_id = household_names.household_id
+    );
+
+  CREATE TRIGGER household_names_never_updated BEFORE UPDATE ON household_names
+    BEGIN SELECT RAISE(ABORT, 'a household name record is appended, never edited'); END;
+  CREATE TRIGGER household_names_never_deleted BEFORE DELETE ON household_names
+    BEGIN SELECT RAISE(ABORT, 'a household name record is appended, never deleted'); END;
+  CREATE TRIGGER household_names_never_replaced BEFORE INSERT ON household_names
+    WHEN NEW.id IS NOT NULL AND EXISTS (SELECT 1 FROM household_names WHERE id = NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'a household name record is appended, never replaced'); END;
+  `,
 ];
 
 /** Brings a directory up to `target`, every migration by default. */
