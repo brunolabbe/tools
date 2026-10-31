@@ -227,3 +227,59 @@ downloader's cookie sentence reworded) with `git merge`, no rebase.
   tags and checks the next characters close the one it found, as the downloader's
   does. The same run's `check`, `test (ubuntu-latest)`, `test (windows-latest,
   informational)`, `e2e`, `docker`, `codeql` and `dependency-review` jobs passed.
+
+**2026-10-31 — round 2: gate 1 failed on one high finding; the owner's answer,
+and the fix.** Gate 1 (`ticket-reviewer-opus`, at `8c1375cb`) found that the
+terms page's "It holds no statement row, no amount" was false: the ledger API's
+error handler logged `url: request.url` with its query string, so a refused
+`GET /api/rows?q=…` (History's search) or `GET
+/api/receipts/:id/matches?amountCents=…&date=…` wrote a statement's text, an
+amount or a date to the log.
+
+- **The owner's answer, 2026-10-31**, from the options the gate gave: (A) reword
+  the page to admit it and file the leak; (B) log the path without its query, in
+  this branch; (B) as its own pull request first. The owner chose **(B) in this
+  branch**, the gate's and the build's recommendation. The ledger's `CLAUDE.md`
+  already says "a log carries their names and no values".
+- **The leak was already on `main`.** `registerErrorHandling` in
+  `api/src/server.ts` has logged `request.url` since the handler was written; it
+  is not something this branch introduced. This branch fixes it, because the
+  terms page is the first document that says otherwise.
+- **Red, then green.** `api/test/log-url.test.ts` (two tests, synthetic text
+  only) sends a refused `GET /api/rows?q=SYNTHETIC%20SHOP&limit=999999` (400) and
+  a refused `GET /api/receipts/not-an-id/matches?amountCents=4599&date=2026-10-01`
+  (400), asserts a `request rejected` line exists first, that it carries the path
+  alone, and that no line holds `SYNTHETIC`, `4599` or `2026-10-01`. Before the
+  fix, `npx vitest run tools/ledger/api/test/log-url.test.ts`: 2 of 2 failed, with
+  `"url":"/api/rows?q=SYNTHETIC%20SHOP&limit=999999"` and
+  `"url":"/api/receipts/not-an-id/matches?amountCents=4599&date=2026-10-01"` in
+  the received line. After: 2 of 2 passed.
+- **The one log call changed**: `server.ts` `registerErrorHandling`'s `fields`,
+  `url: request.url` now `url: pathOf(request.url)`, where `pathOf` drops
+  everything from the first `?`. `grep -rn "request.url\|raw.url\|originalUrl"
+  tools/ledger/api/src` finds two other uses, neither a log call: the not-found
+  handler's response `details.path` (the caller's own body; the handler logs
+  only the details' names), and `routes/web.ts`'s prefix test. Every other
+  `logger.*` call in `api/src` was read; none takes a URL, a header or a request.
+- **The rate-limit log line was not reached by the cookie test** (gate 1, low).
+  `theme-cookie-log.test.ts` gained a fourth test: with
+  `rateLimitReadsPerMinute: 1` a second `GET /api/rows` is refused 429, a
+  `rate limited` line is asserted, and no line holds the cookie. With
+  `cookie: request.headers.cookie` planted in `rate-limit.ts`'s `logger.warn`
+  that test is red (`expected [ Array(1) ] to deeply equal []`, 1 failed of 4);
+  with the plant removed, 4 of 4.
+- **The terms page**, four lows and the owner's cookie wording, in
+  `web/public/terms.html`: the log paragraph now names the workbook lines ("when
+  a spreadsheet is described or imported it also writes a line saying so, with
+  counts of rows and of the model's tokens and nothing of the spreadsheet") and
+  says "the path it asked for without anything after a question mark"; the
+  description names each sheet's name and size and the formula beside a computed
+  cell (`layout-view.ts`'s docblock); the books list the recurring items. The
+  cookie sentence, settled by the owner for both tools: "sends it with requests
+  to `oludoi.com` addresses" and "so that the tools there can share it". The
+  round 1 entry above quotes the earlier wording as it stood then.
+- **Not done**: repo-131's branch was not merged in this round, as told.
+- **Verification, at the head before this commit.** `npm run check` exit 0.
+  `npm test -- --project ledger --project core` exit 0, 2,137 of 2,137 (109
+  files). `E2E_PORT=8193 npx playwright test -c tools/ledger/playwright.config.ts
+  e2e/layout.spec.ts e2e/footer.spec.ts` 29 of 29.
