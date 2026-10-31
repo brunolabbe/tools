@@ -427,6 +427,8 @@ const CARDS: Readonly<Record<string, number>> = {
   Admin: 3,
   // lg-66: the date column, the bucket labels and the checks, once read.
   "Import (read)": 3,
+  // lg-67: a CSV has no bucket label, so the date column and the checks.
+  "Import CSV (read)": 2,
 };
 
 /** The tabs whose screens carry a radio group, with how many radios each draws. */
@@ -577,4 +579,32 @@ test("Import fits a phone and a desktop, before sending and once read", async ({
   // The report open, its longest lines wrapping inside the card.
   await page.getByText("The dry run’s report").click();
   await fitsBothWidths(page, testInfo, "Import (read)");
+});
+
+/**
+ * lg-67: the same screen once a bank CSV is read. The describe request is
+ * answered with what the API answers for `csv-balance` into empty books
+ * (`web/test/fixtures/csv-balance-describe.json`): the date column, the first
+ * import's line and the checks, with no bucket section.
+ */
+const CSV_DESCRIBED: unknown = JSON.parse(
+  fs.readFileSync(path.join(here, "../web/test/fixtures/csv-balance-describe.json"), "utf8"),
+);
+
+test("Import fits a phone and a desktop once a CSV is read", async ({ page }, testInfo) => {
+  await page.route("**/api/workbook/describe", async (route) => {
+    await route.fulfill({ json: CSV_DESCRIBED });
+  });
+  await openTab(page, "Import");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "releve.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("Date,Description,Montant,Solde\n2024-01-02,DEPOT PAIE,1823.45,4335.55\n"),
+  });
+  await page.getByRole("button", { name: "Send the samples and describe" }).click();
+  await expect(page.getByText("First import: no history is stored.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Confirm and import" })).toBeVisible();
+  await expect(page.getByRole("main")).not.toContainText("Which bucket each label files in");
+  await page.getByText("The dry run’s report").click();
+  await fitsBothWidths(page, testInfo, "Import CSV (read)");
 });

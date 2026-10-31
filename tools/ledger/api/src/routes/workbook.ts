@@ -70,6 +70,7 @@ export function registerWorkbookRoutes(
       );
       // Counts only: never a sheet's name, a cell, or the key.
       context.logger.info("a workbook was described", {
+        kind: body.kind,
         inputTokens: body.usage.inputTokens,
         outputTokens: body.usage.outputTokens,
         ok: body.ok,
@@ -85,7 +86,13 @@ export function registerWorkbookRoutes(
       request.body,
       deps,
     );
-    context.logger.info("a described workbook was imported");
+    if (body.kind === "csv") {
+      // Counts only, as for a paste: never a row's text or the file's name (lg-67).
+      context.logger.info("a described CSV was stored", {
+        rowsAdded: body.rowsAdded,
+        rowsInInbox: body.rowsInInbox,
+      });
+    } else context.logger.info("a described workbook was imported");
     return body;
   });
 }

@@ -74,7 +74,7 @@ UTF-8 is tested with `csv-balance` re-encoded and one synthetic file (Done when
   is the number 42 imports with exit 0, the same report as the text control, and
   stores `description` `""` (Log, round 1). Per the owner (Log, round 1) it is
   filed as lg-68 and built on its own pull request from `main`, branch
-  `lg-68-numeric-detail-cell`, which adds `detailOf` to the books reader
+  `lg-68-numeric-detail-cell`, which adds `freeTextOf` to the books reader
   (`books/src/workbook.ts`) and leaves `textOf` as it is; lg-68's final scope is
   not claimed here. It is not this ticket's, and this ticket depends on it **in
   prose only** (lg-68 is not on this branch's base, so there is no
@@ -331,7 +331,7 @@ stays).
 **Answered 2026-10-24 by the owner: (a), a field that starts with a zero followed by a digit stays text** (the recommendation).
 
 Only the CSV half of the digits-only detail defect is open here; the `.xlsx`
-half, lg-68's `detailOf` in the books reader, is lg-68's (Why, above). Reproduced (Log, round 1): the CSV reader turns a
+half, lg-68's `freeTextOf` in the books reader, is lg-68's (Why, above). Reproduced (Log, round 1): the CSV reader turns a
 field of plain digits into a number cell, so `007` becomes the number 7 and its
 leading zeros are gone before the books read it. Nothing at the base calls that
 reader outside the test harness, and the 13 fixtures read 0 rows with an empty
@@ -346,7 +346,7 @@ numbers and `007` and `-007` match it too.
   of that shape (whether any measured fixture holds one is settled by the 13
   pins of Done when 2, which must pass unchanged); and a detail of plain digits
   with no leading zero (`42`) still becomes a number cell, which reads as the
-  detail `"42"` only once lg-68's `detailOf` in the books reader has landed, so
+  detail `"42"` only once lg-68's `freeTextOf` in the books reader has landed, so
   this ticket's CSV path waits for lg-68.
 - **(b) Leave the reader as it is.** Costs: with lg-68 landed, `007` is stored as
   `"7"`: the detail differs from the file's, silently.
@@ -573,7 +573,7 @@ until lg-67" goes with them.
 
 - **Builders have no Anthropic key.** Done when 13 is the owner's.
 - **Not before lg-68** (Why): the CSV path reads a plain-digits detail as a
-  number cell, which only reads as its digits once lg-68's `detailOf` in the books
+  number cell, which only reads as its digits once lg-68's `freeTextOf` in the books
   reader is on the base. Merge `main` in first and check it.
 - **Real bank data never enters the repository**, including what a test or a
   fixture is modelled on (lg-38). Use the 7 synthetic CSV fixtures; add one only
@@ -932,3 +932,138 @@ through `classifyAdded` as a paste's do. The Build already reads for these, so
 no step changes; `status` moves to `ready`, and the ticket is still blocked by
 lg-66 through `depends_on`. Done when 13 (the re-run of the 70 Haiku runs under
 the fixed name, about $0.053) stays the owner's, with their key.
+
+### 2026-10-31 — built, from `main` at `f05108d2`
+
+Branch `lg-67-csv-layout-import`, cut from `main` (`f05108d2`), which carries
+lg-66 (#670), lg-68 (#626) and lg-79 (#677). Every Decision is built as
+answered. `status` is left as it was.
+
+**What the build is.** `api/src/csv.ts` is lg-38's reader, moved (`git mv`)
+from the harness and taking bytes as well as text, with Decision 6 (a) and the
+unread-shape checks. `api/src/csv-statement.ts` is the CSV's own path after the
+description: the parts a CSV cannot have, the placement, the store and the
+rules. `workbook-describe.ts` tells a CSV from a workbook (`fileOf`) and
+branches on it in both requests; the routes are unchanged but for a log line.
+The screen (`ImportWorkbook.tsx`) takes either. Three codes are new in
+`contract/src/errors.ts` with their statuses in `http-errors.ts`:
+`CSV_SHAPE_UNREAD` (415), `LAYOUT_NOT_FOR_CSV` (422), `CSV_NOT_AFTER_TAIL`
+(422). `WORKBOOK_NOT_XLSX` keeps its name, with its message now naming the CSV.
+The contract's `DescribeWorkbookResponse` and `ConfirmWorkbookResponse` became
+unions told by `kind` (`"xlsx"` or `"csv"`), the CSV's carrying `placement` and
+the rows stored; `web/test/fixtures/lg37-describe.json` gained `"kind": "xlsx"`.
+
+**How the insert is shared (Build 5).** `statements.ts` exports `insertRows`,
+the one `INSERT` into `statement_imports` (source `paste`, the column's default)
+and `statement_rows` (seq after the highest stored), which `importStatement`'s
+`store` now calls in place of its own copy, and `immediately`, the `IMMEDIATE`
+transaction with its `SQLITE_BUSY` to `TIMEOUT` mapping, which
+`importStatement` now runs through too. The insert writes `note`, `NULL` for a
+paste's rows, as the column held before. `storeCsvRows` reads the tail, places,
+inserts and runs `classifyAdded` inside one `immediately`.
+
+**The patterns of Decision 3 (a)** (`csv.ts`, `UNREAD` and `delimiterOf`),
+tested in `api/test/csv-import.test.ts`, "Done when 3":
+
+- the delimiter is the one most lines split on, each line voting for the one it
+  holds most of outside quotes, a comma winning a tie; a semicolon or a tab is
+  refused. A semicolon file with decimal commas holds commas on every row and
+  more semicolons, so it is refused as both (`["semicolon","decimal-comma"]`);
+- a date: `d/m/yyyy`-like `^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$`, `yyyy/mm/dd`, an
+  unpadded `yyyy-m-d`, a date with a time, and a day with a month name in
+  English or French;
+- a thousands separator: `1,823.45`, `1 823,45` (space, no-break or narrow
+  no-break), `1'823.45`, `1.823,45`;
+- a decimal comma: `^[-+]?\d+,\d{1,2}$`, and `1.823,45`;
+- not UTF-8: a `fatal` UTF-8 decode that throws, or a UTF-16 byte-order mark.
+
+The message names each shape found, the line and the field where it was first
+seen, and says that a field matching by chance means the check refused a good
+file, which saving it as `.xlsx` goes around.
+
+**The synthetic non-UTF-8 file** (Done when 3) is two invented lines in
+Windows-1252, `Date,Description,Montant,Solde` and
+`2024-02-01,CAFÉ DU PARC – TERRASSE,-4.50,95.50`, `É` the byte 0xC9 and the
+dash 0x96 (`windows1252()` in the test).
+
+**Build 3, the bounds.** Bytes, rows, cells, the cut cell text and the request
+estimate apply to a CSV, each tested ("Build 3" in the test file). The sheets
+bound is moot (a CSV is always one sheet) and so is the inflated size (nothing
+to inflate): neither is checked for a CSV.
+
+**The seven new `layoutRequest` pins** (Build 3, Done when 10), the CSV
+fixtures' text read as one sheet named `statement.csv`, in
+`api/test/layout-pins.test.ts`'s `CSV_UPLOAD_PINS`, each also asserted to differ
+from the measured request only by the sheet's name:
+
+```
+csv-balance        012081995629a7878a7f03e97d9a944c1b61f6295f80c832088aa79bb9080bdb
+csv-no-balance     9795452e657f5256b439ff0c1c7ab1386c43fb6776cedf5b95e9376c9469cb87
+empty-columns-csv  4fecbbcfc90989bc76f261b2ec9e28abd7f1f8ba95f8d8f428579fd48acde507
+bank-preamble      657e5c96bf91aaa0dcbceeeee9b8a52decc6fde61d6513f8d5505116de529409
+bank-two-dates     0d762083380dc7841d561228331f6436f05701729a990a4fa8bf243ac9a6dbb7
+bank-footer        5a25d7c8ea6efee02ead8e9a08a65c33a4963993a36599bad9f2d7993f89fceb
+bank-wide          1df17b6b5f0c1ea041fd221e917e4f0feece7f22e9328d8ce8540e1e686afb56
+```
+
+lg-66's 13 request pins and its schema pin are unedited:
+`git diff f05108d2 -- tools/ledger/api/test/layout-pins.test.ts | grep '^-' | grep -v '^---'`
+prints nothing, and the file passes.
+
+**Rows read with an empty detail after Build 1's change** (Done when 5), each
+fixture through its correct description (session scratch `pins.mts`):
+lg7 0 of 17, lg37 0 of 233, moved 0 of 130, english 0 of 115, csv-balance 0 of
+40, csv-no-balance 0 of 32, swapped-labels 0 of 75, empty-columns-carry 0 of 95,
+empty-columns-csv 0 of 32, bank-preamble 0 of 32, bank-two-dates 0 of 32,
+bank-footer 0 of 32, bank-wide 0 of 32: 0 of 13, as at the base.
+
+**What the brief had wrong, or left open:**
+
+- **Build 2's candidate test cannot be "its first line holds a comma, a
+  semicolon or a tab"**: `bank-preamble`'s first line is `Account statement`,
+  which holds none, so Done when 7 could not hold for it. `isCsvCandidate` takes
+  any line. Done when 1 (iv)'s file holds no delimiter on any line, so its first
+  line holds none, as the line says.
+- **Build 4's "these refusals, each typed, before the dry run is shown"** is
+  built as: a part a CSV cannot have is the typed `LAYOUT_NOT_FOR_CSV` on both
+  requests; a reading problem (the missing balance column among them) and a
+  placement that would be refused are answered by Describe as a 200 with `ok`
+  false, the reason in `problems` and Confirm withheld, as lg-66 answers a
+  workbook's failed verification, because Done when 11 asks for "a fake
+  describe response" in which a verification or the placement fails; on
+  Confirm they are the typed `WORKBOOK_IMPORT_REFUSED` and `CSV_NOT_AFTER_TAIL`.
+- **Decision 2 (a)'s rule, "the oldest row opens from the stored tail's
+  balance", alone would store a file twice** whose rows sum to zero. A
+  continuation must also be dated no earlier than the tail and must not begin
+  with the stored rows of the tail's day, matched by date, amount and balance
+  (`placementOf`); either is refused as an overlap. A transfer, its reversal
+  and the transfer again on one day still continue from the tail.
+- **Done when 10's "uploads each under a name"**: the request body has no field
+  for a name (lg-66's strict schema), so no name reaches the server. The test
+  sends one, which is refused 400 with the fake uncalled, then checks the
+  request names `statement.csv` and neither the token nor the fixture's own file
+  name, and that no log line holds the token; the web test checks the body the
+  screen sends holds no name.
+- **Done when 2's grep** finds nothing at the base too (lg-66's fixtures
+  imported `./csv.ts`); the proof is the file gone and the fixtures importing
+  `../../src/csv.ts`: `ls tools/ledger/api/test/layout/` prints `fixtures.ts
+  score.ts`; `grep -rn "layout/csv" tools/ledger/api --include=*.ts
+  --include=*.js | wc -l` prints `0` (dist built).
+- **lg-68's reader function is `freeTextOf`, not `detailOf`**: renamed in the
+  text above `## Log` (4 places); the Log keeps what was written then. The Why,
+  Build and Notes still say lg-66 is unmerged and the branch is cut from it;
+  both are merged and this branch is cut from `main`.
+- **Rows dated out of order are stored as typed**, as the workbook import
+  does: the report lists them (`dated out of order: …; stored as typed`) and
+  nothing refuses them, so `bank-two-dates`' let-through would be stored but for
+  the person reading the date column (Done when 12).
+- **Done when 12 holds with the confirmation sorted by date** (lg-66's
+  `confirmationOf`), not by file order as the filing measured: header `Date of
+  transaction` for `Date posted`, and 3 of the 6 dates differ.
+
+**Moved, not copied:** `dump` left `api/test/workbook-import.test.ts` for
+`api/test/helpers/dump.ts`, which that file and the new one import; no case of
+it was edited.
+
+**Fold-in exception.** Nothing was folded in: nothing else already specified
+was made free by this work.

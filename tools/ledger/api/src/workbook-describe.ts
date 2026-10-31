@@ -23,15 +23,23 @@
  * estimate, before the call. A cell's text is never refused: the view cuts it
  * at `MAX_CELL_TEXT`, and the file is still read in full.
  *
+ * **A bank CSV comes through the same two requests** (lg-67). Bytes that are
+ * not a workbook and could be a CSV are read as one sheet named
+ * `statement.csv` (`csv.ts`), after the shapes the reader does not read are
+ * refused; the description is checked for parts a CSV cannot have, and the
+ * rows are stored as a statement's, after the stored tail or into an empty
+ * history, rather than through `importWorkbook` (`csv-statement.ts`).
+ *
  * Nothing here logs: no key, no cell text, no file name (the requests carry
  * none). The route logs the call's token counts and the number of sheets.
  */
 
 import { Buffer } from "node:buffer";
 import type { Sheet, WorkbookReading } from "@ledger/books";
-import { NO_CORRECTIONS } from "@ledger/books";
+import { NO_CORRECTIONS, formatCents, readWorkbook } from "@ledger/books";
 import {
   AppError,
+  CSV_SHEET_NAME,
   MAX_WORKBOOK_BYTES,
   confirmWorkbookRequestSchema,
   describeWorkbookRequestSchema,
@@ -41,6 +49,7 @@ import {
 import type {
   BucketLabelConfirmation,
   ConfirmWorkbookResponse,
+  CsvPlacement,
   DescribeWorkbookResponse,
   WorkbookConfirmation,
   WorkbookLayout,
@@ -49,7 +58,18 @@ import type {
 import { layoutOutputFormat } from "@ledger/receipts";
 import type { LayoutAsk } from "@ledger/receipts";
 import type { Database } from "better-sqlite3";
+import { csvSheet, csvText, isCsvCandidate, refuseUnreadShapes } from "./csv.ts";
+import {
+  placementHolds,
+  placementLine,
+  placementOf,
+  refuseNonCsvParts,
+  rowsToStore,
+  storeCsvRows,
+} from "./csv-statement.ts";
+import type { CsvStored } from "./csv-statement.ts";
 import { estimateTokens, layoutRequest } from "./layout-view.ts";
+import type { RowToStore } from "./statements.ts";
 import { importWorkbook } from "./workbook-import.ts";
 import {
   MAX_WORKBOOK_INFLATED_BYTES,
@@ -57,7 +77,7 @@ import {
   declaredInflatedSize,
   workbookEntries,
 } from "./workbook-zip.ts";
-import type { InflateSpy } from "./workbook-zip.ts";
+import type { InflateSpy, ZipEntry } from "./workbook-zip.ts";
 
 /** Sheets a workbook may hold. The measured workbooks hold 2 to 9. */
 export const MAX_WORKBOOK_SHEETS = 40;
@@ -139,10 +159,75 @@ function bytesOf(file: string): Buffer {
   return Buffer.from(file, "base64");
 }
 
-/** The file's sheets, once every bound before the model has held. */
-async function sheetsOf(file: string, deps: WorkbookImportDeps): Promise<Sheet[]> {
+/** A file read: a workbook's sheets, or a CSV's one (lg-67). */
+interface ReadFile {
+  kind: "xlsx" | "csv";
+  sheets: Sheet[];
+}
+
+/**
+ * The file's sheets, once every bound before the model has held. A workbook by
+ * lg-66's zip test is read as one; bytes that fail it and could be a CSV are
+ * read as a CSV (lg-67, Build 2), whatever the file was named, since its name
+ * never reaches the server.
+ */
+async function fileOf(file: string, deps: WorkbookImportDeps): Promise<ReadFile> {
   const bytes = bytesOf(file);
-  const entries = workbookEntries(bytes);
+  let entries: ZipEntry[];
+  try {
+    entries = workbookEntries(bytes);
+  } catch (error: unknown) {
+    if (error instanceof AppError && error.code === "WORKBOOK_NOT_XLSX" && isCsvCandidate(bytes)) {
+      return { kind: "csv", sheets: [csvOf(bytes)] };
+    }
+    throw error;
+  }
+  return { kind: "xlsx", sheets: await workbookSheetsOf(bytes, entries, deps) };
+}
+
+/**
+ * A CSV as its one sheet, named `CSV_SHEET_NAME` (Decision 5 (a)): the shapes
+ * the reader does not read are refused before it is parsed, then lg-66's
+ * bounds on rows and cells apply. A CSV has nothing to inflate and one sheet,
+ * so those two bounds are moot.
+ */
+function csvOf(bytes: Buffer): Sheet {
+  const text = csvText(bytes);
+  refuseUnreadShapes(text);
+  const sheet = csvSheet(CSV_SHEET_NAME, text);
+  boundRowsAndCells([sheet], "That CSV");
+  return sheet;
+}
+
+/** lg-66's bounds on what a file parses to, over every sheet: its rows, then its cells. */
+function boundRowsAndCells(sheets: readonly Sheet[], what: string): void {
+  const rows = sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0);
+  if (rows > MAX_WORKBOOK_ROWS) {
+    throw tooLarge(
+      "rows",
+      `${what} has ${String(rows)} rows; this import reads ${String(MAX_WORKBOOK_ROWS)} at most.`,
+    );
+  }
+  const cells = sheets.reduce(
+    (sum, sheet) =>
+      sum +
+      sheet.rows.reduce((inRow, row) => inRow + row.filter((cell) => cell !== null).length, 0),
+    0,
+  );
+  if (cells > MAX_WORKBOOK_CELLS) {
+    throw tooLarge(
+      "cells",
+      `${what} has ${String(cells)} cells; this import reads ${String(MAX_WORKBOOK_CELLS)} at most.`,
+    );
+  }
+}
+
+/** A workbook's sheets, once its inflated size, its sheets, rows and cells are within bounds. */
+async function workbookSheetsOf(
+  bytes: Buffer,
+  entries: ZipEntry[],
+  deps: WorkbookImportDeps,
+): Promise<Sheet[]> {
   const inflated = `That workbook inflates to more than ${String(MAX_WORKBOOK_INFLATED_BYTES / 1024 / 1024)} MB, more than this import reads.`;
   if (declaredInflatedSize(entries) > MAX_WORKBOOK_INFLATED_BYTES) {
     throw tooLarge("inflated", inflated);
@@ -169,25 +254,7 @@ async function sheetsOf(file: string, deps: WorkbookImportDeps): Promise<Sheet[]
       `That workbook has ${String(sheets.length)} sheets; this import reads ${String(MAX_WORKBOOK_SHEETS)} at most.`,
     );
   }
-  const rows = sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0);
-  if (rows > MAX_WORKBOOK_ROWS) {
-    throw tooLarge(
-      "rows",
-      `That workbook has ${String(rows)} rows; this import reads ${String(MAX_WORKBOOK_ROWS)} at most.`,
-    );
-  }
-  const cells = sheets.reduce(
-    (sum, sheet) =>
-      sum +
-      sheet.rows.reduce((inRow, row) => inRow + row.filter((cell) => cell !== null).length, 0),
-    0,
-  );
-  if (cells > MAX_WORKBOOK_CELLS) {
-    throw tooLarge(
-      "cells",
-      `That workbook has ${String(cells)} cells; this import reads ${String(MAX_WORKBOOK_CELLS)} at most.`,
-    );
-  }
+  boundRowsAndCells(sheets, "That workbook");
   return sheets;
 }
 
@@ -226,7 +293,7 @@ export async function describeWorkbook(
   const { ask } = deps;
   if (ask === undefined) throw new AppError("LAYOUT_READER_UNCONFIGURED");
 
-  const sheets = await sheetsOf(parsed.data.file, deps);
+  const { kind, sheets } = await fileOf(parsed.data.file, deps);
   const request = layoutRequest(sheets);
   const estimate = estimatedRequestTokens(request);
   if (estimate > MAX_REQUEST_TOKENS) {
@@ -238,6 +305,8 @@ export async function describeWorkbook(
 
   const answer = await ask(request, signal);
   const layout = layoutOf(answer);
+  const usage = { inputTokens: answer.inputTokens, outputTokens: answer.outputTokens };
+  if (kind === "csv") return describeCsv(caller, sheets, layout, usage);
   const result = importWorkbook(caller.db, sheets, {
     personId: caller.personId,
     members: caller.members,
@@ -250,13 +319,98 @@ export async function describeWorkbook(
     via: "screen",
   });
   return {
+    kind: "xlsx",
     layout,
     ok: result.ok,
     problems: result.problems,
     report: result.report,
     confirmation: confirmationOf(sheets, layout, result.reading),
-    usage: { inputTokens: answer.inputTokens, outputTokens: answer.outputTokens },
+    usage,
   };
+}
+
+/** A CSV through its description, read as the books read a sheet: no person or bucket to resolve. */
+function readCsv(sheets: readonly Sheet[], layout: WorkbookLayout): WorkbookReading {
+  return readWorkbook(sheets, { people: [], layout });
+}
+
+/**
+ * The dry run for a CSV (lg-67, Build 4): a description naming a part a CSV
+ * cannot have is refused; a reading with a problem, the missing balance column
+ * among them, or a placement that would be refused, is answered with Confirm
+ * withheld and the reason in `problems`. Nothing is written either way.
+ */
+function describeCsv(
+  caller: WorkbookCaller,
+  sheets: readonly Sheet[],
+  layout: WorkbookLayout,
+  usage: { inputTokens: number; outputTokens: number },
+): DescribeWorkbookResponse {
+  refuseNonCsvParts(layout);
+  const reading = readCsv(sheets, layout);
+  const rows = rowsToStore(reading);
+  const problems = [...reading.problems];
+  let placement: CsvPlacement | null = null;
+  if (problems.length === 0) {
+    placement = placementOf(caller.db, rows);
+    if (!placementHolds(placement)) problems.push(placementLine(placement, rows[0]));
+  }
+  return {
+    kind: "csv",
+    layout,
+    ok: problems.length === 0,
+    problems,
+    report: csvReport({ reading, rows, placement, problems, stored: null }),
+    confirmation: confirmationOf(sheets, layout, reading),
+    placement,
+    usage,
+  };
+}
+
+/** The CSV's report, laid out as the workbook's (`importWorkbook`) is. */
+function csvReport(input: {
+  reading: WorkbookReading;
+  rows: readonly RowToStore[];
+  placement: CsvPlacement | null;
+  problems: readonly string[];
+  stored: CsvStored | null;
+}): string {
+  const { reading, rows, placement, problems, stored } = input;
+  const out: string[] = [
+    stored === null ? "Dry run: nothing will be written." : "Storing the CSV's rows.",
+    "",
+    "Rows",
+    `  movements read  ${String(rows.length)}`,
+    `  skipped         ${String(reading.skipped.length)}`,
+  ];
+  for (const skip of reading.skipped) {
+    out.push(`  skipped: ${skip.sheet} row ${String(skip.row)}, no amount`);
+  }
+  for (const late of reading.outOfOrder) {
+    out.push(
+      `  dated out of order: ${late.sheet} row ${String(late.row)}, ${late.date}, is listed above row ${String(late.belowRow)}, ${late.belowDate}; stored as typed`,
+    );
+  }
+  if (placement !== null && placementHolds(placement)) {
+    out.push("", "Placement", `  ${placementLine(placement, rows[0])}`);
+  }
+  if (stored !== null) {
+    out.push(
+      `  stored          ${String(stored.rowsAdded)}`,
+      `  in the inbox    ${String(stored.rowsInInbox)}`,
+      `  stored balance  ${formatCents(stored.tailBalanceCents)}`,
+    );
+  }
+  out.push("", "Verifications");
+  for (const check of reading.checks) out.push(`  ok      ${check}`);
+  for (const problem of problems) out.push(`  FAILED  ${problem}`);
+  const outcome =
+    stored !== null
+      ? "Written."
+      : problems.length === 0
+        ? "Every verification held. This was a dry run: nothing was written. Confirm to store the rows."
+        : "Refused: nothing was written.";
+  return `${out.join("\n")}\n\n${outcome}\n`;
 }
 
 export async function confirmWorkbook(
@@ -271,7 +425,9 @@ export async function confirmWorkbook(
       "The workbook and the description it was read through are both needed. Read it again.",
     );
   }
-  const sheets = await sheetsOf(parsed.data.file, deps);
+  const { kind, sheets } = await fileOf(parsed.data.file, deps);
+  const { layout } = parsed.data;
+  if (kind === "csv") return confirmCsv(caller, sheets, layout);
   const result = importWorkbook(caller.db, sheets, {
     personId: caller.personId,
     members: caller.members,
@@ -280,7 +436,7 @@ export async function confirmWorkbook(
     write: true,
     commit: true,
     now: caller.now,
-    layout: parsed.data.layout,
+    layout,
     via: "screen",
   });
   if (!result.written) {
@@ -288,7 +444,38 @@ export async function confirmWorkbook(
       details: { problems: result.problems },
     });
   }
-  return { report: result.report };
+  return { kind: "xlsx", report: result.report };
+}
+
+/**
+ * A CSV's confirmation (lg-67, Build 5): the description checked and the file
+ * read again, every verification run, and the rows stored only when all hold,
+ * after the stored tail or into an empty history, with the rules run over them.
+ */
+function confirmCsv(
+  caller: WorkbookCaller,
+  sheets: readonly Sheet[],
+  layout: WorkbookLayout,
+): ConfirmWorkbookResponse {
+  refuseNonCsvParts(layout);
+  const reading = readCsv(sheets, layout);
+  if (reading.problems.length > 0) {
+    throw new AppError(
+      "WORKBOOK_IMPORT_REFUSED",
+      "The CSV, read through that description, does not pass every check, so nothing was stored.",
+      { details: { problems: reading.problems } },
+    );
+  }
+  const rows = rowsToStore(reading);
+  const { placement, ...stored } = storeCsvRows(
+    { db: caller.db, personId: caller.personId, now: caller.now },
+    rows,
+  );
+  return {
+    kind: "csv",
+    report: csvReport({ reading, rows, placement, problems: [], stored }),
+    ...stored,
+  };
 }
 
 // --- What the confirmation shows (Build 4.2) ---

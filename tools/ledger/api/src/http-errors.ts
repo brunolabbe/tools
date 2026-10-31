@@ -95,6 +95,13 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   LAYOUT_READER_UNCONFIGURED: 503,
   LAYOUT_UNREADABLE: 422,
   WORKBOOK_IMPORT_REFUSED: 422,
+  // lg-67: a CSV in a shape not read is a media type refused, as a file that is
+  // neither workbook nor CSV is; a description with parts a CSV cannot have is
+  // the model's answer, as LAYOUT_UNREADABLE is; and rows that do not continue
+  // the stored history are the file against the books, as a paste's are.
+  CSV_SHAPE_UNREAD: 415,
+  LAYOUT_NOT_FOR_CSV: 422,
+  CSV_NOT_AFTER_TAIL: 422,
 };
 
 /**

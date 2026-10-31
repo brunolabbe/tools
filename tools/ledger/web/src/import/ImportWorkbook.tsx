@@ -14,12 +14,23 @@
  * of its rows. These are the guards the owner chose (lg-66's Why); the dry
  * run's report is shown below them. When a verification fails there is no
  * Confirm, only the problems and Cancel. Cancel writes nothing.
+ *
+ * **A bank CSV comes through the same screen** (lg-67). The server tells it
+ * from a workbook by its bytes, so the statement before the button names what
+ * leaves the house for either. For a CSV the confirmation is the date column
+ * alone (it has no bucket label), with where its rows go against the stored
+ * history: the first import, or after the stored balance on its date.
  */
 
 import { useId, useState } from "react";
 import { formatCents } from "@ledger/books";
-import { AppError, LAYOUT_SAMPLE_ROWS, MAX_WORKBOOK_BYTES } from "@ledger/contract";
-import type { DescribeWorkbookResponse, WorkbookSampleRow } from "@ledger/contract";
+import { AppError, CSV_SHEET_NAME, LAYOUT_SAMPLE_ROWS, MAX_WORKBOOK_BYTES } from "@ledger/contract";
+import type {
+  ConfirmWorkbookResponse,
+  CsvPlacement,
+  DescribeWorkbookResponse,
+  WorkbookSampleRow,
+} from "@ledger/contract";
 import { base64Of, confirmWorkbook, describeWorkbook } from "../api/workbook.ts";
 import { BUCKET_LABELS } from "../labels.ts";
 
@@ -27,7 +38,16 @@ type Stage =
   | { step: "choose" }
   | { step: "chosen"; file: string }
   | { step: "read"; file: string; described: DescribeWorkbookResponse }
-  | { step: "imported"; report: string };
+  | { step: "imported"; done: ConfirmWorkbookResponse };
+
+/** Where a CSV's rows go, as the checks card says it (lg-67, Build 6.2); `null` when they cannot go. */
+function placementLine(placement: CsvPlacement | null): string | null {
+  if (placement?.kind === "first") return "First import: no history is stored.";
+  if (placement?.kind === "continues") {
+    return `Continues from the stored balance of ${formatCents(placement.balanceCents)} on ${placement.date}.`;
+  }
+  return null;
+}
 
 /** Rows as the confirmation lists them: date and amount, then the detail. */
 function SampleRows(props: { rows: readonly WorkbookSampleRow[]; label: string }) {
@@ -93,22 +113,27 @@ export function ImportWorkbook(): React.ReactElement {
   if (stage.step === "choose" || stage.step === "imported") {
     return (
       <section className="card" aria-labelledby={`${id}-title`}>
-        <h2 id={`${id}-title`}>Import a workbook</h2>
+        <h2 id={`${id}-title`}>Import a workbook or a bank CSV</h2>
         {stage.step === "imported" && (
           <>
-            <output>The workbook was imported.</output>
+            <output>
+              {stage.done.kind === "csv"
+                ? `The CSV's ${String(stage.done.rowsAdded)} rows were stored; ${String(stage.done.rowsInInbox)} wait in the inbox.`
+                : "The workbook was imported."}
+            </output>
             <details>
               <summary>The import&rsquo;s report</summary>
-              <pre className="report">{stage.report}</pre>
+              <pre className="report">{stage.done.report}</pre>
             </details>
           </>
         )}
         <label className="camera">
-          {busy ? "Reading the file…" : "Choose an .xlsx workbook"}
+          {busy ? "Reading the file…" : "Choose an .xlsx workbook or a CSV"}
           <input type="file" disabled={busy} onChange={choose} />
         </label>
         <p className="muted hint">
-          Choosing a file sends nothing. Only an Excel workbook (.xlsx) is read.
+          Choosing a file sends nothing. An Excel workbook (.xlsx) or a bank&rsquo;s comma-separated
+          CSV is read.
         </p>
         {problemLine}
       </section>
@@ -124,7 +149,7 @@ export function ImportWorkbook(): React.ReactElement {
     };
     return (
       <section className="card" aria-labelledby={`${id}-title`}>
-        <h2 id={`${id}-title`}>Import a workbook</h2>
+        <h2 id={`${id}-title`}>Import a workbook or a bank CSV</h2>
         <p>File chosen. Nothing has been sent.</p>
         <div className="offer" role="note" aria-label="What is sent">
           <p className="hint">
@@ -134,7 +159,9 @@ export function ImportWorkbook(): React.ReactElement {
               its first {String(LAYOUT_SAMPLE_ROWS.first)} rows, {String(LAYOUT_SAMPLE_ROWS.middle)}{" "}
               rows from the middle and its last {String(LAYOUT_SAMPLE_ROWS.last)}
             </strong>
-            , with their figures and any formula text. Nothing else leaves the house. The model
+            , with their figures and any formula text. A CSV is one sheet, sent under the name{" "}
+            <strong>{CSV_SHEET_NAME}</strong>: the same rows, with their figures, and{" "}
+            <strong>never the file&rsquo;s name</strong>. Nothing else leaves the house. The model
             proposes where things are, never the rows: you check what it found before anything is
             imported.
           </p>
@@ -154,10 +181,11 @@ export function ImportWorkbook(): React.ReactElement {
 
   const { described, file } = stage;
   const { dateColumn, buckets } = described.confirmation;
+  const placed = described.kind === "csv" ? placementLine(described.placement) : null;
   const confirm = (): void => {
     void run(async () => {
       const done = await confirmWorkbook(file, described.layout);
-      setStage({ step: "imported", report: done.report });
+      setStage({ step: "imported", done });
     });
   };
   return (
@@ -198,11 +226,15 @@ export function ImportWorkbook(): React.ReactElement {
       )}
       <section className="card" aria-labelledby={`${id}-checks`}>
         <h2 id={`${id}-checks`}>The checks</h2>
+        {placed !== null && <p>{placed}</p>}
         {described.ok ? (
           <p>Every verification held on a dry run. Nothing has been written yet.</p>
         ) : (
           <>
-            <p className="bad">Read this way, the workbook does not pass every check:</p>
+            <p className="bad">
+              Read this way, the {described.kind === "csv" ? "CSV" : "workbook"} does not pass every
+              check:
+            </p>
             <ul aria-label="What failed">
               {described.problems.map((line) => (
                 <li key={line} className="bad">

@@ -1,0 +1,106 @@
+{
+  "kind": "csv",
+  "layout": {
+    "account": {
+      "sheets": {
+        "by": "name",
+        "names": [
+          "statement.csv"
+        ]
+      },
+      "yearPerSheet": false,
+      "order": "oldest-first",
+      "columns": [
+        {
+          "role": "date",
+          "column": "A"
+        },
+        {
+          "role": "detail",
+          "column": "B"
+        },
+        {
+          "role": "withdrawal",
+          "column": "C"
+        },
+        {
+          "role": "deposit",
+          "column": "D"
+        },
+        {
+          "role": "balance",
+          "column": "E"
+        }
+      ],
+      "buckets": [],
+      "carryOverLabel": null,
+      "summary": null
+    },
+    "periods": null,
+    "salaries": null,
+    "ignored": []
+  },
+  "ok": true,
+  "problems": [],
+  "report": "Dry run: nothing will be written.\n\nRows\n  movements read  40\n  skipped         0\n\nPlacement\n  first import: no history is stored\n\nVerifications\n  ok      The running balance follows from row to row through all 40 movements, from the 2512.10 the first row implies.\n\nEvery verification held. This was a dry run: nothing was written. Confirm to store the rows.\n",
+  "confirmation": {
+    "dateColumn": {
+      "column": "A",
+      "header": "Date",
+      "oldest": [
+        {
+          "sheet": "statement.csv",
+          "row": 2,
+          "date": "2024-01-02",
+          "detail": "DEPOT PAIE",
+          "amountCents": 182345
+        },
+        {
+          "sheet": "statement.csv",
+          "row": 3,
+          "date": "2024-01-04",
+          "detail": "RESTO LE MIDI",
+          "amountCents": -12231
+        },
+        {
+          "sheet": "statement.csv",
+          "row": 4,
+          "date": "2024-01-08",
+          "detail": "EPICERIE DU COIN",
+          "amountCents": -10502
+        }
+      ],
+      "newest": [
+        {
+          "sheet": "statement.csv",
+          "row": 39,
+          "date": "2024-05-20",
+          "detail": "RESTO LE MIDI",
+          "amountCents": -2049
+        },
+        {
+          "sheet": "statement.csv",
+          "row": 40,
+          "date": "2024-05-24",
+          "detail": "PHARMACIE CENTRALE",
+          "amountCents": -7079
+        },
+        {
+          "sheet": "statement.csv",
+          "row": 41,
+          "date": "2024-05-28",
+          "detail": "HYPOTHEQUE",
+          "amountCents": -104987
+        }
+      ]
+    },
+    "buckets": []
+  },
+  "placement": {
+    "kind": "first"
+  },
+  "usage": {
+    "inputTokens": 2100,
+    "outputTokens": 310
+  }
+}
