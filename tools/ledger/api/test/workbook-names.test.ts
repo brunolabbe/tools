@@ -321,6 +321,11 @@ describe("what Confirm refuses, adding no one (lg-78)", () => {
     ["a person the household does not hold", { as: "held", person: SAMANTHA_ID }],
     ["a new person under a name the household shows", { as: "new", shownAs: "ALEX" }],
     ["a new person under no name", { as: "new", shownAs: "  " }],
+    // lg-82: the directory refuses a character in a name, and the screen says so first.
+    [
+      "a new person under a name with a control character",
+      { as: "new", shownAs: `Sa${String.fromCharCode(0x1b)}m` },
+    ],
   ] as const)("an answer as %s is refused, adding no one", async (_what, answer) => {
     const directory = directoryOf();
     const started = await start(directory);
