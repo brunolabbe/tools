@@ -15,6 +15,7 @@ import type {
   SalaryEntryResponse,
 } from "@ledger/contract";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import { ALEX, SAM, accessConfig, homeBooks, memberDirectory } from "./helpers/access.ts";
 import { startApp } from "./helpers/classification.ts";
@@ -350,6 +351,7 @@ describe("a salary left out of an entry (lg-29)", () => {
   /** A household of alex, casey and sam, alex the caller. */
   async function startThree(): Promise<App> {
     app = await createApp({
+      booksTemplate: migratedBooks(),
       directory: memberDirectory([
         [ALEX, "alex"],
         [CASEY, "casey"],

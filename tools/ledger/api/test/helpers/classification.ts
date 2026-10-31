@@ -7,6 +7,7 @@
 import { ROUTES } from "@ledger/contract";
 import type { InboxResponse, Rule, RuleDraft } from "@ledger/contract";
 import { createApp } from "../../src/server.ts";
+import { migratedBooks } from "./template.ts";
 import type { App } from "../../src/server.ts";
 import { ALEX, accessConfig, memberDirectory, homeBooks } from "./access.ts";
 import { renderPaste, withBalances } from "./paste.ts";
@@ -18,6 +19,7 @@ export async function startApp(
   now: () => Date = () => new Date("2026-10-03T09:30:00Z"),
 ): Promise<App> {
   return await createApp({
+    booksTemplate: migratedBooks(),
     directory: memberDirectory(),
     config: {
       dataDir: ":memory:",

@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { RowsQuery, StoredRow } from "@ledger/contract";
 import { fetchRows } from "../src/api/rows.ts";
@@ -53,9 +53,29 @@ beforeEach(() => {
   vi.mocked(fetchRows).mockResolvedValue({ rows: [], total: 0 });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+/**
+ * Fake timers that still advance with the clock (lg-69), so `waitFor` and
+ * `findBy*` keep polling; the search's 300 ms pause is then crossed by
+ * advancing it rather than waited out.
+ */
+function fakeClock(): void {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+}
+
+/** Lets the search's pause (`SEARCH_DELAY_MS`, 300) elapse inside `act`. */
+async function pass(ms: number): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
 
 test("a search and a sort reach the request, the list is what the server answered, and Show more asks for the next offset", async () => {
+  fakeClock();
   const first = Array.from({ length: 50 }, (_, index) =>
     row(index + 1, `Marché ${String(index)}`, -100),
   );
@@ -76,6 +96,7 @@ test("a search and a sort reach the request, the list is what the server answere
     target: { value: "epicerie" },
   });
   fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "amount-asc" } });
+  await pass(300);
 
   await waitFor(() => {
     expect(asked().at(-1)).toEqual({
@@ -149,6 +170,7 @@ test("each filter is sent as the query field the route takes", async () => {
 });
 
 test("the search waits for a pause in typing, and a filter change drops the request in flight", async () => {
+  fakeClock();
   const late: { release?: (value: { rows: StoredRow[]; total: number }) => void } = {};
   let aborted = false;
   vi.mocked(fetchRows).mockImplementationOnce(
@@ -176,6 +198,10 @@ test("the search waits for a pause in typing, and a filter change drops the requ
   fireEvent.change(screen.getByLabelText("Search the description"), { target: { value: "ig" } });
   fireEvent.change(screen.getByLabelText("Search the description"), { target: { value: "iga" } });
   expect(asked()).toHaveLength(2);
+  // One tick short of the pause nothing is sent; the tick that completes it sends one request.
+  await pass(299);
+  expect(asked()).toHaveLength(2);
+  await pass(1);
   await waitFor(() => expect(asked()).toHaveLength(3));
   expect(asked().at(-1)).toMatchObject({ q: "iga", direction: "in" });
 });
@@ -235,6 +261,7 @@ test("a failed read is said in the taxonomy's words", async () => {
 });
 
 test("a Show more answer that arrives after a filter change is not appended to the new list", async () => {
+  fakeClock();
   const first = Array.from({ length: 50 }, (_, index) =>
     row(index + 1, `Marché ${String(index)}`, -100),
   );
@@ -266,7 +293,8 @@ test("a Show more answer that arrives after a filter change is not appended to t
   // The old filter's page arriving now must not be added to the new filter's list.
   expect(late.release).toBeDefined();
   late.release?.({ rows: [row(90, "Réponse tardive", -300)], total: 52 });
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  // Let the late answer settle and render, if it were going to.
+  await pass(20);
   expect(screen.queryByText("Réponse tardive")).toBeNull();
   expect(screen.getByText("2 rows match.")).toBeTruthy();
   const list = screen.getByRole("list", { name: "Bank rows" });

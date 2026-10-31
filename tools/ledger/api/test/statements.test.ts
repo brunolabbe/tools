@@ -9,6 +9,7 @@ import type { ErrorResponse, ImportStatementReport } from "@ledger/contract";
 import { householdBooksPath } from "../src/books.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import { importWorkbook } from "../src/workbook-import.ts";
 import { readSheets } from "../src/xlsx.ts";
@@ -35,6 +36,7 @@ afterEach(async () => {
 /** Whoever the development identity names is the caller; no token is needed. */
 async function startApp(person: string = ALEX): Promise<App> {
   app = await createApp({
+    booksTemplate: migratedBooks(),
     directory: memberDirectory(),
     config: {
       dataDir: ":memory:",
@@ -413,6 +415,7 @@ describe("POST /api/statements", () => {
     // no token has nobody to be. The household is there so its books can be
     // looked inside afterwards.
     app = await createApp({
+      booksTemplate: migratedBooks(),
       directory: memberDirectory(),
       config: { dataDir: ":memory:", logLevel: "silent" },
     });
@@ -427,6 +430,7 @@ describe("POST /api/statements", () => {
   test("a refusal is logged by code, never with the bank text its details carry", async () => {
     const lines: string[] = [];
     app = await createApp({
+      booksTemplate: migratedBooks(),
       directory: memberDirectory(),
       config: {
         dataDir: ":memory:",
@@ -649,6 +653,7 @@ describe("an over-long paste and a busy database", () => {
     let other: Database.Database | undefined;
     try {
       app = await createApp({
+        booksTemplate: migratedBooks(),
         directory: memberDirectory(),
         config: {
           dataDir: dir,
@@ -1013,6 +1018,7 @@ describe("a paste that meets the workbook's rows", () => {
   test("a paste that fits nowhere after the workbook's rows says so, naming its newest row and where to start", async () => {
     const lines: string[] = [];
     app = await createApp({
+      booksTemplate: migratedBooks(),
       directory: memberDirectory(),
       config: { dataDir: ":memory:", access: accessConfig({ devIdentity: ALEX }) },
       logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
@@ -1515,6 +1521,7 @@ describe("a paste that meets a workbook row dated otherwise says so (lg-58)", ()
   test("no log line carries a date the report names as differing", async () => {
     const lines: string[] = [];
     app = await createApp({
+      booksTemplate: migratedBooks(),
       directory: memberDirectory(),
       config: {
         dataDir: ":memory:",

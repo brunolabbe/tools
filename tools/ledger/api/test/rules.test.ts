@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type { ErrorResponse, PeopleResponse, Rule, RulesResponse } from "@ledger/contract";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import { ALEX, SAM, accessConfig, memberDirectory, homeBooks } from "./helpers/access.ts";
 import { MORTGAGE_RULE, TRANSFER_RULE, addRule, startApp } from "./helpers/classification.ts";
@@ -50,6 +51,7 @@ describe("GET /api/rules", () => {
 
   test("is behind the identity check", async () => {
     app = await createApp({
+      booksTemplate: migratedBooks(),
       directory: memberDirectory(),
       config: { dataDir: ":memory:", logLevel: "silent", access: accessConfig() },
     });
@@ -212,6 +214,7 @@ describe("POST /api/rules/:id/retire", () => {
 describe("GET /api/people", () => {
   test("lists the household's people, once each and in order", async () => {
     app = await createApp({
+      booksTemplate: migratedBooks(),
       directory: memberDirectory([
         [SAM, "sam"],
         ["sam.work@example.test", "sam"],

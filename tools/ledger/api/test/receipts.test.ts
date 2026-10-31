@@ -28,6 +28,7 @@ import { createLogger } from "../src/logger.ts";
 import type { AppLogger } from "../src/logger.ts";
 import { merchantCategory } from "../src/receipts.ts";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import type { Directory } from "../src/directory.ts";
 import {
@@ -108,6 +109,7 @@ async function start(
   if (options.files === true) dataDir = mkdtempSync(path.join(tmpdir(), "ledger-receipts-"));
   const lines = options.lines;
   app = await createApp({
+    booksTemplate: migratedBooks(),
     directory: options.directory ?? memberDirectory(options.members),
     config: {
       dataDir: dataDir ?? ":memory:",

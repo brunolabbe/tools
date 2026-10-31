@@ -16,6 +16,7 @@ import { createIdentityVerifier } from "../src/access.ts";
 import type { Directory } from "../src/directory.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import {
   ADMIN,
@@ -55,6 +56,7 @@ async function start(
 ): Promise<Harness> {
   const lines: string[] = [];
   app = await createApp({
+    booksTemplate: migratedBooks(),
     directory,
     config: {
       dataDir: ":memory:",

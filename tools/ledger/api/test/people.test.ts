@@ -15,6 +15,7 @@ import type { PeopleResponse } from "@ledger/contract";
 import { householdBooksPath } from "../src/books.ts";
 import { migrate } from "../src/db/schema.ts";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import {
   ALEX,
@@ -57,6 +58,7 @@ describe("the people table", () => {
 
   test("boot adds each member's name once, and GET /api/people reads the table", async () => {
     app = await createApp({
+      booksTemplate: migratedBooks(),
       directory: memberDirectory([
         [SAM, "sam"],
         ["sam.work@example.test", "sam"],
@@ -111,12 +113,14 @@ describe("the people table", () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-people-"));
     try {
       app = await createApp({
+        booksTemplate: migratedBooks(),
         directory: memberDirectory(),
         config: { dataDir: dir, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
       });
       await app.shutdown();
 
       app = await createApp({
+        booksTemplate: migratedBooks(),
         directory: memberDirectory([[ALEX, "alex"]]),
         config: { dataDir: dir, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
       });
@@ -229,6 +233,7 @@ describe("upgrading a database lg-4 wrote", () => {
       old.close();
 
       app = await createApp({
+        booksTemplate: migratedBooks(),
         directory: memberDirectory(),
         config: { dataDir: dir, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
       });

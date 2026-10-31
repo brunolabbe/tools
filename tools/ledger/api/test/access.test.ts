@@ -4,6 +4,7 @@ import type { ErrorResponse, HealthResponse, MeResponse } from "@ledger/contract
 import type { AccessConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
 import type { App } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import { createApp } from "../src/server.ts";
 import {
   ALEX,
@@ -50,6 +51,7 @@ async function start(
   const served = jwksFetch(options.keys ?? (() => [KEY]));
   const lines: string[] = [];
   app = await createApp({
+    booksTemplate: migratedBooks(),
     directory: memberDirectory(),
     config: { dataDir: ":memory:", access: options.access ?? accessConfig() },
     logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),

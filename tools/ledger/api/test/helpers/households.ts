@@ -9,6 +9,7 @@ import type Database from "better-sqlite3";
 import type { Directory } from "../../src/directory.ts";
 import { createLogger } from "../../src/logger.ts";
 import { createApp } from "../../src/server.ts";
+import { migratedBooks } from "./template.ts";
 import type { App } from "../../src/server.ts";
 import {
   ADMIN,
@@ -59,6 +60,7 @@ export async function startHouseholds(
   newId?: () => string,
 ): Promise<Harness> {
   const app = await createApp({
+    booksTemplate: migratedBooks(),
     directory,
     config: {
       dataDir: ":memory:",
