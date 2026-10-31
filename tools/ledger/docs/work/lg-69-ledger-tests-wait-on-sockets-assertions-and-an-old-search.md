@@ -187,3 +187,21 @@ found about 23 s of it buys no coverage, and measured the largest items:
     f05108d2 --stat -- tools/ledger/api/src` is the two files above.
   - **Not folded in:** nothing small and already specified came free. The
     unmeasured happy-dom idea and `isolate: false` stay with repo-129.
+- 2026-10-31: **Done when 1, read on this pull request's CI** (#679, head
+  `ed231483`, run `41207755705`, job `124556257761`, `test (ubuntu-latest)`, all
+  checks green). Summing every `ledger` project line's time in the job log with
+  the same script on both logs (`sumlog.mjs`, scratch: it strips the colour codes,
+  counts each file once and adds its `NNNms`): run `40210503276`'s job
+  `121220542726` reads 81 files, 1,687 tests, **100,827 ms** (the ticket's 101 s);
+  this run reads 86 files, 1,840 tests, **75,092 ms**. That is **25.7 s lower**
+  against the 15 s asked, with 153 more tests in the later run (main grew between
+  them, and `books-template.test.ts` adds 5). The files this ticket touched, from
+  the same log: `api/test/receipts.test.ts` 6,608 to 2,352 ms,
+  `lg-65-search-direct.test.ts` 5,444 to 1,702 ms,
+  `household-settlement.test.ts` 5,240 to 1,513 ms, `history.test.tsx` 2,787 to
+  1,551 ms, and `lg-65-search.test.ts` (5,083 ms) is gone.
+  The Windows leg (informational) passed, 3m20s.
+  **Done when 2 on CI is not read directly**: the default reporter prints a time
+  per file, not per test, so the signal case has no CI figure. Its file lost
+  4,256 ms (6,608 to 2,352), which is the 4 s the ticket measured, and the case ran
+  198 ms locally (`--reporter=verbose`, against 4,064 ms in the base run).
