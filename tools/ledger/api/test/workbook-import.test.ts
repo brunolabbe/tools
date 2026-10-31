@@ -35,6 +35,13 @@ import { HOUSEHOLD, writeMemberDirectory } from "./helpers/access.ts";
 import { dump } from "./helpers/dump.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import { asTwo } from "./helpers/settlement.ts";
+import {
+  UNSEEN_CHARACTERS,
+  around,
+  aroundEscaped,
+  escaped,
+  writeUnseenMembers,
+} from "./helpers/unseen.ts";
 import { history, render } from "./helpers/workbook.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
 import { importWorkbook } from "../src/workbook-import.ts";
@@ -1309,6 +1316,54 @@ describe("a described layout (lg-66)", () => {
     expect((db.prepare("SELECT COUNT(*) AS n FROM statement_rows").get() as { n: number }).n).toBe(
       0,
     );
+    db.close();
+  });
+});
+
+// lg-82: a name stored before the write paths refused a control or a zero-width character
+// is written past `Directory`, as such a directory holds it, and the import command's
+// `--as` refusal (T7) and its report (T8) print it as its six-character escape.
+describe("a stored name holding a control or a zero-width character (lg-82)", () => {
+  test("T7: the --as refusal lists the members with each character of the 69 escaped", async () => {
+    rmSync(directoryPath);
+    writeUnseenMembers(directoryPath, NOW);
+
+    const ran = await run(await workbook(), "--as", "nobody");
+
+    expect(ran.code).toBe(2);
+    expect(ran.err).toContain(`--as names "nobody", who is not a member of ${HOUSEHOLD}`);
+    for (const character of UNSEEN_CHARACTERS) {
+      expect(ran.err, escaped(character)).toContain(aroundEscaped(character, "s", "s"));
+      expect(ran.err, escaped(character)).not.toContain(around(character, "s", "s"));
+    }
+  });
+
+  test("T8: the report prints a shown name with each character of the 69 escaped", async () => {
+    // A name is at most 64 characters, so 21 characters in brackets a name, one run each,
+    // and a later `person_names` row is how the person is shown now.
+    const bracketed = (characters: readonly string[], one: (character: string) => string) =>
+      characters.map((character) => `[${one(character)}]`).join("");
+    const db = new Database(directoryPath);
+    const rename = db.prepare(
+      `INSERT INTO person_names (household_id, person, name, named_at, named_by)
+       VALUES (?, 'alex', ?, 'x', 'operator')`,
+    );
+    const source = await workbook();
+    for (let from = 0; from < UNSEEN_CHARACTERS.length; from += 21) {
+      const chunk = UNSEEN_CHARACTERS.slice(from, from + 21);
+      rename.run(
+        HOUSEHOLD,
+        bracketed(chunk, (character) => character),
+      );
+
+      const ran = await run(source, "--as", "alex");
+
+      expect(ran.code, ran.err).toBe(0);
+      expect(ran.out).toContain(bracketed(chunk, escaped));
+      for (const character of chunk) {
+        expect(ran.out, escaped(character)).not.toContain(`[${character}]`);
+      }
+    }
     db.close();
   });
 });

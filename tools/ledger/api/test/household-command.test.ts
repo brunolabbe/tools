@@ -9,10 +9,11 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { Directory } from "../src/directory.ts";
 import { runHouseholdCommand } from "../src/household-command.ts";
 import { ALEX, SAM } from "./helpers/access.ts";
+import { UNSEEN_CHARACTERS, around, aroundEscaped, escaped } from "./helpers/unseen.ts";
 
 const NOW = new Date("2026-10-12T12:00:00.000Z");
 
@@ -430,5 +431,213 @@ describe("a household renamed (lg-77)", () => {
     expect(ran.code).toBe(0);
     expect(ran.out).toContain("home  Our place\n");
     expect(ran.out).not.toContain("home  Home");
+  });
+});
+
+// lg-82: a name stored before the write paths refused the controls and the zero-width
+// characters may hold one, and no UPDATE can clean it. Each is written here past
+// `Directory`, as such a directory holds it, and every sink the command prints a name
+// through writes it as its six-character escape. The 69 characters of the population
+// are walked at each sink; a name's own LF and TAB are told from the output's by the
+// letters either side of them.
+describe("a stored name holding a control or a zero-width character (lg-82)", () => {
+  const household = (index: number): string =>
+    `00000000-0000-4000-8000-${(index + 1).toString(16).padStart(12, "0")}`;
+  const SHOWN = ["s", "s"] as const;
+  const BY_ID = ["i", "i"] as const;
+  const RETIRING = ["q", "q"] as const;
+  const RETIRED = ["r", "r"] as const;
+  const NO_EMAIL = ["n", "n"] as const;
+
+  /** One household per character, named with it, holding people shown, or id'd, by it. */
+  function seed(): void {
+    Directory.open(directoryPath).close();
+    const db = new Database(directoryPath);
+    const insert = {
+      household: db.prepare(
+        "INSERT INTO households (id, name, created_at, created_by) VALUES (?, ?, 'x', 'operator')",
+      ),
+      member: db.prepare(
+        `INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
+         VALUES (?, ?, ?, 'add', 'x', 'operator')`,
+      ),
+      held: db.prepare(
+        "INSERT INTO people (household_id, person, added_at, added_by) VALUES (?, ?, 'x', 'operator')",
+      ),
+      named: db.prepare(
+        `INSERT INTO person_names (household_id, person, name, named_at, named_by)
+         VALUES (?, ?, ?, 'x', 'operator')`,
+      ),
+      retire: db.prepare(
+        `INSERT INTO retirements (household_id, person, action, recorded_at, recorded_by)
+         VALUES (?, ?, 'retire', 'x', 'operator')`,
+      ),
+      applied: db.prepare(
+        "INSERT INTO retirements_applied (retirement_id, from_date, applied_at) VALUES (?, '2026-04-01', 'x')",
+      ),
+    };
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const id = household(index);
+      insert.household.run(id, around(character));
+      insert.member.run(`m${String(index)}@example.test`, id, `p${String(index)}`);
+      insert.named.run(id, `p${String(index)}`, around(character, ...SHOWN));
+      // Before lg-76 a person's id was the name typed, and no `person_names` row says otherwise.
+      insert.member.run(`i${String(index)}@example.test`, id, around(character, ...BY_ID));
+      insert.held.run(id, `n${String(index)}`);
+      insert.named.run(id, `n${String(index)}`, around(character, ...NO_EMAIL));
+      insert.held.run(id, `q${String(index)}`);
+      insert.named.run(id, `q${String(index)}`, around(character, ...RETIRING));
+      insert.retire.run(id, `q${String(index)}`);
+      insert.held.run(id, `r${String(index)}`);
+      insert.named.run(id, `r${String(index)}`, around(character, ...RETIRED));
+      insert.applied.run(insert.retire.run(id, `r${String(index)}`).lastInsertRowid);
+    });
+    db.close();
+  }
+
+  /** Neither the character raw between its letters, nor anything but its escape. */
+  function expectEscaped(
+    text: string,
+    character: string,
+    letters: readonly [string, string] = ["a", "b"],
+  ): void {
+    expect(text, escaped(character)).toContain(aroundEscaped(character, ...letters));
+    expect(text, escaped(character)).not.toContain(around(character, ...letters));
+  }
+
+  test("T1 and T2: list prints a household's name, a person's shown name and an id that is a name escaped", () => {
+    seed();
+
+    const ran = run("list");
+
+    expect(ran.code, ran.err).toBe(0);
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      expect(ran.out, escaped(character)).toContain(
+        `${household(index)}  ${aroundEscaped(character)}\n`,
+      );
+      expect(ran.out, escaped(character)).toContain(
+        `  ${aroundEscaped(character, ...SHOWN)} (p${String(index)})  m${String(index)}@example.test\n`,
+      );
+      expect(ran.out, escaped(character)).toContain(
+        `  ${aroundEscaped(character, ...BY_ID)}  i${String(index)}@example.test\n`,
+      );
+      expect(ran.out, escaped(character)).toContain(
+        `  ${aroundEscaped(character, ...NO_EMAIL)} (n${String(index)})  no email\n`,
+      );
+      expectEscaped(ran.out, character);
+      expectEscaped(ran.out, character, SHOWN);
+      expectEscaped(ran.out, character, BY_ID);
+    });
+  });
+
+  test("T3: add prints the new household's name and its first person's shown name escaped", () => {
+    for (const character of UNSEEN_CHARACTERS) {
+      // `add` names every household "Home" and refuses a person's name with one, so no
+      // data reaches this line; a directory that answered with one shows the sink.
+      const spy = vi.spyOn(Directory.prototype, "createHousehold").mockReturnValue({
+        household: { id: "stub", name: around(character) },
+        member: {
+          address: "x@example.test",
+          household: "stub",
+          person: around(character, "p", "p"),
+        },
+      });
+
+      const ran = run("add", "x@example.test");
+      spy.mockRestore();
+
+      expect(ran.code, ran.err).toBe(0);
+      expect(ran.out, escaped(character)).toContain(
+        `"${aroundEscaped(character)}", with x@example.test as ${aroundEscaped(character, "p", "p")}.`,
+      );
+      expectEscaped(ran.out, character);
+      expectEscaped(ran.out, character, ["p", "p"]);
+    }
+  });
+
+  test("T4: member prints the shown name escaped", () => {
+    for (const character of UNSEEN_CHARACTERS) {
+      // A person found by the name typed is shown as typed, which the directory refuses a
+      // character in, so no data reaches this line either; a stub shows the sink.
+      const spy = vi.spyOn(Directory.prototype, "addMemberByName").mockReturnValue({
+        address: "x@example.test",
+        household: "stub",
+        person: around(character, "p", "p"),
+      });
+
+      const ran = run("member", "stub", "x@example.test", "whoever");
+      spy.mockRestore();
+
+      expect(ran.code, ran.err).toBe(0);
+      expect(ran.out, escaped(character)).toContain(
+        `Added x@example.test to stub, as ${aroundEscaped(character, "p", "p")}.`,
+      );
+      expectEscaped(ran.out, character, ["p", "p"]);
+    }
+  });
+
+  test("T5: remove prints the shown name escaped, a person's and an id that is a name", () => {
+    seed();
+
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const shown = run("remove", `m${String(index)}@example.test`);
+      const byId = run("remove", `i${String(index)}@example.test`);
+
+      expect(shown.code, shown.err).toBe(0);
+      expect(shown.out, escaped(character)).toContain(
+        `where it was ${aroundEscaped(character, ...SHOWN)}. `,
+      );
+      expectEscaped(shown.out, character, SHOWN);
+      expect(byId.code, byId.err).toBe(0);
+      expect(byId.out, escaped(character)).toContain(
+        `where it was ${aroundEscaped(character, ...BY_ID)}. `,
+      );
+      expectEscaped(byId.out, character, BY_ID);
+    });
+  });
+
+  test("T6 and M5: the taken-address refusal on stderr names the household and the person escaped", () => {
+    seed();
+
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const ran = run("member", household(0), `m${String(index)}@example.test`);
+
+      expect(ran.code, ran.out).toBe(1);
+      expect(ran.err, escaped(character)).toContain(
+        `belongs to the household "${aroundEscaped(character)}", as ${aroundEscaped(character, ...SHOWN)}.`,
+      );
+      expectEscaped(ran.err, character);
+      expectEscaped(ran.err, character, SHOWN);
+    });
+  });
+
+  test("T6 and M4: the retiring and the retired refusals on stderr name the person escaped", () => {
+    seed();
+
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const retiring = run(
+        "member",
+        household(index),
+        `new${String(index)}@example.test`,
+        `q${String(index)}`,
+      );
+      const retired = run(
+        "member",
+        household(index),
+        `new${String(index)}@example.test`,
+        `r${String(index)}`,
+      );
+
+      expect(retiring.code, retiring.out).toBe(1);
+      expect(retiring.err, escaped(character)).toContain(
+        `${aroundEscaped(character, ...RETIRING)} is retiring at the next close.`,
+      );
+      expectEscaped(retiring.err, character, RETIRING);
+      expect(retired.code, retired.out).toBe(1);
+      expect(retired.err, escaped(character)).toContain(
+        `${aroundEscaped(character, ...RETIRED)} is retired from the books.`,
+      );
+      expectEscaped(retired.err, character, RETIRED);
+    });
   });
 });

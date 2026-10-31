@@ -35,6 +35,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "./context.ts";
 import { adminOf, personOf } from "./identity.ts";
 import type { AppLogger } from "./logger.ts";
+import { escapeUnseen } from "@ledger/books";
 
 export interface RateLimitHookOptions {
   limiter: RateLimiter;
@@ -104,7 +105,8 @@ export function createRateLimitHook(options: RateLimitHookOptions): Hook {
     reply.header("Retry-After", String(decision.retryAfterSec));
     logger.warn("rate limited", {
       scope,
-      ...(logged === undefined ? {} : { key: logged }),
+      // lg-82: L1. A person added before lg-76 has the name typed then as their id.
+      ...(logged === undefined ? {} : { key: escapeUnseen(logged) }),
       retryAfterSec: decision.retryAfterSec,
     });
     throw new AppError("RATE_LIMITED", undefined, {

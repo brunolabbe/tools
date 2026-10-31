@@ -23,6 +23,7 @@ import {
 } from "../src/directory.ts";
 import { ALEX, SAM, STRANGER } from "./helpers/access.ts";
 import { WRITES_IN_PLACE } from "./helpers/append-only.ts";
+import { UNSEEN_CHARACTERS, around, escaped } from "./helpers/unseen.ts";
 
 const AT = new Date("2026-10-12T12:00:00Z");
 const CHANGE = { by: "operator", at: AT };
@@ -1738,5 +1739,161 @@ describe("a person without an email (lg-74)", () => {
       /unique in its household/u,
     );
     db.close();
+  });
+});
+
+// lg-82: a name is refused what an address is, the C0 and C1 controls, DEL and the
+// zero-width characters, since the host command prints it and a terminal runs an
+// escape sequence. One test per method that writes a name; each walks every
+// character of the population, 69 of them, and checks the refusal leaves the rows.
+describe("a name with a control or a zero-width character (lg-82)", () => {
+  const NEW_UUID = "00000000-0000-4000-8000-000000000001";
+  const NEW_PERSON_ID = "00000000-0000-4000-8000-000000000002";
+
+  test("the population is the 69 characters the ticket names", () => {
+    expect(UNSEEN_CHARACTERS).toHaveLength(69);
+    expect(new Set(UNSEEN_CHARACTERS).size).toBe(69);
+  });
+
+  test("addHousehold refuses each as BAD_REQUEST, and accepts a clean name and an accented one", () => {
+    const directory = withHousehold();
+    const before = directory.households();
+
+    for (const character of UNSEEN_CHARACTERS) {
+      const name = around(character);
+      expect(
+        code(() => directory.addHousehold({ id: "away", name, ...CHANGE })),
+        escaped(character),
+      ).toBe("BAD_REQUEST");
+      expect(directory.households(), escaped(character)).toEqual(before);
+    }
+    expect(() =>
+      directory.addHousehold({ id: "away", name: around(UNSEEN_CHARACTERS[27]!), ...CHANGE }),
+    ).toThrow("A household's name cannot hold a control character or a zero-width one.");
+
+    expect(directory.addHousehold({ id: "away", name: "Zoé's home", ...CHANGE }).name).toBe(
+      "Zoé's home",
+    );
+    directory.close();
+  });
+
+  test("renameHousehold refuses each as BAD_REQUEST, and the household keeps its name", () => {
+    const directory = withHousehold();
+    const before = directory.households();
+
+    for (const character of UNSEEN_CHARACTERS) {
+      expect(
+        code(() =>
+          directory.renameHousehold({ household: "home", name: around(character), ...CHANGE }),
+        ),
+        escaped(character),
+      ).toBe("BAD_REQUEST");
+      expect(directory.households(), escaped(character)).toEqual(before);
+    }
+
+    expect(directory.renameHousehold({ household: "home", name: "Zoé's", ...CHANGE }).name).toBe(
+      "Zoé's",
+    );
+    directory.close();
+  });
+
+  test("addPerson refuses each as BAD_REQUEST, and holds no one new", () => {
+    const directory = withHousehold();
+    const before = directory.heldPeople("home");
+
+    for (const character of UNSEEN_CHARACTERS) {
+      expect(
+        code(() =>
+          directory.addPerson({
+            household: "home",
+            person: around(character),
+            newId: () => NEW_PERSON_ID,
+            ...CHANGE,
+          }),
+        ),
+        escaped(character),
+      ).toBe("BAD_REQUEST");
+      expect(directory.heldPeople("home"), escaped(character)).toEqual(before);
+    }
+
+    expect(
+      directory.addPerson({
+        household: "home",
+        person: "Zoé",
+        newId: () => NEW_PERSON_ID,
+        ...CHANGE,
+      }).name,
+    ).toBe("Zoé");
+    directory.close();
+  });
+
+  test("renamePerson refuses each as BAD_REQUEST, and the person is shown as before", () => {
+    const directory = withHousehold();
+    directory.addMember({ household: "home", address: CASEY, person: "casey", ...CHANGE });
+    const before = directory.names("home");
+
+    for (const character of UNSEEN_CHARACTERS) {
+      expect(
+        code(() =>
+          directory.renamePerson({
+            household: "home",
+            person: "casey",
+            name: around(character),
+            ...CHANGE,
+          }),
+        ),
+        escaped(character),
+      ).toBe("BAD_REQUEST");
+      expect(directory.names("home"), escaped(character)).toEqual(before);
+    }
+
+    expect(
+      directory.renamePerson({ household: "home", person: "casey", name: "Zoé", ...CHANGE }).name,
+    ).toBe("Zoé");
+    directory.close();
+  });
+
+  test("addMemberByName and createHousehold refuse each in the person, as BAD_REQUEST, and write nothing", () => {
+    const directory = withHousehold();
+    const before = { ...stateOf(directory), held: directory.heldPeople("home") };
+
+    for (const character of UNSEEN_CHARACTERS) {
+      const person = around(character);
+      expect(
+        code(() =>
+          directory.addMemberByName({
+            household: "home",
+            address: CASEY,
+            person,
+            newId: () => NEW_PERSON_ID,
+            ...CHANGE,
+          }),
+        ),
+        `addMemberByName ${escaped(character)}`,
+      ).toBe("BAD_REQUEST");
+      expect(
+        code(() =>
+          directory.createHousehold({
+            id: NEW_UUID,
+            address: CASEY,
+            person,
+            newId: () => NEW_PERSON_ID,
+            ...CHANGE,
+          }),
+        ),
+        `createHousehold ${escaped(character)}`,
+      ).toBe("BAD_REQUEST");
+      expect({ ...stateOf(directory), held: directory.heldPeople("home") }).toEqual(before);
+    }
+
+    const made = directory.createHousehold({
+      id: NEW_UUID,
+      address: CASEY,
+      person: "Zoé",
+      newId: () => NEW_PERSON_ID,
+      ...CHANGE,
+    });
+    expect(made.member.address).toBe(CASEY);
+    directory.close();
   });
 });

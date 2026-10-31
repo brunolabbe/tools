@@ -22,6 +22,7 @@ import { AppError } from "@ledger/contract";
 import { loadApiConfig } from "./config.ts";
 import { Directory, OPERATOR, shownName } from "./directory.ts";
 import type { CommandIo } from "./import-command.ts";
+import { escapeUnseen } from "@ledger/books";
 
 const USAGE = `Usage: npm run household:ledger -- <command>
 
@@ -67,10 +68,11 @@ function list(directory: Directory): string {
       ].map((member) => {
         const shown = shownName(names, member.person);
         const who = shown === member.person ? shown : `${shown} (${member.person})`;
-        return `  ${who}  ${member.address}`;
+        // lg-82: a stored name may hold what a terminal runs, T1.
+        return `  ${escapeUnseen(who)}  ${member.address}`;
       });
       return [
-        `${household.id}  ${household.name}`,
+        `${household.id}  ${escapeUnseen(household.name)}`,
         ...(lines.length > 0 ? lines : ["  (no members)"]),
       ]
         .join("\n")
@@ -122,13 +124,14 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
     const cause = appError.cause;
     const reason =
       appError.code === "INTERNAL" && cause instanceof Error ? ` (${cause.message})` : "";
-    io.stderr(`${appError.message}${reason}\n`);
+    io.stderr(escapeUnseen(`${appError.message}${reason}`) + "\n");
     return 2;
   }
 
   const change = { by: OPERATOR, at: io.now(), newId: io.newId };
+  // lg-82: every name this command prints is a stored one, and is escaped, T3 to T5.
   const shown = (member: { household: string; person: string }): string =>
-    shownName(directory.names(member.household), member.person);
+    escapeUnseen(shownName(directory.names(member.household), member.person));
   try {
     switch (command) {
       case "add": {
@@ -143,7 +146,7 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
           ...change,
         });
         io.stdout(
-          `Created the household ${household.id}, "${household.name}", with ${member.address} as ${shown(member)}.\n` +
+          `Created the household ${household.id}, "${escapeUnseen(household.name)}", with ${member.address} as ${shown(member)}.\n` +
             ACCESS_POLICY_REMINDER,
         );
         return 0;
@@ -174,12 +177,17 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
     }
   } catch (error: unknown) {
     const appError = AppError.from(error);
+    // lg-82: T6. The directory's refusals quote a stored name (M4 and M5), and
+    // the owner chose to escape them here, where the web's text is not touched.
     if (appError.code === "INTERNAL") {
       const cause = appError.cause;
-      io.stderr(`${appError.message}${cause instanceof Error ? ` (${cause.message})` : ""}\n`);
+      io.stderr(
+        escapeUnseen(`${appError.message}${cause instanceof Error ? ` (${cause.message})` : ""}`) +
+          "\n",
+      );
       return 2;
     }
-    io.stderr(`${appError.message}\n`);
+    io.stderr(escapeUnseen(appError.message) + "\n");
     return 1;
   } finally {
     directory.close();
