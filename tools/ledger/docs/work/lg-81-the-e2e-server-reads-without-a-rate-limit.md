@@ -3,7 +3,7 @@ id: lg-81
 tool: ledger
 title: The e2e server reads without a rate limit
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -83,6 +83,25 @@ line 313).
 3. With the value lowered to `"10"` the same suite refuses reads and fails, so the
    grep in line 2 counts something. Proof: the mutation run in the Log.
 4. `npm run check` exits 0 on the branch. Proof: its exit code, in the Log.
+
+## Review
+
+**Gate: PASS** — 2026-10-31 · `c7bdef21..dd13ce04` · Sonnet 5.5, depth narrow
+
+Range read from `git merge-base` (it is `c7bdef21` itself, so the three-dot and two-dot ranges agree). Two files change: `tools/ledger/playwright.config.ts` (6 lines, all added) and this ticket. Pull request #687's checks at `dd13ce04`: `check` (both), `e2e`, `docker`, `test (ubuntu-latest)`, `test (windows-latest, informational)`, `codeql`, `CodeQL`, `dependency-review` all pass.
+
+| Done when                                                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `webServer.env` carries `RATE_LIMIT_READS_PER_MINUTE: "0"` after `LOG_LEVEL`, with a comment; the diff touches that file and the ticket only | **verified** by reading and by `git diff --name-only c7bdef21...HEAD`, which lists those two paths and nothing else. The line sits directly after `LOG_LEVEL: "warn"` in `playwright.config.ts`, under a five-line comment. No test can assert a config line; the diff is the proof.                                                                            |
+| 2. The suite passes every case it holds and its output has no `"rate limited"` line                                                             | **proven** by the pull request's `e2e` job at `dd13ce04` (`npm run e2e:ledger`): `15 passed (19.1s)`, and `grep -c '"rate limited"'` over that job's log is `0`. Re-run by the gate on a private port (`E2E_PORT=8172`, head as built): `15 passed (24.4s)`, `"rate limited"` count `0`. The 15 cases are `e2e/layout.spec.ts`; the pass line is the assertion. |
+| 3. With the value lowered to `"10"` the same suite refuses reads and fails, so the grep counts something                                        | **verified**, re-run by the gate (`E2E_PORT=8171`, value `"10"` written by script): `2 failed`, `12 did not run`, `1 passed (23.0s)`, `"rate limited"` count `14`, all 14 with `"scope":"reads"` and none under another scope. This matches the Log's figures exactly.                                                                                          |
+| 4. `npm run check` exits 0 on the branch                                                                                                        | **proven**: exit `0` run by the gate on the restored head tree, and the pull request's two `check` jobs pass at `dd13ce04`.                                                                                                                                                                                                                                     |
+
+- **checked** · attack 1, the line does what the ticket says. `RATE_LIMIT_READS_PER_MINUTE` reaches `int(..., { min: 0 })` in `api/src/config.ts`, then `new RateLimiter({ perMinute: config.rateLimitReadsPerMinute })` in `api/src/server.ts`, whose `enabled` is false at zero in `packages/core/src/rate-limit.ts`, and `createRateLimitHook` in `api/src/rate-limit.ts` returns before `check`. Only the `reads` limiter is switched off, and the admin read hook shares it, which the comment does not say and nothing depends on. Writes (60), receipt reads (5) and workbook describes (5) are separate limiters and are untouched. The key lookup runs before the `enabled` return, so an admin route still refuses a non-admin with the limiter off. `e2e/layout.spec.ts`, `e2e/README.md` and `web/src` hold no `429`, `RATE_LIMITED`, `RateLimit`, `Retry-After` or `rate limit` reference, so no e2e case asserts a limit this line removes. `api/test/route-limits.test.ts` › "a limit of zero turns the limiter off" covers the zero case for reads at the API level.
+- **checked** · attack 2, the ticket's facts. Run `41223738914`, job `124603455298` is `e2e` on `lg-77-rename-a-household` at head `a87da359`; its log has `2 failed` and `15 passed (1.4m)`, the two failures are the cases the ticket quotes (`Household fits … 80-character household name, and renaming it`, with `Expected: >= 2`; `Admin fits … a household's rename open (1.0m)`, with `locator.click: Test timeout of 60000ms exceeded`), and 5 `"scope":"reads" … "msg":"rate limited"` lines. Sibling limiter keys are as quoted: `RATE_LIMIT_RUNS_PER_MINUTE` in the planner's config, `RATE_LIMIT_PROBE_PER_MINUTE` and `RATE_LIMIT_JOBS_PER_MINUTE` in the downloader's. The ledger defaults (120, 60, 5, 5) and the two config line citations match. **The latent claim is true and the ticket says it plainly**: with the added line deleted (comment left), the suite on this tree is `15 passed (24.1s)` with `"rate limited"` count `0`, and the Why's second paragraph and the Log's "brief's premise, corrected" both say it is latent on `main` and live on lg-77's head.
+- **checked** · attack 3, the positive control: row 3 above.
+- **findings** · narrow depth, the named attacks only: 0 findings; 0 carried, 0 dropped.
+- NFR: security ✓ (the variable is set in the e2e `webServer.env` only; `config.ts` still defaults to 120, `.env.example` still documents 120, and no deploy file sets it) · performance n/a · reliability ✓ (removes a suite-length-dependent failure) · maintainability ✓ (one env entry with the reason beside it, as the planner's and downloader's configs do).
 
 ## Log
 
