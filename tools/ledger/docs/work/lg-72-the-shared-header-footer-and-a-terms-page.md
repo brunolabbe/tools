@@ -129,6 +129,17 @@ email); **how long the log is kept** is a size, not a time
 page says what is sent "only if the operator set a key". The wording is a draft
 for the owner to approve, as dl-54's was.
 
+**The theme cookie sentence.** Told by the orchestrator, while this was being
+built, that repo-131's gate 1 failed and its round rewords the downloader's
+storage sentence: the choice is a parent-domain cookie, sent to every
+`*.oludoi.com` host. The ledger's page never copied that sentence, but its own
+said only "one cookie of ours ... a light or a dark look", which left out the
+scope. It now says the cookie lasts a year, is set for the whole site and is sent
+to the other tools on it, and that the ledger's server does not read it
+(`grep -rni cookie tools/ledger/api/src` finds only `logger.ts`'s redaction
+paths; `packages/ui/src/theme.ts` sets `Domain=` and `Max-Age=31536000`). If
+repo-131's round words it differently, the two pages should say the same facts.
+
 **Not folded in:** lifting the plugin (above); moving `.visually-hidden` uses
 (the ledger has none); deleting `HealthResponse` from the contract (the API
 still serves `/api/health`).
