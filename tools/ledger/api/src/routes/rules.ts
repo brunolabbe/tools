@@ -12,11 +12,11 @@
  * field was wrong and never repeats the value (`CLAUDE.md`).
  */
 
-import { AppError, GENERATED_ID, ROUTES, ruleDraftSchema } from "@ledger/contract";
+import { AppError, ROUTES, ruleDraftSchema } from "@ledger/contract";
 import type { PeopleResponse, Rule, RuleDraft, RulesResponse } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
-import { byShownName, shownName } from "../directory.ts";
+import { byShownName, distinctNames } from "../directory.ts";
 import { booksOf, personOf } from "../identity.ts";
 import { knownPeople, peopleInOpenPeriod } from "../people.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
@@ -37,43 +37,6 @@ function ruleId(request: FastifyRequest): number {
   const id = typeof raw === "string" && /^\d{1,15}$/u.test(raw) ? Number(raw) : 0;
   if (id < 1) throw new AppError("BAD_REQUEST", "A rule is named by its number.");
   return id;
-}
-
-/**
- * How each of `people` is shown, with no two alike (lg-33's gate 1, F3; option
- * 2, chosen by the owner on 2026-10-18). The directory refuses a shown name
- * another person holds or has as an id, but it cannot see an id the books hold
- * only from an old rule, so a rename can take one, and so can a person added
- * under that name since lg-76. Here, with the books, every person whose shown
- * name another shares is shown under their id instead, or, when their id is a
- * generated one that is never shown (lg-76), under the name with the lowest
- * free " 2", " 3" … after it. Ids are unique and every suffix is taken free, so
- * the loop ends; it runs again in case a fallback meets a name still standing.
- */
-function distinctNames(
-  people: readonly string[],
-  names: ReadonlyMap<string, string>,
-): Record<string, string> {
-  const shown = new Map(people.map((person) => [person, shownName(names, person)]));
-  for (;;) {
-    const count = new Map<string, number>();
-    for (const name of shown.values()) count.set(name, (count.get(name) ?? 0) + 1);
-    const alike = [...shown].filter(
-      ([person, name]) => name !== person && (count.get(name) ?? 0) > 1,
-    );
-    if (alike.length === 0) break;
-    for (const [person, name] of alike) {
-      if (!GENERATED_ID.test(person)) {
-        shown.set(person, person);
-        continue;
-      }
-      const taken = new Set([...shown.values(), ...people]);
-      let n = 2;
-      while (taken.has(`${name} ${String(n)}`)) n++;
-      shown.set(person, `${name} ${String(n)}`);
-    }
-  }
-  return Object.fromEntries(shown);
 }
 
 function draft(request: FastifyRequest): RuleDraft {

@@ -15,6 +15,13 @@
  * holds. It calls no model. The server keeps nothing of the upload between the
  * two.
  *
+ * **A name the household lacks** (lg-78): Describe lists each name the file
+ * uses that resolves to no one, and reads the file with each taken as a new
+ * person, so what it reports failing is what no answer removes. Confirm takes
+ * an answer for every such name — someone held, or a new person without an
+ * email — runs every verification with them applied, and only then adds the
+ * new people to the directory, signed by the caller, before the books commit.
+ *
  * **The bounds**, each where it can first be known, in this order: the bytes
  * (before anything is parsed); the zip's own structure and its number of
  * entries (`workbook-zip.ts`); the inflated size, declared and then counted,
@@ -35,7 +42,8 @@
  */
 
 import { Buffer } from "node:buffer";
-import type { Sheet, WorkbookReading } from "@ledger/books";
+import { randomUUID } from "node:crypto";
+import type { Corrections, Sheet, WorkbookReading } from "@ledger/books";
 import { NO_CORRECTIONS, formatCents, readWorkbook } from "@ledger/books";
 import {
   AppError,
@@ -51,6 +59,9 @@ import type {
   ConfirmWorkbookResponse,
   CsvPlacement,
   DescribeWorkbookResponse,
+  HeldName,
+  NameAnswer,
+  UnresolvedName,
   WorkbookConfirmation,
   WorkbookLayout,
   WorkbookSampleRow,
@@ -68,7 +79,9 @@ import {
   storeCsvRows,
 } from "./csv-statement.ts";
 import type { CsvStored } from "./csv-statement.ts";
+import { byShownName, distinctNames, shownName } from "./directory.ts";
 import { estimateTokens, layoutRequest } from "./layout-view.ts";
+import { knownPeople } from "./people.ts";
 import type { RowToStore } from "./statements.ts";
 import { importWorkbook } from "./workbook-import.ts";
 import {
@@ -133,6 +146,20 @@ export interface WorkbookCaller {
    */
   names: ReadonlyMap<string, string>;
   now: () => Date;
+  /** A new person's id, as the directory makes one (lg-76); a test hands in its own. */
+  newId: () => string;
+  /**
+   * Adds the new people a Confirm's answers name to the household's directory,
+   * all or none, each under the id given and with no email, signed by the
+   * caller (lg-78). Run just before the books commit.
+   */
+  addPeople: (people: readonly NewPerson[]) => void;
+}
+
+/** A person a Confirm adds (lg-78): the id the books will store, and the name shown. */
+export interface NewPerson {
+  id: string;
+  name: string;
 }
 
 function tooLarge(bound: string, message: string): AppError {
@@ -307,11 +334,19 @@ export async function describeWorkbook(
   const layout = layoutOf(answer);
   const usage = { inputTokens: answer.inputTokens, outputTokens: answer.outputTokens };
   if (kind === "csv") return describeCsv(caller, sheets, layout, usage);
+  const held = heldIds(caller);
+  const unresolved = unresolvedNames(caller, sheets, layout, held);
+  // Each name no one answers to, taken as a new person for the dry run: what
+  // still fails is what no answer removes. The ids are never stored.
+  const provisional: Answered = { map: new Map(), added: [] };
+  for (const entry of unresolved) {
+    const id = randomUUID();
+    provisional.map.set(entry.name, id);
+    provisional.added.push({ id, name: entry.name });
+  }
   const result = importWorkbook(caller.db, sheets, {
     personId: caller.personId,
-    members: caller.members,
-    names: caller.names,
-    corrections: NO_CORRECTIONS,
+    ...withAnswers(caller, provisional),
     write: false,
     commit: false,
     now: caller.now,
@@ -326,7 +361,134 @@ export async function describeWorkbook(
     report: result.report,
     confirmation: confirmationOf(sheets, layout, result.reading),
     usage,
+    unresolved,
+    held: heldNames(caller, held),
   };
+}
+
+// --- A name the household lacks (lg-78) ---
+
+/**
+ * Everyone the reader may resolve a name to, as `importWorkbook` gives it: the
+ * people the books hold, a member who has left included, and the members it
+ * enrols before it reads.
+ */
+function heldIds(caller: WorkbookCaller): string[] {
+  return [...new Set([...knownPeople(caller.db), ...caller.members])].toSorted();
+}
+
+/** `held`, each as the household shows them with no two alike, in the order a person reads them. */
+function heldNames(caller: WorkbookCaller, held: readonly string[]): HeldName[] {
+  const shown = distinctNames(held, caller.names);
+  return held
+    .toSorted(byShownName(new Map(Object.entries(shown))))
+    .map((person) => ({ person, name: shown[person] ?? person }));
+}
+
+/**
+ * Each name the file uses that resolves to no one in `held`, by the reader's
+ * own match (`People`, through `readWorkbook`): no second matcher to disagree
+ * with the one the import runs.
+ */
+function unresolvedNames(
+  caller: WorkbookCaller,
+  sheets: readonly Sheet[],
+  layout: WorkbookLayout,
+  held: readonly string[],
+): UnresolvedName[] {
+  return readWorkbook(sheets, { people: held, names: caller.names, layout }).unresolved;
+}
+
+/** The answers as the reader takes them: each name to its person, and who is new. */
+interface Answered {
+  /** A name as the file spells it, to the person it is answered as; the reader folds it. */
+  map: Map<string, string>;
+  added: NewPerson[];
+}
+
+/** The import's people with `answered` applied: the new ones held, each name mapped. */
+function withAnswers(
+  caller: WorkbookCaller,
+  answered: Answered,
+): { members: string[]; names: Map<string, string>; corrections: Corrections } {
+  return {
+    members: [...caller.members, ...answered.added.map((person) => person.id)],
+    names: new Map([
+      ...caller.names,
+      ...answered.added.map((person): [string, string] => [person.id, person.name]),
+    ]),
+    corrections: { ...NO_CORRECTIONS, people: answered.map },
+  };
+}
+
+/** What a new person's name holds, as the directory checks it (`addPerson`). */
+const NEW_NAME_LENGTH = 64;
+
+/**
+ * The answers for `unresolved`, checked against who the household holds: an
+ * unanswered name is a request the screen should not have sent; an answer that
+ * cannot stand is a problem, and nothing is written. Answers for names that
+ * resolve are not used. Two new people under names that fold alike are one.
+ */
+function answersFor(
+  caller: WorkbookCaller,
+  unresolved: readonly UnresolvedName[],
+  answers: readonly NameAnswer[],
+  held: readonly string[],
+): Answered & { problems: string[] } {
+  const byName = new Map<string, NameAnswer>();
+  for (const answer of answers) {
+    const key = readerFolded(answer.name);
+    if (!byName.has(key)) byName.set(key, answer);
+  }
+  const missing = unresolved.filter((entry) => !byName.has(readerFolded(entry.name)));
+  if (missing.length > 0) {
+    throw new AppError(
+      "BAD_REQUEST",
+      `Say who ${missing.map((entry) => `"${entry.name}"`).join(", ")} ${missing.length === 1 ? "is" : "are"} before confirming: someone the household holds, or a new person. Nothing was imported.`,
+    );
+  }
+  const holds = new Set(held);
+  const taken = new Set(
+    held.flatMap((id) => [readerFolded(id), readerFolded(shownName(caller.names, id))]),
+  );
+  const fresh = new Map<string, NewPerson>();
+  const answered: Answered & { problems: string[] } = { map: new Map(), added: [], problems: [] };
+  for (const entry of unresolved) {
+    const answer = byName.get(readerFolded(entry.name));
+    if (answer === undefined) continue;
+    if (answer.as === "held") {
+      if (holds.has(answer.person)) answered.map.set(entry.name, answer.person);
+      else {
+        answered.problems.push(
+          `"${entry.name}" is answered as someone the household does not hold. Read the file again.`,
+        );
+      }
+      continue;
+    }
+    const name = answer.shownAs.trim();
+    if (name === "" || name.length > NEW_NAME_LENGTH) {
+      answered.problems.push(
+        `The new person for "${entry.name}" needs a name of 1 to ${String(NEW_NAME_LENGTH)} characters.`,
+      );
+      continue;
+    }
+    const key = readerFolded(name);
+    if (taken.has(key)) {
+      answered.problems.push(
+        `Someone in the household is already shown as "${name}": answer "${entry.name}" as them, or give the new person another name.`,
+      );
+      continue;
+    }
+    let person = fresh.get(key);
+    if (person === undefined) {
+      person = { id: caller.newId(), name };
+      fresh.set(key, person);
+      answered.added.push(person);
+    }
+    answered.map.set(entry.name, person.id);
+  }
+  return answered;
 }
 
 /** A CSV through its description, read as the books read a sheet: no person or bucket to resolve. */
@@ -428,16 +590,29 @@ export async function confirmWorkbook(
   const { kind, sheets } = await fileOf(parsed.data.file, deps);
   const { layout } = parsed.data;
   if (kind === "csv") return confirmCsv(caller, sheets, layout);
+  const held = heldIds(caller);
+  const unresolved = unresolvedNames(caller, sheets, layout, held);
+  const answered = answersFor(caller, unresolved, parsed.data.names ?? [], held);
+  if (answered.problems.length > 0) {
+    throw new AppError("WORKBOOK_IMPORT_REFUSED", undefined, {
+      details: { problems: answered.problems },
+    });
+  }
+  // Every verification runs with the answers applied, inside the books'
+  // transaction; only once all hold are the new people added to the
+  // directory, and the books commit after. The two are separate files, so the
+  // one window left is that commit failing once the people are in: a second
+  // Confirm then finds them held.
+  const { added } = answered;
   const result = importWorkbook(caller.db, sheets, {
     personId: caller.personId,
-    members: caller.members,
-    names: caller.names,
-    corrections: NO_CORRECTIONS,
+    ...withAnswers(caller, answered),
     write: true,
     commit: true,
     now: caller.now,
     layout,
     via: "screen",
+    beforeCommit: added.length === 0 ? undefined : () => caller.addPeople(added),
   });
   if (!result.written) {
     throw new AppError("WORKBOOK_IMPORT_REFUSED", undefined, {
