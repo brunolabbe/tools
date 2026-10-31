@@ -89,17 +89,12 @@ test("names the terms page's theme module at a fixed path, and every other entry
   expect(names({ name: "index" } as Parameters<typeof names>[0])).toBe("assets/[name]-[hash].js");
 });
 
-test("puts blocking=render back on the built entry script, which Vite drops (repo-131)", async () => {
-  const plugin = (await config()).plugins?.find(
-    (candidate) =>
-      typeof candidate === "object" &&
-      candidate !== null &&
-      "name" in candidate &&
-      candidate.name === "render-blocking-entry",
-  ) as { transformIndexHtml: { handler: (html: string) => string } } | undefined;
+test("holds the first paint with the shared render-blocking plugin, pinned in @webtools/ui (repo-131)", async () => {
+  const names = ((await config()).plugins ?? [])
+    .flat()
+    .map((plugin) =>
+      typeof plugin === "object" && plugin !== null && "name" in plugin ? plugin.name : undefined,
+    );
 
-  expect(plugin).toBeDefined();
-  expect(
-    plugin?.transformIndexHtml.handler('<script type="module" crossorigin src="/assets/x.js">'),
-  ).toBe('<script type="module" blocking="render" crossorigin src="/assets/x.js">');
+  expect(names).toContain("webtools-render-blocking-entry");
 });
