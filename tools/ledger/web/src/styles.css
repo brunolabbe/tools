@@ -344,6 +344,32 @@ input[type="radio"] {
   gap: 0.5rem;
 }
 
+/* lg-77: a household's title with its Rename beside it, the button wrapping
+   under a title too long for the row. The title reads as a card's title, and a
+   name with no space in it breaks rather than pushing the page wide. */
+.titled {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.titled > h2,
+.titled > h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 1.125rem;
+  overflow-wrap: anywhere;
+}
+
+/* The rename field's label carries the title ("New name for …"), so it breaks
+   the same way: unbroken, it widened the whole card past a phone's screen. */
+.titled + .member-form label {
+  overflow-wrap: anywhere;
+}
+
 .offer {
   margin: 0;
   min-width: 0;

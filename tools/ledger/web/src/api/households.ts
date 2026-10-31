@@ -15,7 +15,9 @@ import type {
   CreateHouseholdResponse,
   HouseholdMember,
   HouseholdResponse,
+  HouseholdSummary,
   PersonName,
+  RenameHouseholdRequest,
   RenamePersonRequest,
   RetirePersonRequest,
 } from "@ledger/contract";
@@ -38,6 +40,28 @@ export async function addHouseholdMember(
   return await requestJson<HouseholdMember>(at(ROUTES.householdMembers, household), {
     method: "POST",
     body: member,
+  });
+}
+
+/** The member's own household renamed (lg-77); the answer is it under its new name. */
+export async function renameHousehold(
+  household: string,
+  rename: RenameHouseholdRequest,
+): Promise<HouseholdSummary> {
+  return await requestJson<HouseholdSummary>(at(ROUTES.householdRename, household), {
+    method: "POST",
+    body: rename,
+  });
+}
+
+/** Any household renamed by an admin (lg-77), as its members can rename their own. */
+export async function adminRenameHousehold(
+  household: string,
+  rename: RenameHouseholdRequest,
+): Promise<HouseholdSummary> {
+  return await requestJson<HouseholdSummary>(at(ROUTES.adminHouseholdRename, household), {
+    method: "POST",
+    body: rename,
   });
 }
 

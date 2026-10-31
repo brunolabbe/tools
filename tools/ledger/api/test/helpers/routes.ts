@@ -13,6 +13,9 @@ export const VERBS = {
   // lg-22: the test household's own, and the admin's.
   household: ["GET", ROUTES.household.replace(":id", "home")],
   householdMembers: ["POST", ROUTES.householdMembers.replace(":id", "home")],
+  // lg-77: a household renamed by a member, and by an admin.
+  householdRename: ["POST", ROUTES.householdRename.replace(":id", "home")],
+  adminHouseholdRename: ["POST", ROUTES.adminHouseholdRename.replace(":id", "home")],
   adminHouseholds: ["GET", ROUTES.adminHouseholds],
   adminMembers: ["POST", ROUTES.adminMembers.replace(":id", "home")],
   adminMemberRemove: ["POST", ROUTES.adminMemberRemove.replace(":id", "home")],

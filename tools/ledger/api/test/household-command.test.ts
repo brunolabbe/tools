@@ -212,7 +212,7 @@ describe("the household command", () => {
     const ran = run("add", ALEX, "alex");
 
     expect(ran.code).toBe(1);
-    expect(ran.err).toContain(`That email already belongs to the household "home", as alex.`);
+    expect(ran.err).toContain(`That email already belongs to the household "Home", as alex.`);
     expect(read((directory) => directory.households())).toEqual([{ id: "home", name: "Home" }]);
   });
 
@@ -411,5 +411,24 @@ describe("a person without an email (lg-74)", () => {
     expect(ran.code).toBe(0);
     expect(ran.out).toContain(`  alex  ${ALEX}`);
     expect(ran.out).toContain(`  Robin (${robin})  no email`);
+  });
+});
+
+describe("a household renamed (lg-77)", () => {
+  test("list prints the name it is called by now, with no verb of its own", () => {
+    legacy("home");
+    run("member", "home", ALEX, "alex");
+    const directory = Directory.open(directoryPath);
+    try {
+      directory.renameHousehold({ household: "home", name: "Our place", by: ALEX, at: NOW });
+    } finally {
+      directory.close();
+    }
+
+    const ran = run("list");
+
+    expect(ran.code).toBe(0);
+    expect(ran.out).toContain("home  Our place\n");
+    expect(ran.out).not.toContain("home  Home");
   });
 });
