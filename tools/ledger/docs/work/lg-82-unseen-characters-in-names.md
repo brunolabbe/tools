@@ -30,12 +30,16 @@ There are two kinds of name, and they are in different states:
   `person`, and no character. `addPerson` (`directory.ts:772`) and `renamePerson`
   (`directory.ts:452`) check the same and no more. `createHousehold`'s first person
   takes this path too, through `#readNamedMember` (`directory.ts:813`).
-- **A household's name is not writable on main.** `createHousehold` names every
-  household `NEW_HOUSEHOLD_NAME`, "Home" (lg-71), and `addHousehold`
+- **A household's name is not changeable on main.** `createHousehold` names every
+  new household `NEW_HOUSEHOLD_NAME`, "Home" (lg-71), and `addHousehold`
   (`directory.ts:626`) has no caller under `api/src` on main; its callers are tests.
-  lg-77's Build 2 adds `renameHousehold` "with the same name rule `addHousehold`
-  applies (trimmed, 1 to 80 characters)", so the household half becomes live when
-  lg-77 merges. This ticket depends on lg-77 for that half.
+  lg-77's Why says a household's name "is set once, when it is created". A household
+  made before lg-71 kept the name its admin typed, and `addHousehold`'s name checks
+  (`directory.ts:626-641`) look at the trimmed length and no character, so such a row
+  may hold an unseen character. Whether one does is not measured (Decision,
+  question 3). lg-77's Build 2 adds `renameHousehold` "with the same name rule
+  `addHousehold` applies (trimmed, 1 to 80 characters)", so a rename becomes a second
+  way to write one when lg-77 merges. This ticket depends on lg-77 for that half.
 
 The owner decided on 2026-10-31 to file one ticket covering both kinds of name,
 rather than to fix it inside lg-77 now or to record it only. Which remedy, and for
@@ -211,8 +215,9 @@ Terminal, from the output sites in command 5 and the name reads in command 6:
 
 - `household-command.ts:68-70`, `list`: each person's shown name, with the id beside
   it when they differ.
-- `household-command.ts:73`, `list`: each household's name. On main every name is
-  "Home"; lg-77 makes it free.
+- `household-command.ts:73`, `list`: each household's name. A household made on main
+  is "Home"; one made before lg-71 keeps the name it was given, and a rename after
+  lg-77 writes another.
 - `household-command.ts:146`, `add`: the household's name and the first person's
   shown name.
 - `household-command.ts:156`, `member`: the shown name.
@@ -347,3 +352,9 @@ waits for a separate answer.
 - **Depends on lg-77** (PR #686, not merged at filing). Its Build 2 and Build 7 are
   quoted from `tools/ledger/docs/work/lg-77-rename-a-household.md` on main. The PR's
   head was not read.
+- **Corrected before the gate.** The first draft said every household on main is
+  named "Home". That holds for households made on main; one made before lg-71 keeps
+  the name its admin typed, as lg-71's Why and lg-77's Why both say. The check on
+  the path that writes a name today does not look at unseen characters
+  (`directory.ts:626-641`); the pre-lg-71 path was not read. Whether such a row holds
+  one is measured by question 3, not here.
