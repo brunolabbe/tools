@@ -282,6 +282,20 @@ select {
   overflow-wrap: anywhere;
 }
 
+/* lg-75: the admin's mark on an email nobody has signed in with. Inline, so it
+   wraps with the name and address beside it and a long one never widens the
+   page; it breaks anywhere itself rather than relying on its parent's rule. */
+.never-signed-in {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
 /* lg-55: what the household says of its mortgage; the choices stack on a phone. */
 .mortgage-form {
   display: grid;

@@ -516,6 +516,32 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
     WHEN NEW.id IS NOT NULL AND EXISTS (SELECT 1 FROM household_names WHERE id = NEW.id)
     BEGIN SELECT RAISE(ABORT, 'a household name record is appended, never replaced'); END;
   `,
+  // 10 — the first time an address signed in (lg-75).
+  `
+  -- One row per address, with the instant a request from it was first seen as a
+  -- member's, so the admin's screen can mark an email that has never been used:
+  -- a mistyped one is never refused, since Access vouches for whoever signs in
+  -- and a typo cannot. Only the first is kept; this is not an activity log, and
+  -- a request after the first writes nothing. The address is not a foreign key:
+  -- it is kept when the membership goes, and a changed address (lg-34) starts a
+  -- row of its own.
+  CREATE TABLE first_sign_ins (
+    address TEXT PRIMARY KEY CHECK (address = lower(trim(address)) AND address GLOB '?*@?*'),
+    first_seen_at TEXT NOT NULL
+  );
+
+  CREATE TRIGGER first_sign_ins_never_updated BEFORE UPDATE ON first_sign_ins
+    BEGIN SELECT RAISE(ABORT, 'a first sign-in is recorded once, never edited'); END;
+  CREATE TRIGGER first_sign_ins_never_deleted BEFORE DELETE ON first_sign_ins
+    BEGIN SELECT RAISE(ABORT, 'a first sign-in is recorded once, never deleted'); END;
+  -- A second write for an address is skipped, not refused, so the writer's
+  -- INSERT OR IGNORE and a plain insert alike leave the first row standing, and
+  -- so does the REPLACE spelling, which would otherwise delete it without
+  -- firing the trigger above.
+  CREATE TRIGGER first_sign_ins_kept BEFORE INSERT ON first_sign_ins
+    WHEN EXISTS (SELECT 1 FROM first_sign_ins WHERE address = NEW.address)
+    BEGIN SELECT RAISE(IGNORE); END;
+  `,
 ];
 
 /** Brings a directory up to `target`, every migration by default. */

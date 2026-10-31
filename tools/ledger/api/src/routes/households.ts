@@ -137,11 +137,21 @@ function peopleOf(directory: Directory, household: string): AdminPerson[] {
     }));
 }
 
-/** A household as the admin's list shows it: its members, and everyone it has named. */
-function adminHousehold(directory: Directory, household: Household): AdminHousehold {
+/**
+ * A household as the admin's list shows it: its members, each with when its
+ * address first signed in (lg-75), and everyone it has named.
+ */
+function adminHousehold(
+  directory: Directory,
+  household: Household,
+  signIns: ReadonlyMap<string, string>,
+): AdminHousehold {
   return {
     ...household,
-    members: membersOf(directory, household.id),
+    members: membersOf(directory, household.id).map((member) => ({
+      ...member,
+      firstSignIn: member.address === null ? null : (signIns.get(member.address) ?? null),
+    })),
     people: peopleOf(directory, household.id),
   };
 }
@@ -221,8 +231,11 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
   // is refused there.
   app.get(ROUTES.adminHouseholds, { onRequest: adminRead }, async (request) => {
     adminOf(request);
+    const signIns = directory.firstSignIns();
     const body: AdminHouseholdsResponse = {
-      households: directory.households().map((household) => adminHousehold(directory, household)),
+      households: directory
+        .households()
+        .map((household) => adminHousehold(directory, household, signIns)),
     };
     return body;
   });
@@ -246,7 +259,11 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
       at: context.now(),
       newId: context.newId,
     });
-    const body: CreateHouseholdResponse = adminHousehold(directory, household);
+    const body: CreateHouseholdResponse = adminHousehold(
+      directory,
+      household,
+      directory.firstSignIns(),
+    );
     return body;
   });
 

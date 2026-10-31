@@ -101,6 +101,9 @@ vi.mock("../src/api/stats.ts");
 const ALEX = "6f1c2a3b-0d4e-4f5a-8b6c-7d8e9f0a1b2c";
 const SAM = "0b9a8c7d-6e5f-4a3b-9c2d-1e0f2a3b4c5d";
 const NAMES: ShownNames = { [ALEX]: "Alex", [SAM]: "Sam" };
+/** An address that has signed in (lg-75), so the Admin fixture carries no mark. */
+const SIGNED_IN = "2026-10-30T08:00:00.000Z";
+
 const ANY_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/u;
 
 /** A fixture written with the ids alex and sam, with each turned to its generated id. */
@@ -588,8 +591,8 @@ describe("no generated id reaches a screen (lg-76)", () => {
       id: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
       name: "Home",
       members: [
-        { address: "alex@example.test", person: "alex", name: "Alex" },
-        { address: "sam@example.test", person: "sam", name: "Sam" },
+        { address: "alex@example.test", person: "alex", name: "Alex", firstSignIn: SIGNED_IN },
+        { address: "sam@example.test", person: "sam", name: "Sam", firstSignIn: SIGNED_IN },
       ],
       people: [
         { person: "alex", name: "Alex", standing: "in" },

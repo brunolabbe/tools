@@ -761,3 +761,47 @@ test("Admin fits a phone and a desktop with a household's rename open", async ({
   await expect(page.getByLabel("New name for Home: alex and sam")).toHaveValue("Home");
   await fitsBothWidths(page, testInfo, "Admin (renaming)");
 });
+
+/**
+ * lg-75: the mark on an email nobody has signed in with, on the card and in the
+ * list to admit. In the seed sam never makes a request, so the real answer
+ * already marks sam; the listing is also given a member whose person name and
+ * address are both long, the shape that made a row wider than a phone, so the
+ * mark is measured wrapping beside them.
+ */
+test("Admin fits a phone and a desktop with an email marked never signed in, beside long names", async ({
+  page,
+}, testInfo) => {
+  const longPerson = "Robin-Alexandrine de la Montagne-Verte-et-des-Vallees-Lointaines";
+  const longAddress = `${"a-very-long-local-part-".repeat(3)}x@an-equally-long-domain-name.example.test`;
+  await page.route("**/api/admin/households", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const body = (await (await route.fetch()).json()) as {
+      households: { members: unknown[] }[];
+    };
+    await route.fulfill({
+      json: {
+        households: body.households.map((household) => ({
+          ...household,
+          members: [
+            ...household.members,
+            {
+              address: longAddress,
+              person: "00000000-0000-4000-8000-0000000000ef",
+              name: longPerson,
+              firstSignIn: null,
+            },
+          ],
+        })),
+      },
+    });
+  });
+
+  await openTab(page, "Admin");
+  const admit = page.getByRole("list", { name: "Emails to admit" });
+  await expect(admit).toContainText(longAddress);
+  // sam (real) and the long address (given): two marks on the card and in the list.
+  await expect(admit.getByText("Never signed in")).toHaveCount(2);
+  await expect(page.getByText("Never signed in")).toHaveCount(4);
+  await fitsBothWidths(page, testInfo, "Admin (never signed in)");
+});

@@ -114,8 +114,8 @@ describe("an admin renames a person", () => {
       await send(app, ADMIN, "GET", ROUTES.adminHouseholds)
     ).json<AdminHouseholdsResponse>();
     expect(admin.households.find((household) => household.id === HOUSEHOLD)?.members).toEqual([
-      { address: ALEX, person: "bruno", name: "Bruno" },
-      { address: SAM, person: "sam", name: "sam" },
+      { address: ALEX, person: "bruno", name: "Bruno", firstSignIn: null },
+      { address: SAM, person: "sam", name: "sam", firstSignIn: null },
     ]);
     const own = (
       await send(app, SAM, "GET", ROUTES.household.replace(":id", HOUSEHOLD))

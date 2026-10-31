@@ -64,3 +64,45 @@ a repeat of what Access already proves). The owner chose **the mark**.
 ## Log
 
 - 2026-10-25 — Filed from the owner's question while lg-71 was being re-scoped.
+- 2026-10-31 — Built, stacked on lg-77 (PR #686, head `aaf6828c`), so migration 10 follows
+  its migration 9.
+  - **Directory**: `first_sign_ins (address PRIMARY KEY, first_seen_at)`, with
+    never-updated and never-deleted triggers and a `BEFORE INSERT` trigger that
+    `RAISE(IGNORE)`s a second row for an address. That makes the writer's
+    `INSERT OR IGNORE` and the other spellings leave the first row standing without
+    the abort the other tables use, which `INSERT OR IGNORE` would not survive
+    (`first-sign-in.test.ts`, "keeps the first row").
+  - **Hook** (`access.ts`): `identityFor` calls `directory.recordFirstSignIn` for a
+    member's address, once per address per process (a `Set`). The method reads
+    first and writes only when the row is absent, with `busy_timeout` at 0, as
+    `createEnroller` does: a write takes the lock even when it changes nothing, so a
+    restarted process would otherwise write once per address, and a wait would be
+    spent on the event loop. Any error is logged at warn (`first sign-in not
+    recorded`, with the SQLite code) and not remembered, so the next request retries.
+    An admin in no household and a stranger are never recorded.
+  - **Contract**: `AdminHouseholdMember extends HouseholdMember { firstSignIn: string | null }`,
+    on `AdminHousehold.members` only. The household's own route and every mutation
+    answer keep `HouseholdMember`; the Admin screen refetches after each change, so it
+    does not need the field on those. A person with no address is `null` and is not
+    marked.
+  - **Read-only path**: no new read on `Directory.openReadOnly`'s callers. The import
+    (`directoryPeople`) reads `holdsHousehold`, `names`, `people`, `heldPeople`, none of
+    which touch `first_sign_ins`; a test opens a directory at migration 9 read-only,
+    reads it through `directoryPeople`, and finds it still at 9.
+  - **Web**: a `NeverSignedIn` span on the card's member row, beside the `<strong>`, and
+    in "Emails to admit". `.never-signed-in` is an inline pill that wraps on its own
+    (`overflow-wrap: anywhere`, `max-width: 100%`), not through lg-80's rule.
+  - **Brief, not wrong, but wider**: seven `user_version` assertions moved to 10, not six:
+    five in `directory.test.ts`, one in `person-names.test.ts`, and lg-77's own
+    migration-9 test in `household-names.test.ts`. A directory at 8 is migrated to the
+    latest there, so it reads 10 now. Existing admin-listing expectations in
+    `households.test.ts`, `rename-person.test.ts`, `admin.test.tsx` and
+    `generated-ids.test.tsx` gained `firstSignIn`.
+  - **Not folded in**: nothing small and specified came free.
+  - **Checked** (worktree at this commit): `npm test -- --project ledger`, 1976 of 1976
+    in 89 files; `npm run check`, exit 0; `npx oxlint` on the four ledger packages, exit 0; the
+    ledger e2e suite, 18 of 18 on port 8175 with `RATE_LIMIT_READS_PER_MINUTE=0`
+    exported in the shell (not committed), including the new `Admin fits a phone and a
+    desktop with an email marked never signed in, beside long names`; its 360 px
+    screenshot was opened, with the mark wrapping under a 64-character person name and
+    a 111-character address.

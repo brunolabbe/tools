@@ -83,7 +83,7 @@ describe("an admin", () => {
     expect(household).toEqual({
       id: cabin,
       name: "Home",
-      members: [{ address: "robin@cabin.test", person: robin, name: "robin" }],
+      members: [{ address: "robin@cabin.test", person: robin, name: "robin", firstSignIn: null }],
       people: [{ person: robin, name: "robin", standing: "in" }],
     });
     const added = await send(app, ADMIN, "POST", of("adminMembers", cabin), {
@@ -154,15 +154,15 @@ describe("an admin", () => {
         {
           id: AWAY,
           name: "The other household",
-          members: [{ address: KIM, person: "kim", name: "kim" }],
+          members: [{ address: KIM, person: "kim", name: "kim", firstSignIn: null }],
           people: [{ person: "kim", name: "kim", standing: "in" }],
         },
         {
           id: HOUSEHOLD,
           name: "The test household",
           members: [
-            { address: ALEX, person: "alex", name: "alex" },
-            { address: SAM, person: "sam", name: "sam" },
+            { address: ALEX, person: "alex", name: "alex", firstSignIn: null },
+            { address: SAM, person: "sam", name: "sam", firstSignIn: null },
           ],
           people: [
             { person: "alex", name: "alex", standing: "in" },
@@ -171,6 +171,84 @@ describe("an admin", () => {
         },
       ],
     });
+  });
+
+  // lg-75: an address that has made a request reports when it first did; one
+  // that has not reports null, which the screen marks.
+  test("lists an address that has signed in with when it first did, and one that has not as never", async () => {
+    const { app } = await start();
+    await send(app, ALEX, "GET", ROUTES.me);
+
+    const listing = (
+      await send(app, ADMIN, "GET", ROUTES.adminHouseholds)
+    ).json<AdminHouseholdsResponse>();
+
+    const members = listing.households.flatMap((household) => household.members);
+    expect(members.map((member) => [member.address, member.firstSignIn])).toEqual([
+      [KIM, null],
+      [ALEX, NOW.toISOString()],
+      [SAM, null],
+    ]);
+  });
+
+  test("starts an address changed in place unmarked, the old one's sign-in left where it was", async () => {
+    const { app, directory } = await start();
+    await send(app, ALEX, "GET", ROUTES.me);
+    const moved = await send(
+      app,
+      ADMIN,
+      "POST",
+      ROUTES.adminMemberAddress.replace(":id", HOUSEHOLD),
+      { from: ALEX, to: "alexandre@example.test" },
+    );
+    expect(moved.statusCode, moved.body).toBe(200);
+
+    const listing = (
+      await send(app, ADMIN, "GET", ROUTES.adminHouseholds)
+    ).json<AdminHouseholdsResponse>();
+
+    const home = listing.households.find((household) => household.id === HOUSEHOLD);
+    expect(home?.members.map((member) => [member.address, member.firstSignIn])).toEqual([
+      ["alexandre@example.test", null],
+      [SAM, null],
+    ]);
+    expect([...directory.firstSignIns().keys()]).toEqual([ALEX]);
+  });
+
+  test("answers a created household with its first member never signed in", async () => {
+    const { app } = await start();
+
+    const created = await send(app, ADMIN, "POST", ROUTES.adminHouseholds, {
+      address: CASEY,
+      person: "Casey",
+    });
+
+    expect(created.statusCode, created.body).toBe(200);
+    expect(created.json<CreateHouseholdResponse>().members).toEqual([
+      { address: CASEY, person: expect.any(String) as string, name: "Casey", firstSignIn: null },
+    ]);
+  });
+
+  test("keeps the sign-in off the household's own route, to its members and to an admin alike", async () => {
+    const { app } = await start();
+    await send(app, ALEX, "GET", ROUTES.me);
+
+    const own = (
+      await send(app, ALEX, "GET", of("household", HOUSEHOLD))
+    ).json<HouseholdResponse>();
+    const added = (
+      await send(app, ALEX, "POST", of("householdMembers", HOUSEHOLD), {
+        address: CASEY,
+        person: "Casey",
+      })
+    ).json<HouseholdMember>();
+
+    expect(own.members.map((member) => Object.keys(member))).toEqual([
+      ["address", "person", "name"],
+      ["address", "person", "name"],
+    ]);
+    expect(JSON.stringify(own)).not.toContain("firstSignIn");
+    expect(Object.keys(added)).toEqual(["address", "person", "name"]);
   });
 
   test("removes a member, who is refused on the next request; their name stays in the books", async () => {
@@ -677,7 +755,9 @@ describe("a person added by name (lg-76)", () => {
     expect(created.json<CreateHouseholdResponse>()).toEqual({
       id: generatedId(1),
       name: "Home",
-      members: [{ address: "robin@cabin.test", person: generatedId(2), name: "robin" }],
+      members: [
+        { address: "robin@cabin.test", person: generatedId(2), name: "robin", firstSignIn: null },
+      ],
       people: [{ person: generatedId(2), name: "robin", standing: "in" }],
     });
   });
@@ -792,7 +872,12 @@ describe("a person without an email (lg-74)", () => {
       await send(app, ADMIN, "GET", ROUTES.adminHouseholds)
     ).json<AdminHouseholdsResponse>();
     const home = listing.households.find((household) => household.id === HOUSEHOLD);
-    expect(home?.members).toContainEqual({ address: null, person: generatedId(1), name: "Robin" });
+    expect(home?.members).toContainEqual({
+      address: null,
+      person: generatedId(1),
+      name: "Robin",
+      firstSignIn: null,
+    });
     expect(home?.people).toContainEqual({ person: generatedId(1), name: "Robin", standing: "in" });
     const people = (await send(app, ALEX, "GET", ROUTES.people)).json<PeopleResponse>();
     expect(people.people).toContain(generatedId(1));

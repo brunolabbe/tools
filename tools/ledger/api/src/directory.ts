@@ -325,6 +325,50 @@ export class Directory {
   }
 
   /**
+   * Records that `address` has signed in, the first time only (lg-75): a row
+   * with the instant, never written again. Called on a member's request by the
+   * identity hook, which remembers what it has recorded, so this is reached
+   * once per address per process.
+   *
+   * Reads before it writes, because a write takes the file's write lock even
+   * when it changes nothing, and an address recorded before a restart is not in
+   * the hook's memory. It writes with `busy_timeout` at 0: the hook is on the
+   * request path, and a wait is spent on the event loop (as `createEnroller`
+   * does). A directory another connection holds throws `SQLITE_BUSY` at once,
+   * and the caller tries again on the next request.
+   */
+  recordFirstSignIn(address: string, at: Date): void {
+    if (typeof address !== "string") refuse("The address is not a string.");
+    const key = address.toLowerCase();
+    if (this.#db.prepare("SELECT 1 FROM first_sign_ins WHERE address = ?").get(key) !== undefined) {
+      return;
+    }
+    const timeout = Number(this.#db.pragma("busy_timeout", { simple: true }));
+    this.#db.pragma("busy_timeout = 0");
+    try {
+      this.#db
+        .prepare("INSERT OR IGNORE INTO first_sign_ins (address, first_seen_at) VALUES (?, ?)")
+        .run(key, at.toISOString());
+    } finally {
+      // Interpolated because PRAGMA takes no bound parameter; it is the
+      // connection's own number, read just above.
+      this.#db.pragma(`busy_timeout = ${String(timeout)}`);
+    }
+  }
+
+  /**
+   * When each address first signed in (lg-75), by address. An address with no
+   * entry has not: it is what the admin's screen marks. The admin's listing
+   * reads it; the household's own route does not.
+   */
+  firstSignIns(): Map<string, string> {
+    const rows = this.#db
+      .prepare("SELECT address, first_seen_at AS at FROM first_sign_ins")
+      .all() as { address: string; at: string }[];
+    return new Map(rows.map((row) => [row.address, row.at]));
+  }
+
+  /**
    * Every change to one household's membership, oldest first: who was added or
    * removed, under which name, by whom and when. Filtered in the SQL, so no
    * other household's record is ever read for it.
