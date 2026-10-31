@@ -198,10 +198,10 @@ test("the search waits for a pause in typing, and a filter change drops the requ
   fireEvent.change(screen.getByLabelText("Search the description"), { target: { value: "ig" } });
   fireEvent.change(screen.getByLabelText("Search the description"), { target: { value: "iga" } });
   expect(asked()).toHaveLength(2);
-  // One tick short of the pause nothing is sent; the tick that completes it sends one request.
-  await pass(299);
-  expect(asked()).toHaveLength(2);
-  await pass(1);
+  // Three keystrokes, one request once the pause is over. (Not a 299 then a 1:
+  // `shouldAdvanceTime` also moves the clock by real time, which a loaded
+  // machine makes more than the tick.)
+  await pass(300);
   await waitFor(() => expect(asked()).toHaveLength(3));
   expect(asked().at(-1)).toMatchObject({ q: "iga", direction: "in" });
 });
