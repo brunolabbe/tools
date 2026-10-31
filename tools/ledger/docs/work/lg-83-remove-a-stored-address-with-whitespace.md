@@ -29,7 +29,7 @@ repeated here.
 The refusal is the lg-20 shape, not the lg-52 control set. The table `memberships`
 and the `\s` exclusion first appear together in `b8a78192` (lg-20), the exclusion
 under the name `ADDRESS`. lg-52 (`d84c8852`) renamed it `ADDRESS_SHAPE` and split
-the control set `UNSEEN` out beside it. Every write path checks its address before
+the control set out beside it, as `CONTROL`; `UNSEEN` arrives in lg-57 (`59629aec`). Every write path checks its address before
 `#record` writes it, and `#record` is the only `INSERT INTO memberships` under
 `tools/ledger/api/src`. So a row holding whitespace can come only from raw SQL or a
 hand-edited file. Whether any live directory holds one is not measured
@@ -249,12 +249,12 @@ was run, in the Reproduction; the other costs are read from the code.
   the lookup misses such a row. The same goes for `u@Éx.test`, which JavaScript
   lower-cases to `u@éx.test`. The Reproduction's second `test.each` has four
   end-position cases and `u@Éx.test`; each answers `That email belongs to no
-  household.`, exit 1, row standing. So (a) reaches a whitespace character after
-  the `@`, and not one at either end. This round ran TAB at both ends, NBSP at the
+  household.`, exit 1, row standing. So (a) reaches an interior whitespace character,
+  and not one at either end. This round ran TAB at both ends, NBSP at the
   end and U+2028 at the start. Gate 1 measured the nine characters the schema
   stores at an end, at either end, with the same answer. Cost: a malformed `remove`
   reads as "belongs to no household"; the admin routes answer `MEMBER_NOT_FOUND`;
-  lg-82's `remove` test changes from pinning the refusal to pinning the removal; and
+  lg-82's `remove` test (PR #691) changes from pinning the refusal to pinning the removal; and
   lg-82's escape at `remove`'s sink is needed before the interior address prints.
 - **(b) `remove` accepts a shape that tolerates whitespace.** A second pattern beside
   `ADDRESS_SHAPE`, used only for the stored read. `readStoredAddress` still trims
@@ -405,14 +405,14 @@ the read; on a live directory, leave them alone.
    section, with the options it was chosen from, and `status` moves to `ready` in
    the same commit.
 2. Whichever remedy is chosen, a spec asserts what `remove` does with a stored address
-   holding each of the ten `\s` characters in the Reproduction, after the `@`, which
-   is the position (a) and (b) cover. The result is removed, with the row out of
+   holding each of the ten `\s` characters in the Reproduction, after the `@`, an
+   interior position, which (a) and (b) cover. The result is removed, with the row out of
    `current_members`, for (a), (b) and (d), and refused with the row standing for (c).
    For (a) and (b), a second assertion pins the limit: the four end-position cases of
    the Reproduction, and `u@Éx.test`, stay refused with `That email belongs to no
    household.`. If (b)
    takes all 25 `\s` code points, the spec also covers the other 15. lg-82's `remove`
-   test is changed to match.
+   test (PR #691) is changed to match.
 3. Question 2 is measured on the live directory by an operator, with the mismatch
    scan above, read-only, and the count and the sidecar state before and after are
    recorded in the Log.
@@ -472,7 +472,7 @@ lookup variant (Decision, question 1a). F3: the scan flags the mismatch with
   `Removed clean@exz.test`, which is what the round-1 probe ran. The verbose output
   in the Reproduction lists all 17 tests of its run. The code block was extracted
   from this file and run as printed. The scratch path is gone. lg-82's PR is #691,
-  head `94b984cc`, and the quoted comment is the same at both heads.
+  head `94b984cc`.
 - **F9 (low), 25 code points.** Agreed: counted with `node`, the set is 25; the ten
   and the other 15 are named in the Why.
 
@@ -486,3 +486,12 @@ end positions are 18 rows in all, not 10.
 **Not measured.** Options (a), (b) and (d) as built: none exists. The other 15
 `\s` code points through `remove`. The retire 400 and 200 in (c), gate-measured and
 not re-run here. Question 2, on the live directory.
+
+### 2026-10-31 — gate 2 lows fixed at landing (maintenance dispatch, fixer)
+
+Gate 2 passed at `5cdd8a14`. Its full report and gate 1's are on the pull request
+thread. The filing is left `needs-decision`, with no `--land`.
+
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, L1 — "Say interior, not after the @". `git diff HEAD -- <this file> | grep -c '^-.*and not one at either end'` gave 1.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, L2 — "Drop the stale Log clause, and give lg-82's remove test a pointer to PR #691". `git diff HEAD -- <this file> | grep -c '^-.*quoted comment is the same at both heads'` gave 1; the pointer is added where the Decision and Done when 2 name the test.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, L3 — "at d84c8852 the set is named CONTROL; UNSEEN arrives in lg-57". `git show d84c8852 -- tools/ledger/api/src/directory.ts | grep -n 'CONTROL\|UNSEEN'` shows only CONTROL, and 59629aec renames it to UNSEEN; `git diff HEAD -- <this file> | grep -c '^-.*set .UNSEEN. out beside it'` gave 1.
