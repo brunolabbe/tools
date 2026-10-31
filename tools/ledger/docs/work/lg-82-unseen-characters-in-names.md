@@ -3,7 +3,7 @@ id: lg-82
 tool: ledger
 title: Unseen characters in a household or person name reach the host's output
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: [lg-77]
 difficulty: standard
@@ -623,12 +623,13 @@ admin's JSON as `message`, which the web displays.
   rendered as text. The web is a display question for a zero-width name, not an
   injection one.
 
-## Decision — open
+## Decision — answered 2026-10-31 by the owner
 
 Two questions. Each is marked on its own line, `open` until an answer names who gave
-it and when.
+it and when. Both are answered, at intake on 2026-10-31, and the answers are recorded
+under **Build orders** below; the options and their costs stay as they were put.
 
-**1. Which remedy — open.**
+**1. Which remedy — answered 2026-10-31 by the owner: (a).**
 
 - **(a) Refuse the population at write time.** The set is `readAddress`'s, at
   `directory.ts:53`. Costs: a check in each of the five write methods the Build names,
@@ -656,7 +657,7 @@ it and when.
 
 The gate recommends (a).
 
-**2. What the stored rows hold — open, not measured.** A stored row cannot be changed
+**2. What the stored rows hold — answered 2026-10-31 by the owner: (i). Not measured, and under (i) not needed.** A stored row cannot be changed
 in place: the triggers refuse every UPDATE and DELETE (command 9, and command 17 for
 `household_names`). Whether a live directory holds a row with an unseen character
 decides which of these is needed.
@@ -688,6 +689,33 @@ Not dispatchable until both questions are answered. Each answer is recorded on t
 ticket first, with who gave it, the date and the options it was chosen from. The
 commit that records the second answer also sets `status` to `ready`, before any
 source change.
+
+### Build orders — the owner's answers, 2026-10-31, given at intake
+
+- **Question 1, "Which remedy"**: chosen from (a) refuse at write time, (b) escape at
+  the 14 sinks, and Both. The owner chose **(a)**, the gate's recommendation, having
+  been shown that (a) refuses U+200C and U+200D (the ZWJ emoji family name and the
+  Persian ZWNJ word).
+- **Question 2, "What the stored rows hold"**: chosen from (i) leave the rows and
+  escape at display, (ii) a migration rebuilding the table with a CHECK, and (iii)
+  rewrite each row under an owner decision. The owner chose **(i)**, the
+  orchestrator's recommendation (the ticket gave none).
+- **Consequence, put to the owner.** The ticket defines (i) as escaping at display
+  "(the (b) sinks)", so (a) with (i) is the ticket's **Both**: the "Under (a)" and the
+  "Under (b)" lines of Build and of Done when both apply. Build 5 (the CHECK) does not:
+  (a) is enforced in `directory.ts`, and (i) changes no row, so there is no migration.
+- **(b)'s sub-choice for M1–M5**, chosen from "in the `directory.ts` sentence builders
+  (the admin's web text changes)" and "at the host command's stderr (T6) (the web text
+  does not change)": the owner chose **at the host command's stderr (T6)**, the
+  orchestrator's recommendation. The admin's web text does not change.
+- **The measurement line** of Done when ("The stored rows are handled as question 2's
+  answer says, with a test, and the measurement's counts, one per table listed under
+  question 2, are in the Log"), chosen from "reword: not needed under (i)" and "the
+  owner runs it after merge, as an `awaiting:` line": the owner chose **reword**, the
+  orchestrator's recommendation. Under (i) the stored rows are left, and the (b) sink
+  tests prove that a stored row prints escaped. No measurement is taken.
+- **Rating**: the ticket's `difficulty: standard` was a placeholder for the owner. The
+  owner rated it **standard**, the orchestrator's recommendation.
 
 The population **P** is the 32 C0 characters U+0000 to U+001F, DEL (U+007F), the 32 C1
 characters U+0080 to U+009F, U+200B, U+200C, U+200D, and an interior U+FEFF, each
@@ -739,8 +767,16 @@ waits for a separate answer.
   `runHouseholdCommand` with a captured `io` (`household-command.test.ts`), T7 through
   the two commands' `--as` refusal, T8 through the import report, M1–M5 through the
   directory methods that build them, and L1 through the rate limit's logged key.
-- The stored rows are handled as question 2's answer says, with a test, and the
-  measurement's counts, one per table listed under question 2, are in the Log.
+  - **Superseded 2026-10-31 by the owner's answer to (b)'s sub-choice** (the clause
+    "M1–M5 through the directory methods that build them"). It now reads: M1–M5 are
+    proven where the answer puts the escape, at T6, through `runHouseholdCommand` with
+    a captured `io` and a stored name that holds a character of P. That follows from
+    the owner's choice of the host command's stderr over the sentence builders.
+- ~~The stored rows are handled as question 2's answer says, with a test, and the
+  measurement's counts, one per table listed under question 2, are in the Log.~~
+  **Superseded 2026-10-31 by the owner's answer ("reword").** It now reads: the stored
+  rows are left as question 2's answer (i) says, and the (b) sink tests prove that a
+  stored row prints escaped. No measurement is taken, so the Log carries no counts.
 - lg-77 has merged before the build starts (`depends_on`).
 - `npm run check` and `npm test -- --project ledger` pass on the build's branch.
 
@@ -757,7 +793,6 @@ waits for a separate answer.
   the name its admin typed, as lg-71's Why and lg-77's Why both say. The check on the
   path that writes a name today does not look at unseen characters
   (`directory.ts:626-643`). Whether such a row holds one is measured under question 2.
-- **Placeholder.** `difficulty: standard` is a placeholder. The owner rates it.
 - **Depends on lg-77** (PR #686, not merged at filing). Its Build 2 and Build 7 are
   quoted from `tools/ledger/docs/work/lg-77-rename-a-household.md` on main. Its head
   was read this round (commands 17 and 18) as `origin/lg-77-rename-a-household`.
@@ -800,3 +835,7 @@ waits for a separate answer.
   in the Log. `sed -n 57,69p tools/ledger/api/src/rate-limit.ts` prints the quoted
   block, doc comment to closing brace, and `sed -n 56,68p` printed a blank line first.
   The proof is the same diff, `grep -c '^-.*sed -n 56,68p'` → `1`.
+- **2026-10-31, answered.** The owner's answers are under Build, "Build orders": (a), (i),
+  the host command's stderr (T6) for M1–M5, the measurement line reworded, and the
+  rating `standard` (the placeholder note is removed; the frontmatter stays `standard`).
+  `status` is `ready` in the commit that records them, before any source change.
