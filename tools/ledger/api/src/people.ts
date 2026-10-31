@@ -8,7 +8,8 @@
  *
  * Two writers, both of names the household already uses. Migration 3 enrols
  * every person id lg-4 had stored on a rule or a classification; then each name
- * the household's current members stand under that the table does not hold is
+ * the household's current members stand under, and each person it holds without
+ * an email who stands (lg-74), that the table does not hold is
  * added — at boot, and whenever a request shows one the table lacks, which is how
  * a member added since boot arrives. Nothing is ever removed, because a person a
  * stored row names stays named after they stop being able to sign in (a name is

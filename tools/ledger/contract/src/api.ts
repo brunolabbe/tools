@@ -137,9 +137,14 @@ export const GENERATED_ID =
  * the person is shown (lg-33). A person added since lg-76 has a generated id
  * and the name typed for them as their first shown name; one added before is
  * shown under their id until an admin renames them.
+ *
+ * `address` is `null` for a person the household holds without an email
+ * (lg-74): they count in the books and never sign in, so they are listed by
+ * name with no address, and are nobody Access needs to admit. One who is given
+ * an email later is listed under it instead, as the same person.
  */
 export interface HouseholdMember {
-  address: string;
+  address: string | null;
   person: string;
   name: string;
 }
@@ -164,7 +169,19 @@ export interface MembershipRecord {
 export interface HouseholdResponse {
   household: HouseholdSummary;
   members: HouseholdMember[];
-  history: (MembershipRecord | PersonNameRecord | PersonFirstNameRecord)[];
+  history: (MembershipRecord | PersonAddedRecord | PersonNameRecord | PersonFirstNameRecord)[];
+}
+
+/**
+ * A person added without an email (lg-74): `person` is their generated id, and
+ * the name they were added under follows as a `PersonFirstNameRecord` at the
+ * same instant. `by` is the address that added them, or `operator`.
+ */
+export interface PersonAddedRecord {
+  action: "add-person";
+  person: string;
+  at: string;
+  by: string;
 }
 
 /**
@@ -196,16 +213,26 @@ export interface PersonFirstNameRecord extends Omit<PersonNameRecord, "action"> 
  * id and shown under that name. Left out, the new person is shown under the
  * address's part before the `@`, numbered when someone in the household already
  * is or has it as their id.
+ *
+ * `address` may be left out once the household exists (lg-74; the owner,
+ * 2026-10-25): then `person` is required, and is a new person who counts in
+ * the books and never signs in, refused if it names someone the household
+ * holds already. `CreateHouseholdRequest` still requires the email, since a
+ * household nobody can sign in to serves no one.
  */
 export interface AddMemberRequest {
-  address: string;
+  address?: string | undefined;
   person?: string | undefined;
 }
 
-export const addMemberRequestSchema = z.strictObject({
-  address: z.string().min(1).max(320),
-  person: z.string().min(1).max(64).optional(),
-}) satisfies z.ZodType<AddMemberRequest>;
+export const addMemberRequestSchema = z
+  .strictObject({
+    address: z.string().min(1).max(320).optional(),
+    person: z.string().min(1).max(64).optional(),
+  })
+  .refine((member) => member.address !== undefined || member.person !== undefined, {
+    message: "An email, a name, or both.",
+  }) satisfies z.ZodType<AddMemberRequest>;
 
 /** `POST /api/admin/households/:id/members/remove`: the address to take out. */
 export interface RemoveMemberRequest {

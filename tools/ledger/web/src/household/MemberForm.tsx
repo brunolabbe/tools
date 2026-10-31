@@ -13,6 +13,11 @@
  * Access policy, which the operator does in the Cloudflare dashboard
  * (`docs/02-DEPLOYMENT.md`, step 2): until then Access turns the new member
  * away before the ledger ever sees them.
+ *
+ * The email may be left empty (lg-74): a name alone is a new person who counts
+ * in the books and never signs in, so has nothing for Access to admit. Picking
+ * such a person from the list and typing an email gives them one, as the same
+ * person.
  */
 
 import { useId, useState } from "react";
@@ -23,6 +28,13 @@ import type { ShownNames } from "../people.tsx";
 
 export const ACCESS_POLICY_NOTE =
   "Every email must also be admitted on the ledger's Access policy, which whoever runs the ledger does in the Cloudflare dashboard. Until it is, that email cannot sign in.";
+
+/** What the member lists show in place of an address for a person who has none (lg-74). */
+export const NO_EMAIL = "no email";
+
+/** The Email field's hint (lg-74): what leaving it empty makes. */
+export const NO_EMAIL_HINT =
+  "Email may be left empty: a person without one counts in the books but cannot sign in. You can add an email for them later.";
 
 export interface MemberFormProps {
   /** The person ids the household holds, offered to pick from by their shown names. */
@@ -42,7 +54,7 @@ export function emptyNameHint(address: string): string {
   const at = typed.lastIndexOf("@");
   const local = at > 0 ? typed.slice(0, at) : "";
   return local === ""
-    ? "Person may be left empty: they are then shown under the email's part before the @, numbered if someone here already is."
+    ? "Person may be left empty when an email is given: they are then shown under the email's part before the @, numbered if someone here already is."
     : `Person may be left empty: they are then shown as ${local}, numbered if someone here already is.`;
 }
 
@@ -61,7 +73,9 @@ export function MemberForm({ people, names, onAdd }: MemberFormProps): React.Rea
       const added = await onAdd(member);
       setAddress("");
       setNotice(
-        `Added ${added.address} as ${added.name}. Ask whoever runs the ledger to admit ${added.address} on its Access policy, if they have not already.`,
+        added.address === null
+          ? `Added ${added.name}, who counts in the books and cannot sign in.`
+          : `Added ${added.address} as ${added.name}. Ask whoever runs the ledger to admit ${added.address} on its Access policy, if they have not already.`,
       );
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
@@ -73,13 +87,17 @@ export function MemberForm({ people, names, onAdd }: MemberFormProps): React.Rea
   const submit = (event: React.SyntheticEvent): void => {
     event.preventDefault();
     setNotice(null);
-    if (address.trim() === "") {
-      setProblem("Give the email, and the person's name it stands under if you like.");
+    const typed = address.trim();
+    const named = person.trim();
+    if (typed === "" && named === "") {
+      setProblem("Give an email, the person's name, or both.");
       return;
     }
     setProblem(null);
-    const named = person.trim();
-    void add({ address: address.trim(), ...(named === "" ? {} : { person: named }) });
+    void add({
+      ...(typed === "" ? {} : { address: typed }),
+      ...(named === "" ? {} : { person: named }),
+    });
   };
 
   return (
@@ -94,6 +112,7 @@ export function MemberForm({ people, names, onAdd }: MemberFormProps): React.Rea
         value={address}
         onChange={(event) => setAddress(event.target.value)}
       />
+      <p className="muted hint">{NO_EMAIL_HINT}</p>
       <label htmlFor={`${id}-person`}>Person</label>
       <input
         id={`${id}-person`}

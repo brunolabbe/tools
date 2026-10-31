@@ -60,7 +60,11 @@ function list(directory: Directory): string {
       const names = directory.names(household.id);
       // lg-76: a person is listed as they are shown, with their id beside it
       // when it differs, as a generated one always does.
-      const lines = members.map((member) => {
+      const lines = [
+        ...members,
+        // lg-74: a person held without an email, who Access need not admit.
+        ...directory.withoutEmail(household.id).map((person) => ({ person, address: "no email" })),
+      ].map((member) => {
         const shown = shownName(names, member.person);
         const who = shown === member.person ? shown : `${shown} (${member.person})`;
         return `  ${who}  ${member.address}`;
