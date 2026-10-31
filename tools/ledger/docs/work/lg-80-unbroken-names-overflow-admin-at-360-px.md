@@ -184,11 +184,14 @@ a 64-character member name does not overflow (probe below).
    characters with a space every ten) passes at both widths before and after, in
    the same case or beside it. Both runs are in the Log.
 3. The names are whole, or in their own scrolling boxes, not clipped at the edge.
-   **The proof is the `nameIsWhole` assertion** in the cases of lines 1 and 2,
-   green at both widths on the fixed branch (it is red on `main`'s styles, in the
-   same runs as those lines). It is not the screenshots alone. The two 360 px
-   screenshots named in Build 4 are also opened and read, and the Log says what
-   they show.
+   **The `nameIsWhole` assertion proves its part** in the cases of lines 1 and 2:
+   no ancestor cuts the name sideways and the window holds it, green at both
+   widths on the fixed branch (it is red on `main`'s styles, in the same runs as
+   those lines). It does not prove the name is not hidden vertically or visually
+   (a line clamp, a `max-height` with `overflow: hidden`, `visibility`,
+   `opacity`, a transparent colour, a tiny font size). **For anything else the
+   proof is the two 360 px screenshots named in Build 4**, opened and read, and
+   the Log says what they show.
 4. `npm run check` passes, and `npm run e2e:ledger` passes with the new cases and
    every existing one.
 
@@ -523,3 +526,21 @@ file, extracted by script, on `main`'s styles at `f05108d2` (the farm and
 
 Not measured: how the same fonts measure on CI's `ledger.yml` e2e job (the numbers
 are this container's Chromium); gate 1 said the same.
+
+**2026-10-31 — gate 2 (PASS, `0ea1c790`): owner's answer on its open decision.**
+The reports of gates 1 and 2 are on the thread of pull request #682, which is the
+review record in full: this filing carries no `## Review` section and the ticket
+stays `ready`. Gate 2 found the `nameIsWhole` assertion green for a name hidden
+vertically or visually (a one-line `-webkit-line-clamp`, `max-height` with
+`overflow: hidden`, `height` with `overflow-y: hidden`, `visibility: hidden`,
+`opacity: 0`, `color: transparent`, a half `clip-path`, `font-size: 1px`), so
+`Done when` 3 said more than the assertion proves. The options, and the owner's
+answer, relayed by the coordinator:
+
+- Options: (A) reword `Done when` 3 so the assertion proves only "no ancestor cuts
+  the name sideways and the window holds it", with the screenshot read as the proof
+  for anything else; (B) extend the hook to compare the text's vertical extent with
+  each clipping ancestor's box.
+- Chosen: **(A)**, the gate's recommendation.
+- Done: `Done when` 3 now says the assertion proves that part, and that the two
+  360 px screenshots, opened and read, are the proof for anything else.
