@@ -419,3 +419,8 @@ real consumer.
   local plugin, passed it once. The two configs' `dist/app` trees differ only
   in the order of attributes on the entry tag (`diff -r`). Then HEAD passed 2
   of 2 at 39 s each. The cause, environmental or a flake, is not measured.
+- **CodeQL at `46b89313`** flagged one new alert, "Bad HTML filtering
+  regexp" ("does not match upper case <SCRIPT> tags"), on
+  `packages/ui/test/vite-plugin.test.ts` line 65. That regexp and the plugin's
+  two matchers now carry the `i` flag, and the attribute-order case now
+  includes an upper-case `<SCRIPT>`.

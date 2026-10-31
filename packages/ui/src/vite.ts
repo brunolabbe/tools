@@ -12,7 +12,7 @@
 import type { Plugin } from "vite";
 
 /** A module script with a `src`, which is how Vite writes a built entry's tag. */
-const ENTRY_TAG = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc=)(?![^>]*\bblocking=)[^>]*>/gu;
+const ENTRY_TAG = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc=)(?![^>]*\bblocking=)[^>]*>/giu;
 
 /**
  * Adds `blocking="render"` to every external module script in the built HTML
@@ -23,7 +23,7 @@ export function addRenderBlocking(html: string): { html: string; tagged: number 
   let tagged = 0;
   const out = html.replace(ENTRY_TAG, (tag) => {
     tagged += 1;
-    return tag.replace(/^<script\b/u, '<script blocking="render"');
+    return tag.replace(/^<script\b/iu, '<script blocking="render"');
   });
   return { html: out, tagged };
 }

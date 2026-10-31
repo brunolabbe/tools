@@ -62,7 +62,7 @@ test("a real vite build: the entry Vite writes comes out render-blocking", async
   });
 
   const built = fs.readFileSync(path.join(outDir, "index.html"), "utf8");
-  const entries = [...built.matchAll(/<script\b[^>]*>/gu)].map((match) => match[0]);
+  const entries = [...built.matchAll(/<script\b[^>]*>/giu)].map((match) => match[0]);
   expect(entries).toHaveLength(1);
   expect(entries[0]).toMatch(/\bsrc="\/assets\/[^"]+\.js"/u);
   expect(entries[0]).toContain('blocking="render"');
@@ -71,10 +71,11 @@ test("a real vite build: the entry Vite writes comes out render-blocking", async
 test("tags an external module script whatever order its attributes come in", () => {
   const { html, tagged } = addRenderBlocking(
     '<script crossorigin src="/assets/a.js" type="module"></script>' +
-      '<script type="module" crossorigin src="/assets/b.js"></script>',
+      '<script type="module" crossorigin src="/assets/b.js"></script>' +
+      '<SCRIPT type="module" src="/assets/c.js"></SCRIPT>',
   );
-  expect(tagged).toBe(2);
-  expect(html.match(/blocking="render"/gu)).toHaveLength(2);
+  expect(tagged).toBe(3);
+  expect(html.match(/blocking="render"/gu)).toHaveLength(3);
 });
 
 test("leaves an inline module, a classic script and an already-blocking tag alone", () => {
