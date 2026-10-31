@@ -6514,3 +6514,47 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - Gate 3, narrow and needing no owner answer, ran on gate 2's high only and passed in 12 minutes.
 - Retiring lg-66's builder at $19.30 for a fresh one: the fresh builder's two rounds cost $15.33.
 - Starting lg-76 from lg-71's landed head, before the merge, kept three tickets moving; the merge of main afterwards needed no choice.
+
+### Batch 2026-10-31 (tools-54, lg-69 lg-74 lg-67, lg-80 filed) — base f05108d2
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | aabcef7460080c2cc | seam-mapper, five ledger candidates (+ lg-78) | 2m28s / 2m28s | 0 | $0.4413 |
+| #679 | open, ready, green at 1a27374f | Sonnet 5.5 / high | af7277923169eb6d4 | builder-standard, lg-69 | 16m47s / 15m52s | 0 | $2.7108 |
+| #679 | as above | Opus 5.5 / high | a384e6abcbc30f56f | ticket-reviewer-opus, lg-69 gate 1 | 14m00s / 13m21s | 0 | $4.1441 |
+| #679 | as above | Sonnet 5.5 / high | ae3eacab23d9344e2 | fixer, lg-69 two lows at landing + landing | 3m26s / 3m20s | 0 | $0.4358 |
+| #680 | merged ae50a8e2 | Opus 5.5 / high | a79a2d9a7348ed2ba | builder-hard, lg-74 | 16m55s / 16m39s | 0 | $6.5995 |
+| #680 | merged ae50a8e2 | Sonnet 5.5 / xhigh | ad8738ed61dd7b510 | ticket-reviewer-sonnet, lg-74 gate 1 | 15m11s / 14m33s | 0 | $3.0590 |
+| #680 | merged ae50a8e2 | Sonnet 5.5 / high | ae23f1b723c5ae207 | fixer, lg-74 answers + one low at landing + landing | 3m46s / 3m40s | 0 | $0.5376 |
+| #681 | open, ready, CI at e390f840 | Opus 5.5 / high | ab39d5ad4c01e367f | builder-hard, lg-67 | 26m32s / 25m44s | 0 | $10.3909 |
+| #681 | as above | Sonnet 5.5 / xhigh | a8bd2cff869a7d969 | ticket-reviewer-sonnet, lg-67 gate 1 | 15m27s / 14m52s | 0 | $3.2843 |
+| #681 | as above | Sonnet 5.5 / high | afa7141de4a8bf99d | fixer, lg-67 answers + rewording + two lows at landing + landing, held as a draft for merge order | 6m10s / 5m58s | 0 | $1.0028 |
+| #681 | as above | Haiku 5.5 / high | a8146b504991490a2 | builder-mechanical maintenance, merge of main after #680 (one additive conflict), ready | 3m53s / 3m50s | 0 | $0.0456 |
+| #682 | open, ready, green at 0a2c7dc2 | Haiku 5.5 / high | a76554522fee5f7d9 | builder-mechanical maintenance, lg-80 filing + two resumes (household measurement; owner's fold) | 8m28s / 7m55s | 0 | $0.5352 |
+| #682 | as above | Sonnet 5.5 / xhigh | a75b7d428f782c67a | ticket-reviewer-sonnet, lg-80 gate 1 (narrow) | 8m08s / 7m25s | 0 | $1.0958 |
+| #682 | as above | Sonnet 5.5 / high | ae7c0e2b68d3132d6 | builder-standard (fresh; the filer's bound was spent), lg-80 round 1 | 7m32s / 7m30s | 0 | $1.2068 |
+| #682 | as above | Sonnet 5.5 / xhigh | ab94197ccb5a79439 | ticket-reviewer-sonnet, lg-80 gate 2 (narrow) | 14m08s / 12m49s | 0 | $1.7347 |
+| #682 | as above | Sonnet 5.5 / high | ac6cf04efb1443171 | fixer, lg-80 answer + two lows at landing + ready (no `--land`) | 3m29s / 3m12s | 0 | $0.5355 |
+| — | — | Opus 5.5 / high | orchestrator ac524f43 | orchestrator (floor) | 1h22m19s / 2h17m28s | 0 | $6.2111 |
+| | | | | **total** (rates read 2026-10-10) | 4h08m40s | 0 | **$43.9707** |
+
+**Tickets:**
+- lg-69 → #679: gate 1 PASS (Opus), four lows; owner chose the two Log corrections at landing (the CI figure for Done when 2, read from vitest's slow-test lines; the two `twoTaxed` twins differ in `chargedTo`). Total $7.29.
+- lg-74 → #680 (merged ae50a8e2): builder's open decision (`HouseholdMember.address` becomes `string | null`) answered (a) before the gate; its proposed ledger `CLAUDE.md` line declined for this review. Gate 1 PASS, five lows: F3 (stale comments) fixed at landing; F1 not offered, since my dry run of its swap failed the branch's own `directory.test.ts`; F2 accepted (b) over the gate's (a) file a ticket; F4 recorded. Total $10.20.
+- lg-67 → #681: four answers before the gate (Describe answers 200 `ok: false`; Done when 10 reworded to what was built; three new error codes accepted; `CLAUDE.md` line declined). Gate 1 CONCERNS: F1 med, open decision (Build 2 says first line, `bank-preamble` needs any line) → owner (a) reword; F6 contract additions accepted; F3 (a test pinning `-007.50`) and F4 (dead export) fixed at landing by owner choice; F2, F5, F7 recorded. Held as a draft behind #680, then main merged in (e390f840) and marked ready. Done when 13 `awaiting` the owner's paid read. Total $14.72.
+- lg-80 → #682 (filed): the Admin overflow lg-74's gate 1 dropped as not that branch's, re-run by me on f05108d2 (763 px at 360) so the filing was in hand; the 80-character household name measured (1005 / 1341 px, re-run by me) and folded in by owner choice. Gate 1 CONCERNS: med F1 (Done when 3 passed by a fix that clips) → round on a fresh builder; gate 2 PASS, its open low → owner (A) reword Done when 3; two lows fixed at landing. Total $5.11.
+
+**Defects in the skill:**
+
+1. `roles/reviewer.md`, _What makes a gate worth its cost_, "Reproduce, do not assess" — tells a gate to copy its own spec "into the package's `test/`", the vitest shape; an e2e probe must go in `tools/<tool>/e2e/` and end `.spec.ts`. Reported by lg-80's gates 1 and 2 and noted by lg-74's gate 1. Reproduction of the page text: `sed -n 61p .claude/skills/orchestrate-tickets/roles/reviewer.md` → "under a project's `include`: copy it into the package's `test/`, run it, and". The run is relayed, not re-run by me: a probe named `probe.ts` in `tools/ledger/e2e/`, then `npx playwright test -c tools/ledger/playwright.config.ts -g probe` → no tests found.
+2. `review-ticket/gate.md`, _Severity and the gate_ — gives no grade for a brief that contradicts itself, where the test asserting the opposite of one `Done when` line is the proof of another. lg-67's gate 1 graded CONCERNS and asked the orchestrator to regrade to high "if you read `gate.md` the other way". Reproduction: `git show f05108d2:tools/ledger/docs/work/lg-67-read-a-bank-csv-through-a-described-layout-into-the-inbox.md | grep -n 'first line'` → line 421 "a CSV candidate when it holds no NUL byte and its first line holds a comma" and line 485 "file whose first line holds no comma, semicolon or tab". Done when 2, 7 and 12 serve `bank-preamble`, whose first line holds none.
+3. `roles/common.md`, _Your scratch directory_ — repeats tools-a2's item 3. A bare `import()` inside a scratch `.mts` resolves from the file's location, not the working directory. Relayed from lg-67's builder, not re-run by me: `node --import tsx …/scratchpad/lg-67/build/csv-describe-fixture.mts <tree>`, run from the worktree root with `await import("better-sqlite3")` → `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'better-sqlite3' imported from …/csv-describe-fixture.mts`. `createRequire(<worktree>/tools/ledger/api/package.json)` fixed it.
+4. `roles/builder.md`, _Set up_ — "Run the merge with no `-m`" leaves no room for the `Co-Authored-By` trailer that `roles/common.md` requires on every commit. lg-67's maintenance merge used `git commit -F <file>` with git's default subject plus the trailer, and the hook accepted it. Reproduction of the pages: `sed -n 120,122p .claude/skills/orchestrate-tickets/roles/builder.md` → "Run the merge with no `-m`: the commit-msg hook bypasses git's own `Merge remote-tracking branch…` subject"; `grep -n Co-Authored-By .claude/skills/orchestrate-tickets/roles/common.md` → `71:- **End every commit message with the \`Co-Authored-By\` trailer**`. That `--no-edit` gives no trailer is relayed, not re-run.
+5. `.claude/agents/seam-mapper.md` — "keep it under about forty lines", while `SKILL.md` step 2 has the checkpoint quote each candidate's open decisions "as the seam map quotes them". This batch's map flagged the conflict and ran past the cap. Reproduction: `grep -n forty .claude/agents/seam-mapper.md` → `53:Nothing but this, and keep it under about forty lines, **grouped by tool**`.
+6. `roles/fixer.md`, _Landing_, the bullet on a pull request that only files a ticket — says "the ticket's Log names the thread" but gives no form or place for the sentence. lg-80's lander put it in its first landing entry. Reproduction: `sed -n 94,97p .claude/skills/orchestrate-tickets/roles/fixer.md` → "…its gate's full report goes on the thread, the body says so, and the ticket's Log names the thread."
+
+**Worked, and worth keeping:**
+- Every open decision went to the owner before the next agent: lg-74's one and lg-67's four before their gates, and each gate's before its landing. No gate graded `unproven (open decision)`, and no ticket needed a builder round.
+- Dry-running a below-floor fix before offering it at landing: lg-74's F1 swap failed a branch test, so it was not offered.
+- Re-running a gate's dropped reproduction on `main` before filing made lg-80 an in-hand maintenance filing ($0.54). Measuring the household name before asking let the owner fold it in on numbers.
+- vitest's default reporter lists every test slower than 300 ms, so a test's absence from a CI log is a CI reading. It proved lg-69's Done when 2, which the builder had left unproven.
