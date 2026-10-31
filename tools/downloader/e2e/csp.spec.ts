@@ -275,6 +275,11 @@ test("a script from any other origin is still refused, before it is fetched", as
  * moment `data-theme` arrives on `<html>`, and the browser's own `first-paint`
  * entry says when it painted. The stamp is taken in a `MutationObserver`
  * callback, a microtask after the write, so it can only read late, never early.
+ *
+ * Calling `bootTheme` before `createRoot` is not enough by itself: a module
+ * script is deferred, and without `blocking="render"` on the entry Chromium
+ * painted at 28 ms and the theme arrived at 68 ms (repo-131's build, this test
+ * red). The attribute is what makes the order hold.
  */
 async function stampThemeArrival(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -332,12 +337,15 @@ test("the static terms page takes the same stored theme from its module, with no
   await page.emulateMedia({ colorScheme: "light" });
   await page.context().addCookies([{ name: "webtools-theme", value: "dark", url: baseURL ?? "" }]);
   await collectCspViolations(page);
+  await stampThemeArrival(page);
 
   const response = await page.goto("/terms.html");
 
   // The page is a document, so it carries the policy its script has to pass.
   expect(response?.headers()["content-security-policy"]).toBe(EXPECTED_POLICY);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const { themeSetAt, firstPaint } = await themeTimings(page);
+  expect(themeSetAt ?? Infinity).toBeLessThan(firstPaint ?? -Infinity);
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(DARK_BG);
   expect(await cspViolationsOn(page)).toEqual([]);
 });

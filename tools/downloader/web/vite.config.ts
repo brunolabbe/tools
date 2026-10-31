@@ -51,7 +51,26 @@ const HOST = process.env["HOST"] ?? false;
 
 export default defineConfig({
   root,
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      // The bundle sets the theme before React renders, but a module script is
+      // deferred, so a browser may paint the page once before it runs: a light
+      // flash for a reader who chose dark (repo-131, measured). `blocking="render"`
+      // holds the first paint until the entry has run. Vite writes the built
+      // entry's tag itself and drops the attribute from `index.html`'s, so it is
+      // put back here.
+      name: "render-blocking-entry",
+      transformIndexHtml: {
+        order: "post",
+        handler: (html) =>
+          html.replace(
+            '<script type="module" crossorigin',
+            '<script type="module" blocking="render" crossorigin',
+          ),
+      },
+    },
+  ],
   define: { __TOOL_VERSION__: JSON.stringify(TOOL_VERSION) },
   server: {
     host: HOST,
