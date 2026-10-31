@@ -328,6 +328,23 @@ describe("Done when 4 and 5: the moved reader", () => {
     );
   });
 
+  test("a signed leading zero stays text too: -007.50 is a problem, -007 a detail, -0.50 a number", () => {
+    const signed = [
+      "Date,Detail,Amount,Balance",
+      "2024-01-01,-007,-0.50,100.50",
+      "2024-01-02,Cheque,-007.50,93.00",
+    ].join("\n");
+    const sheet = csvSheet(CSV_SHEET_NAME, signed);
+    expect(sheet.rows[1]?.[1]?.value).toEqual({ kind: "text", text: "-007" });
+    expect(sheet.rows[1]?.[2]?.value).toEqual({ kind: "number", number: -0.5 });
+    expect(sheet.rows[2]?.[2]?.value).toEqual({ kind: "text", text: "-007.50" });
+    const reading = readWorkbook([sheet], { people: [], layout: FOUR });
+    expect(reading.unfiled.map((row) => [row.detail, row.amountCents])).toEqual([["-007", -50]]);
+    expect(reading.problems).toContainEqual(
+      expect.stringMatching(/C3: the amount is not a number/u),
+    );
+  });
+
   test("the seven files as written hold no shape the reader refuses", () => {
     for (const name of CSVS) {
       expect(unreadShapes(textOf(name)), name).toEqual([]);
