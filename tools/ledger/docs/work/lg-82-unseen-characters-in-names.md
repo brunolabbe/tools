@@ -386,7 +386,7 @@ the error's `reason`, which this ticket does not trace further. None of these re
 stored person or household name. The one that does is `rate-limit.ts:105`, in
 command 16.
 
-16. `sed -n 56,68p tools/ledger/api/src/rate-limit.ts`, the key a rate-limited person's request logs
+16. `sed -n 57,69p tools/ledger/api/src/rate-limit.ts`, the key a rate-limited person's request logs
 
 ```
 /**
@@ -450,7 +450,7 @@ rate-limited person request.
 The lines moved by 72 from main's `addHousehold` (626) and `#readMember` (869). The
 gate measured the same shift on lg-77's head `aaf6828c`.
 
-19. `node --no-warnings check-carry.mjs`, whether a SQL `CHECK` can carry the set. The script builds the CHECK from GLOB classes and a byte-count NUL guard (the same guard the `id` column uses, `db/directory-schema.ts:33–35`), and compares its verdict with the regex on 15 samples. Source:
+19. `node --no-warnings check-carry.mjs`, whether a SQL `CHECK` can carry the set. The script builds the CHECK from GLOB classes and a search for a NUL byte, and compares its verdict with the regex on 15 samples. Source:
 
 ```js
 // check-carry.mjs: can a SQLite CHECK carry the UNSEEN set? Builds the CHECK from
@@ -596,7 +596,7 @@ admin's JSON as `message`, which the web displays.
 **Log sink**
 
 - **L1** `rate-limit.ts:105`, the `rate limited` warning: its `key` is
-  `household:person-id` (`personKey`, `rate-limit.ts:56–68`). For a person added before
+  `household:person-id` (`personKey`, `rate-limit.ts:57–69`). For a person added before
   lg-76 the id is the name typed then (command 16).
 
 **Excluded, with the reason**
@@ -634,7 +634,7 @@ it and when.
   `directory.ts:53`. Costs: a check in each of the five write methods the Build names,
   and a refusal sentence for each, raised as `BAD_REQUEST` as the name rules are. Or the
   same set as a SQL `CHECK`, in the table rebuild question 2 may need. Command 19 builds
-  one from GLOB classes and a byte-count NUL guard, and it agrees with the regex on 15
+  one from GLOB classes and a search for a NUL byte, and it agrees with the regex on 15
   of 15 samples. Rows already stored keep their characters until question 2 is acted
   on. The set also refuses an interior newline and tab (command 7), and U+200C and
   U+200D, which some names carry legitimately: a family emoji written as a ZWJ sequence
@@ -643,8 +643,11 @@ it and when.
   whole.
 - **(b) Escape at every text sink.** The sinks are T1–T8, M1–M5 and L1, fourteen in
   all. Costs: an escape helper, one call at each sink, and every new sink has to
-  remember it. It stops terminal injection, which is what `list` does with ESC and BEL,
-  and what the rate-limit log does with a pre-lg-76 name. It does not stop an invisible
+  remember it. It stops terminal injection, which is what `list` does with ESC and BEL.
+  The rate-limit log line is JSON from pino, which escapes ESC, BEL, NUL and LF already
+  and passes DEL, the C1 controls and the zero-width characters raw, so for a pre-lg-76
+  name L1 is a sink for those raw characters (U+009B is a control sequence introducer on
+  a terminal that honours C1). It does not stop an invisible
   name from reading as a blank or as another name, which is what a zero-width character
   does on a screen; the web would need its own rule. For M1–M5 the owner also chooses
   where the escape sits: in the sentence builders in `directory.ts`, which also changes
@@ -774,7 +777,26 @@ waits for a separate answer.
   answer. F10: the ZWJ and ZWNJ cost is in question 1, command 20.
 - **Found this round, not in the gate's list.** L1: the `rate limited` warning logs
   `household:person-id`, and a person added before lg-76 has the typed name as its id,
-  so the log carries a stored name (`rate-limit.ts:56–68`, `:105`). It is a sink.
+  so the log carries a stored name (`rate-limit.ts:57–69`, `:105`). It is a sink.
 - **Outside this ticket.** The backfill report prints bank-row and card-line text
   (command 14). That text is not a name, so it is not in scope; it may need its own
   ticket if it can carry an unseen character.
+- **Gate records.** This pull request only files the ticket, so no `## Review` section is
+  committed. Gate 1 (CONCERNS, on `2b2c298f`) and gate 2 (PASS, on `a20d919e`) are
+  posted in full on the pull request thread, #688, gate 1 first.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, F6 — "say a search for a NUL
+  byte and drop the same guard the id column uses". Command 19 and question 1 (a) now
+  say "a search for a NUL byte", and the `id` column clause is gone. The proof is the
+  count of removed lines holding the clause, from `git diff a20d919e` on the ticket,
+  `grep -c '^-.*the same guard the'` → `1`. The script's own comment in command 19's
+  source still says "byte-count NUL guard", quoted as it ran; the lander left it.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, F11 — "say which characters of
+  P reach the log raw". Question 1 (b) now says the log line is pino JSON, which escapes
+  ESC, BEL, NUL and LF and passes DEL, the C1 controls and the zero-width characters raw,
+  so L1 is a sink for those. The proof is the same diff,
+  `grep -c '^-.*what the rate-limit log does with a pre-lg-76 name'` → `1`.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, F12 — "change the range to the
+  one that prints the block". The range is now `sed -n 57,69p` in command 16, in L1 and
+  in the Log. `sed -n 57,69p tools/ledger/api/src/rate-limit.ts` prints the quoted
+  block, doc comment to closing brace, and `sed -n 56,68p` printed a blank line first.
+  The proof is the same diff, `grep -c '^-.*sed -n 56,68p'` → `1`.
