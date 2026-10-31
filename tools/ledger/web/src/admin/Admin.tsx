@@ -2,7 +2,8 @@
  * The admin's screen (lg-22): every household and its members, with adding and
  * removing any member, changing a member's address (lg-34), renaming a person
  * (lg-33), retiring a person from the books at the next close or bringing them
- * back (lg-35), and creating a household by adding its first person (lg-71).
+ * back (lg-35), creating a household by adding its first person (lg-71), and
+ * renaming any household (lg-77).
  * Only an admin is answered (`LEDGER_ADMINS`), whether or not they are in a
  * household, and being one shows no household's books.
  *
@@ -25,6 +26,7 @@ import {
   adminAddMember,
   adminChangeAddress,
   adminRemoveMember,
+  adminRenameHousehold,
   adminRenamePerson,
   adminRetirePerson,
   createHousehold,
@@ -36,6 +38,7 @@ import {
   NO_EMAIL,
   emptyNameHint,
 } from "../household/MemberForm.tsx";
+import { HouseholdName } from "../household/HouseholdName.tsx";
 import { byShownName, shownName } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
@@ -166,6 +169,11 @@ function HouseholdCard(props: {
     return added;
   };
 
+  const rename = async (name: string): Promise<void> => {
+    await adminRenameHousehold(household.id, { name });
+    await onChange();
+  };
+
   const remove = async (address: string): Promise<void> => {
     setBusy(true);
     setProblem(null);
@@ -182,7 +190,13 @@ function HouseholdCard(props: {
 
   return (
     <section aria-labelledby={headingId} className="card">
-      <h3 id={headingId}>{label}</h3>
+      <HouseholdName
+        level="h3"
+        headingId={headingId}
+        title={label}
+        name={household.name}
+        onRename={rename}
+      />
       {household.members.length === 0 ? (
         <p className="muted">Nobody yet.</p>
       ) : (

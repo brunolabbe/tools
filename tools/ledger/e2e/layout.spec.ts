@@ -429,6 +429,10 @@ const CARDS: Readonly<Record<string, number>> = {
   "Import (read)": 3,
   // lg-67: a CSV has no bucket label, so the date column and the checks.
   "Import CSV (read)": 2,
+  // lg-77: the household page titled by a long name, and a rename open on each screen.
+  "Household (long household name)": 2,
+  "Household (renaming)": 2,
+  "Admin (renaming)": 3,
 };
 
 /** The tabs whose screens carry a radio group, with how many radios each draws. */
@@ -674,4 +678,86 @@ test("Import fits a phone and a desktop once a CSV is read", async ({ page }, te
   await expect(page.getByRole("main")).not.toContainText("Which bucket each label files in");
   await page.getByText("The dry run’s report").click();
   await fitsBothWidths(page, testInfo, "Import CSV (read)");
+});
+
+/**
+ * lg-77: the household page is titled by the household's name, with a Rename
+ * beside it, and both screens open a field to rename it. The longest name the
+ * API takes, 80 characters with no space to break at, is the one a title
+ * overflows on (lg-80 measured it on the Admin card). The seed's household is
+ * shared by the run, so the long name is the household answer's, given here,
+ * and no rename is saved.
+ */
+const LONG_HOUSEHOLD_NAME = "H".repeat(80);
+
+/**
+ * The title holding `name` is drawn inside the window: `scrollWidth` reads a
+ * title an ancestor cut at its edge as fitting, so the text's own box is read
+ * (a `Range`, which counts text spilling out of its element).
+ */
+function titleInsideWindow(name: string, screen: string) {
+  return async (page: Page, width: number): Promise<void> => {
+    const boxes = await page.getByRole("heading", { name }).evaluateAll((headings) =>
+      headings.map((heading) => {
+        const range = document.createRange();
+        range.selectNodeContents(heading);
+        const { left, right } = range.getBoundingClientRect();
+        return { left, right, inner: window.innerWidth };
+      }),
+    );
+    const at = `${screen} at ${String(width)} px`;
+    expect(boxes.length, `${at}: the title`).toBeGreaterThan(0);
+    for (const box of boxes) {
+      expect
+        .soft(box.left, `${at}: the title starts at ${String(box.left)}`)
+        .toBeGreaterThanOrEqual(0);
+      expect
+        .soft(box.right, `${at}: the title ends at ${String(box.right)} in ${String(box.inner)}`)
+        .toBeLessThanOrEqual(box.inner);
+    }
+  };
+}
+
+test("Household fits a phone and a desktop titled by an 80-character household name, and renaming it", async ({
+  page,
+}, testInfo) => {
+  expect(LONG_HOUSEHOLD_NAME).toHaveLength(80);
+  await page.route("**/api/households/*", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const body = (await (await route.fetch()).json()) as { household: { id: string } };
+    await route.fulfill({
+      json: { ...body, household: { ...body.household, name: LONG_HOUSEHOLD_NAME } },
+    });
+  });
+
+  await openTab(page, "Household");
+  await expect(page.getByRole("main")).toContainText(/sam@example\.test added as sam/u);
+  await expect(page.getByRole("heading", { name: LONG_HOUSEHOLD_NAME, level: 2 })).toBeVisible();
+  await fitsBothWidths(
+    page,
+    testInfo,
+    "Household (long household name)",
+    titleInsideWindow(LONG_HOUSEHOLD_NAME, "Household (long household name)"),
+  );
+
+  await page.getByRole("button", { name: `Rename ${LONG_HOUSEHOLD_NAME}` }).click();
+  await expect(page.getByLabel(`New name for ${LONG_HOUSEHOLD_NAME}`)).toHaveValue(
+    LONG_HOUSEHOLD_NAME,
+  );
+  await fitsBothWidths(
+    page,
+    testInfo,
+    "Household (renaming)",
+    titleInsideWindow(LONG_HOUSEHOLD_NAME, "Household (renaming)"),
+  );
+});
+
+test("Admin fits a phone and a desktop with a household's rename open", async ({
+  page,
+}, testInfo) => {
+  await openTab(page, "Admin");
+  await expect(page.getByRole("main")).toContainText(/Home: alex and sam/u);
+  await page.getByRole("button", { name: "Rename Home: alex and sam" }).click();
+  await expect(page.getByLabel("New name for Home: alex and sam")).toHaveValue("Home");
+  await fitsBothWidths(page, testInfo, "Admin (renaming)");
 });

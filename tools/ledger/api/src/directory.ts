@@ -54,6 +54,17 @@ const UNSEEN = /[\u0000-\u001f\u007f-\u009f\u200b-\u200d\ufeff]/u;
 /** The sentence for an address that is not one, whichever method was given it. */
 const NOT_AN_ADDRESS = "That is not an email address.";
 
+/** The sentence for a household name that is not one, at creation or at a rename. */
+const HOUSEHOLD_NAME_RULE = "A household's name is 1 to 80 characters.";
+
+/**
+ * Each household under the name it is called by now (lg-77): its latest record
+ * in `household_names`, or the name the `households` row was created with.
+ */
+const CURRENT_HOUSEHOLDS = `SELECT households.id, coalesce(current_household_names.name, households.name) AS name
+  FROM households
+  LEFT JOIN current_household_names ON current_household_names.household_id = households.id`;
+
 /** How the host command signs the changes it makes; never an address. */
 export const OPERATOR = "operator";
 
@@ -128,6 +139,14 @@ export interface HeldPerson {
 export interface PersonRename {
   action: "name" | "rename";
   person: string;
+  name: string;
+  at: string;
+  by: string;
+}
+
+/** A household renamed, as the directory recorded it (lg-77). */
+export interface HouseholdRename {
+  action: "rename-household";
   name: string;
   at: string;
   by: string;
@@ -310,14 +329,15 @@ export class Directory {
    * removed, under which name, by whom and when. Filtered in the SQL, so no
    * other household's record is ever read for it.
    */
-  history(household: string): (MembershipChange | PersonAdded | PersonRename)[] {
+  history(household: string): (MembershipChange | PersonAdded | PersonRename | HouseholdRename)[] {
     // Each table read in its own id order, as migration 1 orders memberships
     // rather than by a timestamp two writers could tie, and the three merged by
     // time without re-sorting any among itself: a clock that stepped back
     // between two memberships leaves them in the order they were written
     // (lg-33's gate 1, F2). At the same instant a membership reads first, then
     // a person added without an email (lg-74), then a name, since a person is
-    // only named once one of the other two has added them.
+    // only named once one of the other two has added them, then a rename of the
+    // household itself (lg-77).
     const memberships = this.#db
       .prepare(
         `SELECT address, person, action, changed_at AS at, changed_by AS by
@@ -347,17 +367,69 @@ export class Directory {
       named.add(rename.person);
       return { action: first ? "name" : "rename", ...rename };
     });
-    return mergeByTime(mergeByTime(memberships, added), renames);
+    const householdRenames = (
+      this.#db
+        .prepare(
+          `SELECT name, named_at AS at, named_by AS by
+           FROM household_names WHERE household_id = ? ORDER BY id`,
+        )
+        .all(household) as Omit<HouseholdRename, "action">[]
+    ).map((row): HouseholdRename => ({ action: "rename-household", ...row }));
+    return mergeByTime(mergeByTime(mergeByTime(memberships, added), renames), householdRenames);
   }
 
+  /** Every household, by id, each under the name it is called by now (lg-77). */
   households(): Household[] {
-    return this.#db.prepare("SELECT id, name FROM households ORDER BY id").all() as Household[];
+    return this.#db.prepare(`${CURRENT_HOUSEHOLDS} ORDER BY households.id`).all() as Household[];
   }
 
+  /**
+   * The household, under the name it is called by now: its latest rename, or the
+   * name it was created with when it has none (lg-77).
+   */
   household(id: string): Household | undefined {
-    return this.#db.prepare("SELECT id, name FROM households WHERE id = ?").get(id) as
+    return this.#db.prepare(`${CURRENT_HOUSEHOLDS} WHERE households.id = ?`).get(id) as
       | Household
       | undefined;
+  }
+
+  /**
+   * Whether the directory holds the household, reading the `households` table
+   * alone. For `openReadOnly`, which does not migrate: a directory the API has
+   * not opened since lg-77 has no `current_household_names`, which `household()`
+   * reads, so the import asks this instead.
+   */
+  holdsHousehold(id: string): boolean {
+    return this.#db.prepare("SELECT 1 FROM households WHERE id = ?").get(id) !== undefined;
+  }
+
+  /**
+   * Renames a household (lg-77): a record appended to `household_names`, never
+   * an update of the `households` row, which keeps the name it was created with.
+   * The name rule is `addHousehold`'s, trimmed and 1 to 80 characters, and a
+   * household the directory does not hold is `HOUSEHOLD_NOT_FOUND`. Who may
+   * rename which household is the routes' to decide: its members, and an admin.
+   */
+  renameHousehold(rename: { household: string; name: string } & Change): Household {
+    refuseUnlessChange(rename);
+    if (typeof rename.household !== "string") refuse("The household is not a string.");
+    if (typeof rename.name !== "string") refuse(HOUSEHOLD_NAME_RULE);
+    const name = rename.name.trim();
+    if (name === "" || name.length > 80) refuse(HOUSEHOLD_NAME_RULE);
+    return this.#db
+      .transaction(() => {
+        if (!this.holdsHousehold(rename.household)) {
+          throw new AppError("HOUSEHOLD_NOT_FOUND", `There is no household "${rename.household}".`);
+        }
+        this.#db
+          .prepare(
+            `INSERT INTO household_names (household_id, name, named_at, named_by)
+             VALUES (?, ?, ?, ?)`,
+          )
+          .run(rename.household, name, rename.at.toISOString(), rename.by);
+        return { id: rename.household, name };
+      })
+      .immediate();
   }
 
   /**
@@ -628,7 +700,7 @@ export class Directory {
       refuse(
         `A household id is a lowercase UUID, or one lowercase word of a to z, at most 32 letters, and not con, prn, aux or nul; ${shown} is not.`,
       );
-    const notAName = (): never => refuse("A household's name is 1 to 80 characters.");
+    const notAName = (): never => refuse(HOUSEHOLD_NAME_RULE);
     // Typed strings, but a caller past the request schema can pass null, which
     // reached `.trim()` as a TypeError rather than these refusals (lg-24).
     // The type, not the value: String() throws on Object.create(null) and on an
@@ -983,14 +1055,15 @@ export class Directory {
 
   /**
    * `ADDRESS_ALREADY_A_MEMBER`, naming the person as they are shown, since an id
-   * may be a UUID (lg-76). The household is still named by its id; lg-77 names
-   * it by its name.
+   * may be a UUID (lg-76), and the household by the name it is called by now,
+   * since its id may be one too (lg-77).
    */
   #refuseTaken(standing: Membership): never {
     const shown = shownName(this.names(standing.household), standing.person);
+    const household = this.household(standing.household)?.name ?? standing.household;
     throw new AppError(
       "ADDRESS_ALREADY_A_MEMBER",
-      `That email already belongs to the household "${standing.household}", as ${shown}. Remove it first.`,
+      `That email already belongs to the household "${household}", as ${shown}. Remove it first.`,
     );
   }
 

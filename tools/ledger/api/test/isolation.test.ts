@@ -445,6 +445,19 @@ const WRITES: Write[] = [
       );
     },
   },
+  // lg-77: the household renamed, in the directory, under its own word.
+  {
+    route: "householdRename",
+    async run(app, h) {
+      await post(
+        app,
+        h,
+        ROUTES.householdRename.replace(":id", h.id),
+        { name: `${h.word} des deux` },
+        this.route,
+      );
+    },
+  },
   {
     route: "spendingCategories",
     async run(app, h, written) {
@@ -1056,6 +1069,7 @@ describe("the isolation sweep", () => {
         `POST ${ROUTES.adminHouseholds}`,
         `POST ${ROUTES.adminMembers}`,
         `POST ${ROUTES.adminMemberRemove}`,
+        `POST ${ROUTES.adminHouseholdRename}`,
         `POST ${ROUTES.adminMemberAddress}`,
         `POST ${ROUTES.adminPersonRename}`,
         `POST ${ROUTES.adminPersonRetire}`,

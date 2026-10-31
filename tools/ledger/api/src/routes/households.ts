@@ -4,13 +4,14 @@
  * Two kinds of route, and neither reads any books:
  *
  * - **A household's own**, under `/api/households/:id`, for its members only
- *   (`memberOf`): who belongs now and every change, and adding a member, or a
- *   person with no email who never signs in (lg-74). There is no removal here. Removing cuts a person off from their own records, so
+ *   (`memberOf`): who belongs now and every change, adding a member, or a
+ *   person with no email who never signs in (lg-74), and renaming the household
+ *   (lg-77). There is no removal here. Removing cuts a person off from their own records, so
  *   it goes through an admin (`docs/00-ANALYSIS.md` §7).
  * - **The admin's**, under `/api/admin/`, for an address in `LEDGER_ADMINS` only
  *   (`adminOf`), who need not be in any household: every household and its
- *   members, a new household made by adding its first person (lg-71), adding
- *   or removing any member, changing a
+ *   members, a new household made by adding its first person (lg-71), renaming
+ *   any household (lg-77), adding or removing any member, changing a
  *   member's address in one step (lg-34), and giving a person a shown name
  *   (lg-33); neither of those two changes an id, so neither touches the books.
  *   Retiring a person, or bringing them back (lg-35), is a request the
@@ -43,6 +44,7 @@ import {
   changeAddressRequestSchema,
   createHouseholdRequestSchema,
   removeMemberRequestSchema,
+  renameHouseholdRequestSchema,
   renamePersonRequestSchema,
   retirePersonRequestSchema,
 } from "@ledger/contract";
@@ -54,6 +56,7 @@ import type {
   CreateHouseholdResponse,
   HouseholdMember,
   HouseholdResponse,
+  HouseholdSummary,
   PersonName,
 } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -150,6 +153,9 @@ function namedHousehold(directory: Directory, id: string): Household {
   return household;
 }
 
+/** The refusal of a rename's body, from either route (lg-77). */
+const RENAME_HOUSEHOLD_SHAPE = "Send the name to call the household by, 1 to 80 characters.";
+
 const ADD_MEMBER_SHAPE =
   "Send an email, the name of the person it stands under, or both; a name with no email is a person who never signs in.";
 
@@ -195,6 +201,22 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
     }
   });
 
+  // lg-77: a member renames their own household. The record is signed with
+  // the caller's address, as an add is, and the households row is not touched.
+  app.post(ROUTES.householdRename, { onRequest: [asMember, write] }, async (request) => {
+    const id = householdIdOf(request);
+    const caller = memberOf(request, id);
+    const draft = renameHouseholdRequestSchema.safeParse(request.body);
+    if (!draft.success) throw new AppError("BAD_REQUEST", RENAME_HOUSEHOLD_SHAPE);
+    const body: HouseholdSummary = directory.renameHousehold({
+      household: id,
+      name: draft.data.name,
+      by: caller.email.toLowerCase(),
+      at: context.now(),
+    });
+    return body;
+  });
+
   // The admin's. The hooks ask `adminOf` for the bucket's key, so a non-admin
   // is refused there.
   app.get(ROUTES.adminHouseholds, { onRequest: adminRead }, async (request) => {
@@ -225,6 +247,21 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
       newId: context.newId,
     });
     const body: CreateHouseholdResponse = adminHousehold(directory, household);
+    return body;
+  });
+
+  // lg-77: an admin renames any household, as its members can.
+  app.post(ROUTES.adminHouseholdRename, { onRequest: adminWrite }, async (request) => {
+    const admin = adminOf(request);
+    const id = householdIdOf(request);
+    const draft = renameHouseholdRequestSchema.safeParse(request.body);
+    if (!draft.success) throw new AppError("BAD_REQUEST", RENAME_HOUSEHOLD_SHAPE);
+    const body: HouseholdSummary = directory.renameHousehold({
+      household: id,
+      name: draft.data.name,
+      by: admin,
+      at: context.now(),
+    });
     return body;
   });
 

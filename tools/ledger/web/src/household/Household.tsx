@@ -1,5 +1,6 @@
 /**
- * A member's own household (lg-22): who belongs now, every change to that and
+ * A member's own household (lg-22): its name, with a Rename beside it (lg-77),
+ * who belongs now, every change to that and
  * who made it, and adding a member. There is no removal here — removing cuts a
  * person off from their own records, so it goes through an admin
  * (`docs/00-ANALYSIS.md` §7).
@@ -11,9 +12,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppError } from "@ledger/contract";
 import type { AddMemberRequest, HouseholdResponse } from "@ledger/contract";
-import { addHouseholdMember, fetchHousehold } from "../api/households.ts";
+import { addHouseholdMember, fetchHousehold, renameHousehold } from "../api/households.ts";
 import { byShownName, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
+import { HouseholdName } from "./HouseholdName.tsx";
 import { MemberForm, NO_EMAIL } from "./MemberForm.tsx";
 import { MortgageSetting } from "./MortgageSetting.tsx";
 
@@ -28,12 +30,14 @@ type HistoryRecord = HouseholdResponse["history"][number];
  * Each record in words, oldest first. A person is named as they are shown now,
  * and a rename by what they were shown as before it and what after (lg-33). A
  * person's first name, given with the add that made them (lg-76), is no change
- * of its own: it is `null`, and only tells a later rename what they were.
+ * of its own: it is `null`, and only tells a later rename what they were. A
+ * rename of the household itself names who renamed it (lg-77).
  */
 function describeAll(history: readonly HistoryRecord[], names: ShownNames): (string | null)[] {
   const before = new Map<string, string>();
   return history.map((record) => {
     const by = record.by === "operator" ? "the operator" : record.by;
+    if (record.action === "rename-household") return `Household renamed ${record.name}, by ${by}`;
     if (record.action === "name") {
       before.set(record.person, record.name);
       return null;
@@ -101,7 +105,11 @@ export function Household({ id }: { id: string }): React.ReactElement {
   };
   // Every person the household has held, since a person once in the books can
   // return, in the order a person reads them (lg-76).
-  const people = [...new Set(history.map((record) => record.person))].toSorted(byShownName(names));
+  const people = [
+    ...new Set(
+      history.flatMap((record) => (record.action === "rename-household" ? [] : [record.person])),
+    ),
+  ].toSorted(byShownName(names));
   // Newest first, and only the records that are a change of their own.
   const described = describeAll(history, names)
     .map((text, index) => ({ text, at: history[index]?.at ?? "", index }))
@@ -112,12 +120,21 @@ export function Household({ id }: { id: string }): React.ReactElement {
     await refresh();
     return added;
   };
+  const rename = async (name: string): Promise<void> => {
+    await renameHousehold(id, { name });
+    await refresh();
+  };
 
   return (
     <>
       <section aria-labelledby="household-heading" className="card">
-        <h2 id="household-heading">Household</h2>
-        <p className="muted">{household.name}</p>
+        <HouseholdName
+          level="h2"
+          headingId="household-heading"
+          title={household.name}
+          name={household.name}
+          onRename={rename}
+        />
 
         <h3>Members</h3>
         <ul className="members">

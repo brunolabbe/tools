@@ -207,12 +207,9 @@ describe("membership", () => {
     directory.addMember({ household: "home", address: CASEY, person: "casey", ...CHANGE });
 
     expect(directory.membershipOf(CASEY)).toEqual({ household: "home", person: "casey" });
-    expect(directory.history("home").map((change) => change.person)).toEqual([
-      "alex",
-      "sam",
-      "sam",
-      "casey",
-    ]);
+    expect(
+      directory.history("home").flatMap((change) => ("person" in change ? [change.person] : [])),
+    ).toEqual(["alex", "sam", "sam", "casey"]);
     directory.close();
   });
 
@@ -231,7 +228,7 @@ describe("membership", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
     expect(db.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(before);
     insert(db, { address: CASEY, person: "casey" });
     expect(db.prepare("SELECT person FROM current_members ORDER BY person").all()).toEqual([
@@ -400,7 +397,7 @@ describe("a record is never replaced", () => {
         "INSERT OR REPLACE INTO households (id, name, created_at, created_by) VALUES ('home', 'Elsewhere', 'x', 'raw')",
       ),
     ).toThrow(/appended, never replaced/u);
-    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
     db.close();
   });
 
@@ -504,7 +501,7 @@ describe("a household id is never NULL", () => {
       directory.close();
 
       const after = new Database(file);
-      expect(after.pragma("user_version", { simple: true })).toBe(8);
+      expect(after.pragma("user_version", { simple: true })).toBe(9);
       expect(after.prepare("SELECT * FROM households ORDER BY id").all()).toEqual(households);
       expect(after.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(memberships);
       refusesNullIds(after);
@@ -1299,7 +1296,7 @@ describe("a household id that is a UUID", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
     expect(read()).toEqual(before);
     expect(db.pragma("foreign_key_check")).toEqual([]);
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -1509,7 +1506,8 @@ describe("a new person gets a generated id (lg-76)", () => {
     }
 
     expect(message).toBe(
-      `That email already belongs to the household "home", as casey. Remove it first.`,
+      // lg-77: the household by its name, "Home", never its id, "home".
+      `That email already belongs to the household "Home", as casey. Remove it first.`,
     );
     directory.close();
   });
@@ -1729,7 +1727,7 @@ describe("a person without an email (lg-74)", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(db.pragma("user_version", { simple: true })).toBe(9);
     expect(read()).toEqual(before);
     // Migration 5's refusals, made again, still refuse.
     expect(() =>
