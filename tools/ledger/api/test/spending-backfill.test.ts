@@ -21,6 +21,13 @@ import { backfillSpending } from "../src/spending-backfill.ts";
 import type { BackfillResult } from "../src/spending-backfill.ts";
 import { runSpendingBackfillCommand } from "../src/spending-backfill-command.ts";
 import { spendingCategories } from "../src/spending-categories.ts";
+import {
+  UNSEEN_CHARACTERS,
+  around,
+  aroundEscaped,
+  escaped,
+  writeUnseenMembers,
+} from "./helpers/unseen.ts";
 
 const AT = "2026-10-18T12:00:00.000Z";
 const NOW = new Date(AT);
@@ -399,5 +406,42 @@ describe("npm run backfill-spending:ledger (lg-53)", () => {
 
     expect(ran.code, ran.err).toBe(0);
     expect(overrides()).toEqual({ n: 4 });
+  });
+});
+
+// lg-82, T7: the `--as` refusal lists the household's members, and a name stored before
+// a character was refused in one is printed as its six-character escape.
+describe("the spending backfill's --as refusal and a stored name with a control or a zero-width character (lg-82)", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), "ledger-backfill-unseen-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("lists each of the 69 escaped", () => {
+    const directoryPath = path.join(dir, "directory.db");
+    writeUnseenMembers(directoryPath, NOW);
+    let err = "";
+
+    const code = runSpendingBackfillCommand(["--household", "home", "--as", "nobody"], {
+      stdout: () => undefined,
+      stderr: (text) => {
+        err += text;
+      },
+      env: { DATABASE_PATH: dir, DIRECTORY_PATH: directoryPath },
+      cwd: dir,
+      now: () => NOW,
+    });
+
+    expect(code).toBe(2);
+    expect(err).toContain('--as names "nobody", who is not a member of home');
+    for (const character of UNSEEN_CHARACTERS) {
+      expect(err, escaped(character)).toContain(aroundEscaped(character, "s", "s"));
+      expect(err, escaped(character)).not.toContain(around(character, "s", "s"));
+    }
   });
 });

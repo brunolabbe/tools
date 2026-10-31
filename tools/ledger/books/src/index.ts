@@ -17,6 +17,7 @@ export { formatCents, parseAmountCents, parseTypedAmountCents } from "./amount.t
 export { bufferAsOf, mortgageAsOf, splitCents } from "./buckets.ts";
 export type { BufferPosition, Contribution, FiledRow, Lead, MortgagePosition } from "./buckets.ts";
 export { peopleOn, retiredOn } from "./people.ts";
+export { escapeUnseen, hasUnseen } from "./unseen.ts";
 export { JointSplit, MortgageSplitter, NO_SPLIT_HISTORY, apportion } from "./split.ts";
 export type { MortgageSplitInput, RatioInput, SplitHistory, SplitRule } from "./split.ts";
 export type { RetirementInput } from "./people.ts";

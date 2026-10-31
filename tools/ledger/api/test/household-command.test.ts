@@ -9,10 +9,11 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { Directory } from "../src/directory.ts";
 import { runHouseholdCommand } from "../src/household-command.ts";
 import { ALEX, SAM } from "./helpers/access.ts";
+import { UNSEEN_CHARACTERS, around, aroundEscaped, escaped } from "./helpers/unseen.ts";
 
 const NOW = new Date("2026-10-12T12:00:00.000Z");
 
@@ -430,5 +431,277 @@ describe("a household renamed (lg-77)", () => {
     expect(ran.code).toBe(0);
     expect(ran.out).toContain("home  Our place\n");
     expect(ran.out).not.toContain("home  Home");
+  });
+});
+
+// lg-82: a name stored before the write paths refused the controls and the zero-width
+// characters may hold one, and no UPDATE can clean it. Each is written here past
+// `Directory`, as such a directory holds it, and every sink the command prints a name
+// through writes it as its six-character escape. The 69 characters of the population
+// are walked at each sink; a name's own LF and TAB are told from the output's by the
+// letters either side of them.
+describe("a stored name holding a control or a zero-width character (lg-82)", () => {
+  const household = (index: number): string =>
+    `00000000-0000-4000-8000-${(index + 1).toString(16).padStart(12, "0")}`;
+  const SHOWN = ["s", "s"] as const;
+  const BY_ID = ["i", "i"] as const;
+  const RETIRING = ["q", "q"] as const;
+  const RETIRED = ["r", "r"] as const;
+  const NO_EMAIL = ["n", "n"] as const;
+
+  /** An address whose domain holds `character`: it sits after the `@`, which the schema reads. */
+  const addressWith = (character: string, index: number): string =>
+    `u${String(index)}@ex${character}z.test`;
+  const addressEscaped = (character: string, index: number): string =>
+    `u${String(index)}@ex${escaped(character)}z.test`;
+
+  /** One household per character, named with it, holding people shown, or id'd, by it. */
+  function seed(): void {
+    Directory.open(directoryPath).close();
+    const db = new Database(directoryPath);
+    const insert = {
+      household: db.prepare(
+        "INSERT INTO households (id, name, created_at, created_by) VALUES (?, ?, 'x', 'operator')",
+      ),
+      member: db.prepare(
+        `INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
+         VALUES (?, ?, ?, 'add', 'x', 'operator')`,
+      ),
+      held: db.prepare(
+        "INSERT INTO people (household_id, person, added_at, added_by) VALUES (?, ?, 'x', 'operator')",
+      ),
+      named: db.prepare(
+        `INSERT INTO person_names (household_id, person, name, named_at, named_by)
+         VALUES (?, ?, ?, 'x', 'operator')`,
+      ),
+      retire: db.prepare(
+        `INSERT INTO retirements (household_id, person, action, recorded_at, recorded_by)
+         VALUES (?, ?, 'retire', 'x', 'operator')`,
+      ),
+      applied: db.prepare(
+        "INSERT INTO retirements_applied (retirement_id, from_date, applied_at) VALUES (?, '2026-04-01', 'x')",
+      ),
+    };
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const id = household(index);
+      insert.household.run(id, around(character));
+      insert.member.run(`m${String(index)}@example.test`, id, `p${String(index)}`);
+      insert.named.run(id, `p${String(index)}`, around(character, ...SHOWN));
+      // Before lg-76 a person's id was the name typed, and no `person_names` row says otherwise.
+      insert.member.run(`i${String(index)}@example.test`, id, around(character, ...BY_ID));
+      // An address stored before lg-52 and lg-57 refused a character in one (lg-82).
+      insert.member.run(addressWith(character, index), id, `u${String(index)}`);
+      insert.held.run(id, `n${String(index)}`);
+      insert.named.run(id, `n${String(index)}`, around(character, ...NO_EMAIL));
+      insert.held.run(id, `q${String(index)}`);
+      insert.named.run(id, `q${String(index)}`, around(character, ...RETIRING));
+      insert.retire.run(id, `q${String(index)}`);
+      insert.held.run(id, `r${String(index)}`);
+      insert.named.run(id, `r${String(index)}`, around(character, ...RETIRED));
+      insert.applied.run(insert.retire.run(id, `r${String(index)}`).lastInsertRowid);
+    });
+    db.close();
+  }
+
+  /** Neither the character raw between its letters, nor anything but its escape. */
+  function expectEscaped(
+    text: string,
+    character: string,
+    letters: readonly [string, string] = ["a", "b"],
+  ): void {
+    expect(text, escaped(character)).toContain(aroundEscaped(character, ...letters));
+    expect(text, escaped(character)).not.toContain(around(character, ...letters));
+  }
+
+  test("T1 and T2: list prints a household's name, a person's shown name and an id that is a name escaped", () => {
+    seed();
+
+    const ran = run("list");
+
+    expect(ran.code, ran.err).toBe(0);
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      expect(ran.out, escaped(character)).toContain(
+        `${household(index)}  ${aroundEscaped(character)}\n`,
+      );
+      expect(ran.out, escaped(character)).toContain(
+        `  ${aroundEscaped(character, ...SHOWN)} (p${String(index)})  m${String(index)}@example.test\n`,
+      );
+      expect(ran.out, escaped(character)).toContain(
+        `  ${aroundEscaped(character, ...BY_ID)}  i${String(index)}@example.test\n`,
+      );
+      expect(ran.out, escaped(character)).toContain(
+        `  ${aroundEscaped(character, ...NO_EMAIL)} (n${String(index)})  no email\n`,
+      );
+      expectEscaped(ran.out, character);
+      expectEscaped(ran.out, character, SHOWN);
+      expectEscaped(ran.out, character, BY_ID);
+    });
+  });
+
+  test("T3: add prints the new household's name and its first person's shown name escaped", () => {
+    for (const character of UNSEEN_CHARACTERS) {
+      // `add` names every household "Home" and refuses a person's name with one, so no
+      // data reaches this line; a directory that answered with one shows the sink.
+      const spy = vi.spyOn(Directory.prototype, "createHousehold").mockReturnValue({
+        household: { id: "stub", name: around(character) },
+        member: {
+          address: "x@example.test",
+          household: "stub",
+          person: around(character, "p", "p"),
+        },
+      });
+
+      const ran = run("add", "x@example.test");
+      spy.mockRestore();
+
+      expect(ran.code, ran.err).toBe(0);
+      expect(ran.out, escaped(character)).toContain(
+        `"${aroundEscaped(character)}", with x@example.test as ${aroundEscaped(character, "p", "p")}.`,
+      );
+      expectEscaped(ran.out, character);
+      expectEscaped(ran.out, character, ["p", "p"]);
+    }
+  });
+
+  test("T4: member prints the shown name escaped", () => {
+    for (const character of UNSEEN_CHARACTERS) {
+      // A person found by the name typed is shown as typed, which the directory refuses a
+      // character in, so no data reaches this line either; a stub shows the sink.
+      const spy = vi.spyOn(Directory.prototype, "addMemberByName").mockReturnValue({
+        address: "x@example.test",
+        household: "stub",
+        person: around(character, "p", "p"),
+      });
+
+      const ran = run("member", "stub", "x@example.test", "whoever");
+      spy.mockRestore();
+
+      expect(ran.code, ran.err).toBe(0);
+      expect(ran.out, escaped(character)).toContain(
+        `Added x@example.test to stub, as ${aroundEscaped(character, "p", "p")}.`,
+      );
+      expectEscaped(ran.out, character, ["p", "p"]);
+    }
+  });
+
+  test("T5: remove prints the shown name escaped, a person's and an id that is a name", () => {
+    seed();
+
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const shown = run("remove", `m${String(index)}@example.test`);
+      const byId = run("remove", `i${String(index)}@example.test`);
+
+      expect(shown.code, shown.err).toBe(0);
+      expect(shown.out, escaped(character)).toContain(
+        `where it was ${aroundEscaped(character, ...SHOWN)}. `,
+      );
+      expectEscaped(shown.out, character, SHOWN);
+      expect(byId.code, byId.err).toBe(0);
+      expect(byId.out, escaped(character)).toContain(
+        `where it was ${aroundEscaped(character, ...BY_ID)}. `,
+      );
+      expectEscaped(byId.out, character, BY_ID);
+    });
+  });
+
+  test("T6 and M5: the taken-address refusal on stderr names the household and the person escaped", () => {
+    seed();
+
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const ran = run("member", household(0), `m${String(index)}@example.test`);
+
+      expect(ran.code, ran.out).toBe(1);
+      expect(ran.err, escaped(character)).toContain(
+        `belongs to the household "${aroundEscaped(character)}", as ${aroundEscaped(character, ...SHOWN)}.`,
+      );
+      expectEscaped(ran.err, character);
+      expectEscaped(ran.err, character, SHOWN);
+    });
+  });
+
+  test("T6 and M4: the retiring and the retired refusals on stderr name the person escaped", () => {
+    seed();
+
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const retiring = run(
+        "member",
+        household(index),
+        `new${String(index)}@example.test`,
+        `q${String(index)}`,
+      );
+      const retired = run(
+        "member",
+        household(index),
+        `new${String(index)}@example.test`,
+        `r${String(index)}`,
+      );
+
+      expect(retiring.code, retiring.out).toBe(1);
+      expect(retiring.err, escaped(character)).toContain(
+        `${aroundEscaped(character, ...RETIRING)} is retiring at the next close.`,
+      );
+      expectEscaped(retiring.err, character, RETIRING);
+      expect(retired.code, retired.out).toBe(1);
+      expect(retired.err, escaped(character)).toContain(
+        `${aroundEscaped(character, ...RETIRED)} is retired from the books.`,
+      );
+      expectEscaped(retired.err, character, RETIRED);
+    });
+  });
+
+  // The cost of refusing at write time (the owner's answer (a), 2026-10-31): a person whose
+  // id is a name typed before lg-76 and holds a character is named by that id nowhere, since
+  // the id is typed to `member` and is read as a name is. The person stays, and is listed.
+  test("member cannot name a person by an id that holds one, and the person is still listed", () => {
+    seed();
+    const character = UNSEEN_CHARACTERS[27]!;
+
+    const ran = run("member", household(0), "new@example.test", around(character, ...BY_ID));
+
+    expect(ran.code).toBe(1);
+    expect(ran.err).toContain(
+      "A person's name cannot hold a control character or a zero-width one.",
+    );
+    expect(run("list").out).toContain(
+      `  ${aroundEscaped(character, ...BY_ID)}  i27@example.test\n`,
+    );
+  });
+
+  // lg-82, the second round: an address stored before lg-52 and lg-57 refused a character in
+  // one holds it, and `list` and `remove` print the address as it is stored.
+  test("list prints a stored address with each character of the 69 escaped", () => {
+    seed();
+
+    const ran = run("list");
+
+    expect(ran.code, ran.err).toBe(0);
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      expect(ran.out, escaped(character)).toContain(
+        `  u${String(index)}  ${addressEscaped(character, index)}\n`,
+      );
+      expect(ran.out, escaped(character)).not.toContain(addressWith(character, index));
+    });
+  });
+
+  test("remove prints the address it removed with each character of the 69 escaped", () => {
+    seed();
+
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const ran = run("remove", addressWith(character, index));
+
+      // The address is read as the removal reads it, which refuses whitespace and nothing
+      // else: a stored address with a TAB or a BOM in it cannot be removed at all, so
+      // nothing is printed for those, and the others are printed escaped.
+      if (/\s/u.test(character)) {
+        expect(ran.code, escaped(character)).toBe(1);
+        expect(ran.err, escaped(character)).toContain("That is not an email address.");
+        return;
+      }
+      expect(ran.code, `${escaped(character)} ${ran.err}`).toBe(0);
+      expect(ran.out, escaped(character)).toContain(
+        `Removed ${addressEscaped(character, index)} from `,
+      );
+      expect(ran.out, escaped(character)).not.toContain(addressWith(character, index));
+    });
   });
 });
