@@ -6,7 +6,7 @@ kind: work-package
 status: ready
 milestone: P6
 depends_on: []
-difficulty: standard
+difficulty: hard
 ---
 
 # lg-77 — Rename a household
@@ -82,3 +82,7 @@ land in separate pull requests.
 
 - 2026-10-25 — Filed from lg-71's second decision: a household named "Home" by
   default has to be renameable. Not blocked on lg-71; either can land first.
+- 2026-10-31 — Re-rated `standard` to `hard` by the owner at intake. Asked "Keep
+  standard" or "Re-rate to hard", after the seam map noted that lg-71, a
+  comparable shape, is `hard`, with no recommendation given; the owner chose
+  **re-rate to hard**.
