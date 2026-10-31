@@ -14,7 +14,8 @@
     "./tokens.css": "./src/tokens.css",
     ".": "./src/index.ts",
     "./theme": "./src/theme.ts",
-    "./chrome.css": "./src/chrome.css"
+    "./chrome.css": "./src/chrome.css",
+    "./vite": "./src/vite.ts"
   },
   "scripts": {
     "build": "tsc --build",
