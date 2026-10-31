@@ -58,7 +58,8 @@ line 313).
    comment saying why, in the style of the planner's and downloader's configs.
    Change nothing else.
 2. Leave the other limits as they are. Writes (60 a minute) and receipt and
-   workbook reads (5 a minute each) keep their own settings. A run that shows
+   workbook describes (5 a minute each, `RATE_LIMIT_RECEIPT_READS_PER_MINUTE` and
+   `RATE_LIMIT_WORKBOOK_DESCRIBES_PER_MINUTE`) keep their own settings. A run that shows
    `"rate limited"` under another scope is a finding for the Log, not part of
    this change.
 3. Measure the failure mode before trusting the grep: with the value set to
