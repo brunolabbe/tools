@@ -200,6 +200,9 @@ fs.writeFileSync(`${out}/redos.txt`, lines.join("\n") + "\n");
 process.stdout.write(lines.join("\n") + "\n");
 ```
 
+R1's probe takes about 3m45s on the landing (five calls of about 37 s at 352,000
+characters), so run it in the background.
+
 Measured at `3eb342af` on 2026-10-31 (the Landing column). In rows P9 and P15 the
 second marked tag is Vite's own modulepreload helper, `/assets/index-…js`, not
 the app's entry. Its body is the `modulepreload` polyfill. In P9 it is the page's
@@ -234,12 +237,14 @@ to `ready`. Then:
 4. Rebuild, run the probes again, and check Done when 1 against the Expected
    column.
 5. If Decision 1 is answered "accept R1", the answer commit rewords Done when 1
-   and 2 to what that option leaves. Done when 1 becomes: each row gives the
+   and 2 and 3 to what that option leaves. Done when 1 becomes: each row gives the
    landing verdict recorded in the table as accepted, with P9 and P15 as Decision
    2 records. Done when 2 becomes: the four
    existing cases still pass and P1 to P7 give their Expected in the probe, with no
-   new case. Done when 3 and 4 stand. With both rewords, the ticket can reach `done`
-   once Decision 2 is answered too.
+   new case unless Decision 2 answers its first option, which needs P9's and P15's.
+   Done when 3 becomes: R1 is unchanged and the comment above `ENTRY_TAG` records
+   it. Done when 4 stands. With these rewords, the ticket can reach `done` once
+   Decision 2 is answered too.
 
 ## Decision — open
 
@@ -313,11 +318,16 @@ needs the most judgement. Parse5 would be `standard`; accepting R1 would be
    records. The four existing cases still pass, and P1 to P7 give their Expected
    in the probe. Run with `npm test -- --project core`.
 3. R1: the median for the 352,000-character row in `repo-133-redos.mts`'s output
-   is under 1,000,000 µs (one second). The landing's median is 37,336,885 µs, so it
-   misses. A one-pass `indexOf` scan, timed the same way as a stand-in in round 1,
-   has a median of about 4 µs at that size, so a linear scan meets it. The real
-   remedies are unmeasured. Under Decision 1's
-   accepted option, R1 is unchanged and the comment above `ENTRY_TAG` records it.
+   is under 1,000,000 µs (one second), and the 352,000-character median is under
+   eight times the 88,000-character median. The landing's median is 37,336,885 µs,
+   so it misses the bound. A one-pass `indexOf` scan, timed the same way as a
+   stand-in, sits five orders of magnitude under the bound, so a linear scan meets
+   it. The eight-times threshold rests on gate 2's single run of four subjects, for
+   the ratio between the last two sizes: a one-pass scan 1.8, parse5 with
+   `sourceCodeLocationInfo` 3.2, an `indexOf` scan that forgets a missing closer
+   (quadratic) 15.1, and the landing 16.9. One run each, so eight is a direction to
+   re-run on the real remedy. The real remedies are unmeasured. Under the option
+   named "Accept R1", Build step 5 rewords this item.
 4. The default-setup `CodeQL` check is green on the pull request's head.
 5. `npm run check` passes.
 
@@ -338,13 +348,15 @@ needs the most judgement. Parse5 would be `standard`; accepting R1 would be
   row for row as the filing's; only P9's and P15's labels changed.
 - Claim: P15's second marked tag is the same file as P9's. `cmp` on
   `p15/dist/assets/index-P2Xu9kJm.js` and `p9/dist/assets/index-P2Xu9kJm.js`
-  reports no difference, and the file holds one `modulepreload` (`grep -c` 1).
+  reports no difference, and `grep -o modulepreload <file> | wc -l` prints 3; the
+  helper is the polyfill either way.
 - Claim: R1 is quadratic on the landing version. Round 1, `repo-133-redos.mts`
   on the same tree, median of five calls per size: 146,530.3 µs at 22,000
   characters, 2,323,721.8 µs at 88,000, 37,336,885.1 µs at 352,000. The last
   two sizes differ by 16.07 times for a fourfold step in length.
 - Claim: a one-pass `indexOf` scan, timed by the same method, is a stand-in and
-  not a remedy: medians of 1.3, 2.3 and 4.2 µs at the three sizes. Done when 3's
+  not a remedy, five orders of magnitude under Done when 3's bound; gate 2's
+  `standins.mts` run read 1.9, 3.2 and 5.8 µs at the three sizes. Done when 3's
   bound is met by it and missed by the landing.
 - Round 1, from gate 1's findings F1 to F7 (`0733ca91`). The owner's answer on
   option 3 is its own commit, `8b58b3ee`, before the rest. F1: P9 and P15 are
@@ -362,3 +374,27 @@ needs the most judgement. Parse5 would be `standard`; accepting R1 would be
 - The three remedies are the owner's, from repo-131's Log entry of 2026-10-31
   that names this ticket. Decision 2 is new: P9's helper shows only in a real
   build, so the direct-call measurements did not reach it.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, F2 — "keep the bound
+  and add: the 352,000-character median is under eight times the 88,000-character
+  median". Done when 3 now says so and records that the threshold rests on gate
+  2's single run of four subjects (linear 1.8, parse5 3.2, a quadratic scanner
+  15.1, the landing 16.9). The unsourced stand-in digits are dropped from Done
+  when 3 and attributed to gate 2's run in the Log claim above.
+  `git diff ddedc6dc HEAD -- <ticket> | grep -c '^-.*has a median of about 4'`
+  gives 1, and `grep -c '^-.*medians of 1.3, 2.3 and 4.2'` on the same diff gives 1.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, F7 — "Build step 5
+  says no new case unless Decision 2 answers its first option". Step 5 now says
+  so and rewords Done when 3 itself under "accept R1", and Done when 3 points to
+  step 5. `git diff ddedc6dc HEAD -- <ticket> | grep -c '^-.*new case. Done when 3 and 4 stand'`
+  gives 1.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, the second low — "the
+  file holds one modulepreload (grep -c 1)". The Log now says `grep -o modulepreload <file> | wc -l`
+  prints 3 and the helper is the polyfill either way.
+  `git diff ddedc6dc HEAD -- <ticket> | grep -c '^-.*the file holds one'` gives 1.
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, the third low — "the R1
+  probe now takes 3 minutes 43 seconds on the landing". One sentence added above
+  the Landing column: about 3m45s, five calls of about 37 s, so run it in the
+  background. `git diff ddedc6dc HEAD -- <ticket> | grep -c '^+.*probe takes about 3m45s'`
+  gives 1.
+- 2026-10-31 — Gates 1 and 2 are CONCERNS, narrow; their full reports are on PR
+  #696's thread, and the ticket stays `needs-decision`, so there is no `--land`.
