@@ -197,3 +197,116 @@ marked above), and the build's Log entry names, for lg-72, the exact
 `@webtools/ui` export a tool's `main.tsx` imports the header and footer
 stylesheet from, and the file a static `web/public/terms.html` loads to take the
 shared theme.
+
+**2026-10-31 — built (branch `repo-131-shared-header-footer`, base
+`d7cd223f`).** `@webtools/ui` now exports `AppHeader`, `AppFooter`,
+`ThemeToggle`, `TOOL_VERSION` and the theme functions from `.`, the theme
+functions alone from `./theme`, and the stylesheet from `./chrome.css`. The
+downloader imports them; its `lib/theme.ts` and `components/ThemeToggle.tsx`
+are deleted.
+
+**For lg-72 and pl-65, the two inputs the owner's answer asked for:**
+
+1. **The stylesheet is `@webtools/ui/chrome.css`.** `main.tsx` imports
+   `@webtools/ui/tokens.css`, then `@webtools/ui/chrome.css`, then
+   `./styles.css`. The classes are `.app-header*`, `.theme-toggle*` and
+   `.app-footer`, renamed from the downloader's `.topbar`, `.themetoggle` and
+   `.footer` so they collide with nothing in the other two stylesheets.
+2. **A static `web/public/terms.html` loads `/theme.js`**, as
+   `<script type="module" src="/theme.js" blocking="render"></script>` in its
+   `<head>`. `/theme.js` is a built asset with a fixed name. The tool adds
+   `web/theme.js` (two lines: `import { bootTheme } from "@webtools/ui/theme";`
+   and `bootTheme();`). Its `vite.config.ts` adds `build.rolldownOptions.input`
+   `{ index: <root>/index.html, theme: <root>/theme.js }` and an
+   `output.entryFileNames` that names the `theme` chunk `theme.js` and leaves
+   the rest `assets/[name]-[hash].js`. `vite build` writes `dist/app/theme.js`
+   (82 bytes, importing a hashed `assets/theme-*.js`), and the dev server serves
+   `web/theme.js` at the same `/theme.js` (measured: 200, `text/javascript`).
+   The page's own stylesheet needs `:root[data-theme="light"]` and
+   `:root[data-theme="dark"]` blocks after its `prefers-color-scheme` one, as
+   `tools/downloader/web/public/terms.css` now has.
+
+**What lg-72 and pl-65 still have wrong, for whoever builds them:**
+
+- Their step 2 says `version={__TOOL_VERSION__}`. Use
+  `version={TOOL_VERSION}` from `@webtools/ui`. The global is declared in
+  `packages/ui/src/globals.d.ts` and read only by `packages/ui/src/version.ts`,
+  through `typeof`. A tool's own program never sees the declaration, so a bare
+  `__TOOL_VERSION__` there fails `tsc`. Under vitest, where no `define` runs,
+  it would also throw a `ReferenceError` in every test that renders `App`.
+  `TOOL_VERSION` is `unknown` there, and the footer then links to the
+  changelog.
+- Each tool's `web/tsconfig.json` and `web/test/tsconfig.json` needs a
+  reference to `packages/ui` (see `.claude/rules/ui-package.md`). Without it,
+  `tsc` has no declarations for the `.tsx` source.
+- `main.tsx` calls `bootTheme()` from `@webtools/ui/theme` before
+  `createRoot`, and `vite.config.ts` carries the `render-blocking-entry` plugin
+  described below, or the stored theme lands after the first paint. Neither
+  tool ever stored a theme, so neither needs `migrateStoredTheme`.
+
+**Build 8: TypeScript source, not a built `dist`.** `exports` names `src/*.ts`.
+The tool's Vite and vitest compile it, and `tsc` reads `packages/ui/dist/*.d.ts`
+through the project reference. The `dist` holds declarations only
+(`emitDeclarationOnly`). Measured with
+`build/measure-export.sh`: with `packages/ui/dist` deleted, the source export
+gave `vite build exit 0` and `app.test.tsx` 29 of 29. With `exports` pointed at
+an unbuilt `./dist/index.js`, `vite build` exited 1 with
+`Rolldown failed to resolve import "@webtools/ui/theme"`. That is the failure
+the `HOST` docblock describes, so the source export keeps Vite off a build
+step. (In that dist state vitest still passed `app.test.tsx`; I did not find
+out why.) React is a peer dependency. The test-only packages are
+`devDependencies` at the versions the tree already locks. The lockfile was
+regenerated `--package-lock-only --offline` in a staged copy, the way
+`scripts/check-lockfile-sync.mjs` does it, and only `packages/ui`'s entry
+changed.
+
+**Plumbing.** `packages/ui/tsconfig.json` is a web-surface project. Its tests
+have their own `packages/ui/test/tsconfig.json`, carved out of
+`tsconfig.tests.json`. That makes nine test projects, and
+`.claude/rules/testing.md` and `tsconfig.tests.json`'s comment now say so. The
+`core` vitest project collects `*.test.{ts,tsx}`, and each component suite takes
+jsdom from a docblock. `.oxlintrc.json`'s react/jsx-a11y override now covers
+`packages/ui/**`. `packages/core/test/image-closure.test.ts` passes: the API
+resolves no `@webtools/ui`.
+
+**What the brief had wrong:**
+
+- **Build 1's "call `applyTheme` at the top of `main.tsx`, before
+  `createRoot`" does not by itself apply a stored theme before the first
+  paint.** A module script is deferred. The new `csp.spec.ts` case measured
+  Chromium's `first-paint` at 28 ms and `data-theme` at 68 ms, and failed. The
+  fix is `blocking="render"` on the entry script. Vite rewrites the built
+  entry's tag and drops the attribute from `index.html`, so a small
+  `transformIndexHtml` plugin in `vite.config.ts` (`render-blocking-entry`)
+  puts it back. With it, the case passed 5 of 5 (`--repeat-each=5`). The terms
+  page carries the same attribute, but there it is defensive only: with the
+  attribute removed, its case still passed 5 of 5, because the page and its
+  module are small. Firefox and Safari ignore `blocking`, so a reader there may
+  still see one light frame. No inline script was added.
+- The migration from `downloader:theme:v1` lives in `@webtools/ui` as
+  `migrateStoredTheme(storage, key)`, with the key passed in by the downloader's
+  `main.tsx`. The package knows no tool's name.
+- A favicon cannot take `currentColor` from a page. `public/favicon.svg` is the
+  glyph's path, stroked in the downloader's two accent colours by its own
+  `prefers-color-scheme`.
+- With an `unknown` version the footer's first link reads "Changelog" rather
+  than "vunknown".
+- The theme radios' accessible names are now "System", "Light" and "Dark"
+  (capitalised, in hidden text beside the icon, with a matching `title`). The
+  existing `csp.spec.ts` theme case clicks `getByTitle("Dark")`.
+
+**Not folded in:** moving the downloader's other `.visually-hidden` uses to
+`.sr-only`. repo-130, which is `needs-decision`, retires that class, and the
+move belongs with its decision. The theme control no longer uses the class.
+
+**Verification, at this branch's head before the Log commit:**
+`npx vitest run --project core` 120 of 120 (13 files).
+`npx vitest run tools/downloader/api/test/terms-page.test.ts tools/downloader/web packages/ui`
+381 of 381. `npm test -- --project downloader --project core` exit 0: 2,724
+passed and 2 skipped of 2,726 (139 files passed, 1 skipped), 97.85 s.
+`npm run check` exit 0. The fast e2e suite
+(`playwright.config.ts`, `E2E_PORT=8157`) passed 19 of 19, including the new
+`csp.spec.ts` before-first-paint and terms-page cases, `footer.spec.ts` (the
+built bundle shows `v0.10.0`, linked to `downloader-v0.10.0`), and the
+`layout.spec.ts` 44 px case. The screenshots in `e2e/.artifacts/layout/` were
+opened and show the header on one line at 360 px.

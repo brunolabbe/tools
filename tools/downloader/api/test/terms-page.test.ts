@@ -83,9 +83,10 @@ describe("served by the API", () => {
 
     // One script, the theme module the web build writes beside the page
     // (repo-131), by a same-origin path and with no body: `script-src 'self'`.
-    expect([...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/giu)]).toEqual([
-      expect.arrayContaining([' type="module" src="/theme.js"', ""]),
-    ]);
+    const scripts = [...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/giu)];
+    expect(scripts.map((match) => match[2])).toEqual([""]);
+    expect(scripts[0]?.[1]).toContain('type="module"');
+    expect(scripts[0]?.[1]).toContain('src="/theme.js"');
     expect(text).not.toMatch(/<style/iu);
     expect(text).not.toMatch(/\sstyle=/iu);
     // What it links, the stylesheet and the icon, are same-origin paths.
