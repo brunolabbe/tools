@@ -17,8 +17,9 @@
   // config's own directory and cannot span both. That is true of the Playwright
   // surface — one `tools/<tool>/e2e` per tool — and since pl-12 it is true of
   // the `web` one too, one `tools/<tool>/web/test` each. With the ledger that is
-  // three of each: four surfaces, eight projects, and every further tool with
-  // either suite adds one per suite. That is expected rather than a smell: it
+  // three of each, and `packages/ui/test` is a fourth `web` one since repo-131:
+  // four surfaces, nine projects, and every further tool with either suite
+  // adds one per suite. That is expected rather than a smell: it
   // is the one place where "not a project, one more glob" cannot apply, since a
   // glob here would pull those files onto the node surface and fail on
   // `document`.
@@ -112,6 +113,7 @@
   // Anything extending this file must restate `exclude`: `extends` inherits it,
   // and it would otherwise exclude that project's own files.
   "exclude": [
+    "packages/ui/test/**",
     "tools/downloader/web/test/**",
     "tools/planner/web/test/**",
     "tools/ledger/web/test/**"

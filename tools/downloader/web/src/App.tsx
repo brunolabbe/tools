@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AppError, sourceUrlSchema } from "@downloader/contract";
+import { AppFooter, AppHeader, TOOL_VERSION } from "@webtools/ui";
 import type {
   AppErrorPayload,
   Job,
@@ -10,18 +11,15 @@ import type {
 import { USING_MOCK_API, api } from "./api/client.ts";
 import { AnalysingPanel } from "./components/AnalysingPanel.tsx";
 import { ErrorPanel } from "./components/ErrorPanel.tsx";
+import { Glyph } from "./components/Glyph.tsx";
 import { JobList } from "./components/JobList.tsx";
 import { ProbePanel } from "./components/ProbePanel.tsx";
 import { ScenarioHints } from "./components/ScenarioHints.tsx";
-import { ThemeToggle } from "./components/ThemeToggle.tsx";
 import { UrlForm } from "./components/UrlForm.tsx";
 import { useJobs } from "./hooks/useJobs.ts";
 import { localErrorPayload } from "./lib/error-presentation.ts";
 import type { EventStream } from "./lib/event-stream.ts";
-import { getBrowserStorage } from "./lib/job-store.ts";
 import { mintProbeId } from "./lib/probe-id.ts";
-import { applyTheme, loadTheme, saveTheme } from "./lib/theme.ts";
-import type { ThemeChoice } from "./lib/theme.ts";
 
 type Phase =
   | { kind: "idle" }
@@ -35,8 +33,6 @@ type Phase =
   | { kind: "probed"; url: string; probe: ProbeResult; cached: boolean };
 
 export function App(): React.JSX.Element {
-  const storage = useMemo(() => getBrowserStorage(), []);
-  const [theme, setTheme] = useState<ThemeChoice>(() => loadTheme(storage));
   const [url, setUrl] = useState("");
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   // With the address it came from: the field may have been cleared since, and
@@ -55,11 +51,6 @@ export function App(): React.JSX.Element {
 
   const jobs = useJobs(api);
   const { clearSaved } = jobs;
-
-  useEffect(() => {
-    applyTheme(theme);
-    saveTheme(storage, theme);
-  }, [theme, storage]);
 
   const analyse = useCallback(
     async (candidate: string) => {
@@ -163,13 +154,11 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="topbar__brand">
-          <h1>Downloader</h1>
-          <p className="muted">Find the stream behind a page and pull it down as one file.</p>
-        </div>
-        <ThemeToggle value={theme} onChange={setTheme} />
-      </header>
+      <AppHeader
+        name="Downloader"
+        tagline="Find the stream behind a page and pull it down as one file."
+        glyph={<Glyph />}
+      />
 
       <main className="layout">
         <section className="card" aria-labelledby="analyse-heading">
@@ -246,9 +235,7 @@ export function App(): React.JSX.Element {
       {/* A plain link, not a route: the page is a static file beside the bundle
           (`public/terms.html`), served same-origin, so the document policy needs
           no change for it (dl-54). */}
-      <footer className="footer">
-        <a href="/terms.html">Terms, and what this service records</a>
-      </footer>
+      <AppFooter tool="downloader" version={TOOL_VERSION} termsHref="/terms.html" />
     </div>
   );
 }

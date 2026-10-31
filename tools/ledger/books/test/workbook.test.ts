@@ -934,3 +934,28 @@ describe("a free-text cell that holds a number or a date (lg-68, round 1)", () =
     expect(reading.movements.map((movement) => movement.row)).toEqual([4]);
   });
 });
+
+// lg-82: the problems and checks the reading prints name people as the directory shows
+// them, and a name stored before a character was refused in one may hold a control or a
+// zero-width character the report would carry to a terminal.
+describe("a shown name with a control or a zero-width character", () => {
+  const ESC = String.fromCharCode(0x1b);
+  const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
+  const shown = new Map([
+    ["alex", `Al${ESC}[2Jex`],
+    ["sam", `Sam${ZERO_WIDTH_SPACE}`],
+  ]);
+
+  test("is escaped in the list of the household a problem gives", () => {
+    const sheets = [
+      year("2022", [["2022-02-01", "Hypothèque", "Versement", "Alexandre", 500, 500]]),
+      ACCUEIL,
+    ];
+
+    const reading = readWorkbook(sheets, { people, names: shown });
+
+    expect(reading.problems).toEqual([
+      '2022!E2 names "Alexandre", who is not one of the household (Al\\u001b[2Jex, Sam\\u200b). Map the name to a person in the corrections file\'s "people".',
+    ]);
+  });
+});

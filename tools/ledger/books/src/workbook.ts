@@ -58,6 +58,7 @@ import { bufferAsOf, mortgageAsOf } from "./buckets.ts";
 import type { FiledRow, MortgagePosition } from "./buckets.ts";
 import { daysInMonth } from "./months.ts";
 import { PARTS_PER_MILLION } from "./ratio.ts";
+import { escapeUnseen } from "./unseen.ts";
 import type { Share } from "./ratio.ts";
 
 /** A cell's cached value. A date is a calendar day, `yyyy-mm-dd`. */
@@ -407,7 +408,8 @@ class People {
     }
     this.#shown = byShown;
     this.#shownById = shown;
-    this.#listed = people.map((id) => shown.get(id) ?? id).join(", ");
+    // lg-82: a stored name may hold what a terminal runs; the problems print it.
+    this.#listed = people.map((id) => escapeUnseen(shown.get(id) ?? id)).join(", ");
     const mapped = new Map<string, string>();
     for (const [name, id] of names) {
       if (!people.includes(id)) {
@@ -448,7 +450,7 @@ class People {
 
   /** How a check or a problem prints `id`: by shown name, never a generated id (lg-79). */
   shown(id: string): string {
-    return this.#shownById.get(id) ?? id;
+    return escapeUnseen(this.#shownById.get(id) ?? id);
   }
 
   /** Like `resolve`, without reporting: for cells that may hold a name or anything else. */

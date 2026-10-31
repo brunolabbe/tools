@@ -21,6 +21,7 @@ import type { App } from "../src/server.ts";
 import { accessConfig, memberDirectory, homeBooks } from "./helpers/access.ts";
 import { VERBS } from "./helpers/routes.ts";
 import { TRANSFER_RULE, addRule, startApp } from "./helpers/classification.ts";
+import { UNSEEN_CHARACTERS, around, aroundEscaped, escaped } from "./helpers/unseen.ts";
 
 let app: App | undefined;
 
@@ -337,5 +338,32 @@ describe("the key, on an admin route, against a person's", () => {
     });
 
     await expect(callAs(adminHook(limiter), "admin@example.test", true)).resolves.toBeUndefined();
+  });
+});
+
+// lg-82, L1: a person added before lg-76 has the name typed then as their id, and the
+// `rate limited` warning logs `<household>:<id>`. pino's JSON escapes ESC, BEL, NUL and
+// LF already and passes DEL, the C1 controls and the zero-width characters raw; the
+// logged key is the escape for each of the 69, whichever.
+describe("the logged key of a person whose id holds a control or a zero-width character (lg-82)", () => {
+  test("is written with each character as its six-character escape", async () => {
+    for (const character of UNSEEN_CHARACTERS) {
+      const lines: string[] = [];
+      const hook = createRateLimitHook({
+        limiter: new RateLimiter({ perMinute: 1 }),
+        logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
+        scope: "test",
+      });
+      await callIn(hook, "home", around(character));
+
+      await expect(callIn(hook, "home", around(character))).rejects.toMatchObject({
+        code: "RATE_LIMITED",
+      });
+
+      const logged = lines.map((line) => JSON.parse(line) as { msg?: string; key?: string });
+      const warning = logged.find((line) => line.msg === "rate limited");
+      expect(warning?.key, escaped(character)).toBe(`home:${aroundEscaped(character)}`);
+      expect(lines.join(""), escaped(character)).not.toContain(around(character));
+    }
   });
 });

@@ -46,3 +46,11 @@ not part of a UI change.
 `Dockerfile`. Skip the last and `npm ci` never makes the symlink, so only the
 image build fails, on a Vite import that cannot resolve.
 `packages/core/test/image-closure.test.ts` checks it.
+
+**Components ship as TypeScript source** (repo-131): `exports` names
+`src/*.ts`, the tool's Vite and vitest compile it, and `tsc` reads its
+declarations through a project reference, so a web package that imports a
+component lists `packages/ui` in the `references` of its `tsconfig.json` and of
+its `test/tsconfig.json`. A built `dist` puts every Vite run behind a build
+step: exports pointed at an unbuilt `dist` failed `vite build` with "Rolldown
+failed to resolve import", where the source export built with no `dist` at all.

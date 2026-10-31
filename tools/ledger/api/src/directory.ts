@@ -26,6 +26,7 @@ import { AppError, GENERATED_ID } from "@ledger/contract";
 import type { PersonStanding } from "@ledger/contract";
 import Database from "better-sqlite3";
 import { migrateDirectory } from "./db/directory-schema.ts";
+import { hasUnseen } from "@ledger/books";
 
 /**
  * A household id, which lg-21 makes a file name, a directory name and the
@@ -43,19 +44,21 @@ export const NEW_HOUSEHOLD_NAME = "Home";
 
 /** One `@`, something either side, and nothing a list or a shell would split on. */
 const ADDRESS_SHAPE = /^[^\s@,;]+@[^\s@,;]+$/u;
-/**
- * What `\s` does not cover and no one can see: the C0 controls and DEL (lg-52),
- * the C1 controls and the zero-width characters (lg-57). An address carrying one
- * is stored and then no Access token can name it. The BOM is White_Space to `\s`
- * and was refused before; it is listed so the set reads whole.
- */
-// oxlint-disable-next-line no-control-regex -- the controls are the point
-const UNSEEN = /[\u0000-\u001f\u007f-\u009f\u200b-\u200d\ufeff]/u;
 /** The sentence for an address that is not one, whichever method was given it. */
 const NOT_AN_ADDRESS = "That is not an email address.";
 
 /** The sentence for a household name that is not one, at creation or at a rename. */
 const HOUSEHOLD_NAME_RULE = "A household's name is 1 to 80 characters.";
+
+/**
+ * lg-82: a name is refused what an address is (`hasUnseen`), since the host
+ * command prints it and a terminal runs the escape sequence it holds. U+200C and
+ * U+200D are in the set, so a name written as a ZWJ emoji sequence or a Persian
+ * word with a ZWNJ is refused too; the owner chose that on 2026-10-31.
+ */
+const HOUSEHOLD_NAME_UNSEEN =
+  "A household's name cannot hold a control character or a zero-width one.";
+const PERSON_NAME_UNSEEN = "A person's name cannot hold a control character or a zero-width one.";
 
 /**
  * Each household under the name it is called by now (lg-77): its latest record
@@ -71,7 +74,7 @@ export const OPERATOR = "operator";
 /** A lower-cased address, or `undefined` when the text is not one. */
 export function readAddress(raw: string): string | undefined {
   const address = readStoredAddress(raw);
-  return address !== undefined && !UNSEEN.test(address) ? address : undefined;
+  return address !== undefined && !hasUnseen(address) ? address : undefined;
 }
 
 /**
@@ -509,6 +512,7 @@ export class Directory {
     if (typeof rename.name !== "string") refuse(HOUSEHOLD_NAME_RULE);
     const name = rename.name.trim();
     if (name === "" || name.length > 80) refuse(HOUSEHOLD_NAME_RULE);
+    if (hasUnseen(name)) refuse(HOUSEHOLD_NAME_UNSEEN);
     return this.#db
       .transaction(() => {
         if (!this.holdsHousehold(rename.household)) {
@@ -622,6 +626,7 @@ export class Directory {
     const person = rename.person.trim();
     const name = rename.name.trim();
     if (name === "" || name.length > 64) refuse("A person's name is 1 to 64 characters.");
+    if (hasUnseen(name)) refuse(PERSON_NAME_UNSEEN);
     return this.#db
       .transaction(() => {
         if (this.household(rename.household) === undefined) {
@@ -806,6 +811,7 @@ export class Directory {
     const name = household.name.trim();
     if (!isHouseholdId(id)) notAnId(`"${id}"`);
     if (name === "" || name.length > 80) notAName();
+    if (hasUnseen(name)) refuse(HOUSEHOLD_NAME_UNSEEN);
     return this.#db.transaction(() => this.#insertHousehold({ id, name }, household)).immediate();
   }
 
@@ -940,6 +946,7 @@ export class Directory {
     if (typeof person.person !== "string") refuse("The person's name is not a string.");
     const name = person.person.trim();
     if (name === "" || name.length > NAME_LENGTH) refuse("A person's name is 1 to 64 characters.");
+    if (hasUnseen(name)) refuse(PERSON_NAME_UNSEEN);
     return this.#db
       .transaction(() => {
         if (this.household(person.household) === undefined) {
@@ -1052,6 +1059,7 @@ export class Directory {
     if (address === undefined) refuse(NOT_AN_ADDRESS);
     const person = member.person.trim();
     if (person === "" || person.length > 64) refuse("A person's name is 1 to 64 characters.");
+    if (hasUnseen(person)) refuse(PERSON_NAME_UNSEEN);
     return { address, person };
   }
 

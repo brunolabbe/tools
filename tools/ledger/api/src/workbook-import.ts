@@ -33,6 +33,7 @@
 import {
   bufferAsOf,
   dayAfter,
+  escapeUnseen,
   formatCents,
   mortgageAsOf,
   noteOf,
@@ -647,7 +648,8 @@ function run(
   enrollPeople(db, options.members, options.now());
   const people = knownPeople(db);
   const names = options.names ?? new Map<string, string>();
-  const shown: Shown = (person) => shownName(names, person);
+  // lg-82: T8. Every name the report prints is read through this one closure.
+  const shown: Shown = (person) => escapeUnseen(shownName(names, person));
   const reading = readWorkbook(sheets, {
     people,
     corrections: options.corrections,

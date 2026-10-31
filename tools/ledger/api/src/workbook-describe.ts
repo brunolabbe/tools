@@ -44,7 +44,7 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import type { Corrections, Sheet, WorkbookReading } from "@ledger/books";
-import { NO_CORRECTIONS, formatCents, readWorkbook } from "@ledger/books";
+import { NO_CORRECTIONS, formatCents, hasUnseen, readWorkbook } from "@ledger/books";
 import {
   AppError,
   CSV_SHEET_NAME,
@@ -470,6 +470,13 @@ function answersFor(
     if (name === "" || name.length > NEW_NAME_LENGTH) {
       answered.problems.push(
         `The new person for "${entry.name}" needs a name of 1 to ${String(NEW_NAME_LENGTH)} characters.`,
+      );
+      continue;
+    }
+    // lg-82: what `addPerson` refuses, said here with the others so nothing is written.
+    if (hasUnseen(name)) {
+      answered.problems.push(
+        `The new person for "${entry.name}" needs a name without a control character or a zero-width one.`,
       );
       continue;
     }

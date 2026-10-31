@@ -37,7 +37,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { readCorrections, NO_CORRECTIONS } from "@ledger/books";
+import { readCorrections, NO_CORRECTIONS, escapeUnseen } from "@ledger/books";
 import type { Corrections } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import Database from "better-sqlite3";
@@ -139,7 +139,8 @@ export function memberNamed(found: DirectoryPeople, typed: string): string | und
 
 /** The current members as a sentence names them: shown, never by a generated id. */
 export function membersListed(found: DirectoryPeople): string {
-  return found.people.map((person) => shownName(found.names, person)).join(", ");
+  // lg-82: T7, a stored name on the way to a terminal.
+  return found.people.map((person) => escapeUnseen(shownName(found.names, person))).join(", ");
 }
 
 export function directoryPeople(directoryPath: string, household: string): DirectoryPeople {
