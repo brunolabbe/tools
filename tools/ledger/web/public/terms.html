@@ -40,8 +40,9 @@
         <li>
           <strong>Each household's books</strong>, one file per household. The statement rows you
           paste (date, description, amount and balance), the rules and categories you set, the
-          salaries and ratios, the periods and the lines in them, the receipts you file, and the
-          household's word on its mortgage. Every record carries the person it was filed by.
+          salaries and ratios, the periods and the lines in them, the recurring items, the receipts
+          you file, and the household's word on its mortgage. Every record carries the person it was
+          filed by.
         </li>
         <li>
           <strong>Receipt photos</strong>, in a folder per household beside the books, each under a
@@ -50,12 +51,11 @@
       </ul>
       <p>
         If you choose light or dark, your browser keeps that choice for a year in a cookie named
-        <code>webtools-theme</code>, set for <code>oludoi.com</code> so that every tool there shows
-        the same theme. It holds only the word <code>light</code> or <code>dark</code>, and your
-        browser sends it with every request to any <code>oludoi.com</code> address, this service
-        included. The service does not read it and does not write it to its log; the page reads it
-        in your browser. Choosing "System" deletes it. Cloudflare sets its own cookies when it signs
-        you in.
+        <code>webtools-theme</code>, set for <code>oludoi.com</code> so that the tools there can
+        share it. It holds only the word <code>light</code> or <code>dark</code>, and your browser
+        sends it with requests to <code>oludoi.com</code> addresses, this service included. The
+        service does not read it and does not write it to its log; the page reads it in your
+        browser. Choosing "System" deletes it. Cloudflare sets its own cookies when it signs you in.
       </p>
 
       <h2>Who can read a household's books</h2>
@@ -90,9 +90,10 @@
           <strong>A model, only when asked, and only if the operator set a key.</strong>
           When a member taps "Read it" on a receipt, that photo is sent to Anthropic, a company
           based in the United States, to be read. When a member asks for a spreadsheet to be
-          described, a sample of its rows is sent: the first rows, a few from the middle and the
-          last, with long text cut short. Without a key the ledger sends nothing outside the server
-          and a receipt is typed in by hand. What Anthropic keeps is under its own terms.
+          described, a sample of it is sent: each sheet's name and size, its first rows, a few from
+          the middle and the last, each cell with the formula that computed it beside it, and long
+          text cut short. Without a key the ledger sends nothing outside the server and a receipt is
+          typed in by hand. What Anthropic keeps is under its own terms.
         </li>
       </ul>
 
@@ -114,13 +115,15 @@
 
       <h2>What the server's log holds</h2>
       <p>
-        The log records the server starting and stopping, requests that were refused, and errors. A
-        refused request writes the method, the address it asked for, and how it ended. A refused
-        sign-in of an address that Access admitted but the directory does not hold writes that email
-        address. A request refused for going too fast writes the household and the person's id. It
-        holds no statement row, no amount, no receipt and no photo. The log is kept in a few files
-        of fixed size, and the oldest is discarded when they fill, so this page promises no length
-        of time.
+        The log records the server starting and stopping, requests that were refused, and errors.
+        When a spreadsheet is described or imported it also writes a line saying so, with counts of
+        rows and of the model's tokens and nothing of the spreadsheet. A refused request writes the
+        method, the path it asked for without anything after a question mark, and how it ended. A
+        refused sign-in of an address that Access admitted but the directory does not hold writes
+        that email address. A request refused for going too fast writes the household and the
+        person's id. It holds no statement row, no amount, no receipt and no photo. The log is kept
+        in a few files of fixed size, and the oldest is discarded when they fill, so this page
+        promises no length of time.
       </p>
 
       <h2>Who is responsible</h2>
