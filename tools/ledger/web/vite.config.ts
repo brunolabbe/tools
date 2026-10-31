@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -5,6 +7,17 @@ import { defineConfig } from "vite";
 // Pinned to this file's directory rather than process.cwd(), so the config
 // behaves identically whether it is run from the workspace or the repo root.
 const root = fileURLToPath(new URL(".", import.meta.url));
+
+/**
+ * The version the footer shows (repo-131): the API's, which is the file
+ * release-please bumps (`extra-files`), so the bundle in a released image carries
+ * the released number. `@webtools/ui` declares and reads `__TOOL_VERSION__`.
+ */
+const TOOL_VERSION = (
+  JSON.parse(readFileSync(new URL("../api/package.json", import.meta.url), "utf8")) as {
+    version: string;
+  }
+).version;
 
 /** Where `tools/ledger/api` listens in development. Matches `API_DEFAULTS`. */
 const API_TARGET = process.env["VITE_API_PROXY_TARGET"] ?? "http://127.0.0.1:8100";
@@ -37,7 +50,27 @@ const HOST = process.env["HOST"] ?? false;
 
 export default defineConfig({
   root,
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      // The bundle sets the theme before React renders, but a module script is
+      // deferred, so a browser may paint the page once before it runs: a light
+      // flash for a reader who chose dark (repo-131, measured). `blocking="render"`
+      // holds the first paint until the entry has run. Vite writes the built
+      // entry's tag itself and drops the attribute from `index.html`'s, so it is
+      // put back here. The downloader's config carries the same plugin.
+      name: "render-blocking-entry",
+      transformIndexHtml: {
+        order: "post",
+        handler: (html) =>
+          html.replace(
+            '<script type="module" crossorigin',
+            '<script type="module" blocking="render" crossorigin',
+          ),
+      },
+    },
+  ],
+  define: { __TOOL_VERSION__: JSON.stringify(TOOL_VERSION) },
   // Not 5173 or 5183: the downloader's and the planner's UIs default there, and
   // running every tool at once should not need any of them reconfigured.
   server: {
@@ -59,5 +92,20 @@ export default defineConfig({
     outDir: "dist/app",
     emptyOutDir: true,
     sourcemap: true,
+    rolldownOptions: {
+      // `theme.js` is the static terms page's one script (repo-131). That page is
+      // a file in `public/`, which Vite copies untouched, so it can only name a
+      // fixed path: this entry is written to `/theme.js` rather than a hashed
+      // name, and `@fastify/static` revalidates it like any file outside
+      // `assets/`. What it imports still lands in `assets/`, hashed.
+      input: {
+        index: path.join(root, "index.html"),
+        theme: path.join(root, "theme.js"),
+      },
+      output: {
+        entryFileNames: (chunk) =>
+          chunk.name === "theme" ? "theme.js" : "assets/[name]-[hash].js",
+      },
+    },
   },
 });

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Terms and what this service keeps · Ledger</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/terms.css" />
+    <!-- The visitor's chosen theme, from the cookie every tool shares (repo-131).
+         A same-origin module the build writes beside this page, never an inline
+         script. -->
+    <script type="module" src="/theme.js" blocking="render"></script>
+  </head>
+  <body>
+    <main>
+      <p><a href="/">Back to the ledger</a></p>
+      <h1>Terms, and what this service keeps</h1>
+
+      <h2>What it is for</h2>
+      <p>
+        The ledger is a household's shared account: the bank statements its members paste in, the
+        receipts they file, who put what into the mortgage and the buffer, and who owes whom. It is
+        for the households whose addresses the operator has admitted, and for nobody else. Use it
+        for your own household's money.
+      </p>
+
+      <h2>What it keeps</h2>
+      <p>
+        Everything is kept on one disk volume on the operator's server. There is no other copy
+        unless the operator makes a backup. Three kinds of thing are on it.
+      </p>
+      <ul>
+        <li>
+          <strong>The directory.</strong>
+          Which households exist and what each is called, the email address of every member and the
+          name the household shows for them, who added or removed each address and when, and the
+          moment each address first signed in.
+        </li>
+        <li>
+          <strong>Each household's books</strong>, one file per household. The statement rows you
+          paste (date, description, amount and balance), the rules and categories you set, the
+          salaries and ratios, the periods and the lines in them, the receipts you file, and the
+          household's word on its mortgage. Every record carries the person it was filed by.
+        </li>
+        <li>
+          <strong>Receipt photos</strong>, in a folder per household beside the books, each under a
+          random name.
+        </li>
+      </ul>
+      <p>
+        Your browser keeps one cookie of ours, <code>webtools-theme</code>, which says only whether
+        you chose a light or a dark look. Cloudflare sets its own cookies when it signs you in.
+      </p>
+
+      <h2>Who can read a household's books</h2>
+      <ul>
+        <li>
+          <strong>Only someone signed in.</strong>
+          The ledger sits behind Cloudflare Access, and on top of that it checks the signed token
+          Access attaches on every request to its data, and refuses a request without a valid one.
+          Cloudflare, a company based in the United States, carries the connection and keeps its own
+          records under its own terms.
+        </li>
+        <li>
+          <strong>Every member of the household, and no one from another.</strong>
+          An address the directory does not hold is refused, with a page saying it belongs to no
+          household. A member reads and writes the whole of their household's books: there are no
+          private parts inside a household, and any member can add another address to it.
+        </li>
+        <li>
+          <strong>The admin sees the directory, not the books.</strong>
+          The admin, who is named in the server's configuration, sees every household's name, its
+          members, their email addresses and when each first signed in, and can add and rename
+          households and members and remove an address. That does not open a household's books to
+          them. They read those only as a member of that household.
+        </li>
+        <li>
+          <strong>Whoever runs the server can read the files.</strong>
+          The books are ordinary database files, not encrypted, and the operator has the host they
+          are on. The operator can also run the commands that import a spreadsheet into a household
+          or change who belongs where.
+        </li>
+        <li>
+          <strong>A model, only when asked, and only if the operator set a key.</strong>
+          When a member taps "Read it" on a receipt, that photo is sent to Anthropic, a company
+          based in the United States, to be read. When a member asks for a spreadsheet to be
+          described, a sample of its rows is sent: the first rows, a few from the middle and the
+          last, with long text cut short. Without a key the ledger sends nothing outside the server
+          and a receipt is typed in by hand. What Anthropic keeps is under its own terms.
+        </li>
+      </ul>
+
+      <h2>How long it is kept, and how a household leaves</h2>
+      <p>
+        <strong>It is kept for as long as the volume is.</strong>
+        There is no expiry, and nothing deletes it. The ledger never edits or deletes a stored
+        record: a correction is a new record that supersedes the old one, and the old one stays. The
+        directory is built the same way, and its database refuses an edit or a deletion.
+      </p>
+      <p>
+        There is no screen or command that deletes a household, its books or a receipt photo, and
+        this page does not promise one. What an admin can do is remove an address from a household,
+        which ends that address's access at once; the record that it was a member stays. A person
+        can also be retired from the books at the next close, which stops counting them from then on
+        and keeps what was filed under their name. If a household wants its data gone, ask the
+        operator, who would have to do it by hand on the server, outside the ledger.
+      </p>
+
+      <h2>What the server's log holds</h2>
+      <p>
+        The log records the server starting and stopping, requests that were refused, and errors. A
+        refused request writes the method, the address it asked for, and how it ended. A refused
+        sign-in of an address that Access admitted but the directory does not hold writes that email
+        address. A request refused for going too fast writes the household and the person's id. It
+        holds no statement row, no amount, no receipt and no photo. The log is kept in a few files
+        of fixed size, and the oldest is discarded when they fill, so this page promises no length
+        of time.
+      </p>
+
+      <h2>Who is responsible</h2>
+      <p>
+        The person in charge of the information described here is the operator of this service. This
+        page gives no address for them: ask whoever added your email to your household.
+      </p>
+    </main>
+  </body>
+</html>

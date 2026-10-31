@@ -14,6 +14,7 @@
  * catches a tool with no `HOST` resolution at all, and only this evaluates what
  * the config actually resolves to.
  */
+import { readFileSync } from "node:fs";
 import { afterEach, expect, test, vi } from "vitest";
 import type { UserConfig } from "vite";
 
@@ -60,4 +61,45 @@ test("fails on a taken port rather than walking to one nobody forwarded", async 
   // labels "ledger web".
   expect(server?.port).toBe(5193);
   expect(server?.strictPort).toBe(true);
+});
+
+async function config(): Promise<UserConfig> {
+  vi.resetModules();
+  return ((await import("../vite.config.ts")) as { default: UserConfig }).default;
+}
+
+test("writes the API's version into the bundle, the number release-please bumps (lg-72)", async () => {
+  const api = JSON.parse(
+    readFileSync(new URL("../../api/package.json", import.meta.url), "utf8"),
+  ) as { version: string };
+
+  expect((await config()).define?.["__TOOL_VERSION__"]).toBe(JSON.stringify(api.version));
+});
+
+test("names the terms page's theme module at a fixed path, and every other entry hashed", async () => {
+  const options = (await config()).build?.rolldownOptions;
+  const output = Array.isArray(options?.output) ? options.output[0] : options?.output;
+  const names = output?.entryFileNames;
+
+  expect(Object.keys((options?.input ?? {}) as Record<string, string>)).toEqual(["index", "theme"]);
+  expect(typeof names).toBe("function");
+  if (typeof names !== "function") return;
+  // `public/terms.html` names `/theme.js` literally, so a hash here is a page with no theme.
+  expect(names({ name: "theme" } as Parameters<typeof names>[0])).toBe("theme.js");
+  expect(names({ name: "index" } as Parameters<typeof names>[0])).toBe("assets/[name]-[hash].js");
+});
+
+test("puts blocking=render back on the built entry script, which Vite drops (repo-131)", async () => {
+  const plugin = (await config()).plugins?.find(
+    (candidate) =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      "name" in candidate &&
+      candidate.name === "render-blocking-entry",
+  ) as { transformIndexHtml: { handler: (html: string) => string } } | undefined;
+
+  expect(plugin).toBeDefined();
+  expect(
+    plugin?.transformIndexHtml.handler('<script type="module" crossorigin src="/assets/x.js">'),
+  ).toBe('<script type="module" blocking="render" crossorigin src="/assets/x.js">');
 });

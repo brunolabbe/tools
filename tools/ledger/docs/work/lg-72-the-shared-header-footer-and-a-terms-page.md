@@ -82,3 +82,65 @@ The probe file is deleted. The step now imports `TOOL_VERSION` from
 `@webtools/ui`, which reads the global through `typeof` and is `unknown` under
 vitest, where no `define` runs. pl-65, the planner's twin, has the same line and
 is the planner's to correct; this branch does not touch it.
+
+**2026-10-31 — built (branch `lg-72-shared-header-footer-terms`, stacked on
+`repo-131-shared-header-footer` at `17b45fd8`, draft PR #692).** `App.tsx` renders
+`AppHeader` and `AppFooter` on all three screens and has no `<header>`, no
+`Health` and no `/health` fetch; `web/src/api/health.ts` is deleted (nothing else
+imported it, and it had no test of its own). The wiring is repo-131's Log, as
+handed over: `main.tsx` imports `tokens.css`, `chrome.css`, `./styles.css` and
+calls `bootTheme()` before `createRoot`; `web/theme.js` and the `input` /
+`entryFileNames` pair in `vite.config.ts` write `/theme.js` unhashed;
+`web/tsconfig.json` and `web/test/tsconfig.json` reference `packages/ui`;
+`index.html`'s entry script is `blocking="render"`. The glyph is an open book,
+`src/Glyph.tsx` and `public/favicon.svg`, drawn from the same path.
+
+**What the brief had wrong, beyond Build 2's line (corrected above):**
+
+- **`layout.spec.ts`'s radio check counted the theme switch.**
+  `radiosBesideTheirLabels` asked for `getByRole("radio")` on the whole page, so
+  Household and Salaries would have read six radios, not three, and the switch's
+  icon-only labels fail its "label text beside the radio" test. It is scoped to
+  `main` now. Nothing in the brief says so; the header adds radios to every
+  screen, which is the kind of thing a spec that counts a role has to be
+  told.
+- **The `render-blocking-entry` plugin is local to the downloader's
+  `vite.config.ts`**, not exported from `@webtools/ui`. It is copied here, with
+  the same comment, and pinned by a test in `web/test/vite-config.test.ts`. The
+  ledger is its second real consumer and pl-65 the third, so it is a candidate
+  to lift; that edit is repo-131's code and was left to the orchestrator (an
+  open decision in the report).
+- **An error stub in a layout spec needs `retryable`.** The first stubs of
+  `/api/me` omitted it, `errorPayloadSchema` refused the body, and the client
+  threw `INTERNAL` instead of `FORBIDDEN`, so the shell stayed on the household
+  screen. Both header cases failed on a 15 s timeout until `retryable: false`
+  was added.
+
+**The terms page's claims.** The pull request quotes each with the line that
+makes it true. Four things on the page are not grounded in the code, and each
+says so rather than promising: there is **no deletion path** (the page says
+that, and that data is kept as long as the volume is, citing the append-only
+rule and `classification-schema.test.ts`, which scans the API source for an
+`UPDATE` or a `DELETE`); there is **no contact address** (the ledger has no
+decided one, so the page names none and points to whoever added the reader's
+email); **how long the log is kept** is a size, not a time
+(`compose.ledger.prod.yaml` `max-size` / `max-file`), so none is promised; and
+**whether the live host has an Anthropic key** is not in the repository, so the
+page says what is sent "only if the operator set a key". The wording is a draft
+for the owner to approve, as dl-54's was.
+
+**Not folded in:** lifting the plugin (above); moving `.visually-hidden` uses
+(the ledger has none); deleting `HealthResponse` from the contract (the API
+still serves `/api/health`).
+
+**Verification, at the head before this commit.** `npx vitest run tools/ledger/web`
+305 of 305. `npm test -- --project ledger --project core` exit 0, 2,127 of 2,127
+(106 files). `npm run check` exit 0. The ledger e2e suite
+(`E2E_PORT=8172 npx playwright test -c tools/ledger/playwright.config.ts`) 29 of
+29, including the three header cases, the terms page at both widths, and
+`footer.spec.ts` (the built bundle shows `v0.4.1`, linked to `ledger-v0.4.1`; a
+theme chosen in the header is the terms page's). `dist/app` holds `theme.js`,
+`terms.html`, `terms.css` and `favicon.svg`, and `index.html` carries
+`blocking="render"`. The screenshots in `e2e/.artifacts/layout/` were opened
+(`Header (household)-360.png`, `Terms-360.png`): the header is on one line at
+360 px and the terms page does not scroll sideways.
