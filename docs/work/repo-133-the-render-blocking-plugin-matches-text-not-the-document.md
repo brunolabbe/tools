@@ -227,8 +227,14 @@ to `ready`. Then:
 
 ## Decision — open
 
-Two questions. Neither has a recommendation: the measurement that would pick one
-has not been taken, and the costs are stated for each option.
+Two questions are open, and neither has a recommendation: the measurement that
+would pick one has not been taken, and the costs are stated for each option. A
+third, the form of option 3, is answered first.
+
+**Option 3's form. Answered 2026-10-31 by the owner.** The options were: (a) keep
+option 3 as a free-form note above `ENTRY_TAG`, saying plainly that it is not
+adr/005's register; (b) drop option 3, leaving the two remedies. The owner chose
+(a), the gate's recommendation.
 
 **1. Which remedy for the matcher. Open.**
 
@@ -254,11 +260,12 @@ has not been taken, and the costs are stated for each option.
   direction, not a built remedy, and the regexp rewrite that came before it
   (`222b5048`) left P11–P15 open, which is why this option is rated `hard`. No
   new dependency, so no seven-day rule.
-- **Excuse R1 under adr/005.** Keep the landing's matcher, and record R1 where a
-  reader finds it: the register comment above `ENTRY_TAG`, in adr/005's form,
-  with the measured times and the reason the input is the tool's own built HTML.
-  The landing version has no CodeQL alert to dismiss; the dismissal step applies
-  only if one returns. Costs: this option closes R1 and nothing else. P8–P16 and
+- **Accept R1.** Keep the landing's matcher, and put a comment above `ENTRY_TAG`
+  stating that the input is the tool's own built HTML. It is a free-form note,
+  not adr/005's register: adr/005 needs a query id and a test that goes red on
+  regression, and covers only structurally permanent findings; the comment has
+  neither, and no `codeql[…]` line goes with it. The landing version has no
+  CodeQL alert to dismiss. Costs: this option closes R1 and nothing else. P8–P16 and
   D1–D2 keep their landing verdicts, so Done when 1 and 2 stay unmet and the
   ticket stays open under it. The reason it gives is not measured on the landing
   version: gate 3 measured 5 ms for a well-formed 176 KB page on the rewrite.
