@@ -424,3 +424,10 @@ real consumer.
   `packages/ui/test/vite-plugin.test.ts` line 65. That regexp and the plugin's
   two matchers now carry the `i` flag, and the attribute-order case now
   includes an upper-case `<SCRIPT>`.
+
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, N3 — the downloader's
+  terms sentence, with the gate's two corrections ("with requests to
+  `oludoi.com` addresses" and "so that the tools there can share it"). In
+  `tools/downloader/web/public/terms.html` only.
+  `git diff 3eb342af -- tools/downloader/web/public/terms.html | grep -c '^-.*so that every'`
+  → `1`, and the same with `'^-.*sends it with every request to any'` → `1`.
