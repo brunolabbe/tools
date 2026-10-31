@@ -132,7 +132,11 @@ owner chose **resolve it on screen, its own ticket**, so lg-66 keeps its size.
     14 of 14 passed. Moving the `beforeCommit` call ahead of the `ok` check
     failed 1 of 1 for "a verification that fails with a new person answered
     adds no one". The held-answer refusal test does not reach that path, which
-    the mutation showed: it failed only the two success tests.
+    the mutation showed: it failed only the two success tests. **WITHDRAWN —
+    do not cite this sentence** (superseded; the builder's error, found by gate
+    1 and corrected below): at the tip, three placements of the directory write
+    ahead of the verification each fail the carry-over test alone (1 of 14) and
+    the two success tests pass.
     `npx vitest run tools/ledger/web/test/import-names.test.tsx`: 5 of 5
     passed, and with the "every name answered" condition dropped from Confirm,
     1 of 5 failed ("Confirm is not offered while a name is unanswered").
@@ -140,3 +144,24 @@ owner chose **resolve it on screen, its own ticket**, so lg-66 keeps its size.
     120 passed. The e2e `-g Import` run on a private port: 3 of 3 passed. The
     360 px screenshot shows the long name wrapping in its box.
     `npm test -- --project ledger`: 1961 of 1961 passed, in 89 files.
+- 2026-10-31 — Owner answers, recorded at the landing.
+  - The builder's open decision: a name that appears only in a period sheet's
+    names row or in `Accueil` is not listed for answering, and the import still
+    fails with that sheet's problem. The options were (a) leave it, the
+    builder's recommendation, and (b) list period-sheet names with a label
+    filter. The owner chose (a).
+  - Gate 1's first low, Describe listing past Confirm's 1,000-answer cap. The
+    options were record only and file a ticket. The owner chose record only; it
+    stays in the record as the gate wrote it.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the fourth low,
+  the Build entry's claim about the held-answer refusal test. The sentence is
+  withdrawn in place above. With the directory write moved ahead of the `ok`
+  check in `importWorkbook`, this run gave `1 failed | 13 passed (14)`, the
+  failure being the carry-over test, "a verification that fails with a new
+  person answered adds no one and writes nothing". The source was restored from
+  `1c46064d` after. The run was
+  `npx vitest run tools/ledger/api/test/workbook-names.test.ts`.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the fifth low — "two
+  answers for one name: the first wins and the second is dropped without a
+  word". The comment on Confirm's `names` in `workbook-import.ts` now says so;
+  comment only, no schema or behaviour change.

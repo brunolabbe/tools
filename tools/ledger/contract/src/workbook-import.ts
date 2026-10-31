@@ -88,7 +88,9 @@ export const confirmWorkbookRequestSchema = z
      * none, or left out, when it listed none. An answer for a name that
      * resolves when Confirm reads the file again is not used: a second
      * Confirm, after one that added its people and then failed, finds them
-     * held. A CSV names no one, so its answers are never used.
+     * held. A CSV names no one, so its answers are never used. Two answers for
+     * one name (folded alike) are not an error: the first wins and the later
+     * ones are ignored without a word.
      */
     names: z.array(nameAnswerSchema).max(MAX_NAME_ANSWERS).optional(),
   })
