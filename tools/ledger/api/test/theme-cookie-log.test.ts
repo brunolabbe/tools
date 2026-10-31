@@ -85,3 +85,34 @@ test("the theme cookie reaches no log line when the token is missing and the req
   expect(lines.some((line) => line.includes('"msg":"access token refused"'))).toBe(true);
   expect(lines.filter((line) => line.includes("webtools-theme"))).toEqual([]);
 });
+
+test("the theme cookie reaches no log line when the person is rate limited", async () => {
+  const lines: string[] = [];
+  app = await createApp({
+    directory: memberDirectory(),
+    logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
+    config: {
+      dataDir: ":memory:",
+      access: accessConfig({ devIdentity: ALEX }),
+      rateLimitReadsPerMinute: 1,
+    },
+  });
+
+  // The first read spends the bucket; the second is refused by the limiter.
+  const first = await app.server.inject({
+    method: "GET",
+    url: ROUTES.rows,
+    headers: { cookie: COOKIE },
+  });
+  const second = await app.server.inject({
+    method: "GET",
+    url: ROUTES.rows,
+    headers: { cookie: COOKIE },
+  });
+
+  expect(first.statusCode).toBeLessThan(400);
+  expect(second.statusCode).toBe(429);
+  expect(lines.some((line) => line.includes('"msg":"rate limited"'))).toBe(true);
+  expect(lines.filter((line) => line.includes("webtools-theme"))).toEqual([]);
+  expect(lines.filter((line) => line.includes("dark"))).toEqual([]);
+});
