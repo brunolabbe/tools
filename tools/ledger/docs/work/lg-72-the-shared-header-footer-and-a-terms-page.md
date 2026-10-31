@@ -168,3 +168,52 @@ by the orchestrator; the owner chose, from the options the build's report gave:
    added your email"; (b) reuse `abuse@oludoi.com`; (c) a new ledger alias. The
    owner chose **(a)**, the build's recommendation. The page's "Who is
    responsible" section stays as it is.
+
+**2026-10-31 — round 1: repo-131's new head merged, plugin lifted, cookie
+sentence aligned.** Merged `3eb342af` (repo-131's round: `chrome.css` keeps the
+header on one row, `@webtools/ui/vite` exports `renderBlockingEntry`, the
+downloader's cookie sentence reworded) with `git merge`, no rebase.
+
+- **The plugin.** `web/vite.config.ts` imports `renderBlockingEntry` from
+  `@webtools/ui/vite`; the local copy and its test are gone. The lifted plugin is
+  pinned once, in `packages/ui/test/vite-plugin.test.ts`; the ledger keeps one
+  assertion that its config uses it (`web/test/vite-config.test.ts`). The built
+  `web/dist/app/index.html` carries
+  `<script blocking="render" type="module" crossorigin src="/assets/index-….js">`,
+  and the plugin fails the build when there is no entry tag to mark.
+- **The cookie sentence**, now the same facts as the downloader's: its name
+  `webtools-theme`, kept a year, set for `oludoi.com`, holds only `light` or
+  `dark`, sent with every request to any `oludoi.com` address, not read and not
+  logged by the service, and "System" deletes it. Before:
+
+  > Your browser keeps one cookie of ours, `webtools-theme`, which says only
+  > whether you chose a light or a dark look, for a year. It is set for the whole
+  > site, not only this address, so your browser sends it to every other tool on
+  > the same site too, and a choice made in one is the choice in all. The
+  > ledger's server does not read it. Cloudflare sets its own cookies when it
+  > signs you in.
+
+  After:
+
+  > If you choose light or dark, your browser keeps that choice for a year in a
+  > cookie named `webtools-theme`, set for `oludoi.com` so that every tool there
+  > shows the same theme. It holds only the word `light` or `dark`, and your
+  > browser sends it with every request to any `oludoi.com` address, this service
+  > included. The service does not read it and does not write it to its log; the
+  > page reads it in your browser. Choosing "System" deletes it. Cloudflare sets
+  > its own cookies when it signs you in.
+
+- **"Does not write it to its log" checked, not assumed.** The ledger's API
+  logs no request header: Fastify's own logger is off (`server.ts:186`,
+  `logger: false`), `grep -rn headers tools/ledger/api/src` finds none passed to
+  a log call, and `request rejected` logs method, url, code, status and detail
+  keys only. `logger.ts`'s redaction covers `headers.cookie` and
+  `*.headers.cookie` (nested paths, not a bare `cookie` key), so redaction is the
+  backstop, not the reason. Pinned in `api/test/theme-cookie-log.test.ts`: a
+  `webtools-theme=dark` cookie sent to the page, `terms.html`, health, `/api/me`,
+  a miss, a rejected POST, and a request with no token reaches no log line, with
+  "something was logged" asserted first. It fails when
+  `cookie: request.headers.cookie` is added to the `request rejected` fields
+  (2 of 3 red), and passes again with the line removed.
+- **Port.** `E2E_PORT=8172` was taken by another session's downloader e2e run
+  (`http://127.0.0.1:8172/api/health is already used`); the re-run used 8186.
