@@ -269,20 +269,6 @@ export function storedTail(db: Database): StatementRow | undefined {
   return latest(db, "DESC", 1)[0];
 }
 
-/** Whether a stored row has this date, amount and balance: the CSV's oldest row already stored (lg-67). */
-export function storesMovement(
-  db: Database,
-  row: Pick<StatementRow, "date" | "amountCents" | "balanceCents">,
-): boolean {
-  return (
-    db
-      .prepare(
-        "SELECT 1 FROM statement_rows WHERE date = ? AND amount_cents = ? AND balance_cents = ? LIMIT 1",
-      )
-      .get(row.date, row.amountCents, row.balanceCents) !== undefined
-  );
-}
-
 function store(
   context: ImportContext,
   rows: StatementRow[],
