@@ -158,10 +158,14 @@ found about 23 s of it buys no coverage, and measured the largest items:
     one run alone.
   - **Build 7.** Seven tests deleted from `api/test/receipts.test.ts`, each
     compared with its `splitReceipt` twin in `books/test/receipts.test.ts` for the
-    inputs and the cents: 1377 to `:709` (922 and
+    cents (and for the inputs, except two): 1377 to `:709` (922 and
     1,554), 1392 to `:729` (shared -7 at 2,470), 1422 to `:787` (the coupon,
     565), 1688 to `:957` (-923 and -1,553), 1726 to `:988` (11,58 $ to sam), 1739
-    to `:1003` (a cent under the total) and 1781 to `:973` (casey 1,554, sam 574). The
+    to `:1003` (a cent under the total) and 1781 to `:973` (casey 1,554, sam 574).
+    The two `twoTaxed` cases (1726, 1739) left FROMAGE unnamed (`chargedTo: null`)
+    where the twins' `TWO_TAXED` names `"sam"`; the cents match, and the route
+    still has a test that an unnamed `theirs` charge goes to the other member
+    (`marked("theirs", "theirs", "theirs")`, `charged_to: "sam"`). The
     `test.each` at 1704 keeps the route's refusal message and the zero rows;
     1663 stays. Their helpers `BASKET_REFUND` and `twoTaxed` were unused after
     and are deleted. `api/test/receipts.test.ts`: 75 tests to 68.
@@ -201,7 +205,22 @@ found about 23 s of it buys no coverage, and measured the largest items:
   `household-settlement.test.ts` 5,240 to 1,513 ms, `history.test.tsx` 2,787 to
   1,551 ms, and `lg-65-search.test.ts` (5,083 ms) is gone.
   The Windows leg (informational) passed, 3m20s.
-  **Done when 2 on CI is not read directly**: the default reporter prints a time
-  per file, not per test, so the signal case has no CI figure. Its file lost
-  4,256 ms (6,608 to 2,352), which is the 4 s the ticket measured, and the case ran
-  198 ms locally (`--reporter=verbose`, against 4,064 ms in the base run).
+  **Done when 2 on CI is read as a bound, not a figure**: vitest's default
+  reporter lists each test slower than 300 ms under its file. Run
+  `40210503276`'s ubuntu log lists the signal case at 4048 ms; this run's log
+  lists no such test, so the case ran under 300 ms on CI, inside the 500 ms asked.
+  Its file lost 4,256 ms (6,608 to 2,352), which is the 4 s the ticket measured,
+  and the case ran 198 ms locally (`--reporter=verbose`, against 4,064 ms in the
+  base run).
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the first low — "The
+  2026-10-31 CI entry says 'the default reporter prints a time per file, not per
+  test, so the signal case has no CI figure'" (vitest lists each test slower than
+  300 ms under its file; run `40210503276` lists the signal case at 4048 ms, the
+  head run lists none). The CI entry now reads the case's absence as a bound
+  under 300 ms. `git diff 9c67b8ef HEAD -- <this file> | grep -c '^-.*per file,
+  not per test, so the signal case has no CI figure'` → `1`.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the third low — "two of
+  the seven deleted route cases do not have quite the same input as their books
+  twins" (`twoTaxed(1_007)` and `twoTaxed(1_012)` left FROMAGE unnamed,
+  `TWO_TAXED` names `"sam"`; the cents match). Build 7 now says so. `git diff
+  9c67b8ef HEAD -- <this file> | grep -c '^-.*inputs and the cents: 1377'` → `1`.
