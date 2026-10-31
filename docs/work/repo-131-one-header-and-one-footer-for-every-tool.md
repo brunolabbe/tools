@@ -550,7 +550,7 @@ real consumer.
   `packages/ui/src/vite.ts` and its test are byte-identical to `3eb342af`.
 
 - 2026-10-31 — The owner reversed Build step 3's links after landing: the footer
-  links to nothing on GitHub. It is now `v<version> · Terms`, left-aligned, with
+  links to nothing on GitHub. It is now `<version> · Terms` (no `v`), left-aligned, with
   the version as plain text; an `unknown` version is left out rather than
   replaced by a changelog link. `packages/ui/src/repository.ts` and its four
   exports are gone, and `AppFooter` no longer takes `tool`, which only built

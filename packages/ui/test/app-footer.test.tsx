@@ -15,7 +15,7 @@ afterEach(cleanup);
 test("the version is shown as text, and Terms is the only link", () => {
   render(<AppFooter version="0.10.0" termsHref="/terms.html" />);
 
-  expect(screen.getByText("v0.10.0").closest("a")).toBeNull();
+  expect(screen.getByText("0.10.0").closest("a")).toBeNull();
   const links = screen.getAllByRole("link");
   expect(links.map((link) => link.getAttribute("href"))).toEqual(["/terms.html"]);
   expect(links[0]?.textContent).toBe("Terms");

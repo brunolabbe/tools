@@ -17,7 +17,7 @@ test("the footer shows the API's version, and links only to the terms", async ({
   await page.goto("/");
 
   const footer = page.getByRole("contentinfo");
-  await expect(footer.getByText(`v${version}`, { exact: true })).toBeVisible();
+  await expect(footer.getByText(version, { exact: true })).toBeVisible();
   await expect(footer.getByRole("link")).toHaveCount(1);
   await expect(footer.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms.html");
 });
