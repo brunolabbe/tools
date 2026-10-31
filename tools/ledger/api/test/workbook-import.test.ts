@@ -32,6 +32,7 @@ import { closedPeriods, currentLines } from "../src/periods.ts";
 import { currentRatios, currentSalaries } from "../src/salaries.ts";
 import { importStatement } from "../src/statements.ts";
 import { HOUSEHOLD, writeMemberDirectory } from "./helpers/access.ts";
+import { dump } from "./helpers/dump.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import { asTwo } from "./helpers/settlement.ts";
 import { history, render } from "./helpers/workbook.ts";
@@ -99,16 +100,6 @@ function books(): Database.Database {
   const db = new Database(databasePath);
   migrate(db);
   return db;
-}
-
-/** Every row of every table, for "nothing changed". */
-function dump(db: Database.Database): Record<string, unknown[]> {
-  const tables = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
-    .all() as { name: string }[];
-  return Object.fromEntries(
-    tables.map(({ name }) => [name, db.prepare(`SELECT * FROM "${name}"`).all()]),
-  );
 }
 
 function sha256(file: string): string {

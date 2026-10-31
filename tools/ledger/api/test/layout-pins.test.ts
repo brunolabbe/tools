@@ -14,7 +14,9 @@
 
 import { createHash } from "node:crypto";
 import { beforeAll, describe, expect, test } from "vitest";
+import { CSV_SHEET_NAME } from "@ledger/contract";
 import { layoutOutputFormat } from "@ledger/receipts";
+import { csvSheet } from "../src/csv.ts";
 import { layoutRequest } from "../src/layout-view.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
 import type { LayoutFixture } from "./layout/fixtures.ts";
@@ -77,4 +79,46 @@ describe("what the model is sent", () => {
   test("the answer's schema, as the structured output's format, is the pinned one", () => {
     expect(sha256(JSON.stringify(layoutOutputFormat().schema))).toBe(SCHEMA_PIN);
   });
+});
+
+/**
+ * lg-67, Build 3: what the import screen sends for each CSV fixture, its text
+ * read by `api/src/csv.ts` as one sheet named `statement.csv` (Decision 5 (a)),
+ * not under the fixture's own file name. Seven new pins beside the seven above
+ * for the same fixtures, which stand: the two differ by the sheet's name
+ * alone. What Haiku answers to the fixed name is unmeasured (lg-67, Done when
+ * 13, the owner's).
+ */
+const CSV_UPLOAD_PINS: Readonly<Record<string, string>> = {
+  "csv-balance": "012081995629a7878a7f03e97d9a944c1b61f6295f80c832088aa79bb9080bdb",
+  "csv-no-balance": "9795452e657f5256b439ff0c1c7ab1386c43fb6776cedf5b95e9376c9469cb87",
+  "empty-columns-csv": "4fecbbcfc90989bc76f261b2ec9e28abd7f1f8ba95f8d8f428579fd48acde507",
+  "bank-preamble": "657e5c96bf91aaa0dcbceeeee9b8a52decc6fde61d6513f8d5505116de529409",
+  "bank-two-dates": "0d762083380dc7841d561228331f6436f05701729a990a4fa8bf243ac9a6dbb7",
+  "bank-footer": "5a25d7c8ea6efee02ead8e9a08a65c33a4963993a36599bad9f2d7993f89fceb",
+  "bank-wide": "1df17b6b5f0c1ea041fd221e917e4f0feece7f22e9328d8ce8540e1e686afb56",
+};
+
+describe("what the model is sent for an uploaded CSV (lg-67)", () => {
+  test("pins the seven CSV fixtures, the ones that carry a file's text", () => {
+    expect(
+      fixtures
+        .filter((fixture) => fixture.text !== undefined)
+        .map((fixture) => fixture.name)
+        .toSorted(),
+    ).toEqual(Object.keys(CSV_UPLOAD_PINS).toSorted());
+  });
+
+  test.each(Object.entries(CSV_UPLOAD_PINS))(
+    "%s: the request under statement.csv is pinned, and differs from the measured one by the name alone",
+    (name, pin) => {
+      const fixture = fixtures.find((candidate) => candidate.name === name);
+      const text = fixture?.text ?? "";
+      const sent = layoutRequest([csvSheet(CSV_SHEET_NAME, text)]);
+      expect(sha256(sent)).toBe(pin);
+      const measured = layoutRequest(fixture?.sheets ?? []);
+      const own = JSON.stringify(fixture?.sheets[0]?.name ?? "");
+      expect(sent).toBe(measured.replace(`## Sheet ${own}:`, `## Sheet "${CSV_SHEET_NAME}":`));
+    },
+  );
 });

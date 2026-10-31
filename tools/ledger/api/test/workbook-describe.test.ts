@@ -679,34 +679,19 @@ describe("confirming (Done when 7)", () => {
   });
 });
 
-describe("only an .xlsx is read, judged from the bytes (Done when 13)", () => {
+describe("only an .xlsx or a CSV is read, judged from the bytes (Done when 13, amended by lg-67)", () => {
   const MINIMAL_TYPES =
     '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>';
   const NO_SHEETS =
     '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets/></workbook>';
 
-  async function csvText(): Promise<Buffer> {
-    const csv = fixtures.find((candidate) => candidate.name === "csv-balance");
-    // The fixture's sheet back as the text it was read from.
-    const lines = (csv?.sheets[0]?.rows ?? []).map((row) =>
-      row
-        .map((cell) => {
-          const value = cell?.value ?? null;
-          if (value === null) return "";
-          if (value.kind === "number") return String(value.number);
-          if (value.kind === "date") return value.date;
-          return value.text.includes(",") ? `"${value.text}"` : value.text;
-        })
-        .join(","),
-    );
-    return Buffer.from(`${lines.join("\n")}\n`);
-  }
-
-  test("a bank CSV, a CSV whose first header is PK ID, and a zip that is not a workbook get one refusal", async () => {
+  // lg-67 amends this lg-66 line: a bank CSV, and one whose first header is
+  // `PK ID`, are read as CSVs now (`csv-import.test.ts`, its Done when 1). What
+  // is still refused is a zip that is not a workbook and text no CSV could be.
+  test("a zip that is not a workbook, and a text file with no comma, semicolon or tab, get one refusal", async () => {
     const uploads = [
-      await csvText(),
-      Buffer.from("PK ID,Date,Amount\n1,2026-01-05,12.50\n"),
       zipOf([{ name: "notes.txt", data: Buffer.from("Rien ici") }]),
+      Buffer.from("Rien ici\nNi là non plus\n"),
     ];
     const model = fake(answering(fixture("lg7").layout));
     const started = await start({ ask: model.ask });
@@ -723,7 +708,7 @@ describe("only an .xlsx is read, judged from the bytes (Done when 13)", () => {
     }
     expect(new Set(refusals.map((error) => `${error.code}: ${error.message}`))).toEqual(
       new Set([
-        "WORKBOOK_NOT_XLSX: Only an .xlsx workbook can be imported here. Save the file as an Excel workbook (.xlsx) and choose it again.",
+        "WORKBOOK_NOT_XLSX: Only an .xlsx workbook or a comma-separated CSV can be imported here. Save the file as an Excel workbook (.xlsx), or export it as a CSV, and choose it again.",
       ]),
     );
     expect(model.requests).toHaveLength(0);

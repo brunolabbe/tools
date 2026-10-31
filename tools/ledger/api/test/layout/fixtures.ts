@@ -24,7 +24,8 @@
  * 13. `bank-wide`: a bank CSV of eleven columns, most of them not needed.
  *
  * Every bank shape is invented: it stands for a kind of export, not for any
- * bank's, and stays within what `csv.ts` reads.
+ * bank's, and stays within what `api/src/csv.ts` reads (lg-67 moved the reader
+ * there; the fixtures' text is as lg-56 measured it).
  */
 
 import { readSheets } from "../../src/xlsx.ts";
@@ -32,7 +33,7 @@ import { HOUSEHOLD_LAYOUT } from "@ledger/books";
 import type { Cell, Sheet } from "@ledger/books";
 import type { Bucket, WorkbookLayout } from "@ledger/contract";
 import { history, render } from "../helpers/workbook.ts";
-import { csvSheet } from "./csv.ts";
+import { csvSheet } from "../../src/csv.ts";
 
 export interface LayoutFixture {
   name: string;
@@ -43,6 +44,8 @@ export interface LayoutFixture {
   people: string[];
   /** The correct description, written by hand. */
   layout: WorkbookLayout;
+  /** A bank CSV's text, as a file holds it (lg-67): its one sheet is this, read. */
+  text?: string;
 }
 
 // --- Cells ---
@@ -815,6 +818,12 @@ function statement(
   return out;
 }
 
+/** A bank CSV fixture's file: its text, and the one sheet the reader makes of it. */
+function csvFile(name: string, lines: readonly string[]): { sheets: Sheet[]; text: string } {
+  const text = `${lines.join("\n")}\n`;
+  return { sheets: [csvSheet(name, text)], text };
+}
+
 function quoted(text: string): string {
   return /[",]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
@@ -836,7 +845,7 @@ function csvBalance(): LayoutFixture {
   return {
     name: "csv-balance",
     shape: "a bank CSV, oldest first, withdrawals and deposits apart, with a balance",
-    sheets: [csvSheet("releve-2024.csv", `${lines.join("\n")}\n`)],
+    ...csvFile("releve-2024.csv", lines),
     people: [],
     layout: {
       account: {
@@ -869,7 +878,7 @@ function csvNoBalance(): LayoutFixture {
   return {
     name: "csv-no-balance",
     shape: "a bank CSV, newest first, one signed amount, no balance",
-    sheets: [csvSheet("transactions.csv", `${lines.join("\n")}\n`)],
+    ...csvFile("transactions.csv", lines),
     people: [],
     layout: {
       account: {
@@ -1166,7 +1175,7 @@ function emptyColumnsCsv(): LayoutFixture {
   return {
     name: "empty-columns-csv",
     shape: "a bank CSV, oldest first, withdrawals and deposits apart with an empty column between",
-    sheets: [csvSheet("chequing-activity.csv", `${lines.join("\n")}\n`)],
+    ...csvFile("chequing-activity.csv", lines),
     people: [],
     layout: csvLayout("chequing-activity.csv", "oldest-first", [
       { role: "date", column: "A" },
@@ -1192,7 +1201,7 @@ function bankPreamble(): LayoutFixture {
   return {
     name: "bank-preamble",
     shape: "a bank CSV with a title, an account line and a period line above the header",
-    sheets: [csvSheet("statement-q1.csv", `${lines.join("\n")}\n`)],
+    ...csvFile("statement-q1.csv", lines),
     people: [],
     layout: csvLayout("statement-q1.csv", "oldest-first", [
       { role: "date", column: "A" },
@@ -1224,7 +1233,7 @@ function bankTwoDates(): LayoutFixture {
   return {
     name: "bank-two-dates",
     shape: "a bank CSV with the date a movement posted and the date it was made, and a reference",
-    sheets: [csvSheet("activity.csv", `${lines.join("\n")}\n`)],
+    ...csvFile("activity.csv", lines),
     people: [],
     layout: csvLayout("activity.csv", "oldest-first", [
       { role: "date", column: "A" },
@@ -1252,7 +1261,7 @@ function bankFooter(): LayoutFixture {
   return {
     name: "bank-footer",
     shape: "a bank CSV, oldest first, with total and closing-balance lines after the last movement",
-    sheets: [csvSheet("month-end.csv", `${lines.join("\n")}\n`)],
+    ...csvFile("month-end.csv", lines),
     people: [],
     layout: csvLayout("month-end.csv", "oldest-first", [
       { role: "date", column: "A" },
@@ -1302,7 +1311,7 @@ function bankWide(): LayoutFixture {
   return {
     name: "bank-wide",
     shape: "a bank CSV, newest first, of eleven columns of which a description needs four",
-    sheets: [csvSheet("full-export.csv", `${lines.join("\n")}\n`)],
+    ...csvFile("full-export.csv", lines),
     people: [],
     layout: csvLayout("full-export.csv", "newest-first", [
       { role: "date", column: "A" },

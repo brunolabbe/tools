@@ -66,6 +66,11 @@
  * The whole thing runs in one `IMMEDIATE` transaction, so two pastes arriving
  * at once cannot both read the same tail and both extend it. The rows it adds
  * are classified by the rules in force in that same transaction (lg-4).
+ *
+ * **A bank CSV's rows are stored by the same insert** (`insertRows`, lg-67),
+ * inside the same kind of transaction (`immediately`), but placed by
+ * `csv-statement.ts`: after the tail or into an empty history, never compared
+ * here, since its wording is another bank's.
  */
 
 import { AppError } from "@ledger/contract";
@@ -177,30 +182,91 @@ export function importStatement(context: ImportContext, text: string): ImportSta
   if (oldest === undefined || newest === undefined) {
     throw new AppError("BAD_REQUEST", "The paste holds no statement rows.");
   }
+  return immediately(context.db, "Try the paste again.", () => {
+    // Taken before the rows are stored, so the paste's own are the ones after it.
+    const before = lastRowId(context.db);
+    const stored = store(context, rows, oldest, newest);
+    // A row with exactly one matching rule is classified here; the rest wait
+    // in the inbox (lg-4). Inside the paste's transaction, so a paste is
+    // never stored without its classifications or classified without it.
+    const filed = classifyAdded(context, before);
+    // The report says how many of this paste's own rows wait (lg-54).
+    return { ...stored, rowsInInbox: stored.rowsAdded - filed };
+  });
+}
+
+/**
+ * `work` in one `IMMEDIATE` transaction, so two writers arriving at once cannot
+ * both read the same tail and both extend it: a paste's, and a CSV's (lg-67).
+ */
+export function immediately<T>(db: Database, retry: string, work: () => T): T {
   try {
-    return context.db
-      .transaction(() => {
-        // Taken before the rows are stored, so the paste's own are the ones after it.
-        const before = lastRowId(context.db);
-        const stored = store(context, rows, oldest, newest);
-        // A row with exactly one matching rule is classified here; the rest wait
-        // in the inbox (lg-4). Inside the paste's transaction, so a paste is
-        // never stored without its classifications or classified without it.
-        const filed = classifyAdded(context, before);
-        // The report says how many of this paste's own rows wait (lg-54).
-        return { ...stored, rowsInInbox: stored.rowsAdded - filed };
-      })
-      .immediate();
+    return db.transaction(work).immediate();
   } catch (error: unknown) {
     // Another connection holds the write lock past the busy timeout. Nothing
     // here opens a second connection, but a backup or an operator's shell can.
     if ((error as { code?: unknown } | null)?.code === "SQLITE_BUSY") {
-      throw new AppError("TIMEOUT", "The ledger's database was busy. Try the paste again.", {
+      throw new AppError("TIMEOUT", `The ledger's database was busy. ${retry}`, {
         cause: error,
       });
     }
     throw error;
   }
+}
+
+/** A row to store: a paste's, or a CSV's (lg-67), which has no category and may have a note. */
+export interface RowToStore {
+  date: string;
+  category: string;
+  description: string;
+  amountCents: number;
+  balanceCents: number;
+  note: string | null;
+}
+
+/**
+ * Stores `rows`, oldest first, after the highest stored position, under one
+ * new `statement_imports` row of source `paste` (its column's default), inside
+ * the caller's transaction. The one insert a paste and a CSV share (lg-67): a
+ * CSV's rows are stored as a paste's are, and compared as a paste's are later.
+ */
+export function insertRows(
+  db: Database,
+  context: Pick<ImportContext, "personId" | "now">,
+  rows: readonly RowToStore[],
+): void {
+  if (rows.length === 0) return;
+  const imported = db
+    .prepare("INSERT INTO statement_imports (imported_at, imported_by) VALUES (?, ?)")
+    .run(context.now().toISOString(), context.personId);
+  // The position after the highest stored one — not the row count, which only
+  // equals it while positions run 0..n.
+  const next = (
+    db.prepare("SELECT coalesce(max(seq), -1) + 1 AS next FROM statement_rows").get() as {
+      next: number;
+    }
+  ).next;
+  const insert = db.prepare(
+    `INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id, note)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const [offset, row] of rows.entries()) {
+    insert.run(
+      next + offset,
+      row.date,
+      row.category,
+      row.description,
+      row.amountCents,
+      row.balanceCents,
+      imported.lastInsertRowid,
+      row.note,
+    );
+  }
+}
+
+/** The newest stored row, by position: the tail a paste or a CSV must continue. */
+export function storedTail(db: Database): StatementRow | undefined {
+  return latest(db, "DESC", 1)[0];
 }
 
 function store(
@@ -233,33 +299,12 @@ function store(
   }
 
   const added = rows.slice(alreadyPresent);
-  if (added.length > 0) {
-    const imported = db
-      .prepare("INSERT INTO statement_imports (imported_at, imported_by) VALUES (?, ?)")
-      .run(context.now().toISOString(), context.personId);
-    // The position after the highest stored one — not the row count, which only
-    // equals it while positions run 0..n.
-    const next = (
-      db.prepare("SELECT coalesce(max(seq), -1) + 1 AS next FROM statement_rows").get() as {
-        next: number;
-      }
-    ).next;
-    const insert = db.prepare(
-      `INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    );
-    for (const [offset, row] of added.entries()) {
-      insert.run(
-        next + offset,
-        row.date,
-        row.category,
-        row.description,
-        row.amountCents,
-        row.balanceCents,
-        imported.lastInsertRowid,
-      );
-    }
-  }
+  // A paste's rows carry no note: the column is the workbook's and a CSV's.
+  insertRows(
+    db,
+    context,
+    added.map((row) => ({ ...row, note: null })),
+  );
 
   // Read back, not taken from the paste: a paste that sits inside the stored
   // history leaves the tail where it was, and this is the answer either way.

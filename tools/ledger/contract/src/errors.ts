@@ -24,8 +24,9 @@
  * four are the household directory's (lg-22), the next two are its people's
  * shown names (lg-33), the next is a person retired from the books (lg-35), the
  * next six are the receipts' (lg-8), the next is their items' (lg-10), the
- * next is the mortgage split's (lg-63), and the last six are the workbook
- * import's through a described layout (lg-66).
+ * next is the mortgage split's (lg-63), the next six are the workbook
+ * import's through a described layout (lg-66), and the last three are a bank
+ * CSV's read through the same screen (lg-67).
  */
 
 import {
@@ -234,9 +235,12 @@ export const LEDGER_ERROR_CODES = [
   // The upload's byte bound is core's `SIZE_LIMIT_EXCEEDED`, as a receipt
   // photo's is: it is the size of what was sent. These are about what is in it.
   /**
-   * The upload is not an `.xlsx` workbook, judged from its bytes and never its
-   * name: not a zip, a zip whose directory cannot be read, or one without the
-   * workbook's own entries. A bank CSV is refused this way until lg-67.
+   * The upload is neither an `.xlsx` workbook nor a CSV, judged from its bytes
+   * and never its name: not a workbook's zip (a zip whose directory cannot be
+   * read, or one without the workbook's own entries), and not text a CSV could
+   * be (it holds a NUL byte, or no line holds a comma, a semicolon or a tab).
+   * The name stayed when lg-67 began reading CSVs: the code is what the screen
+   * and the tests key on, and the message says what is read.
    */
   "WORKBOOK_NOT_XLSX",
   /** The workbook reads as no sheet at all, so there is nothing to describe. */
@@ -263,6 +267,29 @@ export const LEDGER_ERROR_CODES = [
    * verification, so nothing was imported. `details.problems` lists them.
    */
   "WORKBOOK_IMPORT_REFUSED",
+  // --- A bank CSV, read through the same screen (lg-67) ---
+  /**
+   * The CSV is written in a shape the reader does not read, found by
+   * whole-field patterns before anything is sent: fields separated by
+   * semicolons or tabs, a decimal comma, a thousands separator, a date not
+   * written `yyyy-mm-dd`, or bytes that are not UTF-8. `details.shapes` names
+   * each; the message says which, and that a field matching by chance is the
+   * check's mistake.
+   */
+  "CSV_SHAPE_UNREAD",
+  /**
+   * The model's description of a CSV names a part a CSV cannot have: a bucket
+   * mapping or column, a person column, a carry-over label, summary rows,
+   * periods, salaries or a sheet per year. `details.parts` names each.
+   */
+  "LAYOUT_NOT_FOR_CSV",
+  /**
+   * A CSV's rows do not continue the stored history: its oldest row does not
+   * open from the newest stored row's balance, or it reaches back over rows
+   * already stored. `details` names the stored tail's date and balance. A CSV
+   * is stored after the tail or into an empty history, never overlapping.
+   */
+  "CSV_NOT_AFTER_TAIL",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -320,7 +347,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   MORTGAGE_SHARES_WRONG_PEOPLE:
     "Those parts do not name exactly the people in the books on that day. Give each of them a part, and nobody else.",
   WORKBOOK_NOT_XLSX:
-    "Only an .xlsx workbook can be imported here. Save the file as an Excel workbook (.xlsx) and choose it again.",
+    "Only an .xlsx workbook or a comma-separated CSV can be imported here. Save the file as an Excel workbook (.xlsx), or export it as a CSV, and choose it again.",
   WORKBOOK_NO_SHEETS: "That workbook has no sheet to read.",
   WORKBOOK_TOO_LARGE: "That workbook is larger than this import reads.",
   LAYOUT_READER_UNCONFIGURED:
@@ -329,6 +356,11 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
     "The model did not answer with a description of the workbook. Nothing was imported.",
   WORKBOOK_IMPORT_REFUSED:
     "The workbook, read through that description, does not pass every check, so nothing was imported.",
+  CSV_SHAPE_UNREAD: "That CSV is written in a way this import does not read. Nothing was sent.",
+  LAYOUT_NOT_FOR_CSV:
+    "The model described parts a bank CSV cannot have, so the description is not of this file. Nothing was imported.",
+  CSV_NOT_AFTER_TAIL:
+    "The CSV's rows do not continue from the newest stored row, so nothing was stored.",
 };
 
 /**

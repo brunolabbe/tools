@@ -10,6 +10,11 @@
  * - **Confirm** takes the file and the description again, and imports only when
  *   every verification holds. It calls no model.
  *
+ * **A bank CSV comes through the same two requests** (lg-67): the server tells
+ * one from a workbook by its bytes, reads it as one sheet named
+ * `CSV_SHEET_NAME`, and stores its rows as a statement's, after the stored
+ * tail or into an empty history. The responses say which it read (`kind`).
+ *
  * A file of its own beside `api.ts`, as `layout.ts` is: one seam, its own.
  */
 
@@ -32,6 +37,13 @@ export const MAX_WORKBOOK_BYTES = 4 * 1024 * 1024;
  * the screen that says what leaves the house (Build 4.1) says what is sent.
  */
 export const LAYOUT_SAMPLE_ROWS = { first: 12, middle: 6, last: 3 } as const;
+
+/**
+ * What a CSV's one sheet is called in what is sent and in the description
+ * (lg-67, Decision 5 (a)): a fixed name, so nothing of the uploaded file's
+ * name leaves the house.
+ */
+export const CSV_SHEET_NAME = "statement.csv";
 
 /** The file as the requests carry it: its bytes, base64. */
 const file = z.string().min(1);
@@ -90,20 +102,54 @@ export interface WorkbookConfirmation {
   buckets: BucketLabelConfirmation[];
 }
 
-export interface DescribeWorkbookResponse {
+/**
+ * Where a CSV's rows would go against the stored history (lg-67, Decision 2
+ * (a)), from the same check Confirm makes: into an empty history, or after the
+ * newest stored row, whose date and balance are named. Overlapping that row,
+ * or leaving a gap after it, is a problem of the reading, and Confirm is not
+ * offered.
+ */
+export type CsvPlacement =
+  | { kind: "first" }
+  | { kind: "continues"; date: string; balanceCents: number }
+  | { kind: "overlaps"; date: string; balanceCents: number }
+  | { kind: "gap"; date: string; balanceCents: number };
+
+interface DescribedFile {
   layout: WorkbookLayout;
   /** Whether every verification holds, so the screen offers Confirm. */
   ok: boolean;
   /** Each verification that failed, in a sentence. */
   problems: string[];
-  /** The dry run's report, as `import:ledger` prints it. */
+  /** The dry run's report: for a workbook, as `import:ledger` prints it. */
   report: string;
   confirmation: WorkbookConfirmation;
   /** What the call cost, in the model's tokens. */
   usage: { inputTokens: number; outputTokens: number };
 }
 
-export interface ConfirmWorkbookResponse {
-  /** The import's report, as `import:ledger --write` prints it. */
-  report: string;
-}
+/** What Describe answers, for a workbook or for a CSV (lg-67), told by `kind`. */
+export type DescribeWorkbookResponse =
+  | (DescribedFile & { kind: "xlsx" })
+  | (DescribedFile & {
+      kind: "csv";
+      /** `null` when the reading has a problem, so no row was placed. */
+      placement: CsvPlacement | null;
+    });
+
+export type ConfirmWorkbookResponse =
+  | {
+      kind: "xlsx";
+      /** The import's report, as `import:ledger --write` prints it. */
+      report: string;
+    }
+  | {
+      kind: "csv";
+      report: string;
+      /** The CSV's rows stored, all of them: a CSV never overlaps what is stored. */
+      rowsAdded: number;
+      /** How many of them no rule and no history filed, which wait in the inbox. */
+      rowsInInbox: number;
+      /** The newest stored row's balance once they are stored. */
+      tailBalanceCents: number;
+    };
