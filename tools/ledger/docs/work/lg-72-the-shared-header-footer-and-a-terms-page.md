@@ -155,3 +155,16 @@ theme chosen in the header is the terms page's). `dist/app` holds `theme.js`,
 `blocking="render"`. The screenshots in `e2e/.artifacts/layout/` were opened
 (`Header (household)-360.png`, `Terms-360.png`): the header is on one line at
 360 px and the terms page does not scroll sideways.
+
+**2026-10-31 — the owner's answers to the build's two open decisions.** Relayed
+by the orchestrator; the owner chose, from the options the build's report gave:
+
+1. **The `render-blocking-entry` plugin.** Options: (a) lift it into
+   `@webtools/ui` in repo-131's round; (b) one copy per tool. The owner chose
+   **(a)**, the build's recommendation. The ledger's local copy, and its test in
+   `web/test/vite-config.test.ts`, are replaced by the lifted plugin in this
+   round.
+2. **A contact address on the terms page.** Options: (a) none, with "ask whoever
+   added your email"; (b) reuse `abuse@oludoi.com`; (c) a new ledger alias. The
+   owner chose **(a)**, the build's recommendation. The page's "Who is
+   responsible" section stays as it is.
