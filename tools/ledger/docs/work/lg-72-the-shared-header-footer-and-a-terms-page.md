@@ -217,3 +217,13 @@ downloader's cookie sentence reworded) with `git merge`, no rebase.
   (2 of 3 red), and passes again with the line removed.
 - **Port.** `E2E_PORT=8172` was taken by another session's downloader e2e run
   (`http://127.0.0.1:8172/api/health is already used`); the re-run used 8186.
+- **CodeQL on the draft's first round head `c208231e`.** The `CodeQL` check run
+  failed in 2 s with "1 new alert including 1 high severity security
+  vulnerability": rule "Bad HTML filtering regexp", at
+  `tools/ledger/web/test/terms-page.test.ts:14`, "This regular expression does
+  not match script end tags like `</script >`". It was this branch's own test, the
+  build's `<script>…</script>` pairing regex, the shape repo-131's gate 1 (F2)
+  had already refused in the downloader's terms test. The test now counts opening
+  tags and checks the next characters close the one it found, as the downloader's
+  does. The same run's `check`, `test (ubuntu-latest)`, `test (windows-latest,
+  informational)`, `e2e`, `docker`, `codeql` and `dependency-review` jobs passed.

@@ -11,11 +11,23 @@ const read = (name: string): string =>
   readFileSync(new URL(`../public/${name}`, import.meta.url), "utf8");
 
 test("loads the shared theme from one same-origin module, with no inline script", () => {
-  const scripts = [...read("terms.html").matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/giu)];
+  const text = read("terms.html");
+  // Opening tags are counted, never paired with a closing one: a closing tag has
+  // spellings a pattern misses (`</script >`), and a second script hidden behind
+  // one would go uncounted. The same shape as the downloader's terms test.
+  const opening = [...text.matchAll(/<script\b[^>]*>/giu)];
 
-  expect(scripts.map((match) => match[2])).toEqual([""]);
-  expect(scripts[0]?.[1]).toContain('type="module"');
-  expect(scripts[0]?.[1]).toContain('src="/theme.js"');
+  expect(opening).toHaveLength(1);
+  const tag = opening[0]?.[0] ?? "";
+  expect(tag).toContain('type="module"');
+  expect(tag).toContain('src="/theme.js"');
+  // Empty: the very next characters close it.
+  expect(
+    text
+      .slice((opening[0]?.index ?? 0) + tag.length)
+      .toLowerCase()
+      .startsWith("</script>"),
+  ).toBe(true);
 });
 
 test("links back to the ledger, and to its own stylesheet and icon", () => {
