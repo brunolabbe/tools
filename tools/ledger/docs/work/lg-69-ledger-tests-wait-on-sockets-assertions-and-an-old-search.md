@@ -106,3 +106,84 @@ found about 23 s of it buys no coverage, and measured the largest items:
   regression spec. All helpers and fixtures are imported, and nothing is skipped.
   Not measured and not in scope: happy-dom for the 16 jsdom files. repo-129
   covers `isolate: false`.
+- 2026-10-31: Built on `lg-69-ledger-test-waits` from `f05108d2`. Every
+  cited line resolved to the same test at `f05108d2` except `receipts.test.ts:1703`,
+  a blank line there, with the `test.each` at 1704 (kept).
+  - **Build 1.** `afterEach` in `api/test/receipts.test.ts` calls
+    `app?.server.server.closeAllConnections()` before `shutdown()`. It is the only
+    spec in ledger that `listen()`s (`grep -rln "\.listen(\|createServer("
+    tools/ledger` finds it and `api/src/main.ts`), so no other test needed it. The
+    signal test: 4064 ms in the base run (`base.json`, the whole ledger project) to
+    198 ms (`npx vitest run tools/ledger/api/test/receipts.test.ts -t signal
+    --reporter=verbose`).
+  - **Build 2.** `books/test/helpers/trials.ts` (`trials()`: `begin`, `holds`,
+    `equal`, `assertNone`) collects what a loop finds and fails once, naming the
+    first failing trial, its inputs and how many failed. All three loops of
+    `household-settlement.test.ts` use it; every trial count is unchanged (5,000,
+    3,000 each for 3, 4 and 5 people, 5,000). The file ran in 3,638 ms in the
+    base run and 1,614 ms in mine (1.28 s alone).
+  - **Build 3 and 4.** `api/test/lg-65-search.test.ts` and
+    `api/test/helpers/paste-population.ts` are deleted (nothing else imported the
+    helper). `DEFAULT_CASES` is 5,000 with the comment citing lg-65's table. The
+    direct spec: 5,334 ms to 2,794 ms in the same two runs (1.2 s alone).
+  - **Build 5, the seam.** `CreateAppOptions.booksTemplate?: Buffer`
+    (`api/src/server.ts`), passed as `Books`'s `template` (`api/src/books.ts`),
+    used only when the books are `:memory:`: `new Database(template)` instead of
+    `new Database(":memory:")`. better-sqlite3 copies the buffer, so households do
+    not share one. `main.ts` and `ApiConfig` do not carry it. **The call shape for
+    lg-67 and lg-74:** `import { migratedBooks } from "./helpers/template.ts";`
+    then `createApp({ ..., booksTemplate: migratedBooks() })`. `migratedBooks()`
+    builds the template from the app's own `configure` and `applyMigrations`, once
+    per test file (vitest gives each file its own module registry; under
+    repo-129's `isolate: false` it would be once per worker). It is added to every
+    `createApp({` in the api specs and helpers except `books.test.ts` (it tests the
+    migration path), `health.test.ts` (its boots are the health probe's) and
+    `config-access.test.ts` (its boots refuse before the books open); file-backed
+    boots ignore it. Measured with a scratch script, 150 boots, three rounds:
+    13.3 to 14.4 ms a boot without it, 8.1 to 8.7 with it, about 5 ms a boot and
+    about 2.8 s over the 550 boots, not the audit's 5 s: a boot also builds Fastify.
+    `api/test/books-template.test.ts` pins it: used when given, equal in schema,
+    version and enrolled people to a migrated boot, not used when not given and
+    not a config key, ignored for files, and a copy per household and per app.
+  - **Build 6.** `web/test/history.test.tsx`: `fakeClock()` is
+    `vi.useFakeTimers({ shouldAdvanceTime: true })` in the three tests that wait
+    on the pause or on a late answer, `pass(ms)` advances inside `act`, and the
+    `setTimeout(…, 20)` sleep is `pass(20)`; `afterEach` restores real timers.
+    **What the brief had wrong:** I first asserted nothing sent at 299 ms and one
+    request at 300, and the full run failed it once (`expected … length 2 but got
+    3`): `shouldAdvanceTime` also moves the clock by real time, which a loaded run
+    makes more than 1 ms. The test keeps the original's claim (three keystrokes, one
+    request after the pause) and no more. File: 2,928 ms of test time in the
+    base run (1697+272+406+152+87+32+282 ms over its 7 tests) against 987 ms in
+    one run alone.
+  - **Build 7.** Seven tests deleted from `api/test/receipts.test.ts`, each
+    compared with its `splitReceipt` twin in `books/test/receipts.test.ts` for the
+    inputs and the cents: 1377 to `:709` (922 and
+    1,554), 1392 to `:729` (shared -7 at 2,470), 1422 to `:787` (the coupon,
+    565), 1688 to `:957` (-923 and -1,553), 1726 to `:988` (11,58 $ to sam), 1739
+    to `:1003` (a cent under the total) and 1781 to `:973` (casey 1,554, sam 574). The
+    `test.each` at 1704 keeps the route's refusal message and the zero rows;
+    1663 stays. Their helpers `BASKET_REFUND` and `twoTaxed` were unused after
+    and are deleted. `api/test/receipts.test.ts`: 75 tests to 68.
+  - **Done when 3.** `mutate-settle.mjs` (scratch) plants one break in
+    `books/src/settlement.ts` at a time and runs `npx vitest run
+    tools/ledger/books/test/household-settlement.test.ts`. S1, every deposit two
+    cents too large: `Tests 8 failed | 3 passed`, the first failure
+    `3 people, trial 0, alex stands -1034680 millionths of a cent off after the
+    deposits`, with the inputs printed; the two-person loop names `trial 0,
+    settleHousehold as a pair` (expected `depositCents` 440374, got 440376).
+    S2, the last transfer dropped for three or more people: `Tests 5 failed | 6
+    passed`, `3 people, trial 0, blair is 116296565484 millionths of a cent off
+    the transfers`. The file was restored in-process; `git status --short` empty
+    after.
+  - **Done when 4.** `mutate-search.mjs` (scratch) plants lg-65's M1 to M4 in
+    `api/src/workbook-days.ts` one at a time and runs the direct spec at 5,000
+    cases. All four fail (`Tests 1 failed (1)`), at the first cases lg-65's table
+    gives: M1 case 280, M2 case 1774, M3 case 65, M4 case 19. The file was
+    restored; `git status --short` empty after.
+  - **Done when 5.** The template is reachable only through `booksTemplate`:
+    `books-template.test.ts` › "is reachable only through the option: not given,
+    not used, and not a config key". No other `src` line changed: `git diff
+    f05108d2 --stat -- tools/ledger/api/src` is the two files above.
+  - **Not folded in:** nothing small and already specified came free. The
+    unmeasured happy-dom idea and `isolate: false` stay with repo-129.
