@@ -611,9 +611,30 @@ One browser is one key, the API allows a key 120 reads a minute
 reach it: the shell is refused its household and draws no Admin tab. The base's
 15 cases sit under it. So the planner's and the downloader's e2e configs already
 switch their limiters off (`RATE_LIMIT_RUNS_PER_MINUTE`, `RATE_LIMIT_PROBE_PER_MINUTE`),
-and `tools/ledger/playwright.config.ts` now sets `RATE_LIMIT_READS_PER_MINUTE: "0"`;
+and `tools/ledger/playwright.config.ts` now sets `RATE_LIMIT_READS_PER_MINUTE: "0"`
+(**superseded: that line moved to lg-81, see the next entry; it is no longer on this
+branch**);
 the limiter has its own tests in `api` (`route-limits.test.ts`). Result, the same
 command: `18 passed (26.6s)`, no `rate limited` line (before: 1.4 min). It
 matters for the siblings: every case they add counts against the same 120.
 
 `npm run check`: exit 0 (its warnings are in files this branch does not touch).
+
+**2026-10-31 — owner's answer: the e2e read limit is split out to lg-81.** The
+builder's report put an open decision: the line `RATE_LIMIT_READS_PER_MINUTE: "0"`
+in `tools/ledger/playwright.config.ts`, outside this ticket's Build, which Done when
+4 needs. The coordinator put it to the owner, who answered (relayed by the
+coordinator, 2026-10-31):
+
+- Options: (1) keep it in lg-80's pull request, the builder's and the coordinator's
+  recommendation; (2) split it into its own pull request.
+- Chosen: **(2) split**, which **overrode both recommendations**.
+- Consequence: lg-81, on branch `lg-81-e2e-reads-unthrottled`, carries the line and
+  merges before this pull request. The line and its comment are removed from this
+  branch, so `tools/ledger/playwright.config.ts` no longer differs from `origin/main`
+  here. **Done when 4's `e2e:ledger` is red on CI on this branch until lg-81
+  merges** (the 18th case is refused its reads, as measured above); after that
+  merge it is the 18 of 18 measured above. The local `18 passed (26.6s)` run above
+  used the setting; this branch alone has not been run to 18 of 18, and the
+  measurement stays as a record of the cause: `1 failed / 17 passed (1.4m)` without
+  the line, `18 passed (26.6s)` with it.

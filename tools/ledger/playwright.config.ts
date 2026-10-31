@@ -106,12 +106,6 @@ export default defineConfig({
       DEV_IDENTITY: "alex@example.test",
       LEDGER_ADMINS: "alex@example.test",
       LOG_LEVEL: "warn",
-      // One browser, one key, every case reloading the shell: the 120 reads a
-      // minute the API allows a key ran out in the last case of the layout spec
-      // (lg-80's third), and the shell then drew no Admin tab. The planner's and
-      // the downloader's configs switch theirs off for the same reason; the
-      // limiter has its own tests in `api`.
-      RATE_LIMIT_READS_PER_MINUTE: "0",
     },
   },
 });
