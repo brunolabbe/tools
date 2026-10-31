@@ -22,5 +22,9 @@
   // these files out of its own program, and inheriting that here would leave
   // this project with nothing in it.
   "exclude": [],
-  "references": [{ "path": ".." }, { "path": "../../contract" }]
+  "references": [
+    { "path": ".." },
+    { "path": "../../contract" },
+    { "path": "../../../../packages/ui" }
+  ]
 }

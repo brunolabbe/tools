@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 /**
- * The three smaller components: the wait, the demo affordance, and the theme
- * switch.
+ * The smaller components: the wait and the demo affordance. The theme switch
+ * moved to `@webtools/ui` with its tests (repo-131).
  *
  * See `progress-bar.test.tsx` for why the DOM arrives as a docblock rather than
  * a vitest project of its own.
@@ -22,11 +22,8 @@ import { PROBE_STAGES } from "@downloader/contract";
 import type { ProbeStageEvent } from "@downloader/contract";
 import { AnalysingPanel } from "../src/components/AnalysingPanel.tsx";
 import { ScenarioHints } from "../src/components/ScenarioHints.tsx";
-import { ThemeToggle } from "../src/components/ThemeToggle.tsx";
 import { SCENARIOS, scenarioUrl } from "../src/api/scenarios.ts";
 import { PROBE_STAGE_PENDING, probeStageText } from "../src/lib/probe-stages.ts";
-import { THEME_CHOICES } from "../src/lib/theme.ts";
-import type { ThemeChoice } from "../src/lib/theme.ts";
 import { NOW, SOURCE_URL } from "./fixtures.ts";
 
 afterEach(cleanup);
@@ -257,43 +254,4 @@ test("picking a scenario reports the URL that selects it", () => {
 
   fireEvent.click(screen.getAllByRole("button")[0] as HTMLButtonElement);
   expect(onPick).toHaveBeenLastCalledWith(scenarioUrl(""));
-});
-
-// ---------------------------------------------------------------------------
-// ThemeToggle
-// ---------------------------------------------------------------------------
-
-test("the theme switch offers every choice and marks whichever is current", () => {
-  // Every choice, not one: a `checked` hard-coded against a single value would
-  // pass a test that only ever mounted with `value="dark"`.
-  for (const choice of THEME_CHOICES) {
-    render(<ThemeToggle value={choice} onChange={vi.fn()} />);
-
-    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
-    expect(radios.map((input) => input.value)).toEqual([...THEME_CHOICES]);
-    expect(radios.filter((input) => input.checked).map((input) => input.value)).toEqual([choice]);
-    // The group is named for a screen reader even though the legend is visually
-    // hidden, so "Colour theme" is what it answers to.
-    expect(screen.getByRole("group", { name: "Colour theme" })).toBeDefined();
-    cleanup();
-  }
-});
-
-test("choosing a theme reports it upward without owning the state", () => {
-  // Controlled-ness from both ends: whichever choice is clicked is reported,
-  // and the selection does not move until the parent moves it. Swap `checked`
-  // for `defaultChecked` in the component and the second half goes red.
-  for (const choice of THEME_CHOICES.filter((candidate) => candidate !== "system")) {
-    const onChange = vi.fn<(next: ThemeChoice) => void>();
-    render(<ThemeToggle value="system" onChange={onChange} />);
-
-    fireEvent.click(screen.getByRole("radio", { name: choice }));
-    expect(onChange).toHaveBeenCalledWith(choice);
-    expect(
-      (screen.getAllByRole("radio") as HTMLInputElement[])
-        .filter((input) => input.checked)
-        .map((input) => input.value),
-    ).toEqual(["system"]);
-    cleanup();
-  }
 });

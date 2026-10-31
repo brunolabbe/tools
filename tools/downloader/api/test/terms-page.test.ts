@@ -78,14 +78,19 @@ describe("served by the API", () => {
     expect(css.headers["content-type"]).toContain("text/css");
   });
 
-  test("the page needs nothing the policy refuses: no script, no <style>, no style attribute", async () => {
+  test("the page needs nothing the policy refuses: no inline script, no <style>, no style attribute", async () => {
     const text = await page();
 
-    expect(text).not.toMatch(/<script/iu);
+    // One script, the theme module the web build writes beside the page
+    // (repo-131), by a same-origin path and with no body: `script-src 'self'`.
+    expect([...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/giu)]).toEqual([
+      expect.arrayContaining([' type="module" src="/theme.js"', ""]),
+    ]);
     expect(text).not.toMatch(/<style/iu);
     expect(text).not.toMatch(/\sstyle=/iu);
-    // The one stylesheet it links is a same-origin path.
+    // What it links, the stylesheet and the icon, are same-origin paths.
     expect([...text.matchAll(/<link[^>]*href="([^"]+)"/giu)].map((match) => match[1])).toEqual([
+      "/favicon.svg",
       "/terms.css",
     ]);
   });

@@ -12,6 +12,7 @@
   "files": [],
   "references": [
     { "path": "./packages/core" },
+    { "path": "./packages/ui" },
     { "path": "./tools/downloader/contract" },
     { "path": "./tools/downloader/resolvers" },
     { "path": "./tools/downloader/engine" },
@@ -30,6 +31,7 @@
     { "path": "./tools/ledger/web" },
 
     { "path": "./tsconfig.tests.json" },
+    { "path": "./packages/ui/test" },
     { "path": "./tools/downloader/web/test" },
     { "path": "./tools/planner/web/test" },
     { "path": "./tools/ledger/web/test" },

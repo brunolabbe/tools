@@ -112,6 +112,7 @@
   // Anything extending this file must restate `exclude`: `extends` inherits it,
   // and it would otherwise exclude that project's own files.
   "exclude": [
+    "packages/ui/test/**",
     "tools/downloader/web/test/**",
     "tools/planner/web/test/**",
     "tools/ledger/web/test/**"

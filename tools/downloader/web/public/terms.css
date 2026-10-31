@@ -25,6 +25,29 @@
   }
 }
 
+/*
+ * A choice made with the app's theme switch (repo-131): `/theme.js` reads the
+ * shared cookie and sets `data-theme`, which wins over the media query above
+ * either way, as it does in the app's own stylesheet.
+ */
+:root[data-theme="light"] {
+  --bg: #f6f7f9;
+  --text: #16191f;
+  --muted: #5c6472;
+  --accent: #2f5fe0;
+  --warn-bg: #fff4d6;
+  --warn-border: #9a6400;
+}
+
+:root[data-theme="dark"] {
+  --bg: #101317;
+  --text: #e8ebf0;
+  --muted: #98a2b3;
+  --accent: #7aa2ff;
+  --warn-bg: #2b2412;
+  --warn-border: #e5b567;
+}
+
 body {
   margin: 0;
   background: var(--bg);

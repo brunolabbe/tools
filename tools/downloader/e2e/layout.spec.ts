@@ -162,3 +162,32 @@ test("the terms page fits a phone and a desktop", async ({ page }, testInfo) => 
   await expect(page.getByRole("heading").first()).toBeVisible();
   await fitsBothWidths(page, testInfo, "Terms");
 });
+
+/**
+ * repo-131: the shared header at 360 px. Each theme segment is a tap target of
+ * at least 44 px both ways, the floor repo-130 sets for every button and field,
+ * and the switch sits on the same line as the glyph and the name rather than
+ * wrapping under them.
+ */
+test("the theme switch's segments are 44 px tall at 360 px, beside the name", async ({ page }) => {
+  await page.setViewportSize(WIDTHS[0]);
+  await page.goto("/");
+  const header = page.getByRole("banner");
+  const segments = header.locator(".theme-toggle label");
+  await expect(segments).toHaveCount(3);
+
+  for (const segment of await segments.all()) {
+    const box = await segment.boundingBox();
+    expect(box?.height ?? 0, "a theme segment's height").toBeGreaterThanOrEqual(44);
+    expect(box?.width ?? 0, "a theme segment's width").toBeGreaterThanOrEqual(44);
+  }
+
+  const name = await header.getByRole("heading", { level: 1 }).boundingBox();
+  const toggle = await header.getByRole("group", { name: "Colour theme" }).boundingBox();
+  expect(name).not.toBeNull();
+  expect(toggle).not.toBeNull();
+  // On one line: the name's vertical middle falls inside the switch's height.
+  const middle = (name?.y ?? 0) + (name?.height ?? 0) / 2;
+  expect(middle).toBeGreaterThanOrEqual(toggle?.y ?? Infinity);
+  expect(middle).toBeLessThanOrEqual((toggle?.y ?? 0) + (toggle?.height ?? 0));
+});

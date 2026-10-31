@@ -7,6 +7,8 @@
          theme is active, so native widgets match the CSS variables below. -->
     <meta name="color-scheme" content="light dark" />
     <title>Downloader</title>
+    <!-- Same-origin, so `img-src 'self'` allows it; a `data:` URL would be refused. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
     <div id="root"></div>
