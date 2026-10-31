@@ -382,3 +382,40 @@ orchestrator before round 1.** Each was chosen from the options shown.
 
 **For lg-72:** the round changed `packages/ui/src/chrome.css`, which lg-72
 inherits. The export paths and the `/theme.js` mechanism are unchanged.
+
+**2026-10-31 — round 1, the owner's addition: the plugin moves to
+`@webtools/ui`.** lg-72's builder copied the downloader's
+`render-blocking-entry` plugin into the ledger's config, and pl-65 would have
+made a third copy. The options were (a) lift it into `@webtools/ui` as an
+exported Vite plugin in this round, with both tools importing it, or (b) keep
+one copy per tool. The owner chose **(a)**, because the ledger is the second
+real consumer.
+
+- **Import path:** `import { renderBlockingEntry } from "@webtools/ui/vite";`,
+  then `plugins: [react(), renderBlockingEntry()]`. The module is
+  `packages/ui/src/vite.ts` and imports only a type from `vite`. The
+  downloader's local copy is gone.
+- **Gate 1's maintainability note is answered in code, not only in a test.**
+  The plugin now matches any external module script (`type="module"` with a
+  `src`, in any attribute order, without `blocking`) instead of a literal of
+  Vite's output, and it is `apply: "build"`. When it finds nothing to mark,
+  it calls `this.error` and fails the build. So a change in how Vite writes
+  the tag stops `vite build` instead of quietly dropping the hold.
+- **Pinned once, in `packages/ui/test/vite-plugin.test.ts`.** The test runs a
+  real `vite build` of a one-entry fixture, plus attribute-order,
+  leave-alone and fail-loudly cases. With the matcher made to miss Vite's tag
+  (`src=` changed to `srcx=`), the real build failed with
+  `render-blocking-entry: no external module script in the built HTML`, and
+  2 of the 4 tests went red. Restored, all 4 passed.
+- **A tool's config loads it with no build step.** With `packages/ui/dist`
+  deleted, `vite build` in `tools/downloader/web` exited 0 and wrote
+  `<script blocking="render" type="module" crossorigin src="/assets/index-….js">`.
+  `npm run check` exited 0 with the import in place: `../vite.config.ts` is in
+  `web/test/tsconfig.json`'s program and resolves through `dist/vite.d.ts`.
+- **One e2e failure was not this change.** After the lift, the fast suite ran
+  18 of 19. `refused-download.spec.ts` failed 3 times in a row at line 83:
+  the refused job's second link never showed "Saved by your browser" within
+  120 s. In the same window, the downloader config from `fca27ebc`, with the
+  local plugin, passed it once. The two configs' `dist/app` trees differ only
+  in the order of attributes on the entry tag (`diff -r`). Then HEAD passed 2
+  of 2 at 39 s each. The cause, environmental or a flake, is not measured.
