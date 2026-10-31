@@ -7,6 +7,7 @@ status: ready
 milestone: P6
 depends_on: [lg-66, lg-68]
 difficulty: hard
+awaiting: Done when 13 — the owner's paid live read of a synthetic CSV through the web Import screen with the owner's key, and the repeat of the 70 Haiku shown runs on the 7 CSV fixtures under statement.csv, read after the merge, the Log recording the input tokens, the cost and the table beside lg-56's
 ---
 
 # lg-67 — Read a bank CSV through a layout a model describes, into the inbox
