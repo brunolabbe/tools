@@ -10,9 +10,11 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { ROUTES } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { API_DEFAULTS } from "../src/config.ts";
 import { FINISHED_JOB_CLEAR_AFTER_MS, JOB_RETENTION_DAYS } from "../src/jobs/links.ts";
+import { createLogger } from "../src/logger.ts";
 import { createHarness } from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
 
@@ -159,5 +161,42 @@ describe("what it says", () => {
     expect(text).toMatch(/Use it for video you have the right to save/u);
     // The page links back to the app and the app links to the page.
     expect(text).toContain('href="/"');
+  });
+
+  test("the theme cookie it says the service never logs reaches no log line (repo-131)", async () => {
+    // The page says the cookie goes with every request and the service does not
+    // write it to its log. Every door a browser can send it through: the page,
+    // the static terms file, the API, a miss.
+    const text = (await page()).replace(/\s+/gu, " ");
+    expect(text).toContain("webtools-theme");
+    expect(text).toContain("does not write it to its log");
+
+    const raw: string[] = [];
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "downloader-terms-"));
+    await fs.writeFile(path.join(root, "index.html"), "<!doctype html><title>Downloader</title>");
+    await fs.copyFile(new URL("terms.html", PUBLIC), path.join(root, "terms.html"));
+    webDir = root;
+    harness = await createHarness({
+      config: { webDir: root },
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+    });
+    const cookie = "webtools-theme=dark";
+    for (const url of ["/", "/terms.html", ROUTES.health, "/api/no-such-route"]) {
+      await harness.app.server.inject({
+        method: "GET",
+        url,
+        headers: { cookie, accept: "text/html" },
+      });
+    }
+    await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      headers: { cookie },
+      payload: { url: "not a url" },
+    });
+
+    // Something was logged, so an empty log is not what passes this.
+    expect(raw.filter((line) => line.includes('"msg":"request"')).length).toBeGreaterThan(0);
+    expect(raw.filter((line) => line.includes("webtools-theme"))).toEqual([]);
   });
 });
