@@ -106,6 +106,12 @@ export default defineConfig({
       DEV_IDENTITY: "alex@example.test",
       LEDGER_ADMINS: "alex@example.test",
       LOG_LEVEL: "warn",
+      // One browser is one key, and the reads limit is 120 a minute. The layout
+      // spec makes more reads than that once it holds about seventeen cases, and
+      // the last ones are refused. The API's own tests cover the limiter; here it
+      // only makes the suite's length matter, as the planner's and downloader's
+      // configs do.
+      RATE_LIMIT_READS_PER_MINUTE: "0",
     },
   },
 });
