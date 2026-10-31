@@ -13,6 +13,7 @@ import {
   settleStretches,
 } from "../src/index.ts";
 import type { Charge, HouseholdSettlement, PersonCents, Share, Stretch } from "../src/index.ts";
+import { trials } from "./helpers/trials.ts";
 import { settleStretchesV3 } from "./helpers/two-person-v3.ts";
 
 /** A small, seeded generator, so a failure names a mix that can be re-run. */
@@ -87,6 +88,9 @@ describe("between two people it is lg-6's settlement, to the cent", () => {
     const people = ["alex", "sam"];
     let owing = 0;
     let direct = 0;
+    // Asserted once, after the loop (helpers/trials.ts): an `expect` per trial
+    // was most of this test's time.
+    const found = trials();
     for (let trial = 0; trial < 5_000; trial++) {
       const ratios = Array.from({ length: 1 + next(4) }, (): Share[] => {
         if (next(10) !== 0) {
@@ -105,13 +109,17 @@ describe("between two people it is lg-6's settlement, to the cent", () => {
       const closing = ratios.at(-1) ?? [];
       const expected = settleStretchesV3(stretches, closing);
 
-      expect(asPair(settleHousehold(stretches, closing)), `trial ${String(trial)}`).toEqual(
+      found.begin(`trial ${String(trial)}`, () => ({ stretches, closing }));
+      found.equal(
+        asPair(settleHousehold(stretches, closing)),
         expected,
+        "settleHousehold as a pair",
       );
-      expect(settleStretches(stretches, closing), `trial ${String(trial)}`).toEqual(expected);
+      found.equal(settleStretches(stretches, closing), expected, "settleStretches");
       if (expected.payerId !== null) owing++;
       if (expected.depositCents === null) direct++;
     }
+    found.assertNone();
     // The draw reaches every branch: someone owing, and only a direct transfer.
     expect(owing).toBeGreaterThan(4_000);
     expect(direct).toBeGreaterThan(50);
@@ -127,33 +135,43 @@ describe("between three, four and five people", () => {
       const next = generator(100 + size);
       const people = NAMES.slice(0, size);
       let deposited = 0;
+      const found = trials();
       for (let trial = 0; trial < 3_000; trial++) {
         const ratios = Array.from({ length: 1 + next(4) }, () => variedRatio(next, people));
         const stretches = ratios.map((ratio) => variedStretch(next, people, ratio));
         const closing = ratios.at(-1) ?? [];
-        const where = `${String(size)} people, trial ${String(trial)}`;
+        found.begin(`${String(size)} people, trial ${String(trial)}`, () => ({
+          stretches,
+          closing,
+        }));
 
         const nets = netsOf(stretches);
-        expect(
-          [...nets.values()].reduce((sum, net) => sum + net, 0n),
-          where,
-        ).toBe(0n);
+        found.holds(
+          [...nets.values()].reduce((sum, net) => sum + net, 0n) === 0n,
+          () => "the nets do not sum to zero",
+        );
 
         const settled = settleHousehold(stretches, closing);
-        expect(settled.deposits, where).not.toBeNull();
+        found.holds(settled.deposits !== null, () => "there are no deposits");
         for (const deposit of settled.deposits ?? []) {
-          expect(deposit.depositCents, where).toBeGreaterThan(0);
+          found.holds(
+            deposit.depositCents > 0,
+            () => `${deposit.personId} deposits ${String(deposit.depositCents)}`,
+          );
         }
         // The one furthest ahead for their share deposits nothing.
-        expect((settled.deposits ?? []).length, where).toBeLessThan(size);
+        found.holds((settled.deposits ?? []).length < size, () => "everyone deposits");
         deposited += (settled.deposits ?? []).length;
 
         for (const [personId, net] of standingAfter(stretches, closing, settled)) {
-          expect(abs(net), `${where}, ${personId}`).toBeLessThanOrEqual(1_000_000n);
+          found.holds(
+            abs(net) <= 1_000_000n,
+            () => `${personId} stands ${String(net)} millionths of a cent off after the deposits`,
+          );
         }
 
         // The transfers pay each net to within half a cent per transfer.
-        expect(settled.transfers.length, where).toBeLessThan(size);
+        found.holds(settled.transfers.length < size, () => "as many transfers as people");
         const paid = new Map<string, number>();
         for (const { fromId, toId, cents } of settled.transfers) {
           paid.set(fromId, (paid.get(fromId) ?? 0) + cents);
@@ -161,11 +179,13 @@ describe("between three, four and five people", () => {
         }
         for (const [personId, net] of nets) {
           const off = abs(net - BigInt(paid.get(personId) ?? 0) * 1_000_000n);
-          expect(off, `${where}, ${personId}`).toBeLessThanOrEqual(
-            BigInt(settled.transfers.length) * 500_000n,
+          found.holds(
+            off <= BigInt(settled.transfers.length) * 500_000n,
+            () => `${personId} is ${String(off)} millionths of a cent off the transfers`,
           );
         }
       }
+      found.assertNone();
       // Several deposits a close, not one: the draw is not two people in disguise.
       expect(deposited).toBeGreaterThan(3_000 * (size - 2));
     },
@@ -361,6 +381,7 @@ describe("between two people, less than half a cent owed to a share of zero", ()
     const next = generator(31);
     const people = ["alex", "sam"];
     let residual = 0;
+    const found = trials();
     for (let trial = 0; trial < 5_000; trial++) {
       const stretches: Stretch[] = Array.from({ length: 1 + next(3) }, () => {
         const ratio = ratioFromSalaries(
@@ -377,9 +398,11 @@ describe("between two people, less than half a cent owed to a share of zero", ()
       stretches.push({ ratio: closing, contributions: [], charges: [] });
       const expected = settleStretchesV3(stretches, closing);
 
-      expect(settleStretches(stretches, closing), `trial ${String(trial)}`).toEqual(expected);
+      found.begin(`trial ${String(trial)}`, () => ({ stretches, closing }));
+      found.equal(settleStretches(stretches, closing), expected);
       if (expected.depositCents === null && expected.netCents === 0) residual++;
     }
+    found.assertNone();
     // The draw reaches the class: a payer named, paid nothing, directly.
     // 401 of the 5 000 at seed 31.
     expect(residual).toBeGreaterThan(300);
