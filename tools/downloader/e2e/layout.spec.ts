@@ -217,7 +217,7 @@ test("the theme switch's segments are 44 px tall at 360 px, beside the name", as
   const natural = await page.evaluate(() => {
     const heading = document.querySelector<HTMLElement>("header h1");
     if (heading === null) return 0;
-    heading.style.letterSpacing = "0.15em";
+    heading.style.letterSpacing = "0.2em";
     const computed = getComputedStyle(heading);
     const copy = document.createElement("span");
     copy.textContent = heading.textContent;
