@@ -153,3 +153,21 @@ land in separate pull requests.
     the variable, the first run failed one case on the reads limit (`"scope":
     "reads" … "msg":"rate limited"` in the server log), the defect lg-80's
     pull request #684 carries the config line for; it is not on this branch.
+- 2026-10-31 — Owner answers at landing, each the builder's recommendation.
+  - **The rename record carries only the new name, no `from` field.** The
+    options were "add `from`", "refuse same-name rename" and "both".
+  - **A rename to the current name is accepted and recorded**, as person
+    renames are.
+  - **Both routes answer `HouseholdSummary`, with the action named
+    `"rename-household"`.** The contract shape is approved.
+  - **The builder's proposed `tools/ledger/CLAUDE.md` line is left out.** The
+    options were "leave out; log it" and "add it in lg-77's PR"; it goes to the
+    orchestration log for the review session.
+  - **Gate 1's third low (household names take terminal-control characters,
+    which `household:ledger list` prints raw) is filed as lg-82**, on the
+    owner's choice of "file one ticket" over "record only" and "fix in lg-77
+    now"; it covers household and person names. The finding stays in the gate's
+    record as written.
+  - **CI `e2e` is red at `a87da359`** (run 41223738914) on the reads limit
+    alone, as gate 1 verified with a local 17 of 17 run. lg-81 (#687) carries
+    the e2e read-limit setting and merges first.
