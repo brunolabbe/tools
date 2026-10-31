@@ -392,3 +392,24 @@ describe("the household command and a person's name (lg-76)", () => {
     expect(ran.out).toMatch(new RegExp(`  sam \\(${UUID.source}\\)  sam@example\\.test`, "u"));
   });
 });
+
+describe("a person without an email (lg-74)", () => {
+  test("list prints them as shown with their id, and no email in place of an address", () => {
+    const robin = "00000000-0000-4000-8000-000000000001";
+    const directory = Directory.open(directoryPath);
+    try {
+      const change = { by: "operator", at: NOW };
+      directory.addHousehold({ id: "home", name: "Home", ...change });
+      directory.addMember({ household: "home", address: ALEX, person: "alex", ...change });
+      directory.addPerson({ household: "home", person: "Robin", ...change, newId: () => robin });
+    } finally {
+      directory.close();
+    }
+
+    const ran = run("list");
+
+    expect(ran.code).toBe(0);
+    expect(ran.out).toContain(`  alex  ${ALEX}`);
+    expect(ran.out).toContain(`  Robin (${robin})  no email`);
+  });
+});

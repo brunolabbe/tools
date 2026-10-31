@@ -499,3 +499,69 @@ test("labels no address field Address, the change-address form included", async 
   expect(labels).toContain("New email for sam@example.test");
   expect(screen.queryAllByLabelText(/address/iu)).toEqual([]);
 });
+
+// lg-74: a person who has no email and never signs in.
+const ROBIN = "00000000-0000-4000-8000-000000000001";
+
+test("lists a person without an email by name with no email, with nothing to edit or remove, and leaves them out of the emails to admit", async () => {
+  const [away, home] = HOUSEHOLDS;
+  if (away === undefined || home === undefined) throw new Error("the fixture holds two households");
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue([
+    away,
+    {
+      ...home,
+      members: [...home.members, { address: null, person: ROBIN, name: "Robin" }],
+      people: [...home.people, { person: ROBIN, name: "Robin", standing: "in" }],
+    },
+  ]);
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+
+  const homeCard = card("The test household");
+  const rows = [...(homeCard.querySelector("ul.members")?.querySelectorAll(":scope > li") ?? [])];
+  expect(rows.map((row) => row.textContent)).toEqual([
+    "alex alex@example.testEditRemove",
+    "sam sam@example.testEditRemove",
+    "Robin no email",
+  ]);
+  expect(within(rows[2] as HTMLElement).queryAllByRole("button")).toEqual([]);
+  expect(homeCard.textContent).not.toContain(ROBIN);
+  const admit = screen.getByRole("list", { name: "Emails to admit" });
+  expect([...admit.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
+    "kim@away.test",
+    "alex@example.test",
+    "sam@example.test",
+  ]);
+  // Offered to pick, so an email can be given to them later.
+  const options = [...homeCard.querySelectorAll("datalist option")].map((one) => one.textContent);
+  expect(options).toContain("Robin");
+});
+
+test("adds a person without an email from a card, by name alone", async () => {
+  vi.mocked(adminAddMember).mockResolvedValue({ address: null, person: ROBIN, name: "Robin" });
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+
+  const homeCard = card("The test household");
+  fireEvent.change(within(homeCard).getByLabelText("Person"), { target: { value: "Robin" } });
+  fireEvent.click(within(homeCard).getByRole("button", { name: "Add member" }));
+
+  expect((await within(homeCard).findByRole("status")).textContent).toBe(
+    "Added Robin, who counts in the books and cannot sign in.",
+  );
+  expect(vi.mocked(adminAddMember)).toHaveBeenCalledWith("home", { person: "Robin" });
+});
+
+test("a new household still needs its first person's email", async () => {
+  render(<Admin />);
+  await screen.findByRole("heading", { name: "Households" });
+
+  const fresh = card("New household");
+  fireEvent.change(within(fresh).getByLabelText("Person"), { target: { value: "Robin" } });
+  fireEvent.click(within(fresh).getByRole("button", { name: "Create household" }));
+
+  expect(within(fresh).getByRole("alert").textContent).toBe(
+    "Give the first person's email, and their name if you like.",
+  );
+  expect(vi.mocked(createHousehold)).not.toHaveBeenCalled();
+});

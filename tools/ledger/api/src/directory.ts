@@ -103,6 +103,24 @@ export interface MembershipChange {
 }
 
 /**
+ * A person added with no email (lg-74), as the directory recorded it: a person
+ * the books count who never signs in, until an email is added under their id.
+ */
+export interface PersonAdded {
+  action: "add-person";
+  person: string;
+  at: string;
+  by: string;
+}
+
+/** A person the household holds, as `addPerson` leaves them: their id and their shown name. */
+export interface HeldPerson {
+  household: string;
+  person: string;
+  name: string;
+}
+
+/**
  * A person given a shown name, as the directory recorded it (lg-33): `rename`
  * by an admin, or `name`, the first name a person with a generated id is given
  * in the transaction that adds them (lg-76).
@@ -192,6 +210,31 @@ export function nameFromAddress(address: string, taken: (name: string) => boolea
   }
 }
 
+/**
+ * Two lists each in the order it was written, merged by time without re-sorting
+ * either among itself, `first`'s record ahead of `then`'s at the same instant.
+ */
+function mergeByTime<A extends { at: string }, B extends { at: string }>(
+  first: readonly A[],
+  then: readonly B[],
+): (A | B)[] {
+  const merged: (A | B)[] = [];
+  let f = 0;
+  let t = 0;
+  while (f < first.length || t < then.length) {
+    const one = first[f];
+    const other = then[t];
+    if (one !== undefined && (other === undefined || one.at <= other.at)) {
+      merged.push(one);
+      f++;
+    } else if (other !== undefined) {
+      merged.push(other);
+      t++;
+    }
+  }
+  return merged;
+}
+
 function refuse(message: string): never {
   throw new AppError("BAD_REQUEST", message);
 }
@@ -267,19 +310,28 @@ export class Directory {
    * removed, under which name, by whom and when. Filtered in the SQL, so no
    * other household's record is ever read for it.
    */
-  history(household: string): (MembershipChange | PersonRename)[] {
+  history(household: string): (MembershipChange | PersonAdded | PersonRename)[] {
     // Each table read in its own id order, as migration 1 orders memberships
-    // rather than by a timestamp two writers could tie, and the two merged by
-    // time without re-sorting either among itself: a clock that stepped back
+    // rather than by a timestamp two writers could tie, and the three merged by
+    // time without re-sorting any among itself: a clock that stepped back
     // between two memberships leaves them in the order they were written
-    // (lg-33's gate 1, F2). At the same instant a membership reads first,
-    // since a person is only renamed once a membership has named them.
+    // (lg-33's gate 1, F2). At the same instant a membership reads first, then
+    // a person added without an email (lg-74), then a name, since a person is
+    // only named once one of the other two has added them.
     const memberships = this.#db
       .prepare(
         `SELECT address, person, action, changed_at AS at, changed_by AS by
          FROM memberships WHERE household_id = ? ORDER BY id`,
       )
       .all(household) as MembershipChange[];
+    const added = (
+      this.#db
+        .prepare(
+          `SELECT person, added_at AS at, added_by AS by
+           FROM people WHERE household_id = ? ORDER BY id`,
+        )
+        .all(household) as Omit<PersonAdded, "action">[]
+    ).map((row): PersonAdded => ({ action: "add-person", ...row }));
     // lg-76: a person with a generated id is given their first shown name in
     // the transaction that adds them, so that record is a name and no rename.
     const named = new Set<string>();
@@ -295,21 +347,7 @@ export class Directory {
       named.add(rename.person);
       return { action: first ? "name" : "rename", ...rename };
     });
-    const merged: (MembershipChange | PersonRename)[] = [];
-    let m = 0;
-    let r = 0;
-    while (m < memberships.length || r < renames.length) {
-      const membership = memberships[m];
-      const rename = renames[r];
-      if (membership !== undefined && (rename === undefined || membership.at <= rename.at)) {
-        merged.push(membership);
-        m++;
-      } else if (rename !== undefined) {
-        merged.push(rename);
-        r++;
-      }
-    }
-    return merged;
+    return mergeByTime(mergeByTime(memberships, added), renames);
   }
 
   households(): Household[] {
@@ -338,21 +376,57 @@ export class Directory {
     ) as Member[];
   }
 
-  /** The names a household's current members stand under, once each. */
-  people(household?: string): string[] {
-    return [...new Set(this.members(household).map((member) => member.person))].toSorted();
+  /**
+   * Who stands in the household now, once each: the people its current members
+   * stand under, and the people it holds without an email who stand now
+   * (`withoutEmail`, lg-74). What the books enrol, and who a receipt's "the
+   * other's" can mean.
+   */
+  people(household: string): string[] {
+    return [
+      ...new Set([
+        ...this.members(household).map((member) => member.person),
+        ...this.withoutEmail(household),
+      ]),
+    ].toSorted();
   }
 
   /**
-   * Every person id a membership of the household has ever named, a member who
-   * has left included (lg-33): who can be given a shown name. `people` is only
-   * who stands now.
+   * The people added without an email (lg-74) who stand now: no address stands
+   * under them, and they are in the books, with no retirement waiting or
+   * applied. A person with an email leaves `people` when the last address under
+   * them is removed, which comes before anyone can retire them; one without
+   * leaves it when their retirement is asked for, the step that stands in for
+   * that removal. One given an email since is a member and is listed as one; if
+   * every address under them is removed again, they are held without one again.
+   */
+  withoutEmail(household: string): string[] {
+    const members = new Set(this.members(household).map((member) => member.person));
+    const standings = this.standings(household);
+    return (
+      this.#db
+        .prepare("SELECT person FROM people WHERE household_id = ? ORDER BY person")
+        .all(household) as { person: string }[]
+    )
+      .map((row) => row.person)
+      .filter((person) => !members.has(person) && standings.get(person) === "in");
+  }
+
+  /**
+   * Every person id the household has ever held, a member who has left
+   * included (lg-33): one a membership has named, or one added without an
+   * email (lg-74). Who can be given a shown name, retired, or given an email
+   * under the id they have. `people` is only who stands now.
    */
   heldPeople(household: string): string[] {
     return (
       this.#db
-        .prepare("SELECT DISTINCT person FROM memberships WHERE household_id = ? ORDER BY person")
-        .all(household) as { person: string }[]
+        .prepare(
+          `SELECT person FROM memberships WHERE household_id = ?
+           UNION SELECT person FROM people WHERE household_id = ?
+           ORDER BY person`,
+        )
+        .all(household, household) as { person: string }[]
     ).map((row) => row.person);
   }
 
@@ -370,7 +444,7 @@ export class Directory {
 
   /**
    * Gives a person a shown name, keeping their id (lg-33). Refused as
-   * `PERSON_NOT_FOUND` for a person no membership of the household has named —
+   * `PERSON_NOT_FOUND` for a person the household has never held —
    * an id the books know only from an old rule included — and as
    * `PERSON_NAME_TAKEN` for a name another person is shown under or has as
    * their id. Renaming a person back to their own id is a rename like any other.
@@ -472,10 +546,11 @@ export class Directory {
   /**
    * Records an admin's request to retire a person from the books at the next
    * close, or to bring a retired one back at the next close after it (lg-35).
-   * Refused as `PERSON_NOT_FOUND` for a person no membership of the household
-   * has named, and as a bad request for a retirement while an address stands
-   * under the person, or a request that would not change where they stand.
-   * Returns where they stand after it.
+   * Refused as `PERSON_NOT_FOUND` for a person the household has never held,
+   * and as a bad request for a retirement while an address stands under the
+   * person, or a request that would not change where they stand. A person
+   * added without an email (lg-74) has no address to remove, so nothing is
+   * asked of them first. Returns where they stand after it.
    */
   retirePerson(
     request: { household: string; person: string; action: "retire" | "return" } & Change,
@@ -679,6 +754,57 @@ export class Directory {
           throw new AppError("HOUSEHOLD_NOT_FOUND", `There is no household "${member.household}".`);
         }
         return this.#admitByName({ household: member.household, ...draft }, member);
+      })
+      .immediate();
+  }
+
+  /**
+   * Adds a person who has no email and never signs in (lg-74): a person the
+   * books count, under a new generated id from `newId` and shown under
+   * `person`, as `addMemberByName` makes a new person (lg-76). The person and
+   * their first shown name are written in one transaction. Refused as
+   * `PERSON_NAME_TAKEN` when `person` names someone the household holds
+   * already — the person shown under it, or the one whose id it is — since that
+   * is not a new person. Giving this person an email later is
+   * `addMemberByName` under the name they are shown by, or `addMember` under
+   * their id.
+   */
+  addPerson(person: { household: string; person: string } & Change & NewId): HeldPerson {
+    refuseUnlessChange(person);
+    if (typeof person.household !== "string") refuse("The household is not a string.");
+    if (typeof person.person !== "string") refuse("The person's name is not a string.");
+    const name = person.person.trim();
+    if (name === "" || name.length > NAME_LENGTH) refuse("A person's name is 1 to 64 characters.");
+    return this.#db
+      .transaction(() => {
+        if (this.household(person.household) === undefined) {
+          throw new AppError("HOUSEHOLD_NOT_FOUND", `There is no household "${person.household}".`);
+        }
+        const held = this.heldPeople(person.household);
+        const names = this.names(person.household);
+        if (held.some((one) => one === name || shownName(names, one) === name)) {
+          throw new AppError(
+            "PERSON_NAME_TAKEN",
+            `Someone in this household is already shown as "${name}", or has it as their id. To give them an email, add it as them; a new person needs a name of their own.`,
+          );
+        }
+        const id = (person.newId ?? randomUUID)();
+        if (!GENERATED_ID.test(id) || held.includes(id)) {
+          throw new AppError("INTERNAL", "A new person's id is not a fresh lowercase UUID.");
+        }
+        const at = person.at.toISOString();
+        this.#db
+          .prepare(
+            "INSERT INTO people (household_id, person, added_at, added_by) VALUES (?, ?, ?, ?)",
+          )
+          .run(person.household, id, at, person.by);
+        this.#db
+          .prepare(
+            `INSERT INTO person_names (household_id, person, name, named_at, named_by)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run(person.household, id, name, at, person.by);
+        return { household: person.household, person: id, name };
       })
       .immediate();
   }

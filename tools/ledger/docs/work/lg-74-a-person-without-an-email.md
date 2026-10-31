@@ -85,3 +85,63 @@ the owner noted that most likely one member of a house keeps the ledger.
   lg-76's rule rather than storing the name as the id.
 - 2026-10-25 — lg-78 waits on this: the import screen adds a name the household
   lacks as a person without an email, through `addPerson`.
+- 2026-10-31 — Built from `f05108d2`, on branch `lg-74-person-without-email`.
+  Directory migration 8 adds `people` (household, person, `added_at`,
+  `added_by`) with the triggers the brief names; `Directory.addPerson({
+  household, person, by, at, newId? })` returns `{ household, person, name }`,
+  the person under a generated id (lg-76) and `person` as their first shown
+  name, both written in one transaction. `addMemberRequestSchema`'s `address`
+  is optional, with a refinement that one of the two fields is there;
+  `createHouseholdRequestSchema` is untouched. The history gains
+  `{ action: "add-person", person, at, by }` (`PersonAddedRecord`), read before
+  the `name` record written with it.
+  - **What the brief had wrong or left out.** (1) Migrations 5 and 6's
+    `person_names_held`, `person_names_unique`,
+    `memberships_person_not_shown_as_another` and `retirements_held` read "a
+    person the household holds" from `memberships` only, so the schema refused a
+    no-email person's first shown name, a rename and a retirement whatever
+    `heldPeople` said. Migration 8 drops and recreates the four, asking
+    `memberships` or `people`, with the sentences they raised before. (2) Build
+    step 4's lists need an address-less entry, which the contract had no room
+    for: `HouseholdMember.address` is now `string | null`, `null` for a person
+    held without an email. That is a response-shape change beside the request
+    change the owner approved; nothing reads `members` for an address except the
+    screens changed here. (3) `people` is not quite the plain union: it adds the
+    no-email people who stand `in` (`Directory.withoutEmail`). A person with an
+    email leaves `people` when their last address is removed, which comes before
+    any retirement; a no-email person has no such step, so the retire request
+    takes them out instead, or a retired partner would still be "the other" on a
+    receipt and a workbook import's member. `heldPeople` is the plain union.
+    `people`'s household argument is now required: no caller left it out.
+  - **Every caller of `heldPeople` and `people`**, re-resolved at `f05108d2`
+    with `git grep -n "heldPeople\|directory\.people(" f05108d2 --
+    tools/ledger/api/src`; it printed the seam map's list exactly.
+    `directory.ts:391` (rename), `:463` (`standings`), `:715` (`#admitByName`)
+    and `:764` (`#admit`) take the union: a no-email person can be renamed and
+    retired, found by their shown name, and given an email under the id they
+    have without the "new person" name check. `books.ts:161,225` enrol from
+    `people`, which is how the books get them. `import-command.ts:162,164` and
+    `routes/workbook.ts:33` enrol an import's members and name them; an import
+    recorded `--as` a no-email person is the operator's choice and harmless.
+    `routes/receipts.ts:128` is who "the other's" item means, and the partner
+    who never signs in is exactly that person. **None of them has to mean "has
+    an email".** The readings that do already read `members()`: the identity
+    hook, the retirement refusal (`directory.ts`, `retirePerson`), the admin's
+    "Emails to admit" list and `server.ts`'s empty-directory check.
+  - **Build step 5.** `retirePerson`'s "Remove every email" refusal reads
+    `members()`, so a no-email person is never asked for one; the admin card's
+    retire hint now says "Remove their emails first, if they have any."
+  - **Fold-in.** `npm run household:ledger -- list` prints a no-email person as
+    `<shown> (<id>)  no email` (`household-command.ts`, with a test in
+    `household-command.test.ts`): the operator's list is the third member list.
+    Not folded in: a host-command verb to add a person without an email, which
+    nothing specifies.
+  - Measured: `npx vitest run` over `households.test.ts`, `directory.test.ts`,
+    `household-command.test.ts`, `person-names.test.ts` (api) and
+    `household.test.tsx`, `admin.test.tsx` (web): `Tests 200 passed (200)`.
+    `E2E_PORT=8174 npx playwright test -c tools/ledger/playwright.config.ts`:
+    `14 passed (23.9s)`, the new case "Household and Admin fit a phone and a
+    desktop with a person who has no email" among them; its four screenshots
+    were opened and show the person by name with "no email" and nothing to
+    admit. Five `user_version` assertions moved from 7 to 8; lg-75 and lg-77
+    move them again.

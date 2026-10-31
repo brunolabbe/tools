@@ -309,7 +309,7 @@ describe("migration 5", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.pragma("user_version", { simple: true })).toBe(8);
     expect(db.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(before);
     const directory = new Directory(db);
     expect(directory.names("home").size).toBe(0);

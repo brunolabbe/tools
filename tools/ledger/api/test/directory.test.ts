@@ -231,7 +231,7 @@ describe("membership", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.pragma("user_version", { simple: true })).toBe(8);
     expect(db.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(before);
     insert(db, { address: CASEY, person: "casey" });
     expect(db.prepare("SELECT person FROM current_members ORDER BY person").all()).toEqual([
@@ -400,7 +400,7 @@ describe("a record is never replaced", () => {
         "INSERT OR REPLACE INTO households (id, name, created_at, created_by) VALUES ('home', 'Elsewhere', 'x', 'raw')",
       ),
     ).toThrow(/appended, never replaced/u);
-    expect(db.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.pragma("user_version", { simple: true })).toBe(8);
     db.close();
   });
 
@@ -504,7 +504,7 @@ describe("a household id is never NULL", () => {
       directory.close();
 
       const after = new Database(file);
-      expect(after.pragma("user_version", { simple: true })).toBe(7);
+      expect(after.pragma("user_version", { simple: true })).toBe(8);
       expect(after.prepare("SELECT * FROM households ORDER BY id").all()).toEqual(households);
       expect(after.prepare("SELECT * FROM memberships ORDER BY id").all()).toEqual(memberships);
       refusesNullIds(after);
@@ -1299,7 +1299,7 @@ describe("a household id that is a UUID", () => {
 
     migrateDirectory(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(7);
+    expect(db.pragma("user_version", { simple: true })).toBe(8);
     expect(read()).toEqual(before);
     expect(db.pragma("foreign_key_check")).toEqual([]);
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -1563,5 +1563,182 @@ describe("a new person gets a generated id (lg-76)", () => {
     );
     expect(nameFromAddress(`${local}@x.test`, () => false)).toBe(whole);
     directory.close();
+  });
+});
+
+describe("a person without an email (lg-74)", () => {
+  const ROBIN = "11111111-1111-4111-8111-111111111111";
+  const OTHER = "22222222-2222-4222-8222-222222222222";
+
+  function withRobin(): Directory {
+    const directory = withHousehold();
+    directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
+    directory.addPerson({ household: "home", person: " Robin ", ...CHANGE, newId: () => ROBIN });
+    return directory;
+  }
+
+  function addPeopleRow(db: Database.Database, person: string, id?: number): void {
+    db.prepare(
+      `INSERT INTO people (id, household_id, person, added_at, added_by)
+       VALUES (?, 'home', ?, 'x', 'operator')`,
+    ).run(id ?? null, person);
+  }
+
+  test("addPerson holds them under a generated id with no membership, and every read of who is held includes them", () => {
+    const directory = withRobin();
+
+    expect(directory.members("home")).toEqual([
+      { address: ALEX, household: "home", person: "alex" },
+    ]);
+    expect(directory.heldPeople("home")).toEqual([ROBIN, "alex"]);
+    expect(directory.people("home")).toEqual([ROBIN, "alex"]);
+    expect(directory.withoutEmail("home")).toEqual([ROBIN]);
+    expect(directory.names("home")).toEqual(new Map([[ROBIN, "Robin"]]));
+    expect(directory.standings("home")).toEqual(
+      new Map([
+        [ROBIN, "in"],
+        ["alex", "in"],
+      ]),
+    );
+    expect(directory.history("home").slice(-2)).toEqual([
+      { action: "add-person", person: ROBIN, at: AT.toISOString(), by: "operator" },
+      { action: "name", person: ROBIN, name: "Robin", at: AT.toISOString(), by: "operator" },
+    ]);
+    directory.close();
+  });
+
+  test("addPerson refuses a name someone holds, by id or as shown, and a household that is not there", () => {
+    const directory = withRobin();
+    directory.renamePerson({ household: "home", person: "alex", name: "Alexandre", ...CHANGE });
+    const before = stateOf(directory);
+    const add = (household: string, person: string) => () =>
+      directory.addPerson({ household, person, ...CHANGE, newId: () => OTHER });
+
+    expect(code(add("home", "alex"))).toBe("PERSON_NAME_TAKEN");
+    expect(code(add("home", "Alexandre"))).toBe("PERSON_NAME_TAKEN");
+    expect(code(add("home", "Robin"))).toBe("PERSON_NAME_TAKEN");
+    expect(code(add("home", ROBIN))).toBe("PERSON_NAME_TAKEN");
+    expect(code(add("home", " "))).toBe("BAD_REQUEST");
+    expect(code(add("home", "x".repeat(65)))).toBe("BAD_REQUEST");
+    expect(code(add("cabin", "Kim"))).toBe("HOUSEHOLD_NOT_FOUND");
+    expect(stateOf(directory)).toEqual(before);
+    directory.close();
+  });
+
+  test("addMember under their id gives them an email, and they stop being held without one until it is removed", () => {
+    const directory = withRobin();
+
+    directory.addMember({ household: "home", address: CASEY, person: ROBIN, ...CHANGE });
+
+    expect(directory.membershipOf(CASEY)).toEqual({ household: "home", person: ROBIN });
+    expect(directory.withoutEmail("home")).toEqual([]);
+    expect(directory.people("home")).toEqual([ROBIN, "alex"]);
+
+    directory.removeMember({ address: CASEY, ...CHANGE });
+
+    expect(directory.withoutEmail("home")).toEqual([ROBIN]);
+    expect(directory.people("home")).toEqual([ROBIN, "alex"]);
+    directory.close();
+  });
+
+  test("a retirement asks for no email first, and takes them out of who stands now", () => {
+    const directory = withRobin();
+
+    const retired = directory.retirePerson({
+      household: "home",
+      person: ROBIN,
+      action: "retire",
+      ...CHANGE,
+    });
+
+    expect(retired).toEqual({ person: ROBIN, standing: "retiring" });
+    expect(directory.withoutEmail("home")).toEqual([]);
+    expect(directory.people("home")).toEqual(["alex"]);
+    expect(directory.heldPeople("home")).toEqual([ROBIN, "alex"]);
+    directory.retirePerson({ household: "home", person: ROBIN, action: "return", ...CHANGE });
+    expect(directory.people("home")).toEqual([ROBIN, "alex"]);
+    directory.close();
+  });
+
+  test("the schema refuses an UPDATE, a DELETE, a REPLACE, a person held twice, and an id another is shown under", () => {
+    const db = raw();
+    insert(db, { address: ALEX, person: "alex" });
+    addPeopleRow(db, ROBIN);
+    db.exec(`INSERT INTO person_names (household_id, person, name, named_at, named_by)
+             VALUES ('home', 'alex', 'Kim', 'x', 'operator')`);
+
+    for (const statement of [
+      "UPDATE people SET person = 'someone'",
+      "DELETE FROM people",
+      `INSERT OR REPLACE INTO people (id, household_id, person, added_at, added_by)
+       VALUES (1, 'home', '${OTHER}', 'x', 'raw')`,
+    ]) {
+      expect(() => db.exec(statement), statement).toThrow(/appended, never/u);
+    }
+    expect(() => addPeopleRow(db, ROBIN)).toThrow(/holds this person already/u);
+    expect(() => addPeopleRow(db, "alex")).toThrow(/holds this person already/u);
+    expect(() => addPeopleRow(db, "Kim")).toThrow(/unique in its household/u);
+    expect(() => addPeopleRow(db, " padded ")).toThrow(/CHECK/u);
+    expect(db.prepare("SELECT person FROM people").all()).toEqual([{ person: ROBIN }]);
+    db.close();
+  });
+
+  test("the schema lets a person this table holds be named, retired and given an address, and keeps names unique against their id", () => {
+    const db = raw();
+    insert(db, { address: ALEX, person: "alex" });
+    addPeopleRow(db, ROBIN);
+    const name = (person: string, text: string) =>
+      db
+        .prepare(
+          `INSERT INTO person_names (household_id, person, name, named_at, named_by)
+           VALUES ('home', ?, ?, 'x', 'operator')`,
+        )
+        .run(person, text);
+
+    name(ROBIN, "Robin");
+    expect(() => name("alex", ROBIN)).toThrow(/unique in its household/u);
+    expect(() => name("alex", "Robin")).toThrow(/unique in its household/u);
+    expect(() => name(OTHER, "Kim")).toThrow(/household has held/u);
+    db.exec(`INSERT INTO retirements (household_id, person, action, recorded_at, recorded_by)
+             VALUES ('home', '${ROBIN}', 'retire', 'x', 'operator')`);
+    expect(() =>
+      db.exec(`INSERT INTO retirements (household_id, person, action, recorded_at, recorded_by)
+               VALUES ('home', '${OTHER}', 'retire', 'x', 'operator')`),
+    ).toThrow(/household has held/u);
+    db.exec(`INSERT INTO retirements (household_id, person, action, recorded_at, recorded_by)
+             VALUES ('home', '${ROBIN}', 'return', 'x', 'operator')`);
+    insert(db, { address: CASEY, person: ROBIN });
+    expect(db.prepare("SELECT person FROM current_members WHERE address = ?").get(CASEY)).toEqual({
+      person: ROBIN,
+    });
+    db.close();
+  });
+
+  test("migration 8 takes a directory at migration 7 with its records unchanged", () => {
+    const db = new Database(":memory:");
+    migrateDirectory(db, 7);
+    db.exec(
+      "INSERT INTO households (id, name, created_at, created_by) VALUES ('home', 'Home', 'x', 'operator')",
+    );
+    insert(db, { address: ALEX, person: "alex" });
+    db.exec(`INSERT INTO person_names (household_id, person, name, named_at, named_by)
+             VALUES ('home', 'alex', 'Alexandre', 'x', 'operator')`);
+    const tables = ["households", "memberships", "person_names", "retirements"];
+    const read = () => tables.map((table) => db.prepare(`SELECT * FROM ${table}`).all());
+    const before = read();
+
+    migrateDirectory(db);
+
+    expect(db.pragma("user_version", { simple: true })).toBe(8);
+    expect(read()).toEqual(before);
+    // Migration 5's refusals, made again, still refuse.
+    expect(() =>
+      db.exec(`INSERT INTO person_names (household_id, person, name, named_at, named_by)
+               VALUES ('home', 'nobody', 'Kim', 'x', 'operator')`),
+    ).toThrow(/household has held/u);
+    expect(() => insert(db, { address: CASEY, person: "Alexandre" })).toThrow(
+      /unique in its household/u,
+    );
+    db.close();
   });
 });

@@ -386,6 +386,100 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
     WHEN NEW.id IS NULL
     BEGIN SELECT RAISE(ABORT, 'a household has an id'); END;
   `,
+  // 8 — a person without an email (lg-74).
+  `
+  -- A person the household holds who has no email and never signs in: the
+  -- partner whose salary sets a split while someone else keeps the ledger. A
+  -- person added with an email is a membership and has no row here; a person
+  -- added without one has a row here and no membership, until one is added
+  -- under their id. Appended, never edited, as memberships are.
+  CREATE TABLE people (
+    id INTEGER PRIMARY KEY,
+    household_id TEXT NOT NULL REFERENCES households (id),
+    -- The person's id, as memberships.person names them: since lg-76 a
+    -- generated UUID, shown under the person_names record written with it.
+    person TEXT NOT NULL CHECK (length(person) BETWEEN 1 AND 64 AND person = trim(person)),
+    added_at TEXT NOT NULL,
+    -- Who added them: an address, or 'operator' for the host command.
+    added_by TEXT NOT NULL
+  );
+
+  CREATE INDEX people_household ON people (household_id, person);
+
+  -- A person is added once: not one this table holds for the household, and not
+  -- one a membership of it has named, who is held already.
+  CREATE TRIGGER people_new BEFORE INSERT ON people
+    WHEN EXISTS (SELECT 1 FROM people WHERE household_id = NEW.household_id AND person = NEW.person)
+      OR EXISTS (SELECT 1 FROM memberships WHERE household_id = NEW.household_id AND person = NEW.person)
+    BEGIN SELECT RAISE(ABORT, 'the household holds this person already'); END;
+
+  -- migration 5's memberships_person_not_shown_as_another, for this table.
+  CREATE TRIGGER people_not_shown_as_another BEFORE INSERT ON people
+    WHEN EXISTS (
+      SELECT 1 FROM current_person_names
+      WHERE household_id = NEW.household_id AND name = NEW.person
+    )
+    BEGIN SELECT RAISE(ABORT, 'a shown name is unique in its household'); END;
+
+  CREATE TRIGGER people_never_updated BEFORE UPDATE ON people
+    BEGIN SELECT RAISE(ABORT, 'a person record is appended, never edited'); END;
+  CREATE TRIGGER people_never_deleted BEFORE DELETE ON people
+    BEGIN SELECT RAISE(ABORT, 'a person record is appended, never deleted'); END;
+  CREATE TRIGGER people_never_replaced BEFORE INSERT ON people
+    WHEN NEW.id IS NOT NULL AND EXISTS (SELECT 1 FROM people WHERE id = NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'a person record is appended, never replaced'); END;
+
+  -- Migrations 5 and 6 read "a person the household holds" as "a person a
+  -- membership of it has named". From here it is either that or a person this
+  -- table holds, so each trigger that asks is made again asking both. The
+  -- sentences they raise are the ones they raised.
+  DROP TRIGGER person_names_held;
+  CREATE TRIGGER person_names_held BEFORE INSERT ON person_names
+    WHEN NOT EXISTS (
+        SELECT 1 FROM memberships WHERE household_id = NEW.household_id AND person = NEW.person
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM people WHERE household_id = NEW.household_id AND person = NEW.person
+      )
+    BEGIN SELECT RAISE(ABORT, 'a shown name is for a person the household has held'); END;
+
+  DROP TRIGGER person_names_unique;
+  CREATE TRIGGER person_names_unique BEFORE INSERT ON person_names
+    WHEN EXISTS (
+        SELECT 1 FROM current_person_names
+        WHERE household_id = NEW.household_id AND person <> NEW.person AND name = NEW.name
+      )
+      OR EXISTS (
+        SELECT 1 FROM memberships
+        WHERE household_id = NEW.household_id AND person <> NEW.person AND person = NEW.name
+      )
+      OR EXISTS (
+        SELECT 1 FROM people
+        WHERE household_id = NEW.household_id AND person <> NEW.person AND person = NEW.name
+      )
+    BEGIN SELECT RAISE(ABORT, 'a shown name is unique in its household'); END;
+
+  DROP TRIGGER memberships_person_not_shown_as_another;
+  CREATE TRIGGER memberships_person_not_shown_as_another BEFORE INSERT ON memberships
+    WHEN NEW.action = 'add'
+      AND NEW.person NOT IN (SELECT person FROM memberships WHERE household_id = NEW.household_id)
+      AND NEW.person NOT IN (SELECT person FROM people WHERE household_id = NEW.household_id)
+      AND EXISTS (
+        SELECT 1 FROM current_person_names
+        WHERE household_id = NEW.household_id AND name = NEW.person
+      )
+    BEGIN SELECT RAISE(ABORT, 'a shown name is unique in its household'); END;
+
+  DROP TRIGGER retirements_held;
+  CREATE TRIGGER retirements_held BEFORE INSERT ON retirements
+    WHEN NOT EXISTS (
+        SELECT 1 FROM memberships WHERE household_id = NEW.household_id AND person = NEW.person
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM people WHERE household_id = NEW.household_id AND person = NEW.person
+      )
+    BEGIN SELECT RAISE(ABORT, 'a retirement is for a person the household has held'); END;
+  `,
 ];
 
 /** Brings a directory up to `target`, every migration by default. */

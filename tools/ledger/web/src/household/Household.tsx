@@ -14,7 +14,7 @@ import type { AddMemberRequest, HouseholdResponse } from "@ledger/contract";
 import { addHouseholdMember, fetchHousehold } from "../api/households.ts";
 import { byShownName, shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
-import { MemberForm } from "./MemberForm.tsx";
+import { MemberForm, NO_EMAIL } from "./MemberForm.tsx";
 import { MortgageSetting } from "./MortgageSetting.tsx";
 
 type Load =
@@ -42,6 +42,9 @@ function describeAll(history: readonly HistoryRecord[], names: ShownNames): (str
       const was = before.get(record.person) ?? shownName({}, record.person);
       before.set(record.person, record.name);
       return `${was} renamed ${record.name}, by ${by}`;
+    }
+    if (record.action === "add-person") {
+      return `${shownName(names, record.person)} added without an email, by ${by}`;
     }
     const what = record.action === "add" ? "added" : "removed";
     return `${record.address} ${what} as ${shownName(names, record.person)}, by ${by}`;
@@ -120,11 +123,19 @@ export function Household({ id }: { id: string }): React.ReactElement {
         <ul className="members">
           {members
             .toSorted((one, other) => byShownName(names)(one.person, other.person))
-            .map((member) => (
-              <li key={member.address}>
-                <strong>{shownName(names, member.person)}</strong> <span>{member.address}</span>
-              </li>
-            ))}
+            .map((member) =>
+              member.address === null ? (
+                // lg-74: a person who counts in the books and never signs in.
+                <li key={`person:${member.person}`}>
+                  <strong>{shownName(names, member.person)}</strong>{" "}
+                  <span className="muted">{NO_EMAIL}</span>
+                </li>
+              ) : (
+                <li key={member.address}>
+                  <strong>{shownName(names, member.person)}</strong> <span>{member.address}</span>
+                </li>
+              ),
+            )}
         </ul>
 
         <h3>Add a member</h3>

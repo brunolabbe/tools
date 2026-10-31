@@ -30,7 +30,12 @@ import {
   createHousehold,
   fetchAdminHouseholds,
 } from "../api/households.ts";
-import { ACCESS_POLICY_NOTE, MemberForm, emptyNameHint } from "../household/MemberForm.tsx";
+import {
+  ACCESS_POLICY_NOTE,
+  MemberForm,
+  NO_EMAIL,
+  emptyNameHint,
+} from "../household/MemberForm.tsx";
 import { byShownName, shownName } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
@@ -69,8 +74,9 @@ export function Admin(): React.ReactElement {
   }
 
   const { households } = load;
+  // lg-74: a person without an email signs in nowhere, so Access has nothing to admit.
   const addresses = households.flatMap((household) =>
-    household.members.map((member) => member.address),
+    household.members.flatMap((member) => (member.address === null ? [] : [member.address])),
   );
   // lg-71: the answer to a create is the new card, so it goes in without asking
   // for the list again, where the list puts it: the API orders households by id.
@@ -147,7 +153,8 @@ function HouseholdCard(props: {
     ...household.people.map((one) => [one.person, one.name]),
     ...household.members.map((member) => [member.person, member.name]),
   ]);
-  // Who an address can be added for: the people who have one now, by shown name (lg-76).
+  // Who an address can be added for: the people who have one now, and those held
+  // without one (lg-74), by shown name (lg-76).
   const people = [...new Set(household.members.map((member) => member.person))].toSorted(
     byShownName(names),
   );
@@ -180,70 +187,84 @@ function HouseholdCard(props: {
         <p className="muted">Nobody yet.</p>
       ) : (
         <ul className="members">
-          {household.members.map((member) => (
-            <li key={member.address}>
-              <span>
-                <strong>{shownName(names, member.person)}</strong> {member.address}
-              </span>
-              {editing === member.address ? (
-                <ChangeAddress
-                  household={household.id}
-                  address={member.address}
-                  onCancel={() => setEditing(null)}
-                  onChanged={async () => {
-                    setEditing(null);
-                    await onChange();
-                  }}
-                />
-              ) : confirming === member.address ? (
-                <span className="actions">
-                  <button
-                    type="button"
-                    className="small"
-                    disabled={busy}
-                    onClick={() => void remove(member.address)}
-                  >
-                    Remove {member.address}
-                  </button>
-                  <button
-                    type="button"
-                    className="small secondary"
-                    disabled={busy}
-                    onClick={() => setConfirming(null)}
-                  >
-                    Keep
-                  </button>
+          {household.members.map((member) => {
+            const { address } = member;
+            if (address === null) {
+              // lg-74: nothing to edit or remove; an email is given through the form below.
+              return (
+                <li key={`person:${member.person}`}>
+                  <span>
+                    <strong>{shownName(names, member.person)}</strong>{" "}
+                    <span className="muted">{NO_EMAIL}</span>
+                  </span>
+                </li>
+              );
+            }
+            return (
+              <li key={address}>
+                <span>
+                  <strong>{shownName(names, member.person)}</strong> {address}
                 </span>
-              ) : (
-                <span className="actions">
-                  <button
-                    type="button"
-                    className="small secondary"
-                    aria-label={`Edit ${member.address}`}
-                    disabled={busy}
-                    onClick={() => {
-                      setConfirming(null);
-                      setEditing(member.address);
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="small secondary"
-                    aria-label={`Remove ${member.address}`}
-                    disabled={busy}
-                    onClick={() => {
+                {editing === address ? (
+                  <ChangeAddress
+                    household={household.id}
+                    address={address}
+                    onCancel={() => setEditing(null)}
+                    onChanged={async () => {
                       setEditing(null);
-                      setConfirming(member.address);
+                      await onChange();
                     }}
-                  >
-                    Remove
-                  </button>
-                </span>
-              )}
-            </li>
-          ))}
+                  />
+                ) : confirming === address ? (
+                  <span className="actions">
+                    <button
+                      type="button"
+                      className="small"
+                      disabled={busy}
+                      onClick={() => void remove(address)}
+                    >
+                      Remove {address}
+                    </button>
+                    <button
+                      type="button"
+                      className="small secondary"
+                      disabled={busy}
+                      onClick={() => setConfirming(null)}
+                    >
+                      Keep
+                    </button>
+                  </span>
+                ) : (
+                  <span className="actions">
+                    <button
+                      type="button"
+                      className="small secondary"
+                      aria-label={`Edit ${address}`}
+                      disabled={busy}
+                      onClick={() => {
+                        setConfirming(null);
+                        setEditing(address);
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="small secondary"
+                      aria-label={`Remove ${address}`}
+                      disabled={busy}
+                      onClick={() => {
+                        setEditing(null);
+                        setConfirming(address);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       {confirming !== null && (
@@ -278,8 +299,8 @@ function HouseholdCard(props: {
           </p>
           <p className="muted hint">
             Retiring a person takes effect at the household&rsquo;s next close: they settle the open
-            period, and every period after leaves them out. Remove their emails first. Bringing them
-            back works the same way.
+            period, and every period after leaves them out. Remove their emails first, if they have
+            any. Bringing them back works the same way.
           </p>
         </>
       )}

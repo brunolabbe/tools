@@ -578,3 +578,70 @@ test("Import fits a phone and a desktop, before sending and once read", async ({
   await page.getByText("The dry run’s report").click();
   await fitsBothWidths(page, testInfo, "Import (read)");
 });
+
+/**
+ * lg-74: a person held without an email, listed by name with "no email" where
+ * an address would be. The seed adds nobody without one, since a third person in
+ * the books would change every period's people; the household's answers are
+ * taken from the server and given one here, with a long name to wrap.
+ */
+const WITHOUT_EMAIL = {
+  person: "00000000-0000-4000-8000-0000000000ee",
+  name: "Robin-Alexandrine de la Montagne-Verte",
+};
+
+test("Household and Admin fit a phone and a desktop with a person who has no email", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/api/households/*", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const body = (await (await route.fetch()).json()) as {
+      members: unknown[];
+      history: unknown[];
+    };
+    const at = "2026-10-25T12:00:00.000Z";
+    await route.fulfill({
+      json: {
+        ...body,
+        members: [...body.members, { address: null, ...WITHOUT_EMAIL }],
+        history: [
+          ...body.history,
+          { action: "add-person", person: WITHOUT_EMAIL.person, at, by: "alex@example.test" },
+          { action: "name", ...WITHOUT_EMAIL, at, by: "alex@example.test" },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/admin/households", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const body = (await (await route.fetch()).json()) as {
+      households: { members: unknown[]; people: unknown[] }[];
+    };
+    await route.fulfill({
+      json: {
+        households: body.households.map((household) => ({
+          ...household,
+          members: [...household.members, { address: null, ...WITHOUT_EMAIL }],
+          people: [...household.people, { ...WITHOUT_EMAIL, standing: "in" }],
+        })),
+      },
+    });
+  });
+
+  await openTab(page, "Household");
+  await expect(page.getByRole("main")).toContainText(`${WITHOUT_EMAIL.name} no email`);
+  await expect(page.getByRole("main")).toContainText(
+    `${WITHOUT_EMAIL.name} added without an email`,
+  );
+  await fitsBothWidths(page, testInfo, "Household (no email)");
+
+  await page
+    .getByRole("navigation", { name: "Screens" })
+    .getByRole("button", { name: "Admin" })
+    .click();
+  await expect(page.getByRole("main")).toContainText(`${WITHOUT_EMAIL.name} no email`);
+  await expect(page.getByRole("list", { name: "Emails to admit" })).not.toContainText(
+    WITHOUT_EMAIL.name,
+  );
+  await fitsBothWidths(page, testInfo, "Admin (no email)");
+});
