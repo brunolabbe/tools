@@ -68,8 +68,8 @@ function list(directory: Directory): string {
       ].map((member) => {
         const shown = shownName(names, member.person);
         const who = shown === member.person ? shown : `${shown} (${member.person})`;
-        // lg-82: a stored name may hold what a terminal runs, T1.
-        return `  ${escapeUnseen(who)}  ${member.address}`;
+        // lg-82: a stored name or address may hold what a terminal runs, T1.
+        return `  ${escapeUnseen(who)}  ${escapeUnseen(member.address)}`;
       });
       return [
         `${household.id}  ${escapeUnseen(household.name)}`,
@@ -165,7 +165,7 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
         const [address = ""] = args;
         const removed = directory.removeMember({ address, ...change });
         io.stdout(
-          `Removed ${removed.address} from ${removed.household}, where it was ${shown(removed)}. ` +
+          `Removed ${escapeUnseen(removed.address)} from ${removed.household}, where it was ${shown(removed)}. ` +
             `Its records keep the name. Take it off the ledger's Access policy too, if nothing else needs it there.\n`,
         );
         return 0;

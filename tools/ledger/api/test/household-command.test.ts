@@ -449,6 +449,12 @@ describe("a stored name holding a control or a zero-width character (lg-82)", ()
   const RETIRED = ["r", "r"] as const;
   const NO_EMAIL = ["n", "n"] as const;
 
+  /** An address whose domain holds `character`: it sits after the `@`, which the schema reads. */
+  const addressWith = (character: string, index: number): string =>
+    `u${String(index)}@ex${character}z.test`;
+  const addressEscaped = (character: string, index: number): string =>
+    `u${String(index)}@ex${escaped(character)}z.test`;
+
   /** One household per character, named with it, holding people shown, or id'd, by it. */
   function seed(): void {
     Directory.open(directoryPath).close();
@@ -483,6 +489,8 @@ describe("a stored name holding a control or a zero-width character (lg-82)", ()
       insert.named.run(id, `p${String(index)}`, around(character, ...SHOWN));
       // Before lg-76 a person's id was the name typed, and no `person_names` row says otherwise.
       insert.member.run(`i${String(index)}@example.test`, id, around(character, ...BY_ID));
+      // An address stored before lg-52 and lg-57 refused a character in one (lg-82).
+      insert.member.run(addressWith(character, index), id, `u${String(index)}`);
       insert.held.run(id, `n${String(index)}`);
       insert.named.run(id, `n${String(index)}`, around(character, ...NO_EMAIL));
       insert.held.run(id, `q${String(index)}`);
@@ -657,5 +665,43 @@ describe("a stored name holding a control or a zero-width character (lg-82)", ()
     expect(run("list").out).toContain(
       `  ${aroundEscaped(character, ...BY_ID)}  i27@example.test\n`,
     );
+  });
+
+  // lg-82, the second round: an address stored before lg-52 and lg-57 refused a character in
+  // one holds it, and `list` and `remove` print the address as it is stored.
+  test("list prints a stored address with each character of the 69 escaped", () => {
+    seed();
+
+    const ran = run("list");
+
+    expect(ran.code, ran.err).toBe(0);
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      expect(ran.out, escaped(character)).toContain(
+        `  u${String(index)}  ${addressEscaped(character, index)}\n`,
+      );
+      expect(ran.out, escaped(character)).not.toContain(addressWith(character, index));
+    });
+  });
+
+  test("remove prints the address it removed with each character of the 69 escaped", () => {
+    seed();
+
+    UNSEEN_CHARACTERS.forEach((character, index) => {
+      const ran = run("remove", addressWith(character, index));
+
+      // The address is read as the removal reads it, which refuses whitespace and nothing
+      // else: a stored address with a TAB or a BOM in it cannot be removed at all, so
+      // nothing is printed for those, and the others are printed escaped.
+      if (/\s/u.test(character)) {
+        expect(ran.code, escaped(character)).toBe(1);
+        expect(ran.err, escaped(character)).toContain("That is not an email address.");
+        return;
+      }
+      expect(ran.code, `${escaped(character)} ${ran.err}`).toBe(0);
+      expect(ran.out, escaped(character)).toContain(
+        `Removed ${addressEscaped(character, index)} from `,
+      );
+      expect(ran.out, escaped(character)).not.toContain(addressWith(character, index));
+    });
   });
 });

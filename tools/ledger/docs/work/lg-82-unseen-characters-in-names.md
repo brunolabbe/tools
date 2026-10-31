@@ -924,7 +924,7 @@ waits for a separate answer.
   too, as a problem. Test: `workbook-names.test.ts`, "an answer as a new person under a name
   with a control character is refused, adding no one", 422 `WORKBOOK_IMPORT_REFUSED`; with
   the check disabled it fails `expected 400 to be 422`.
-- **Not folded, and why.** `list`, `remove` and M5 print `member.address` raw, and an
+- **Not folded in the first round (superseded: folded in the second, below).** `list`, `remove` and M5 print `member.address` raw, and an
   address stored before lg-52 or lg-57 may hold a control or a zero-width character
   (`readStoredAddress` admits it so the row can be removed). That is the same class of
   defect for another field, found by reading, not run; it needs its own reproduction and a
@@ -937,3 +937,33 @@ waits for a separate answer.
   its check disabled.
   After the last commit: `npm run check` exit 0; `npm test -- --project ledger` exit 0, 92 files,
   2018 tests (2016 before the id and the Confirm tests).
+- **2026-10-31, second round: M1–M3 left, addresses folded in.** The owner's answers are
+  under Build orders. **M1–M3:** the `Done when` clause is reworded (above), and nothing in
+  the source changes for them. **Addresses (the fold-in), reproduced first.** `list` and
+  `remove` print a stored address raw. Two tests were written first, in
+  `household-command.test.ts`, with an address stored past `Directory` (the character after
+  the `@`, because the schema's `GLOB '?*@?*'` stops at a NUL before it; 69 households, one
+  address each): `list prints a stored address with each character of the 69 escaped` and
+  `remove prints the address it removed with each character of the 69 escaped`. Red on
+  the base sources (`git checkout d7cd223f -- <the seven source files>`, `books` rebuilt,
+  `grep -c escapeUnseen books/dist/workbook.js` → `0`):
+  `npx vitest run tools/ledger/api/test/household-command.test.ts -t "stored address|address it removed"`
+  → two failures, first `AssertionError: \u0000: expected 'Directory: …' to contain '  u0
+  u0@ex\u0000z.test\n'`. Also red at the branch head before the fix. Then `escapeUnseen`
+  at the two call sites, `list`'s address column and `remove`'s `Removed ${removed.address}`,
+  and both are green (33 of 33 in the file).
+- **What the owner's reading had wrong, 1: M5 prints no address.** `#refuseTaken` says
+  `That email already belongs to the household "…", as …. Remove it first.` and names no
+  address, so M5 is not an address sink (the name and the household name in it were
+  escaped in the first round, at T6). The sinks that print an address are `list` and
+  `remove`. `Created…with ${member.address}` and `Added ${member.address}` also print one,
+  but it is the address typed, which `readAddress` has refused a character in, so those two
+  are reachable by no data and are left unescaped.
+- **What the reading had wrong, 2: not all 69 reach `remove`.** `removeMember` reads the
+  typed address with `readStoredAddress`, whose `ADDRESS_SHAPE` refuses `\s`. Six of the
+  69 are in `\s` (TAB, LF, VT, FF, CR and U+FEFF), so a stored address holding one is
+  listed and cannot be removed by the command at all, answering `That is not an email
+  address.` The test asserts that for the six and the escape for the other 63. That is an
+  existing defect, not this ticket's (a row nobody can remove); it is not fixed here and is
+  named in the report.
+- **Second round, verification.** `npm test -- --project ledger` exit 0, 92 files, 2020 tests (2018 before the two address tests); `npm run check` exit 0 at the final head, and `npx oxfmt --check` on this ticket reports `All matched files use the correct format.`
