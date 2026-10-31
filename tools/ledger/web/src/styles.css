@@ -139,9 +139,14 @@ h1 {
  * lg-80: a name with no space in it (a person's, up to 64 characters, a
  * household's, up to 80) breaks where the card ends rather than widening it. A
  * grid item will not shrink below its longest word, so the title is what held the
- * whole card, and the names beneath it, wider than a phone. Set on the elements a
- * name is drawn in, not on `.card` or a wrapper: nothing is clipped, so the name
- * shows whole on as many lines as it takes.
+ * whole card, and the names beneath it, wider than a phone. Set on a card's
+ * headings and its `strong` elements, not on `.card` or a wrapper: nothing is
+ * clipped, so the name shows whole on as many lines as it takes. It reaches more
+ * than names: no `.card h2` shows one today (`h2` is here for lg-77, which makes
+ * the household's name a heading), and a `strong` also shows amounts, counts,
+ * percentages and a file name. That is safe, since `anywhere` only breaks a word
+ * wider than its line: lg-80's gate read 278 such elements on every screen at
+ * both widths, and only the eight holding a stubbed long name reflowed.
  */
 .card h2,
 .card h3,

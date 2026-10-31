@@ -54,9 +54,15 @@ person who has an email, on `main`. The layout spec does not catch it, because i
 Admin case reads the seeded names (`alex`, `sam`), which are short, and passes on
 `main` (control, below).
 
-**Not measured:** whether the Household screen shows the household's own name, and
-so whether an 80-character household name overflows there. The Household screen with
-a 64-character member name does not overflow (probe below).
+**Measured by gate 1, not fixed here:** the Household screen draws the household's
+own name in a `<p className="muted">` inside its `.card`, which this ticket's rule
+does not reach. With an 80-character unbroken name stubbed into
+`GET /api/households/:id`, `scrollWidth` is **894** at 360 px on `main` and on this
+head alike, and 1280 px fits. lg-77 (pull request #686) closes it: it replaces that
+`<p>` with a `.titled > h2` carrying `overflow-wrap: anywhere`, and its layout case
+"Household fits a phone and a desktop titled by an 80-character household name, and
+renaming it" stubs the same name. The Household screen with a 64-character member
+name does not overflow (probe below).
 
 ## Build
 
@@ -465,8 +471,10 @@ lg-80, filed as `lg-81`, or recorded only. The answer, relayed by the coordinato
   and the Done when each carry the household case, and its measured numbers replace
   the "not measured" sentences that stood here before.
 
-Not measured, and still open: whether the Household screen shows the household's
-own name, and whether an 80-character household name overflows there.
+WITHDRAWN — do not cite this paragraph: "Not measured, and still open: whether the
+Household screen shows the household's own name, and whether an 80-character
+household name overflows there." Gate 1 measured it (894 at 360 px on `main` and on
+this head); see the 2026-10-31 entries at the end of this Log.
 
 **2026-10-31 — gate 1 (CONCERNS, `330ce54b`): F1 to F6 fixed in this round.** No
 code; the ticket is the only file changed, and its file was renamed on this unmerged
@@ -638,3 +646,31 @@ coordinator, 2026-10-31):
   used the setting; this branch alone has not been run to 18 of 18, and the
   measurement stays as a record of the cause: `1 failed / 17 passed (1.4m)` without
   the line, `18 passed (26.6s)` with it.
+
+**2026-10-31 — gate 1 (CONCERNS, `02218799`): the med, the owner's answer.** Gate 1
+measured what the brief left open: the Household screen, which draws the household's
+name in a `<p className="muted">` inside its `.card`, overflows at 360 px with an
+80-character unbroken name (`scrollWidth` 894, on `main` and on this head alike;
+1280 px fits). The "Not measured" sentences in the Why and in the Log above are
+corrected for it (the Log's is withdrawn in place). The question and the answer
+(relayed by the orchestrator):
+
+- Options: (1) fold it into lg-80, a fourth case on Household and a rule reaching
+  that `<p>`, not run; (2) file it as its own `lg-` ticket with the gate's probe as
+  its reproduction, the gate's recommendation; (3) covered by lg-77, which replaces
+  that `<p>` with a `.titled > h2` carrying `overflow-wrap: anywhere`, and whose
+  layout case "Household fits a phone and a desktop titled by an 80-character
+  household name, and renaming it" passed in its gate 1 local run, 17 of 17, with
+  the read limit off. The orchestrator's recommendation.
+- Chosen: **(3) covered by lg-77**, which **overrode the gate's recommendation of
+  (2)**. Nothing is filed, and this branch changes no Household code.
+- Consequence: the Household screen's overflow stays on `main` until lg-77 (pull
+  request #686) merges, and lg-77's case is what closes it.
+
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the low — "the new rule's
+  comment says it is 'set on the elements a name is drawn in'". The comment in
+  `tools/ledger/web/src/styles.css` now says what the rule reaches (headings and
+  `strong` elements in a card, amounts and counts among them) and why that is safe
+  (the gate's reach probe: 278 elements, only the 8 holding a stubbed name reflowed).
+  No declaration changed. Proof: the diff of that file against `02218799`, piped
+  through `grep -c '^-.*Set on the elements a'`, → `1`.
