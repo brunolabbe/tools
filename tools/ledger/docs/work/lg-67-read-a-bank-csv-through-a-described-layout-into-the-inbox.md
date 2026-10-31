@@ -418,8 +418,8 @@ until lg-67" goes with them.
    re-encodes `csv-balance` as Latin-1 and adds one synthetic non-UTF-8 file.
 2. **Judge a CSV from the bytes** (lg-66 Build 3.1's judgement is for an `.xlsx`).
    A file that is a workbook by lg-66's zip test is read as one. Otherwise it is
-   a CSV candidate when it holds no NUL byte and its first line holds a comma, a
-   semicolon or a tab; anything else is refused with one plain message that only
+   a CSV candidate when it holds no NUL byte and some line holds a comma, a
+   semicolon or a tab; a file in which no line holds one is refused with one plain message that only
    an `.xlsx` workbook or a comma-separated CSV is read (this replaces lg-66's
    "only an `.xlsx`" wording; a zip that is not a workbook still gets it). A file
    named `.csv` that is a workbook is read as one, and a CSV named `.xlsx` as a
@@ -482,7 +482,7 @@ until lg-67" goes with them.
 1. Decision 2 of lg-66 is served: the describe request and the confirm request,
    given as the upload (i) `csv-balance`'s text, (ii) a CSV whose first header
    is `PK ID`, (iii) a zip that is not a workbook (one text entry), (iv) a text
-   file whose first line holds no comma, semicolon or tab, return: for (i) and
+   file in which no line holds a comma, semicolon or tab, return: for (i) and
    (ii), read as CSVs, the fake called once on the describe request and zero times
    on the confirm request; for (iii) and (iv) the one typed error with the plain
    message of Build 2, the fake and the sheet reader uncalled, the books
@@ -543,11 +543,11 @@ until lg-67" goes with them.
    the other rows in the inbox, and reports `rowsInInbox` equal to 40 less that
    number. A test that makes the classification throw finds no statement row
    stored, since both run in the one transaction.
-10. The request for each of the 7 CSV fixtures carries `statement.csv` and nothing
-    of the uploaded file's name: a test uploads each under a name holding a
-    distinctive token and finds the token in neither the request the fake was
-    given nor any line the logger received. The seven new pins are in the Log,
-    and the 13 pins of Done when 2 are unedited by this line's change.
+10. A request body carrying a file name is refused 400 with the fake uncalled;
+    the request for each of the 7 CSV fixtures carries `statement.csv`; no logger
+    line holds the uploaded name's token; the web sends no name. The seven new
+    pins are in the Log, and the 13 pins of Done when 2 are unedited by this line's
+    change.
 11. The web tests show, for a fake describe response on `csv-balance`: the
     statement of Build 6.1 before the button is pressed, with the fake uncalled
     until it is; the date column's letter, header text and 3 + 3 dates with
@@ -1072,3 +1072,14 @@ was made free by this work.
 
 - 2026-10-31 — Fixed at landing by owner choice: gate 1, F3 — "the `-?` of the leading-zero rule is unpinned". The head reads `-007.50` in an amount column as the text `-007.50`, a reading problem (`{"kind":"text","text":"-007.50"}`), and `-0.50` as the number -0.5. With `LEADING_ZERO` at `/^0\d/u` in place of `/^-?0\d/u` in `api/src/csv.ts`, the same probe reads it as `{"kind":"number","number":-7.5}`, as the finding inferred. The test is `api/test/csv-import.test.ts` › "a signed leading zero stays text too: -007.50 is a problem, -007 a detail, -0.50 a number": 1 of 1 passes at the head, and under the mutation `csv-import.test.ts` and `layout-pins.test.ts` give `Tests  1 failed | 86 passed (87)`, failing with `expected { kind: 'number', number: -7 } to deeply equal { kind: 'text', text: '-007' }` (the detail `-007` is the first assertion to fail; the amount assertion sits after it). The mutation was made in the working tree and undone from a copy, not committed.
 - 2026-10-31 — Fixed at landing by owner choice: gate 1, F4 — "`storesMovement` in `api/src/statements.ts` is exported with a comment about" the CSV's oldest row "and has no caller anywhere in `tools/` or `packages/`". `grep -rIn storesMovement . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git` before the deletion printed one line, `tools/ledger/api/src/statements.ts:273:export function storesMovement(`, the definition. Deleted; the same grep after prints nothing.
+
+### 2026-10-31 — the owner's answers at landing
+
+The owner's answers of 2026-10-31, on the build's open points and gate 1's F1 and F6. Gate 1's F2, F5 and F7 stay recorded as the gate wrote them, with no change.
+
+1. **Build 4's "each typed".** Options: (a) a description naming parts a CSV cannot have is the typed `LAYOUT_NOT_FOR_CSV`, and a reading problem or a refused placement comes back from Describe as a 200 with `ok` false and Confirm withheld, both being typed errors on Confirm; (b) typed errors on Describe too. **The owner chose (a)**, the builder's recommendation. The build is as the first entry of the build's "What the brief had wrong" says.
+2. **Done when 10.** Options: (a) reworded to what was built, (b) keep the wording. **The owner chose (a)**, the builder's recommendation. The line is reworded above: a request body carrying a file name is refused 400 with the fake uncalled; the request for each of the 7 CSV fixtures carries `statement.csv`; no logger line holds the uploaded name's token; the web sends no name. `git diff 46f4fd86 HEAD -- tools/ledger/docs/work | grep -c '^-.*distinctive token'` → `1`.
+3. **Three new error codes.** Options: new codes, or reusing the `STATEMENT_*` codes, whose copy says "pasted statement". **The owner accepted** `CSV_SHAPE_UNREAD` (415), `LAYOUT_NOT_FOR_CSV` (422) and `CSV_NOT_AFTER_TAIL` (422), over reuse; it was the orchestrator's recommendation.
+4. **The builder's proposed line for `tools/ledger/CLAUDE.md`.** The owner declined it here; it goes to the next review session.
+5. **Gate 1, F1: the CSV candidate test takes any line, and the brief says the first.** Options: (a) keep any line and reword Build 2 and Done when 1 (iv) to "no line holds one"; (b) first line, and drop `bank-preamble` from the served set; (c) tighten the candidate test. **The owner chose (a)**, the gate's recommendation. Build 2's candidate sentence and Done when 1 (iv) are reworded above. `git diff 46f4fd86 HEAD -- tools/ledger/docs/work | grep -c '^-.*file whose first line holds no comma'` → `1`, and `grep -c '^-.*its first line holds a comma, a'` → `1`.
+6. **Gate 1, F6: the responses became unions told by `kind`, and `CSV_SHEET_NAME` and `CsvPlacement` entered `@ledger/contract`.** **The owner accepted it**, the gate's recommendation.
