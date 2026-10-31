@@ -438,3 +438,12 @@ real consumer.
   packages lock. `git diff 3eb342af HEAD -- package-lock.json | grep -c '^[-+] '`
   → `6` lines (the `packages/ui` entry only, no version moved), and
   `node scripts/check-lockfile-sync.mjs` exits 0.
+
+- 2026-10-31 — Fixed at landing by owner choice: gate 2, N1 —
+  "`renderBlockingEntry` (`packages/ui/src/vite.ts`) matches text, not the
+  document". It now reads start tags: only a `<script>` with `type="module"`
+  and a same-origin `src` is marked, attribute names match whole, comments are
+  skipped, and the guard needs an entry tag that holds `blocking="render"`.
+  `npx vitest run packages/ui/test/vite-plugin.test.ts`: 11 of 16 failed
+  against the plugin at `3eb342af` (the 12 new cases less one that already
+  passed), 16 of 16 pass after.

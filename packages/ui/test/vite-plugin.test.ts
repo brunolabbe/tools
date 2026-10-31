@@ -91,3 +91,135 @@ test("fails the build when there is no entry to mark, instead of doing nothing",
     /no external module script/u,
   );
 });
+
+// Gate 2's N1 (repo-131): the plugin read the text, not the document. Each case
+// below is a row of its population, run against the plugin at 3eb342af, where
+// it was wrong, and against the fix.
+
+test("leaves a module script on another origin alone, and marks the local entry beside it", () => {
+  const remote = '<script type="module" src="https://cdn.example.test/x.js"></script>';
+  const protocolRelative = '<script type="module" src="//cdn.example.test/x.js"></script>';
+  const backslash = '<script type="module" src="/\\cdn.example.test/x.js"></script>';
+  const local = '<script type="module" src="/assets/index-a.js"></script>';
+  const out = addRenderBlocking(remote + protocolRelative + backslash + local);
+  expect(out.tagged).toBe(1);
+  expect(out.html).toBe(
+    remote +
+      protocolRelative +
+      backslash +
+      '<script blocking="render" type="module" src="/assets/index-a.js"></script>',
+  );
+});
+
+test("marks a relative and a root-path src, not a scheme", () => {
+  const { tagged } = addRenderBlocking(
+    '<script type="module" src="./a.js"></script>' +
+      '<script type="module" src="assets/b.js"></script>' +
+      '<script type="module" src="/c.js"></script>' +
+      '<script type="module" src="data:text/javascript,1"></script>' +
+      '<script type="module" src="http://x.test/d.js"></script>',
+  );
+  expect(tagged).toBe(3);
+});
+
+test("a real vite build leaves a remote module script unmarked", async () => {
+  const root = fixture(
+    '<!doctype html><html><head><script type="module" src="https://cdn.example.test/x.js"></script>' +
+      '<script type="module" src="/main.js"></script></head><body></body></html>',
+  );
+  const outDir = path.join(root, "dist");
+  await build({
+    root,
+    configFile: false,
+    logLevel: "silent",
+    plugins: [renderBlockingEntry() as Plugin],
+    build: { outDir, emptyOutDir: true, rollupOptions: { external: [/^https?:/u] } },
+  });
+  const built = fs.readFileSync(path.join(outDir, "index.html"), "utf8");
+  const scripts = [...built.matchAll(/<script\b[^>]*>/giu)].map((match) => match[0]);
+  const remote = scripts.filter((tag) => tag.includes("cdn.example.test"));
+  const local = scripts.filter((tag) => tag.includes("/assets/"));
+  expect(remote).toHaveLength(1);
+  expect(remote[0]).not.toContain("blocking");
+  expect(local).toHaveLength(1);
+  expect(local[0]).toContain('blocking="render"');
+});
+
+test("does not mark a script inside an HTML comment", () => {
+  const commented = '<!-- <script type="module" src="/main.js"></script> -->';
+  const real = '<script type="module" src="/assets/index-a.js"></script>';
+  expect(addRenderBlocking(commented)).toEqual({ html: commented, tagged: 0 });
+  const out = addRenderBlocking(commented + real);
+  expect(out.tagged).toBe(1);
+  expect(out.html).toBe(
+    commented + '<script blocking="render" type="module" src="/assets/index-a.js"></script>',
+  );
+});
+
+test("a page whose only module script is commented out fails the build", () => {
+  expect(() =>
+    runHook(
+      '<!doctype html><html><head><!-- <script type="module" src="/main.js"></script> --></head></html>',
+    ),
+  ).toThrow(/no external module script/u);
+});
+
+test("a blocking attribute on a link, or in a comment, does not pass the guard", () => {
+  const link = '<link rel="stylesheet" href="/a.css" blocking="render">';
+  expect(() => runHook(`<!doctype html><html><head>${link}</head></html>`)).toThrow(
+    /no external module script/u,
+  );
+  expect(() =>
+    runHook('<!doctype html><html><head><!-- <link blocking="render"> --></head></html>'),
+  ).toThrow(/no external module script/u);
+  // The same link beside a real entry: the entry is marked, the link untouched.
+  const out = runHook(
+    `<!doctype html><html><head>${link}<script type="module" src="/assets/index-a.js"></script></head></html>`,
+  );
+  expect(out).toContain(link);
+  expect(out).toContain('<script blocking="render" type="module" src="/assets/index-a.js">');
+});
+
+test("a page whose only module script is on another origin fails the build", () => {
+  expect(() =>
+    runHook(
+      '<!doctype html><html><head><script type="module" src="https://cdn.example.test/x.js"></script></head></html>',
+    ),
+  ).toThrow(/no external module script/u);
+});
+
+test("a blocking script that is not a module entry does not pass the guard", () => {
+  expect(() =>
+    runHook(
+      '<!doctype html><html><head><script src="/classic.js" blocking="render"></script></head></html>',
+    ),
+  ).toThrow(/no external module script/u);
+});
+
+test("an entry that already carries blocking passes the guard and is left alone", () => {
+  const page =
+    '<!doctype html><html><head><script type="module" blocking="render" src="/assets/index-a.js"></script></head></html>';
+  expect(runHook(page)).toBe(page);
+});
+
+test("matches attribute names whole: data-src is not src, data-type is not type", () => {
+  const inline = '<script type="module" data-src="/x.js">inline()</script>';
+  const classic = '<script data-type="module" src="/x.js"></script>';
+  expect(addRenderBlocking(inline + classic)).toEqual({ html: inline + classic, tagged: 0 });
+});
+
+test("matches the script element, not a longer tag name", () => {
+  const input = '<script-x type="module" src="/x.js"></script-x>';
+  expect(addRenderBlocking(input)).toEqual({ html: input, tagged: 0 });
+});
+
+test("reads quoted and unquoted attributes the way a browser does", () => {
+  const { html, tagged } = addRenderBlocking(
+    "<script type='module' src='/a.js'></script>" +
+      "<script type=module src=/b.js></script>" +
+      '<script type="module" src="/c.js" nonblocking="x"></script>' +
+      '<script type="module" src="/d.js" data-note="a > b"></script>',
+  );
+  expect(tagged).toBe(4);
+  expect(html.match(/<script blocking="render"/gu)).toHaveLength(4);
+});

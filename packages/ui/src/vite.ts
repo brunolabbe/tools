@@ -11,21 +11,90 @@
 
 import type { Plugin } from "vite";
 
-/** A module script with a `src`, which is how Vite writes a built entry's tag. */
-const ENTRY_TAG = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc=)(?![^>]*\bblocking=)[^>]*>/giu;
+/**
+ * An HTML comment, or a `<script>` start tag. One pattern, so a scan sees them
+ * in document order and a script inside a comment is consumed with it. The tag
+ * name must end at whitespace, `/` or `>`, so `<script-x` is not a script, and
+ * a quoted attribute value may hold a `>`.
+ */
+const COMMENT_OR_SCRIPT = /<!--[\s\S]*?-->|<script(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>/giu;
+
+/** One attribute of a start tag: its name, then a double-quoted, single-quoted or bare value. */
+const ATTRIBUTE = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/gu;
+
+/** The attributes of a `<script` start tag, names lower-cased, first occurrence winning as in a browser. */
+function attributes(tag: string): Map<string, string> {
+  const found = new Map<string, string>();
+  for (const match of tag.slice("<script".length).matchAll(ATTRIBUTE)) {
+    const name = (match[1] ?? "").toLowerCase();
+    if (!found.has(name)) found.set(name, match[2] ?? match[3] ?? match[4] ?? "");
+  }
+  return found;
+}
 
 /**
- * Adds `blocking="render"` to every external module script in the built HTML
- * that lacks one. Exported apart from the plugin so a test can feed it Vite's
- * output directly. Returns the HTML and how many tags it changed.
+ * A `src` that loads from this page's own origin: a relative path or a root
+ * path. A scheme, `//` and `/\` (which a browser reads as `//`) are another
+ * origin, and a build must not hold the first paint on one. A tab or newline is
+ * dropped first, as the URL parser drops it.
+ */
+function isSameOrigin(src: string): boolean {
+  const url = src.replace(/[\t\n\r]/gu, "").trim();
+  return (
+    url !== "" &&
+    !/^[a-z][a-z0-9+.-]*:/iu.test(url) &&
+    !/^[/\\]{2}/u.test(url) &&
+    !url.startsWith("\\")
+  );
+}
+
+/**
+ * A built entry is a `<script>` with `type="module"` and a same-origin `src`.
+ * `blocking` says whether it already holds the paint (the token `render`);
+ * `hasBlocking` is any `blocking` attribute at all, whose value is then the
+ * author's and is left alone.
+ */
+function classify(tag: string): { entry: boolean; hasBlocking: boolean; blocking: boolean } {
+  const attrs = attributes(tag);
+  const entry =
+    attrs.get("type")?.trim().toLowerCase() === "module" && isSameOrigin(attrs.get("src") ?? "");
+  const value = attrs.get("blocking");
+  return {
+    entry,
+    hasBlocking: value !== undefined,
+    blocking: value !== undefined && value.toLowerCase().split(/\s+/u).includes("render"),
+  };
+}
+
+/**
+ * Adds `blocking="render"` to every same-origin external module script in the
+ * built HTML that lacks a `blocking` attribute. Exported apart from the plugin
+ * so a test can feed it Vite's output directly. Returns the HTML and how many
+ * tags it changed.
+ *
+ * It reads start tags, not the document: a comment is skipped whole, and an
+ * element's content is not parsed. That is enough for the page Vite writes.
  */
 export function addRenderBlocking(html: string): { html: string; tagged: number } {
   let tagged = 0;
-  const out = html.replace(ENTRY_TAG, (tag) => {
+  const out = html.replace(COMMENT_OR_SCRIPT, (match) => {
+    if (match.startsWith("<!--")) return match;
+    const { entry, hasBlocking } = classify(match);
+    if (!entry || hasBlocking) return match;
     tagged += 1;
-    return tag.replace(/^<script\b/iu, '<script blocking="render"');
+    return `<script blocking="render"${match.slice("<script".length)}`;
   });
   return { html: out, tagged };
+}
+
+/** Whether an entry tag in the document holds the paint: the tag itself, not any `blocking="render"` on the page. */
+function hasBlockingEntry(html: string): boolean {
+  for (const match of html.matchAll(COMMENT_OR_SCRIPT)) {
+    if (match[0].startsWith("<!--")) continue;
+    const { entry, blocking } = classify(match[0]);
+    if (entry && blocking) return true;
+  }
+  return false;
 }
 
 /**
@@ -55,7 +124,7 @@ export function renderBlockingEntry(): Plugin {
       order: "post",
       handler(html) {
         const { html: out, tagged } = addRenderBlocking(html);
-        if (tagged === 0 && !/\bblocking="render"/u.test(html)) {
+        if (tagged === 0 && !hasBlockingEntry(html)) {
           this.error(
             'render-blocking-entry: no external module script in the built HTML to mark blocking="render"',
           );
