@@ -148,7 +148,8 @@ export class Books {
 
   /**
    * The books of the member's household, with every name the household's
-   * current members stand under enrolled into its `people` (lg-20, `people.ts`).
+   * current members stand under, and the people it holds without an email who
+   * stand, enrolled into its `people` (lg-20, lg-74, `people.ts`).
    *
    * A name the books cannot take — another process holds the write lock —
    * refuses only the person whose name it is (lg-20's gate, F5): the

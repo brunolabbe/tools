@@ -189,3 +189,72 @@ test("labels no address field Address", async () => {
   expect(labels.filter((text) => /address/iu.test(text))).toEqual([]);
   expect(screen.queryAllByLabelText(/address/iu)).toEqual([]);
 });
+
+// lg-74: a person who has no email and never signs in.
+const ROBIN = "00000000-0000-4000-8000-000000000001";
+
+test("lists a person without an email by name with no email, and their add as a line of the history", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue({
+    ...HOME,
+    members: [...HOME.members, { address: null, person: ROBIN, name: "Robin" }],
+    history: [
+      ...HOME.history,
+      {
+        action: "add-person",
+        person: ROBIN,
+        at: "2026-10-03T00:00:00.000Z",
+        by: "sam@example.test",
+      },
+      {
+        action: "name",
+        person: ROBIN,
+        name: "Robin",
+        at: "2026-10-03T00:00:00.000Z",
+        by: "sam@example.test",
+      },
+    ],
+  });
+  render(<Household id="home" />);
+  await screen.findByRole("heading", { name: "Household" });
+
+  const [members, history] = screen.getAllByRole("list");
+  const rows = [...(members?.querySelectorAll("li") ?? [])].map((row) => row.textContent);
+  expect(rows).toEqual(["alex alex@example.test", "Robin no email", "sam sam@example.test"]);
+  expect(members?.textContent).not.toContain(ROBIN);
+  expect(history?.querySelector("li")?.textContent).toBe(
+    "2026-10-03 Robin added without an email, by sam@example.test",
+  );
+});
+
+test("the Email field may be left empty: a name alone adds a person who cannot sign in", async () => {
+  vi.mocked(addHouseholdMember).mockResolvedValue({ address: null, person: ROBIN, name: "Robin" });
+  render(<Household id="home" />);
+  await screen.findByRole("heading", { name: "Household" });
+  expect(
+    screen.getByText(
+      /Email may be left empty: a person without one counts in the books but cannot sign in/u,
+    ),
+  ).toBeTruthy();
+
+  fireEvent.change(screen.getByLabelText("Person"), { target: { value: "Robin" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add member" }));
+
+  expect((await screen.findByRole("status")).textContent).toBe(
+    "Added Robin, who counts in the books and cannot sign in.",
+  );
+  expect(screen.getByRole("status").textContent).not.toContain("Access");
+  expect(vi.mocked(addHouseholdMember)).toHaveBeenCalledWith("home", { person: "Robin" });
+});
+
+test("with neither an email nor a name, nothing is sent", async () => {
+  render(<Household id="home" />);
+  await screen.findByRole("heading", { name: "Household" });
+
+  fireEvent.change(screen.getByLabelText("Person"), { target: { value: " " } });
+  fireEvent.click(screen.getByRole("button", { name: "Add member" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "Give an email, the person's name, or both.",
+  );
+  expect(vi.mocked(addHouseholdMember)).not.toHaveBeenCalled();
+});

@@ -4,8 +4,8 @@
  * Two kinds of route, and neither reads any books:
  *
  * - **A household's own**, under `/api/households/:id`, for its members only
- *   (`memberOf`): who belongs now and every change, and adding a member. There
- *   is no removal here. Removing cuts a person off from their own records, so
+ *   (`memberOf`): who belongs now and every change, and adding a member, or a
+ *   person with no email who never signs in (lg-74). There is no removal here. Removing cuts a person off from their own records, so
  *   it goes through an admin (`docs/00-ANALYSIS.md` §7).
  * - **The admin's**, under `/api/admin/`, for an address in `LEDGER_ADMINS` only
  *   (`adminOf`), who need not be in any household: every household and its
@@ -47,6 +47,7 @@ import {
   retirePersonRequestSchema,
 } from "@ledger/contract";
 import type {
+  AddMemberRequest,
   AdminHousehold,
   AdminHouseholdsResponse,
   AdminPerson,
@@ -68,12 +69,19 @@ function householdIdOf(request: FastifyRequest): string {
   return typeof id === "string" ? id : "";
 }
 
-/** A household's members, by how their person is shown, then by address (lg-76). */
+/**
+ * A household's members, by how their person is shown, then by address (lg-76):
+ * every membership that stands, and every person held without an email who
+ * stands now, with no address (lg-74). The sort is stable, so a person's
+ * addresses keep the directory's address order.
+ */
 function membersOf(directory: Directory, household: string): HouseholdMember[] {
   const names = directory.names(household);
   const order = byShownName(names);
-  return directory
-    .members(household)
+  const withoutEmail = directory
+    .withoutEmail(household)
+    .map((person) => ({ address: null, person }));
+  return [...directory.members(household), ...withoutEmail]
     .toSorted((one, other) => order(one.person, other.person))
     .map(({ address, person }) => ({ address, person, name: shownName(names, person) }));
 }
@@ -82,6 +90,31 @@ function membersOf(directory: Directory, household: string): HouseholdMember[] {
 function memberOfHousehold(directory: Directory, member: Member): HouseholdMember {
   const name = shownName(directory.names(member.household), member.person);
   return { address: member.address, person: member.person, name };
+}
+
+/**
+ * An add as the routes make it: an address as a person (lg-76), or with no
+ * address a person who has none (lg-74), answered with `address: null`.
+ */
+function addAs(
+  directory: Directory,
+  household: string,
+  member: AddMemberRequest,
+  change: { by: string; at: Date; newId: () => string },
+): HouseholdMember {
+  if (member.address === undefined) {
+    // The schema refuses a request with neither; this is the narrowing.
+    if (member.person === undefined) throw new AppError("BAD_REQUEST", ADD_MEMBER_SHAPE);
+    const added = directory.addPerson({ household, person: member.person, ...change });
+    return { address: null, person: added.person, name: added.name };
+  }
+  const added = directory.addMemberByName({
+    household,
+    address: member.address,
+    person: member.person,
+    ...change,
+  });
+  return memberOfHousehold(directory, added);
 }
 
 /**
@@ -118,7 +151,7 @@ function namedHousehold(directory: Directory, id: string): Household {
 }
 
 const ADD_MEMBER_SHAPE =
-  "Send an email, and the name of the person it stands under if you give one.";
+  "Send an email, the name of the person it stands under, or both; a name with no email is a person who never signs in.";
 
 /** A household route's guard, as a hook: the caller is a member of the household the path names. */
 async function asMember(request: FastifyRequest): Promise<void> {
@@ -147,14 +180,12 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
     if (!draft.success) throw new AppError("BAD_REQUEST", ADD_MEMBER_SHAPE);
     try {
       // lg-76: `person` is a name as typed; a new one is a person under a UUID.
-      const added = directory.addMemberByName({
-        household: id,
-        ...draft.data,
+      // lg-74: with no address, a person who never signs in.
+      const body: HouseholdMember = addAs(directory, id, draft.data, {
         by: caller.email.toLowerCase(),
         at: context.now(),
         newId: context.newId,
       });
-      const body: HouseholdMember = memberOfHousehold(directory, added);
       return body;
     } catch (error: unknown) {
       if (error instanceof AppError && error.code === "ADDRESS_ALREADY_A_MEMBER") {
@@ -202,14 +233,11 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
     const id = householdIdOf(request);
     const draft = addMemberRequestSchema.safeParse(request.body);
     if (!draft.success) throw new AppError("BAD_REQUEST", ADD_MEMBER_SHAPE);
-    const added = directory.addMemberByName({
-      household: id,
-      ...draft.data,
+    const body: HouseholdMember = addAs(directory, id, draft.data, {
       by: admin,
       at: context.now(),
       newId: context.newId,
     });
-    const body: HouseholdMember = memberOfHousehold(directory, added);
     return body;
   });
 

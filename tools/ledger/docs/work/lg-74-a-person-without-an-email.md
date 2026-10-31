@@ -3,7 +3,7 @@ id: lg-74
 tool: ledger
 title: A household can hold a person who has no email and never signs in
 kind: work-package
-status: ready
+status: done
 milestone: P6
 depends_on: [lg-71, lg-76]
 difficulty: hard
@@ -74,6 +74,32 @@ the owner noted that most likely one member of a house keeps the ledger.
   `e2e/layout.spec.ts` passes.
 - `npm run check` and `npm test -- --project ledger` pass.
 
+## Review
+
+**Gate: PASS** — 2026-10-31 · `f05108d2..defd5294` (the base is the merge-base, so the range carries no `main` files) · Sonnet 5.5, depth full
+
+| Done when                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A member and the admin can each add a person with no email; the person is enrolled into the books on the next request | `api/test/households.test.ts` › "a member adds one by name alone, and the books enrol them on the next request" (the member's half; reads the books' own `GET /api/people` for the id and its shown name) and › "an admin adds one the same way, listed with no address and nothing for Access to admit" (the admin's half) ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| That person can later be given an email and then signs in as the same person id                                       | `api/test/households.test.ts` › "is given an email later, and signs in as the same person id" (`GET /api/me` answers the id `addPerson` made) ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| lg-71's create request still refuses a missing email                                                                  | `api/test/households.test.ts` › "lg-71's create request still refuses a household made with no email" (400 `BAD_REQUEST`, directory snapshot unchanged) ✓; `createHouseholdRequestSchema` is untouched in the diff                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Renaming and retiring work on a person without an email                                                               | `api/test/households.test.ts` › "is renamed by an admin, keeping their id" and › "is retired with no email to remove first, leaves the members, and the close applies it"; `api/test/directory.test.ts` › "a retirement asks for no email first, and takes them out of who stands now" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| The forms and lists behave as in Build step 4, proved by web tests; `e2e/layout.spec.ts` passes                       | `web/test/household.test.tsx` › "lists a person without an email by name with no email, and their add as a line of the history", "the Email field may be left empty: a name alone adds a person who cannot sign in", "with neither an email nor a name, nothing is sent"; `web/test/admin.test.tsx` › "lists a person without an email by name with no email, with nothing to edit or remove, and leaves them out of the emails to admit" (its companion list of three addresses is non-empty), "adds a person without an email from a card, by name alone", "a new household still needs its first person's email" ✓. `e2e/layout.spec.ts` › "Household and Admin fit a phone and a desktop with a person who has no email": the pull request's `e2e` check passed on `defd5294`, and a local run passed 1 of 1 ✓ |
+| `npm run check` and `npm test -- --project ledger` pass                                                               | **verified** — `npm run check` exit 0; `npm test -- --project ledger` exit 0, `Test Files 86 passed (86)`, `Tests 1864 passed (1864)`; the pull request's `check`, `test (ubuntu-latest)` and the informational `test (windows-latest, informational)` all passed on `defd5294`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+- **low** · no `Done when` line depends on it · `Directory.history` orders ties as membership, then `add-person`, then name, and says that is because a person is named only after one of the other two has added them. A person's `add-person` record is always the first record of that person (`people_new` refuses a person a membership has named), so at one instant a person given an email reads "added as" **before** "added without an email". Reproduced with the harness's fixed `at`: `add:sam@example.test:<robin>` precedes `add-person::<robin>`. No live call site in production (two writes for one person in the same millisecond); direction: at a tie `add-person` reads ahead of memberships. Comment true in its stated reason, false for this pair.
+- **low** · no `Done when` line depends on it · **open decision** · `Directory.openReadOnly` does not migrate, and `people()` now reads the `people` table, so the import command (`directoryPeople`) against a directory the API has not yet booted on migration 8 dies with a raw `SqliteError: no such table: people`, not an `AppError`. Before this branch the same call worked on a migration-7 directory. The shape is not new (`names()` reads migration 5's view the same way, by reading, not measured). Options: (a) `openReadOnly` checks `user_version` and throws a typed refusal naming "start the API once"; it touches every migration, so its own ticket; (b) leave it, since a deploy boots the API before any import. Recommend (a), filed, not fixed here.
+- **low** · no `Done when` line depends on it · shipped comments now understate: `Books.forMember`'s doc and the `api/src/people.ts` header say the books enrol the names the household's **current members** stand under; since this branch they also enrol the people held without an email who stand. False in the safe direction.
+- **low** · no `Done when` line depends on it · the two new `layout.spec.ts` screen labels, "Household (no email)" and "Admin (no email)", have no entry in `CARDS`, so the card-gap check reads `?? 0` and compares nothing for them; the existing "Household" and "Admin" cases keep their floors.
+- **low** · no `Done when` line depends on it · the ticket's Decision (2026-10-25) covers the request schema only; the Log calls `HouseholdMember.address: string | null` "a response-shape change beside the request change the owner approved" and does not record that the owner chose it on 2026-10-31 (dispatch: option (a), over a separate no-email list). The shape itself is graded against that answer and matches it. The lander records the answer in the Log.
+- **dropped** · migration 8 re-creates the four triggers last, so an insert that two triggers refuse (a retirement of a person nobody holds with no state change) now reports the other trigger's sentence; both refuse in both versions and nothing reads the text. Not a defect.
+- **dropped** · a 64-character unbroken name makes Admin 763 px wide at 360 px. Reproduced for a person who **has** an email as well, so it is not this diff's: for a pull request or ticket of its own, with the reproduction in the full report.
+- **dropped** · `people()` costs 725 µs against 289 µs for the base's equivalent on a household with 800 history rows (2.5×, 0.44 ms a request, run by `forMember` on every request). Not a defect.
+- **dropped** · a clock that steps back leaves a person's email before their `add-person` too; the same cross-table limit lg-33's merge already had. Not this branch's.
+- **findings** · the hunt returned 9; 5 carried, 4 dropped.
+- Attack 1 (migration 8's four recreated triggers): **held**. 252 cases a state over {a membership person, a no-email person} × the four triggers; the migrated directory matched an independent model in 252 of 252, and a migration-7 directory matched it in 252 of 252; five positive controls (drop each trigger; leave each as migrations 5 and 6 wrote it) each failed the probe. Migration 8 is one new array entry: 94 added lines, 0 removed in `directory-schema.ts`.
+- NFR: security ✓ (no email-less person reaches `membershipOf`, the Access list or `members()`; a member's refusals stay generic and name no other household) · performance — above · reliability — above (migration is additive; read-only import above) · maintainability — above.
+
 ## Log
 
 - 2026-10-25 — Filed from the owner's question while lg-71 was being re-scoped.
@@ -85,3 +111,85 @@ the owner noted that most likely one member of a house keeps the ledger.
   lg-76's rule rather than storing the name as the id.
 - 2026-10-25 — lg-78 waits on this: the import screen adds a name the household
   lacks as a person without an email, through `addPerson`.
+- 2026-10-31 — Built from `f05108d2`, on branch `lg-74-person-without-email`.
+  Directory migration 8 adds `people` (household, person, `added_at`,
+  `added_by`) with the triggers the brief names; `Directory.addPerson({
+  household, person, by, at, newId? })` returns `{ household, person, name }`,
+  the person under a generated id (lg-76) and `person` as their first shown
+  name, both written in one transaction. `addMemberRequestSchema`'s `address`
+  is optional, with a refinement that one of the two fields is there;
+  `createHouseholdRequestSchema` is untouched. The history gains
+  `{ action: "add-person", person, at, by }` (`PersonAddedRecord`), read before
+  the `name` record written with it.
+  - **What the brief had wrong or left out.** (1) Migrations 5 and 6's
+    `person_names_held`, `person_names_unique`,
+    `memberships_person_not_shown_as_another` and `retirements_held` read "a
+    person the household holds" from `memberships` only, so the schema refused a
+    no-email person's first shown name, a rename and a retirement whatever
+    `heldPeople` said. Migration 8 drops and recreates the four, asking
+    `memberships` or `people`, with the sentences they raised before. (2) Build
+    step 4's lists need an address-less entry, which the contract had no room
+    for: `HouseholdMember.address` is now `string | null`, `null` for a person
+    held without an email. That is a response-shape change beside the request
+    change the owner approved; nothing reads `members` for an address except the
+    screens changed here. (3) `people` is not quite the plain union: it adds the
+    no-email people who stand `in` (`Directory.withoutEmail`). A person with an
+    email leaves `people` when their last address is removed, which comes before
+    any retirement; a no-email person has no such step, so the retire request
+    takes them out instead, or a retired partner would still be "the other" on a
+    receipt and a workbook import's member. `heldPeople` is the plain union.
+    `people`'s household argument is now required: no caller left it out.
+  - **Every caller of `heldPeople` and `people`**, re-resolved at `f05108d2`
+    with `git grep -n "heldPeople\|directory\.people(" f05108d2 --
+    tools/ledger/api/src`; it printed the seam map's list exactly.
+    `directory.ts:391` (rename), `:463` (`standings`), `:715` (`#admitByName`)
+    and `:764` (`#admit`) take the union: a no-email person can be renamed and
+    retired, found by their shown name, and given an email under the id they
+    have without the "new person" name check. `books.ts:161,225` enrol from
+    `people`, which is how the books get them. `import-command.ts:162,164` and
+    `routes/workbook.ts:33` enrol an import's members and name them; an import
+    recorded `--as` a no-email person is the operator's choice and harmless.
+    `routes/receipts.ts:128` is who "the other's" item means, and the partner
+    who never signs in is exactly that person. **None of them has to mean "has
+    an email".** The readings that do already read `members()`: the identity
+    hook, the retirement refusal (`directory.ts`, `retirePerson`), the admin's
+    "Emails to admit" list and `server.ts`'s empty-directory check.
+  - **Build step 5.** `retirePerson`'s "Remove every email" refusal reads
+    `members()`, so a no-email person is never asked for one; the admin card's
+    retire hint now says "Remove their emails first, if they have any."
+  - **Fold-in.** `npm run household:ledger -- list` prints a no-email person as
+    `<shown> (<id>)  no email` (`household-command.ts`, with a test in
+    `household-command.test.ts`): the operator's list is the third member list.
+    Not folded in: a host-command verb to add a person without an email, which
+    nothing specifies.
+  - Measured: `npx vitest run` over `households.test.ts`, `directory.test.ts`,
+    `household-command.test.ts`, `person-names.test.ts` (api) and
+    `household.test.tsx`, `admin.test.tsx` (web): `Tests 200 passed (200)`.
+    `E2E_PORT=8174 npx playwright test -c tools/ledger/playwright.config.ts`:
+    `14 passed (23.9s)`, the new case "Household and Admin fit a phone and a
+    desktop with a person who has no email" among them; its four screenshots
+    were opened and show the person by name with "no email" and nothing to
+    admit. Five `user_version` assertions moved from 7 to 8; lg-75 and lg-77
+    move them again.
+- 2026-10-31 — The owner's answers, recorded at landing. The builder raised as
+  an open decision that the response field `HouseholdMember.address` becomes
+  nullable for a person with no email, which the 2026-10-25 Decision (request
+  schema only) did not name. Options: (a) keep the one field as `string | null`,
+  so each list reads one array and the type checker found every reader; (b)
+  leave `HouseholdMember` as it was and add a separate no-email list to
+  `HouseholdResponse` and `AdminHousehold`. The owner chose (a), the builder's
+  recommendation, overriding no one's.
+  - The owner declined the builder's proposed `tools/ledger/CLAUDE.md` line; it
+    goes to the next review session instead.
+  - Gate 1, F2 (`Directory.openReadOnly` does not migrate, so the import command
+    against a directory the API has not booted on migration 8 dies with a raw
+    SQLite "no such table" error): the owner chose (b) accept, "a deploy boots
+    the API, which migrates, before an import runs", over (a) file a ticket for
+    a typed `user_version` check in `openReadOnly`, the gate's recommendation,
+    overridden by the owner.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, F3 — "stale comments.
+  `Books.forMember`'s doc and the `api/src/people.ts` header say the books
+  enrol the names of current members". Both comments now also name the people
+  held without an email who stand. `git diff defd5294 -- tools/ledger/api/src/books.ts | grep -c '^-.*current members stand under enrolled into'`
+  → `1`, and `git diff defd5294 -- tools/ledger/api/src/people.ts | grep -c '^-.*current members stand under that the table does not hold'`
+  → `1`.

@@ -14,13 +14,16 @@ import { afterEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type {
   AdminHouseholdsResponse,
+  AdminPerson,
   CreateHouseholdResponse,
   ErrorResponse,
   HouseholdMember,
   HouseholdResponse,
   MeResponse,
   PeopleResponse,
+  PersonName,
   Rule,
+  SalaryEntryResponse,
 } from "@ledger/contract";
 import { migrateDirectory } from "../src/db/directory-schema.ts";
 import { Directory } from "../src/directory.ts";
@@ -725,5 +728,192 @@ describe("a person added by name (lg-76)", () => {
       sam: "sam",
       [generatedId(1)]: "jordan 2",
     });
+  });
+});
+
+describe("a person without an email (lg-74)", () => {
+  const RENAME = ROUTES.adminPersonRename.replace(":id", HOUSEHOLD);
+  const RETIRE = ROUTES.adminPersonRetire.replace(":id", HOUSEHOLD);
+  const ROBIN = "robin@example.test";
+
+  async function startWithIds(): Promise<Harness> {
+    return await start(twoHouseholds(), [ADMIN], sequentialIds());
+  }
+
+  async function addAs(
+    app: Harness["app"],
+    as: string,
+    body: Record<string, unknown>,
+  ): Promise<HouseholdMember> {
+    const route = as === ADMIN ? of("adminMembers", HOUSEHOLD) : of("householdMembers", HOUSEHOLD);
+    const response = await send(app, as, "POST", route, body);
+    expect(response.statusCode, response.body).toBe(200);
+    return response.json<HouseholdMember>();
+  }
+
+  // Done when 1, a member's half.
+  test("a member adds one by name alone, and the books enrol them on the next request", async () => {
+    const { app, directory } = await startWithIds();
+
+    const added = await addAs(app, ALEX, { person: "Robin" });
+
+    expect(added).toEqual({ address: null, person: generatedId(1), name: "Robin" });
+    expect(directory.membershipOf(ROBIN)).toBeUndefined();
+    expect(directory.people(HOUSEHOLD)).toEqual([generatedId(1), "alex", "sam"]);
+    const household = (
+      await send(app, ALEX, "GET", of("household", HOUSEHOLD))
+    ).json<HouseholdResponse>();
+    expect(household.members).toEqual([
+      { address: ALEX, person: "alex", name: "alex" },
+      { address: null, person: generatedId(1), name: "Robin" },
+      { address: SAM, person: "sam", name: "sam" },
+    ]);
+    // The add, then the name it was made under, at the same instant.
+    expect(household.history.slice(-2)).toEqual([
+      { action: "add-person", person: generatedId(1), at: NOW.toISOString(), by: ALEX },
+      { action: "name", person: generatedId(1), name: "Robin", at: NOW.toISOString(), by: ALEX },
+    ]);
+    // The books' own table, read by the next request.
+    const people = (await send(app, SAM, "GET", ROUTES.people)).json<PeopleResponse>();
+    expect(people.people).toContain(generatedId(1));
+    expect(people.names[generatedId(1)]).toBe("Robin");
+  });
+
+  // Done when 1, the admin's half; Build step 4's "to admit" list reads `members`' addresses.
+  test("an admin adds one the same way, listed with no address and nothing for Access to admit", async () => {
+    const { app } = await startWithIds();
+
+    const added = await addAs(app, ADMIN, { person: "Robin" });
+
+    expect(added).toEqual({ address: null, person: generatedId(1), name: "Robin" });
+    const listing = (
+      await send(app, ADMIN, "GET", ROUTES.adminHouseholds)
+    ).json<AdminHouseholdsResponse>();
+    const home = listing.households.find((household) => household.id === HOUSEHOLD);
+    expect(home?.members).toContainEqual({ address: null, person: generatedId(1), name: "Robin" });
+    expect(home?.people).toContainEqual({ person: generatedId(1), name: "Robin", standing: "in" });
+    const people = (await send(app, ALEX, "GET", ROUTES.people)).json<PeopleResponse>();
+    expect(people.people).toContain(generatedId(1));
+  });
+
+  test("a name someone in the household holds already is refused, and so is a request with neither field", async () => {
+    const { app, directory } = await startWithIds();
+    await send(app, ADMIN, "POST", RENAME, { person: "alex", name: "Alexandre" });
+    await addAs(app, ALEX, { person: "Robin" });
+    const before = directorySnapshot(directory);
+
+    // An id, a shown name, and a person who has no email either.
+    for (const person of ["sam", "Alexandre", "Robin"]) {
+      for (const as of [ALEX, ADMIN]) {
+        const route =
+          as === ADMIN ? of("adminMembers", HOUSEHOLD) : of("householdMembers", HOUSEHOLD);
+        const response = await send(app, as, "POST", route, { person });
+        expect(response.statusCode, `${person} as ${as}`).toBe(409);
+        expect(response.json<ErrorResponse>().error.code).toBe("PERSON_NAME_TAKEN");
+      }
+    }
+    for (const body of [{}, { person: "" }, { address: "" }]) {
+      const response = await send(app, ALEX, "POST", of("householdMembers", HOUSEHOLD), body);
+      expect(response.statusCode, JSON.stringify(body)).toBe(400);
+    }
+
+    expect(directorySnapshot(directory)).toBe(before);
+  });
+
+  // Done when 2.
+  test("is given an email later, and signs in as the same person id", async () => {
+    const { app } = await startWithIds();
+    const robin = await addAs(app, ALEX, { person: "Robin" });
+
+    const given = await addAs(app, SAM, { address: ROBIN, person: "Robin" });
+
+    expect(given).toEqual({ address: ROBIN, person: robin.person, name: "Robin" });
+    const me = await send(app, ROBIN, "GET", ROUTES.me);
+    expect(me.statusCode, me.body).toBe(200);
+    expect(me.json<MeResponse>().person).toEqual({
+      id: robin.person,
+      email: ROBIN,
+      household: HOUSEHOLD,
+    });
+    // Listed under the email now, once.
+    const household = (
+      await send(app, ROBIN, "GET", of("household", HOUSEHOLD))
+    ).json<HouseholdResponse>();
+    expect(household.members.filter((member) => member.person === robin.person)).toEqual([
+      { address: ROBIN, person: robin.person, name: "Robin" },
+    ]);
+  });
+
+  // Done when 3.
+  test("lg-71's create request still refuses a household made with no email", async () => {
+    const { app, directory } = await startWithIds();
+    const before = directorySnapshot(directory);
+
+    const response = await send(app, ADMIN, "POST", ROUTES.adminHouseholds, { person: "Robin" });
+
+    expect(response.statusCode, response.body).toBe(400);
+    expect(response.json<ErrorResponse>().error.code).toBe("BAD_REQUEST");
+    expect(directorySnapshot(directory)).toBe(before);
+  });
+
+  // Done when 4, renaming.
+  test("is renamed by an admin, keeping their id", async () => {
+    const { app, directory } = await startWithIds();
+    const robin = await addAs(app, ALEX, { person: "Robin" });
+
+    const renamed = await send(app, ADMIN, "POST", RENAME, { person: robin.person, name: "Robyn" });
+
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    expect(renamed.json<PersonName>()).toEqual({ person: robin.person, name: "Robyn" });
+    expect(directory.names(HOUSEHOLD).get(robin.person)).toBe("Robyn");
+    const people = (await send(app, ALEX, "GET", ROUTES.people)).json<PeopleResponse>();
+    expect(people.names[robin.person]).toBe("Robyn");
+  });
+
+  // Done when 4, retiring; Build step 5.
+  test("is retired with no email to remove first, leaves the members, and the close applies it", async () => {
+    const { app, directory } = await startWithIds();
+    const robin = await addAs(app, ALEX, { person: "Robin" });
+    // The open period is weighed with robin in it: their salary sets the ratio.
+    const entered = await send(app, ALEX, "POST", ROUTES.salaries, {
+      year: 2026,
+      salaries: ["alex", "sam", robin.person].map((personId) => ({
+        personId,
+        amountCents: 4_000_000,
+      })),
+    });
+    expect(entered.statusCode, entered.body).toBe(200);
+    const ratio = await send(app, ALEX, "POST", ROUTES.ratios, {
+      effectiveFrom: "2026-01-01",
+      salaryIds: entered.json<SalaryEntryResponse>().salaries.map((salary) => salary.id),
+    });
+    expect(ratio.statusCode, ratio.body).toBe(200);
+
+    const retired = await send(app, ADMIN, "POST", RETIRE, {
+      person: robin.person,
+      action: "retire",
+    });
+
+    expect(retired.statusCode, retired.body).toBe(200);
+    expect(retired.json<AdminPerson>()).toEqual({
+      person: robin.person,
+      name: "Robin",
+      standing: "retiring",
+    });
+    expect(directory.people(HOUSEHOLD)).toEqual(["alex", "sam"]);
+    const household = (
+      await send(app, ALEX, "GET", of("household", HOUSEHOLD))
+    ).json<HouseholdResponse>();
+    expect(household.members.map((member) => member.person)).toEqual(["alex", "sam"]);
+
+    const closed = await send(app, ALEX, "POST", ROUTES.periodClose, {
+      start: null,
+      end: "2026-09-30",
+    });
+
+    expect(closed.statusCode, closed.body).toBe(200);
+    const people = (await send(app, ALEX, "GET", ROUTES.people)).json<PeopleResponse>();
+    expect(people.retired).toEqual([robin.person]);
+    expect(people.people).not.toContain(robin.person);
   });
 });
