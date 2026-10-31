@@ -560,3 +560,60 @@ answer, relayed by the coordinator:
   `git diff 0ea1c790 HEAD -- tools/ledger/docs/work/lg-80-unbroken-names-overflow-admin-at-360-px.md | grep -c '^-.*and the sha that exists only on'`
   → `1`. The other F5 clause (the hook-variant harness is not in the ticket) is
   left as gate 2 recorded it, unfixed.
+
+**2026-10-31 — built (builder, branch `lg-80-admin-name-wraps`, base `c7bdef21`).**
+Measured on `main` at `c7bdef21` (lg-74 and lg-67 merged since the ticket's
+`f05108d2`) before any style change, with the three new cases and `nameIsWhole` as
+the Build gives it (the body is the ticket's, unchanged, so its variants were not
+re-run). `E2E_PORT=8281 npx playwright test -c tools/ledger/playwright.config.ts
+tools/ledger/e2e/layout.spec.ts -g "Admin fits a phone and a desktop with"`:
+
+```
+person, 360 px:     the name reaches 746, 667, 667 px in a 360 px window; Admin (long person name) is 763 px wide
+household, 360 px:  the name reaches 988 px in a 360 px window; Admin (long household name) is 1005 px wide
+household, 1280 px: the name reaches 1324 px in a 1280 px window; Admin (long household name) is 1341 px wide
+control (spaced):   passed
+  2 failed, 1 passed
+```
+
+Every number is the ticket's, so the lg-74 row (an address-less member row, a
+`<strong>` too) changed nothing here. Fix, in `tools/ledger/web/src/styles.css`:
+**the break shape**, `overflow-wrap: anywhere` on `.card h2`, `.card h3` and
+`.card strong`. Chosen over a scroll box because a name that scrolls sideways
+inside a card the thumb is also scrolling down is harder to read than one that
+wraps, and the card's other text already wraps (`.members li`). It is on the
+elements a name is drawn in, not on `.card` (it would change every card's
+min-content) and not on a wrapper, so a Rename button or a "never signed in"
+mark beside the name (lg-77, lg-75) does not defeat it; `.card h2` is there
+because lg-77 makes the Household heading the household's name. The same
+command on the fixed styles: `3 passed (7.5s)`. Screenshots opened
+(`e2e/.artifacts/layout/Admin (long person name)-360.png`, `Admin (long household
+name)-360.png`): the 64 `R`s show whole on three lines in the card title, in the
+member row and in the People list, and the 80 `H`s show whole on four lines in
+the title; nothing is cut at the right edge, and the Edit/Remove and
+Rename/Retire buttons wrap under the name. The Person input of the add-member
+form holds the first member's `R`s and scrolls inside its own field, as a field
+does.
+
+**What the brief did not say: the e2e server's read limit.** The full ledger
+suite (`E2E_PORT=8282 npx playwright test -c tools/ledger/playwright.config.ts`)
+failed twice, the same case each time, with the new styles in:
+
+```
+1) layout.spec.ts:809:1 › Admin fits … spaced every ten
+   locator.click: Test timeout of 60000ms exceeded. waiting for … getByRole('button', { name: 'Admin' })
+   {"scope":"reads", … "msg":"rate limited"}   (2 and 5 of them in the two runs)
+  1 failed / 17 passed (1.4m)
+```
+
+One browser is one key, the API allows a key 120 reads a minute
+(`API_DEFAULTS.rateLimitReadsPerMinute`), and 18 cases each reloading the shell
+reach it: the shell is refused its household and draws no Admin tab. The base's
+15 cases sit under it. So the planner's and the downloader's e2e configs already
+switch their limiters off (`RATE_LIMIT_RUNS_PER_MINUTE`, `RATE_LIMIT_PROBE_PER_MINUTE`),
+and `tools/ledger/playwright.config.ts` now sets `RATE_LIMIT_READS_PER_MINUTE: "0"`;
+the limiter has its own tests in `api` (`route-limits.test.ts`). Result, the same
+command: `18 passed (26.6s)`, no `rate limited` line (before: 1.4 min). It
+matters for the siblings: every case they add counts against the same 120.
+
+`npm run check`: exit 0 (its warnings are in files this branch does not touch).

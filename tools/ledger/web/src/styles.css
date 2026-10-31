@@ -135,6 +135,20 @@ h1 {
   font-size: 1.125rem;
 }
 
+/*
+ * lg-80: a name with no space in it (a person's, up to 64 characters, a
+ * household's, up to 80) breaks where the card ends rather than widening it. A
+ * grid item will not shrink below its longest word, so the title is what held the
+ * whole card, and the names beneath it, wider than a phone. Set on the elements a
+ * name is drawn in, not on `.card` or a wrapper: nothing is clipped, so the name
+ * shows whole on as many lines as it takes.
+ */
+.card h2,
+.card h3,
+.card strong {
+  overflow-wrap: anywhere;
+}
+
 textarea {
   width: 100%;
   font: inherit;
