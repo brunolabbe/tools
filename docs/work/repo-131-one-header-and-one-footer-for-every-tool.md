@@ -438,3 +438,13 @@ real consumer.
   packages lock. `git diff 3eb342af HEAD -- package-lock.json | grep -c '^[-+] '`
   → `6` lines (the `packages/ui` entry only, no version moved), and
   `node scripts/check-lockfile-sync.mjs` exits 0.
+
+- 2026-10-31 — Gate 2, N1 (`renderBlockingEntry` matches text, not the
+  document) is not fixed here: it goes, with gate 3's two remaining clauses
+  (an entity-encoded remote `src` is still marked; text in an unterminated
+  comment, `<title>` or `<textarea>` passes the guard) and its N4 (the scan's
+  pattern is quadratic, and CodeQL is red on it), to **repo-133**. The owner
+  chose to revert the attempted fix (`222b5048`) and file the plugin as its
+  own ticket, over rebuilding it on parse5 with a gate 4, over gate 3's
+  `indexOf` scan with a gate 4, and over excusing N4 under adr/005.
+  `packages/ui/src/vite.ts` and its test are byte-identical to `3eb342af`.
