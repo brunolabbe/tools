@@ -164,7 +164,12 @@ ticket blocks the other. Whichever lands second rebases.
 - The downloader's built bundle contains the version from
   `tools/downloader/api/package.json`. A test or build assertion shows it.
 - `e2e/csp.spec.ts` still passes, and a case in it, or a new one, shows that a
-  stored `dark` applies before first paint with no CSP violation.
+  stored `dark` applies before first paint with no CSP violation. _Superseded
+  by the owner, 2026-10-31 (Log), and kept for the record; the line that binds
+  is:_
+- `e2e/csp.spec.ts` still passes, and a case in it, or a new one, shows that on
+  Chromium, the engine the e2e suite runs, a stored `dark` applies before first
+  paint with no CSP violation. Other engines are not measured.
 - The downloader's `e2e/layout.spec.ts` passes at 360 px with the new header,
   and covers `terms.html`.
 - Each theme segment is at least 44px tall at 360 px, and the layout spec says
@@ -310,3 +315,25 @@ passed and 2 skipped of 2,726 (139 files passed, 1 skipped), 97.85 s.
 built bundle shows `v0.10.0`, linked to `downloader-v0.10.0`), and the
 `layout.spec.ts` 44 px case. The screenshots in `e2e/.artifacts/layout/` were
 opened and show the header on one line at 360 px.
+
+**2026-10-31 — the owner's answers to gate 1 (at `17b45fd8`), relayed by the
+orchestrator before round 1.** Each was chosen from the options shown.
+
+- **F1, the header wraps in CI.** (A) keep one row, with `flex-wrap: nowrap`
+  on `.app-header__bar` and `flex: 1 1 0` on `.app-header__name` in
+  `packages/ui/src/chrome.css`; or (B) allow the wrap and drop the "beside
+  the name" assertion. The owner chose **(A)**, in the shared sheet, because
+  lg-72 and pl-65 inherit it.
+- **F3, first paint proven on Chromium only.** (1) accept Chromium, reword
+  Done when 5 and say in the comments in `vite.config.ts` and `csp.spec.ts`
+  that the hold is an engine's choice; or (2) a synchronous classic script.
+  The owner chose **(1)**. Done when 5 is reworded above; the old line is kept
+  and marked.
+- **F6, the terms page's sentence about where the theme is kept.** Reword it
+  in this round, or record it and have the owner reword it later. The owner
+  chose **reword it in this round**, after checking whether the service logs
+  the `Cookie` header. The owner reviews the wording on the pull request.
+- **F7, lg-72's and pl-65's `__TOOL_VERSION__`.** The owner chose a separate
+  `docs(planner)` pull request; this branch does not touch either ticket.
+- **F5** (`cookieDomain` has no public-suffix list) stays recorded as the
+  gate wrote it, not fixed.
