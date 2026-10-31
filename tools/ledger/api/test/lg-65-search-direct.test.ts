@@ -43,7 +43,7 @@
  *   bank's own row, marked `fromWorkbook: false`, in every shape.
  *
  * `LG65_DIRECT_CASES` is `first-last` (case numbers); the suite runs the first
- * `DEFAULT_CASES`, about three seconds here. `LG65_DIRECT_SUMMARY=<file>` writes
+ * `DEFAULT_CASES`, about a second here. `LG65_DIRECT_SUMMARY=<file>` writes
  * the counts as JSON. The Log's larger run is this file with
  * `LG65_DIRECT_CASES=1-150000`.
  */
@@ -60,9 +60,14 @@ import {
 } from "../src/workbook-days.ts";
 import { matchStretch as reference } from "./helpers/reference-search.ts";
 
-/** Sized to the ledger project's 20 s test timeout: about 3 s unloaded here, so
- * a loaded runner or the Windows leg still has several times over. */
-const DEFAULT_CASES = 20_000;
+/**
+ * 5,000 cases, down from 20,000 (lg-69). lg-65's mutation table has the first
+ * failing case of each planted mutant: M4 at 19, M3 at 65, M1 at 280 and M2 at
+ * 1774, M2 (the deleted tie-break sort) being the rarest, 21 cases in 20,000.
+ * 5,000 reaches all four with more than twice the margin on the latest. The
+ * larger run is still one variable away (`LG65_DIRECT_CASES=1-150000`).
+ */
+const DEFAULT_CASES = 5_000;
 
 /** A small seeded generator (mulberry32 over a hashed seed): the same case every run. */
 function rng(seed: number): () => number {

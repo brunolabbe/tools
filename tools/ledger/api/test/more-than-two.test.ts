@@ -20,6 +20,7 @@ import type {
 } from "@ledger/contract";
 import type { Directory } from "../src/directory.ts";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import {
   ALEX,
@@ -79,6 +80,7 @@ function rule(
 async function start(): Promise<{ target: App; directory: Directory }> {
   const directory = memberDirectory();
   const target = await createApp({
+    booksTemplate: migratedBooks(),
     directory,
     config: {
       dataDir: ":memory:",

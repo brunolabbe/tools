@@ -88,6 +88,14 @@ export interface CreateAppOptions {
   workbookSheets?: (bytes: Buffer) => Promise<Sheet[]>;
   /** Told each chunk the upload's counted inflate produces; a test reads it. */
   inflateSpy?: InflateSpy;
+  /**
+   * Test-only (lg-69): a serialized, already-migrated books database that each
+   * in-memory household starts from instead of migrating an empty one, which
+   * costs 9.7 to 17 ms a boot where deserialising costs 0.45 ms. Nothing in
+   * production passes it, and `main.ts` and the environment cannot: it is not
+   * a config key. Ignored when the books are kept in files.
+   */
+  booksTemplate?: Buffer;
 }
 
 export interface App {
@@ -140,7 +148,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   }
   // Every household's books, opened, migrated and enrolled before any route
   // can be asked for them (books.ts).
-  const books = new Books({ dataDir: config.dataDir, directory, now, logger });
+  const books = new Books({
+    dataDir: config.dataDir,
+    directory,
+    now,
+    logger,
+    ...(options.booksTemplate === undefined ? {} : { template: options.booksTemplate }),
+  });
   try {
     books.openAll();
   } catch (error: unknown) {

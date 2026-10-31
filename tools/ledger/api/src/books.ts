@@ -120,13 +120,20 @@ export class Books {
   readonly #now: () => Date;
   readonly #logger: AppLogger;
   readonly #held = new Map<string, Held>();
+  readonly #template: Buffer | undefined;
 
   constructor(options: {
     dataDir: string;
     directory: Directory;
     now: () => Date;
     logger: AppLogger;
+    /**
+     * Test-only (lg-69, `CreateAppOptions.booksTemplate`): an already-migrated
+     * database an in-memory household starts from. Not read for books in files.
+     */
+    template?: Buffer;
   }) {
+    this.#template = options.template;
     this.#dataDir = options.dataDir;
     this.#directory = options.directory;
     this.#now = options.now;
@@ -208,7 +215,11 @@ export class Books {
     if (!memory) mkdirSync(path.dirname(file), { recursive: true });
     // better-sqlite3 waits 5 s on a lock by default, which `configure` would
     // spend on switching the journal before it sets the timeout itself.
-    const db = new Database(file, { timeout: wait ? 5000 : 0 });
+    // better-sqlite3 copies a buffer it is given, so households starting from
+    // one template do not share a database.
+    const db = new Database(memory && this.#template !== undefined ? this.#template : file, {
+      timeout: wait ? 5000 : 0,
+    });
     let enroller: Enroller;
     try {
       configure(db);

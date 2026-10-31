@@ -16,6 +16,7 @@ import type { AppContext } from "../src/context.ts";
 import { createRateLimitHook, rateLimitsFor } from "../src/rate-limit.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import { accessConfig, memberDirectory, homeBooks } from "./helpers/access.ts";
 import { VERBS } from "./helpers/routes.ts";
@@ -37,6 +38,7 @@ const LIMITED = Object.entries(VERBS).filter(([name]) => name !== "health");
  */
 async function startTight(): Promise<App> {
   app = await createApp({
+    booksTemplate: migratedBooks(),
     directory: memberDirectory(),
     config: {
       dataDir: ":memory:",
@@ -120,6 +122,7 @@ describe("the routes", () => {
 
   test("a limit of zero turns the limiter off", async () => {
     app = await createApp({
+      booksTemplate: migratedBooks(),
       directory: memberDirectory(),
       config: {
         dataDir: ":memory:",

@@ -48,6 +48,7 @@ import { LAYOUT_PROMPT } from "../src/layout-view.ts";
 import { createLogger } from "../src/logger.ts";
 import { filePhotoStore } from "../src/receipt-photos.ts";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import {
   HOUSEHOLD,
@@ -247,6 +248,7 @@ afterAll(() => {
 
 async function start(photos: string = PHOTOS): Promise<App> {
   return await createApp({
+    booksTemplate: migratedBooks(),
     photos: filePhotoStore(photos),
     directory: twoHouseholds(),
     config: {

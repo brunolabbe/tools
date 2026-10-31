@@ -28,6 +28,7 @@ import { runImportCommand } from "../src/import-command.ts";
 import { MAX_CELL_TEXT, layoutRequest } from "../src/layout-view.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
+import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
 import {
   MAX_REQUEST_TOKENS,
@@ -164,6 +165,7 @@ async function start(
   const reader = spyReader(options.sheets);
   const inflated: number[] = [];
   app = await createApp({
+    booksTemplate: migratedBooks(),
     directory:
       options.directory ??
       memberDirectory(people.map((person) => [`${person}@example.test`, person])),
