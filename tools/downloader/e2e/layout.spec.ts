@@ -168,7 +168,35 @@ test("the terms page fits a phone and a desktop", async ({ page }, testInfo) => 
  * at least 44 px both ways, the floor repo-130 sets for every button and field,
  * and the switch sits on the same line as the glyph and the name rather than
  * wrapping under them.
+ *
+ * **The name is measured twice, once as rendered and once widened**, because
+ * whether it fits depends on the font the machine has. This spec passed locally
+ * with a 120 px name and failed in CI, where the name was about 159 px and the
+ * switch wrapped onto a second row (gate 1, F1). Widening it by CSSOM (a
+ * `style` write, which the policy does not govern, where an injected `<style>`
+ * would be refused) makes every machine see the wide case.
  */
+async function nameBesideSwitch(page: Page): Promise<void> {
+  const header = page.getByRole("banner");
+  const name = await header.getByRole("heading", { level: 1 }).boundingBox();
+  const toggle = await header.getByRole("group", { name: "Colour theme" }).boundingBox();
+  expect(name).not.toBeNull();
+  expect(toggle).not.toBeNull();
+  // On one line: the name's vertical middle falls inside the switch's height.
+  const middle = (name?.y ?? 0) + (name?.height ?? 0) / 2;
+  expect(middle, "the name's middle against the switch's top").toBeGreaterThanOrEqual(
+    toggle?.y ?? Infinity,
+  );
+  expect(middle, "the name's middle against the switch's bottom").toBeLessThanOrEqual(
+    (toggle?.y ?? 0) + (toggle?.height ?? 0),
+  );
+  const measured = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth,
+  }));
+  expect(measured.scrollWidth).toBeLessThanOrEqual(measured.innerWidth);
+}
+
 test("the theme switch's segments are 44 px tall at 360 px, beside the name", async ({ page }) => {
   await page.setViewportSize(WIDTHS[0]);
   await page.goto("/");
@@ -182,12 +210,27 @@ test("the theme switch's segments are 44 px tall at 360 px, beside the name", as
     expect(box?.width ?? 0, "a theme segment's width").toBeGreaterThanOrEqual(44);
   }
 
-  const name = await header.getByRole("heading", { level: 1 }).boundingBox();
-  const toggle = await header.getByRole("group", { name: "Colour theme" }).boundingBox();
-  expect(name).not.toBeNull();
-  expect(toggle).not.toBeNull();
-  // On one line: the name's vertical middle falls inside the switch's height.
-  const middle = (name?.y ?? 0) + (name?.height ?? 0) / 2;
-  expect(middle).toBeGreaterThanOrEqual(toggle?.y ?? Infinity);
-  expect(middle).toBeLessThanOrEqual((toggle?.y ?? 0) + (toggle?.height ?? 0));
+  await nameBesideSwitch(page);
+
+  // The name as wide as CI's font made it, or wider: its width on one line,
+  // read from an unconstrained copy, since the heading itself may now wrap.
+  const natural = await page.evaluate(() => {
+    const heading = document.querySelector<HTMLElement>("header h1");
+    if (heading === null) return 0;
+    heading.style.letterSpacing = "0.15em";
+    const computed = getComputedStyle(heading);
+    const copy = document.createElement("span");
+    copy.textContent = heading.textContent;
+    copy.style.font = computed.font;
+    copy.style.letterSpacing = computed.letterSpacing;
+    copy.style.whiteSpace = "nowrap";
+    copy.style.position = "absolute";
+    copy.style.visibility = "hidden";
+    document.body.append(copy);
+    const width = copy.getBoundingClientRect().width;
+    copy.remove();
+    return width;
+  });
+  expect(natural, "the widened name's width on one line").toBeGreaterThanOrEqual(158.7);
+  await nameBesideSwitch(page);
 });

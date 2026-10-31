@@ -279,7 +279,10 @@ test("a script from any other origin is still refused, before it is fetched", as
  * Calling `bootTheme` before `createRoot` is not enough by itself: a module
  * script is deferred, and without `blocking="render"` on the entry Chromium
  * painted at 28 ms and the theme arrived at 68 ms (repo-131's build, this test
- * red). The attribute is what makes the order hold.
+ * red). The attribute is what makes the order hold, on the engine that honours
+ * it: this suite runs Chromium only, so that is what these cases prove. Holding
+ * the paint is each engine's choice, and the others are not measured (owner,
+ * 2026-10-31: Chromium accepted).
  */
 async function stampThemeArrival(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -338,6 +341,14 @@ test("the static terms page takes the same stored theme from its module, with no
   await page.context().addCookies([{ name: "webtools-theme", value: "dark", url: baseURL ?? "" }]);
   await collectCspViolations(page);
   await stampThemeArrival(page);
+  // The page and its module are small enough that the order held here even
+  // without `blocking="render"` (gate 1, F4). Held back 300 ms, the module
+  // arrives after the first paint unless the attribute holds the paint for it,
+  // so this case can tell the two apart.
+  await page.route("**/theme.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.continue();
+  });
 
   const response = await page.goto("/terms.html");
 
