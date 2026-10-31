@@ -31,9 +31,9 @@ version. There is no theme control and no terms page.
    shared account." on the household's own screen, and that same sentence on
    the no-household screen, which has none today), plus the ledger's glyph. The
    Home / Stats / Period tabs stay below the header, as they are.
-2. Render `AppFooter` with `tool="ledger"`, `version={__TOOL_VERSION__}` and
-   `termsHref="/terms.html"`. Add the `define` to `web/vite.config.ts` as
-   repo-131 step 5 describes. Delete the `Health` component. Delete
+2. Render `AppFooter` with `tool="ledger"`, `version={TOOL_VERSION}` (imported
+   from `@webtools/ui`) and `termsHref="/terms.html"`. Add the `define` to
+   `web/vite.config.ts` as repo-131 step 5 describes. Delete the `Health` component. Delete
    `web/src/api/health.ts` and its tests if nothing else imports them.
 3. Glyph: an inline SVG drawn with `currentColor`, such as a coin or an open
    book. Ship the same drawing as `web/public/favicon.svg`, with a
@@ -69,3 +69,16 @@ version. There is no theme control and no terms page.
 - `npm run check` and `npm test -- --project ledger` pass.
 
 ## Log
+
+**2026-10-31 — Build 2 corrected before any source change.** The brief said
+`version={__TOOL_VERSION__}`. repo-131's Log says a tool cannot read that global,
+because `@webtools/ui` declares it in `packages/ui/src/globals.d.ts` and only its
+own `version.ts` reads it. Checked on this branch with the `packages/ui`
+reference already in `web/tsconfig.json`: a one-line `web/src/probe.ts`,
+`export const probe: string = __TOOL_VERSION__;`, then
+`npx tsc --build tools/ledger/web` printed
+`tools/ledger/web/src/probe.ts(1,30): error TS2304: Cannot find name '__TOOL_VERSION__'.`
+The probe file is deleted. The step now imports `TOOL_VERSION` from
+`@webtools/ui`, which reads the global through `typeof` and is `unknown` under
+vitest, where no `define` runs. pl-65, the planner's twin, has the same line and
+is the planner's to correct; this branch does not touch it.
