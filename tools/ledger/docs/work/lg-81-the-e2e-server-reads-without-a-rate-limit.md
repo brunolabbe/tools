@@ -3,7 +3,7 @@ id: lg-81
 tool: ledger
 title: The e2e server reads without a rate limit
 kind: fix
-status: done
+status: ready
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -118,3 +118,17 @@ The fix, commit `1d4627f0`: `RATE_LIMIT_READS_PER_MINUTE: "0",` after
   none is in `playwright.config.ts`.
 - `E2E_PORT=8133 npx playwright test -c tools/ledger/playwright.config.ts`:
   `15 passed (22.6s)`. `grep -c '"rate limited"'` over the output: `0`.
+
+**Status, left `ready`.** The brief said to set `done` with the fix. Committed as
+`done`, `node scripts/preflight.mjs --only review --base origin/main` fails:
+
+```
+FAIL  tools/ledger/docs/work/lg-81-the-e2e-server-reads-without-a-rate-limit.md is marked done but has no ## Review section
+preflight failed: review (exit 4)
+```
+
+The builder page (`roles/builder.md`, _Scope_) says a ticket filed on a branch is
+left `ready`, and the lander sets `done` with the gate record. The brief's
+instruction to set `done` here conflicts with that and with this check, so the
+status is `ready`. Nothing has been reviewed yet; the gate's `## Review` is what
+makes `done` true.
