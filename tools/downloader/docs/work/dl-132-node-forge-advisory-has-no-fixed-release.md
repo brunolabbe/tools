@@ -3,11 +3,10 @@ id: dl-132
 tool: downloader
 title: node-forge carries a high advisory with no fixed release, in code the API never calls
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
-note: not startable until node-forge publishes a fix — check npm view node-forge version first
 ---
 
 # dl-132 — node-forge's advisory has no fixed release
@@ -57,3 +56,15 @@ nothing prompts the upgrade when a fix ships.
 - 2026-10-25: filed after #632 left this as the one advisory with no fix. If
   GitHub shows a Dependabot alert for it, dismiss it as "vulnerable code is not
   actually used", linking this ticket.
+- 2026-10-31: done. node-forge 1.4.1 and 1.4.2 shipped on 2026-10-27, and by
+  then `npm audit` named twelve node-forge advisories, not one — all `<=1.4.0`,
+  all fixed in 1.4.1. Raised the range to `^1.4.2` (1.4.2 fixes 1.4.1's
+  `pem.decode()` regression on non-string input) and took it at four days old.
+  Build step 2 had this wrong: it said the advisory exemption did not apply
+  because the tree does not reach the bug, but the owner's rule
+  (`.claude/rules/dependency-updates.md`, 2026-10-24) exempts any fix for an
+  advisory `npm audit` reports against this tree and sets no reachability test.
+  Reachability still holds: the reachability grep finds no verify call. Of 1.4.1's
+  behaviour changes, only the PEM parsing reaches this code (`privateKeyFromPem` and
+  `publicKeyFromPem` on PEM that Node generates), and the downloader suite passes with
+  1.4.2 actually loaded (2605 tests). The lockfile moves that one entry.
