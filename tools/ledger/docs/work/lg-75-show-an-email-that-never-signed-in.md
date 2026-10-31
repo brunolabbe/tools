@@ -106,3 +106,18 @@ a repeat of what Access already proves). The owner chose **the mark**.
     desktop with an email marked never signed in, beside long names`; its 360 px
     screenshot was opened, with the mark wrapping under a 64-character person name and
     a 111-character address.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the first low — "writes with `INSERT OR IGNORE`".
+  It is a plain `INSERT` now. Before, `recordFirstSignIn("  SAM@example.test ")` printed
+  `returned normally, rows: 0`; after, it throws `SQLITE_CONSTRAINT_CHECK` (a scratch script, both
+  states on this tree). The removed line: `git diff e4882175 -- tools/ledger/api/src/directory.ts | grep -c '^-.*OR IGNORE INTO first_sign_ins'` → `1`.
+  The comment beside the trigger in migration 10 now says "plain INSERT and an INSERT OR IGNORE alike".
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the second low — "A doc comment like
+  `holdsHousehold`'s would warn the next read-only caller". `firstSignIns` and `recordFirstSignIn`
+  each say they are not for `openReadOnly`: `git diff e4882175 -- tools/ledger/api/src/directory.ts | grep -c '^+.*Not for .openReadOnly'` → `2`.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the third low — "claims an admin, but the body
+  sends only as `ALEX`". The title says what the body asserts and no assertion moved:
+  `git diff e4882175 -- tools/ledger/api/test/households.test.ts | grep -c '^-.*to an admin alike'` → `1`.
+- 2026-10-31 — Fixed at landing by owner choice: gate 1, the fourth low (the open decision) — the
+  owner chose (a), per address, as built. A removed and re-added address keeps its first instant,
+  in the same household and in another; no source change. Pinned by `api/test/first-sign-in.test.ts`
+  › "keeps the instant it first signed in, in the same household and in another", at the end of the file.

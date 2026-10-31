@@ -535,8 +535,8 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
   CREATE TRIGGER first_sign_ins_never_deleted BEFORE DELETE ON first_sign_ins
     BEGIN SELECT RAISE(ABORT, 'a first sign-in is recorded once, never deleted'); END;
   -- A second write for an address is skipped, not refused, so the writer's
-  -- INSERT OR IGNORE and a plain insert alike leave the first row standing, and
-  -- so does the REPLACE spelling, which would otherwise delete it without
+  -- plain INSERT and an INSERT OR IGNORE alike leave the first row standing,
+  -- and so does the REPLACE spelling, which would otherwise delete it without
   -- firing the trigger above.
   CREATE TRIGGER first_sign_ins_kept BEFORE INSERT ON first_sign_ins
     WHEN EXISTS (SELECT 1 FROM first_sign_ins WHERE address = NEW.address)

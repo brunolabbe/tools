@@ -24,6 +24,7 @@ import { migratedBooks } from "./helpers/template.ts";
 import {
   ADMIN,
   ALEX,
+  HOUSEHOLD,
   SAM,
   STRANGER,
   accessConfig,
@@ -243,5 +244,39 @@ describe("migration 10", () => {
       ),
     ).toThrow(/CHECK/u);
     db.close();
+  });
+});
+
+describe("an address removed and added back", () => {
+  // The mark is kept per address, not per membership (the owner's answer to
+  // gate 1): it exists to catch a typo, and an address that has signed in once
+  // is not one.
+  test("keeps the instant it first signed in, in the same household and in another", async () => {
+    const { directory } = fileDirectory();
+    const { app: target } = await start(directory);
+    expect((await me(target, ALEX)).statusCode).toBe(200);
+
+    const change = { by: "operator", at: LATER };
+    const alexIn = async () => {
+      const listing = (await me(target, ADMIN, ROUTES.adminHouseholds)).json<{
+        households: { id: string; members: { address: string; firstSignIn: string | null }[] }[];
+      }>();
+      return listing.households.flatMap((household) =>
+        household.members
+          .filter((member) => member.address === ALEX)
+          .map((member) => [household.id, member.firstSignIn]),
+      );
+    };
+    expect(await alexIn()).toEqual([[HOUSEHOLD, NOW.toISOString()]]);
+
+    directory.removeMember({ address: ALEX, ...change });
+    expect(await alexIn()).toEqual([]);
+    directory.addMember({ household: HOUSEHOLD, address: ALEX, person: "alex", ...change });
+    expect(await alexIn()).toEqual([[HOUSEHOLD, NOW.toISOString()]]);
+
+    directory.addHousehold({ id: "away", name: "Away", ...change });
+    directory.removeMember({ address: ALEX, ...change });
+    directory.addMember({ household: "away", address: ALEX, person: "alex", ...change });
+    expect(await alexIn()).toEqual([["away", NOW.toISOString()]]);
   });
 });

@@ -336,6 +336,14 @@ export class Directory {
    * request path, and a wait is spent on the event loop (as `createEnroller`
    * does). A directory another connection holds throws `SQLITE_BUSY` at once,
    * and the caller tries again on the next request.
+   *
+   * A plain `INSERT`, not `INSERT OR IGNORE`: the table's trigger already
+   * skips an address that is there, and `OR IGNORE` would also skip a row the
+   * table's `CHECK` refuses, so an address that is not lowercase and trimmed
+   * would return normally and write nothing. It throws instead.
+   *
+   * Not for `openReadOnly`, which does not migrate: a directory still at
+   * migration 9 has no `first_sign_ins`, and this throws `no such table`.
    */
   recordFirstSignIn(address: string, at: Date): void {
     if (typeof address !== "string") refuse("The address is not a string.");
@@ -347,7 +355,7 @@ export class Directory {
     this.#db.pragma("busy_timeout = 0");
     try {
       this.#db
-        .prepare("INSERT OR IGNORE INTO first_sign_ins (address, first_seen_at) VALUES (?, ?)")
+        .prepare("INSERT INTO first_sign_ins (address, first_seen_at) VALUES (?, ?)")
         .run(key, at.toISOString());
     } finally {
       // Interpolated because PRAGMA takes no bound parameter; it is the
@@ -360,6 +368,9 @@ export class Directory {
    * When each address first signed in (lg-75), by address. An address with no
    * entry has not: it is what the admin's screen marks. The admin's listing
    * reads it; the household's own route does not.
+   *
+   * Not for `openReadOnly`, which does not migrate: a directory still at
+   * migration 9 has no `first_sign_ins`, and this throws `no such table`.
    */
   firstSignIns(): Map<string, string> {
     const rows = this.#db

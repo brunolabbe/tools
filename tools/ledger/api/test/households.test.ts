@@ -229,7 +229,7 @@ describe("an admin", () => {
     ]);
   });
 
-  test("keeps the sign-in off the household's own route, to its members and to an admin alike", async () => {
+  test("keeps the sign-in off the household's own route, in its members and in the member it adds", async () => {
     const { app } = await start();
     await send(app, ALEX, "GET", ROUTES.me);
 
