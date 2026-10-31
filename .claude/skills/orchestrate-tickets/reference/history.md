@@ -6558,3 +6558,51 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - Dry-running a below-floor fix before offering it at landing: lg-74's F1 swap failed a branch test, so it was not offered.
 - Re-running a gate's dropped reproduction on `main` before filing made lg-80 an in-hand maintenance filing ($0.54). Measuring the household name before asking let the owner fold it in on numbers.
 - vitest's default reporter lists every test slower than 300 ms, so a test's absence from a CI log is a CI reading. It proved lg-69's Done when 2, which the builder had left unproven.
+
+### Batch 2026-10-31 (tools-54 second, lg-80 lg-78 lg-77 lg-75, lg-81 lg-82 filed) — base c7bdef21
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a7fd907c4faa57789 | seam-mapper, four ledger candidates | 1m59s / 1m58s | 0 | $0.3762 |
+| #684 | open, ready; e2e red at 865555fa on the read limit until #687 merges | Sonnet 5.5 / high | af185c7b0ca13170f | builder-standard, lg-80 + one owner stop (the read-limit line moved out) | 9m00s / 23m37s | 0 | $1.2198 |
+| #684 | as above | Opus 5.5 / high | a5a83659356c98655 | ticket-reviewer-opus, lg-80 gate 1 | 10m37s / 10m07s | 0 | $3.1060 |
+| #684 | as above | Sonnet 5.5 / high | a0037deab1ade7d7d | fixer, lg-80 answer + one low at landing + landing | 3m45s / 3m37s | 0 | $0.6442 |
+| #685 | open, draft (merge order), green at b1d973e4 | Opus 5.5 / high | a8050d856d258c4cc | builder-hard, lg-78 | 17m56s / 17m17s | 0 | $6.3919 |
+| #685 | as above | Sonnet 5.5 / xhigh | a5361d629ea618180 | ticket-reviewer-sonnet, lg-78 gate 1 | 11m55s / 11m51s | 0 | $2.5242 |
+| #685 | as above | Sonnet 5.5 / high | af85f863831fd99cf | fixer, lg-78 answers + two lows at landing + landing, held as a draft | 4m00s / 3m55s | 0 | $0.4941 |
+| #686 | open, draft (merge order), green at aaf6828c | Opus 5.5 / high | a9556888acb86b60b | builder-hard, lg-77 (re-rated hard by the owner at intake) | 17m28s / 17m21s | 0 | $7.1676 |
+| #686 | as above | Sonnet 5.5 / xhigh | af6e7b2a99307863f | ticket-reviewer-sonnet, lg-77 gate 1 | 13m02s / 12m22s | 0 | $2.7725 |
+| #686 | as above | Sonnet 5.5 / high | aa90fbde84ac03c93 | fixer, lg-77 answers + landing, held as a draft | 4m20s / 3m00s | 0 | $0.4572 |
+| #687 | open, ready, green at b163cb14 | Haiku 5.5 / high | ab7bca1b8126c1f1d | builder-mechanical maintenance, lg-81 filing + its one-line fix | 7m11s / 6m57s | 0 | $0.2817 |
+| #687 | as above | Sonnet 5.5 / xhigh | ad5100c7103edf65a | ticket-reviewer-sonnet, lg-81 gate 1 (narrow) | 4m59s / 4m52s | 0 | $0.9902 |
+| #687 | as above | Sonnet 5.5 / high | a68fea64c06c914a1 | fixer, lg-81 landing | 1m56s / 1m48s | 0 | $0.2713 |
+| #688 | open, ready, CI at 99c67033 pending at close | Haiku 5.5 / high | a17b5b606f6aa13f6 | builder-mechanical maintenance, lg-82 filing + round 1 | 19m26s / 32m52s | 0 | $1.4268 |
+| #688 | as above | Sonnet 5.5 / xhigh | ad9dec0599fd911d7 | ticket-reviewer-sonnet, lg-82 gate 1 (narrow) | 12m36s / 12m27s | 0 | $2.5177 |
+| #688 | as above | Sonnet 5.5 / xhigh | aac97dd7ec6460813 | ticket-reviewer-sonnet, lg-82 gate 2 (narrow) | 11m41s / 11m36s | 0 | $2.3931 |
+| #688 | as above | Sonnet 5.5 / high | a98fbe0f6b70de793 | fixer, lg-82 three lows at landing + ready (no `--land`) | 2m58s / 2m33s | 0 | $0.5137 |
+| #689 | open, draft, stacked on #686; e2e red at 19ff41c7 on the read limit | Sonnet 5.5 / high | a592198ce4756229b | builder-standard, lg-75 (stacked on lg-77) | 9m26s / 9m07s | 0 | $2.2907 |
+| #689 | as above | Opus 5.5 / high | af6765259f6a770e6 | ticket-reviewer-opus, lg-75 gate 1 | 9m25s / 8m57s | 0 | $2.6847 |
+| #689 | as above | Sonnet 5.5 / high | ad35bd307a10c184e | fixer, lg-75 answer + four lows at landing + landing, held as a draft | 4m36s / 4m09s | 0 | $0.7812 |
+| — | — | Opus 5.5 / high | orchestrator 79503080 | orchestrator (floor) | 1h23m10s / 2h19m34s | 0 | $6.8516 |
+| | | | | **total** (rates read 2026-10-10) | 4h21m25s | 0 | **$46.1564** |
+
+**Tickets:**
+- lg-80 → #684: the builder's open decision (`RATE_LIMIT_READS_PER_MINUTE: "0"` in the ledger Playwright config, outside the Build) → owner split it out (over builder's and my keep) → lg-81. Gate 1 CONCERNS: med open decision (Household screen 894 px at 360 with an 80-character name, a `<p>` the rule misses) held until lg-77's gate graded its own 80-character Household case, then owner chose "covered by lg-77" over the gate's "file a ticket"; the comment low fixed at landing. Total $4.97.
+- lg-78 → #685: builder's open decision (period-sheet-only names not listed) → owner (a) leave it. Gate 1 PASS, five lows: two (a false Log sentence; first-answer-wins in the contract comment) fixed at landing; the 1,000-answer cap low recorded by owner choice; two recorded. Total $9.41.
+- lg-77 → #686: owner re-rated standard → hard at intake. Three open shape choices answered as built; its proposed `tools/ledger/CLAUDE.md` line ("A household's name is appended too (lg-77, `household_names`): the `households` row keeps the name it was created with, and `household()` reads the latest rename.") declined for this review. Gate 1 PASS, three lows: the terminal-escape low → owner filed lg-82; two recorded. Total $10.40.
+- lg-81 → #687 (filed with its fix): the read-limit line, owner's split. Gate 1 PASS, no findings. Total $1.54.
+- lg-82 → #688 (filed, `needs-decision`): from lg-77's gate 1 low, one ticket for household and person names by owner choice. Gate 1 CONCERNS, four meds (one re-opened the settled scope) and six lows → round 1 by the filer; gate 2 PASS, three lows fixed at landing. Total $6.85.
+- lg-75 → #689 (stacked on #686): gate 1 PASS, four lows: open decision on re-add → owner (a) per address; all four fixed at landing (plain `INSERT`, dry-run by me 156/156 first; a read-only doc comment; a test title; a test pinning the re-add). Total $5.76.
+
+**Defects in the skill:**
+
+1. `roles/common.md`, _Your worktree_, "A branch whose diff is markdown only … skips both steps" — contradicts `roles/fixer.md`, _Set up_, step 2 ("Farm and build … even for a docs-only landing: preflight's `npm run check` typechecks every workspace"). lg-82's filer and lander both hit it on a markdown-only branch. Reproduction of the pages: `sed -n 32,34p .claude/skills/orchestrate-tickets/roles/common.md` → "**A branch whose diff is markdown only** — `git diff --name-only <base sha>...HEAD` lists nothing but `.md` — skips both steps"; `sed -n 16p .claude/skills/orchestrate-tickets/roles/fixer.md` → "2. Farm and build, per `common.md`, even for a docs-only landing". Relayed from lg-82's lander, not re-run by me: `npm run check` on the unfarmed tree exited 2 with `tools/ledger/web/test/import.test.tsx(35,5): error TS2353 … 'kind' does not exist in type 'ConfirmWorkbookResponse'`, and 0 after the farm and build.
+2. `roles/common.md`, the `\uXXXX`-into-Write warning — its check, `grep -cP '\x{feff}'`, misses U+200B and U+200D, which landed in lg-82's ticket (17 characters in round 1) and in three gates' scratch scripts. Reproduction, re-run by me: `printf 'a\xe2\x80\x8bb\n' > zwsp-line.txt; grep -cP '\x{feff}' zwsp-line.txt` → `0`; `grep -cP '[\x{0}-\x{8}\x{b}\x{c}\x{e}-\x{1f}\x{7f}-\x{9f}\x{200b}-\x{200f}\x{2028}\x{2029}\x{2060}\x{feff}]' zwsp-line.txt` → `1`. Relayed from lg-82's filer, not re-run: Write also turned printable escapes (`é`, Persian letters) into glyphs.
+3. `review-ticket/gate.md`, _Steps_ step 4 — "No line numbers anywhere in the section" leaves a filing gate no form for a finding about the filed ticket's own line citation. lg-82's gates 1 and 2 both raised it (gate 2's F12 is an off-by-one `sed -n` range). Reproduction of the page: `grep -n "No line numbers" .claude/skills/review-ticket/gate.md` → `61:   "covered". **No line numbers anywhere in the section, and no commit pins**:`.
+4. Script, not a page: `scripts/review-record.mjs --land` prints `FAIL` with an empty reason under `== preflight ==` before the nested `== mergeTree ==` block. Reproduction: `grep -n -A2 "== preflight ==" <scratch>/lg-77/land/land.out` → `17:== preflight ==` / `18-FAIL  ` / `19-== mergeTree ==`.
+
+**Worked, and worth keeping:**
+- Holding a gate's open decision until a sibling's gate measured the premise: lg-80's Household med was answered "covered by lg-77" on lg-77's passing 80-character case, not filed as a ticket that would go stale.
+- Relaying a sibling builder's diagnosis (the e2e read limit) to running builders as an unverified heads-up: lg-77's builder reproduced it locally, did not commit the line, and named the CI red in advance.
+- Reading a green check's log: #686's `e2e` passed `17 passed` with two `"rate limited"` lines, so green there was at the limit, not clear of it.
+- Dry-running a below-floor source fix before offering it at landing (lg-75's plain `INSERT`, 156/156).
