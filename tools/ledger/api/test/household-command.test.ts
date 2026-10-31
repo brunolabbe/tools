@@ -640,4 +640,22 @@ describe("a stored name holding a control or a zero-width character (lg-82)", ()
       expectEscaped(retired.err, character, RETIRED);
     });
   });
+
+  // The cost of refusing at write time (the owner's answer (a), 2026-10-31): a person whose
+  // id is a name typed before lg-76 and holds a character is named by that id nowhere, since
+  // the id is typed to `member` and is read as a name is. The person stays, and is listed.
+  test("member cannot name a person by an id that holds one, and the person is still listed", () => {
+    seed();
+    const character = UNSEEN_CHARACTERS[27]!;
+
+    const ran = run("member", household(0), "new@example.test", around(character, ...BY_ID));
+
+    expect(ran.code).toBe(1);
+    expect(ran.err).toContain(
+      "A person's name cannot hold a control character or a zero-width one.",
+    );
+    expect(run("list").out).toContain(
+      `  ${aroundEscaped(character, ...BY_ID)}  i27@example.test\n`,
+    );
+  });
 });

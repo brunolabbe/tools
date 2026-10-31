@@ -20,9 +20,10 @@ its only user. A name is checked for its trimmed length and for nothing else, on
 every path that writes one, so a name can carry any of those characters, and the
 host command prints it raw.
 
-Line numbers in this ticket are on `main` at `c7bdef21`. lg-77's head moves most of
-the `directory.ts` lines below line 53 by 72 (`addHousehold` 626 becomes 698,
-`#readMember` 869 becomes 941; command 18), so the Build names symbols.
+The commands under Reproduction are quoted as they were run on `main` at `c7bdef21`.
+Every other `file:line` in this ticket is on `main` at `d7cd223f`, after lg-77 merged
+(#686): its `renameHousehold` made `directory.ts` longer, so the Build names symbols and
+the lines below were re-resolved by symbol on 2026-10-31 by the builder.
 
 There are two kinds of name, and they are in different states:
 
@@ -30,16 +31,16 @@ There are two kinds of name, and they are in different states:
   `POST /api/households/:id/members` (`contract/src/api.ts:28`,
   `api/src/routes/households.ts:176`); the operator does the same with
   `household:ledger add` and `household:ledger member`. The paths reach `#readMember`
-  (`directory.ts:869`), through `#readNamedMember` (`directory.ts:813`) from
+  (`directory.ts:1048`), through `#readNamedMember` (`directory.ts:992`) from
   `addMemberByName` and `createHousehold`, which checks the trim and the length of
-  `person`, and no character. `addPerson` (`directory.ts:772`) and `renamePerson`
-  (`directory.ts:452`) check the same and no more.
+  `person`, and no character. `addPerson` (`directory.ts:937`) and `renamePerson`
+  (`directory.ts:617`) check the same and no more.
 - **A household's name is not changeable on main.** `createHousehold` names every
   new household `NEW_HOUSEHOLD_NAME`, "Home" (lg-71), and `addHousehold`
-  (`directory.ts:626`) has no caller under `api/src` on main; its callers are tests.
+  (`directory.ts:791`) has no caller under `api/src` on main; its callers are tests.
   lg-77's Why says a household's name "is set once, when it is created". A household
   made before lg-71 kept the name its admin typed, and `addHousehold`'s name checks
-  (`directory.ts:626-643`) look at the trimmed length and no character, so such a row
+  (`directory.ts:791-808`) look at the trimmed length and no character, so such a row
   may hold an unseen character. Whether one does is not measured (Decision,
   question 2). lg-77's Build 2 adds `renameHousehold` "with the same name rule
   `addHousehold` applies (trimmed, 1 to 80 characters)", so a rename becomes a second
@@ -571,25 +572,29 @@ the Build and the Done when can count them.
   (`import-command.ts:141–142`) names every member in the `--as` refusal, on stderr
   through `usage` (`import-command.ts:75`, `spending-backfill-command.ts:43`).
 - **T8** `import-command.ts:275` and `:301`: the import report. Its 20 name lines
-  (command 13) all read the one closure at `workbook-import.ts:643`, so escaping that
-  closure covers them. The `--as` problem at line 661 is among them. T7 is a separate
-  path.
+  (command 13) all read the one closure at `workbook-import.ts:650`, so escaping that
+  closure covers them. **The brief had this wrong (found by the build, 2026-10-31):**
+  the report also prints names that `@ledger/books` builds, in `People.shown` (four
+  lines of `books/src/workbook.ts`: the sheet-total checks, the second-salary problem
+  and the ratio problem) and in its `#listed` household list (two problems), and the
+  closure does not reach them. They are escaped inside `books`. The `--as` problem at
+  `workbook-import.ts:668` is among the closure's lines. T7 is a separate path.
 
 **Message sinks**: sentences that quote a name. Each reaches T6 on stderr, or the
 admin's JSON as `message`, which the web displays.
 
-- **M1** `directory.ts:474–475`, `renamePerson`: `PERSON_NAME_TAKEN` quotes the typed
+- **M1** `directory.ts:639–640`, `renamePerson`: `PERSON_NAME_TAKEN` quotes the typed
   name. No host command calls `renamePerson`; the admin's rename route does.
-- **M2** `directory.ts:785–788`, `addPerson`: `PERSON_NAME_TAKEN` quotes the typed
+- **M2** `directory.ts:952–955`, `addPerson`: `PERSON_NAME_TAKEN` quotes the typed
   name. `addAs` in `routes/households.ts` reaches it; no host command does.
-- **M3** `directory.ts:580–589`, the retire refusals: `${shown}`. Reached through the
+- **M3** `directory.ts:745–754`, the retire refusals: `${shown}`. Reached through the
   admin's retire route.
-- **M4** `directory.ts:906–907`, `#admit`'s retirement sentences: `${shown} is retiring
+- **M4** `directory.ts:1085–1086`, `#admit`'s retirement sentences: `${shown} is retiring
   at the next close …` and `${shown} is retired from the books …`. Reached by
   `household:ledger member` through `addMemberByName` (command 10) and by the admin's
   `adminMembers` route.
-- **M5** `directory.ts:990–995`, `#refuseTaken`: `as ${shown}`, the taken-address
-  sentence. Reached by `household:ledger member` through `#admit` (line 887), and by
+- **M5** `directory.ts:1168–1175`, `#refuseTaken`: `as ${shown}`, the taken-address
+  sentence. Reached by `household:ledger member` through `#admit` (`directory.ts:1066`), and by
   the admin's member routes. lg-77's Build 7 changes the household named in it from its
   id to its name.
 
@@ -601,7 +606,7 @@ admin's JSON as `message`, which the web displays.
 
 **Excluded, with the reason**
 
-- `directory.ts:894–895`: the `#admit` branch for a person not yet held. Only `addMember`
+- `directory.ts:1073–1074`: the `#admit` branch for a person not yet held. Only `addMember`
   reaches it, and `addMember` has no caller under `api/src` (command 11). Test-only.
 - `spending-backfill-command.ts:120` and `:127`: the backfill report prints counts,
   bank-row and card-line text, and categories (command 14). No person's name.
@@ -632,7 +637,7 @@ under **Build orders** below; the options and their costs stay as they were put.
 **1. Which remedy — answered 2026-10-31 by the owner: (a).**
 
 - **(a) Refuse the population at write time.** The set is `readAddress`'s, at
-  `directory.ts:53`. Costs: a check in each of the five write methods the Build names,
+  `directory.ts:53` on `c7bdef21`. Costs: a check in each of the five write methods the Build names,
   and a refusal sentence for each, raised as `BAD_REQUEST` as the name rules are. Or the
   same set as a SQL `CHECK`, in the table rebuild question 2 may need. Command 19 builds
   one from GLOB classes and a search for a NUL byte, and it agrees with the regex on 15
@@ -680,7 +685,7 @@ these. A zero from a shorter list is a false all-clear:
   latest row, and the history shows all of them);
 - `person_names.name`, every row;
 - `people.person` and `memberships.person`, every row. A person's id prints as their
-  name when no `person_names` row exists (`shownName`, `directory.ts:155–157`), and
+  name when no `person_names` row exists (`shownName`, `directory.ts:155–157` on `c7bdef21`), and
   before lg-76 the id was the name typed (lg-76's Why).
 
 ## Build
@@ -740,7 +745,9 @@ Under (b):
    - T1–T5: the host command's `io` calls, which print the names through the helper.
    - T6 and M1–M5: at the place question 1 chooses.
    - T7: `membersListed` (`import-command.ts:141–142`).
-   - T8: the closure at `workbook-import.ts:643`, once, for all 20 lines.
+   - T8: the closure at `workbook-import.ts:650`, once, for all 20 lines; and
+     `People.shown` and `People`'s `#listed` in `books/src/workbook.ts`, for the lines
+     `books` builds (the brief missed them).
    - L1: the logged key in `rate-limit.ts`.
 7. Tests, as Done when 2 says.
 
@@ -839,3 +846,68 @@ waits for a separate answer.
   the host command's stderr (T6) for M1–M5, the measurement line reworded, and the
   rating `standard` (the placeholder note is removed; the frontmatter stays `standard`).
   `status` is `ready` in the commit that records them, before any source change.
+- **2026-10-31, built (a) and (i), which is the ticket's Both.** Refusal: `hasUnseen` in
+  the five write methods (`addHousehold`, `renameHousehold`, `addPerson`, `renamePerson`,
+  `#readMember`, so `addMemberByName` and `createHousehold` too), after the trim and the
+  length check, as `BAD_REQUEST`, with a sentence of its own for a household and for a
+  person. No CHECK and no migration (Build 5 does not apply under (i)); no row is changed.
+  Escape: `escapeUnseen` writes each of the 69 characters as `\uXXXX`, at T1, T2, T3, T4,
+  T5, T6 (all three `io.stderr` sites of `household-command.ts`), T7 (`membersListed`), T8
+  and L1 (`rate-limit.ts`, at the log call, so every `logged` key is covered). The helper
+  is `books/src/unseen.ts`, exported by `@ledger/books`; `api` imports it from there, not
+  from a file of its own, because `books` needed it too (below).
+- **What the brief had wrong, 1: T8 is not one closure.** The report also prints names
+  that `@ledger/books` builds, in `People.shown` and in `People`'s `#listed`. With the
+  closure at `workbook-import.ts` escaped and nothing else, the T8 test failed on
+  `ok $ (Avril-Août): [ ][]…'s lines add up to the sheet's total` printed raw. The fix is
+  in `books/src/workbook.ts`, and the helper moved to `books` so there is one definition.
+  The T8 count of "20 lines" is therefore 20 plus the `books` lines (four in `People.shown`,
+  two problems through `#listed`).
+- **What the brief had wrong, 2: M1–M5 at T6 is not five sinks.** The owner chose to escape
+  M1–M5 at the host command's stderr. What the stderr can show is what a host command
+  reaches, and: `household:ledger` reaches **M4** (both sentences, through `member` naming
+  a held person by id) and **M5** (through `member` or `add` for an address already in a
+  household), and no host command reaches **M1**, **M2** or **M3** (`renamePerson`,
+  `addPerson` and `retirePerson` have no caller under `command` code, only the admin's
+  routes). M1 and M2 quote the typed name, which (a) now refuses a character in before the
+  sentence is built, so they cannot carry one. M3 quotes a stored shown name and is reached
+  only through the admin's retire route. So under this answer **M1, M2 and M3 are escaped
+  nowhere and have no test**, and the admin's web text is as it was. The fourteen-sink count
+  does not mean fourteen tests: M4 and M5 are proven at T6 (`T6 and M4`, `T6 and M5`), and
+  T6 is not a separate test beyond those two. The tests are T1+T2 (one, `list`), T3, T4, T5,
+  T6 with M4 (retiring and retired), T6 with M5, T7 (two: the import command, the backfill
+  command), T8, and L1, plus one `books` test for `#listed` and one for the helper.
+- **What the brief had wrong, 3: T3 and T4 are reachable by no data.** `add` names every
+  household "Home" and refuses a person's name with a character in it, and `member` finds a
+  person by the name or id typed, which (a) refuses a character in. So no stored row
+  reaches the shown name printed at T3 or T4; their tests stub `Directory.prototype`'s
+  `createHousehold` and `addMemberByName` to return a name with one. The escape is defence
+  in depth there.
+- **Consequence of (a) with (i), recorded for the owner.** A person added before lg-76
+  has the name typed then as their id. If that name held a character, they cannot be named
+  by it to `household:ledger member`, nor by the admin's member routes, because the id is
+  typed and read as a name is. They stay in `list`, escaped. The test is `member cannot name
+  a person by an id that holds one, and the person is still listed`, the last in
+  `household-command.test.ts`. No stored row is known to hold one: nothing was measured (the
+  owner chose not to).
+- **A sixth write path, folded in.** The import screen's Confirm adds new people through
+  `addPeople`, and `answersFor` in `workbook-describe.ts` mirrors `addPerson`'s name rule
+  (its 1-to-64 check) so a bad answer is a `WORKBOOK_IMPORT_REFUSED` problem and nothing is
+  written. With (a) in `addPerson` alone, a name with a control character passed the mirror
+  and was refused later, inside `beforeCommit`, as a bare 400. The mirror now refuses it
+  too, as a problem. Test: `workbook-names.test.ts`, "an answer as a new person under a name
+  with a control character is refused, adding no one", 422 `WORKBOOK_IMPORT_REFUSED`; with
+  the check disabled it fails `expected 400 to be 422`.
+- **Not folded, and why.** `list`, `remove` and M5 print `member.address` raw, and an
+  address stored before lg-52 or lg-57 may hold a control or a zero-width character
+  (`readStoredAddress` admits it so the row can be removed). That is the same class of
+  defect for another field, found by reading, not run; it needs its own reproduction and a
+  question about whether the address is escaped or only shown, so it is not folded.
+- **Verification.** Red then green: 16 of the new tests (every one of them but the
+  population count) fail on the base sources (`git checkout d7cd223f -- <the six source
+  files>`, `books` rebuilt, and `escapeUnseen` absent from `books/dist/workbook.js`, then
+  restored from `4ae0e27e`) and pass on the build. The two tests added after that run (the
+  id one and the Confirm one) were not run against the base, except the Confirm one against
+  its check disabled.
+  After the last commit: `npm run check` exit 0; `npm test -- --project ledger` exit 0, 92 files,
+  2018 tests (2016 before the id and the Confirm tests).
