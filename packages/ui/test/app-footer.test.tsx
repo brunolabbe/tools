@@ -1,46 +1,30 @@
 // @vitest-environment jsdom
 
 /**
- * The footer's three links (repo-131): the release the bundle was built at,
- * the changelog when it does not know, and the tool's source.
+ * The footer (repo-131): the version the bundle was built at, as text, and the
+ * Terms link — nothing that points at GitHub (owner, 2026-10-31).
  */
 
 import { afterEach, expect, test } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { AppFooter } from "../src/AppFooter.tsx";
-import { REPOSITORY_URL } from "../src/repository.ts";
 import { TOOL_VERSION } from "../src/version.ts";
 
 afterEach(cleanup);
 
-test("the version links to that tool's release, tagged <tool>-v<version>", () => {
-  render(<AppFooter tool="planner" version="0.10.0" termsHref="/terms.html" />);
+test("the version is shown as text, and Terms is the only link", () => {
+  render(<AppFooter version="0.10.0" termsHref="/terms.html" />);
 
-  const version = screen.getByRole("link", { name: "v0.10.0" });
-  expect(version.getAttribute("href")).toBe(
-    "https://github.com/brunolabbe/tools/releases/tag/planner-v0.10.0",
-  );
+  expect(screen.getByText("v0.10.0").closest("a")).toBeNull();
+  const links = screen.getAllByRole("link");
+  expect(links.map((link) => link.getAttribute("href"))).toEqual(["/terms.html"]);
+  expect(links[0]?.textContent).toBe("Terms");
 });
 
-test("an unknown version links to the tool's changelog instead", () => {
-  render(<AppFooter tool="ledger" version="unknown" termsHref="/terms.html" />);
+test("an unknown version is left out rather than printed", () => {
+  render(<AppFooter version="unknown" termsHref="/terms.html" />);
 
-  const changelog = screen.getByRole("link", { name: "Changelog" });
-  expect(changelog.getAttribute("href")).toBe(
-    "https://github.com/brunolabbe/tools/blob/main/tools/ledger/CHANGELOG.md",
-  );
-  expect(screen.queryByText(/vunknown/u)).toBeNull();
-});
-
-test("Source links to the tool's directory, and Terms to the page it is given", () => {
-  render(<AppFooter tool="downloader" version="1.2.3" termsHref="/terms.html" />);
-
-  expect(screen.getByRole("link", { name: "Source" }).getAttribute("href")).toBe(
-    "https://github.com/brunolabbe/tools/tree/main/tools/downloader",
-  );
-  expect(screen.getByRole("link", { name: "Terms" }).getAttribute("href")).toBe("/terms.html");
-  // Every outbound link is built from the one constant.
-  expect(REPOSITORY_URL).toBe("https://github.com/brunolabbe/tools");
+  expect(screen.getByRole("contentinfo").textContent).toBe("Terms");
 });
 
 test("with no build-time define, the version is unknown rather than a ReferenceError", () => {
