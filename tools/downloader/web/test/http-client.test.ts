@@ -110,3 +110,48 @@ test("a frame of a type this bundle does not know is dropped, and the stream car
     at,
   });
 });
+
+// dl-136: Cloudflare's rate limiting rule answers 429 with an HTML page, which
+// read as INTERNAL ("Something went wrong on our end") until the status alone
+// was enough.
+function edgeAnswer(status: number, headers: Record<string, string> = {}): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() =>
+      Promise.resolve(
+        new Response("<!DOCTYPE html><title>Access denied | Error 1015</title>", {
+          status,
+          headers: { "content-type": "text/html", ...headers },
+        }),
+      ),
+    ),
+  );
+}
+
+test("an edge 429 with no body of ours reads as RATE_LIMITED, with the header's wait (dl-136)", async () => {
+  edgeAnswer(429, { "retry-after": "10" });
+
+  await expect(createHttpClient().cancelJob("job-1")).rejects.toMatchObject({
+    code: "RATE_LIMITED",
+    details: { retryAfterSec: 10 },
+  });
+});
+
+test("an edge 429 with no header carries no wait (dl-136)", async () => {
+  edgeAnswer(429);
+
+  const error: unknown = await createHttpClient()
+    .cancelJob("job-1")
+    .catch((caught: unknown) => caught);
+  expect(error).toMatchObject({ code: "RATE_LIMITED" });
+  expect((error as { details?: unknown }).details).toBeUndefined();
+});
+
+test("another status with no body of ours is still INTERNAL, naming the status (dl-136)", async () => {
+  edgeAnswer(502);
+
+  await expect(createHttpClient().cancelJob("job-1")).rejects.toMatchObject({
+    code: "INTERNAL",
+    details: { status: 502 },
+  });
+});

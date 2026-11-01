@@ -70,6 +70,17 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
           ...(payload.data.details ? { details: payload.data.details } : {}),
         });
       }
+      // A 429 with no body of ours is Cloudflare's rate limiting rule on `/api/`
+      // (dl-136, `docs/02-DEPLOYMENT.md`), whose page is HTML. It means what our
+      // own refusal means, so it reads the same, with the header's wait if sent.
+      if (response.status === 429) {
+        const wait = Number(response.headers.get("retry-after"));
+        throw new AppError(
+          "RATE_LIMITED",
+          undefined,
+          Number.isFinite(wait) && wait > 0 ? { details: { retryAfterSec: wait } } : {},
+        );
+      }
       throw new AppError("INTERNAL", undefined, { details: { status: response.status } });
     }
 
