@@ -95,10 +95,18 @@ here. A different shape is a stop and a question.
 
 ## Done when
 
-1. `books/test` proves the pot-charge settlement on a two-person and a
+1. ~~`books/test` proves the pot-charge settlement on a two-person and a
    three-person household with unequal ratios, and on a stretch where the
    ratio changes. The nets sum to zero, and the simulation in Build 1 finds 0
-   mismatches.
+   mismatches.~~ _Superseded 2026-11-01 by the line below, which fixes the
+   simulation's trial count and household sizes._
+   **1.** `books/test` proves the pot-charge settlement on a two-person and a
+   three-person household with unequal ratios, and on a stretch where the
+   ratio changes. The nets sum to zero. The seeded simulation in
+   `books/test/settlement.test.ts` (`the settlement's promise, simulated`) is
+   extended with pot charges and runs 2,000 trials each for a two-person and a
+   three-person household, ratios and amounts drawn as the existing test draws
+   them, and finds 0 mismatches.
 2. An `api` test files a receipt on a joint row with one item charged to a
    person and proves:
    - one pot charge line in the row's period, at that item's cost;
@@ -113,3 +121,15 @@ here. A different shape is a stop and a question.
 6. `npm run check`, `npm test -- --project ledger` and `npm run e2e:ledger` pass.
 
 ## Log
+
+**2026-11-01 — the owner's answer at intake to Done when 1, relayed by the
+orchestrator in the build dispatch.** Question: "the simulation in Build 1 finds
+0 mismatches" names no trial count, so a gate cannot grade it; the existing test
+`the settlement's promise, simulated` in `books/test/settlement.test.ts` uses a
+seeded `generator` and 2,000 trials for two people. Options: (a) the same
+convention for two and three people: extend the seeded simulation with pot
+charges, 2,000 trials each for a two-person and a three-person household,
+ratios and amounts drawn as the existing test draws them, 0 mismatches; (b) a
+fixed, enumerated grid; (c) leave the line as written. Chosen **(a)**, the
+orchestrator's recommendation. Done when 1 is reworded above, the old line left
+beside it and marked superseded.
