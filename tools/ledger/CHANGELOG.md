@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0](https://github.com/brunolabbe/tools/compare/ledger-v0.6.0...ledger-v0.7.0) (2026-11-01)
+
+
+### Features
+
+* **ledger:** leave an item out of a joint row's receipt, owed to the pot (lg-91) ([#734](https://github.com/brunolabbe/tools/issues/734)) ([a5f4acf](https://github.com/brunolabbe/tools/commit/a5f4acf2ec96b7930230eb8cc3fd48b190f11e78))
+* **ledger:** re-file a bank row already answered, from the history (lg-95) ([#732](https://github.com/brunolabbe/tools/issues/732)) ([283e442](https://github.com/brunolabbe/tools/commit/283e44252ddc637e18232977dedfdc9cba077530))
+
+
+### Fixes
+
+* **ledger:** an edge 429 reads as a rate limit, not "The API answered 429." (lg-97) ([#736](https://github.com/brunolabbe/tools/issues/736)) ([b9b1f0b](https://github.com/brunolabbe/tools/commit/b9b1f0bf6f7356705f20cc5a73d83f2900814d6f))
+* **ledger:** give a merged range no places, so its area costs no memory (lg-88) ([#733](https://github.com/brunolabbe/tools/issues/733)) ([13a2602](https://github.com/brunolabbe/tools/commit/13a2602bb49d5fc3b8dea64c5879530fe5234fa6))
+* **ledger:** refuse a read item charged to nobody current until one is picked (lg-94) ([#744](https://github.com/brunolabbe/tools/issues/744)) ([d1bc974](https://github.com/brunolabbe/tools/commit/d1bc9748f250c5aef7e3018012cf5fdf1dd9708f))
+
 ## [0.6.0](https://github.com/brunolabbe/tools/compare/ledger-v0.5.0...ledger-v0.6.0) (2026-11-01)
 
 
