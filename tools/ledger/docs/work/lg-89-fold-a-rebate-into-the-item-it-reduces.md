@@ -121,3 +121,91 @@ shape is a stop and a question.
    leaves the third as its own item, and the Log records the result.
 
 ## Log
+
+### 2026-11-01 — built (builder, Claude Opus 5.5)
+
+Built on `8ad4e91d` as the Build section says, the contract in the approved
+shape: `ReceiptItem.discount: number | null`, `cents.nullable().default(null)`
+in `receiptItemSchema`, and the net `price + (discount ?? 0)`.
+
+- **`books`.** One `netPrice(item)` in `books/src/receipts.ts`, read by
+  `itemsAddUp`, `itemsCost` (so `sharedAmount`, `splitReceipt` and
+  `splitByCategory`), `taxableFits`, and `splitReceipt`'s nothing-shared test.
+  A deposit stays untaxed. Eight cases at the end of
+  `books/test/receipts.test.ts`, under "a rebate folded into its item (lg-89)".
+  The receipt where the rebate is the only difference is `BASKET` with 2,00 $
+  off the six-pack, read both ways: as a separate `RABAIS` item the six-pack
+  left out alone takes 1 554 off (shared 692), folded it takes 1 324 (shared
+  922), the 230 between them is the rebate and its taxes, both make the 2 246
+  paid, and folding equals tapping the rebate's own line too.
+- **`receipts`.** `RECEIPT_PROMPT` drops "A discount is an item with a
+  negative price" and asks for each rebate folded into its item, matched by
+  product code or text when it is not printed under it, several adding up, and
+  a whole-receipt or unplaceable rebate left an item of its own. The schema
+  asks for `discount` beside `deposit`, parsed and bounded by the same
+  `amount`. Five tests at the end of `receipts/test/reader.test.ts`.
+- **`api`.** Migration 16, `ALTER TABLE receipt_items ADD COLUMN
+  discount_cents INTEGER`; `fileReceipt` stores it, `toItem` and
+  `receiptsOnRows` read it. `api/test/schema.test.ts`, "migration 16's
+  rebates (lg-89)", builds two filings at version 15 (a line, and a row split
+  by category), migrates, and reads every item back with `discount: null` and
+  the same split and slices as before. Three filing tests at the end of
+  `api/test/receipts.test.ts`, one a request that omits `discount`.
+- **`web`.** A `Rebate on <item>` input beside `Deposit`, parsed as the
+  deposit is; the live split and the add-up hint come from `books` and so use
+  the net. Two tests at the end of `web/test/receipts.test.tsx`. The item row
+  already wraps (`.items .item`, `flex-wrap`), so no layout case was added:
+  `E2E_PORT=8189 npx playwright test -c tools/ledger/playwright.config.ts
+  layout.spec.ts -g Receipt` → `1 passed`, "Receipt fits a phone and a
+  desktop, with a photo kept and an item typed".
+- **The three fixtures (Build 6)**, in `receipts/test/fixtures/`:
+  `rebate-under-its-item`, `rebate-away-from-its-item` (`RABAIS 1185` printed
+  three lines below `1185 DETERGENT`, a taxable item) and
+  `coupon-on-the-whole-receipt`, each an `.html` source and the `.png`
+  rendered from it. Every amount adds up and its taxes are the rates'.
+  `receipts/test/live/render-rebate-fixtures.ts` renders them through
+  Playwright's Chromium (no network, no cost); `rebate-fixtures.ts` holds what
+  each read must give; `read-rebate-fixtures.ts` is the paid read. None is
+  named `.test.ts`, so vitest never runs them, and `tsconfig.tests.json`
+  typechecks them, as the planner's `api/test/live/run.ts` is kept.
+
+Mutation, on `113ba31b`: `netPrice` returning `item.price` alone failed 11 of
+the new tests across `books`, `api` and `web` (`npx vitest run` of the three
+receipt suites: `11 failed | 167 passed`). The category test passed under it
+at first, since `splitByCategory` gives the remainder to the largest category
+and the rebate was on the largest; it now puts the rebate on the soap, and
+fails under the mutation (`-t "charts each item at its net"`: `1 failed`).
+
+`npm run check` exits 0, and `npm test -- --project ledger` passes 2 098 of
+2 098 tests in 97 files.
+
+**Done when 7, awaiting the owner's paid read.** Not run here: it costs three
+Haiku reads. From the repository root, once `npm run build` has run on the
+merged tree, with `api.anthropic.com` reachable:
+
+```bash
+node --import tsx tools/ledger/receipts/test/live/read-rebate-fixtures.ts --paid .claude/.keys /tmp/lg-89-read.json
+```
+
+It reads the key from the file (the `LEDGER=` line, or the whole file), never
+the environment, and refuses without `--paid` (exit 2, checked). It prints one
+`<fixture>: pass` or `<fixture>: FAIL: <why>` line per receipt and exits 0 only
+when all three pass; the JSON holds every item read. **The three verdict lines
+go in a dated entry here**, which closes line 7; the JSON stays outside the
+repository. The verdict logic was checked offline against eight made-up
+readings, folded and not, 8 of 8 as expected.
+
+What the brief had wrong:
+
+- "Keep them in `receipts/test/fixtures/` beside the existing ones": there was
+  no `receipts/test/fixtures/`, and no receipt image anywhere in the tool. The
+  directory is new.
+- Done when 4's "the same split as before" cannot be computed through
+  `receiptsOnRows` at version 15, since its query names the new column. The
+  test reads the row's receipt through `storedFiling` before the migration
+  and through `receiptsOnRows` after.
+- Not named: eight assertions hard-code the latest schema version (15) in
+  `schema.test.ts`, `auto-file.test.ts` and `spending-backfill.test.ts`, and
+  every migration has to bump them; they now say 16. The recorded reader
+  responses lacked `discount`, which the output schema now requires, so they
+  carry `discount: null`.

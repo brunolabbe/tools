@@ -1313,11 +1313,17 @@ describe("a rebate folded into its item (lg-89)", () => {
   });
 
   test("a row split by category charts each item at its net", () => {
-    // 3,49 $ + 13,24 $ + 5,74 $ is a cent over the row, which comes off the largest.
-    expect(splitByCategory(2_246, REBATED)).toEqual([
+    // The 2,00 $ off the soap instead, so the remainder, which goes to the
+    // largest category, cannot hide it: the same taxes and total as `REBATED`.
+    const soap = { ...REBATED, items: [item(0), item(1), { ...item(2), discount: -200 }] };
+
+    expect(checkReceipt(soap)).toEqual([]);
+    // 3,49 $ + 15,54 $ + 2,99 $ × 1,14975 = 3,44 $ is a cent over the row,
+    // which comes off the largest.
+    expect(splitByCategory(2_246, soap)).toEqual([
       { categoryId: 1, cents: 349 },
-      { categoryId: 2, cents: 1_323 },
-      { categoryId: 3, cents: 574 },
+      { categoryId: 2, cents: 1_553 },
+      { categoryId: 3, cents: 344 },
     ]);
   });
 
