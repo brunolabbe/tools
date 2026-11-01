@@ -92,3 +92,7 @@ runs, and over leaving it.
   job to skip, and the title pattern in `release-please-config.json` to be the
   shape matched. F4: `awaiting` rewritten from the gate's row. F2, the shape
   match, is put to the owner.
+- 2026-11-01: F2 answered by the owner — keep the shape match. A false match
+  skips gates only on a `push` to `main`, after its pull request ran them; the
+  alternative, naming each tool, made the condition three times longer in
+  eleven places.
