@@ -376,3 +376,5 @@ The file was then restored from `f0b0860d`.
 - Nothing runs past the card's right edge.
 - The close card reads "sam deposits 68.56 $ into the buffer. / Or pays alex
   39.18 $ directly."
+
+- 2026-11-01 — At the owner's direct instruction, the orchestrator replaced `tools/ledger/CLAUDE.md`'s "on a row every item is shared" with the builder's wording. The builder had declined the edit on a relayed instruction, as its role page requires.
