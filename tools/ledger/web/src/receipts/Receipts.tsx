@@ -122,6 +122,13 @@ const NOBODY_ELSE = "There is nobody else in the household to charge an item to.
 const NOBODY_CHOSEN =
   "Choose whose each item left out is: a joint-account purchase has no payer to keep one.";
 
+/** The live line's words for a charge no one has been picked for (lg-91, lg-94). */
+const NOT_CHOSEN_YET = "Whose not chosen yet";
+
+/** A read item marked someone else's that names no current member: nobody may be assumed (lg-94). */
+const UNPICKED_CHARGE =
+  "Choose whose each item left out is: it was charged to someone who has left, or to nobody.";
+
 /**
  * The `Whose is` choice that keeps an item with whoever paid (`not-shared`). The
  * empty string, because it is a value no person id can take: the contract's
@@ -500,6 +507,9 @@ export function Receipts(): React.ReactElement {
   const alone = other === null;
   // Paid with the joint card, an item names any current member, and nobody
   // until one is picked (lg-91): a row has no payer to be "the other" of.
+  // Not paid jointly, a charge to someone who has left, or to nobody, is not
+  // filed to the first other either: it is nobody's until the person picks (lg-94).
+  // The select's own picks always name a current other, so only a read brings one.
   const whose = (item: ItemDraft): string | null =>
     joint
       ? item.chargedTo !== null && people.includes(item.chargedTo)
@@ -509,7 +519,15 @@ export function Receipts(): React.ReactElement {
         ? null
         : item.chargedTo !== null && others.includes(item.chargedTo)
           ? item.chargedTo
-          : other;
+          : null;
+  // With nobody else the item is refused as it always was (NOBODY_ELSE), not unpicked.
+  // With one other member a charge to nobody is that member's, as the request has
+  // always read it; a charge naming someone who is not a current member never is.
+  const unpicked = (item: ItemDraft): boolean =>
+    !joint &&
+    !alone &&
+    item.share === "theirs" &&
+    (item.chargedTo === null ? several : !others.includes(item.chargedTo));
   const wholeWhose = others.includes(wholeChosen) ? wholeChosen : other;
   const proposal = proposalOf(form, whose);
   const flags = checkReceipt(proposal);
@@ -597,7 +615,9 @@ export function Receipts(): React.ReactElement {
         ? NOBODY_CHOSEN
         : !joint && alone && form.items.some((item) => item.share === "theirs")
           ? NOBODY_ELSE
-          : null;
+          : form.items.some(unpicked)
+            ? UNPICKED_CHARGE
+            : null;
 
   const lookUp = (): void => {
     if (charged === null || charged === 0 || !dated) {
@@ -810,7 +830,11 @@ export function Receipts(): React.ReactElement {
                   {item.share !== "shared" && !joint && (
                     <select
                       aria-label={`Whose is ${name}`}
-                      value={item.share === "not-shared" ? MINE : (whose(item) ?? other ?? "")}
+                      value={
+                        item.share === "not-shared" || unpicked(item)
+                          ? MINE
+                          : (whose(item) ?? other ?? "")
+                      }
                       onChange={(event) =>
                         setItem(
                           index,
@@ -824,6 +848,16 @@ export function Receipts(): React.ReactElement {
                       {item.share === "theirs" && alone && (
                         <option value="" disabled>
                           Someone else&rsquo;s
+                        </option>
+                      )}
+                      {/*
+                        A read charge to nobody current: said first, with the value Mine
+                        has, which React matches to this first option (lg-94). A person
+                        id cannot be a second sentinel: any 1 to 100 characters is one.
+                      */}
+                      {unpicked(item) && (
+                        <option value="" disabled>
+                          Whose?
                         </option>
                       )}
                       <option value={MINE}>Mine</option>
@@ -871,7 +905,7 @@ export function Receipts(): React.ReactElement {
                   (charge) =>
                     `${
                       charge.personId === null
-                        ? "Whose not chosen yet"
+                        ? NOT_CHOSEN_YET
                         : `Owed to the pot by ${shownName(shown, charge.personId)}`
                     } ${formatCents(charge.cents)} · `,
                 )
@@ -886,16 +920,17 @@ export function Receipts(): React.ReactElement {
                 ? split.charges
                     .map(
                       (charge) =>
-                        `${shareLabel("theirs", charge.personId, shown)} ${formatCents(charge.cents)} · `,
+                        `${charge.personId === null ? NOT_CHOSEN_YET : shareLabel("theirs", charge.personId, shown)} ${formatCents(charge.cents)} · `,
                     )
                     .join("")
-                : `${shareLabel("theirs", other, shown)} ${formatCents(split.chargedCents)} · `}
+                : `${form.items.some(unpicked) ? NOT_CHOSEN_YET : shareLabel("theirs", other, shown)} ${formatCents(split.chargedCents)} · `}
               Shared {formatCents(split.sharedCents)}
             </output>
           )}
-          {(itemsUnread || unfileable === NOBODY_ELSE || unfileable === NOBODY_CHOSEN) && (
-            <p className="hint bad">{unfileable}</p>
-          )}
+          {(itemsUnread ||
+            unfileable === NOBODY_ELSE ||
+            unfileable === NOBODY_CHOSEN ||
+            unfileable === UNPICKED_CHARGE) && <p className="hint bad">{unfileable}</p>}
         </fieldset>
         {field("charged", "Charged to the card (with any tip)")}
         <label htmlFor={`${id}-spending`}>Spending category</label>
