@@ -32,7 +32,7 @@ under the name `ADDRESS`. lg-52 (`d84c8852`) renamed it `ADDRESS_SHAPE` and spli
 the control set out beside it, as `CONTROL`; `UNSEEN` arrives in lg-57 (`59629aec`). Every write path checks its address before
 `#record` writes it, and `#record` is the only `INSERT INTO memberships` under
 `tools/ledger/api/src`. So a row holding whitespace can come only from raw SQL or a
-hand-edited file. Whether any live directory holds one is not measured
+hand-edited file. Whether any live directory holds one is answered by the owner
 (Decision, question 2).
 
 The ten characters below are 10 of the 25 code points `\s` matches. The other 15
@@ -236,7 +236,7 @@ Each question carries its own marker, `open` or `answered <date> by <who>`.
 **(c), leave the refusal and remove a stuck row by hand**, from four options: (a),
 (c), (d), or close as won't fix; (b) was not offered, being (a)'s limit with a second
 pattern. The ticket itself made no recommendation; the question carried one for (c),
-because question 2 measured no row in prod. Option (c)'s record
+because the owner reports prod holds no row (question 2). Option (c)'s record
 was run, in the Reproduction; the other costs are read from the code.
 
 - **(a) `remove` looks the address up without the shape check.** `removeMember`,
@@ -303,7 +303,7 @@ string. The limit is the one under (a) above.
 
 **Question 2 — answered 2026-11-01 by the owner: does any live directory hold such a
 row.** No: the owner reports the prod directory holds no addresses at all, so the
-count is 0. It is
+count is 0. Prod is the only live directory this ticket knows of. It is
 an operator step, as lg-82's question 2 framed it. The scan in the next section
 reads and writes no stored data; it can create sidecar files, see its note on them.
 A hit means a row written by raw SQL or a hand-edited file, by the code reading
@@ -409,7 +409,8 @@ the read; on a live directory, leave them alone.
 
 1. The owner's answer to question 1 is recorded on its line in this Decision
    section, with the options it was chosen from, and `status` moves to `ready` in
-   the same commit.
+   the same commit. _Amended 2026-11-01: `done` instead, since the same commit
+   carries Done when 2's spec._
 2. Whichever remedy is chosen, a spec asserts what `remove` does with a stored address
    holding each of the ten `\s` characters in the Reproduction, after the `@`, an
    interior position, which (a) and (b) cover. The result is removed, with the row out of
@@ -421,7 +422,9 @@ the read; on a live directory, leave them alone.
    test (PR #691) is changed to match.
 3. Question 2 is measured on the live directory by an operator, with the mismatch
    scan above, read-only, and the count and the sidecar state before and after are
-   recorded in the Log.
+   recorded in the Log. _Amended 2026-11-01: the owner reports the prod directory
+   empty, which answers the count without a scan; there is no sidecar state to
+   record. The scan stays the measurement if it gains members._
 
 ## Log
 
