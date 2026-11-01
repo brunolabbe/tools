@@ -186,8 +186,13 @@ written).
    selector.
 3. The planner's `styles.css` declares no `body`, `button`, `.panel`,
    field or column rule of its own.
-4. Every planner text field shows the page font at 16px. The planner's layout
-   spec says so at 360px and at 1280px.
+4. ~~Every planner text field shows the page font at 16px. The planner's layout
+   spec says so at 360px and at 1280px.~~ _Superseded 2026-11-01 by the line
+   below, which fixes the scope; the wording is unchanged._
+   **4.** Every planner text field in the set the Why enumerates (17 inputs, 3
+   textareas, 3 of the 4 selects: 23 fields) shows the page font at 16px. The
+   planner's layout spec says so at 360px and at 1280px. A planner field on
+   `main` outside that set is named in the Log; the work is not widened for it.
 5. The planner's layout spec and e2e suite pass. The before and after
    screenshots are compared in the Log, screen by screen.
 6. `npm run check` and `npm test` pass.
@@ -230,3 +235,14 @@ Fold-in: the 2026-10-25 entry above says lg-70 is "open as pull request #664",
 which is stale. lg-70 merged as `f69e9b2c`. `git log --oneline -1 f69e9b2c`
 prints `f69e9b2c fix(ledger): space Admin's cards and restore the stats gridlines
 (lg-70) (#664)`. The old sentence is left as it was written.
+
+**2026-11-01 — Done when 4 scoped, answered by the owner at intake.** Question
+(from the builder's dispatch): "Done when 4 says 'Every planner text field shows
+the page font at 16px'. The fields are listed only in the Why: 17 inputs, 3
+textareas, 3 of the 4 selects. What does the gate grade it against?" Options: (1)
+the Why's 23 fields, the dispatch naming that enumerated set as the scope, with
+a field on `main` outside it a Log line and not extra scope; (2) re-enumerate on
+`main` first, the builder listing every field in the Log and the gate grading
+against that list. The owner chose **(1) the Why's 23 fields**, the
+orchestrator's recommendation. Done when 4 is reworded above, the old line left
+beside it and marked superseded.
