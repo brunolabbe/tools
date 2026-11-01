@@ -3,7 +3,7 @@ id: lg-83
 tool: ledger
 title: A stored address holding whitespace cannot be removed
 kind: fix
-status: needs-decision
+status: done
 milestone: null
 depends_on: [lg-82]
 difficulty: standard
@@ -32,7 +32,7 @@ under the name `ADDRESS`. lg-52 (`d84c8852`) renamed it `ADDRESS_SHAPE` and spli
 the control set out beside it, as `CONTROL`; `UNSEEN` arrives in lg-57 (`59629aec`). Every write path checks its address before
 `#record` writes it, and `#record` is the only `INSERT INTO memberships` under
 `tools/ledger/api/src`. So a row holding whitespace can come only from raw SQL or a
-hand-edited file. Whether any live directory holds one is not measured
+hand-edited file. Whether any live directory holds one is answered by the owner
 (Decision, question 2).
 
 The ten characters below are 10 of the 25 code points `\s` matches. The other 15
@@ -228,11 +228,15 @@ in place.
 This branch's source is the base's, so the run above is the base's behaviour at
 this branch's head.
 
-## Decision — open
+## Decision — answered
 
 Each question carries its own marker, `open` or `answered <date> by <who>`.
 
-**Question 1 — open: which remedy.** No recommendation is made. Option (c)'s record
+**Question 1 — answered 2026-11-01 by the owner: which remedy.** The owner chose
+**(c), leave the refusal and remove a stuck row by hand**, from four options: (a),
+(c), (d), or close as won't fix; (b) was not offered, being (a)'s limit with a second
+pattern. The ticket itself made no recommendation; the question carried one for (c),
+because the owner reports prod holds no row (question 2). Option (c)'s record
 was run, in the Reproduction; the other costs are read from the code.
 
 - **(a) `remove` looks the address up without the shape check.** `removeMember`,
@@ -297,7 +301,9 @@ chose **state the limit**, from two options: state the limit, and have Done when
 name the position it covers; or add a variant that also looks up the untrimmed
 string. The limit is the one under (a) above.
 
-**Question 2 — open: does any live directory hold such a row.** Not measured. It is
+**Question 2 — answered 2026-11-01 by the owner: does any live directory hold such a
+row.** No: the owner reports the prod directory holds no addresses at all, so the
+count is 0. Prod is the only live directory this ticket knows of. It is
 an operator step, as lg-82's question 2 framed it. The scan in the next section
 reads and writes no stored data; it can create sidecar files, see its note on them.
 A hit means a row written by raw SQL or a hand-edited file, by the code reading
@@ -403,7 +409,8 @@ the read; on a live directory, leave them alone.
 
 1. The owner's answer to question 1 is recorded on its line in this Decision
    section, with the options it was chosen from, and `status` moves to `ready` in
-   the same commit.
+   the same commit. _Amended 2026-11-01: `done` instead, since the same commit
+   carries Done when 2's spec._
 2. Whichever remedy is chosen, a spec asserts what `remove` does with a stored address
    holding each of the ten `\s` characters in the Reproduction, after the `@`, an
    interior position, which (a) and (b) cover. The result is removed, with the row out of
@@ -415,7 +422,9 @@ the read; on a live directory, leave them alone.
    test (PR #691) is changed to match.
 3. Question 2 is measured on the live directory by an operator, with the mismatch
    scan above, read-only, and the count and the sidecar state before and after are
-   recorded in the Log.
+   recorded in the Log. _Amended 2026-11-01: the owner reports the prod directory
+   empty, which answers the count without a scan; there is no sidecar state to
+   record. The scan stays the measurement if it gains members._
 
 ## Log
 
@@ -495,3 +504,25 @@ thread. The filing is left `needs-decision`, with no `--land`.
 - 2026-10-31 — Fixed at landing by owner choice: gate 2, L1 — "Say interior, not after the @". `git diff HEAD -- <this file> | grep -c '^-.*and not one at either end'` gave 1.
 - 2026-10-31 — Fixed at landing by owner choice: gate 2, L2 — "Drop the stale Log clause, and give lg-82's remove test a pointer to PR #691". `git diff HEAD -- <this file> | grep -c '^-.*quoted comment is the same at both heads'` gave 1; the pointer is added where the Decision and Done when 2 name the test.
 - 2026-10-31 — Fixed at landing by owner choice: gate 2, L3 — "at d84c8852 the set is named CONTROL; UNSEEN arrives in lg-57". `git show d84c8852 -- tools/ledger/api/src/directory.ts | grep -n 'CONTROL\|UNSEEN'` shows only CONTROL, and 59629aec renames it to UNSEEN; `git diff HEAD -- <this file> | grep -c '^-.*set .UNSEEN. out beside it'` gave 1.
+
+### 2026-11-01 — remedy (c) recorded and its spec added (orchestrator session)
+
+**Owner's answers, 2026-11-01.** Question 2: the prod directory is empty, so no row is
+stuck and the count is 0. Question 1: (c), from (a), (c), (d) and won't fix. Both are on
+their lines under the Decision.
+
+**Done when 2.** `household-command.test.ts` ends with `a stored address holding
+whitespace (lg-83)`: each of the ten characters after the `@` is refused, exit 1,
+`That is not an email address.`, with the row still in `current_members`; and one raw
+`remove` record clears the TAB row and `list` stops printing it, which is the hand
+remedy. lg-82's `remove` test is unchanged, as (c) says; it covers six of the ten and
+does not check the row stays, which is why the new block is not a duplicate.
+`npx vitest run tools/ledger/api/test/household-command.test.ts -t "lg-83"` gave 11
+passed.
+
+**Done when 3, not as worded.** The scan was not run: the owner reports the directory
+empty, which answers the count without it. The sidecar state before and after was
+therefore not recorded. If the directory gains members, the scan in this ticket is
+still the measurement.
+
+**Fold-in.** None.
