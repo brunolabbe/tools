@@ -102,11 +102,11 @@ here. A different shape is a stop and a question.
    simulation's trial count and household sizes._
    **1.** `books/test` proves the pot-charge settlement on a two-person and a
    three-person household with unequal ratios, and on a stretch where the
-   ratio changes. The nets sum to zero. The seeded simulation in
-   `books/test/settlement.test.ts` (`the settlement's promise, simulated`) is
-   extended with pot charges and runs 2,000 trials each for a two-person and a
-   three-person household, ratios and amounts drawn as the existing test draws
-   them, and finds 0 mismatches.
+   ratio changes. The nets sum to zero. A second seeded simulation in
+   `books/test/settlement.test.ts` (`the settlement's promise with charges to the pot, simulated`)
+   adds pot charges and runs 2,000 trials each for a two-person and a
+   three-person household, ratios and amounts drawn as the existing
+   `the settlement's promise, simulated` draws them, and finds 0 mismatches.
 2. An `api` test files a receipt on a joint row with one item charged to a
    person and proves:
    - one pot charge line in the row's period, at that item's cost;
@@ -378,3 +378,5 @@ The file was then restored from `f0b0860d`.
   39.18 $ directly."
 
 - 2026-11-01 — At the owner's direct instruction, the orchestrator replaced `tools/ledger/CLAUDE.md`'s "on a row every item is shared" with the builder's wording. The builder had declined the edit on a relayed instruction, as its role page requires.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the third low — "Done when 1 says the simulation is extended; the branch adds a second describe". Done when 1 now names the added simulation and its 2,000 trials each for two and three people. Proof: `git diff 1510ecfa HEAD -- tools/ledger/docs/work/lg-91-leave-an-item-out-of-a-joint-account-row.md | grep -c '^-.*extended with pot charges'` → 1.
+- 2026-11-01 — Recorded, not fixed, by owner choice: gate 1, the second low — "a person whose items span two categories has them leave the row's chart and re-enter it uncategorised" (`filePotCharges` in `api/src/receipts.ts`). It goes to a new ticket, filed separately from this landing. The first low stays recorded as the gate wrote it.
