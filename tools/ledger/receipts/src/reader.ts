@@ -15,8 +15,11 @@
  *
  * **It reads no environment.** `api` reads the key and passes it in. The SDK
  * would otherwise read `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
- * `ANTHROPIC_BASE_URL` and `ANTHROPIC_LOG` for every option it is not given, so
- * each is passed explicitly, "nothing" included. The one it reads whatever it is
+ * `ANTHROPIC_BASE_URL`, `ANTHROPIC_LOG` and, for a client given no
+ * `openTelemetry` option, `ANTHROPIC_OPEN_TELEMETRY`, `_PROPAGATION`,
+ * `_TRACES_CONTENT_MODE` and `_TRACES_MAX_CONTENT_BYTES` for every option it is
+ * not given, so each is passed explicitly, "nothing" included (`openTelemetry`
+ * with `traces` and `propagation` both off). The one it reads whatever it is
  * given is `ANTHROPIC_CUSTOM_HEADERS`, which can replace the key; `api` refuses
  * to boot with it set beside a key, as the planner's does. The planner's
  * provider is not reused: a tool never imports another tool.
@@ -236,6 +239,9 @@ export function createModelReader(options: ModelReaderOptions): ReceiptReader {
     apiKey: options.apiKey,
     authToken: null,
     webhookKey: null,
+    // Given, so the SDK reads no `ANTHROPIC_OPEN_TELEMETRY*` variable. Both
+    // off: `openTelemetry: false` alone leaves propagation on.
+    openTelemetry: { traces: false, propagation: false },
     baseURL: options.baseURL ?? ANTHROPIC_BASE_URL,
     timeout: options.timeoutMs ?? DEFAULT_READ_TIMEOUT_MS,
     maxRetries: options.maxRetries ?? 2,

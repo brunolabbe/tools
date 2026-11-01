@@ -85,8 +85,9 @@ describe("what boot writes down about grounding", () => {
   });
 
   test("a thrown authentication error, logged through the real logger, does not contain the key", async () => {
-    // pl-39. The SDK's errors carry the request that produced them, and the
-    // request carries `x-api-key`. The provider logs status, type and request
+    // pl-39. The SDK's errors carry the status, the response headers, the
+    // request id and the body, and the request carries the key in
+    // `Authorization`. The provider logs status, type and request
     // id by hand and attaches no cause; this holds it to that through the
     // logger that production runs, and through the error handler's own fields.
     const { logger, lines } = capturing();

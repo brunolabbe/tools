@@ -168,8 +168,9 @@ describe("what the provider sends", () => {
   });
 
   test("the key it was given, and no bearer token from anywhere else", async () => {
-    // The key and a token share `Authorization` in SDK 1.x, so this is the only
-    // thing that shows `authToken: null` still keeps a host's token off the wire.
+    // The key and a token share `Authorization` in SDK 1.x. Passing `apiKey`
+    // alone already stops the SDK reading a token from the environment, so this
+    // holds the wire to the key and no token from the host, whichever option does it.
     vi.stubEnv("ANTHROPIC_AUTH_TOKEN", "a-token-from-the-host");
     const { fetch, sent } = answering(fixture("ordinary"));
     await provider(fetch).send(REQUEST);

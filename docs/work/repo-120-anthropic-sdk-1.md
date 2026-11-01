@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: standard
+awaiting: one paid planner read and one paid ledger receipt read succeed on SDK 1.3.0 — the owner's reading, after the merge
 ---
 
 # repo-120 — Move the Anthropic SDK from 0.125 to 1.x
@@ -81,6 +82,12 @@ layout reads — goes through it.
       key and a token now share `Authorization`, the planner test stubs
       `ANTHROPIC_AUTH_TOKEN` (the ledger's already did) so the stray-token guard is
       still exercised; neither test was shown to fail with the guard removed.
+      - WITHDRAWN — do not cite this paragraph: "so the stray-token guard is still
+        exercised". The builder's account of why the stub matters was wrong, as gate 1
+        found: in 1.3.0, passing `apiKey` alone stops the SDK reading a credential from
+        the environment, so `authToken: null` is not what keeps a host's token off the
+        wire. The stub still pins "no token from anywhere else" (gate 1: with the
+        host's token passed explicitly, 2 of 52 failed, one in each tool).
     - _`ANTHROPIC_CUSTOM_HEADERS`_: unchanged mechanism (`defaultHeaders` win over
       the key), but the header it would overwrite is now `Authorization`; the
       comment in `anthropic.ts` says so. Both `api` configs still refuse to boot with
@@ -123,3 +130,38 @@ layout reads — goes through it.
   - **Fold-in.** None made: nothing else small and already specified came free.
     `npm install --ignore-scripts` on the farm dropped `better-sqlite3`'s `build/`;
     restored by copying it from the shared checkout (worktree-local, not committed).
+- 2026-11-01 (owner's answer, after the build): the builder's open decision, "Whether
+  to ship this on the notes alone", options (A) merge once the gate passes, then one
+  paid planner read and one paid ledger receipt read soon after, (B) make the paid
+  reads a gate condition, (C) pin the key back to `x-api-key` via `defaultHeaders`.
+  The owner chose (A), the builder's and the orchestrator's recommendation. The
+  `awaiting:` line carries the two reads.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the first low — the SDK
+  reads four `ANTHROPIC_OPEN_TELEMETRY*` variables when a client gets no option.
+  Chosen from (a) pass the option, (b) add the variables to both headers, (c) record
+  only: the owner took (a), the gate's and the orchestrator's recommendation. All four
+  clients (the planner's provider and its live `countTokensClient`, the ledger's
+  `reader.ts` and `layout.ts`) now get the option `openTelemetry` with `traces` and
+  `propagation` both `false`, and the two headers name the variables. Proof, a new
+  narrow assertion that the client is constructed with the option, since no existing
+  test could see it: two new specs, `anthropic-telemetry.test.ts` in the planner's
+  `agent` and `telemetry.test.ts` in the ledger's `receipts`. Run together with
+  `npx vitest run` they failed 3 of 3 before the source change (no `openTelemetry`
+  among the constructor's options) and pass 3 of 3 after. The live `countTokensClient`
+  has no test and is a script; it carries the same option unproven.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the second low — the texts
+  saying `authToken: null` keeps a host's token off the wire. The owner chose to fix
+  the second and third lows at landing, the orchestrator's recommendation, over record
+  only. A wording fix in two files, each counted as `git diff ef1baf02 HEAD -- <path>`
+  piped to `grep -c '^-.*<fragment>'`, which reads the removed line and gave `1` each:
+  - `tools/planner/agent/test/anthropic-provider.test.ts`, fragment `still keeps a host`.
+  - `tools/planner/agent/src/providers/anthropic.ts`, fragment `be sent beside the key`.
+  - The Log sentence is withdrawn in place above, not deleted.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the third low — stale
+  `x-api-key` text and the `#failure` doc's claim about what an error carries. Same
+  choice as the second low, counted the same way, `1` each:
+  - `tools/planner/api/src/config.ts`, fragment `Re-sending .x-api-key.`.
+  - `tools/planner/api/test/logging.test.ts`, fragment `carry the request that`.
+  - `tools/planner/agent/src/providers/anthropic.ts`, fragment `carries the request that`.
+- 2026-11-01 — gate 1's fourth low (no test pins `createLayoutAsk`'s request) is
+  recorded and not fixed, by the owner's choice.

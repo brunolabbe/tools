@@ -504,7 +504,7 @@ function price(raw: string | undefined, variable: string): number | undefined {
  *
  * The SDK reads this variable unconditionally, no client option switches it
  * off, and a header in it can replace the explicit key — reproduced with a
- * stubbed `fetch`. Re-sending `x-api-key` per request would close the key, but
+ * stubbed `fetch`. Re-sending `Authorization` per request would close the key, but
  * not a stray `anthropic-beta` or any other header that changes what a request
  * does or bills. Refusing closes all of them, the same way a typo'd
  * `MODEL_PROVIDER` refuses above.
