@@ -194,7 +194,7 @@ export function ChartCard(props: {
             </ul>
           )}
           {asTable ? <TableView title={title} table={table} /> : children}
-          <button type="button" className="secondary small" onClick={() => setAsTable(!asTable)}>
+          <button type="button" className="small" onClick={() => setAsTable(!asTable)}>
             {asTable ? "Show the chart" : "Show as a table"}
           </button>
         </>
@@ -285,7 +285,7 @@ function ReadoutView(props: { readout: Readout | null; ghost?: boolean }): React
         <>
           <p className="readout-heading">{say(readout.heading)}</p>
           {readout.onOpen !== undefined && (
-            <button type="button" className="secondary small" onClick={open(readout.onOpen)}>
+            <button type="button" className="small" onClick={open(readout.onOpen)}>
               {say("Show the rows")}
             </button>
           )}
@@ -300,7 +300,7 @@ function ReadoutView(props: { readout: Readout | null; ghost?: boolean }): React
                 {row.onOpen !== undefined && (
                   <button
                     type="button"
-                    className="secondary small"
+                    className="small"
                     aria-label={`Show the rows for ${row.label}`}
                     onClick={open(row.onOpen)}
                   >

@@ -131,7 +131,7 @@ export function StatementPaste({ onStored, onOpenInbox }: StatementPasteProps): 
         </p>
       )}
       {rows === null && (
-        <button type="button" onClick={preview} disabled={text.trim() === ""}>
+        <button className="primary" type="button" onClick={preview} disabled={text.trim() === ""}>
           Preview
         </button>
       )}
@@ -153,7 +153,12 @@ export function StatementPaste({ onStored, onOpenInbox }: StatementPasteProps): 
               </li>
             ))}
           </ol>
-          <button type="button" onClick={() => confirm(rows)} disabled={storing}>
+          <button
+            className="primary"
+            type="button"
+            onClick={() => confirm(rows)}
+            disabled={storing}
+          >
             {storing ? "Storing…" : "Confirm and store"}
           </button>
         </>

@@ -125,11 +125,7 @@ function AutoFiledItem({
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => onAnswer(person === "" ? null : person, bucket)}
-        >
+        <button type="button" onClick={() => onAnswer(person === "" ? null : person, bucket)}>
           Change
         </button>
       </div>

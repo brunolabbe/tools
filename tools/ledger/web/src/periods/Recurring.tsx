@@ -57,7 +57,7 @@ function EndItem({
         value={last}
         onChange={(event) => setLast(event.target.value)}
       />
-      <button type="button" className="secondary" disabled={busy} onClick={end}>
+      <button type="button" disabled={busy} onClick={end}>
         End
       </button>
     </div>
@@ -156,7 +156,7 @@ export function Recurring({ items, people, me, busy, send, onProblem }: Props): 
           onChange={(event) => setStartDate(event.target.value)}
         />
         <div className="actions">
-          <button type="submit" disabled={busy}>
+          <button className="primary" type="submit" disabled={busy}>
             Add the item
           </button>
         </div>

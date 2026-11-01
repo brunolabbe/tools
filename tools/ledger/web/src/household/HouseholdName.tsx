@@ -64,7 +64,7 @@ export function HouseholdName(props: HouseholdNameProps): React.ReactElement {
         {!editing && (
           <button
             type="button"
-            className="small secondary"
+            className="small"
             aria-label={`Rename ${title}`}
             onClick={() => {
               setTyped(name);
@@ -97,7 +97,7 @@ export function HouseholdName(props: HouseholdNameProps): React.ReactElement {
             </button>
             <button
               type="button"
-              className="small secondary"
+              className="small"
               disabled={busy}
               onClick={() => setEditing(false)}
             >

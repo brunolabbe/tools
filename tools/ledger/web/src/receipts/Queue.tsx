@@ -372,7 +372,7 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
             <strong>{reader}</strong> reads them, one at a time. Typing a receipt in sends nothing.
           </p>
           <div className="actions">
-            <button type="button" disabled={reading} onClick={queue.readAll}>
+            <button className="primary" type="button" disabled={reading} onClick={queue.readAll}>
               {reading ? "Reading…" : "Read all"}
             </button>
           </div>

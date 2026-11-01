@@ -298,7 +298,7 @@ export function Periods(): React.ReactElement {
                         {line.lineId !== null && (
                           <button
                             type="button"
-                            className="secondary small"
+                            className="small"
                             disabled={busy}
                             aria-label={`Remove ${line.date} ${lineLabel(line, names, shown)}`}
                             onClick={() => {
@@ -363,7 +363,12 @@ export function Periods(): React.ReactElement {
           </>
         )}
         <div className="actions">
-          <button type="button" onClick={close} disabled={busy || sentence === null || empty}>
+          <button
+            className="primary"
+            type="button"
+            onClick={close}
+            disabled={busy || sentence === null || empty}
+          >
             Close the period
           </button>
         </div>

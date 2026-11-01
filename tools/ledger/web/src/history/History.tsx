@@ -260,7 +260,7 @@ export function History(): React.ReactElement {
         </select>
         <button
           type="button"
-          className="secondary filters-toggle"
+          className="filters-toggle"
           aria-expanded={open}
           aria-controls={`${id}-filters`}
           onClick={() => setOpen((current) => !current)}
@@ -365,7 +365,7 @@ export function History(): React.ReactElement {
         </p>
       )}
       {filtered && (
-        <button type="button" className="secondary" onClick={clear}>
+        <button type="button" onClick={clear}>
           Clear filters
         </button>
       )}
@@ -410,12 +410,7 @@ export function History(): React.ReactElement {
             {load.rows.length} of {load.total}
           </p>
           {load.rows.length < load.total && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={more}
-              onClick={() => void showMore()}
-            >
+            <button type="button" disabled={more} onClick={() => void showMore()}>
               Show more
             </button>
           )}
