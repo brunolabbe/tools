@@ -3,7 +3,7 @@ id: lg-94
 tool: ledger
 title: A read item charged to a departed member is filed to the first current other
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [lg-90]
 difficulty: standard
@@ -335,6 +335,53 @@ with its cost, or (b) say why it is excluded. Chosen: (a). It is option 5 above.
 3. The fix is built after lg-90 merges, rebased or merged onto lg-90's result, with
    line numbers re-resolved against the merged file. Not applicable to option 4.
 4. `npm run check` and `npm test -- --project ledger` pass. Not applicable to option 4.
+
+## Review
+
+**Gate: CONCERNS** — 2026-11-01 · `bd95ab0b..b09aadd2` · Opus 5.5, depth standard
+
+| Done when                                                                                                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Owner's answer recorded under `## Decision — answered <date> by <who>`, options listed, `ready` in that commit, before any source change | **verified** by reading: `779f6269` touches only the ticket, sets `status: ready`, carries `## Decision — answered 2026-11-01 by the owner` with option 1 chosen from options 1–5 and Question 3 (a); the source commit `b09aadd2` follows it                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 2. Option 1: C1, C2, C3 show the unpicked state and `fileReceipt` is not called; C0's `NOBODY_ELSE` refusal pinned                          | `web/test/receipts.test.tsx` › "a read item charged to someone who has left, or to nobody, files nothing until a current member is picked: C1 two+left dana / C2 three+left dana / C3 three, read null (lg-94)" ✓ (`selectedOptions[0].text` is `Whose?` and `disabled`, the alert is `UNPICKED_CHARGE`, `fileReceipt` not called); › "with nobody else, a read charge to someone who has left is refused as before (lg-94 C0)" ✓ (alert `NOBODY_ELSE`, not called). Positive control: reverting the `unfileable` clause fails C1–C3 (3 of 3); reverting `whose`'s fallback fails C2 and C3. "Fails on `main`": the gate's probe at `bd95ab0b` source files `sam`/`null` (C1) and `casey` (C2, C3) |
+| 3. Built after lg-90 merged, line numbers re-resolved                                                                                       | **verified**: `8b1a88e0` (lg-90) and `a5f4acf2` (lg-91) are ancestors of the base `bd95ab0b`; the Build section names symbols, not lines                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 4. `npm run check` and `npm test -- --project ledger` pass                                                                                  | **verified**: check exit 0; ledger `99 passed (99)` files, `2179 passed (2179)` tests. PR #744 CI at `b09aadd2`: every check green, `test (windows-latest, informational)` included                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+- **med** · no `Done when` line depends on it · open decision · A read `theirs` item that
+  is unpicked because it names nobody (C3) or the payer is filed `not-shared` after
+  "Paid with the joint card?" then "Paid with my own card", with no pick: `payMyself` (lg-91)
+  turns every `theirs` item charged to `null` or the payer into Mine. Measured at
+  `b09aadd2`, three current members: refused before, `Mine` after, filed
+  `["BIERE 6X355","not-shared",null]`. The mechanism is lg-91's and the same round trip lands
+  on Mine at the base, but it defeats option 1's rule that the item "cannot read as Mine"; a
+  departed or unknown name survives the round trip (stays unpicked). Graded `med` rather than
+  `low` (no live call site) because the whole ticket governs this latent input and the owner
+  chose option 1 to prevent exactly this outcome.
+- **low** · Stale alert: after a refused tap the alert stays once the form is fileable.
+  Pre-existing on `main` for `NOBODY_ELSE` (measured at the base source). The branch adds
+  `UNPICKED_CHARGE` to the same path, and after a refused joint attach then "Paid with my own
+  card" the stale `NOBODY_CHOSEN` alert ("a joint-account purchase has no payer") shows beside
+  the `UNPICKED_CHARGE` hint. `unfileable` itself never holds both.
+- **low** · `UNPICKED_CHARGE` says "charged to someone who has left, or to nobody", which is
+  false for a read naming the payer or a name the books never held; false in the safe
+  direction (the refusal holds, the reason is misnamed).
+- **low** · unverified, read not run · In a household of two the live line reads
+  `Whose not chosen yet` for the whole charged amount whenever any item is unpicked, including
+  another item that is the one other member's. Display only; filing is refused.
+- **dropped** · `""` shared by `Whose?` and Mine filing `not-shared` silently: no direct path
+  does it. Across 20 read cells (households of 1–4 × current other, payer, departed, no name,
+  unknown) every unpicked select shows `Whose?` and refuses; only an explicit pick of Mine
+  files `not-shared`. The round trip above is the one path, carried as the `med`.
+- **dropped** · Shared checked then unchecked turns an unpicked item into Mine: lg-90's stated
+  rule ("unchecked starts on Mine"), the person's own tap on the item.
+- **dropped** · a read naming the payer files as owed to the pot by the payer once paid jointly:
+  lg-91's rule, the payer is a member there.
+- **findings** · the hunt returned 7; 4 carried, 3 dropped.
+- NFR: security n/a (no input reaches a URL or a log) · performance n/a · reliability — the
+  `med` above · maintainability ✓ (two `""` options rely on React matching the first; the code
+  says so, and `Someone else's` and `Whose?` cannot render together). Layout: one short option
+  added to an existing select, no new screen; ledger `e2e` green on CI at `b09aadd2`, not run
+  locally.
 
 ## Log
 
