@@ -81,7 +81,10 @@ the owner chose "anywhere, named in the report" over "only above the movements".
   CSV report's `summaries` lines could never print one, so they are gone. F1, an
   undated movement whose amount really is a `SUM`, is read as a summary and
   named in the report; the newest row of the newest sheet is the one place no
-  balance check catches it. It went to the owner as a decision.
+  balance check catches it. The owner accepted it on 2026-11-01: none of
+  the workbook's 428 movements has a `SUM` amount, and the row is named in the
+  report. Requiring no person was declined, since 162 of those movements have
+  none either.
 - Not done: the description still names one summary column. A model that
   misplaces it no longer matters for a total that is a formula, and still matters
   for a summary typed as a figure.
