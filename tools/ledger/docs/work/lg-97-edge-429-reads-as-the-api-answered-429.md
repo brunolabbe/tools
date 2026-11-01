@@ -57,7 +57,7 @@ other status with no parseable body still reads "The API answered N.".
 - **med** · no `Done when` line depends on it · **the per-tab request counts were wrong**, in three places. lg-97's Why, `docs/02-DEPLOYMENT.md` and lg-98's Why all said 3 to 8, from a static read. The gate rendered `<App/>` over a stubbed `fetch` and counted 2 to 11, with Stats at 11. **Fixed** in all three, and lg-97's Why now lists each tab's count.
 - **med** · lg-98's Done when 2 depends on it · **lg-98's Build 3 and Build 4 contradicted each other for people.** Build 3 gave every call to one route one cache entry, but Build 4 kept the `fetch*` functions as they are. `fetchPeople` and `fetchPeopleNames` return different shapes from the one `ROUTES.people` URL, so one key would hand a caller the other's data, and nothing would catch it. **Fixed**: Build 3 now caches the whole response, and each caller takes what it needs with `select`. Build 4 names the exception.
 - **low** · **lg-98's smaller counts were off.** The fetch calls are 42 in 23 effects, not about 41. People is asked from six call sites on five tabs. Of the 25 web test files, 19 mock an `api/` module. **Fixed** in lg-98.
-- **low** · shape-level, in another tool · **the planner has the same branch.** `tools/planner/web/src/api/client.ts` also shows "The API answered N." for a body it cannot parse, and the planner shares the same edge budget. The owner decides this one, and the answer is in the Log.
+- **low** · shape-level, in another tool · **the planner has the same branch.** `tools/planner/web/src/api/client.ts` also shows "The API answered N." for a body it cannot parse, and the planner shares the same edge budget. Fixed in pl-67 (#738), with the downloader in dl-136 (#737); see the Log.
 - **dropped (4)** · **behaviours the gate checked and found correct.** `Queue.tsx` now waits out an edge 429, which is lg-92's path and is safe, because a WAF block answers before the origin. An HTTP-date `Retry-After` reads as no wait, as it did before. The present-tense "lg-98 cuts" sentence in the deployment doc misleads no one. Computing `wait` before the parse is harmless.
 - **findings** · the hunt returned 8; 4 carried, 4 dropped.
 - **NFR** · security ✓ · reliability ✓ · performance: not applicable to this change (lg-98).
@@ -77,5 +77,6 @@ The 429s themselves stop in two other places, and this ticket fixes neither:
   replaced later.
 
 **2026-11-01, after gate 1.** Both mediums and the counts are fixed (see Review).
-The owner chose to fix the planner's identical branch now, in a pull request of
-its own with a `pl-` ticket, since it belongs to another tool.
+The planner had the same branch, and the owner added that the downloader might
+too. It did: the downloader showed an edge 429 as `INTERNAL`. The owner chose to
+fix both now, each in its own pull request: pl-67 (#738) and dl-136 (#737).
