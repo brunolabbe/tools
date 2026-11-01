@@ -3,7 +3,7 @@ id: lg-93
 tool: ledger
 title: Negative amounts may have no minus key on an iPhone's decimal keypad
 kind: fix
-status: needs-decision
+status: dropped
 milestone: null
 depends_on: []
 difficulty: standard
@@ -275,11 +275,27 @@ origin/main:tools/ledger/web/src/salaries/Salaries.tsx:215
    The chosen option's Build steps are written into this section in that commit,
    and so is its check, added to _Done when_ as line 3, before any source change.
 
-## Decision — open
+## Decision — answered 2026-11-01 by the owner
 
-**Open: what a person on an iPhone types for a negative amount.** Nothing here is
-chosen. Build step 1 comes first, and each option is priced from the code in
-_Why_.
+**Won't fix: the fields stay `inputMode="decimal"`, and the ticket is dropped
+without the iPhone reading.** The owner's words: "I wouldnt try to fix a browser
+bug. I would leave the field as is". Build step 1 is not run.
+
+What the answer was given with: the documentation in _Why_, plus a second search
+on 2026-11-01 that found more of the same and no measurement on iOS 18 or 26 —
+Carbon ([#21379](https://github.com/carbon-design-system/carbon/issues/21379)),
+PrimeVue ([#6640](https://github.com/primefaces/primevue/issues/6640)), moraine
+([PR #92](https://github.com/subframe7536/moraine/pull/92)) and PrairieLearn
+([PR #15869](https://github.com/PrairieLearn/PrairieLearn/pull/15869)) all report
+no minus key on the decimal pad and moved signed fields to `inputMode="text"`;
+PrairieLearn says its fix is not verified on a real iPhone. It is UIKit's keypad
+design rather than a bug WebKit is expected to fix (bug 193825, open since 2019),
+so "until Apple fixes it" likely means permanently: on an iPhone, a negative amount
+is typed by pasting a `-`, or on a computer. Negative entries are rare corrections
+— most receipt amounts come from the model reading a photo.
+
+The options it was chosen from (option (d) is the closest, taken without its
+measurement):
 
 1. **(a) A keyboard that offers a minus key** on each field the table marks
    **Yes**, by an `inputMode` the measurement shows gives one (`inputMode="text"`
@@ -391,3 +407,4 @@ _Why_.
   https://github.com/brunolabbe/tools/pull/718#issuecomment-6558993188, and gate 2's at
   https://github.com/brunolabbe/tools/pull/718#issuecomment-6558993946. The pull request
   only files this ticket, so it has no `--land`; status stays `needs-decision`.
+- 2026-11-01: owner answered won't-fix, without the device reading; status `dropped`. A later report of an iPhone user stuck on a negative amount reopens it with the reading of Build step 1.
