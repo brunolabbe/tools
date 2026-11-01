@@ -310,6 +310,7 @@ function countTokensClient(config: ApiConfig): Anthropic | null {
     apiKey: config.anthropicApiKey,
     authToken: null,
     webhookKey: null,
+    openTelemetry: { traces: false, propagation: false },
     baseURL: ANTHROPIC_BASE_URL,
     timeout: config.modelTimeoutMs,
     maxRetries: ANTHROPIC_MAX_RETRIES,

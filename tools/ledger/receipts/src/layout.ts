@@ -98,6 +98,9 @@ export function createLayoutAsk(options: LayoutAskOptions): LayoutAsk {
     apiKey: options.apiKey,
     authToken: null,
     webhookKey: null,
+    // Given, so the SDK reads no `ANTHROPIC_OPEN_TELEMETRY*` variable. Both
+    // off: `openTelemetry: false` alone leaves propagation on.
+    openTelemetry: { traces: false, propagation: false },
     baseURL: options.baseURL ?? ANTHROPIC_BASE_URL,
     timeout: options.timeoutMs ?? LAYOUT_TIMEOUT_MS,
     maxRetries: options.maxRetries ?? 2,

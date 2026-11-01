@@ -13,14 +13,21 @@
  * ## It reads no environment
  *
  * The SDK reads `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
- * `ANTHROPIC_BASE_URL` and `ANTHROPIC_LOG` from `process.env` for any option it
- * is not given, and `api/src/config.ts` is the only file in this tool allowed to
- * read the environment. So every one of those is passed explicitly, including
- * the ones that are "nothing": a stray `ANTHROPIC_AUTH_TOKEN` on a host would
- * otherwise be sent beside the key, and the API rejects a request carrying both.
+ * `ANTHROPIC_BASE_URL`, `ANTHROPIC_LOG` and, for a client given no
+ * `openTelemetry` option, `ANTHROPIC_OPEN_TELEMETRY`, `_PROPAGATION`,
+ * `_TRACES_CONTENT_MODE` and `_TRACES_MAX_CONTENT_BYTES` from `process.env` for
+ * any option it is not given, and `api/src/config.ts` is the only file in this
+ * tool allowed to read the environment. So every one of those is passed
+ * explicitly, including the ones that are "nothing": `openTelemetry` with both
+ * `traces` and `propagation` off. In 1.3.0 passing `apiKey` alone already stops
+ * the SDK reading a credential from the environment, so `authToken: null` is
+ * kept as the explicit form; the test "the key it was given, and no bearer
+ * token from anywhere else" holds the wire to the key alone.
  * The one it reads unconditionally is `ANTHROPIC_CUSTOM_HEADERS`, which no
  * option switches off — and it can replace the key rather than add to it: an
- * `x-api-key` line in that variable overwrites the one passed here. This file
+ * `Authorization` line in that variable overwrites the one the SDK builds from
+ * the key passed here (SDK 1.x sends the key as `Authorization: Bearer`, where
+ * 0.x sent `x-api-key`; repo-120), because its defaults win. This file
  * cannot refuse it, because it reads no environment: `loadApiConfig` in `api`
  * refuses to boot `anthropic` while the variable is set (the owner's decision
  * on pl-39).
@@ -138,6 +145,9 @@ export class AnthropicProvider implements ModelProvider {
       apiKey: options.apiKey,
       authToken: null,
       webhookKey: null,
+      // Given, so the SDK reads no `ANTHROPIC_OPEN_TELEMETRY*` variable. Both
+      // off: `openTelemetry: false` alone leaves propagation on.
+      openTelemetry: { traces: false, propagation: false },
       baseURL: options.baseURL ?? ANTHROPIC_BASE_URL,
       timeout: options.timeoutMs,
       maxRetries: options.maxRetries ?? ANTHROPIC_MAX_RETRIES,
@@ -230,7 +240,8 @@ export class AnthropicProvider implements ModelProvider {
    * which `stopReasonOf` maps.
    *
    * **The error object is never logged and never attached as a cause.** It
-   * carries the request that produced it, and the request carries `x-api-key`.
+   * carries the status, the response headers, the request id and the body, and
+   * not the request, which carries the key in `Authorization`.
    * What is kept is the status, the API's error type and the request id —
    * chosen field by field, so a key cannot ride along inside something nobody
    * meant to log.
@@ -341,7 +352,8 @@ function stopReasonOf(message: BetaMessage): ModelReply["stopReason"] {
  * absent from every member of `BetaIterationsUsage`
  * (`BetaMessageIterationUsage`, `BetaCompactionIterationUsage`,
  * `BetaAdvisorMessageIterationUsage`, `BetaFallbackMessageIterationUsage`),
- * confirmed by reading all four in `@anthropic-ai/sdk@0.125.0`'s own types,
+ * confirmed by reading all four in `@anthropic-ai/sdk@0.125.0`'s own types (and
+ * again at 1.3.0, repo-120: still only `BetaUsage` and `BetaMessageDeltaUsage`),
  * not assumed from pl-50's own prose (whose Build step 2 asked for the same
  * per-iteration sum the other kinds get, which the SDK cannot supply). So
  * this is read once, from `usage` itself, never from `attempts`. Whether that
