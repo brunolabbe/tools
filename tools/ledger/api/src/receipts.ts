@@ -102,6 +102,8 @@ interface ItemColumns {
   price_cents: number;
   taxable: 0 | 1;
   deposit_cents: number | null;
+  /** `NULL` on every item filed before lg-89, which folded no rebate. */
+  discount_cents: number | null;
   spending_category_id: number | null;
   share: ItemShare;
   charged_to: string | null;
@@ -114,6 +116,7 @@ function toItem(columns: ItemColumns): ReceiptItem {
     price: columns.price_cents,
     taxable: columns.taxable === 1,
     deposit: columns.deposit_cents,
+    discount: columns.discount_cents,
     spendingCategoryId: columns.spending_category_id,
     share: columns.share,
     chargedTo: columns.charged_to,
@@ -469,8 +472,8 @@ export function fileReceipt(
         );
       const filingId = Number(result.lastInsertRowid);
       const insertItem = context.db.prepare(
-        `INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, deposit_cents, spending_category_id, share, charged_to, charge_line_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, deposit_cents, discount_cents, spending_category_id, share, charged_to, charge_line_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const [index, item] of proposal.items.entries()) {
         insertItem.run(
@@ -480,6 +483,7 @@ export function fileReceipt(
           item.price,
           item.taxable ? 1 : 0,
           item.deposit,
+          item.discount,
           item.spendingCategoryId,
           item.share,
           item.chargedTo,
