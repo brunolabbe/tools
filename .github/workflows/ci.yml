@@ -58,6 +58,27 @@ name: CI
 #
 # Release pull requests still run the matrix: release-please touches
 # `version.txt` and the manifest alongside the changelog.
+#
+# **The merge of a release pull request does not run it again** (repo-142).
+# This repo squash-merges, so the `main` push carries the tree the pull request
+# already proved, and release-please keeps that pull request rebased onto
+# `main` (`always-update`). Re-running bought about 25 runner-minutes per
+# release — this matrix, plus `ledger.yml`, `downloader.yml` and `planner.yml`
+# whole. The last two fire on *another* tool's release because release-please
+# writes the released version into `package-lock.json`, which is in every tool's
+# path filter so that a real dependency change rebuilds every image. So the
+# matrix here and every job in those three files carry the same `if`: skip a
+# `push` whose commit opens `chore(` and carries `): release ` — the shape of
+# `pull-request-title-pattern` in `release-please-config.json`. `head_commit` is
+# absent on every other event, so a pull request, the nightly and a manual
+# re-run are untouched. `check` still runs; `release.yml` does the work the
+# merge is for.
+#
+# **The concurrency group is split for the same commits, and the skip is unsafe
+# without it.** A release merged straight after a code merge would otherwise
+# cancel that code's `main` run, and then skip its own — so the merged state of
+# the code would be recorded by nothing. In its own group the release run
+# cancels no one.
 on:
   push:
     branches: [main]
@@ -74,7 +95,7 @@ on:
 
 # A second push to the same branch makes the first run's answer irrelevant.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: "ci-${{ github.ref }}${{ startsWith(github.event.head_commit.message, 'chore(') && contains(github.event.head_commit.message, '): release ') && '-release' || '' }}"
   cancel-in-progress: true
 
 permissions:
@@ -337,7 +358,8 @@ jobs:
   # in the checks list and by the summary step at the end of this job.
   test:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Not on a release merge: see the note above `on:`.
+    if: "needs.changes.outputs.code == 'true' && !(startsWith(github.event.head_commit.message, 'chore(') && contains(github.event.head_commit.message, '): release '))"
     strategy:
       fail-fast: false
       matrix:

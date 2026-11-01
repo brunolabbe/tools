@@ -44,7 +44,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ledger-${{ github.ref }}
+  # A release merge gets its own group, so it cannot cancel the run of the
+  # code merged before it and then skip its own. See the note in `ci.yml`.
+  group: "ledger-${{ github.ref }}${{ startsWith(github.event.head_commit.message, 'chore(') && contains(github.event.head_commit.message, '): release ') && '-release' || '' }}"
   cancel-in-progress: true
 
 permissions:
@@ -56,6 +58,9 @@ jobs:
   # Not in `ci.yml`, for the planner's reason: it costs a browser download and a
   # Vite build, and this file is path-filtered so other tools' work does not pay.
   e2e:
+    # Not on a release merge, which re-proves its pull request's tree. See the
+    # note in `ci.yml` (repo-142).
+    if: "${{ !(startsWith(github.event.head_commit.message, 'chore(') && contains(github.event.head_commit.message, '): release ')) }}"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -93,6 +98,9 @@ jobs:
           retention-days: 7
 
   docker:
+    # Not on a release merge, which re-proves its pull request's tree. See the
+    # note in `ci.yml` (repo-142).
+    if: "${{ !(startsWith(github.event.head_commit.message, 'chore(') && contains(github.event.head_commit.message, '): release ')) }}"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
