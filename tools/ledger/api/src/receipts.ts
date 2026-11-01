@@ -25,7 +25,8 @@
  * else's come off the line, computed by the books from the items
  * (`splitReceipt`), and each charged person's part is filed as a charge of its
  * own, to whoever the item names (lg-30). The items are stored with the filing,
- * each `theirs` one with whose it was and the charge line it became.
+ * each `theirs` one with whose it was and the charge line it became. On a
+ * joint-account row each person's items are a charge they owe the pot (lg-91).
  */
 
 import {
@@ -51,7 +52,7 @@ import type {
 } from "@ledger/contract";
 import type { CategoryChoice, ReceiptReader } from "@ledger/receipts";
 import type { Database } from "better-sqlite3";
-import { addLine } from "./periods.ts";
+import { addLine, addPotCharge } from "./periods.ts";
 import type { PeriodContext } from "./periods.ts";
 import type { PhotoStore } from "./receipt-photos.ts";
 import { requireKnownPerson } from "./rules.ts";
@@ -132,14 +133,14 @@ function itemColumnsOf(db: Database, filingId: number): ItemColumns[] {
 /**
  * The charge lines a filing made (lg-30), from its items: one per line, in the
  * order each person's first `theirs` item is printed. A `theirs` item with no
- * line came to nothing.
+ * line came to nothing. On a row, each is owed to the pot (lg-91).
  */
-function chargesOf(items: readonly ItemColumns[]): ReceiptCharge[] {
+function chargesOf(items: readonly ItemColumns[], onRow: boolean): ReceiptCharge[] {
   const charges: ReceiptCharge[] = [];
   for (const item of items) {
     if (item.charge_line_id === null || item.charged_to === null) continue;
     if (charges.some((charge) => charge.lineId === item.charge_line_id)) continue;
-    charges.push({ chargedTo: item.charged_to, lineId: item.charge_line_id });
+    charges.push({ chargedTo: item.charged_to, lineId: item.charge_line_id, owedToPot: onRow });
   }
   return charges;
 }
@@ -171,7 +172,7 @@ function toFiling(db: Database, columns: FilingColumns): ReceiptFiling {
     },
     periodLineId: columns.period_line_id,
     chargeLineId: columns.charge_line_id,
-    charges: chargesOf(items),
+    charges: chargesOf(items, columns.row_id !== null),
     rowId: columns.row_id,
     filedAt: columns.filed_at,
     filedBy: columns.filed_by,
@@ -387,9 +388,12 @@ export function receiptMatches(
  * confirmed, its items with it (lg-10).
  *
  * Items must make the total, or nothing is filed (`RECEIPT_DOES_NOT_ADD_UP`).
- * Each item's category must be in the list. On a row every item is shared (the
- * owner's answer of 2026-10-17): the money left the joint account, so there is
- * no payer for an item to stay with, nor one someone else's would owe.
+ * Each item's category must be in the list. On a row the money left the joint
+ * account, so there is no payer for an item to stay with: none is `not-shared`.
+ * One that is a person's is owed by them to the pot (lg-91, the owner's answer
+ * of 2026-11-01, superseding "shared whole" of 2026-10-17): each `theirs` item
+ * names a current member, and each person's items become one charge to the pot
+ * (`filePotCharges`). The row itself is unchanged.
  *
  * `members` is the household's current members, from the directory (lg-30): a
  * `theirs` item that names nobody is the one of them who is not the payer, and
@@ -433,21 +437,17 @@ export function fileReceipt(
         const lines = fileLines(context, receipt.uploaded_by, destination, proposal);
         ({ periodLineId, chargeLineId, chargeLines } = lines);
       } else {
-        if (proposal.items.some((item) => item.share !== "shared")) {
-          throw new AppError(
-            "BAD_REQUEST",
-            "A receipt on a joint-account row is shared whole: every item on it stays shared.",
-          );
-        }
+        requireRowItems(context, proposal, members);
         const row = context.db
-          .prepare("SELECT id FROM statement_rows WHERE id = ?")
-          .get(destination.rowId);
+          .prepare("SELECT id, date, amount_cents FROM statement_rows WHERE id = ?")
+          .get(destination.rowId) as RowOfFiling | undefined;
         if (row === undefined) throw new AppError("ROW_NOT_FOUND");
         const documented = context.db
           .prepare("SELECT id FROM receipt_filings WHERE row_id = ?")
           .get(destination.rowId);
         if (documented !== undefined) throw new AppError("ROW_ALREADY_DOCUMENTED");
         rowId = destination.rowId;
+        chargeLines = filePotCharges(context, row, proposal);
       }
 
       const result = context.db
@@ -541,6 +541,99 @@ function chargedToOf(
     );
   }
   return other;
+}
+
+/** A joint-account row a receipt is filed on: its date and what the card was charged. */
+interface RowOfFiling {
+  id: number;
+  date: string;
+  /** As the statement holds it: a purchase is negative. */
+  amount_cents: number;
+}
+
+/**
+ * The items a receipt on a joint-account row may carry (lg-91): shared, or a
+ * current member's. Not `not-shared`, since the joint account paid and there is
+ * no payer to keep the item; and a `theirs` item names whose it is, since a row
+ * has no payer for "the other" to be the other of. Checked before anything is
+ * written.
+ */
+function requireRowItems(
+  context: PeriodContext,
+  proposal: ReceiptProposal,
+  members: readonly string[],
+): void {
+  for (const item of proposal.items) {
+    if (item.share === "not-shared") {
+      throw new AppError(
+        "BAD_REQUEST",
+        "A joint-account purchase has no payer to keep an item: mark it shared, or name whose it is.",
+      );
+    }
+    if (item.share !== "theirs") continue;
+    if (item.chargedTo === null) {
+      throw new AppError(
+        "BAD_REQUEST",
+        "On a joint-account row, name whose each item left out of the shared amount is.",
+      );
+    }
+    requireKnownPerson(context.people, item.chargedTo);
+    if (!members.includes(item.chargedTo)) {
+      throw new AppError(
+        "BAD_REQUEST",
+        "An item on a joint-account row is charged to a current member of the household.",
+      );
+    }
+  }
+}
+
+/**
+ * The charges to the pot a receipt on a joint-account row files (lg-91): one
+ * per person, for what that person's `theirs` items cost (`splitReceipt`, as a
+ * line's charges are computed), dated the row's date, so the period holding it
+ * counts it. What the joint card was charged is the row's amount, so a tip
+ * stays shared, as on a line. Under the person's items' category when they
+ * share one, and none otherwise, since a row's destination names no category;
+ * the merchant is its note. A part that comes to nothing files no line.
+ *
+ * Answers each person's line, by name, for their items to record.
+ */
+function filePotCharges(
+  context: PeriodContext,
+  row: RowOfFiling,
+  proposal: ReceiptProposal,
+): Map<string, number> {
+  const chargeLines = new Map<string, number>();
+  if (!proposal.items.some((item) => item.share === "theirs")) return chargeLines;
+  const paid = -row.amount_cents;
+  const split = splitReceipt(proposal, undefined, paid);
+  if (split.sharedCents !== 0 && Math.sign(split.sharedCents) !== Math.sign(paid)) {
+    throw new AppError(
+      "BAD_REQUEST",
+      "More comes off this receipt than the joint account was charged. Check the row and the items.",
+    );
+  }
+  for (const charge of split.charges) {
+    if (charge.cents === 0) continue;
+    const { personId } = charge;
+    if (personId === null) throw new AppError("INTERNAL", "A charge names nobody.");
+    const theirs = proposal.items.filter(
+      (item) => item.share === "theirs" && item.chargedTo === personId,
+    );
+    const [first] = theirs;
+    const alike =
+      first !== undefined &&
+      theirs.every((item) => item.spendingCategoryId === first.spendingCategoryId);
+    const line = addPotCharge(context, {
+      personId,
+      date: row.date,
+      amountCents: charge.cents,
+      spendingCategoryId: alike ? first.spendingCategoryId : null,
+      note: proposal.merchant,
+    });
+    chargeLines.set(personId, line.id);
+  }
+  return chargeLines;
 }
 
 /** What a receipt filed as a line became: its lines, and each person's charge. */

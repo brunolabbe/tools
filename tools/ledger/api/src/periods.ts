@@ -76,6 +76,8 @@ interface LineColumns {
   note: string | null;
   source: PeriodLineSource;
   charged_to: string | null;
+  /** Migration 17 (lg-91): `charged_to` is then `NULL`, and `person_id` owes it. */
+  owed_to_pot: 0 | 1;
   supersedes: number | null;
   entered_at: string;
   entered_by: string;
@@ -117,7 +119,11 @@ function toLine(columns: LineColumns): PeriodLine {
     spendingCategoryId: columns.spending_category_id,
     note: columns.note,
     source: columns.source,
-    chargedTo: columns.charged_to,
+    // A charge to the pot is owed by the person it names, so it reads as a
+    // charge to them and never as shared (migration 17 says why it is stored
+    // otherwise).
+    chargedTo: columns.owed_to_pot === 1 ? columns.person_id : columns.charged_to,
+    owedToPot: columns.owed_to_pot === 1,
     supersedes: columns.supersedes,
     enteredAt: columns.entered_at,
     enteredBy: columns.entered_by,
@@ -199,17 +205,24 @@ function requireLinePeople(context: PeriodContext, draft: PeriodLineDraft): void
   }
 }
 
+/**
+ * Stores a line. A charge to the pot (`owedToPot`, lg-91) is stored with
+ * `charged_to` `NULL` and `person_id` the person who owes it (migration 17),
+ * whatever `chargedTo` the draft carries: `toLine` reads it back as charged to
+ * that person.
+ */
 function insertLine(
   context: PeriodContext,
   draft: PeriodLineDraft,
   supersedes: number | null,
   retired: boolean,
   source: PeriodLineSource = "manual",
+  owedToPot = false,
 ): PeriodLine {
   const result = context.db
     .prepare(
-      `INSERT INTO period_lines (person_id, date, amount_cents, category, spending_category_id, note, source, charged_to, supersedes, retired, entered_at, entered_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO period_lines (person_id, date, amount_cents, category, spending_category_id, note, source, charged_to, owed_to_pot, supersedes, retired, entered_at, entered_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       draft.personId,
@@ -219,7 +232,8 @@ function insertLine(
       draft.spendingCategoryId,
       draft.note,
       source,
-      draft.chargedTo,
+      owedToPot ? null : draft.chargedTo,
+      owedToPot ? 1 : 0,
       supersedes,
       retired ? 1 : 0,
       context.now().toISOString(),
@@ -259,19 +273,58 @@ export function addLine(
     .immediate();
 }
 
-/** The line as corrected: a new line, under a new id, that supersedes `id`. */
+/**
+ * A charge to the pot (lg-91), filed from a joint-account row's receipt inside
+ * the filing's own transaction, where this one is a savepoint. `personId` owes
+ * it, and is its `chargedTo` too.
+ */
+export function addPotCharge(
+  context: PeriodContext,
+  charge: Omit<PeriodLineDraft, "chargedTo" | "category">,
+): PeriodLine {
+  requireKnownPerson(context.people, charge.personId);
+  return context.db
+    .transaction(() => {
+      requireSpendingCategory(context.db, charge.spendingCategoryId);
+      const draft = { ...charge, category: null, chargedTo: charge.personId };
+      return insertLine(context, draft, null, false, "receipt", true);
+    })
+    .immediate();
+}
+
+/**
+ * The line as corrected: a new line, under a new id, that supersedes `id`. A
+ * charge to the pot stays one (lg-91): its correction names the same person as
+ * `personId` and `chargedTo`, as a reader that copies the line sends it, and a
+ * correction that would make it a card line is refused. No other line may be
+ * charged to whoever paid it.
+ */
 export function correctLine(
   context: PeriodContext,
   id: number,
   draft: PeriodLineDraft,
 ): PeriodLine {
-  requireLinePeople(context, draft);
+  const toPot = draft.chargedTo !== null && draft.chargedTo === draft.personId;
+  if (toPot) requireKnownPerson(context.people, draft.personId);
+  else requireLinePeople(context, draft);
   return context.db
     .transaction(() => {
       const current = standingLine(context.db, id);
+      if (toPot && !current.owedToPot) {
+        throw new AppError(
+          "BAD_REQUEST",
+          "A charge is owed by the other person, not by whoever paid.",
+        );
+      }
+      if (current.owedToPot && !toPot) {
+        throw new AppError(
+          "BAD_REQUEST",
+          "A charge to the pot stays owed to the pot. Remove it instead, if it was a mistake.",
+        );
+      }
       // The category it already has stays acceptable if it has since been retired.
       requireSpendingCategory(context.db, draft.spendingCategoryId, current.spendingCategoryId);
-      return insertLine(context, draft, id, false);
+      return insertLine(context, draft, id, false, "manual", current.owedToPot);
     })
     .immediate();
 }
@@ -281,7 +334,7 @@ export function retireLine(context: PeriodContext, id: number): PeriodLine {
   return context.db
     .transaction(() => {
       const line = standingLine(context.db, id);
-      insertLine(context, line, id, true);
+      insertLine(context, line, id, true, "manual", line.owedToPot);
       return line;
     })
     .immediate();
@@ -463,6 +516,7 @@ function linesThrough(
       personId: line.personId,
       amountCents: line.amountCents,
       chargedTo: line.chargedTo,
+      owedToPot: line.owedToPot,
       category: line.category,
       spendingCategoryId: line.spendingCategoryId,
       note: line.note,
@@ -476,6 +530,7 @@ function linesThrough(
       personId: item.personId,
       amountCents: item.monthlyCents,
       chargedTo: null,
+      owedToPot: false,
       category: item.label,
       spendingCategoryId: null,
       note: null,

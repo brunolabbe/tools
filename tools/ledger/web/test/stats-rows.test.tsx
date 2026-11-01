@@ -427,6 +427,7 @@ function line(id: number, more: Partial<PeriodLine> = {}): PeriodLine {
     note: null,
     source: "manual",
     chargedTo: null,
+    owedToPot: false,
     supersedes: null,
     enteredAt: "2026-01-20T10:00:00.000Z",
     enteredBy: "sam",

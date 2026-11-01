@@ -68,6 +68,7 @@ const OPEN: OpenPeriodResponse = {
       personId: "alex",
       amountCents: 8_000,
       chargedTo: null,
+      owedToPot: false,
       category: "Internet",
       spendingCategoryId: null,
       note: null,
@@ -80,6 +81,7 @@ const OPEN: OpenPeriodResponse = {
       personId: "sam",
       amountCents: 12_345,
       chargedTo: null,
+      owedToPot: false,
       category: "Épicerie",
       spendingCategoryId: null,
       note: null,
@@ -92,6 +94,7 @@ const OPEN: OpenPeriodResponse = {
       personId: "sam",
       amountCents: 2_000,
       chargedTo: "alex",
+      owedToPot: false,
       category: null,
       spendingCategoryId: null,
       note: "A book",
@@ -251,6 +254,7 @@ test("a line entered by hand, ticked as the other person's, is a charge to them"
     note: null,
     source: "manual",
     chargedTo: "alex",
+    owedToPot: false,
     supersedes: null,
     enteredAt: "2026-09-12T12:00:00.000Z",
     enteredBy: "sam",
@@ -381,6 +385,7 @@ test("a line entered after its period closed is listed as late, and in its payer
         personId: "alex",
         amountCents: 4_000,
         chargedTo: null,
+        owedToPot: false,
         category: "Épicerie",
         spendingCategoryId: null,
         note: null,
@@ -410,6 +415,7 @@ test("a line is named by its spending category, and an older one shows its text 
         personId: "sam",
         amountCents: 12_345,
         chargedTo: null,
+        owedToPot: false,
         category: null,
         spendingCategoryId: 1,
         note: null,
@@ -422,6 +428,7 @@ test("a line is named by its spending category, and an older one shows its text 
         personId: "sam",
         amountCents: 2_500,
         chargedTo: null,
+        owedToPot: false,
         category: "pharmacie du coin",
         spendingCategoryId: null,
         note: null,
@@ -450,6 +457,7 @@ test("the line form offers the list, and sends none when none is picked", async 
     note: null,
     source: "manual",
     chargedTo: null,
+    owedToPot: false,
     supersedes: null,
     enteredAt: "2026-09-12T12:00:00.000Z",
     enteredBy: "sam",
@@ -543,6 +551,7 @@ test("between three people, a charge names whose it was", async () => {
     note: null,
     source: "manual",
     chargedTo: "casey",
+    owedToPot: false,
     supersedes: null,
     enteredAt: "2026-09-12T12:00:00.000Z",
     enteredBy: "sam",
@@ -575,6 +584,7 @@ test("a charge to a renamed person is confirmed under their shown name, and send
     note: null,
     source: "manual",
     chargedTo: "alex",
+    owedToPot: false,
     supersedes: null,
     enteredAt: "2026-09-12T12:00:00.000Z",
     enteredBy: "sam",
@@ -610,6 +620,7 @@ test("lists a retired person's late line under them, and offers only the people 
         personId: "casey",
         amountCents: 3_000,
         chargedTo: null,
+        owedToPot: false,
         category: null,
         spendingCategoryId: null,
         note: null,
@@ -656,4 +667,73 @@ test("lists three people's deposits by shown name, not by id (lg-76)", () => {
   expect(lead).toBe(
     "Alex deposits 20.00 $, Maya deposits 30.00 $ and Zoe deposits 10.00 $ into the buffer.",
   );
+});
+
+// lg-91: a charge to the pot was paid on nobody's card, so it is listed apart
+// from what each person paid, and the settlement the API computed counts it.
+test("lists a charge to the pot apart from what each person paid, and closes on the settlement that counts it (lg-91)", async () => {
+  vi.mocked(fetchOpenPeriod).mockResolvedValue({
+    ...OPEN,
+    lines: [
+      ...OPEN.lines,
+      {
+        date: "2026-10-03",
+        personId: "sam",
+        amountCents: 1_554,
+        chargedTo: "sam",
+        owedToPot: true,
+        category: null,
+        spendingCategoryId: 1,
+        note: "Marché Exemple",
+        lineId: 9,
+        recurringItemId: null,
+        late: false,
+      },
+    ],
+    // What the API computes with it: sam owes alex 0.6 of 15.54 $.
+    settlement: {
+      ...OWED,
+      deposits: [{ personId: "sam", depositCents: 1_554 }],
+      transfers: [{ fromId: "sam", toId: "alex", cents: 932 }],
+    },
+  });
+  vi.mocked(retireLine).mockResolvedValue({
+    id: 9,
+    personId: "sam",
+    date: "2026-10-03",
+    amountCents: 1_554,
+    category: null,
+    spendingCategoryId: 1,
+    note: "Marché Exemple",
+    source: "receipt",
+    chargedTo: "sam",
+    owedToPot: true,
+    supersedes: null,
+    enteredAt: "x",
+    enteredBy: "alex",
+  });
+  render(<Periods />);
+
+  const open = await screen.findByRole("heading", { name: "Open period, since 2026-07-01" });
+  const card = open.closest("section") as HTMLElement;
+  // Not paid by sam: sam's total and list are the groceries and the book alone.
+  expect(within(card).getByText("Paid by sam").nextSibling?.textContent).toBe("123.45 $");
+  expect(within(card).getByText("Owed to the pot").nextSibling?.textContent).toBe("15.54 $");
+  const owed = within(card).getByRole("list", { name: "Owed to the pot" });
+  expect(
+    within(owed)
+      .getAllByRole("listitem")
+      .map((item) => item.firstChild?.textContent),
+  ).toEqual(["2026-10-03 · Groceries · Marché Exemple, owed to the pot by sam"]);
+  expect(within(card).getAllByText(/owed to the pot by/u)).toHaveLength(1);
+  const close = section("Close the period");
+  expect(within(close).getByText("sam deposits 15.54 $ into the buffer.")).toBeTruthy();
+  expect(within(close).getByText("Or pays alex 9.32 $ directly.")).toBeTruthy();
+
+  fireEvent.click(
+    within(owed).getByRole("button", {
+      name: "Remove 2026-10-03 Groceries · Marché Exemple, owed to the pot by sam",
+    }),
+  );
+  await waitFor(() => expect(retireLine).toHaveBeenCalledWith(9));
 });

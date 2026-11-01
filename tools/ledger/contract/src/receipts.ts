@@ -87,7 +87,8 @@ export interface ReceiptItem {
    * means the household's one other current member, which the API resolves and
    * refuses when there are several; a filed `theirs` item answers the name it
    * was charged to (`null` only on one filed before lg-30 whose charge came to
-   * nothing).
+   * nothing). On a joint-account row it must name a current member (lg-91): a
+   * row has no payer for "the other" to be the other of.
    */
   chargedTo: string | null;
 }
@@ -242,7 +243,8 @@ export interface ReceiptFiling {
    * Every charge line the filing made, one per person, in the order each
    * person's first `theirs` item is printed (lg-30), including a charge that is
    * also `periodLineId`. A `theirs` item that came to nothing files no line and
-   * is not here.
+   * is not here. On a row every one is a charge to the pot (lg-91), and
+   * `periodLineId` and `chargeLineId` stay `null`.
    */
   charges: ReceiptCharge[];
   /** The stored row it documents, or `null` when it became a line. */
@@ -255,6 +257,12 @@ export interface ReceiptFiling {
 export interface ReceiptCharge {
   chargedTo: string;
   lineId: number;
+  /**
+   * Owed to the pot (lg-91): a filing on a joint-account row, where the joint
+   * account paid. `false` on a filing that became a line, where it is owed to
+   * whoever uploaded the photo.
+   */
+  owedToPot: boolean;
 }
 
 /**
@@ -331,8 +339,13 @@ export interface ReceiptMatchesResponse {
  * not shared and what is someone else's, computed from the items
  * (`splitReceipt` in `books`), files the rest as the line, and files each
  * charged person's part as a charge of its own, to the person each `theirs`
- * item names (lg-30). A tip stays shared. A receipt attached to a row is shared
- * whole: its items carry categories, and none may be `not-shared` or `theirs`.
+ * item names (lg-30). A tip stays shared.
+ *
+ * A receipt attached to a row leaves the row as it is (lg-91, superseding
+ * lg-10's "shared whole"). Its items carry categories; none may be
+ * `not-shared`, since the joint account paid and there is no payer to keep
+ * one; and each `theirs` item names a current member, who owes its cost to the
+ * pot: one charge line per person, dated the row's date, `owedToPot`.
  *
  * `chargedTo` on a line marks the whole receipt as one person's, as lg-8 filed
  * it: it names anyone the books hold who is not the payer.

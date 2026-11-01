@@ -157,8 +157,17 @@ export function PeriodLines({
                   <p className="muted">{line.note}</p>
                 )}
                 <p className="muted">
-                  Paid by {shownName(names, line.personId)}
-                  {line.chargedTo !== null && `, charged to ${shownName(names, line.chargedTo)}`}.
+                  {line.owedToPot ? (
+                    // Paid from the joint account for one person alone (lg-91).
+                    <>Owed to the pot by {shownName(names, line.personId)}.</>
+                  ) : (
+                    <>
+                      Paid by {shownName(names, line.personId)}
+                      {line.chargedTo !== null &&
+                        `, charged to ${shownName(names, line.chargedTo)}`}
+                      .
+                    </>
+                  )}
                 </p>
                 <p className="line">
                   <span>Spending category</span>
