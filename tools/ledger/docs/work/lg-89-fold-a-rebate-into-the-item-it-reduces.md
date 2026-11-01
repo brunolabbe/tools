@@ -7,7 +7,6 @@ status: done
 milestone: null
 depends_on: []
 difficulty: hard
-awaiting: Done when 7 — the owner's paid read of the three rebate fixtures (`read-rebate-fixtures.ts --paid`) after the merge and `npm run build`, its three verdict lines recorded in a dated Log entry
 ---
 
 # lg-89 — Fold a rebate into the item it reduces, wherever it is printed
@@ -296,3 +295,29 @@ below.
   `discount: null` → `2 failed | 70 passed (72)`, this test and "passes a
   rebate on a row's item to the chart's split", `expected { slices: [ { …(2)
   }, …(2) ], …(1) } to deeply equal { split: true, …(1) }`.
+
+### 2026-11-01 — paid read recorded (builder-mechanical, Claude Haiku 5.5, high)
+
+The owner ran the paid read of the three rebate fixtures on `main` at
+`25ef6ac7`, after `npm run build`, with:
+
+```bash
+node --import tsx tools/ledger/receipts/test/live/read-rebate-fixtures.ts --paid .claude/.keys /tmp/lg-89-read.json
+```
+
+Its three verdict lines, read from the JSON's `name` and `verdict` fields:
+
+```
+rebate-under-its-item: pass
+rebate-away-from-its-item: pass
+coupon-on-the-whole-receipt: pass
+```
+
+What each reading shows, checked against the JSON:
+
+- `rebate-under-its-item`: the cheddar (`0412 FROMAGE CHEDDAR`, price 799) carries `discount: -150`, shared, with no negative line of its own.
+- `rebate-away-from-its-item`: the detergent (`1185 DETERGENT 1,5L FP`, price 1099, taxable) carries `discount: -200`; the four items hold no negative line of their own.
+- `coupon-on-the-whole-receipt`: the coupon is its own item, `COUPON 2,00 $ SUR ACHAT DE 15 $ ET PLUS`, with `price: -200` and `discount: null`.
+
+Done when 7 is met: the first two rebates are folded into their items, and the
+third stays an item of its own. The JSON stays outside the repository.
