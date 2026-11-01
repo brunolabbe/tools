@@ -22,11 +22,11 @@ them (lg-95's Log, last entry). No `Done when` line of lg-95 depends on either.
   leaves the list as it was. The row still shows its old answer ("alex · Current
   expenses") while the notice says the row is now "sam". Reopening the control preselects
   the old answer, so a second Save sends it back, and nothing says so. lg-95's test "a save
-  whose re-read fails closes the control ..." asserts only that Save has gone. It never
+  whose re-read fails closes the control ..." asserts the alert (three phrases), that Save has gone and one `classifyRow` call. It never
   reopens the control, so it passes with this defect in place.
 - **N1.** `Refile`'s focus effect gives focus back to its own button whenever its control
   closes while focus sits on the page body. A browser that does not focus a button on click
-  (Safari and iOS, per MDN's "Clicking and focus" table, read and not run in Safari) leaves
+  (Safari, per MDN's "Clicking and focus" section, which names Safari alone; read and not run in Safari) leaves
   the body focused when row B's button is clicked, so opening B while A's control is open
   sends focus to A's button. jsdom does not focus on click either, and the same steps there
   read `focusIsA: true`. Whether the page also scrolls up to A is not measured.
@@ -40,7 +40,7 @@ Run from the worktree root on a farmed and built tree: `bash .claude/scripts/wor
 then `npm run build`, because the ledger web tests read `@ledger/contract` through its `dist`.
 Never `npm install` there.
 
-The probe is one file, `tools/ledger/web/test/zz-repro-lg98.test.tsx` (the name is yours to
+The probe is one file, `tools/ledger/web/test/zz-repro-lg99.test.tsx` (the name is yours to
 choose). It is a scratch file: delete it before any `npm run check` or commit, since
 `oxfmt --check` reads everything under `test/`. Its two cases, F2 and N1, can share a file.
 
@@ -87,7 +87,7 @@ any record; the screen does not read the value it returns.
 The fake: `fetchRows` resolves two rows, ids 1 and 2, descriptions "A" and "B", both on
 `2026-10-10`, both `personId: "alex"`, `source: "manual"`. `fetchPeriods` resolves `[]`.
 
-Arm 1, no focus on click (the Safari and iOS behaviour, as MDN describes it):
+Arm 1, no focus on click (the Safari behaviour, as MDN describes it):
 
 1. Get A's and B's "Change who and what" buttons, each inside its own `listitem`.
 2. Click A's button without calling `focus()` on it. Then click B's button, again without focusing it.
@@ -112,15 +112,18 @@ After a stored save whose re-read fails, what may the row offer?
 - **a. Offer no change on that row until a read succeeds (recommended; the gate's direction).**
   The row's "Change who and what" button is disabled, with a line beside it saying the list
   has not been read since the change, and that a new read (a filter change or a reload) will
-  bring the button back. Any later successful read clears it. Costs: one piece of per-row
+  bring the button back. Only a read that replaces the list clears it. Costs: one piece of per-row
   state; a person whose network is back must change a filter or reload before they can act
   on that row; until a read succeeds the row's text still shows the old answer beside the
-  notice; the new line is visible text, so the layout case covers that state at 360 px.
+  notice; the new line is visible text, so the History case of `layout.spec.ts` needs a new
+  step for that state at 360 px: it deliberately never saves, so reaching a stored save then
+  a failed read there takes `page.route` stubs on the save and on the re-read.
 - **b. Keep the answer the save returned on the row.** `classifyRow` already returns the stored
   `ClassificationRecord` (`web/src/api/inbox.ts`). The row shows that record, and the control
   preselects it, until a read replaces it. Costs: the row is patched locally, which the lg-95
-  Build ruled out ("Re-read the list afterwards; do not patch it locally") and whose test
-  asserts against (a local patch fails it), so the Build and that test change together; the
+  Build ruled out ("Re-read the list afterwards; do not patch it locally"), so that Build
+  sentence changes; the lg-95 test fails only if the patch replaces the re-read, and a patch
+  beside the re-read passes it; the
   row shows an answer the last read did not hold, until the next one; the returned record
   must be carried in state.
 - **c. Read the list again when the control opens.** Before it preselects, the control reads
@@ -157,9 +160,10 @@ Written from the recommended options, 1a and 2a. Not to be dispatched until the 
 answers, and the answer may change it.
 
 1. F2, option 1a: in `web/src/history/History.tsx`, mark a row whose save is stored but unread
-   (set when `classifyRow` succeeds, cleared by the next successful `fetchRows`), and disable
+   (set when `classifyRow` succeeds, cleared by the next read that replaces the list), and disable
    that row's button with its line. Test in `web/test/history.test.tsx`: after the F2 steps, the
-   button is disabled and the control cannot open; a successful read clears both.
+   button is disabled and the control cannot open; a read that replaces the list (a filter
+   change or a reload) clears both, and `showMore`'s append does not.
 2. N1, option 2a: narrow `Refile`'s focus effect as option 2a says. Test: the two arms of the
    N1 reproduction on the branch, arm 1 leaving focus on B's button.
 3. Leave the two existing tests named under Done when unchanged.
@@ -185,7 +189,7 @@ answers, and the answer may change it.
 
 - 2026-11-01 — Filed at the owner's choice, from lg-95's gate 2 (PASS at `f6e06db1`), which
   left F2's remaining clause and N1 as lows. The options were: file one ticket for both (chosen,
-  the orchestrator's recommendation); record both; fix now with a third gate. Filed on
+  the orchestrator's recommendation); record both; fix F2 now, with a third gate. Filed on
   `580dabbe`, `origin/main` at filing. No code changed: the commit adds this file only. Status
   is `needs-decision` because both remedies are the owner's to choose.
 - 2026-11-01 — Reproduced on `origin/main` at `580dabbe`, before filing. Gate 2's two probe
@@ -210,9 +214,16 @@ answers, and the answer may change it.
   called once. It does not reopen the control, so no test in the repo fails on F2's remaining
   clause. Not changed here: the test is lg-95's, and the fix is the owner's to choose.
 - 2026-11-01 — Not measured, as the gate left it: whether the page scrolls to row A on N1, and
-  the Safari and iOS focus behaviour, which rests on MDN's table and was not run in Safari.
+  the Safari focus behaviour, which rests on MDN's "Clicking and focus" section and was not run in Safari.
 - 2026-11-01 — Id moved from lg-98 to lg-99 before the push, because a peer's lg-98 (`lg-98-tanstack-query-for-the-ledger-web.md`, `ready`) reached `origin/main` first, in #736 (`b9b1f0bf`). Rebased onto `origin/main` at `05a6d450`; the reproduction above still ran on `580dabbe`.
 - 2026-11-01 — Owner's answer, relayed by the orchestrator, to gate 1's CONCERNS at `8bef87a5`
   (F1 med, F2 to F6 low). The options were: all six findings fixed at landing (the
   orchestrator's recommendation); F1 at landing with the lows recorded; treat F1 as high and run
   a gate 2. The owner chose all six at landing, with no re-gate.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F1 — "the Build and that test change together". Option 1b's cost now says the Build sentence changes and lg-95's test fails only if the patch replaces the re-read. Proof: `git diff 8bef87a5 HEAD -- tools/ledger/docs/work/lg-99-a-failed-re-read-offers-the-old-answer-and-moves-focus.md | grep -c '^-.*so the Build and that test change together'` → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F2 — "Any later successful read clears it". Option 1a and Build step 1 now say only a read that replaces the list clears the mark, and `showMore`'s append does not. Proof: same diff, `grep -c '^-.*Any later successful read clears it'` → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F3 — "the layout case covers that state at 360 px". Option 1a's cost now says the History case needs a new step, and that reaching a stored save then a failed read takes `page.route` stubs on the save and the re-read. Proof: same diff, `grep -c '^-.*so the layout case covers that state at 360 px'` → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F4 — "MDN's "Clicking and focus" table". Why, the Reproduction's Arm 1 and the Log's not-measured entry now say Safari alone and the section, not a table and not iOS. Proof: same diff, `grep -c '^-.*table, read and not run in Safari'` → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F5 — "asserts only that Save has gone". Why now lists the alert's three phrases, Save gone and one `classifyRow` call, and the filing entry now quotes lg-95's option C as "fix F2 now, with a third gate". Proof: same diff, `grep -c '^-.*asserts only that Save has gone'` → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F6 — "zz-repro-lg98.test.tsx". The Reproduction's scratch file is now `zz-repro-lg99.test.tsx`. Proof: same diff, `grep -c '^-.*zz-repro-lg98'` → 1.
+- 2026-11-01 — Gate 1's full report is on the pull request thread, #742; status unchanged.
