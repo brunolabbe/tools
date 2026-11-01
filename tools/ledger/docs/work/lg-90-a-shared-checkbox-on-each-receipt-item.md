@@ -121,3 +121,24 @@ npm run e2e:ledger                                        31 passed (41.6s), exi
 `Receipt-360.png` and `Receipt-1280.png` under `e2e/.artifacts/layout/` were
 opened: the item shows the unchecked box, the Mine select, and "Takes off 12.99
 $", and nothing runs past the right edge at 360 px.
+
+### 2026-11-01, owner answers at the landing
+
+Three questions went to the owner on 2026-11-01, after the build report and
+gate 1. Each answer, with its options and the one chosen:
+
+- Builder's open decision: should the per-item "Takes off" figures always sum
+  to the person's live line (the six-pack 15.54 $ and the soap 5.74 $ show
+  21.28 $ against "Not shared 21.27 $")? Options: keep per-item rounding as
+  Build 3 says; file a largest-remainder ticket; fix it in lg-90. **Chosen:
+  keep per-item rounding.** The pinned test stays as the known cent.
+- Gate 1's open decision: a read item charged to a departed member, or to
+  nobody, is silently charged to the first current other (`whose` in
+  `Receipts.tsx`, which predates lg-90). Options: (a) file a ledger ticket with
+  the gate's probe B as its reproduction; (b) fold it into lg-90; (c) leave it.
+  **Chosen: (a).** It is filed in parallel as lg-94, on branch
+  `lg-94-read-item-charged-to-a-departed-member`, unmerged at this landing.
+- Gate 1's lows. Options: fix the first, reword the second, record the third;
+  fix the first only; record all three. **Chosen: fix the first, reword the
+  second, record the third.** The third (the unlabelled selects) stays
+  recorded and unfixed.
