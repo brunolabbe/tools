@@ -392,3 +392,8 @@ This round answers gate 1's findings, as the owner decided them above:
   → `Tests  1 passed | 47 skipped (48)`. Before the guard, the same file under
   `timeout -k 5 60 … -t "gate 2" --pool=threads` → `exit=124`, with no result
   in 60 s.
+
+- **2026-11-01: decision 3 reopened.** The owner chose to let a joint-account
+  row's receipt leave items out, each as a charge owed to the pot. That is
+  lg-91, which replaces the "shared whole" refusal. Until lg-91 lands, this
+  ticket's decision 3 still describes the code.
