@@ -705,3 +705,81 @@ describe("a stored name holding a control or a zero-width character (lg-82)", ()
     });
   });
 });
+
+// lg-83, remedy (c): a stored address holding whitespace is refused by `remove`, and the
+// row stays, because the stored read keeps `ADDRESS_SHAPE`'s `\s` exclusion. Such a row
+// comes only from raw SQL or a hand-edited file; the operator clears one with a raw
+// `remove` record, which the last test shows the append-only triggers accept.
+describe("a stored address holding whitespace (lg-83)", () => {
+  const HOUSEHOLD = "00000000-0000-4000-8000-000000000083";
+  const ch = (code: number): string => String.fromCharCode(code);
+  // The six `\s` characters UNSEEN also covers, then four more `\s` characters.
+  const TEN: [string, string][] = [
+    ["TAB U+0009", ch(0x09)],
+    ["LF U+000A", ch(0x0a)],
+    ["VT U+000B", ch(0x0b)],
+    ["FF U+000C", ch(0x0c)],
+    ["CR U+000D", ch(0x0d)],
+    ["BOM U+FEFF", ch(0xfeff)],
+    ["SPACE U+0020", ch(0x20)],
+    ["NBSP U+00A0", ch(0xa0)],
+    ["LINE SEPARATOR U+2028", ch(0x2028)],
+    ["IDEOGRAPHIC SPACE U+3000", ch(0x3000)],
+  ];
+
+  /** Writes past `Directory`, as such a directory holds the row. */
+  function record(address: string, action: "add" | "remove"): void {
+    const db = new Database(directoryPath);
+    try {
+      db.prepare(
+        `INSERT INTO memberships (address, household_id, person, action, changed_at, changed_by)
+         VALUES (?, ?, 'u', ?, 'x', 'operator')`,
+      ).run(address, HOUSEHOLD, action);
+    } finally {
+      db.close();
+    }
+  }
+
+  /** By the exact stored text, which the command's own lookup would lower-case. */
+  function stands(address: string): boolean {
+    const db = new Database(directoryPath, { readonly: true });
+    try {
+      return (
+        db.prepare("SELECT 1 FROM current_members WHERE address = ?").get(address) !== undefined
+      );
+    } finally {
+      db.close();
+    }
+  }
+
+  beforeEach(() => {
+    Directory.open(directoryPath).close();
+    const db = new Database(directoryPath);
+    db.prepare(
+      "INSERT INTO households (id, name, created_at, created_by) VALUES (?, 'Home', 'x', 'operator')",
+    ).run(HOUSEHOLD);
+    db.close();
+  });
+
+  test.each(TEN)("remove refuses a stored address with %s after the @", (_label, character) => {
+    const address = `u@ex${character}z.test`;
+    record(address, "add");
+
+    const ran = run("remove", address);
+
+    expect(ran.code).toBe(1);
+    expect(ran.err).toContain("That is not an email address.");
+    expect(stands(address)).toBe(true);
+  });
+
+  test("one raw remove record clears such a row, and list stops printing it", () => {
+    const address = `u@ex${ch(0x09)}z.test`;
+    record(address, "add");
+    expect(run("list").out).toContain("u@ex");
+
+    record(address, "remove");
+
+    expect(stands(address)).toBe(false);
+    expect(run("list").out).not.toContain("u@ex");
+  });
+});
