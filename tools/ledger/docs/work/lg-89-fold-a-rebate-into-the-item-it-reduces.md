@@ -209,3 +209,64 @@ What the brief had wrong:
   every migration has to bump them; they now say 16. The recorded reader
   responses lacked `discount`, which the output schema now requires, so they
   carry `discount: null`.
+
+### 2026-11-01 — fixed at landing (fixer, Claude Sonnet 5.5)
+
+Gate 1's five below-floor findings, fixed by owner choice as the gate states
+them, in commit "fix(ledger): refuse custom headers and a multi-key file in the
+rebate read" (the commit before the records). Each planted fault was run on
+that committed tree and restored from it; `npx vitest run <spec>` fails each as
+below.
+
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the first med —
+  "prints the whole key file when it has no `LEDGER=` line". `keyFrom` now
+  refuses a file of several lines with no `LEDGER=` line (exit 2, no text of
+  the file in the message) and the script prints only a failed read's `code`
+  (`paid-read.ts`: `keyFrom`, `failureNote`; `read-rebate-fixtures.ts`).
+  `rebate-live-gate.test.ts` › "refuses several lines with no LEDGER= line,
+  and repeats none of them" and › "prints a failed read's code and never its
+  message or cause". Planted: `keyFrom` falling back to the whole file again →
+  `1 failed | 7 passed (8)`, `AssertionError: expected [Function] to throw an
+  error`; `failureNote` returning the error's message and cause → `1 failed`,
+  `expected 'The receipt could not be read. Type i…' to be
+  'RECEIPT_UNREADABLE'`, received text holding `Bearer sk-secret`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the second med —
+  "does not refuse `ANTHROPIC_CUSTOM_HEADERS`". `assertPaidReadConsent`
+  (`paid-read.ts`) mirrors `assertLiveRunConsent`: it refuses
+  `--paid`-less runs and a non-blank `ANTHROPIC_CUSTOM_HEADERS`, never
+  repeating its value. New `receipts/test/rebate-live-gate.test.ts`, in the
+  shape of `api/test/layout-live-gate.test.ts`, pins the consent, `keyFrom`,
+  `failureNote` and `wrong()` (8 tests). Planted: the custom-headers check
+  removed → `1 failed | 7 passed (8)`, "refuses ANTHROPIC_CUSTOM_HEADERS, and
+  never repeats its value", `expected [Function] to throw an error`; `wrong()`
+  blind to a negative item left beside a folded rebate → `1 failed | 7 passed
+  (8)`, "a folded rebate that is the wrong amount, absent, or left as a
+  negative item fails".
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the first low —
+  "pinned only for the huge case". `reader.test.ts` › "the model reader's
+  malformed rebates (lg-89)": a fraction, a string, a key left out and 2^53
+  each refuse the reading as `RECEIPT_UNREADABLE`, and a wrong-sign rebate
+  passes through. Planted: `const cents = z.number().nullable()` in the
+  reader → `2 failed | 27 passed (29)` (the fraction and the 2^53 cases),
+  `AssertionError: expected [ Array(1) ] to be an instance of AppError`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the second low —
+  "the Rebate input's placeholder does not say a rebate is typed negative".
+  The placeholder reads `Rebate, -2.00` and the `items-differ` label lists
+  rebates. `git diff fcc71e10 HEAD -- tools/ledger/web/src/receipts/Receipts.tsx
+  | grep -c '^-.*placeholder="Rebate"'` → `1`, and the same with `The items,
+  deposits and taxes do not add up` → `1`. New `web/test/receipts.test.tsx` ›
+  "the Rebate field's placeholder shows a rebate typed negative (lg-89)"; the
+  two label assertions in that file now say "deposits, rebates and taxes".
+  Planted: the placeholder back to `Rebate` → `1 failed | 27 passed (28)`,
+  `expected 'Rebate' to be 'Rebate, -2.00'`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the third low —
+  "no test takes a stored rebate to a chart amount in one piece".
+  `api/test/receipts.test.ts` › "a rebate on the soap lowers the household
+  slice by its net and taxes, and the remainder stays with the beer": files
+  a receipt with 1,00 $ off the soap on a row, then `chartedAs` over
+  `receiptsOnRows` gives 349, 1 842 and 459 (574 without the rebate). The
+  rebate is on the soap, not the beer, since the largest category takes the
+  remainder and would hide it. Planted: `receiptsOnRows` reading
+  `discount: null` → `2 failed | 70 passed (72)`, this test and "passes a
+  rebate on a row's item to the chart's split", `expected { slices: [ { …(2)
+  }, …(2) ], …(1) } to deeply equal { split: true, …(1) }`.
