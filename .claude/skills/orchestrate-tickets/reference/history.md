@@ -6606,3 +6606,73 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - Relaying a sibling builder's diagnosis (the e2e read limit) to running builders as an unverified heads-up: lg-77's builder reproduced it locally, did not commit the line, and named the CI red in advance.
 - Reading a green check's log: #686's `e2e` passed `17 passed` with two `"rate limited"` lines, so green there was at the limit, not clear of it.
 - Dry-running a below-floor source fix before offering it at landing (lg-75's plain `INSERT`, 156/156).
+
+### Batch 2026-10-31 (tools-54 third, repo-131 lg-72 lg-82, lg-83 pl-65-line repo-133 filed) — base d7cd223f
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a7cf7dc84d2dc578f | seam-mapper, five candidates (lg-82 lg-72 lg-73 repo-130 repo-131) | 1m50s / 1m45s | 0 | $0.3434 |
+| #691 | merged 4b3c4c14 | Sonnet 5.5 / high | aa44f69b3544a260f | builder-standard, lg-82 + one owner stop (M1–M3 reword, address fold-in) | 19m56s / 19m32s | 0 | $4.1054 |
+| #691 | as above | Opus 5.5 / high | a95d9e793df6e26f9 | ticket-reviewer-opus, lg-82 gate 1 | 12m18s / 11m37s | 0 | $3.4652 |
+| #691 | as above | Sonnet 5.5 / high | ac2b2cc5adeeabe16 | fixer, lg-82 four lows + two Log lines at landing + landing | 3m49s / 3m44s | 0 | $0.4920 |
+| #692 | merged f160785a | Opus 5.5 / high | ae48dca7c340d2bed | builder-hard, repo-131 + round 1 + owner's plugin lift; retired at $15.86 | 1h08m03s / 1h18m56s | 0 | $15.8642 |
+| #692 | as above | Sonnet 5.5 / xhigh | aceff6fc9427e4a44 | ticket-reviewer-sonnet, repo-131 gate 1 | 9m58s / 9m30s | 0 | $2.0412 |
+| #692 | as above | Sonnet 5.5 / xhigh | a0788699c2d645475 | ticket-reviewer-sonnet, repo-131 gate 2 | 10m44s / 10m24s | 0 | $2.0791 |
+| #692 | as above | Sonnet 5.5 / high | a493f03620cc6e2d8 | fixer, repo-131 N1 N2 N3 at landing, then revert of N1 + landing | 20m06s / 37m59s | 0 | $1.3106 |
+| #692 | as above | Sonnet 5.5 / xhigh | a118733c93a9a75a2 | ticket-reviewer-sonnet, repo-131 gate 3 (narrow, owner-asked) | 10m33s / 9m33s | 0 | $1.6051 |
+| #694 | open, ready, green at ac4eebb9 | Sonnet 5.5 / high | ae3ab4a0e2ff226a6 | builder-standard, lg-72 stacked on repo-131 + round 1 (merge of repo-131's round, answers) | 27m51s / 1h11m32s | 0 | $5.0469 |
+| #694 | as above | Opus 5.5 / high | a443c4164ab9d2259 | ticket-reviewer-opus, lg-72 gate 1 | 10m36s / 10m09s | 0 | $3.9194 |
+| #694 | as above | Sonnet 5.5 / high | ab33f239361bae16b | builder-standard (fresh), lg-72 round 2 (logged query stripped) | 4m19s / 4m16s | 0 | $0.8704 |
+| #694 | as above | Opus 5.5 / high | a844f810d7cd154e7 | ticket-reviewer-opus, lg-72 gate 2 | 7m45s / 7m43s | 0 | $2.3999 |
+| #694 | as above | Sonnet 5.5 / high | ad78ce5c5389bd553 | fixer, lg-72 merge of repo-131's landing + landing, held as a draft | 12m51s / 9m12s | 0 | $0.3759 |
+| #694 | as above | Haiku 5.5 / high | acceb411baeaf9713 | builder-mechanical maintenance, merge of main after #692 + ready | 8m57s / 8m32s | 0 | $0.0417 |
+| #693 | merged 20d6167b | Haiku 5.5 / high | af3b7c8d60037c7cf | builder-mechanical maintenance, lg-83 filing + round 1 | 14m16s / 28m44s | 0 | $1.0995 |
+| #693 | as above | Sonnet 5.5 / xhigh | af8e3da02c3a16ff2 | ticket-reviewer-sonnet, lg-83 gate 1 (narrow) | 9m52s / 9m41s | 0 | $1.7120 |
+| #693 | as above | Sonnet 5.5 / xhigh | ad3c6f4ddbff23e44 | ticket-reviewer-sonnet, lg-83 gate 2 (narrow) | 12m46s / 11m41s | 0 | $2.2306 |
+| #693 | as above | Sonnet 5.5 / high | a6d9fbafdae1fd2b6 | fixer, lg-83 three lows at landing + ready (no `--land`) | 3m09s / 2m45s | 0 | $0.4929 |
+| #695 | merged 45dfb732 | Haiku 5.5 / high | a3ff5ffa23002565a | builder-mechanical maintenance, pl-65 Build 2 line | 2m26s / 2m26s | 0 | $0.0337 |
+| #695 | as above | Sonnet 5.5 / xhigh | a28968926c554870d | ticket-reviewer-sonnet, pl-65 line gate 1 (narrow) | 4m37s / 4m34s | 0 | $0.7857 |
+| #695 | as above | Sonnet 5.5 / high | a56efca3df54946d4 | fixer, pl-65 line landing (no `--land`) | 1m54s / 1m36s | 0 | $0.3211 |
+| #696 | open, ready, CI at e5b2dd12 pending at close | Haiku 5.5 / high | a537bd21ac7ce43a9 | builder-mechanical maintenance, repo-133 filing + round 1 | 20m30s / 37m28s | 0 | $1.6388 |
+| #696 | as above | Sonnet 5.5 / xhigh | ab223c686a8a4904e | ticket-reviewer-sonnet, repo-133 gate 1 (narrow) | 8m29s / 8m16s | 0 | $1.5551 |
+| #696 | as above | Sonnet 5.5 / xhigh | a860d531d0f292329 | ticket-reviewer-sonnet, repo-133 gate 2 (narrow) | 9m57s / 9m45s | 0 | $1.5519 |
+| #696 | as above | Sonnet 5.5 / high | a9824550ec02676c2 | fixer, repo-133 med + three lows at landing + ready (no `--land`) | 2m40s / 2m38s | 0 | $0.5195 |
+| — | — | Opus 5.5 / high | orchestrator e40b98cb | orchestrator (floor) | 2h59m52s / 3h29m41s | 0 | $10.6061 |
+| | | | | **total** (rates read 2026-10-10) | 8h20m05s | 0 | **$66.5073** |
+
+**Tickets:**
+
+- lg-82 → #691: owner answered Q1 (a), Q2 (i) (⇒ Both), M1–M5 at T6, measurement line reworded, rated standard. Builder's two open decisions → owner: M1–M3 left and reworded; raw addresses folded in (over the builder's file-it). Gate 1 PASS, six lows: four fixed at landing, one Log line, one filed as lg-83. Total $8.06.
+- repo-131 → #692: owner narrowed Build 5 to the downloader at intake. Gate 1 FAIL (F1 high: header wraps in CI at 360 px; F2 med CodeQL regexp; F3 med Chromium-only) → round 1 by the builder, with the owner's mid-round lift of the render-blocking plugin into `@webtools/ui/vite`. Gate 2 PASS, three lows → owner: all three at landing; N1's fix was not fully stated, so re-asked → narrow gate 3 (owner-asked) → CONCERNS (N4 med: the rewrite's regexp is quadratic, a third CodeQL alert) → owner reverted the N1 commit and filed repo-133. Total $22.90.
+- lg-72 → #694: stacked on repo-131. Gate 1 FAIL (F1 high: the new terms page said the log holds no amount; the error handler logged `request.url` with its query, pre-existing on main) → owner (B), fresh builder round 2 → gate 2 PASS, one PR-body low fixed at landing. Total $12.65.
+- lg-83 → #693 (filed, `needs-decision`): gate 1 CONCERNS (three meds, false option costs) → round 1 → gate 2 PASS, three lows at landing. Total $5.54.
+- pl-65 line → #695: gate 1 CONCERNS (its med already met on lg-72's branch; two lows recorded by owner). Total $1.14.
+- repo-133 → #696 (filed, `needs-decision`): gate 1 CONCERNS (four meds) → round 1 → gate 2 CONCERNS (F2 med: the bound passed a quadratic scanner) → fixed at landing with the owner's ratio clause. Total $5.27.
+
+**Defects in the skill:**
+
+1. `roles/common.md`, _Your worktree_, last bullet — the invisible-character check `grep -cP '\x{feff}'` covers 1 of the 69 characters lg-82 handles, and is locale-dependent. Reproduction (relayed from lg-82's builder and gate 1, not re-run): `grep -cP '\x{feff}' tools/ledger/books/src/unseen.ts` → `2` under this shell's locale, while `python3 -I bytes.py <tree>` → `unseen chars: 0 []`.
+2. `roles/common.md`, _Your worktree_ — "A dependency your ticket adds is not in the farm" offers only `npm install --ignore-scripts`, which rewrites the farm's `node_modules/.package-lock.json` (a symlink into the shared checkout); declaring an already-locked dependency needs only a relock. Reproduction (relayed from repo-131's builder): `node <scratch>/relock.mjs <worktree>` → `up to date in 644ms`, `npm exit 0 staged 20`, and `git diff package-lock.json` touches only `packages/ui`.
+3. `roles/common.md`, _Your worktree_ — a markdown-only branch "skips both steps" (farm and build), but `npm run check` and `oxfmt --check` need a farmed tree. Reproduction (relayed from repo-133's gate 2): `ls node_modules` in an unfarmed markdown-only worktree → `ls: cannot access 'node_modules': No such file or directory`.
+4. `roles/common.md`, _Your worktree_ — no route for a builder to measure a sha another open branch holds. Reproduction (relayed from repo-133's filer): `git worktree add --detach /workspaces/tools/.claude/worktrees/repo-133-probe 3eb342af` works, then `git -C <that path> log --oneline -1` → `this command redirects git to the shared checkout via -C. Refusing to run it`.
+5. `roles/common.md`, the wait guidance — the sandbox's refusal names `Monitor`, which no builder or fixer has. Reproduction (relayed from repo-133's filer and lg-72's maintenance agent): a Monitor call → `Error: No such tool available: Monitor`; `sleep 100` → `Do not chain shorter sleeps to work around this block`.
+6. `roles/reviewer.md`, _What you are not given, on purpose_ — it orders brief, then diff, then Log, but an owner's intake answer recorded in the Log sits beside the builder's account, so a gate sent to the Log for it reads the build first. Reproduction: `git show 17b45fd8:docs/work/repo-131-one-header-and-one-footer-for-every-tool.md | grep -n '^## Log' -A14` → `174:## Log`, then the owner's intake answer at line 181, in the one section the builder's account follows.
+7. `roles/reviewer.md` — a heading for gate 2, none for gate 3, and no word on whether a gate 3 continues gate 2's finding numbers. Reproduction (relayed from repo-131's gate 3): `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n -i -E 'gate 3|third gate'` → only line 218.
+8. `roles/reviewer.md`, _Returning the gate_ — scripts handed back take the tree and the output directory, but nothing stops them hard-coding a port, which collides when two gates run them. Reproduction (relayed from repo-131's gate 2): `grep -n listen header-fonts.mts header-remedy.mts` → `server.listen(8183, …)`, `server.listen(8184, …)`.
+9. `review-ticket/gate.md`, _Steps_, 4 — `unproven (gate)` covers a CI leg not yet run green, and says nothing of a leg that ran and is red on the head. Reproduction: repo-131's gate 1 at `17b45fd8`, `gh pr checks 692` → `e2e (direct) fail`; it graded Done when 6 `not met` and 7 `unproven (gate)` for want of a rule.
+10. `review-ticket/gate.md`, _Severity and the gate_, the `high` row — "a conclusion the owner will choose from" names measurement tickets only; a `needs-decision` filing with a false option cost has the same exposure. Reproduction (relayed from lg-83's gate 1): option (c)'s "only remedy" was false (one `INSERT` of a remove record removed the row with both triggers present), graded `med` for want of a rule.
+11. `review-ticket/gate.md`, _When the pull request only files a ticket, or only records a decision on one_ — silent on a PR that only corrects a ticket's brief, so its roll-up rule (a failed reproduction is `not met`) fits it badly. Reproduction (relayed from pl-65's gate): `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n -i 'correction\|only files a ticket'` → only line 15.
+12. `roles/fixer.md`, _Landing, when your dispatch grants it_, and `reference/records.md`, _Fixed at landing_ — the proof `git diff <gated sha> HEAD -- <path> | grep -c '^-.*<fragment>'` reads 0 when the fix and its Log entry are written before the one commit that carries both. Reproduction (relayed from lg-83's lander; repo-131's fixer hit the same): `git diff 5cdd8a14 HEAD -- <ticket> | grep -c '^-.*the .@., and not one at either end'` → `0` before the commit; `git diff HEAD -- <ticket> | grep -c …` → `1`.
+13. `reference/records.md`, _When there is no ticket_ and _Fixed at landing_ — no entry shape for the Log line that names the thread, and nothing on a fix made only in a PR body. Reproduction: `grep -n -i 'pull request body\|PR body' .claude/skills/orchestrate-tickets/reference/records.md` → lines 172 ("Narrative belongs in the pull request body") and 174 ("The pull request body names every model"), neither about a fix made only in the body; lg-72's lander added no Log entry for one.
+14. `roles/fixer.md`, _The work_ — `git revert --no-edit` writes no `Co-Authored-By` trailer, and the page does not say a revert needs one. Reproduction (relayed from repo-131's lander): `git revert --no-edit 222b5048 && git log -1 --format=%B` → no trailer; amended before the push.
+15. `roles/builder.md`, _When you are resumed with findings_ and _Before you report_ — no step to re-read CI, CodeQL above all, after the round's push. Reproduction: repo-131's push `46b89313` raised a new default-setup `CodeQL` alert on `vite-plugin.test.ts:65`, and lg-72's `c208231e` one on `terms-page.test.ts:14`; both needed a second push.
+16. `roles/builder.md`, _Set up_, the `needs-decision` bullet — it covers an answer that settles the ticket, not a partial answer to a multi-question one. Reproduction (relayed from repo-133's filer, not re-run): at `ddedc6dc` the ticket holds one of three questions answered and `status: needs-decision`, which the filer kept by its own choice.
+17. `docs/01-TICKETS.md`, the `difficulty` paragraph — "a `needs-decision` filing whose options differ in size rates its recommended option" collides with a filing that makes no recommendation. Reproduction (relayed from lg-83's filer): `sed -n 570,585p docs/01-TICKETS.md`.
+18. root `CLAUDE.md`, _Handing back_, "A subagent never writes it" — a maintenance dispatch on `builder-mechanical` ended its report with `# Done` again (the previous batch logged the same of a filer). Reproduction: lg-72's maintenance agent `acceb411baeaf9713`, report's last line `# Done`.
+19. `scripts/commit-message.mjs` (a script, not a page) — no scope accepts work under `packages/ui`, so repo-131's fixer used `core`. Reproduction: `node scripts/commit-message.mjs --text "build(ui): declare vite (repo-131)"` → `"ui" is not a known scope. Use one of: downloader, ledger, planner, core, repo, ci, deps`, exit 1.
+
+**Worked, and worth keeping:**
+
+- A stacked draft based on the parent's branch: GitHub retargeted #694 to `main` when #692's branch was deleted, and a `git merge-tree --write-tree origin/main <branch>` dry run (exit 0, 23 files, all lg-72's) priced the maintenance merge before dispatch.
+- Reverting to the last gated state instead of a gate 4 when a third gate's fix drew a third CodeQL alert on the same code (repo-131's N1 → repo-133).
+- A low the owner ticks whose fix the finding does not fully state is re-asked before the lander gets it (repo-131's N1).
