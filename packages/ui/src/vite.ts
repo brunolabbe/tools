@@ -53,10 +53,13 @@ function entries(html: string): Entry[] {
   const found: Entry[] = [];
   // A `<template>`'s content is not in `childNodes`, which is right: its
   // scripts never run. The stack is explicit so deeply nested input cannot
-  // overflow the call stack.
+  // overflow the call stack, and children are pushed one at a time because a
+  // spread of a wide node's children is an argument list that can.
   const stack: Node[] = [parse(html, { sourceCodeLocationInfo: true })];
   for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
-    if ("childNodes" in node) stack.push(...node.childNodes);
+    if ("childNodes" in node) {
+      for (const child of node.childNodes) stack.push(child);
+    }
     if (
       node.nodeName !== "script" ||
       !("attrs" in node) ||

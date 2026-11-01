@@ -508,3 +508,16 @@ needs the most judgement. Parse5 would be `standard`; accepting R1 would be
   landing marked it. No tool does this (each CSP names one origin); it is
   stated here so the next reader does not rediscover it.
 - Fold-in: none. Nothing else small and already specified came free.
+- 2026-11-01 — Owner answers after gate 1 (asked by the orchestrator,
+  2026-11-01). The first low, the RangeError on wide documents: fix it at
+  landing and record the rest. The second, third and fifth lows (`<base href>`
+  and the `http:` spellings, parse5 nesting cost, the padded `type`) stay
+  recorded and are not fixed. The fourth low, where parse5 is declared: keep
+  it in `dependencies`; nothing changes.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the first low
+  ("a document with 300,000 sibling elements"). The children are pushed one at
+  a time, in the same order. Before the fix, `addRenderBlocking` on 300,000
+  sibling `<br>` elements and one module script printed
+  `wide 300000 threw RangeError: Maximum call stack size exceeded`; after it,
+  `wide 300000 tagged 1 419 ms`. `npx vitest run packages/ui/test/vite-plugin.test.ts`
+  passes 18 of 18.
