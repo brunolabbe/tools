@@ -522,7 +522,7 @@ export function Receipts(): React.ReactElement {
               <strong>{receipt.reader}</strong> reads it. Typing it in sends nothing.
             </p>
             <div className="actions">
-              <button type="button" disabled={busy} onClick={ask}>
+              <button className="primary" type="button" disabled={busy} onClick={ask}>
                 {busy ? "Reading…" : "Read it"}
               </button>
             </div>
@@ -945,7 +945,7 @@ export function Receipts(): React.ReactElement {
           </>
         )}
         <div className="actions">
-          <button type="button" disabled={busy} onClick={() => fileAs("line")}>
+          <button className="primary" type="button" disabled={busy} onClick={() => fileAs("line")}>
             File as {shownName(shown, payer)}&rsquo;s line
           </button>
           <button type="button" disabled={busy} onClick={lookUp}>

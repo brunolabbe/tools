@@ -133,7 +133,6 @@ export function Rules(): React.ReactElement {
                 <div className="actions">
                   <button
                     type="button"
-                    className="secondary"
                     onClick={() => setOpen({ kind: "edit", id: rule.id })}
                     aria-label={`Edit ${rule.descriptionPattern}`}
                   >
@@ -141,7 +140,6 @@ export function Rules(): React.ReactElement {
                   </button>
                   <button
                     type="button"
-                    className="secondary"
                     onClick={() => retire(rule)}
                     aria-label={`Retire ${rule.descriptionPattern}`}
                   >

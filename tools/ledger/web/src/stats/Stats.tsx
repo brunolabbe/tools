@@ -76,7 +76,7 @@ export function Stats(): React.ReactElement {
             <button
               key={one}
               type="button"
-              className="secondary small"
+              className="small"
               aria-pressed={preset === one}
               onClick={() => setPreset(one)}
             >

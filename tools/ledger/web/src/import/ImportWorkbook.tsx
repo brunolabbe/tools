@@ -201,7 +201,7 @@ export function ImportWorkbook(): React.ReactElement {
             imported.
           </p>
           <div className="actions">
-            <button type="button" disabled={busy} onClick={describe}>
+            <button className="primary" type="button" disabled={busy} onClick={describe}>
               {busy ? "Describing…" : "Send the samples and describe"}
             </button>
             <button type="button" disabled={busy} onClick={cancel}>
@@ -305,7 +305,7 @@ export function ImportWorkbook(): React.ReactElement {
         )}
         <div className="actions">
           {described.ok && answers !== null && (
-            <button type="button" disabled={busy} onClick={confirm}>
+            <button className="primary" type="button" disabled={busy} onClick={confirm}>
               {busy ? "Importing…" : "Confirm and import"}
             </button>
           )}

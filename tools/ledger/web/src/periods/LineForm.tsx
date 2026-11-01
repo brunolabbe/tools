@@ -156,7 +156,7 @@ export function LineForm({
         </>
       )}
       <div className="actions">
-        <button type="submit" disabled={busy}>
+        <button className="primary" type="submit" disabled={busy}>
           Add the line
         </button>
       </div>

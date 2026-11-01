@@ -174,7 +174,7 @@ export function MortgageSplitCard(): React.ReactElement {
           given is never moved. A split filed for a day that has one takes its place.
         </p>
         <div className="actions">
-          <button type="submit" disabled={busy}>
+          <button className="primary" type="submit" disabled={busy}>
             File the split
           </button>
         </div>

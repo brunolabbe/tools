@@ -144,7 +144,7 @@ export function Spending(): React.ReactElement {
                   />
                   <div className="actions">
                     <button type="submit">Save</button>
-                    <button type="button" className="secondary" onClick={() => setRenaming(null)}>
+                    <button type="button" onClick={() => setRenaming(null)}>
                       Cancel
                     </button>
                   </div>
@@ -159,7 +159,6 @@ export function Spending(): React.ReactElement {
                     <div className="actions">
                       <button
                         type="button"
-                        className="secondary"
                         aria-label={`Rename ${category.name}`}
                         onClick={() => setRenaming({ id: category.id, name: category.name })}
                       >
@@ -167,7 +166,6 @@ export function Spending(): React.ReactElement {
                       </button>
                       <button
                         type="button"
-                        className="secondary"
                         aria-label={`Retire ${category.name}`}
                         onClick={() => void change(() => retireSpendingCategory(category.id))}
                       >
@@ -184,7 +182,9 @@ export function Spending(): React.ReactElement {
           <label htmlFor={`${id}-name`}>New spending category</label>
           <input id={`${id}-name`} value={name} onChange={(event) => setName(event.target.value)} />
           <div className="actions">
-            <button type="submit">Add</button>
+            <button className="primary" type="submit">
+              Add
+            </button>
           </div>
         </form>
       </section>

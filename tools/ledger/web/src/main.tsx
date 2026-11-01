@@ -6,6 +6,9 @@ import { App } from "./App.tsx";
 // Before the tool's own stylesheet, so its `:root` can set the values the shared names take.
 // oxlint-disable-next-line import/no-unassigned-import -- Vite injects the stylesheet; there is nothing to bind.
 import "@webtools/ui/tokens.css";
+// The shared base layer (repo-130), after the tokens it reads and before everything that may override it.
+// oxlint-disable-next-line import/no-unassigned-import -- Vite injects the stylesheet; there is nothing to bind.
+import "@webtools/ui/base.css";
 // The shared header and footer's rules, also before ours, so ours can override them.
 // oxlint-disable-next-line import/no-unassigned-import -- Vite injects the stylesheet; there is nothing to bind.
 import "@webtools/ui/chrome.css";

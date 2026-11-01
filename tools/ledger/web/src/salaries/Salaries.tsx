@@ -218,7 +218,7 @@ export function Salaries(): React.ReactElement {
           </div>
         ))}
         <div className="actions">
-          <button type="submit" disabled={busy}>
+          <button className="primary" type="submit" disabled={busy}>
             Save salaries
           </button>
         </div>
@@ -239,12 +239,7 @@ export function Salaries(): React.ReactElement {
             <button type="button" onClick={confirm} disabled={busy || effectiveFrom === ""}>
               Confirm ratio
             </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setProposal(null)}
-              disabled={busy}
-            >
+            <button type="button" onClick={() => setProposal(null)} disabled={busy}>
               Not now
             </button>
           </div>

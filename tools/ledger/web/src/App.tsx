@@ -130,9 +130,9 @@ export function App(): React.ReactElement {
 
   if (adminOnly) {
     return (
-      <div className="shell">
+      <div className="shell stack">
         <AppHeader name="Ledger" tagline="Admin" glyph={<Glyph />} />
-        <main>
+        <main className="stack">
           <Admin />
         </main>
         <AppFooter version={TOOL_VERSION} termsHref="/terms.html" />
@@ -142,9 +142,9 @@ export function App(): React.ReactElement {
 
   if (inNoHousehold) {
     return (
-      <div className="shell">
+      <div className="shell stack">
         <AppHeader name="Ledger" tagline={HOUSEHOLD_TAGLINE} glyph={<Glyph />} />
-        <main>
+        <main className="stack">
           <NoHousehold />
         </main>
         <AppFooter version={TOOL_VERSION} termsHref="/terms.html" />
@@ -153,7 +153,7 @@ export function App(): React.ReactElement {
   }
 
   return (
-    <div className="shell">
+    <div className="shell stack">
       <AppHeader name="Ledger" tagline={HOUSEHOLD_TAGLINE} glyph={<Glyph />} />
       <nav className="tabs" aria-label="Screens">
         <button type="button" aria-pressed={tab === "home"} onClick={() => setTab("home")}>
@@ -204,7 +204,7 @@ export function App(): React.ReactElement {
           </button>
         )}
       </nav>
-      <main>
+      <main className="stack">
         <PeopleNamesProvider value={names}>
           {tab === "home" && <Home />}
           {tab === "stats" && <Stats />}

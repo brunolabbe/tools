@@ -139,7 +139,7 @@ export function MortgageSetting(): React.ReactElement {
           </p>
         )}
         <div className="actions">
-          <button type="submit" disabled={busy}>
+          <button className="primary" type="submit" disabled={busy}>
             Save
           </button>
         </div>

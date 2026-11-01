@@ -177,12 +177,7 @@ export function PeriodLines({
             {load.lines.length} of {load.total}
           </p>
           {load.lines.length < load.total && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={more}
-              onClick={() => void showMore()}
-            >
+            <button type="button" disabled={more} onClick={() => void showMore()}>
               Show more card lines
             </button>
           )}
