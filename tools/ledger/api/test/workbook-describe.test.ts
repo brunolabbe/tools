@@ -41,6 +41,7 @@ import {
   INFLATE_CHUNK_BYTES,
   MAX_WORKBOOK_ENTRIES,
   MAX_WORKBOOK_INFLATED_BYTES,
+  workbookEntries,
 } from "../src/workbook-zip.ts";
 import { readSheets } from "../src/xlsx.ts";
 import {
@@ -819,6 +820,8 @@ describe("stored entries, counted before the sheet reader (lg-66 gate 1, F1)", (
     // Nothing inflates a stored entry, so only the count stands between these
     // forty names over one block and a reader that reads each of them whole.
     // Three tenths of the bound: a stop on a whole entry would overshoot by a fifth.
+    // The local header says 0 too, under bit 3, as a data descriptor allows: a
+    // local size the directory does not repeat is refused earlier (lg-87).
     const block = Buffer.alloc(Math.floor(MAX_WORKBOOK_INFLATED_BYTES * 0.3), 0x20);
     const zip = rawZip([
       {
@@ -841,6 +844,10 @@ describe("stored entries, counted before the sheet reader (lg-66 gate 1, F1)", (
         ...(index === 0 ? {} : { sameAs: 2 }),
       })),
     ]);
+    const local = workbookEntries(zip)[2]?.localHeaderOffset ?? 0;
+    zip.writeUInt16LE(8, local + 6);
+    zip.writeUInt32LE(0, local + 18);
+    zip.writeUInt32LE(0, local + 22);
     expect(zip.length).toBeLessThan(MAX_WORKBOOK_BYTES);
     const model = fake(answering(fixture("lg7").layout));
     const started = await start({ ask: model.ask });

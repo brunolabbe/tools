@@ -39,14 +39,18 @@
  * entries must end exactly where the directory ends, and the directory exactly
  * where the end record starts; anything else is `WORKBOOK_NOT_XLSX`.
  *
- * **SheetJS walks the same entries** (lg-84): the end record's count, through
- * the central directory, each at its local header. It takes an entry's method
- * from the local header, not the directory, but its ESM build has no `zlib` and
- * inflates in JavaScript into a buffer of the entry's declared size and no more.
- * So an entry the directory calls stored and the local header deflated is read
- * as its declared size, which the first bound already summed: measured, a sheet
- * inflating to 35 178 290 bytes declared as 1 000 was read as 1 000 bytes, no
- * row, +4 MB. That holds only while nothing calls `XLSX.set_zlib`.
+ * **SheetJS must read the entries counted here** (lg-84, lg-87). It walks the
+ * end record's count through the central directory, each at its local header,
+ * but finds the end record from four bytes before the file's end, and takes an
+ * entry's method and sizes from the local header or a zip64 record. So a
+ * signature in the last 21 bytes, a zip64 record anywhere, and a local header
+ * that disagrees with the directory on method, sizes or encryption are each
+ * `WORKBOOK_NOT_XLSX`. Its ESM build has no `zlib` (`XLSX.CFB.use_zlib` would
+ * give it one, and nothing calls it): it inflates in JavaScript to the end of
+ * the stream, into a buffer of the local size, or a growing one when bit 3 left
+ * that size 0. What bounds its memory either way is that the stream is the one
+ * counted here: a stream that runs past the directory's compressed size fails
+ * this inflate (`Z_BUF_ERROR`), so it is refused before SheetJS sees it.
  *
  * The parse is by hand rather than through the reader, whose zip walk is not
  * an API.
@@ -137,6 +141,14 @@ function tooLarge(): AppError {
   return new AppError("WORKBOOK_TOO_LARGE", undefined, { details: { bound: "inflated" } });
 }
 
+/** Whether `extra`, a header's extra field, carries a zip64 record (header id 1). */
+function hasZip64(extra: Buffer): boolean {
+  for (let at = 0; at + 4 <= extra.length; at += 4 + extra.readUInt16LE(at + 2)) {
+    if (extra.readUInt16LE(at) === 1) return true;
+  }
+  return false;
+}
+
 /** Where the end-of-central-directory record starts, or -1. */
 function endOfDirectory(bytes: Buffer): number {
   const lowest = Math.max(0, bytes.length - END_OF_DIRECTORY_SIZE - MAX_COMMENT);
@@ -161,6 +173,11 @@ export function workbookEntries(bytes: Buffer): ZipEntry[] {
   }
   const end = endOfDirectory(bytes);
   if (end < 0) throw notXlsx();
+  // SheetJS searches back from four bytes before the end, not twenty-two, so a
+  // signature in the last 21 bytes is an end record only it would read (lg-87).
+  for (let at = end + 1; at <= bytes.length - 4; at++) {
+    if (bytes.readUInt32LE(at) === END_OF_DIRECTORY) throw notXlsx();
+  }
   const disk = bytes.readUInt16LE(end + 4);
   const directoryDisk = bytes.readUInt16LE(end + 6);
   const onDisk = bytes.readUInt16LE(end + 8);
@@ -195,10 +212,13 @@ export function workbookEntries(bytes: Buffer): ZipEntry[] {
     const next = at + 46 + nameLength + extraLength + commentLength;
     // Bit 0: encrypted. Sizes of 0xffffffff: zip64, carried in an extra field.
     if ((flags & 1) !== 0 || (method !== 0 && method !== 8)) throw notXlsx();
+    // SheetJS takes an entry's sizes from a zip64 record whatever the fixed
+    // fields say, so one is refused even when they hold no 0xffffffff (lg-87).
     if (
       compressedSize === 0xffffffff ||
       declaredSize === 0xffffffff ||
-      localHeaderOffset === 0xffffffff
+      localHeaderOffset === 0xffffffff ||
+      hasZip64(bytes.subarray(at + 46 + nameLength, at + 46 + nameLength + extraLength))
     ) {
       throw notXlsx();
     }
@@ -224,11 +244,35 @@ export function declaredInflatedSize(entries: readonly ZipEntry[]): number {
   return entries.reduce((sum, entry) => sum + entry.declaredSize, 0);
 }
 
-/** An entry's compressed bytes, found through its local header. */
+/**
+ * An entry's compressed bytes, found through its local header, which must agree
+ * with the directory. SheetJS reads the method and the sizes from the local
+ * header, and inflates into a buffer of the local size (or a growing one when
+ * that is 0), so a local header that says deflated where the directory says
+ * stored would be counted here as its raw bytes and inflated there without
+ * bound (lg-87). The sizes may be 0 only where bit 3 says a data descriptor
+ * carries them; the stream inflated is then the one counted here.
+ */
 function compressedOf(bytes: Buffer, entry: ZipEntry): Buffer {
   const at = entry.localHeaderOffset;
   if (at + 30 > bytes.length || bytes.readUInt32LE(at) !== LOCAL_HEADER) throw notXlsx();
-  const start = at + 30 + bytes.readUInt16LE(at + 26) + bytes.readUInt16LE(at + 28);
+  const flags = bytes.readUInt16LE(at + 6);
+  const compressed = bytes.readUInt32LE(at + 18);
+  const inflated = bytes.readUInt32LE(at + 22);
+  const nameLength = bytes.readUInt16LE(at + 26);
+  const extraLength = bytes.readUInt16LE(at + 28);
+  const sizesAgree =
+    (compressed === entry.compressedSize && inflated === entry.declaredSize) ||
+    ((flags & 8) !== 0 && compressed === 0 && inflated === 0);
+  if (
+    (flags & 1) !== 0 ||
+    bytes.readUInt16LE(at + 8) !== entry.method ||
+    !sizesAgree ||
+    hasZip64(bytes.subarray(at + 30 + nameLength, at + 30 + nameLength + extraLength))
+  ) {
+    throw notXlsx();
+  }
+  const start = at + 30 + nameLength + extraLength;
   const stop = start + entry.compressedSize;
   if (stop > bytes.length) throw notXlsx();
   return bytes.subarray(start, stop);

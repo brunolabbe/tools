@@ -146,3 +146,8 @@ table inside the test.
     taken under `exceljs` keep its name. The contract's comment on fixture sizes
     "as `exceljs` writes them" is left: still true of the measurement, and the
     contract is not this ticket's to edit.
+- 2026-11-01: gate 1 returned FAIL after the owner merged #710. The Log above was
+  wrong in three places: a formula with no saved value is not `t: "e"` in files
+  Excel writes (it was dropped); dates were not timezone-free; and the zip-walk
+  claim held only where local headers agree with the directory, and named
+  `XLSX.set_zlib`, which does not exist. Fixed in lg-87.
