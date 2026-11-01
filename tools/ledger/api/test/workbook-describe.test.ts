@@ -477,7 +477,7 @@ describe("what is refused before the model is asked (Done when 6 and 8)", () => 
   });
 });
 
-describe("the inflated size, bounded before exceljs inflates anything (Done when 8)", () => {
+describe("the inflated size, bounded before the reader inflates anything (Done when 8)", () => {
   /** A real one-sheet workbook with its sheet's XML replaced. */
   async function withSheet(
     sheet: (xml: Buffer) => Promise<{ bytes: Buffer; crc: number; size: number }>,
@@ -894,10 +894,10 @@ describe("the zip's entries, counted before anything is inflated (lg-66 gate 1, 
 });
 
 describe("an end record and a directory that disagree (lg-66 gate 2, F2)", () => {
-  // `jszip`, which exceljs calls, reads every header that follows while its
-  // signature matches, whatever the end record counts, and shifts its offsets
-  // when the directory ends short of the record. These are each refused before
-  // the sheet reader, so neither parser reads what the other does not.
+  // `jszip`, which exceljs called until lg-84, read every header that followed
+  // while its signature matched, whatever the end record counted, and shifted its
+  // offsets when the directory ended short of the record. These are each refused
+  // before the sheet reader, so neither parser reads what the other does not.
   const TYPES =
     '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>';
   const NO_SHEETS =

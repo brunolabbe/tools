@@ -68,3 +68,7 @@ description. `npm audit` reports them on every run with no reason attached.
   recording the advisories alone or leaving them unrecorded. If GitHub shows
   Dependabot alerts for either advisory, dismiss them as "vulnerable code is not
   actually used", linking this ticket.
+- 2026-11-01: lg-84 removes exceljs and its chain on its branch. `npm audit` there
+  reports 3 moderate, down from 9: `@fastify/static`, glob and minimatch, the
+  first half above and nothing else. Build 3's "nothing should remain" holds once
+  this ticket's `@fastify/static` release lands too.

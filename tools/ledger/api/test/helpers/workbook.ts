@@ -22,7 +22,7 @@
  *   deposits 0.4 × 500 − 100 = 100.00, which she did on 2023-04-10.
  */
 
-import ExcelJS from "exceljs";
+import { SheetWriter, type Written, workbookOf } from "./xlsx-file.ts";
 
 export interface YearRow {
   /** As written in the cell, `yyyy-mm-dd`: a typo'd year is written wrong here. */
@@ -234,23 +234,26 @@ function day(text: string): Date {
   return new Date(`${text}T00:00:00.000Z`);
 }
 
-const DATE_FORMAT = "yyyy-mm-dd";
-
-function carried(amount: number, formula: string | undefined): ExcelJS.CellValue {
+function carried(amount: number, formula: string | undefined): Written {
   return formula === undefined ? amount : { formula, result: amount };
 }
 
 /** The fixture as an `.xlsx` file. */
-export async function render(fixture: Fixture): Promise<Buffer> {
-  const book = new ExcelJS.Workbook();
+export function render(fixture: Fixture): Promise<Buffer> {
+  const book: SheetWriter[] = [];
+  const addWorksheet = (name: string): SheetWriter => {
+    const sheet = new SheetWriter(name);
+    book.push(sheet);
+    return sheet;
+  };
 
   // The running balance is the account's, from what the first year carried in.
   const first = fixture.years[0];
   let balance = first === undefined ? 0 : first.carry.mortgage + first.carry.buffer;
   for (const year of fixture.years) {
-    const sheet = book.addWorksheet(String(year.year));
+    const sheet = addWorksheet(String(year.year));
     sheet.addRow(["", "Date", "Compte", "Détail", "Personne", "Solde", "Montant", "Note"]);
-    const lines: ExcelJS.CellValue[][] = [];
+    const lines: Written[][] = [];
     for (const row of year.rows) {
       if (row.amount !== undefined) balance = Math.round((balance + row.amount) * 100) / 100;
       lines.push([
@@ -285,82 +288,77 @@ export async function render(fixture: Fixture): Promise<Buffer> {
       null,
       carried(year.carry.mortgage, year.carryFormula?.mortgage),
     ]);
-    sheet.getColumn(2).numFmt = DATE_FORMAT;
   }
 
   for (const period of fixture.periods) {
-    const sheet = book.addWorksheet(period.name);
-    sheet.getCell("A1").value = "Période";
-    sheet.getCell("C1").value = "Alex";
-    sheet.getCell("D1").value = "Sam";
-    sheet.getCell("A6").value = "Du";
-    sheet.getCell("B6").value = day(period.start);
-    sheet.getCell("B6").numFmt = DATE_FORMAT;
+    const sheet = addWorksheet(period.name);
+    sheet.set("A1", "Période");
+    sheet.set("C1", "Alex");
+    sheet.set("D1", "Sam");
+    sheet.set("A6", "Du");
+    sheet.set("B6", day(period.start));
     if (period.end !== undefined) {
-      sheet.getCell("C6").value = "au";
-      sheet.getCell("D6").value = day(period.end);
-      sheet.getCell("D6").numFmt = DATE_FORMAT;
+      sheet.set("C6", "au");
+      sheet.set("D6", day(period.end));
     }
-    sheet.getCell("A7").value = "Item";
-    sheet.getCell("E7").value = "Note";
+    sheet.set("A7", "Item");
+    sheet.set("E7", "Note");
     let row = 8;
     const totals = { alex: 0, sam: 0 };
     for (const line of period.lines) {
-      sheet.getCell(`A${String(row)}`).value = line.label;
+      sheet.set(`A${String(row)}`, line.label);
       for (const [who, column] of [
         ["alex", "C"],
         ["sam", "D"],
       ] as const) {
         const amount = line[who];
         if (amount === undefined) continue;
-        sheet.getCell(`${column}${String(row)}`).value = amount;
+        sheet.set(`${column}${String(row)}`, amount);
         totals[who] += typeof amount === "number" ? amount : amount.result;
       }
-      if (line.note !== undefined) sheet.getCell(`E${String(row)}`).value = line.note;
+      if (line.note !== undefined) sheet.set(`E${String(row)}`, line.note);
       row += 1;
     }
     const last = row - 1;
-    sheet.getCell(`A${String(row)}`).value = "Total";
-    sheet.getCell(`C${String(row)}`).value = {
+    sheet.set(`A${String(row)}`, "Total");
+    sheet.set(`C${String(row)}`, {
       formula: `SUM(C8:C${String(last)})`,
       result: totals.alex,
-    };
-    sheet.getCell(`D${String(row)}`).value = {
+    });
+    sheet.set(`D${String(row)}`, {
       formula: `SUM(D8:D${String(last)})`,
       result: totals.sam,
-    };
+    });
     row += 1;
-    sheet.getCell(`A${String(row)}`).value = "Montant à déposer";
-    if (period.deposit.alex !== undefined)
-      sheet.getCell(`C${String(row)}`).value = period.deposit.alex;
-    if (period.deposit.sam !== undefined)
-      sheet.getCell(`D${String(row)}`).value = period.deposit.sam;
+    sheet.set(`A${String(row)}`, "Montant à déposer");
+    if (period.deposit.alex !== undefined) sheet.set(`C${String(row)}`, period.deposit.alex);
+    if (period.deposit.sam !== undefined) sheet.set(`D${String(row)}`, period.deposit.sam);
   }
 
   // As the household's Accueil has it (lg-37): names heading columns, the
   // salaries in a labelled row under them, and the names again over a
   // calculator whose figures are not salaries.
-  const home = book.addWorksheet("Accueil");
-  home.getCell("C2").value = "Alex";
-  home.getCell("D2").value = "Sam";
-  home.getCell("B4").value = "Salaires bruts";
-  home.getCell("C4").value = fixture.salaries.alex;
-  home.getCell("D4").value = fixture.salaries.sam;
-  home.getCell("B5").value = "Facteur équivalence";
-  home.getCell("C5").value = {
+  const home = addWorksheet("Accueil");
+  home.set("C2", "Alex");
+  home.set("D2", "Sam");
+  home.set("B4", "Salaires bruts");
+  home.set("C4", fixture.salaries.alex);
+  home.set("D4", fixture.salaries.sam);
+  home.set("B5", "Facteur équivalence");
+  home.set("C5", {
     formula: "C4/(C4+D4)",
     result: fixture.salaries.alex / (fixture.salaries.alex + fixture.salaries.sam),
-  };
-  home.getCell("C8").value = "Alex";
-  home.getCell("D8").value = "Sam";
-  home.getCell("B9").value = "Équivalence avec un total";
-  home.getCell("C9").value = 900;
-  home.getCell("D9").value = 600;
+  });
+  home.set("C8", "Alex");
+  home.set("D8", "Sam");
+  home.set("B9", "Équivalence avec un total");
+  home.set("C9", 900);
+  home.set("D9", 600);
 
-  const labels = book.addWorksheet("Labels");
+  const labels = addWorksheet("Labels");
   labels.addRow(["Personnes", "Comptes", "Détails"]);
   labels.addRow(["Alex", "Hypothèque", "Versement"]);
-  book.addWorksheet("Budget").addRow(["Épicerie", 400]);
+  addWorksheet("Budget").addRow(["Épicerie", 400]);
 
-  return Buffer.from(await book.xlsx.writeBuffer());
+  return Promise.resolve(workbookOf(book));
 }

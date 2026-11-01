@@ -6,21 +6,96 @@
 
 import { Buffer } from "node:buffer";
 import { crc32, createDeflateRaw, deflateRawSync, inflateRawSync } from "node:zlib";
-import ExcelJS from "exceljs";
+import * as XLSX from "xlsx";
 import type { Sheet } from "@ledger/books";
 import { workbookEntries } from "../../src/workbook-zip.ts";
 
-/** `sheets` as an `.xlsx`, each cell as `readSheets` reads it back. */
-export async function xlsxOf(sheets: readonly Sheet[]): Promise<Buffer> {
-  const book = new ExcelJS.Workbook();
+/** A cell as the tests write it: a value, a day, or a formula beside its saved result. */
+export type Written =
+  | string
+  | number
+  | boolean
+  | Date
+  | null
+  | { formula: string; result: number | boolean };
+
+const DAY_FORMAT = "yyyy-mm-dd";
+
+/** A day as Excel stores it: days since 1899-12-30, under a date format. */
+function serialOf(date: Date): number {
+  return (date.getTime() - Date.UTC(1899, 11, 30)) / 86_400_000;
+}
+
+function cellObject(value: Written): XLSX.CellObject | undefined {
+  if (value === null) return undefined;
+  if (typeof value === "string") return { t: "s", v: value };
+  if (typeof value === "number") return { t: "n", v: value };
+  if (typeof value === "boolean") return { t: "b", v: value };
+  if (value instanceof Date) return { t: "n", v: serialOf(value), z: DAY_FORMAT };
+  return typeof value.result === "boolean"
+    ? { t: "b", v: value.result, f: value.formula }
+    : { t: "n", v: value.result, f: value.formula };
+}
+
+/** One sheet, filled by address or a row at a time, as the tests build them. */
+export class SheetWriter {
+  readonly cells = new Map<string, XLSX.CellObject>();
+  readonly merges: XLSX.Range[] = [];
+  #rows = 0;
+
+  constructor(readonly name: string) {}
+
+  set(address: string, value: Written, format?: string): void {
+    const cell = cellObject(value);
+    if (cell === undefined) return;
+    if (format !== undefined) cell.z = format;
+    this.cells.set(address, cell);
+    this.#rows = Math.max(this.#rows, XLSX.utils.decode_cell(address).r + 1);
+  }
+
+  /** Values from column A, on the row after the last one written. */
+  addRow(values: readonly Written[]): void {
+    const r = this.#rows;
+    values.forEach((value, c) => {
+      this.set(XLSX.utils.encode_cell({ r, c }), value);
+    });
+    this.#rows = r + 1;
+  }
+
+  merge(range: string): void {
+    this.merges.push(XLSX.utils.decode_range(range));
+  }
+}
+
+/** `sheets` as an `.xlsx`, in their order. */
+export function workbookOf(sheets: readonly SheetWriter[]): Buffer {
+  const book = XLSX.utils.book_new();
   for (const sheet of sheets) {
-    const out = book.addWorksheet(sheet.name);
-    for (const [index, row] of sheet.rows.entries()) {
-      for (const [column, cell] of row.entries()) {
+    const out: XLSX.WorkSheet = {};
+    const bounds = { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+    for (const [address, cell] of sheet.cells) {
+      out[address] = cell;
+      const { r, c } = XLSX.utils.decode_cell(address);
+      bounds.e.r = Math.max(bounds.e.r, r);
+      bounds.e.c = Math.max(bounds.e.c, c);
+    }
+    out["!ref"] = XLSX.utils.encode_range(bounds);
+    if (sheet.merges.length > 0) out["!merges"] = sheet.merges;
+    XLSX.utils.book_append_sheet(book, out, sheet.name);
+  }
+  return XLSX.write(book, { type: "buffer", bookType: "xlsx" }) as Buffer;
+}
+
+/** `sheets` as an `.xlsx`, each cell as `readSheets` reads it back. */
+export function xlsxOf(sheets: readonly Sheet[]): Promise<Buffer> {
+  const writers = sheets.map((sheet) => {
+    const out = new SheetWriter(sheet.name);
+    for (const [r, row] of sheet.rows.entries()) {
+      for (const [c, cell] of row.entries()) {
         if (cell === null || cell === undefined) continue;
-        const target = out.getCell(index + 1, column + 1);
+        const address = XLSX.utils.encode_cell({ r, c });
         const value = cell.value;
-        const plain: ExcelJS.CellValue =
+        const plain =
           value === null
             ? null
             : value.kind === "text"
@@ -28,15 +103,18 @@ export async function xlsxOf(sheets: readonly Sheet[]): Promise<Buffer> {
               : value.kind === "number"
                 ? value.number
                 : new Date(`${value.date}T00:00:00.000Z`);
-        target.value =
+        out.set(
+          address,
           cell.formula === null
             ? plain
-            : { formula: cell.formula, result: typeof plain === "number" ? plain : 0 };
-        if (value?.kind === "date") target.numFmt = "yyyy-mm-dd";
+            : { formula: cell.formula, result: typeof plain === "number" ? plain : 0 },
+          value?.kind === "date" ? DAY_FORMAT : undefined,
+        );
       }
     }
-  }
-  return Buffer.from(await book.xlsx.writeBuffer());
+    return out;
+  });
+  return Promise.resolve(workbookOf(writers));
 }
 
 /** An entry of a zip as `zipOf` writes it. */

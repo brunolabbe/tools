@@ -72,7 +72,7 @@ describe("the control", () => {
 describe("the directory, read before anything is inflated", () => {
   test.each([
     ["encrypted (flag bit 0)", { flags: 1 }],
-    ["compressed by a method exceljs does not read (12, bzip2)", { method: 12 }],
+    ["compressed by a method the reader does not read (12, bzip2)", { method: 12 }],
   ])("an entry %s is not an .xlsx", (_what, field) => {
     const zip = rawZip(
       workbook({ name: "xl/worksheets/sheet1.xml", data: Buffer.from("<x/>"), ...field }),
