@@ -383,6 +383,40 @@ with its cost, or (b) say why it is excluded. Chosen: (a). It is option 5 above.
   added to an existing select, no new screen; ledger `e2e` green on CI at `b09aadd2`, not run
   locally.
 
+### Gate 2
+
+**Gate: PASS** — 2026-11-01 · `b09aadd2..6a294daa` · Opus 5.5, depth standard, scoped to the round (`500881b1`, `6a294daa`)
+
+| Done when                                                                                                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Owner's answer recorded under `## Decision — answered <date> by <who>`, options listed, `ready` in that commit, before any source change | **verified** by reading; the round's commits touch only `## Log` of the ticket, and the Decision and `status: ready` are as gate 1 read them                                                                                                                                                                                                                                                                                                                                       |
+| 2. Option 1: C1, C2, C3 show the unpicked state and `fileReceipt` is not called; C0's `NOBODY_ELSE` refusal pinned                          | `web/test/receipts.test.tsx` › "a read item charged to someone who has left, or to nobody, files nothing until a current member is picked: %s (lg-94)" ✓ (C1–C3: `Whose?`, alert is the new `UNPICKED_CHARGE`, `fileReceipt` not called); › "with nobody else, a read charge to someone who has left is refused as before (lg-94 C0)" ✓. `-t lg-94`: 10 of 10 pass. Gate 1's 20-cell probe at the head gives the same 20 records as at `b09aadd2`, apart from the new refusal text |
+| 3. Built after lg-90 merged, line numbers re-resolved                                                                                       | **verified**: the round adds no merge; lg-90 and lg-91 are still ancestors of the base                                                                                                                                                                                                                                                                                                                                                                                             |
+| 4. `npm run check` and `npm test -- --project ledger` pass                                                                                  | **verified**: check exit 0; ledger `99 passed (99)` files, `2183 passed (2183)` tests (gate 1: 2179; the round adds 4, deletes none, and changes one constant to the new text). PR #744 CI at `6a294daa`: all 10 checks `SUCCESS`, `test (windows-latest, informational)` and ledger `e2e` included                                                                                                                                                                                |
+
+Gate 1's findings:
+
+- **med, the joint round trip** · **fixed**. Across gate 1's 20 cells × 8 sequences (160 records), the outcome after one and after two joint round trips matches the no-round-trip outcome in every cell. Every pick goes where it was picked. Positive control: with `!item.asRead &&` removed from `payMyself`, the two new round-trip tests fail (`2 failed | 8 passed`, `-t lg-94`), and 18 of the probe's 160 records flip to `Mine`.
+- **low, the stale alert** · not fixed. The owner chose to record it (answer C).
+- **low, the `UNPICKED_CHARGE` text** · **fixed**. The new text shows in 11 cells: households of 2–4 for a read naming the payer, a departed member or an unknown name, and households of 3–4 for no name. It is true in all 11. For the payer cell, "no other member" holds because the payer is not an _other_.
+- **low, the household-of-two live line** · not fixed. The owner chose to record it (answer C).
+
+New in the round:
+
+- **low** · `nfr:maintainability` · Three behaviours of `asRead` have no test on the branch:
+  - the builder's own counter-case: an item unchecked while paid jointly is Mine again on my own card;
+  - a household of two with no name now stays the other member's through a round trip (answer A), where it used to land on Mine;
+  - a household of one now stays refused `NOBODY_ELSE`, where it used to land on Mine.
+
+  The probe shows all three behave correctly. A change to `payMyself` could break any of them and no test would fail.
+
+- **low** · The test "a refusal's words are true for a name the books never held, the payer and a departed member alike (lg-94)" reads only `zed`. Its title claims more than its body asserts. No `Done when` line rests on it.
+- **low** · The Log's round 1 entry describes gate 1's third low as "it reads `Whose not chosen yet` with one candidate". Gate 1's section says the line reads the whole charged amount as not chosen, an item that is the other member's included. The Log points to gate 1's section for the text. The stale-alert summary matches.
+- **dropped** · "no other member" being false for a departed name (the code's comments say "a member who has left"): the household screen removes a member who leaves, so a person reads "member" as current.
+- **dropped** · A pick is lost when the form is left for the queue and reopened. It is older than this branch: `backToQueue` drops the draft. The reopened part reads `Whose?` and refuses, which is the safe direction.
+- **findings** · the hunt returned 5; 3 carried, 2 dropped. None is a `high`.
+- NFR: security n/a · performance n/a · reliability ✓ (the gate 1 `med` is fixed) · maintainability — the first low above. Layout: no new control and no new screen; ledger `e2e` green on CI at `6a294daa`, not run locally.
+
 ## Log
 
 **2026-11-01, filed by a builder (maintenance dispatch, lg-94, base `686b213c`).**
