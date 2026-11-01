@@ -35,6 +35,7 @@ import type {
   Charge,
   HouseholdSettlement,
   PersonCents,
+  PotCharge,
   Settlement,
   Stretch,
 } from "./settlement.ts";
@@ -50,13 +51,22 @@ export interface WeighedPeriod extends PeriodSpan {
   ratio: readonly Share[];
 }
 
-/** A line paid on someone's own card: shared, or charged in full to the other. */
+/**
+ * A line paid on someone's own card: shared, or charged in full to the other.
+ * Or a charge to the pot (lg-91), which nobody paid on a card: the joint
+ * account paid for something `chargedTo` consumed alone.
+ */
 export interface LineInput {
   personId: string;
   date: string;
   amountCents: number;
   /** `null` is shared at the ratio; a person is who owes the whole of it. */
   chargedTo: string | null;
+  /**
+   * `true` on a charge to the pot, whose `personId` and `chargedTo` are both
+   * the person who owes it; absent or `false` on every other line.
+   */
+  owedToPot?: boolean;
 }
 
 /** Money a person put into the buffer: a current-expenses row filed to them. */
@@ -202,10 +212,16 @@ function periodStretches(
 ): Stretch[] {
   const contributions: PersonCents[][] = periods.map(() => []);
   const charges: Charge[][] = periods.map(() => []);
+  const potCharges: PotCharge[][] = periods.map(() => []);
   for (const line of lines) {
     const index = periodIndexOf(periods, line.date);
     if (index < 0) continue;
-    if (line.chargedTo === null) {
+    if (line.owedToPot === true) {
+      potCharges[index]?.push({
+        owedBy: line.chargedTo ?? line.personId,
+        cents: line.amountCents,
+      });
+    } else if (line.chargedTo === null) {
       contributions[index]?.push({ personId: line.personId, cents: line.amountCents });
     } else {
       charges[index]?.push({
@@ -231,6 +247,7 @@ function periodStretches(
     ratio: period.ratio,
     contributions: contributions[index] ?? [],
     charges: charges[index] ?? [],
+    potCharges: potCharges[index] ?? [],
   }));
 }
 

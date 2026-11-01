@@ -440,7 +440,7 @@ test("files the items as marked, on what the card was charged", async () => {
     proposal: BASKET,
     periodLineId: 9,
     chargeLineId: 10,
-    charges: [{ chargedTo: "sam", lineId: 10 }],
+    charges: [{ chargedTo: "sam", lineId: 10, owedToPot: false }],
     rowId: null,
     filedAt: "x",
     filedBy: "alex",
@@ -503,7 +503,9 @@ test("items that do not add up to the total are shown for correction and not fil
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
 });
 
-test("keeps an item left out off a joint-account row, before asking the server", async () => {
+// lg-91 supersedes "shared whole": an item left out of a joint row must name
+// whose it is, and one left as Mine names nobody once paid jointly.
+test("keeps an item left out that names nobody off a joint-account row, before asking the server", async () => {
   vi.mocked(fetchReceiptMatches).mockResolvedValue([
     {
       rowId: 41,
@@ -520,7 +522,9 @@ test("keeps an item left out off a joint-account row, before asking the server",
   fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
 
   const said = (await screen.findByRole("alert")).textContent ?? "";
-  expect(said).toContain("shared whole");
+  expect(said).toBe(
+    "Choose whose each item left out is: a joint-account purchase has no payer to keep one.",
+  );
   // Never sent to file it as a line: a line is paid by whoever took the photo (gate 1, F1).
   expect(said).not.toContain("line");
   expect(fileReceipt).not.toHaveBeenCalled();
@@ -559,8 +563,8 @@ test("among three people, an unchecked item names whose it is from one select (l
     periodLineId: 9,
     chargeLineId: 10,
     charges: [
-      { chargedTo: "sam", lineId: 10 },
-      { chargedTo: "casey", lineId: 11 },
+      { chargedTo: "sam", lineId: 10, owedToPot: false },
+      { chargedTo: "casey", lineId: 11, owedToPot: false },
     ],
     rowId: null,
     filedAt: "x",
@@ -1205,7 +1209,7 @@ test("among three people, checking a charged item again files it shared with nob
     proposal: BASKET,
     periodLineId: 9,
     chargeLineId: 10,
-    charges: [{ chargedTo: "casey", lineId: 10 }],
+    charges: [{ chargedTo: "casey", lineId: 10, owedToPot: false }],
     rowId: null,
     filedAt: "x",
     filedBy: "alex",
@@ -1317,4 +1321,114 @@ test("a photo of one receipt opens its form, files back to the queue, and offers
   expect(field("Merchant").value).toBe("");
   fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
   expect(readReceipt).toHaveBeenCalledTimes(1);
+});
+
+// --- lg-91: an item left out of a joint-account row, owed to the pot ---
+
+/** The basket's row on the joint account, for its whole total. */
+function basketRow(): void {
+  vi.mocked(fetchReceiptMatches).mockResolvedValue([
+    {
+      rowId: 41,
+      date: "2026-10-03",
+      description: "Achat /Marché Exemple",
+      amountCents: -2_476,
+      daysApart: 1,
+    },
+  ]);
+}
+
+const NOBODY_CHOSEN =
+  "Choose whose each item left out is: a joint-account purchase has no payer to keep one.";
+
+test("paid with the joint card, an item left out offers every member and no Mine, and nothing is chosen until one is picked (lg-91)", async () => {
+  basketRow();
+  await readBasket();
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  await screen.findByRole("button", { name: "Attach to this row" });
+
+  leaveOut("BIERE 6X355");
+
+  // alex took the photo, and is offered too: a joint purchase has no payer.
+  expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Whose?", "alex", "sam"]);
+  expect(whoseSelect("BIERE 6X355").value).toBe("");
+  expect(shared()).toBe("Whose not chosen yet 15.54 $ · Shared 9.22 $");
+  expect(screen.getByText(NOBODY_CHOSEN)).toBeTruthy();
+  // No line to file: the joint account paid.
+  expect(screen.queryByRole("button", { name: "File as alex’s line" })).toBeNull();
+
+  fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "sam" } });
+
+  expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["alex", "sam"]);
+  expect(shared()).toBe("Owed to the pot by sam 15.54 $ · Shared 9.22 $");
+  expect(screen.queryByText(NOBODY_CHOSEN)).toBeNull();
+  // Picking whose keeps the rows found.
+  expect(screen.getByRole("button", { name: "Attach to this row" })).toBeTruthy();
+});
+
+test.each(["sam", "alex"])(
+  "attached to a joint-account row, an item left out is filed as the person chosen's, %s (lg-91)",
+  async (person) => {
+    basketRow();
+    vi.mocked(fileReceipt).mockResolvedValue({
+      id: 1,
+      receiptId: 3,
+      part: 1,
+      proposal: BASKET,
+      periodLineId: null,
+      chargeLineId: null,
+      charges: [{ chargedTo: person, lineId: 10, owedToPot: true }],
+      rowId: 41,
+      filedAt: "x",
+      filedBy: "alex",
+    });
+    await readBasket();
+    fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+    await screen.findByRole("button", { name: "Attach to this row" });
+    leaveOut("BIERE 6X355");
+    fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: person } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Attach to this row" }));
+
+    await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+    const request = vi.mocked(fileReceipt).mock.calls[0]?.[1];
+    expect(request?.destination).toEqual({ to: "row", rowId: 41 });
+    expect(request?.proposal.items.map((item) => [item.share, item.chargedTo])).toEqual([
+      ["shared", null],
+      ["theirs", person],
+      ["shared", null],
+    ]);
+    expect(
+      await screen.findByText(
+        `Attached to the joint-account row, and ${person}'s items as a charge to the pot.`,
+      ),
+    ).toBeTruthy();
+  },
+);
+
+test("an item left as Mine names nobody once paid jointly, and is Mine again on my own card (lg-91)", async () => {
+  basketRow();
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  await readBasket();
+  leaveOut("BIERE 6X355");
+  expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Mine", "casey", "sam"]);
+
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  await screen.findByRole("button", { name: "Attach to this row" });
+
+  expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Whose?", "alex", "casey", "sam"]);
+  expect(whoseSelect("BIERE 6X355").value).toBe("");
+  fireEvent.click(screen.getByRole("button", { name: "Attach to this row" }));
+  expect((await screen.findByRole("alert")).textContent).toBe(NOBODY_CHOSEN);
+  expect(fileReceipt).not.toHaveBeenCalled();
+
+  fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "alex" } });
+  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+
+  // Charged to whoever took the photo is theirs to keep, on their own card.
+  expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Mine", "casey", "sam"]);
+  expect(whoseSelect("BIERE 6X355").value).toBe("");
+  expect(screen.queryByRole("button", { name: "Attach to this row" })).toBeNull();
+  expect(screen.getByRole("button", { name: "File as alex’s line" })).toBeTruthy();
 });

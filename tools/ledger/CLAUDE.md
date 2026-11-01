@@ -256,7 +256,7 @@ is documented by one receipt (`ROW_ALREADY_DOCUMENTED`). **A receipt's items
 must make its total or it is not filed** (`RECEIPT_DOES_NOT_ADD_UP`, lg-10): the
 line is what the card was charged less what the books compute its not-shared and
 someone else's items to cost, and each charged person's part is a charge line of
-its own; on a row every item is shared. **A `theirs` item names whose it is**
+its own; on a row an item is shared or a current member's, and each member's items are a charge they owe the pot (lg-91). **A `theirs` item names whose it is**
 (`chargedTo`, lg-30): with one other current member it may name nobody and means
 them, with more it must name one, and a name is anyone the books hold who is not
 the payer, a member who has left included. The model proposes each item's category from the list and

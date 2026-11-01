@@ -1254,7 +1254,9 @@ describe("a merchant's last category, corrected (lg-10 gate 1, F3)", () => {
 });
 
 describe("a joint-account row's items (lg-10 gate 1, F1)", () => {
-  test("refuses an item marked as the other's on a row, files nothing, and says the row is shared whole", async () => {
+  // lg-91 supersedes "shared whole": a person's item on a row is a charge to the
+  // pot, and must name whose it is, since a row has no payer to be "the other" of.
+  test("refuses an item marked as someone's on a row that names nobody, and files nothing", async () => {
     const target = await start();
     await pasteRows(target);
     const receipt = await uploaded(target);
@@ -1270,7 +1272,9 @@ describe("a joint-account row's items (lg-10 gate 1, F1)", () => {
 
     expect(refused.statusCode, refused.body).toBe(400);
     const message = refused.json<ErrorResponse>().error.message;
-    expect(message).toContain("shared whole");
+    expect(message).toBe(
+      "On a joint-account row, name whose each item left out of the shared amount is.",
+    );
     // A line is paid by whoever uploaded the photo, which a row's purchase was not.
     expect(message).not.toContain("line");
     expect([count(target, "receipt_filings"), count(target, "receipt_items")]).toEqual([0, 0]);
@@ -1357,8 +1361,8 @@ describe("an item marked as the other's, among more than two", () => {
     ]);
     expect(stored.reduce((sum, line) => sum + line.amount_cents, 0)).toBe(2_476);
     expect(filing.charges).toEqual([
-      { chargedTo: "casey", lineId: stored[1]?.id },
-      { chargedTo: "sam", lineId: stored[2]?.id },
+      { chargedTo: "casey", lineId: stored[1]?.id, owedToPot: false },
+      { chargedTo: "sam", lineId: stored[2]?.id, owedToPot: false },
     ]);
     expect(filing.chargeLineId).toBe(stored[1]?.id);
     expect(storedItems(target)).toEqual([
@@ -1469,7 +1473,9 @@ describe("two people keep their requests and results (lg-30)", () => {
     expect(response.statusCode, response.body).toBe(200);
     const filing = response.json<ReceiptFiling>();
     expect(filing.chargeLineId).not.toBeNull();
-    expect(filing.charges).toEqual([{ chargedTo: "sam", lineId: filing.chargeLineId }]);
+    expect(filing.charges).toEqual([
+      { chargedTo: "sam", lineId: filing.chargeLineId, owedToPot: false },
+    ]);
     expect(storedItems(target)).toEqual([
       { share: "shared", charged_to: null, charge_line_id: null },
       { share: "theirs", charged_to: "sam", charge_line_id: filing.chargeLineId },
@@ -1515,21 +1521,22 @@ describe("the names a theirs item may not carry (lg-30)", () => {
     expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
   });
 
-  test("still refuses a theirs item on a joint-account row, with the same words", async () => {
+  // lg-91 supersedes the refusal this test held: a named item on a row is a
+  // charge to the pot. The rest is proved at the end of this file.
+  test("a theirs item naming a member on a joint-account row is filed as a charge to the pot", async () => {
     const target = await start({ members: THREE });
     await pasteRows(target);
     const receipt = await uploaded(target, ALEX);
 
-    const refused = await file(target, receipt.id, {
+    const filed = await file(target, receipt.id, {
       proposal: named(BASKET, "shared", ["theirs", "sam"]),
       destination: { to: "row", rowId: chargeRow(target) },
     });
 
-    expect(refused.statusCode, refused.body).toBe(400);
-    expect(refused.json<ErrorResponse>().error.message).toBe(
-      "A receipt on a joint-account row is shared whole: every item on it stays shared.",
-    );
-    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+    expect(filed.statusCode, filed.body).toBe(200);
+    expect(filed.json<ReceiptFiling>().charges).toEqual([
+      { chargedTo: "sam", lineId: 1, owedToPot: true },
+    ]);
   });
 });
 
@@ -1601,8 +1608,8 @@ describe("nothing shared, two people charged (lg-30)", () => {
     ]);
     expect(filing.chargeLineId).toBeNull();
     expect(filing.charges).toEqual([
-      { chargedTo: "casey", lineId: stored[0]?.id },
-      { chargedTo: "sam", lineId: stored[1]?.id },
+      { chargedTo: "casey", lineId: stored[0]?.id, owedToPot: false },
+      { chargedTo: "sam", lineId: stored[1]?.id, owedToPot: false },
     ]);
   });
 
@@ -1865,5 +1872,295 @@ describe("a stored rebate reaches the chart (lg-89, gate 1)", () => {
         { categoryId: HOUSEHOLD, cents: 459 },
       ],
     });
+  });
+});
+
+// --- lg-91: an item left out of a joint-account row's receipt, owed to the pot ---
+
+/** The six-pack, sam's: 15,54 $ with its deposit and taxes (`BASKET`'s comment). */
+const SAMS_BEER = named(BASKET, "shared", ["theirs", "sam"]);
+const BEER_CENTS = 1_554;
+
+async function send(target: App, method: "GET" | "POST", route: string, payload?: object) {
+  return await target.server.inject({
+    method,
+    url: route,
+    headers: as(ALEX),
+    ...(payload === undefined ? {} : { payload }),
+  });
+}
+
+/** Confirms a ratio from 2026-01-01 out of the salaries given, by person. */
+async function confirmRatio(target: App, salaries: Record<string, number>): Promise<void> {
+  const entered = await send(target, "POST", ROUTES.salaries, {
+    year: 2026,
+    salaries: Object.entries(salaries).map(([personId, amountCents]) => ({
+      personId,
+      amountCents,
+    })),
+  });
+  expect(entered.statusCode, entered.body).toBe(200);
+  const confirmed = await send(target, "POST", ROUTES.ratios, {
+    effectiveFrom: "2026-01-01",
+    salaryIds: entered.json<{ salaries: { id: number }[] }>().salaries.map((salary) => salary.id),
+  });
+  expect(confirmed.statusCode, confirmed.body).toBe(200);
+}
+
+async function openPeriod(target: App): Promise<OpenPeriodResponse> {
+  const open = await send(target, "GET", ROUTES.periodOpen);
+  expect(open.statusCode, open.body).toBe(200);
+  return open.json<OpenPeriodResponse>();
+}
+
+function statementRow(target: App, rowId: number): unknown {
+  return homeBooks(target).prepare("SELECT * FROM statement_rows WHERE id = ?").get(rowId);
+}
+
+function potLines(target: App): unknown[] {
+  return homeBooks(target)
+    .prepare(
+      "SELECT person_id, date, amount_cents, charged_to, owed_to_pot, spending_category_id, note, source FROM period_lines ORDER BY id",
+    )
+    .all();
+}
+
+describe("an item on a joint-account row charged to a person (lg-91)", () => {
+  test("files one charge to the pot in the row's period at the item's cost, leaves the row as it was, and moves the settlement by (1 − r) × c", async () => {
+    const target = await start();
+    await pasteRows(target);
+    // alex 0.6, sam 0.4.
+    await confirmRatio(target, { alex: 6_000_000, sam: 4_000_000 });
+    const rowId = chargeRow(target);
+    const row = statementRow(target, rowId);
+    const classifications = count(target, "classifications");
+    const before = await openPeriod(target);
+    const receipt = await uploaded(target);
+
+    const filed = await file(target, receipt.id, {
+      proposal: SAMS_BEER,
+      destination: { to: "row", rowId },
+    });
+
+    expect(filed.statusCode, filed.body).toBe(200);
+    const filing = filed.json<ReceiptFiling>();
+    expect(filing).toMatchObject({ rowId, periodLineId: null, chargeLineId: null });
+    // One line: sam owes the pot the six-pack, dated the row's date, under its category.
+    expect(potLines(target)).toEqual([
+      {
+        person_id: "sam",
+        date: "2026-10-03",
+        amount_cents: BEER_CENTS,
+        charged_to: null,
+        owed_to_pot: 1,
+        spending_category_id: ALCOHOL,
+        note: "Marché Exemple",
+        source: "receipt",
+      },
+    ]);
+    const [charge] = filing.charges;
+    expect(filing.charges).toEqual([{ chargedTo: "sam", lineId: charge?.lineId, owedToPot: true }]);
+    expect(storedItems(target)).toEqual([
+      { share: "shared", charged_to: null, charge_line_id: null },
+      { share: "theirs", charged_to: "sam", charge_line_id: charge?.lineId },
+      { share: "shared", charged_to: null, charge_line_id: null },
+    ]);
+    // The row is as it was, and so is how it is filed.
+    expect(statementRow(target, rowId)).toEqual(row);
+    expect(count(target, "classifications")).toBe(classifications);
+
+    const after = await openPeriod(target);
+    // The open period holds it, read as a charge to sam owed to the pot.
+    expect(after.lines).toEqual([
+      expect.objectContaining({
+        date: "2026-10-03",
+        personId: "sam",
+        chargedTo: "sam",
+        owedToPot: true,
+        amountCents: BEER_CENTS,
+        lineId: charge?.lineId,
+      }),
+    ]);
+    // Nothing was owed before; now sam owes alex (1 − 0.4) × 15,54 $ = 9,324 $.
+    expect(before.settlement).toMatchObject({ deposits: [], transfers: [] });
+    expect(after.settlement).toMatchObject({
+      transfers: [{ fromId: "sam", toId: "alex", cents: 932 }],
+      // Into a buffer alex owns 0.6 of: 9,324 / 0.6 = 15,54 $, the six-pack's cost.
+      deposits: [{ personId: "sam", depositCents: BEER_CENTS }],
+    });
+  });
+
+  test("among three, the charge is shared out at each member's ratio", async () => {
+    const target = await start({ members: THREE });
+    await pasteRows(target);
+    // alex 0.5, casey 0.3, sam 0.2.
+    await confirmRatio(target, { alex: 5_000_000, casey: 3_000_000, sam: 2_000_000 });
+    const receipt = await uploaded(target);
+
+    const filed = await file(target, receipt.id, {
+      proposal: SAMS_BEER,
+      destination: { to: "row", rowId: chargeRow(target) },
+    });
+
+    expect(filed.statusCode, filed.body).toBe(200);
+    // sam owes alex 0.5 × 15,54 $ = 7,77 $ and casey 0.3 × 15,54 $ = 4,662 $.
+    expect((await openPeriod(target)).settlement?.transfers).toEqual([
+      { fromId: "sam", toId: "alex", cents: 777 },
+      { fromId: "sam", toId: "casey", cents: 466 },
+    ]);
+  });
+
+  test.each([
+    [
+      "a not-shared item",
+      named(BASKET, "shared", "not-shared"),
+      "A joint-account purchase has no payer to keep an item: mark it shared, or name whose it is.",
+    ],
+    [
+      "a theirs item naming nobody",
+      named(BASKET, "shared", "theirs"),
+      "On a joint-account row, name whose each item left out of the shared amount is.",
+    ],
+    [
+      "a theirs item naming someone the books do not hold",
+      named(BASKET, "shared", ["theirs", "robin"]),
+      "That person is not one of the household.",
+    ],
+  ])("refuses %s, and files nothing", async (_case, proposal, message) => {
+    const target = await start({ members: THREE });
+    await pasteRows(target);
+    const rowId = chargeRow(target);
+    const row = statementRow(target, rowId);
+    const receipt = await uploaded(target);
+
+    const refused = await file(target, receipt.id, {
+      proposal,
+      destination: { to: "row", rowId },
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error).toMatchObject({ code: "BAD_REQUEST", message });
+    expect([
+      count(target, "period_lines"),
+      count(target, "receipt_filings"),
+      count(target, "receipt_items"),
+    ]).toEqual([0, 0, 0]);
+    expect(statementRow(target, rowId)).toEqual(row);
+  });
+
+  test("the row's chart leaves out the charged item's category, which its charge charts instead", async () => {
+    const target = await start();
+    await pasteRows(target);
+    const rowId = chargeRow(target);
+    const receipt = await uploaded(target);
+    const filed = await file(target, receipt.id, {
+      proposal: SAMS_BEER,
+      destination: { to: "row", rowId },
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    const row: StoredRow = {
+      id: rowId,
+      date: "2026-10-03",
+      category: "Épicerie",
+      description: "Achat /Marché Exemple",
+      amountCents: -2_650,
+      balanceCents: 0,
+      classification: null,
+      spendingCategory: null,
+    };
+
+    const charted = chartedAs(row, receiptsOnRows(homeBooks(target)));
+
+    // Bread 3,49 $ and soap 4,99 $ × 1,14975 = 5,74 $; the 26,50 $ less the
+    // six-pack's 15,54 $ is 10,96 $, and the soap, the larger, takes the
+    // remaining 1,73 $. No alcohol: the six-pack's charge charts it, as a card line.
+    expect(charted).toEqual({
+      split: true,
+      slices: [
+        { categoryId: GROCERIES, cents: 349 },
+        { categoryId: HOUSEHOLD, cents: 747 },
+      ],
+    });
+    expect(charted.slices.reduce((sum, slice) => sum + slice.cents, 0) + BEER_CENTS).toBe(2_650);
+    expect(potLines(target)).toEqual([
+      expect.objectContaining({ amount_cents: BEER_CENTS, spending_category_id: ALCOHOL }),
+    ]);
+  });
+
+  test("a charge to the pot corrected stays one, and the row's chart follows what stands; removed, the row is whole again", async () => {
+    const target = await start();
+    await pasteRows(target);
+    const rowId = chargeRow(target);
+    const receipt = await uploaded(target);
+    const filed = await file(target, receipt.id, {
+      proposal: SAMS_BEER,
+      destination: { to: "row", rowId },
+    });
+    expect(filed.statusCode, filed.body).toBe(200);
+    const lineId = filed.json<ReceiptFiling>().charges[0]?.lineId ?? 0;
+    const row = { id: rowId, amountCents: -2_650, spendingCategory: null } as StoredRow;
+    const copied = {
+      personId: "sam",
+      date: "2026-10-03",
+      amountCents: 1_000,
+      category: null,
+      spendingCategoryId: ALCOHOL,
+      note: "Marché Exemple",
+      chargedTo: "sam",
+    };
+
+    // The stats screen corrects a line by sending it back as it reads it.
+    const corrected = await send(
+      target,
+      "POST",
+      ROUTES.periodLine.replace(":id", String(lineId)),
+      copied,
+    );
+    expect(corrected.statusCode, corrected.body).toBe(200);
+    expect(corrected.json()).toMatchObject({
+      chargedTo: "sam",
+      owedToPot: true,
+      amountCents: 1_000,
+    });
+    const chargedNow = receiptsOnRows(homeBooks(target)).get(rowId)?.chargedCents;
+    expect(chargedNow).toBe(1_000);
+    // Made a card line, it is refused: nobody paid it on a card.
+    const toCard = await send(
+      target,
+      "POST",
+      ROUTES.periodLine.replace(":id", String(corrected.json<{ id: number }>().id)),
+      { ...copied, chargedTo: null },
+    );
+    expect(toCard.statusCode, toCard.body).toBe(400);
+
+    const retired = await send(
+      target,
+      "POST",
+      ROUTES.periodLineRetire.replace(":id", String(corrected.json<{ id: number }>().id)),
+    );
+    expect(retired.statusCode, retired.body).toBe(200);
+    expect((await openPeriod(target)).lines).toEqual([]);
+    expect(chartedAs(row, receiptsOnRows(homeBooks(target))).slices).toEqual([
+      { categoryId: GROCERIES, cents: 349 },
+      { categoryId: ALCOHOL, cents: 1_727 },
+      { categoryId: HOUSEHOLD, cents: 574 },
+    ]);
+  });
+
+  test("a line charged to whoever paid it is still refused when a person enters it", async () => {
+    const target = await start();
+
+    const refused = await send(target, "POST", ROUTES.periodLines, {
+      personId: "sam",
+      date: "2026-10-03",
+      amountCents: 1_000,
+      category: null,
+      spendingCategoryId: null,
+      note: null,
+      chargedTo: "sam",
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(count(target, "period_lines")).toBe(0);
   });
 });

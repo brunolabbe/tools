@@ -747,6 +747,19 @@ const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE receipt_items ADD COLUMN discount_cents INTEGER;
   `,
+
+  // 17 — a charge to the pot (lg-91): an item left out of a joint-account row's
+  // receipt, owed by one person to the other members at the period's ratio.
+  // person_id is who owes it, and charged_to stays NULL: migration 4's CHECK
+  // refuses a charge to whoever paid, and changing it means rebuilding a table
+  // three others reference, for a column the API reads in one place (toLine in
+  // api/src/periods.ts, which answers chargedTo as person_id on such a line). An
+  // added column with a CHECK of its own, so a charge to the pot never also
+  // names a person to whom it is owed. Every line before reads 0.
+  `
+  ALTER TABLE period_lines ADD COLUMN owed_to_pot INTEGER NOT NULL DEFAULT 0
+    CHECK (owed_to_pot IN (0, 1) AND (owed_to_pot = 0 OR charged_to IS NULL));
+  `,
 ];
 
 /**

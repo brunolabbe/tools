@@ -427,6 +427,30 @@ period's does not take effect inside it, so every period is weighed with the
 same people throughout; confirming one is refused, and it is confirmed from
 the open period's first day, or after the close.
 
+### Charges to the pot
+
+_Decided by the owner on 2026-11-01, in lg-91._ A purchase on the joint card
+can carry one person's own things. Their items on the receipt filed on that
+row are a **charge to the pot**: the joint account paid for them, and the
+members fund it at their ratios, so each member `i` bore `r_i × c` of their
+cost `c`. Had X paid for them, X would have borne all of it. So X owes each
+other member `r_i × c`, which totals `(1 − r_X) × c`:
+
+```
+net_X += (1 − r_X) × c        net_i −= r_i × c   (each other member i)
+```
+
+The ratio is that of the period the charge is dated in, applied at the close,
+so a change of salaries before the close counts. The nets still sum to zero,
+exactly. The rule was checked the way the matching rule was: 2,000 seeded
+random mixes each, for two and three people, of card spending, charges,
+deposits, payments out of the buffer and charges to the pot, and after the
+settlement each person's cash out, minus their share of the buffer, equalled
+what they consumed, to within the rounding of the deposits. An item on a joint
+row is never "not shared", since nobody paid it to keep it, and it always
+names whose it is, since a row has no payer to be "the other" of. The row
+itself is unchanged; the stats chart the item under the charge, not the row.
+
 ### Numbers
 
 - **Money is integer cents.**

@@ -135,9 +135,11 @@ function lineLabel(
   const kind =
     line.recurringItemId !== null
       ? `${words} (monthly)`
-      : line.chargedTo !== null
-        ? `${words}, ${shownName(shown, line.chargedTo)}'s`
-        : words;
+      : line.owedToPot && line.chargedTo !== null
+        ? `${words}, owed to the pot by ${shownName(shown, line.chargedTo)}`
+        : line.chargedTo !== null
+          ? `${words}, ${shownName(shown, line.chargedTo)}'s`
+          : words;
   // Dated in a period already closed, and counted by the next close instead.
   return line.late ? `${kind}, entered after its period closed` : kind;
 }
@@ -266,6 +268,37 @@ export function Periods(): React.ReactElement {
   // The period after one closed today starts tomorrow: nothing to close yet.
   const empty = open.start !== null && chosenEnd < open.start;
   const sentence = open.settlement === null ? null : settlementSentence(open.settlement, shown);
+  // Charges to the pot (lg-91), which the settlement above already counts.
+  const owedToPot = open.lines.filter((line) => line.owedToPot);
+
+  const lineItem = (line: OpenPeriodLine): React.ReactElement => (
+    <li key={`${String(line.lineId)}-${String(line.recurringItemId)}-${line.date}`}>
+      <span>
+        {line.date} · {lineLabel(line, names, shown)}
+      </span>
+      <span className="amount">
+        {formatCents(line.amountCents)}
+        {line.lineId !== null && (
+          <button
+            type="button"
+            className="small"
+            disabled={busy}
+            aria-label={`Remove ${line.date} ${lineLabel(line, names, shown)}`}
+            onClick={() => {
+              const lineId = line.lineId;
+              if (lineId === null) return;
+              void send(async () => {
+                await retireLine(lineId);
+                return "Line removed.";
+              });
+            }}
+          >
+            Remove
+          </button>
+        )}
+      </span>
+    </li>
+  );
 
   return (
     <>
@@ -274,7 +307,8 @@ export function Periods(): React.ReactElement {
           {open.start === null ? "Open period" : `Open period, since ${open.start}`}
         </h2>
         {shownPeople.map((personId) => {
-          const lines = open.lines.filter((line) => line.personId === personId);
+          // A charge to the pot was paid on nobody's card (lg-91): it is listed apart.
+          const lines = open.lines.filter((line) => line.personId === personId && !line.owedToPot);
           const shared = lines
             .filter((line) => line.chargedTo === null)
             .reduce((sum, line) => sum + line.amountCents, 0);
@@ -287,40 +321,28 @@ export function Periods(): React.ReactElement {
               {lines.length === 0 ? (
                 <p className="muted hint">Nothing yet.</p>
               ) : (
-                <ul className="figures">
-                  {lines.map((line) => (
-                    <li key={`${String(line.lineId)}-${String(line.recurringItemId)}-${line.date}`}>
-                      <span>
-                        {line.date} · {lineLabel(line, names, shown)}
-                      </span>
-                      <span className="amount">
-                        {formatCents(line.amountCents)}
-                        {line.lineId !== null && (
-                          <button
-                            type="button"
-                            className="small"
-                            disabled={busy}
-                            aria-label={`Remove ${line.date} ${lineLabel(line, names, shown)}`}
-                            onClick={() => {
-                              const lineId = line.lineId;
-                              if (lineId === null) return;
-                              void send(async () => {
-                                await retireLine(lineId);
-                                return "Line removed.";
-                              });
-                            }}
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <ul className="figures">{lines.map(lineItem)}</ul>
               )}
             </div>
           );
         })}
+        {owedToPot.length > 0 && (
+          <div className="period-person">
+            <p className="figure lead">
+              <span>Owed to the pot</span>
+              <span className="amount">
+                {formatCents(owedToPot.reduce((sum, line) => sum + line.amountCents, 0))}
+              </span>
+            </p>
+            <p className="muted hint">
+              Paid from the joint account for one person alone. They owe it to the others, at their
+              shares.
+            </p>
+            <ul className="figures" aria-label="Owed to the pot">
+              {owedToPot.map(lineItem)}
+            </ul>
+          </div>
+        )}
         <LineForm
           people={people}
           categories={categories}

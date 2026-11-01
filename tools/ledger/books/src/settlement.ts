@@ -44,6 +44,32 @@
  * _Numbers_). A person a stretch's ratio does not name has a share of zero in
  * it, so a person who joins or leaves at a boundary adds nothing to the
  * stretches they were not part of.
+ *
+ * **A charge to the pot** (lg-91, the owner's answer of 2026-11-01). An item on
+ * a joint-account row's receipt can be one person's: the pot paid for it, and
+ * the members fund the pot at their ratios. Had X paid for it themselves, X
+ * would bear all of its cost `c`; through the pot, each member `i` bore
+ * `r_i × c` of it. So X owes each other member `r_i × c`, which totals
+ * `(1 − r_X) × c`, at the ratio of the stretch the charge is dated in. In
+ * `netsOf` that is `−r_i × c` on each other member's net and the sum of those,
+ * `+(1 − r_X) × c`, on X's. A share is parts per million and `c` is cents, so
+ * each term is a whole number of millionths of a cent: exact, and the nets
+ * still sum to zero with nothing to round.
+ *
+ * ```
+ * r = 0.5 alex, 0.3 blair, 0.2 casey; the pot paid 100.00 for casey's items
+ *   alex  −50.00   owed 0.5 × 100.00
+ *   blair −30.00   owed 0.3 × 100.00
+ *   casey +80.00   owes (1 − 0.2) × 100.00
+ * into the buffer: casey deposits 100.00, the items' cost, while alex and
+ *                  blair, each standing at their share already, deposit nothing
+ * directly:        casey pays alex 50.00 and blair 30.00
+ * ```
+ *
+ * A charge between two people moves money from one to the other and leaves Σe
+ * alone; a charge to the pot does the same, spread over everyone the stretch's
+ * ratio names. A person the ratio does not name has no share of it, so a charge
+ * to the pot for them is owed whole, to those who have one.
  */
 
 import { AppError } from "@ledger/contract";
@@ -76,11 +102,24 @@ export interface Charge {
   cents: number;
 }
 
+/**
+ * An amount one person owes the pot (lg-91): the joint account paid for
+ * something that was entirely theirs. It is owed to the other members at the
+ * stretch's ratio, never to one person.
+ */
+export interface PotCharge {
+  /** Who consumed it. */
+  owedBy: string;
+  cents: number;
+}
+
 /** Contributions and charges weighed at one ratio. */
 export interface Stretch {
   ratio: readonly Share[];
   contributions: readonly PersonCents[];
   charges: readonly Charge[];
+  /** Charges to the pot (lg-91); absent is none. */
+  potCharges?: readonly PotCharge[];
 }
 
 /** A settlement between two people, as lg-6 records it. */
@@ -150,7 +189,8 @@ function cents(value: number): bigint {
 
 /**
  * Each person's net over the stretches, in millionths of a cent: `r_i × Σe − e_i`
- * per stretch, at that stretch's ratio, added up. Positive owes; negative is
+ * per stretch, at that stretch's ratio, added up, with each charge to the pot
+ * shared out at that same ratio. Positive owes; negative is
  * owed. They sum to zero, exactly. Everyone a stretch's ratio names has an
  * entry, though it be zero.
  */
@@ -180,6 +220,18 @@ export function netsOf(stretches: readonly Stretch[]): Map<string, bigint> {
     }
     for (const [personId, share] of shares) add(personId, share * total);
     for (const [personId, amount] of put) add(personId, -MILLION * amount);
+    for (const charge of stretch.potCharges ?? []) {
+      // Each other member is owed their share of it; whoever consumed it owes
+      // the sum of those, (1 − r_X) × c. Exact, in millionths of a cent.
+      const amount = cents(charge.cents);
+      let owed = 0n;
+      for (const [personId, share] of shares) {
+        if (personId === charge.owedBy) continue;
+        add(personId, -share * amount);
+        owed += share * amount;
+      }
+      add(charge.owedBy, owed);
+    }
   }
   return nets;
 }
@@ -429,6 +481,11 @@ export function settleStretches(
         (owedBy === first && owedTo === second) || (owedBy === second && owedTo === first);
       if (!between) {
         throw new AppError("BAD_REQUEST", "A charge is between the two people of the ratio.");
+      }
+    }
+    for (const { owedBy } of stretch.potCharges ?? []) {
+      if (owedBy !== first && owedBy !== second) {
+        throw new AppError("BAD_REQUEST", "A charge to the pot names someone the ratio does not.");
       }
     }
   }

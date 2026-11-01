@@ -30,6 +30,14 @@
  * (lg-39): while it is slow, or after it failed, the screen says so with a retry
  * and offers no filing, since without the members it cannot name whose an item
  * is. The categories load on their own, so one request failing drops no other.
+ *
+ * **Paid with the joint card** (lg-91). Tapping "Paid with the joint card?"
+ * looks for the row and turns the items to the joint account: nobody paid, so
+ * there is no Mine. An unchecked item's select offers every current member,
+ * whoever took the photo included, and nothing is chosen until the person
+ * picks; the item becomes a charge that person owes the pot, and the receipt is
+ * held until each such item names one. "Paid with my own card" turns them back,
+ * an item charged to whoever took the photo, or to nobody yet, becoming Mine.
  */
 
 import { useEffect, useId, useState } from "react";
@@ -110,6 +118,9 @@ interface Draft {
 type TextField = Exclude<keyof Draft, "items">;
 
 const NOBODY_ELSE = "There is nobody else in the household to charge an item to.";
+
+const NOBODY_CHOSEN =
+  "Choose whose each item left out is: a joint-account purchase has no payer to keep one.";
 
 /**
  * The `Whose is` choice that keeps an item with whoever paid (`not-shared`). The
@@ -316,6 +327,8 @@ export function Receipts(): React.ReactElement {
   /** Whose the whole receipt is, when it is someone's among several (lg-30). */
   const [wholeChosen, setWholeChosen] = useState("");
   const [matches, setMatches] = useState<ReceiptMatch[] | null>(null);
+  /** Paid with the joint card (lg-91): an item left out is owed to the pot, and there is no Mine. */
+  const [joint, setJoint] = useState(false);
   const [members, retryMembers] = useLoad(loadMembers);
   const [loadedCategories, retryCategories] = useLoad(fetchSpendingCategories);
   const [busy, setBusy] = useState(false);
@@ -341,6 +354,7 @@ export function Receipts(): React.ReactElement {
     setTheirs(false);
     setWholeChosen("");
     setMatches(null);
+    setJoint(false);
     setProblem(null);
     queue.clear();
   };
@@ -358,6 +372,7 @@ export function Receipts(): React.ReactElement {
     setTheirs(false);
     setWholeChosen("");
     setMatches(null);
+    setJoint(false);
     // The photo's own three fields, not a stage spread in whole: its `step` would win.
     setStage({
       step: "form",
@@ -384,6 +399,7 @@ export function Receipts(): React.ReactElement {
   const backToQueue = (said: string | null): void => {
     setDraft(null);
     setMatches(null);
+    setJoint(false);
     setProblem(null);
     setStage({ step: "queue", said });
   };
@@ -482,12 +498,18 @@ export function Receipts(): React.ReactElement {
   // With nobody else, nothing can be someone else's: an item cannot be charged
   // and the receipt cannot be, and filing either would name no one (lg-39).
   const alone = other === null;
+  // Paid with the joint card, an item names any current member, and nobody
+  // until one is picked (lg-91): a row has no payer to be "the other" of.
   const whose = (item: ItemDraft): string | null =>
-    !several
-      ? null
-      : item.chargedTo !== null && others.includes(item.chargedTo)
+    joint
+      ? item.chargedTo !== null && people.includes(item.chargedTo)
         ? item.chargedTo
-        : other;
+        : null
+      : !several
+        ? null
+        : item.chargedTo !== null && others.includes(item.chargedTo)
+          ? item.chargedTo
+          : other;
   const wholeWhose = others.includes(wholeChosen) ? wholeChosen : other;
   const proposal = proposalOf(form, whose);
   const flags = checkReceipt(proposal);
@@ -521,7 +543,18 @@ export function Receipts(): React.ReactElement {
         items: current.items.map((item, at) => (at === index ? { ...item, ...change } : item)),
       };
     });
-    setMatches(null);
+    // Whose an item is moves no row the charge may be (lg-91): picking one
+    // after the rows are found keeps them.
+    if (Object.keys(change).some((key) => key !== "share" && key !== "chargedTo")) {
+      setMatches(null);
+    }
+  };
+  /** Every item changed at once, by `change`. */
+  const setItems = (change: (item: ItemDraft) => ItemDraft): void => {
+    setDraft((before) => {
+      const current = before ?? form;
+      return { ...current, items: current.items.map(change) };
+    });
   };
   const removeItem = (index: number): void => {
     setDraft((before) => {
@@ -560,9 +593,11 @@ export function Receipts(): React.ReactElement {
     ? "An item needs its text and its price before the receipt can be filed."
     : flags.includes("items-differ")
       ? FLAG_LABELS["items-differ"]
-      : alone && form.items.some((item) => item.share === "theirs")
-        ? NOBODY_ELSE
-        : null;
+      : joint && form.items.some((item) => item.share !== "shared" && whose(item) === null)
+        ? NOBODY_CHOSEN
+        : !joint && alone && form.items.some((item) => item.share === "theirs")
+          ? NOBODY_ELSE
+          : null;
 
   const lookUp = (): void => {
     if (charged === null || charged === 0 || !dated) {
@@ -574,6 +609,32 @@ export function Receipts(): React.ReactElement {
     });
   };
 
+  /**
+   * Paid with the joint card (lg-91): an item left out is a member's, and one
+   * that was Mine names nobody until the person picks, since a joint purchase
+   * has no payer to keep it. Then the rows are looked for.
+   */
+  const payJointly = (): void => {
+    if (!joint) {
+      setJoint(true);
+      setItems((item) =>
+        item.share === "not-shared" ? { ...item, share: "theirs", chargedTo: null } : item,
+      );
+    }
+    lookUp();
+  };
+
+  /** Back to a line: an item charged to whoever took the photo, or to nobody yet, is Mine. */
+  const payMyself = (): void => {
+    setJoint(false);
+    setMatches(null);
+    setItems((item) =>
+      item.share === "theirs" && (item.chargedTo === null || item.chargedTo === payer)
+        ? { ...item, share: "not-shared", chargedTo: null }
+        : item,
+    );
+  };
+
   const fileAs = (destination: "line" | number): void => {
     if (charged === null || charged === 0 || !dated) {
       setProblem("The amount charged and the date are needed to file it.");
@@ -581,12 +642,6 @@ export function Receipts(): React.ReactElement {
     }
     if (unfileable !== null) {
       setProblem(unfileable);
-      return;
-    }
-    if (destination !== "line" && proposal.items.some((item) => item.share !== "shared")) {
-      setProblem(
-        "A receipt on a joint-account row is shared whole: every item on it stays shared.",
-      );
       return;
     }
     void run(async () => {
@@ -611,7 +666,11 @@ export function Receipts(): React.ReactElement {
       );
       const said =
         destination !== "line"
-          ? "Attached to the joint-account row."
+          ? chargedPeople.length === 0
+            ? "Attached to the joint-account row."
+            : `Attached to the joint-account row, and ${listed(chargedPeople)} items as ${
+                chargedPeople.length === 1 ? "a charge" : "charges"
+              } to the pot.`
           : chargedPeople.length === 0
             ? `Filed as ${shownName(shown, payer)}'s line in the period.`
             : `Filed as ${shownName(shown, payer)}'s line in the period, and ${listed(chargedPeople)} items as ${
@@ -714,8 +773,13 @@ export function Receipts(): React.ReactElement {
                         setItem(
                           index,
                           // Unchecked starts on Mine: a charge is the person's choice (lg-90).
+                          // Paid jointly there is no Mine, and it starts on nobody (lg-91).
                           {
-                            share: event.target.checked ? "shared" : "not-shared",
+                            share: event.target.checked
+                              ? "shared"
+                              : joint
+                                ? "theirs"
+                                : "not-shared",
                             chargedTo: null,
                           },
                         )
@@ -723,39 +787,57 @@ export function Receipts(): React.ReactElement {
                     />
                     Shared
                   </label>
-                  {item.share !== "shared" && (
-                    <>
-                      <select
-                        aria-label={`Whose is ${name}`}
-                        value={item.share === "not-shared" ? MINE : (whose(item) ?? other ?? "")}
-                        onChange={(event) =>
-                          setItem(
-                            index,
-                            event.target.value === MINE
-                              ? { share: "not-shared", chargedTo: null }
-                              : { share: "theirs", chargedTo: event.target.value },
-                          )
-                        }
-                      >
-                        {/* A read item someone else's in a household of one: said, not hidden. */}
-                        {item.share === "theirs" && alone && (
-                          <option value="" disabled>
-                            Someone else&rsquo;s
-                          </option>
-                        )}
-                        <option value={MINE}>Mine</option>
-                        {others.map((person) => (
-                          <option key={person} value={person}>
-                            {shownName(shown, person)}
-                          </option>
-                        ))}
-                      </select>
-                      {split !== null && (
-                        <span className="takes-off">
-                          Takes off {formatCents(sharedAmount(proposal, [index]).excludedCents)}
-                        </span>
+                  {item.share !== "shared" && joint && (
+                    <select
+                      aria-label={`Whose is ${name}`}
+                      value={whose(item) ?? ""}
+                      onChange={(event) =>
+                        setItem(index, { share: "theirs", chargedTo: event.target.value })
+                      }
+                    >
+                      {whose(item) === null && (
+                        <option value="" disabled>
+                          Whose?
+                        </option>
                       )}
-                    </>
+                      {people.map((person) => (
+                        <option key={person} value={person}>
+                          {shownName(shown, person)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {item.share !== "shared" && !joint && (
+                    <select
+                      aria-label={`Whose is ${name}`}
+                      value={item.share === "not-shared" ? MINE : (whose(item) ?? other ?? "")}
+                      onChange={(event) =>
+                        setItem(
+                          index,
+                          event.target.value === MINE
+                            ? { share: "not-shared", chargedTo: null }
+                            : { share: "theirs", chargedTo: event.target.value },
+                        )
+                      }
+                    >
+                      {/* A read item someone else's in a household of one: said, not hidden. */}
+                      {item.share === "theirs" && alone && (
+                        <option value="" disabled>
+                          Someone else&rsquo;s
+                        </option>
+                      )}
+                      <option value={MINE}>Mine</option>
+                      {others.map((person) => (
+                        <option key={person} value={person}>
+                          {shownName(shown, person)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {item.share !== "shared" && split !== null && (
+                    <span className="takes-off">
+                      Takes off {formatCents(sharedAmount(proposal, [index]).excludedCents)}
+                    </span>
                   )}
                   <SpendingCategoryPicker
                     ariaLabel={`Category of ${name}`}
@@ -780,7 +862,24 @@ export function Receipts(): React.ReactElement {
               Add an item
             </button>
           </div>
-          {split !== null && (
+          {split !== null && joint && (
+            <output aria-label="What is shared">
+              {/* Paid jointly nothing stays with a payer: each person's part is owed to the pot (lg-91). */}
+              {split.charges
+                .filter((charge) => charge.cents !== 0 || charge.personId === null)
+                .map(
+                  (charge) =>
+                    `${
+                      charge.personId === null
+                        ? "Whose not chosen yet"
+                        : `Owed to the pot by ${shownName(shown, charge.personId)}`
+                    } ${formatCents(charge.cents)} · `,
+                )
+                .join("")}
+              Shared {formatCents(split.sharedCents)}
+            </output>
+          )}
+          {split !== null && !joint && (
             <output aria-label="What is shared">
               Not shared {formatCents(split.notSharedCents)} ·{" "}
               {several
@@ -794,7 +893,9 @@ export function Receipts(): React.ReactElement {
               Shared {formatCents(split.sharedCents)}
             </output>
           )}
-          {(itemsUnread || unfileable === NOBODY_ELSE) && <p className="hint bad">{unfileable}</p>}
+          {(itemsUnread || unfileable === NOBODY_ELSE || unfileable === NOBODY_CHOSEN) && (
+            <p className="hint bad">{unfileable}</p>
+          )}
         </fieldset>
         {field("charged", "Charged to the card (with any tip)")}
         <label htmlFor={`${id}-spending`}>Spending category</label>
@@ -805,7 +906,8 @@ export function Receipts(): React.ReactElement {
           noneLabel="None"
           onChange={setSpendingCategoryId}
         />
-        {other !== null && (
+        {/* The whole receipt as someone's is a line's; a joint row has its items (lg-91). */}
+        {other !== null && !joint && (
           <label className="check">
             <input
               type="checkbox"
@@ -815,7 +917,7 @@ export function Receipts(): React.ReactElement {
             {several ? "This was someone else's" : `This was ${shownName(shown, other)}'s`}
           </label>
         )}
-        {theirs && several && (
+        {theirs && several && !joint && (
           <>
             <label htmlFor={`${id}-whose`}>Whose it was</label>
             <select
@@ -832,10 +934,21 @@ export function Receipts(): React.ReactElement {
           </>
         )}
         <div className="actions">
-          <button className="primary" type="button" disabled={busy} onClick={() => fileAs("line")}>
-            File as {shownName(shown, payer)}&rsquo;s line
-          </button>
-          <button type="button" disabled={busy} onClick={lookUp}>
+          {joint ? (
+            <button type="button" disabled={busy} onClick={payMyself}>
+              Paid with my own card
+            </button>
+          ) : (
+            <button
+              className="primary"
+              type="button"
+              disabled={busy}
+              onClick={() => fileAs("line")}
+            >
+              File as {shownName(shown, payer)}&rsquo;s line
+            </button>
+          )}
+          <button type="button" disabled={busy} onClick={payJointly}>
             Paid with the joint card?
           </button>
         </div>

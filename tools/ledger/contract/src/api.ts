@@ -1036,10 +1036,17 @@ export type PeriodLineSource = (typeof PERIOD_LINE_SOURCES)[number];
  * `chargedTo: null` is **shared**, at the ratio. A person is a **charge**: the
  * thing was entirely theirs, and they owe its full price to whoever paid
  * (`docs/00-ANALYSIS.md` §5, _Charges between the two_).
+ *
+ * `owedToPot: true` is a **charge to the pot** (lg-91): the joint account paid
+ * for something one person consumed alone, an item left out of a joint-account
+ * row's receipt. Nobody paid it on a card, so `personId` and `chargedTo` both
+ * name the person who owes it, and the settlement shares it out to the other
+ * members at the ratio of the period it is dated in (§5, _Charges to the pot_).
+ * Read as any other charge — `chargedTo` is not `null` — it is never shared.
  */
 export interface PeriodLine {
   id: number;
-  /** Who paid. */
+  /** Who paid; on a charge to the pot, who owes it. */
   personId: string;
   /** `yyyy-mm-dd`. */
   date: string;
@@ -1055,6 +1062,8 @@ export interface PeriodLine {
   note: string | null;
   source: PeriodLineSource;
   chargedTo: string | null;
+  /** A charge to the pot (lg-91); `false` on every other line. */
+  owedToPot: boolean;
   supersedes: number | null;
   enteredAt: string;
   enteredBy: string;
@@ -1246,6 +1255,8 @@ export interface OpenPeriodLine {
   personId: string;
   amountCents: number;
   chargedTo: string | null;
+  /** A charge to the pot (lg-91), as `PeriodLine` says; `false` on a generated line. */
+  owedToPot: boolean;
   /** The free-text category, or the recurring item's label. */
   category: string | null;
   /** The line's spending category; `null` for a generated line, and for any stored before lg-15. */
