@@ -1462,8 +1462,8 @@ holds one.
 ## The ledger
 
 A plain Node image, like the planner's, with SQLite on a volume and nothing it
-reaches outside the host unless it is given a key to read receipts
-([below](#reading-receipts-with-a-model)). Three things are its own:
+reaches outside the host unless it is given a key to read receipts and describe workbooks
+([below](#reading-receipts-and-describing-workbooks-with-a-model)). Three things are its own:
 
 - **The volume is the books.** `ledger_storage` is the only copy of every
   statement anyone imported, and of the history carried over from the
@@ -1514,19 +1514,24 @@ reaches outside the host unless it is given a key to read receipts
   import takes `--household <id>`, writes that household's books and no other's,
   and `--as` names one of its members.
 
-### Reading receipts with a model
+### Reading receipts and describing workbooks with a model
 
 Receipts (lg-8) are read by Claude Haiku 5.5, and only when a person taps "Read
-it". **With no key the ledger reaches nothing outside the host**: a read is
-refused, and a receipt is typed in instead, which never needed one. Photos are
+it". The same key also describes an imported workbook's layout (lg-66), with a
+fixed model rather than `RECEIPT_MODEL`, and only when a person presses "Send the
+samples and describe". **With no key the ledger reaches nothing outside the
+host**: a read is refused, and a receipt is typed in instead, which never needed
+one; a workbook import stops at "Describing a workbook is not set up on this
+server". Photos are
 kept on the volume, at `/data/receipts/<household>/`, so the backup of `/data`
 above covers them.
 
-| Variable                              | Value                        | Required                     |
-| ------------------------------------- | ---------------------------- | ---------------------------- |
-| `ANTHROPIC_API_KEY`                   | the key                      | no — **a secret**, see below |
-| `RECEIPT_MODEL`                       | `claude-haiku-5-5` (default) | no                           |
-| `RATE_LIMIT_RECEIPT_READS_PER_MINUTE` | `5` (default), per person    | no                           |
+| Variable                                   | Value                        | Required                     |
+| ------------------------------------------ | ---------------------------- | ---------------------------- |
+| `ANTHROPIC_API_KEY`                        | the key                      | no — **a secret**, see below |
+| `RECEIPT_MODEL`                            | `claude-haiku-5-5` (default) | no                           |
+| `RATE_LIMIT_RECEIPT_READS_PER_MINUTE`      | `5` (default), per person    | no                           |
+| `RATE_LIMIT_WORKBOOK_DESCRIBES_PER_MINUTE` | `5` (default)                | no                           |
 
 The key reaches the process the way the planner's does ([A real model behind
 the planner](#a-real-model-behind-the-planner)): in the host's `.env`, passed
