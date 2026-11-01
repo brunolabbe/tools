@@ -14,9 +14,11 @@
  * edited (`checkReceipt`), and flags; it never corrects, and blocks only items
  * that do not make the total (lg-10), which the API refuses too.
  *
- * **The items** (lg-10): a tap on an item cycles it through shared, not shared
- * and someone else's, and the amounts that come off and the shared amount update
- * as it does, computed by the same `splitReceipt` the API files with. Each item's
+ * **The items** (lg-10, lg-90): each item has a Shared box, checked until it is
+ * left out; unchecked, a select says whose it is, Mine (not shared) first and
+ * then each other member (someone else's), and the item shows what it takes off.
+ * The amounts that come off and the shared amount update as it changes,
+ * computed by the same `splitReceipt` the API files with. Each item's
  * category is editable, and the category the merchant was last given is offered
  * first.
  *
@@ -36,6 +38,7 @@ import {
   formatCents,
   itemsAddUp,
   parseTypedAmountCents,
+  sharedAmount,
   splitReceipt,
 } from "@ledger/books";
 import type { ReceiptSplit } from "@ledger/books";
@@ -55,7 +58,8 @@ import { fetchMe } from "../api/me.ts";
 import { fetchSpendingCategories } from "../api/spending.ts";
 import { fetchReceiptMatches, fileReceipt } from "../api/receipts.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
-import { PhotoPickers, ReceiptQueueView, useReceiptQueue } from "./Queue.tsx";
+import { PhotoPickers } from "./PhotoPickers.tsx";
+import { ReceiptQueueView, useReceiptQueue } from "./Queue.tsx";
 import type { QueuedPhoto } from "./Queue.tsx";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
@@ -107,18 +111,13 @@ type TextField = Exclude<keyof Draft, "items">;
 
 const NOBODY_ELSE = "There is nobody else in the household to charge an item to.";
 
-/** What a tap on an item makes it next. */
-const NEXT_SHARE: Record<ItemShare, ItemShare> = {
-  shared: "not-shared",
-  "not-shared": "theirs",
-  theirs: "shared",
-};
-
-/** The tap's result; with nobody else in the household it skips someone else's. */
-function nextShare(share: ItemShare, alone: boolean): ItemShare {
-  const next = NEXT_SHARE[share];
-  return alone && next === "theirs" ? NEXT_SHARE[next] : next;
-}
+/**
+ * The `Whose is` choice that keeps an item with whoever paid (`not-shared`). The
+ * empty string, because it is a value no person id can take: the contract's
+ * `chargedTo` is `z.string().min(1).max(100)`, and a member whose id was a word
+ * here was filed Mine when picked (lg-90's gate 1).
+ */
+const MINE = "";
 
 let lastItemKey = 0;
 
@@ -240,7 +239,7 @@ type Stage =
       queueKey: number;
     } & Photo);
 
-/** An item's share as its button reads: someone else's names whose, when known. */
+/** An item's share as the live line reads it: someone else's names whose, when known. */
 function shareLabel(share: ItemShare, person: string | null, shown: ShownNames): string {
   return share === "shared"
     ? "Shared"
@@ -706,25 +705,57 @@ export function Receipts(): React.ReactElement {
                     />
                     Taxable
                   </label>
-                  <button
-                    type="button"
-                    aria-label={`${name}, ${shareLabel(item.share, whose(item) ?? other, shown)}`}
-                    onClick={() => setItem(index, { share: nextShare(item.share, alone) })}
-                  >
-                    {shareLabel(item.share, whose(item) ?? other, shown)}
-                  </button>
-                  {several && item.share === "theirs" && (
-                    <select
-                      aria-label={`Whose is ${name}`}
-                      value={whose(item) ?? ""}
-                      onChange={(event) => setItem(index, { chargedTo: event.target.value })}
-                    >
-                      {others.map((person) => (
-                        <option key={person} value={person}>
-                          {shownName(shown, person)}
-                        </option>
-                      ))}
-                    </select>
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      aria-label={`${name} is shared`}
+                      checked={item.share === "shared"}
+                      onChange={(event) =>
+                        setItem(
+                          index,
+                          // Unchecked starts on Mine: a charge is the person's choice (lg-90).
+                          {
+                            share: event.target.checked ? "shared" : "not-shared",
+                            chargedTo: null,
+                          },
+                        )
+                      }
+                    />
+                    Shared
+                  </label>
+                  {item.share !== "shared" && (
+                    <>
+                      <select
+                        aria-label={`Whose is ${name}`}
+                        value={item.share === "not-shared" ? MINE : (whose(item) ?? other ?? "")}
+                        onChange={(event) =>
+                          setItem(
+                            index,
+                            event.target.value === MINE
+                              ? { share: "not-shared", chargedTo: null }
+                              : { share: "theirs", chargedTo: event.target.value },
+                          )
+                        }
+                      >
+                        {/* A read item someone else's in a household of one: said, not hidden. */}
+                        {item.share === "theirs" && alone && (
+                          <option value="" disabled>
+                            Someone else&rsquo;s
+                          </option>
+                        )}
+                        <option value={MINE}>Mine</option>
+                        {others.map((person) => (
+                          <option key={person} value={person}>
+                            {shownName(shown, person)}
+                          </option>
+                        ))}
+                      </select>
+                      {split !== null && (
+                        <span className="takes-off">
+                          Takes off {formatCents(sharedAmount(proposal, [index]).excludedCents)}
+                        </span>
+                      )}
+                    </>
                   )}
                   <SpendingCategoryPicker
                     ariaLabel={`Category of ${name}`}
@@ -801,7 +832,7 @@ export function Receipts(): React.ReactElement {
           </>
         )}
         <div className="actions">
-          <button type="button" disabled={busy} onClick={() => fileAs("line")}>
+          <button className="primary" type="button" disabled={busy} onClick={() => fileAs("line")}>
             File as {shownName(shown, payer)}&rsquo;s line
           </button>
           <button type="button" disabled={busy} onClick={lookUp}>

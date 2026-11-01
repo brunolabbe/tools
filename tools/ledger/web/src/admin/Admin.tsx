@@ -268,7 +268,7 @@ function HouseholdCard(props: {
                     </button>
                     <button
                       type="button"
-                      className="small secondary"
+                      className="small"
                       disabled={busy}
                       onClick={() => setConfirming(null)}
                     >
@@ -279,7 +279,7 @@ function HouseholdCard(props: {
                   <span className="actions">
                     <button
                       type="button"
-                      className="small secondary"
+                      className="small"
                       aria-label={`Edit ${address}`}
                       disabled={busy}
                       onClick={() => {
@@ -291,7 +291,7 @@ function HouseholdCard(props: {
                     </button>
                     <button
                       type="button"
-                      className="small secondary"
+                      className="small"
                       aria-label={`Remove ${address}`}
                       disabled={busy}
                       onClick={() => {
@@ -410,7 +410,7 @@ function ChangeAddress(props: {
         <button type="submit" className="small" disabled={busy}>
           Save
         </button>
-        <button type="button" className="small secondary" disabled={busy} onClick={onCancel}>
+        <button type="button" className="small" disabled={busy} onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -505,7 +505,7 @@ function RenamePerson(props: {
         <span className="actions">
           <button
             type="button"
-            className="small secondary"
+            className="small"
             aria-label={`Rename ${name}`}
             disabled={busy}
             onClick={() => {
@@ -518,7 +518,7 @@ function RenamePerson(props: {
           </button>
           <button
             type="button"
-            className="small secondary"
+            className="small"
             aria-label={next.named(name)}
             disabled={busy}
             onClick={() => void retire()}
@@ -553,12 +553,7 @@ function RenamePerson(props: {
           <button type="submit" className="small" disabled={busy}>
             Save
           </button>
-          <button
-            type="button"
-            className="small secondary"
-            disabled={busy}
-            onClick={() => setEditing(false)}
-          >
+          <button type="button" className="small" disabled={busy} onClick={() => setEditing(false)}>
             Cancel
           </button>
         </div>
@@ -644,7 +639,7 @@ function NewHousehold(props: {
           </p>
         )}
         <div className="actions">
-          <button type="submit" disabled={busy}>
+          <button className="primary" type="submit" disabled={busy}>
             Create household
           </button>
         </div>

@@ -153,10 +153,10 @@ export function RuleForm(props: RuleFormProps): React.ReactElement {
         </p>
       )}
       <div className="actions">
-        <button type="submit" disabled={busy}>
+        <button className="primary" type="submit" disabled={busy}>
           {props.submitLabel}
         </button>
-        <button type="button" className="secondary" onClick={props.onCancel} disabled={busy}>
+        <button type="button" onClick={props.onCancel} disabled={busy}>
           {props.cancelLabel ?? "Cancel"}
         </button>
       </div>

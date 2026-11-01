@@ -6755,3 +6755,39 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 
 - A filing's premise checked against primary documentation by `builder-web` on the filing's own branch, in the same dispatch as gate 1's fixes, then re-checked by a narrow gate 2 that fetched every cited source. Gate 2 found eight lows, two of them quotes that were not in their sources, and one a premise credited with evidence its source did not give.
 - A gate attack naming the population for a header parser (`"0"`, `"-1"`, `"abc"`, an HTTP date, `"1e9"`, absent): lg-92's gate 1 returned a bounded-wait table for every cell and cleared the `client.ts` change in one pass.
+
+### Batch 2026-11-01 (tools-fc, lg-90 lg-73, lg-94 filed) — base 686b213c
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a3b4724bd81c32115 | seam-mapper, fifteen candidates (dl-130 dl-131 dl-133 dl-134 dl-135 lg-73 lg-90 pl-64 pl-65 repo-126 repo-129 repo-135 repo-136 repo-137 repo-139) | 7m29s / 7m27s | 0 | $1.3759 |
+| #724 | open, ready, 11/11 green at bb496824 (CodeQL, Windows) | Sonnet 5.5 / high | a9f4a067110a1512f | builder-standard, lg-90 | 6m10s / 5m50s | 0 | $1.5224 |
+| #724 | as above | Opus 5.5 / high | a6f6771fe38dd9654 | ticket-reviewer-opus, lg-90 gate 1 | 7m14s / 7m07s | 0 | $2.5236 |
+| #724 | as above | Sonnet 5.5 / high | ab24a8a7a734c48ae | fixer, lg-90 two lows at landing + three owner answers + landing | 3m28s / 3m24s | 0 | $0.7069 |
+| #725 | open, ready, green at bf6cb4b5 (CodeQL; test matrix skipped, docs-only) | Haiku 5.5 / high | add833defd60e11e9 | builder-mechanical, lg-94 filing (maintenance), then round 1 (resumed) | 12m47s / 24m34s | 0 | $0.9993 |
+| #725 | as above | Sonnet 5.5 / xhigh | ad8e2c05f6560e919 | ticket-reviewer-sonnet, lg-94 gate 1, narrow | 6m55s / 6m51s | 0 | $1.3475 |
+| #725 | as above | Sonnet 5.5 / xhigh | a2ea603845042d120 | ticket-reviewer-sonnet, lg-94 gate 2, narrow | 6m50s / 6m42s | 0 | $1.2026 |
+| #725 | as above | Sonnet 5.5 / high | affeaddf1df28bcfa | fixer, lg-94 gate 2's F2 + F5 + thread record + landing | 4m12s / 4m11s | 0 | $0.7353 |
+| #726 | open, draft (stacked on #724, held for merge order), 15/15 green at gated 529e0364 | Sonnet 5.5 / high | a469e7c382a8b76ab | builder-standard, lg-73, then owner stop (resumed) | 19m48s / 19m22s | 0 | $4.1313 |
+| #726 | as above | Opus 5.5 / high | aedf12dd3fa987244 | ticket-reviewer-opus, lg-73 gate 1 | 10m10s / 9m40s | 0 | $3.9563 |
+| #726 | as above | Sonnet 5.5 / high | a9a9e0c912a8dbd9c | fixer, lg-73 two lows at landing + two owner answers + landing, held as draft | 4m02s / 3m52s | 0 | $0.5801 |
+| — | — | Fable 5.1 + Opus 5.5 / high | orchestrator 78129d87 | orchestrator (floor) | 1h08m51s / 1h40m55s | 0 | $4.9993 |
+| | | | | **total** (rates read 2026-10-10) | 2h37m56s | 0 | **$24.0807** |
+
+**Tickets:**
+
+- lg-90 → #724: the owner chose the ledger batch over my repo-135/136/137 recommendation at intake. Builder's open decision (per-item "Takes off" rounding, a cent off a person's line) → owner kept per-item rounding. Gate 1 PASS, three lows, plus an open decision on behaviour from before the range (a read item charged to a departed member is silently charged to the first current other) → owner filed it as lg-94; L1 (`MINE` value collides with a person id) fixed at landing, L2 (Done when 4 "open" → "shown") reworded, L3 recorded. Total $4.75.
+- lg-94 → #725 (filed, `needs-decision`): gate 1 FAIL — F1 high (the reproduction's test body was a comment and passed whatever the screen did), F2–F4 med, F5 low; owner answered F4 (add "keep the charge on the departed member" as a fifth option). Round 1 by the resumed filer. Gate 2 CONCERNS — F2 med and F5 low fixed in part; no high, so no gate 3; a fresh fixer finished both and landed. Total $4.28.
+- lg-73 → #726 (stacked on #724, draft): intake answers scoped Done when 2 to a named grep and stacked the build on lg-90's landing. Builder's two open decisions (count primaries as rendered; per-row buttons never primary) and a Done when 3 gap (7 of 33 screens opened) → owner took both recommendations and scoped the screenshots to every screen at 360 px plus named 1280 px screens; builder resumed once. Gate 1 PASS, two Log-wording lows → corrected at landing; owner accepted the screens left with no accent button. A peer session's #728 conflicts with #724 and #726 → owner set the order #724 → #726 → #728. Total $8.67.
+
+**Defects in the skill:**
+
+1. `SKILL.md`, _Decisions_, "An acceptance line that says "every" is reworded to an enumerable scope before dispatch" — the rule keys on the word, so a population written another way passed intake unflagged: lg-73's Done when 3 asked for 33 screens × 2 widths compared "screen by screen", the builder opened 7 pairs, and the line was reworded only after the build, at an owner stop. Reproduction: `git show 686b213c:tools/ledger/docs/work/lg-73-the-ledger-reset-onto-the-shared-base-layer.md | grep -n 'screen by screen'` → `75:   screenshots are compared in the Log, screen by screen.`; `git show 686b213c:.claude/skills/orchestrate-tickets/SKILL.md | grep -n 'acceptance line that says "every"'` → `334:`.
+2. `.claude/rules/dependency-updates.md` against `roles/common.md`, _Your worktree_ — the rules page ends its relock recipe with a plain `npm install` on npm 10, which `common.md` forbids in a farmed worktree, so a builder relocking a dependency cannot follow both (relayed from the seam-mapper; re-run by me). Reproduction: `grep -n 'plain .npm install. on npm 10' .claude/rules/dependency-updates.md` → `31:clears the week. **Then run a plain `npm install` on npm 10**: …`; `grep -n 'Never .npm install. in a farmed' .claude/skills/orchestrate-tickets/roles/common.md` → `49:- **Never `npm install` in a farmed worktree, `--ignore-scripts` included.**`
+3. `reference/records.md`, the `--land` command, on a stacked branch — `--land` exited 1 after pushing and verifying the section, because preflight's merge-tree probe failed on a third pull request (#728, another session's) that the owner had already ordered after this one; the lander had to run the remaining checks with `--only`, and records.md's rule that the landing's checks count only once the whole set passes leaves that step open until #728 merges `main`. Relayed from lg-73's lander, not re-run (re-running it pushes): its output was `FAIL` at `mergeTree` naming `Queue.tsx`, `Receipts.tsx`, `receipts.test.tsx` against #728, after "1 section(s) verified against HEAD".
+4. `scripts/next-id.mjs` (a script, not a page) — still reports a stale clash, logged by tools-36 too. Reproduction: `node scripts/next-id.mjs lg` (exit 0) → `next free: lg-95` and `clash: lg-84 is claimed by branch/docs-glob-minimatch-advisories, on main`, while `lg-84-replace-exceljs.md` is the ticket on `main`.
+
+**Worked, and worth keeping:**
+
+- lg-73's gate 1 replaced reading screenshots by eye with a computed-style diff of every element on all 66 shots, base against head, in both themes, and grouped every change under a repo-130 row. That is how it disproved the Log's account of the hover border.
+- Asking at intake whether a serial follower stacks on the first ticket's landing or waits for its merge kept lg-73 inside the batch.

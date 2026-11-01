@@ -3,7 +3,7 @@ id: lg-88
 tool: ledger
 title: A merged range costs memory in proportion to its area, past every size bound
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -34,9 +34,18 @@ directory): a 2 513-byte workbook holding one merge, read through `readSheets`.
 so `A1:XFD1000` is about +570 MB, over the 512 MB the ledger's container has
 (`compose.ledger.prod.yaml`) and the 4 MiB inflated bound is sized against.
 
-## Decision — open
+## Decision — answered 2026-11-01 by the owner
 
-**Open: how to bound it.**
+**Option 3: stop giving merged places at all.** Chosen from the three below. The
+"unverified" in option 3 was checked before asking, on `main` at `686b213c`: every
+reader indexes a sheet's cells as `rows[r]?.[c] ?? null` (`books/src/workbook.ts`,
+`cellAt`; `api/src/layout-view.ts`, `rowLine`), a merged place is already `null`
+like any gap, and `workbook-describe.ts`'s cell bound counts only non-null cells.
+So dropping the places changes no value a reader sees: only a row's trailing
+width, the row count past the last stored row, and a value stored inside a merge
+(read under option 3, which Excel never writes).
+
+**How to bound it** — the options it was chosen from:
 
 1. **Clip a merge's places to the stored cells' extent.** A merge then holds
    places only where the sheet holds something to its right or below. Changes what
@@ -49,6 +58,18 @@ so `A1:XFD1000` is about +570 MB, over the 512 MB the ledger's container has
    are absent. Simplest, and changes row widths for every merged layout, which the
    books' column positions may rely on — unverified.
 
+## Build
+
+1. In `api/src/xlsx.ts`, `rowsOf`: delete the `covered` map and its loop over
+   `sheet["!merges"]`. A row is its stored cells, gaps `null`, as for an unmerged
+   sheet; `last` is `data.length` alone.
+2. `api/test/xlsx.test.ts`: `a merge past the last stored row holds its places to
+   its own end` becomes a test that the sheet ends at its last stored row; the
+   150 000-row merge test expects one row; `a merged cell is read once, at its
+   first part` still holds.
+3. Measure Done when 2 the way lg-87's gate measured the reproduction, and record
+   the number in the Log.
+
 ## Done when
 
 1. The owner's choice is recorded here with its options, and `status` moves on.
@@ -58,3 +79,4 @@ so `A1:XFD1000` is about +570 MB, over the 512 MB the ledger's container has
 ## Log
 
 - 2026-11-01: filed from lg-87's gate (its F5 bullet), on the owner's choice.
+- 2026-11-01: owner answered the decision: option 3. Build written from it; status `ready`.

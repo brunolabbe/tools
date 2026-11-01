@@ -211,12 +211,7 @@ export function PeriodRows({
             {load.rows.length} of {load.total}
           </p>
           {load.rows.length < load.total && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={more}
-              onClick={() => void showMore()}
-            >
+            <button type="button" disabled={more} onClick={() => void showMore()}>
               Show more
             </button>
           )}
@@ -230,7 +225,7 @@ export function PeriodRows({
         categories={categories}
         onChanged={onChanged}
       />
-      <button type="button" className="secondary" onClick={onClose}>
+      <button type="button" onClick={onClose}>
         Close the rows
       </button>
     </section>

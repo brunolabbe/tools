@@ -506,6 +506,14 @@ test("Receipt fits a phone and a desktop, with a photo kept and an item typed", 
   const items = page.getByRole("list", { name: "The items" });
   await items.getByRole("textbox").nth(0).fill("Organic rolled oats, the large two-kilogram bag");
   await items.getByRole("textbox").nth(1).fill("12.99");
+  // The items make the total, so the left-out item shows what it takes off.
+  await page.getByLabel("Subtotal").fill("12.99");
+  await page.getByLabel("GST (TPS)").fill("0.00");
+  await page.getByLabel("QST (TVQ)").fill("0.00");
+  await page.getByLabel("Total", { exact: true }).fill("12.99");
+  // lg-90: leave the item out, so the select of whose it is is on the screen measured.
+  await items.getByRole("checkbox", { name: /is shared$/u }).uncheck();
+  await items.getByLabel(/^Whose is /u).focus();
   await fitsBothWidths(page, testInfo, "Receipt", async (_page, width) => {
     const at = `Receipt at ${String(width)} px`;
     // lg-64: a field that shows the start of its entry and cuts the rest off
@@ -527,8 +535,10 @@ test("Receipt fits a phone and a desktop, with a photo kept and an item typed", 
       .toBeLessThanOrEqual(price.box);
     // Every control of the row can be reached without scrolling the page sideways.
     const controls = [
-      items.getByRole("button", { name: /, Shared$/u }),
-      items.getByRole("checkbox"),
+      items.getByRole("checkbox", { name: /is shared$/u }),
+      items.getByRole("checkbox", { name: "Taxable" }),
+      items.getByLabel(/^Whose is /u),
+      items.getByText(/^Takes off /u),
       items.getByRole("button", { name: /^Remove /u }),
     ];
     for (const control of controls) {

@@ -163,7 +163,7 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
             {problem}
           </p>
         )}
-        <button type="button" className="secondary" onClick={() => setReviewing(false)}>
+        <button type="button" onClick={() => setReviewing(false)}>
           Back to the inbox
         </button>
         <AutoFiled
@@ -227,7 +227,7 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
     <section className="card" aria-labelledby="inbox-title">
       <h2 id="inbox-title">Inbox</h2>
       {autoFiled.length > 0 && (
-        <button type="button" className="secondary" onClick={() => setReviewing(true)}>
+        <button type="button" onClick={() => setReviewing(true)}>
           Review {autoFiled.length} filed automatically
         </button>
       )}
@@ -393,11 +393,7 @@ function InboxItem({
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => onAnswer(person === "" ? null : person, bucket)}
-        >
+        <button type="button" onClick={() => onAnswer(person === "" ? null : person, bucket)}>
           Classify
         </button>
       </div>

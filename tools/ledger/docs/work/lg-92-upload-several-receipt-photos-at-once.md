@@ -306,3 +306,10 @@ stays as it is".**
   touch-only element is hidden there unless a `describe` turns touch back on;
   the photo-sources case does, and a desktop case checks the camera tile is
   hidden.
+- **After lg-73 (#726).** The tiles take the base's quiet look as `.button`
+  labels; `.pick` keeps only their size and the focus and disabled states a
+  hidden input cannot show. **Read it / Read all** is the queue card's one
+  `primary`; the photo step's card has none (its tiles are labels). The
+  pickers moved to `receipts/PhotoPickers.tsx`, since the photo step and the
+  queue both use them. They stay in the ledger until a second tool takes a
+  file (`.claude/rules/ui-package.md`).

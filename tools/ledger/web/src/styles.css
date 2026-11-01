@@ -65,30 +65,14 @@
   }
 }
 
-body {
-  font-family: var(--font-sans);
-  line-height: 1.5;
-}
-
-.shell {
-  max-width: var(--page-width);
-  margin: 0 auto;
-  padding: var(--gap);
-  display: grid;
-  gap: var(--gap);
-}
-
 /*
- * A screen's cards are siblings in main, which would otherwise stack them flush.
- * A grid gap reaches only its own children, so a screen that keeps its cards in
- * one labelled section of its own (Admin) puts `.stack` on it (lg-70).
+ * The shared base (`@webtools/ui/base.css`, repo-130) owns the body, the buttons
+ * and fields, `.card`, `.stack`, `.shell` and `.muted`. A screen's cards are
+ * siblings in `main`, and a grid gap reaches only its own children, so `main`,
+ * the shell and a screen's own labelled section (Admin, lg-70) each carry
+ * `.stack` in the markup. What the base does not zero is a heading that is a
+ * direct child of a stack, which would otherwise add its margin to the gap.
  */
-main,
-.stack {
-  display: grid;
-  gap: var(--gap);
-}
-
 .stack > h2 {
   margin: 0;
 }
@@ -97,10 +81,6 @@ h1 {
   margin: 0;
   font-size: 1.5rem;
   color: var(--accent);
-}
-
-.muted {
-  color: var(--text-muted);
 }
 
 .bad {
@@ -114,26 +94,6 @@ h1 {
  */
 .app-header {
   margin-bottom: 0;
-}
-
-/*
- * The paste screen (lg-2). One column on a phone; 16px text in the textarea so
- * iOS does not zoom the page when it takes focus; buttons at least 44px tall.
- */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--gap);
-  display: grid;
-  gap: 0.75rem;
-}
-
-/* A card under a screen's own h2 is titled by an h3 (Admin), and reads as any other card's title (lg-70). */
-.card h2,
-.card > h3:first-child {
-  margin: 0;
-  font-size: 1.125rem;
 }
 
 /*
@@ -153,33 +113,6 @@ h1 {
 .card h3,
 .card strong {
   overflow-wrap: anywhere;
-}
-
-textarea {
-  width: 100%;
-  font: inherit;
-  font-size: 1rem;
-  padding: 0.5rem;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  resize: vertical;
-}
-
-button {
-  min-height: 2.75rem;
-  padding: 0 1.25rem;
-  font: inherit;
-  font-weight: 600;
-  color: var(--accent-text);
-  background: var(--accent);
-  border: 0;
-  border-radius: var(--radius);
-}
-
-button:disabled {
-  opacity: 0.5;
 }
 
 .rows {
@@ -229,8 +162,8 @@ button:disabled {
 }
 
 /*
- * The tabs, the inbox and the rules (lg-4). Same rules as the paste screen: one
- * column, 16px fields so iOS does not zoom, and targets a thumb can hit.
+ * The tabs, the inbox and the rules (lg-4). One column, and targets a thumb can
+ * hit; the base gives the buttons and the 16px fields.
  */
 .tabs {
   display: flex;
@@ -239,34 +172,12 @@ button:disabled {
 
 .tabs button {
   flex: 1;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
 }
 
 .tabs button[aria-pressed="true"] {
   color: var(--accent-text);
   background: var(--accent);
   border-color: var(--accent);
-}
-
-button.secondary {
-  color: var(--accent);
-  background: transparent;
-  border: 1px solid var(--accent);
-}
-
-input,
-select {
-  width: 100%;
-  min-height: 2.75rem;
-  font: inherit;
-  font-size: 1rem;
-  padding: 0 0.5rem;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
 }
 
 .rule-form,
@@ -339,14 +250,6 @@ select {
   align-items: center;
   gap: 0.5rem;
   min-height: 2.75rem;
-}
-
-/* The global `input` rule is for fields; a radio is sized as a radio, the way
-   `label.check input` sizes a checkbox. */
-input[type="radio"] {
-  width: 1.25rem;
-  min-height: 1.25rem;
-  padding: 0;
 }
 
 .hint {
@@ -544,11 +447,6 @@ label.check {
   color: var(--text);
 }
 
-label.check input {
-  width: 1.25rem;
-  min-height: 1.25rem;
-}
-
 /*
  * The stats screen (lg-9). The SVG is drawn at the container's measured width, so
  * its 12px text is 12px on a phone; a chart too wide for the screen scrolls in
@@ -569,6 +467,7 @@ label.check input {
 .range button[aria-pressed="true"] {
   color: var(--accent-text);
   background: var(--accent);
+  border-color: var(--accent);
 }
 
 /*
@@ -787,12 +686,6 @@ svg.chart .selected-band {
   background: var(--surface);
 }
 
-@media (min-width: 48rem) {
-  .shell {
-    padding: calc(var(--gap) * 2);
-  }
-}
-
 /* lg-8: the camera button is the file input's label, as large as a thumb. */
 .camera {
   display: grid;
@@ -805,7 +698,9 @@ svg.chart .selected-band {
 }
 
 /* A receipt photo's two sources as thumb-sized icon tiles, the file input hidden
-   inside each: the browser's "Choose file" box made two sources read as a form. */
+   inside each: the browser's "Choose file" box made two sources read as a form.
+   Each is a `.button`, so it has the base's quiet look and hover (lg-73); this
+   gives it a square and the states a hidden input cannot show itself. */
 .pickers {
   display: flex;
   flex-wrap: wrap;
@@ -813,14 +708,9 @@ svg.chart .selected-band {
 }
 
 .pick {
-  display: grid;
-  place-items: center;
   width: 4rem;
   height: 4rem;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  color: var(--accent);
-  cursor: pointer;
+  padding: 0;
 }
 
 .pick svg {
@@ -834,9 +724,11 @@ svg.chart .selected-band {
   outline-offset: 2px;
 }
 
+/* As the base's disabled button, and without its hover: a label is never `:disabled`. */
 .pick:has(:disabled) {
+  border-color: var(--border);
   opacity: 0.5;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 /* A desktop ignores `capture`, so its camera tile would be a second gallery. */
@@ -885,9 +777,9 @@ svg.chart .selected-band {
   border-bottom: 1px solid var(--border);
 }
 
-/* lg-10: a receipt's items, one per block on a phone, each tapped through
-   shared, not shared and the other's. What is not shared is muted and what is
-   the other's is marked, so the state reads without the button's word. */
+/* lg-10: a receipt's items, one per block on a phone, each with a Shared box and,
+   once unchecked, a select of whose it is (lg-90). What is not shared is muted and
+   what is the other's is marked, so the state reads without the select's word. */
 .items {
   margin: 0;
   min-width: 0;
@@ -925,6 +817,14 @@ svg.chart .selected-band {
    basis above it showed 8 to 13 characters of "Organic rolled oats, …". */
 .items .item > input:first-child {
   flex-basis: 100%;
+}
+
+.items .item .takes-off {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
 .items .item.not-shared > input {

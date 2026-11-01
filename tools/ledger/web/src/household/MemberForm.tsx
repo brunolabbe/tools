@@ -138,7 +138,7 @@ export function MemberForm({ people, names, onAdd }: MemberFormProps): React.Rea
       )}
       {notice !== null && <output>{notice}</output>}
       <div className="actions">
-        <button type="submit" disabled={busy}>
+        <button className="primary" type="submit" disabled={busy}>
           Add member
         </button>
       </div>

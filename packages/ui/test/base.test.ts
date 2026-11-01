@@ -23,7 +23,7 @@ const BASE = fs.readFileSync(path.join(REPO_ROOT, "packages", "ui", "src", "base
  * request that deletes its own copies: from then on it must import the base and
  * declare none of its selectors.
  */
-const MOVED = ["planner"];
+const MOVED = ["ledger", "planner"];
 
 const tools = fs
   .readdirSync(path.join(REPO_ROOT, "tools"), { withFileTypes: true })
