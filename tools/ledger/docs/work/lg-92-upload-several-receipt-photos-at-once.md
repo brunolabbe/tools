@@ -141,3 +141,55 @@ Proof, from the worktree root (`/tmp/.../lg-92/build/` holds the logs):
 - Done when 6: `npm run check` exit 0. `npm test -- --project ledger` was not run
   whole on this first build (CI runs it on the draft); the web project is the
   316 above.
+
+2026-11-01, builder, round 1: gate 1 (Opus, CONCERNS at `0587e1d3`), five
+findings, fixed in `12be04fc`. The owner's answers (2026-11-01, asked through
+`AskUserQuestion`): F2 "Fix it; Read all skips it" (the other options were "Fix
+it; Read all still reads" and "Leave F2 recorded"); the lows "F3 + F4 + F5" (the
+other option was "None"), F4 as "also disable Start over while photos are
+uploading". F1 needed no answer. The F1, F2 and F4 tests failed before their fixes (F5 is below); the
+full outputs are in `/tmp/.../lg-92/build/red-left-out.log` and `red-unit.log`.
+
+- **F1, the left-out names overflowed 360 px.** `.queue .name` did not reach
+  `li.name` in the "Photos left out" list, which is outside `.queue`; the rule is
+  now `.name`. New case at the end of `e2e/layout.spec.ts`, "the receipt queue
+  fits a phone and a desktop with photos left out, by long names": 80-character
+  names, one over 7 MiB, one refused by the server (a route answering 500), one
+  kept. Before the fix: `Error: Receipt queue (left out) is 697 px wide in a 360
+  px window`. After: passes; the 360 px screenshot was opened.
+- **F2, a receipt typed in from a photo that was not read.** The kept and failed
+  rows now say "n receipt(s) typed in from this photo, filed."; both "Type it
+  in" buttons open `nextPart(photo.filed)`; **Read all** skips a photo with a
+  filed part and the "n of N read" total leaves it out (it would never be read);
+  a failed photo with a filed part drops its failure and its retry. Tests
+  "a receipt typed in from a kept photo shows it filed, files the next one as part
+  2, and Read all spends no read on it" and "a receipt typed in from a photo
+  whose read failed shows it filed and drops the failure". Before:
+  `TestingLibraryElementError: Unable to find an element with the text: 1 receipt
+  typed in from this photo, filed.` in both. After: `fileReceipt` calls
+  `[[11,1],[11,2]]` and reads `[12]`.
+- **F3, a claim of the first entry above is corrected.** It says the brief's
+  `Retry-After` header "was not reachable from the screen". The header was not,
+  but its number was: at the base `requestJson` already passed the body's
+  `details` through, and `api/src/rate-limit.ts` puts `retryAfterSec` there, so
+  the queue could have read the wait without the `client.ts` change. That change
+  is kept (the brief says the header, and the header is what every client is told
+  to obey); it was not needed to make the wait readable.
+- **F4, Start over during uploads.** It is disabled while any photo is going up
+  (and while a read runs, as before). Test "Start over waits while photos are
+  still going up". Before: `AssertionError: expected false to be true`.
+- **F5, three behaviours that held and had no test.** "a second Read all while
+  one is running reads nothing twice" (the `readingNow` guard, called twice in
+  one tick through the hook, since a disabled button would hide it), "a photo
+  refused five times in a row is reported failed, with a retry, and not asked
+  again" (the cap: six asks) and "leaving the screen during a wait reads nothing
+  more" (unmount). They pass on the code, so each was planted red, all three in
+  one run: the guard line removed, `MAX_WAITS` replaced by 1,000,000, the
+  `alive` check after the sleep removed. Result: `expected [ 11, 12, 12 ] to
+  deeply equal [ 11, 12 ]`; `expected "vi.fn()" to be called 6 times, but got 61
+  times`; `expected "vi.fn()" to be called 1 times, but got 13 times`. Restored
+  with `git checkout 12be04fc -- <file>`; 39 of 39 again.
+
+Proof at the round's head: `npx vitest run tools/ledger/web`: 322 of 322 in 25
+files (316 before, six new in `receipts.test.tsx`); `npm run e2e:ledger`: 31
+passed (30 before, one new); `npm run check` exit 0.
