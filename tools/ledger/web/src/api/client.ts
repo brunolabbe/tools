@@ -50,6 +50,7 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
   const payload: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
+    const wait = Number(response.headers.get("retry-after"));
     const parsed = errorPayloadSchema.safeParse((payload as { error?: unknown } | null)?.error);
     if (parsed.success) {
       const { code, message, details } = parsed.data;
@@ -58,7 +59,6 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
       // asking too often carries the header's wait as `retryAfterSec` (lg-92):
       // the header is what every client is told to obey, and the body's copy is
       // only the same number.
-      const wait = Number(response.headers.get("retry-after"));
       const carried: AppErrorOptions =
         code === "RATE_LIMITED" && Number.isFinite(wait) && wait > 0
           ? { details: { ...details, retryAfterSec: wait } }
@@ -66,6 +66,16 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
             ? {}
             : { details };
       throw new AppError(code, message, carried);
+    }
+    // A 429 with no body of ours is Cloudflare's rate limiting rule on `/api/`
+    // (lg-97, `docs/02-DEPLOYMENT.md`), whose page is HTML. It means what our
+    // own refusal means, so it reads the same, with the header's wait if sent.
+    if (response.status === 429) {
+      throw new AppError(
+        "RATE_LIMITED",
+        undefined,
+        Number.isFinite(wait) && wait > 0 ? { details: { retryAfterSec: wait } } : {},
+      );
     }
     throw new AppError("INTERNAL", `The API answered ${String(response.status)}.`);
   }
