@@ -3,7 +3,7 @@ id: repo-120
 tool: repo
 title: Move the Anthropic SDK from 0.125 to 1.x in the planner and the ledger
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -44,6 +44,34 @@ layout reads — goes through it.
   and both tools' suites pass.
 - The Log lists each breaking change the migration notes name and what this
   tree did about it (including "not called here").
+
+## Review
+
+**Gate: PASS** — 2026-11-01 · `84135dbf..ef1baf02` · Opus 5.5, depth full
+
+| Done when                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The three workspaces resolve one `@anthropic-ai/sdk` 1.x, and `npm run check` and both tools' suites pass | **verified**: `npm ls` shows one `@anthropic-ai/sdk@1.3.0`, deduped under `@ledger/receipts`, `@planner/agent` and `@planner/api`, and the lockfile has one `node_modules/@anthropic-ai/sdk` entry. `npm run check` exit 0. `npm test -- --project planner` 1940 of 1940 (84 files). `--project ledger` 2037 of 2037 (96 files). CI `test (ubuntu-latest)`, both `docker` jobs and both `e2e` jobs passed on `ef1baf02`. The test diff deletes no test, and each changed assertion is an exact `toBe` |
+| The Log lists each breaking change the migration notes name and what this tree did about it               | **verified** by reading the Log against every heading under "Breaking changes" and "SDK and CLI changes" in `platform.claude.com/docs/en/api/migration-2026-10-21`, fetched today. All 13 headings that apply to TypeScript are in the Log, each marked as called here or not called here                                                                                                                                                                                                             |
+
+- **low** · no `Done when` line depends on it · `nfr:security`, unsafe direction, no live call site. The headers of `agent/src/providers/anthropic.ts` and `receipts/src/reader.ts` list everything the SDK reads from the environment. They name `ANTHROPIC_CUSTOM_HEADERS` as the only variable read whatever the client is given. Since 0.134.0, the SDK also reads `ANTHROPIC_OPEN_TELEMETRY`, `_PROPAGATION`, `_TRACES_CONTENT_MODE` and `_TRACES_MAX_CONTENT_BYTES` whenever the client gets no `openTelemetry` option, and neither tool passes one. Measured: with no option, `resolveOpenTelemetryOptions` takes `contentMode: "content"` from the environment. Nothing under `tools/` or `packages/` registers a tracer provider or a propagator, so no span or trace header is produced today. The Log names `@opentelemetry/api` as a new entry in the lockfile, but not this behaviour. **Open decision**, two remedies:
+  - (a) Recommended: pass `openTelemetry: { traces: false, propagation: false }` to all four clients (the planner's provider and its live `countTokensClient`, the ledger's `reader.ts` and `layout.ts`). Measured: `openTelemetry: false` alone leaves `propagation: true`.
+  - (b) Add the four variables to both headers.
+- **low** · no `Done when` line depends on it · false in the safe direction. In 1.3.0, `authToken: null` no longer does what three texts say it does:
+  - the comment in `anthropic-provider.test.ts` › "the key it was given, and no bearer token from anywhere else", which calls that test "the only thing that shows `authToken: null` still keeps a host's token off the wire";
+  - the sentence in the `anthropic.ts` header that a stray `ANTHROPIC_AUTH_TOKEN` "would otherwise be sent beside the key";
+  - the Log's "so the stray-token guard is still exercised".
+
+  In 1.3.0, passing `apiKey` alone stops the SDK from reading the environment for a credential. Positive control: with `authToken: null` deleted from all three clients, the two specs passed 52 of 52 and the wire carried only the passed key. With the host's token passed explicitly, 2 of 52 failed, one in each tool. So the assertions do pin "no token from anywhere else". Only the texts' account of why that holds is wrong.
+
+- **low** · no `Done when` line depends on it · stale `x-api-key` text, safe direction. It is in the `refuseCustomHeaders` doc in `planner/api/src/config.ts` ("Re-sending `x-api-key` per request would close the key") and in the comment in `planner/api/test/logging.test.ts` › "a thrown authentication error, logged through the real logger, does not contain the key". The `#failure` doc in `anthropic.ts` was reworded on this branch but still says the error "carries the request that produced it". In 1.3.0, `APIError` holds the status, the response headers, the request id and the body. It does not hold the request.
+- **low** · no `Done when` line depends on it · `nfr:reliability`. `createLayoutAsk` in `receipts/src/layout.ts` builds an SDK client, and no test asserts anything about the request it sends: credential header, URL or version. That was already true at 0.125, and the SDK move reaches it. The gate's probe sent one layout request: `Authorization: Bearer <passed key>`, no `x-api-key`, `anthropic-version: 2026-10-21`, and the passed key won with both environment variables set.
+- **dropped** · a key leaking through the logs. In both tools, a 401 through each client, logged with the tool's own `createLogger`, carried no key, no environment key and no token. The captured headers logged raw, nested and through `redactHeaders` all printed `"authorization":"[redacted]"`. The planner's backstop path lists cover `authorization` beside `x-api-key`. The ledger's cover `authorization`.
+- **dropped** · the lockfile and the seven-day rule. 1.3.0 was published 2026-10-23T23:31Z and `@opentelemetry/api` 1.10.0 on 2026-10-20T18:23Z. Both were more than seven days old at the commit (2026-11-01). No other entry moved. `check-lockfile-sync.mjs` exit 0, and image-closure passed 8 of 8.
+- **dropped** · the licence moved from MIT to Apache-2.0. The Log records it, and `dependency-review` passed on `ef1baf02`.
+- **dropped** · `test (windows-latest, informational)` failed on `ef1baf02` with one test, `ledger/api/test/household-command.test.ts` › "T5: remove prints the shown name escaped, a person's and an id that is a name", which timed out at 20 s. That test is synchronous, runs in-process and uses SQLite, so the diff cannot reach it. Main's Windows leg at `84135dbf` passed. It is informational and not graded.
+- **findings** · the hunt returned 8; 4 carried, 4 dropped.
+- NFR: security, above (the redaction is sound) · performance n/a · reliability, above · maintainability: three stale comments, above.
 
 ## Log
 
