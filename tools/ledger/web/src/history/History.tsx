@@ -533,7 +533,14 @@ function Refile({
 }: RefileProps): React.ReactElement {
   if (!open) {
     return (
-      <button type="button" aria-expanded={false} onClick={() => onOpen(true)}>
+      <button
+        type="button"
+        aria-expanded={false}
+        // The visible words come first in the name (label in name), then the row, so the
+        // identical buttons down the list are told apart by a screen reader.
+        aria-label={`Change who and what: ${row.description}, ${row.date}`}
+        onClick={() => onOpen(true)}
+      >
         Change who and what
       </button>
     );

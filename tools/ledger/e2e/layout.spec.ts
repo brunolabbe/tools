@@ -1260,8 +1260,11 @@ test("History fits a phone and a desktop with a filed row's change open", async 
     .getByRole("list", { name: "Bank rows" })
     .getByRole("listitem")
     .filter({ hasText: "Hypothèque /Prêteur Exemple" })
-    .first();
-  await row.getByRole("button", { name: "Change who and what" }).click();
+    .filter({ hasText: "2026-09-12" });
+  // The seed's three Hypothèque rows differ by date, and the button's name carries it.
+  await row
+    .getByRole("button", { name: "Change who and what: Hypothèque /Prêteur Exemple, 2026-09-12" })
+    .click();
   await expect(row.getByText(/closed period/u)).toBeVisible();
   await expect(row.getByLabel("Belongs to")).toBeVisible();
   await expect(row.getByLabel("Bucket")).toBeVisible();

@@ -348,7 +348,13 @@ test("a row answered by a person is filed again from the history, the list is re
   expect(item.textContent).toContain("alex · Current expenses");
   expect(item.textContent).toContain("answered by a person");
 
-  fireEvent.click(within(item).getByRole("button", { name: "Change who and what" }));
+  const open = within(item).getByRole("button", {
+    name: "Change who and what: Virement Sam, 2026-09-20",
+  });
+  // Label in name: the words on the button open its accessible name.
+  expect(open.textContent).toBe("Change who and what");
+  expect(open.getAttribute("aria-label")?.startsWith(open.textContent)).toBe(true);
+  fireEvent.click(open);
   fireEvent.change(within(item).getByLabelText("Belongs to"), { target: { value: "sam" } });
   fireEvent.change(within(item).getByLabelText("Bucket"), { target: { value: "mortgage" } });
   fireEvent.click(within(item).getByRole("button", { name: "Save" }));
@@ -394,11 +400,19 @@ test("a row in a closed period says what the change reaches, and the next close 
   );
   if (old === undefined || recent === undefined) throw new Error("two rows expected");
 
-  fireEvent.click(within(recent).getByRole("button", { name: "Change who and what" }));
+  fireEvent.click(
+    within(recent).getByRole("button", {
+      name: "Change who and what: New row, 2026-10-04",
+    }),
+  );
   expect(within(recent).queryByText(/closed period/u)).toBeNull();
   fireEvent.click(within(recent).getByRole("button", { name: "Cancel" }));
 
-  fireEvent.click(within(old).getByRole("button", { name: "Change who and what" }));
+  fireEvent.click(
+    within(old).getByRole("button", {
+      name: "Change who and what: Old row, 2026-09-20",
+    }),
+  );
   const said = within(old).getByText(/closed period/u).textContent;
   expect(said).toContain("from the first row to 2026-09-30");
   expect(said).toContain("recorded for it stays as it was paid");
@@ -419,7 +433,11 @@ test("a refused change is said and leaves the control open (lg-95)", async () =>
   vi.mocked(classifyRow).mockRejectedValue(new AppError("UNREACHABLE", "The ledger API is down."));
   render(<History />);
 
-  fireEvent.click(await screen.findByRole("button", { name: "Change who and what" }));
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Change who and what: Épicerie, 2026-09-20",
+    }),
+  );
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   expect((await screen.findByRole("alert")).textContent).toContain("down");
@@ -435,7 +453,7 @@ test("a row not filed yet is not offered a change here; the inbox files it (lg-9
   render(<History />);
 
   await screen.findByText("Café du coin");
-  expect(screen.queryByRole("button", { name: "Change who and what" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Change who and what/u })).toBeNull();
 });
 
 test("closedPeriodOf holds a period's first and last day, and the first period has no start (lg-95)", () => {
