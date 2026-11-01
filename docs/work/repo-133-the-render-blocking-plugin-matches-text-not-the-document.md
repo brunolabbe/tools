@@ -440,3 +440,71 @@ needs the most judgement. Parse5 would be `standard`; accepting R1 would be
   loses exactly one clause, the sentence `Under the option named "Accept R1",
   Build step 5 rewords this item.`; nothing else in the line changed. The figure
   the bound is graded against is recorded in the round's Log entry below.
+- 2026-11-01 — Built (builder, Sonnet 5.5), branch `repo-133-render-blocking-parse5`
+  off `84135dbf`. Remedy: `packages/ui/src/vite.ts` parses the built HTML with
+  parse5 8.0.1 (`sourceCodeLocationInfo`), collects each `script` element in the
+  HTML namespace with `type=module` (case-insensitive) and a non-empty `src` that
+  resolves to the page's own origin (`new URL(src, "http://webtools.invalid/")`,
+  so `//host`, `\\host`, `data:` and a character-reference-encoded host are all
+  read as a browser reads them), and inserts ` blocking="render"` at the start
+  tag's offset plus 7. The guard counts every same-origin module script, tagged
+  now or already carrying a `blocking` attribute (Decision 2). `addRenderBlocking`
+  keeps its `{ html, tagged }` shape, so the four existing cases are untouched.
+  A `<template>`'s content is not walked. The traversal is an explicit stack.
+- Claim: the before is the Landing column. `vite.ts` at `84135dbf` and at
+  `3eb342af` both hash to `bede8abf408ac7fa6390475f19e7ea79b1e28194`, so the
+  base is the landing version. Both probes, run on a copy of that file, printed
+  the Landing column row for row (P1-P5 1 marked; P6, P7 guard; P8 2 marked; P9
+  2 marked; P10-P14 and P16 BUILD-OK with 1 marked in the text; P15 2 marked; D1
+  and D2 tagged 1), and R1 read 150,340.9 / 2,334,391.0 / 38,205,922.4 µs at
+  22,000 / 88,000 / 352,000 characters (ratio 352,000 to 88,000: 16.4).
+- Claim: Done when 1 holds. On the fixed tree `repo-133-population.mts` prints
+  P1-P5 BUILD-OK with 1 marked, P6 and P7 BUILD-FAIL (guard), P8 BUILD-OK with 1
+  marked (the entry), P9 and P15 BUILD-OK with 1 marked (Vite's helper
+  `/assets/index-P2Xu9kJm.js`) and the remote unmarked, P10-P14 and P16
+  BUILD-FAIL (guard), D1 and D2 `tagged=0`. That is the Expected column on all 18
+  rows.
+- Claim: Done when 3 holds, and this is the measurement its bound is graded
+  against (the owner's answer above). On the fixed tree, median of five, no other
+  job running: 1,484.7 µs at 22,000 characters, 3,409.4 µs at 88,000,
+  11,970.5 µs at 352,000. 11,970.5 µs is 12 ms against the 1,000,000 µs bound,
+  and the ratio 352,000 to 88,000 is 3.51 against the bound of 8 (a first run
+  with the before-probe still running on the machine read 13,642.2 µs and 3.87).
+  So the bound of eight sits above parse5's measured 3.5 and below the landing's
+  16.4, as gate 2's single-run 3.2 and 16.9 had it: eight is a direction that
+  separates the two, and has not been tuned to either.
+- Claim: Done when 2 holds. `npx vitest run packages/ui/test/vite-plugin.test.ts`
+  gives 18 of 18 passed on the fix; the same file with `vite.ts` restored from
+  `9de83197` (the landing's) gives 13 failed | 5 passed: P8, P9, P10, P11, P12,
+  P13, P14, P16, P15, D1, D2, and two the probe has no row for (a remote origin
+  in `//`, `\\`, leading-whitespace and `data:` spellings; a `<template>`'s
+  script). The five that pass on both are the four existing cases and one new
+  regression guard (offsets past CRLF and an astral character), which the
+  landing's regexp could not get wrong. `npm test -- --project core` was not
+  run as a whole; the narrower file and `npm run check` (exit 0) were.
+- Claim: the real consumers still build. `cd tools/downloader/web && npx vite
+  build` writes `dist/app/index.html` with
+  `<script blocking="render" type="module" crossorigin src="/assets/index-CDFfo_Lk.js">`,
+  and `npx vitest run tools/downloader/web/test/vite-config.test.ts packages/ui`
+  gives 74 of 74.
+- Dependency: `parse5` `^8.0.1` is declared under `dependencies` in
+  `packages/ui/package.json` (the plugin runs in Node inside every tool's Vite
+  config, so it is a runtime dependency of the package, not a dev one). The
+  version does not move from the lockfile's 8.0.1, so the seven-day rule is not
+  engaged. No `npm install` was run: the `packages/ui` entry in `package-lock.json`
+  was edited by hand to add the dependency, and `node scripts/check-lockfile-sync.mjs`
+  then printed a diff of exactly two lines, `"dev": true` on `node_modules/parse5`
+  and `node_modules/entities`, which were removed by hand; it now prints
+  `up to date` and nothing else. `entities` 8.1.0 is parse5's only dependency.
+- What the brief had wrong or left open. (1) "Whether the lock's `dev` flag
+  changes" is answered: it does, on parse5 and on its dependency `entities`,
+  because `dependencies` makes both production. (2) The vite.ts message changed
+  from "no external module script" to "no external module script on the same
+  origin"; the existing case's regexp still matches. (3) A tag with a `blocking`
+  attribute that lacks `render` is left alone and counts as an entry, as the
+  landing's `(?![^>]*\bblocking=)` also left it alone; Vite writes none, so no
+  tool reaches it. (4) A tool built with an absolute `base` on another origin
+  would have its entry read as remote and the guard would fail the build. The
+  landing marked it. No tool does this (each CSP names one origin); it is
+  stated here so the next reader does not rediscover it.
+- Fold-in: none. Nothing else small and already specified came free.
