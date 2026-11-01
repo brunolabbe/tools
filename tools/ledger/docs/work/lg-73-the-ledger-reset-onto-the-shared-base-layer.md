@@ -72,13 +72,26 @@ not this ticket's: after it, the shared header draws the only `h1`.
 2. ~~No ledger source carries `secondary`, and each card has at most one
    `primary`. The Log lists them.~~ _Superseded 2026-11-01 by the line below,
    which fixes what "each card" ranges over._
+   **2.** ~~No ledger source carries `secondary`. Every element whose
+   `className` contains `card`, as
+   `grep -rnoE 'className="[^"]*\bcard\b[^"]*"' tools/ledger/web/src` lists them
+   at the branch head, holds at most one `primary` button, and the Log lists each
+   such card with its `primary` button or "none".~~ _Superseded 2026-11-01 by the
+   line below, which fixes what "holds" counts._
    **2.** No ledger source carries `secondary`. Every element whose `className`
    contains `card`, as
    `grep -rnoE 'className="[^"]*\bcard\b[^"]*"' tools/ledger/web/src` lists them
-   at the branch head, holds at most one `primary` button, and the Log lists each
+   at the branch head, holds at most one `primary` button rendered at once (two
+   source buttons that never render together count once), and the Log lists each
    such card with its `primary` button or "none".
-3. `e2e/layout.spec.ts` passes at 360 px and 1280 px. The before and after
-   screenshots are compared in the Log, screen by screen.
+3. ~~`e2e/layout.spec.ts` passes at 360 px and 1280 px. The before and after
+   screenshots are compared in the Log, screen by screen.~~ _Superseded
+   2026-11-01 by the line below, which fixes the scope of the comparison._
+   **3.** `e2e/layout.spec.ts` passes at 360 px and 1280 px. Every screen's
+   before and after screenshot at 360 px is opened and compared in the Log,
+   screen by screen, and so is the 1280 px pair of each screen the Log names as
+   one whose desktop layout differs from its 360 layout in a way the reset could
+   reach. Every difference is a row of repo-130's table or a finding.
 4. `npm run check` and `npm test -- --project ledger` pass.
 
 ## Log
@@ -143,3 +156,9 @@ Choices the brief did not make. Per-row buttons that repeat down a list (Inbox's
 **Fold-ins.** None taken. `packages/ui/test/base.test.ts`'s `MOVED` line is the one dl-135 will change next; the conflict is dl-135's, as the dispatch said.
 
 `npm test -- --project ledger` at `8c035ce4`: 99 files, 2133 of 2133.
+
+**2026-11-01 — three answers from the owner, relayed by the coordinator after the first report.** Each is the question, the options, the choice and whose recommendation it was. Done when 2 and 3 are reworded above, the old lines left beside them and marked superseded.
+
+1. **How "at most one `primary`" is counted** (`StatementPaste.tsx`'s Preview and Confirm and store, which never render together; `Rules.tsx`'s `RuleForm`, rendered for an edit or a new rule, one at a time). Options: (a) count as rendered; (b) fold Preview and Confirm into one conditional button; (c) make Preview quiet. Chosen **(a) count as rendered**, the builder's and the coordinator's recommendation. Done when 2 now says "at most one `primary` button rendered at once", keeping the grep scope recorded above.
+2. **Repeated per-row buttons are never `primary`** (Inbox's Accept and Classify, AutoFiled's Confirm, Queue's per-photo buttons, a line's Remove). Options: keep; promote one per-row action per screen. Chosen **keep**, the builder's and the coordinator's recommendation. No source change.
+3. **Done when 3's screenshots.** The first report said five screens at 360 px and one at 1280 px were opened, of 33 screens. Options: every screen at 360 px, with 1280 px scoped to the screens whose desktop layout differs; all 66 pairs; leave it to the gate. Chosen **every screen at 360 px, 1280 px for the screens whose desktop layout differs**, the coordinator's recommendation. The comparison is in the entry below.
