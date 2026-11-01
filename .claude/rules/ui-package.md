@@ -47,9 +47,11 @@ the classes every tool drew (body, `code`, focus, buttons, text fields, `.card`,
 stylesheet (`chrome.css`), then its own `./styles.css`. **Every selector in it
 is wrapped in `:where()`, so it has no specificity** and any class beats it
 whatever the load order; a new rule there is wrapped too. **A tool differs from
-it by declaring, in its own `:root`, a property a base rule reads with a
-fallback** (`var(--card-shadow, none)`), never by declaring the base's rule
-again. Such a property is not declared in `tokens.css`, whose guard fails on a
+it in its own `:root`, in one of two ways, and comments its reason either
+way.** It overrides a shared default that `tokens.css` declares (`--font-size-base`,
+`--font-sans`), or it declares a property a base rule reads with a fallback
+(`var(--card-shadow, none)`). It never declares the base's rule again. A
+fallback-read property is not declared in `tokens.css`, whose guard fails on a
 name no tool or shared stylesheet reads. `packages/ui/test/base.test.ts` fails a
 moved tool (its `MOVED` list: the ticket that moves a tool adds it) whose
 `styles.css` declares a selector the base declares, or whose `main.tsx` imports

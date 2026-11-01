@@ -29,7 +29,7 @@ provider and the model. It has no theme control and no terms page.
 1. `App.tsx`: render `AppHeader` with `name="Planner"`, the lede's sentence as
    `tagline`, and the planner's glyph. Move the `<h1>` out of `<main>` so the
    page has one `<header>`, one `<main>` and one `<footer>`.
-2. Render `AppFooter` with `tool="planner"`, `version={TOOL_VERSION}` (imported from `@webtools/ui`) and
+2. Render `AppFooter` with `version={TOOL_VERSION}` (imported from `@webtools/ui`) and
    `termsHref="/terms.html"`. Add the `define` to `web/vite.config.ts` as
    repo-131 step 5 describes. Delete the `Health` component. Delete
    `web/src/api/health.ts` and its tests if nothing else imports them. The
@@ -54,6 +54,9 @@ provider and the model. It has no theme control and no terms page.
 5. The terms page honours the theme cookie the way the downloader's does
    (repo-131 step 7), and links back to the planner.
 6. `e2e/layout.spec.ts`: add the terms page at 360 px and at desktop width.
+7. In a `.choice` row the 20px radio sits a few pixels above its label text, because
+   the row is `align-items: baseline` (repo-130 moved the radios from 13px to 20px).
+   Fix the alignment here.
 
 ## Done when
 

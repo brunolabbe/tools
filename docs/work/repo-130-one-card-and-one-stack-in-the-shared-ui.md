@@ -287,6 +287,12 @@ the four it leaves out.
   centred `button.link`'s grid and moved the trip and plan titles to the middle.
 - `:where(.shell)`'s `calc(var(--gap) * 2)` from `48rem` sits in an
   `@media (min-width: 48rem)` block, since breakpoints are literals.
+- Three more departures the builder's list left out, named by gate 1's second
+  low. `text-decoration: none` on `button, .button`. `color: var(--text)` on text
+  fields. Button states scoped to `button:disabled, .button:disabled` and
+  `button:hover:not(:disabled), .button:hover:not(:disabled)`, where the table
+  writes bare `:disabled` and `:hover:not(:disabled)`. None changed anything
+  visible in the 20 head screenshots.
 
 **The planner's own changes beyond the table.** `.panel` is `.card` (13
 `className` uses across six files; the 11 `section.panel.*` e2e locators and
@@ -315,7 +321,12 @@ difference is a table row unless it says finding.
   `0.75rem` gap, not their margins. The Checkpoint's three buttons wrap to two
   rows at 360 where they fitted in one before, since each is wider (44px tall,
   `padding: 0 1rem`).
-- Buttons: 40px to 44px (buttons row). Finding: `.pin`, a deliberately small
+- WITHDRAWN — do not cite this sentence: "Buttons: 40px to 44px (buttons row)."
+  Gate 1's fourth low shows it false, and the error is the builder's. A base
+  button computes to about 44.4px (`0.55rem` padding twice, a 1.55 line and the
+  border), and "Describe a new trip" is 44px tall in the base
+  `Trips and plans-360` screenshot, so button height is essentially unchanged.
+  The sentence it began is left standing: Finding: `.pin`, a deliberately small
   button, is also 44px tall now (about 24px before), and `.item-controls`'
   Move and Remove stack in the item's narrow column at 360 as they did before.
   Left as the table has it; it is a design question for the owner, not a defect
@@ -348,6 +359,97 @@ Checkpoint and Plan cases on the 13.33px readings above. The checkpoint case
 reads every field the intake walk meets through a `MutationObserver` (kinds
 seen: textarea, `input:date`, `input:number`), not only the last question's.
 
-**Fold-ins.** None taken beyond the ones above. Left: the downloader and ledger
+**Fold-ins.** WITHDRAWN — do not cite the clause "the downloader and ledger
+still declare their own `--font-sans`": gate 1's third low shows it false for
+the ledger, and the error is the builder's. The ledger declares no `--font-sans`;
+its `body` reads `var(--font-sans)`, so the new stack in `tokens.css` changes the
+ledger's computed `font-family`. That is the change the table asked for. It
+renders the same wherever `system-ui` resolves, and the ledger e2e passed on CI
+at `4e13bd96`; a pixel comparison of the ledger was not made. Only the
+downloader declares its own. The rest of the sentence stands as written. None
+taken beyond the ones above. Left: the downloader and ledger
 still declare their own `--font-sans` and body size, which are lg-73's and
 dl-135's, and each adds itself to `MOVED` in `base.test.ts`.
+
+**2026-11-01 — the owner's answers at the landing.** Each is the question, the
+options, the choice and whose recommendation it was.
+
+1. **Done when 4, asked three times.** At intake: what the gate grades "Every
+   planner text field" against; options "the Why's 23 fields" and "re-enumerate
+   on `main` first"; chosen the Why's 23 fields, the orchestrator's
+   recommendation (entry above). The builder then measured 24 fields (17 inputs,
+   3 textareas, 4 selects, all with `.field`, all already 16px on `main`);
+   re-asked, with the options "met on 24, as a regression guard" and "spec names
+   each of the 24"; chosen **met on 24, as a regression guard**, the
+   orchestrator's recommendation. Gate 1 then measured the guard's reach: 6
+   intake fields and 7 on the Plan screen, **13 of the 24**. It misses the
+   version-picker select, the intake's text inputs and the currency select.
+   Re-asked, with the options "stands, met as graded" and "extend the watch
+   first"; chosen **stands**, the orchestrator's recommendation. The 13-of-24
+   reach is the guard's reach, and Done when 4 is met as graded.
+2. **`.pin` at 44px** (the builder's open decision). Options: keep 44px per the
+   table, or a smaller `.pin` through a token in pl-65. Chosen **keep 44px**, the
+   builder's and the orchestrator's recommendation.
+3. **The `.choice` radio above its label** (`align-items: baseline`; the
+   builder's second open decision). Options: add it to pl-65's Build, fix it in
+   repo-130 now, or leave it. Chosen **add it to pl-65's Build**, the
+   orchestrator's recommendation. Done: pl-65's Build step 7.
+4. **Gate 1, the sixth low** (the two pages disagree on how a tool differs).
+   Options: "both, each with a reason", "fallback properties only", "defer to
+   dl-135". Chosen **both, each with a reason**, the orchestrator's
+   recommendation. Done in `.claude/rules/ui-package.md` and the `tokens.css`
+   header.
+5. **Gate 1, the second to fifth lows:** fix at landing, the fifth knowing it is
+   CSS after the gate. **The first low is recorded, not fixed**: the
+   re-declaration guard in `packages/ui/test/support/base.ts` matches selector
+   text exactly, so `button.primary { … }` or `.field { font: 13px serif }`
+   appended to the planner's `styles.css` would not fail it. `ui-package.md`
+   describes the guard as "a selector the base declares", so Done when 2 is met
+   as written.
+
+**Fold-in, the orchestrator's and not the owner's.** pl-65's Build step 2 said
+`AppFooter` takes `tool="planner"`. On `main`, `AppFooter` takes only `version`
+and `termsHref` (`packages/ui/src/AppFooter.tsx`, since #697), which this
+landing read before editing. The step now reads `AppFooter` with `version` and
+`termsHref`.
+
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the second low —
+  "`base.css` departs from the table in three places the Log does not name". The
+  three are in the departures list above. Proof:
+  `git diff 4e13bd96 HEAD -- docs/work/repo-130-one-card-and-one-stack-in-the-shared-ui.md | grep -c '^+.*departures the builder.s list left ou[t]'`
+  → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the third low — "the
+  Log's Fold-ins says the downloader and ledger still declare their own
+  `--font-sans`". Withdrawn in place under Fold-ins, with the correction. Proof:
+  `git diff 4e13bd96 HEAD -- docs/work/repo-130-one-card-and-one-stack-in-the-shared-ui.md | grep -c '^+.*third low shows it fals[e] for'`
+  → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the fourth low — "the
+  Log says Buttons: 40px to 44px". Withdrawn in place under the screenshots,
+  with the correction. Proof:
+  `git diff 4e13bd96 HEAD -- docs/work/repo-130-one-card-and-one-stack-in-the-shared-ui.md | grep -c '^+.*fourth low shows it fals[e], and'`
+  → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the fifth low — "the
+  planner rule `.card > :is(.crumb, .day, .replan, .version-picker, .actions)`
+  is a second place that decides how a card spaces its children". The own
+  margins of `.day` and `.version-picker` are deleted, and the card rule is
+  narrowed to `.card > :is(.crumb, .actions)`. `grep` found `className="day"`,
+  `className="replan"` and `className="version-picker"` once each, all direct
+  children of `section.card.plan`. `.replan` is the one departure from the
+  finding as stated: its own `margin: 1.5rem 0` is deleted, but the rule keeps
+  `margin: 0`, because deleting it alone leaves the browser's 2px side margin on
+  a fieldset, and the pure deletion moved the Re-plan box 2px in on each side
+  (`Plan-1280` and `Plan-360` differed from gate 1's head screenshots in 31689
+  and 32104 pixels). With the `margin: 0` kept, all 10 layout screenshots
+  (`layout.spec.ts`, 360 and 1280) are pixel-identical to gate 1's head. Proof:
+  `git diff 4e13bd96 HEAD -- tools/planner/web/src/styles.css | grep -c '^-.*version-picker, .actions'`
+  → 1. Owner's answer, 2026-11-01: asked whether `.replan` lands as the pure
+  deletion (accepting the 2px fieldset shift) or as the variant (keep
+  `margin: 0` with a comment, 0 differing pixels); chosen **the variant**, the
+  fixer's and the orchestrator's recommendation.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the sixth low — "the
+  `tokens.css` header says a tool that differs sets its own in its `:root`. The
+  next sentence, and `ui-package.md`, say a tool differs only through a
+  fallback-read property". Both are now said, each with a reason, in the header
+  and in the rule page. Proof:
+  `git diff 4e13bd96 HEAD -- packages/ui/src/tokens.css | grep -c '^-.*differs from it only through a property'`
+  → 1.

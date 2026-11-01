@@ -312,10 +312,6 @@ ul.answers li + li {
   border-bottom: 1px solid var(--border);
 }
 
-.day {
-  margin: 1.25rem 0;
-}
-
 .day h3 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
@@ -423,10 +419,6 @@ ul.answers li + li {
  * Revisions, editing and the diff (pl-45)
  * ------------------------------------------------------------------------ */
 
-.version-picker {
-  margin: 0.5rem 0 1rem;
-}
-
 .item-controls {
   display: flex;
   gap: 0.4rem;
@@ -446,7 +438,8 @@ ul.answers li + li {
 }
 
 .replan {
-  margin: 1.5rem 0;
+  /* The browser gives a fieldset a 2px side margin of its own. */
+  margin: 0;
   padding: var(--gap);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -485,6 +478,6 @@ ul.answers li + li {
  * apart as the rest. Only where the section is a direct child: the same class
  * elsewhere (the crumb above a card, the actions inside an alert) keeps its own.
  */
-.card > :is(.crumb, .day, .replan, .version-picker, .actions) {
+.card > :is(.crumb, .actions) {
   margin: 0;
 }

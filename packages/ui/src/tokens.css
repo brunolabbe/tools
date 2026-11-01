@@ -38,9 +38,10 @@
  * `@media (max-width: ...)`, so each stylesheet writes its own literals.
  *
  * Defaults below are the value most tools already used; a tool that differs
- * (the body size, the font stack) sets its own in its `:root`. The base layer
- * (`base.css`) reads these, and a tool differs from it only through a property
- * it reads with a fallback (`--card-shadow`), never declared here.
+ * (the body size, the font stack) sets its own in its `:root` and comments why.
+ * The base layer (`base.css`) reads these. A tool also differs from the base
+ * through a property a base rule reads with a fallback (`--card-shadow`), which
+ * it declares in its own `:root`, with its reason, and never here.
  */
 
 :root {
