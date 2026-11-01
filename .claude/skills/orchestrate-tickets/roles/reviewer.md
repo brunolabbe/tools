@@ -18,9 +18,10 @@ your scratch directory and no `Edit`.
    the builder has merged `main`, that range carries `main`'s files: diff from
    `git merge-base <base sha> HEAD` instead and say so in the header (three
    gates in one batch read 3,503 lines where the branch had 3,248).
-3. Farm, then build — per `common.md`, **after** the checkout, unless the
-   diff is markdown only: then skip both and say so (`common.md`, _Your
-   worktree_). A gate that
+3. Farm, then build — per `common.md`, **after** the checkout. The farm is
+   never skipped; the build is, when the diff is markdown only or touches only
+   `scripts/` files importing `node:` builtins and `vitest`, and the section
+   says so (`common.md`, _Your worktree_). A gate that
    builds before it detaches grades `main`, and produces a fluent section that
    marks every acceptance line `unproven`.
 
@@ -35,7 +36,11 @@ confirm it. So read in this order:
    line, read the branch's copy down to `## Log` and stop there:
    `git show <head sha>:<ticket path> | awk '/^## Log/{exit} {print}'` —
    `sed -n 1,80p` reads past the heading, and the diff puts a reworded line and
-   the Log in one hunk.
+   the Log in one hunk. An owner's answer your dispatch pastes — a
+   `needs-decision` answer, an intake answer to a `Done when` line, a rewording
+   — is part of the brief and is read here; the branch's Log carries the same
+   words beside the builder's account, and you check that copy against the
+   dispatch at step 3 rather than reading it first (repo-131's gate).
 2. **The diff and the tests**, with the ticket file excluded —
    `git diff <base sha>...HEAD -- . ':!<ticket path>'`: any diff of the ticket
    prints the branch's Log additions, since the `## Log` heading sits outside
@@ -58,15 +63,23 @@ confirm it. So read in this order:
   directory and run as `node <script> <tree>`: you have no `Edit`, and `sed -i`
   on the tree is refused (lg-20). Restore with
   `git checkout <head sha> -- <path>`, and rebuild. A spec of your own runs only
-  under a project's `include`: copy it into the package's `test/`, run it, and
-  remove it before you report (lg-18). Such a spec reports by appending to a
+  under a project's `include`: a vitest spec is copied into the package's
+  `test/`, an e2e probe into `tools/<tool>/e2e/` under a `.spec.ts` name (a
+  `probe.ts` there finds no tests: lg-80's gates), run, and removed before you
+  report (lg-18). Such a spec reports by appending to a
   file in your scratch directory (`appendFileSync`): its `console.log` lines
   did not appear in a ledger project run (lg-23). When you need a second tree,
   `git worktree add --detach /workspaces/tools/.claude/worktrees/gate-<id>-<n> <sha>`,
   then farm and `npm run build` in it, and `git worktree remove --force` it
   before you report. Not under your scratch directory, nor anywhere outside
   `/workspaces/tools`: the farm's links are relative and resolve to the shared
-  `node_modules` only from a sibling of the agent worktrees. The Edit tool
+  `node_modules` only from a sibling of the agent worktrees. The one
+  measurement that tree cannot make is whether a link is _needed_: Node's
+  parent walk reaches the shared checkout's `node_modules` from any tree under
+  `/workspaces/tools`, so a build with a package removed exits 0 there and 1 in
+  a tree under `/tmp/claude-1000/<id>/` (repo-117's gates: `Rollup failed to
+  resolve import "@webtools/ui/tokens.css"` only outside). For that one, build
+  the tree outside, unfarmed, and read the failure you expect. The Edit tool
   cannot write a second tree, and `git` run in it — `cd <tree> && git status`
   — is refused as a change of directory out of your worktree (lg-61, lg-58):
   change its files by `cp` from your scratch directory, read it with
@@ -77,8 +90,12 @@ confirm it. So read in this order:
   in one script in your scratch directory and run it with `bash <file>`. A
   `git archive` copy has no `dist` and the farm's links are relative, so its
   suites resolve nothing (four gates this period), and `git clone --local`
-  fails across devices. A script you hand back takes the tree and the output
-  directory as arguments, so a builder can run it on its own tree.
+  fails across devices. A script you hand back takes the tree, the output
+  directory and the sha it restores to as arguments, so a builder or a later
+  gate can run it on its own tree (repo-117's gate 1 pinned its head in
+  `controls.sh`), and it binds no fixed port: take one as an argument or listen
+  on `0` and print it (repo-131's gate 2 held 8183 and 8184, which two gates
+  would share).
 - **Run a new wall-clock assertion ten times before you pass it** — one spec
   file, `-t` the test, seconds a run. dl-115's gate 1 passed a bound on one run
   that failed 1 in 10 (its gate 2's `repeat.summary`: run 1 exit 1, runs 2–10
@@ -176,9 +193,12 @@ confirm it. So read in this order:
   Decision is outside that entry: its line is `unproven`, and FAIL.
 - Flag anything you did not verify as unverified in the sentence that states it.
 
-## When you are dispatched as gate 2
+## When you are dispatched as gate 2, or later
 
-Your dispatch comes after a round of fixes. It names the sha gate 1 gated, the
+A gate 3 runs this section over gate 2's files and the second round, and labels
+its new findings with a letter of its own — `F` for gate 1, `N` for gate 2, `P`
+for gate 3 (lg-66) — never reusing an earlier gate's ids (repo-131's gate 3
+asked). Your dispatch comes after a round of fixes. It names the sha gate 1 gated, the
 new head, gate 1's section and full report, gate 1's probe scripts, and any
 refutation as a command and its output. You did not run gate 1: read its full
 report before the round's commits, as the account of what it measured.
@@ -195,8 +215,11 @@ report before the round's commits, as the account of what it measured.
   branch use `git range-diff` over the branch's commits before and after.
 - **Verify a finding with the probe that found it; do not re-derive it.** Run
   the script your dispatch names on your tree, with your own scratch directory
-  as its output directory. One that hard-codes gate 1's tree goes at the end of
-  your report, with the command that showed it (`common.md`, _Your report_).
+  as its output directory. One that hard-codes gate 1's tree, pins gate 1's
+  head in its restore step, or anchors a mutation on a line the round replaced
+  (repo-117's `mutate.mjs noskip`: `0` matches, exit 2) goes at the end of
+  your report, with the command that showed it (`common.md`, _Your report_),
+  and the finding it served is verified by what you can run.
 - Give **each of gate 1's findings** a verdict: fixed, with how you verified it; fixed
   in part, naming the clause that remains (lg-17's F6); not fixed; or refuted,
   where you re-ran the refutation and it held. A refutation that quotes gate

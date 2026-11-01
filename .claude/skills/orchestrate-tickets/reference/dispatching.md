@@ -51,12 +51,19 @@ the first dispatch with `node scripts/agent-cost.mjs --agent <id>`.
   of each stop**: pl-62's builder stopped at Build 8's stop with an independent
   Build 9 unbuilt.
 - **The fold-in exception**, out loud: if the work makes some other small,
-  already-specified piece free, fold it in, or say in the Log why not.
+  already-specified piece free, fold it in, or say in the Log why not — and
+  never into a rule, role or skill page, an agent definition or a `CLAUDE.md`
+  (`roles/builder.md`, _Scope_; repo-121's builder folded a
+  `.claude/rules/testing.md` line in, reverted at the landing).
 - **The narrowest thing that can fail**, for verification runs.
 - **When you name a line to edit, quote its content**, not its number.
 
-A branch touching a spawn call or an ffmpeg path is unproven on Windows until the
-draft pull request's Windows leg has run: read it yourself with `gh pr checks`.
+A branch touching anything Windows runs differently — a spawn call, an ffmpeg
+path, a symlink, a path-string assertion (repo-117's `symlinkSync` and
+`..\..\packages\ui`) — is unproven on Windows until the draft pull request's
+Windows leg has run: read it yourself with `gh pr checks` before the landing,
+not at step 10 after it (repo-117's red leg cost a post-landing fixer and an
+owner stop).
 
 ## A gate prompt carries
 
@@ -128,9 +135,10 @@ for as long as it is open, so:
 - **Its title is checked like any other**
   (`node scripts/commit-message.mjs --text "<title>"`) before you write it into
   the prompt; "DO NOT MERGE" goes after the type and scope.
-- **It runs `ci.yml`'s whole matrix too** whenever it adds a file that is not
-  markdown, beside its own job: dl-125's probe paid about 17 minutes of Linux
-  and Windows legs beside a 13-minute probe. Price that in the dispatch.
+- **It runs, beside its own job, the `ci.yml` projects its paths reach**
+  (repo-127): a file under a tool's directory runs that tool's project on
+  Linux and Windows. dl-125's probe, before repo-127, paid about 17 minutes of
+  legs beside a 13-minute probe. Price that in the dispatch.
 - **It prints its whole reading into its job log**, and an artifact is a
   copy: `gh run download` timed out here on 2026-10-15 and fetched the same
   artifact on 2026-10-17, so it depends on the firewall of the day.
@@ -163,7 +171,10 @@ which cannot reach `origin` without a force-push
   which (lg-68's builder asked).
 - **A fresh `fixer`**, when every finding is mechanical or only the landing is
   left: the branch, the base, the findings pasted, the scratch directory, the
-  gate files to land, each gate's `.full.md` report file beside them, the pull request number and title, and every model's name for
+  gate section files, which are `--land`'s arguments, and each gate's
+  `.full.md` beside them, which the lander posts on the thread and never passes
+  to `--land` (repo-119's and both of 2026-11-01's landers caught
+  `--land <ticket> <section> <full>`), the pull request number and title, and every model's name for
   the body. A fixer and a resumed builder never work one branch at once.
 - **End the last relay with conditional ship authority**: "apply these, and if
   preflight exits 0 and the diff's scope is unchanged, land it yourself; if any
@@ -192,9 +203,11 @@ prompt carries, beside the gate-1 items above:
   `<scratch>/<id>/gate-1/` — never a directory, which shows the gate a
   builder's files beside them (lg-67's gate 1 saw `build.log` and
   `pr-body.md`) — to re-run on the new head rather than re-derive; they take
-  the tree and the output directory as arguments (`roles/common.md`), wrappers
-  included (lg-67's `setup.sh`, `run-probes.sh` and `control.sh` each
-  hard-coded gate 1's worktree).
+  the tree, the output directory and the sha to restore to as arguments
+  (`roles/common.md`, `roles/reviewer.md`), wrappers included (lg-67's
+  `setup.sh`, `run-probes.sh` and `control.sh` each hard-coded gate 1's
+  worktree; repo-117's `controls.sh` pinned gate 1's head, and its
+  `mutate.mjs` anchored a line the round replaced, exit 2 at gate 2).
 - **Each refutation as a command and its output.** Not the builder's or the
   fixer's account.
 
@@ -214,3 +227,10 @@ evaporate: have the builder record the question, the answer, the reason and the
 cost that came with it in the ticket, mark the superseded Build step, leave
 `status` as `ready`, and implement none of it. For a ticket nobody is building,
 recording the answer is its own maintenance dispatch; schedule it.
+
+An answer given after the builder reported — at a gate's checkpoint, on the
+builder's own open decision — travels in the next dispatch that touches the
+branch, the lander's at the latest, and that agent records it before the
+records (`roles/fixer.md`, _Landing_): four such answers on 2026-10-25 reached
+the gates and nobody else, and repo-128's lander wrote "open decision" into
+#660's body from the Log.

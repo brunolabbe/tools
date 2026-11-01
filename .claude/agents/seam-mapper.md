@@ -50,7 +50,9 @@ an inventory.
 
 ## What you return
 
-Nothing but this, and keep it under about forty lines, **grouped by tool**: the
+Nothing but this, and keep it under about forty lines beside the quoted open
+decisions, which count against no cap (`SKILL.md` step 2 wants each quoted; the
+2026-10-31 map flagged the conflict and ran past), **grouped by tool**: the
 orchestrator offers the owner batches of one tool's tickets, so the groups are
 the options it builds from.
 
