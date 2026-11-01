@@ -135,7 +135,7 @@ export function App(): React.ReactElement {
         <main>
           <Admin />
         </main>
-        <AppFooter tool="ledger" version={TOOL_VERSION} termsHref="/terms.html" />
+        <AppFooter version={TOOL_VERSION} termsHref="/terms.html" />
       </div>
     );
   }
@@ -147,7 +147,7 @@ export function App(): React.ReactElement {
         <main>
           <NoHousehold />
         </main>
-        <AppFooter tool="ledger" version={TOOL_VERSION} termsHref="/terms.html" />
+        <AppFooter version={TOOL_VERSION} termsHref="/terms.html" />
       </div>
     );
   }
@@ -231,7 +231,7 @@ export function App(): React.ReactElement {
           {tab === "admin" && me?.admin === true && <Admin />}
         </PeopleNamesProvider>
       </main>
-      <AppFooter tool="ledger" version={TOOL_VERSION} termsHref="/terms.html" />
+      <AppFooter version={TOOL_VERSION} termsHref="/terms.html" />
     </div>
   );
 }

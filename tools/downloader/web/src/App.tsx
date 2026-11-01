@@ -235,7 +235,7 @@ export function App(): React.JSX.Element {
       {/* A plain link, not a route: the page is a static file beside the bundle
           (`public/terms.html`), served same-origin, so the document policy needs
           no change for it (dl-54). */}
-      <AppFooter tool="downloader" version={TOOL_VERSION} termsHref="/terms.html" />
+      <AppFooter version={TOOL_VERSION} termsHref="/terms.html" />
     </div>
   );
 }

@@ -10,7 +10,6 @@
 export { AppFooter } from "./AppFooter.tsx";
 export { AppHeader } from "./AppHeader.tsx";
 export { ThemeToggle } from "./ThemeToggle.tsx";
-export { REPOSITORY_URL, changelogUrl, releaseUrl, sourceUrl } from "./repository.ts";
 export { TOOL_VERSION } from "./version.ts";
 export {
   THEME_CHOICES,

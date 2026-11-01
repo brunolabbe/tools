@@ -418,11 +418,8 @@ test("the household's own screen has the shared header and footer, and asks noth
   expect(within(footer).getByRole("link", { name: "Terms" }).getAttribute("href")).toBe(
     "/terms.html",
   );
-  expect(within(footer).getByRole("link", { name: "Source" }).getAttribute("href")).toBe(
-    "https://github.com/brunolabbe/tools/tree/main/tools/ledger",
-  );
-  // No `define` runs under vitest, so the version is unknown and the footer says so.
-  expect(within(footer).getByRole("link", { name: "Changelog" })).toBeTruthy();
+  // No `define` runs under vitest, so the version is unknown and left out: Terms is all there is.
+  expect(within(footer).getAllByRole("link")).toHaveLength(1);
   expect(screen.queryByText(/Server v|Checking the server/u)).toBeNull();
 });
 
