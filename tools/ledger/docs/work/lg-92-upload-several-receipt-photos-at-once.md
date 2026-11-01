@@ -193,3 +193,23 @@ full outputs are in `/tmp/.../lg-92/build/red-left-out.log` and `red-unit.log`.
 Proof at the round's head: `npx vitest run tools/ledger/web`: 322 of 322 in 25
 files (316 before, six new in `receipts.test.tsx`); `npm run e2e:ledger`: 31
 passed (30 before, one new); `npm run check` exit 0.
+
+2026-11-01, lander (`fixer`, Sonnet 5.5), the owner's answer to gate 2's open
+decision, asked through `AskUserQuestion`:
+
+- **The question.** A photo with a typed-in receipt can no longer be read at all:
+  round 1 removed "Try again" from a failed photo once one of its receipts is
+  filed, and a kept photo with a typed-in receipt has no read control (Read all
+  skips it). The owner's earlier answer covered Read all, not the per-photo
+  retry.
+- **The options.** (a) Keep it, and say here that a typed-in photo is not read
+  again (recommended). (b) Restore "Try again" on such a photo and accept the
+  mismatch below.
+- **The owner chose (a), 2026-11-01.** A photo with a typed-in receipt is not
+  read again, by Read all or by a retry.
+- **Why.** In `ReceiptQueueView` a read part's "filed" mark is matched to the
+  filed parts by position (index). A later read's part 1 would show as filed
+  whether or not it is the receipt that was typed in, so a retry could mark the
+  wrong part filed. Nothing is lost: "Type it in" still files the next part of
+  the photo.
+- No code changed for this entry.
