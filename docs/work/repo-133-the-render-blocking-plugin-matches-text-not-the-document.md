@@ -3,10 +3,10 @@ id: repo-133
 tool: repo
 title: The render-blocking plugin matches text, not the document
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: [repo-131]
-difficulty: hard
+difficulty: standard
 ---
 
 # repo-133 — The render-blocking plugin matches text, not the document
@@ -236,7 +236,7 @@ to `ready`. Then:
    Each must fail on the landing version and pass after the fix, shown in the Log.
 4. Rebuild, run the probes again, and check Done when 1 against the Expected
    column.
-5. If Decision 1 is answered "accept R1", the answer commit rewords Done when 1
+5. **Superseded by Decision 1's answer (parse5 with source locations); this step does not apply.** If Decision 1 is answered "accept R1", the answer commit rewords Done when 1
    and 2 and 3 to what that option leaves. Done when 1 becomes: each row gives the
    landing verdict recorded in the table as accepted, with P9 and P15 as Decision
    2 records. Done when 2 becomes: the four
@@ -246,18 +246,23 @@ to `ready`. Then:
    it. Done when 4 stands. With these rewords, the ticket can reach `done` once
    Decision 2 is answered too.
 
-## Decision — open
+## Decision — answered 2026-11-01 by the owner
 
-Two questions are open, and neither has a recommendation: the measurement that
-would pick one has not been taken, and the costs are stated for each option. A
-third, the form of option 3, is answered first.
+Two questions were open when this was filed, and neither had a recommendation:
+the measurement that would pick one had not been taken, and the costs were stated
+for each option. A third, the form of option 3, was answered first. Both are
+answered below, each on its own line.
 
 **Option 3's form. Answered 2026-10-31 by the owner.** The options were: (a) keep
 option 3 as a free-form note above `ENTRY_TAG`, saying plainly that it is not
 adr/005's register; (b) drop option 3, leaving the two remedies. The owner chose
 (a), the gate's recommendation.
 
-**1. Which remedy for the matcher. Open.**
+**1. Which remedy for the matcher. Answered 2026-11-01 by the owner.**
+
+The options were the three bullets below: parse5 with source locations; an
+`indexOf` scanner with raw-text elements; accept R1. The owner chose **parse5
+with source locations**, the orchestrator's recommendation; the ticket made none.
 
 - **parse5 with source locations.** Parse the built HTML with parse5 (8.0.1
   has `sourceCodeLocationInfo`) and mark the start tag of each same-origin module
@@ -294,8 +299,17 @@ adr/005's register; (b) drop option 3, leaving the two remedies. The owner chose
   thread, gate 3 measured one well-formed tag of 16,000 attributes, 176,044
   characters, at 5.0 ms, on the rewrite; that is one tag, not a page.
 
-**2. Whether the guard passes on P9. Open.** P9's only same-origin module script
-is Vite's own modulepreload helper, not the app's entry. Options:
+**2. Whether the guard passes on P9. Answered 2026-11-01 by the owner.** P9's
+only same-origin module script is Vite's own modulepreload helper, not the app's
+entry. The options were the two bullets below. The owner chose **the guard counts
+any same-origin module script**, the orchestrator's recommendation; the ticket
+made none.
+
+Under that answer, P9 and P15 pass: BUILD-OK, with one marked same-origin script
+(Vite's helper) and the remote unmarked. That is what the Expected column's
+"remote unmarked; as Decision 2 records" means here. It is the expected verdict,
+not a measured one; Done when 1 is where it is measured. The two bullets as
+filed:
 
 - The guard counts only the app's entry, so P9 fails with BUILD-FAIL (guard), as
   P6 does. Costs: the plugin must tell Vite's helper from the app's entry, which
@@ -306,7 +320,8 @@ is Vite's own modulepreload helper, not the app's entry. Options:
 
 **Difficulty.** `hard` is my proposal, rated for the scanner, the option that
 needs the most judgement. Parse5 would be `standard`; accepting R1 would be
-`mechanical`. The commit that records the answer re-rates it.
+`mechanical`. The commit that records the answer re-rates it. Re-rated
+`standard` for the chosen parse5 option, as the ticket states; see the Log.
 
 ## Done when
 
@@ -398,3 +413,19 @@ needs the most judgement. Parse5 would be `standard`; accepting R1 would be
   gives 1.
 - 2026-10-31 — Gates 1 and 2 are CONCERNS, narrow; their full reports are on PR
   #696's thread, and the ticket stays `needs-decision`, so there is no `--land`.
+- 2026-11-01 — The owner's answers are recorded and the ticket is `ready`, with
+  `difficulty` re-rated from `hard` to `standard`. Decision 1: parse5 with source
+  locations, from the three options (parse5; an `indexOf` scanner with raw-text
+  elements; accept R1), the orchestrator's recommendation, which the ticket did
+  not make. Decision 2: the guard counts any same-origin module script, from the
+  two options (the app's entry only, so P9 fails; any same-origin module script,
+  so P9 passes), the orchestrator's recommendation, which the ticket did not make.
+  The re-rating follows the ticket's own stated rating for the chosen option:
+  "Parse5 would be `standard`".
+- Build step 5 (the "accept R1" branch) is marked superseded by Decision 1's
+  answer and is not deleted. Done when 1 and 2 are unchanged. Under Decision 2 as
+  answered, P9 and P15 are expected to pass as BUILD-OK with one marked
+  same-origin script (Vite's helper) and the remote unmarked. That matches the
+  table's Expected cells, which say "remote unmarked; as Decision 2 records", so
+  no cell was edited. This is the expected verdict only; no tree was built or
+  probed in this commit.
