@@ -287,3 +287,32 @@ E2E_PORT=8118 npm run e2e:ledger                            33 passed (43.7s), e
 
 `Period-360.png` was opened. The per-person lists drew as before, with no
 charge to the pot in the seed.
+
+### 2026-11-01, the owner's answers to the build's open decisions
+
+Relayed by the coordinator after the build report.
+
+1. **How the receipt screen switches to paying jointly.**
+   - Options: (a) as built, through the "Paid with the joint card?" button;
+     (b) an explicit "Paid with" switch; (c) ask whose each item is at "Attach
+     to this row".
+   - **Chosen: (a)**, the builder's recommendation. No change.
+2. **E2e coverage of the "Owed to the pot" block.**
+   - Options: (a) leave it unmeasured, the builder's recommendation; (b) seed a
+     receipt filed on a joint row in `e2e/layout.spec.ts`'s seed, and measure
+     the block at 360 px and 1280 px.
+   - **Chosen: (b)**, on the coordinator's recommendation, because the repo's
+     360 px rule is checked by `layout.spec.ts` and this is a new block.
+   - The answer also asks for three things:
+     - any other screen's layout case whose seeded figures move is updated;
+     - the new case is shown to fail on a seed without the receipt, or the
+       reason it cannot be is given;
+     - the 360 px screenshot is opened and described.
+   - Built in the entry below.
+3. **Done when 1's trial count.**
+   - The premise was wrong: the dispatch's relay said
+     `the settlement's promise, simulated` runs 2,000 trials, and it runs 500
+     seeds. The intake entry above repeats the mistake.
+   - Options: (a) keep 2,000 trials each, as built, measured at 65 ms and 48 ms
+     on the build's head; (b) drop to 500 seeds, the existing convention.
+   - **Chosen: (a), keep 2,000.** Done when 1 stays as reworded.
