@@ -55,6 +55,7 @@ export type {
   Charge,
   HouseholdSettlement,
   PersonCents,
+  PotCharge,
   Settlement,
   Stretch,
 } from "./settlement.ts";

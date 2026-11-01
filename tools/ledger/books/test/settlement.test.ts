@@ -5,8 +5,23 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { cumulativeSettlement, settleStretches, settlement } from "../src/index.ts";
-import type { Charge, PersonCents, Share, WeighedPeriod } from "../src/index.ts";
+import {
+  cumulativeHouseholdSettlement,
+  cumulativeSettlement,
+  netsOf,
+  settleHousehold,
+  settleStretches,
+  settlement,
+} from "../src/index.ts";
+import type {
+  Charge,
+  PersonCents,
+  PotCharge,
+  Share,
+  Stretch,
+  WeighedPeriod,
+} from "../src/index.ts";
+import { trials } from "./helpers/trials.ts";
 
 function ratio(alex: number): Share[] {
   return [
@@ -505,4 +520,299 @@ describe("a settlement's own deposit, across a ratio change", () => {
       });
     }
   });
+});
+
+// lg-91: a charge to the pot. The joint account paid for something one person
+// consumed alone, and the members fund the account at their ratios, so that
+// person owes each other member their share of its cost.
+describe("a charge to the pot", () => {
+  const three: Share[] = [
+    { personId: "alex", partsPerMillion: 500_000 },
+    { personId: "blair", partsPerMillion: 300_000 },
+    { personId: "casey", partsPerMillion: 200_000 },
+  ];
+  const pot = (owedBy: string, cents: number): PotCharge => ({ owedBy, cents });
+  const sum = (nets: Map<string, bigint>): bigint =>
+    [...nets.values()].reduce((total, net) => total + net, 0n);
+
+  test("between two at 0.6, sam owes alex 0.6 of what the pot paid for sam's items", () => {
+    const stretch: Stretch = {
+      ratio: R60,
+      contributions: [],
+      charges: [],
+      potCharges: [pot("sam", 5_000)],
+    };
+
+    // (1 − 0.4) × 50.00 = 30.00 directly; into a buffer alex owns 0.6 of,
+    // 30.00 / 0.6 = 50.00: sam puts back what the pot spent on sam.
+    expect(settleStretches([stretch], R60)).toEqual({
+      formula: "v3",
+      payerId: "sam",
+      recipientId: "alex",
+      depositCents: 5_000,
+      netCents: 3_000,
+    });
+    expect(netsOf([stretch])).toEqual(
+      new Map([
+        ["alex", -3_000n * 1_000_000n],
+        ["sam", 3_000n * 1_000_000n],
+      ]),
+    );
+  });
+
+  test("between three at 0.5, 0.3 and 0.2: the worked example in settlement.ts", () => {
+    const stretch: Stretch = {
+      ratio: three,
+      contributions: [],
+      charges: [],
+      potCharges: [pot("casey", 10_000)],
+    };
+    const nets = netsOf([stretch]);
+
+    expect(nets).toEqual(
+      new Map([
+        ["alex", -5_000n * 1_000_000n],
+        ["blair", -3_000n * 1_000_000n],
+        ["casey", 8_000n * 1_000_000n],
+      ]),
+    );
+    expect(sum(nets)).toBe(0n);
+    expect(settleHousehold([stretch], three)).toEqual({
+      formula: "v3",
+      people: ["alex", "blair", "casey"],
+      deposits: [{ personId: "casey", depositCents: 10_000 }],
+      transfers: [
+        { fromId: "casey", toId: "alex", cents: 5_000 },
+        { fromId: "casey", toId: "blair", cents: 3_000 },
+      ],
+    });
+  });
+
+  test("an amount the shares do not divide stays exact, and the nets still sum to zero", () => {
+    const odd: Share[] = [
+      { personId: "alex", partsPerMillion: 333_334 },
+      { personId: "blair", partsPerMillion: 333_333 },
+      { personId: "casey", partsPerMillion: 333_333 },
+    ];
+    const stretch: Stretch = {
+      ratio: odd,
+      contributions: [spentBy("blair", 1_001)],
+      charges: [],
+      potCharges: [pot("alex", 7), pot("casey", 1)],
+    };
+    const nets = netsOf([stretch]);
+
+    expect(sum(nets)).toBe(0n);
+    // alex owes blair and casey 333 333 × 7 each, is owed alex's own share of
+    // casey's one cent, and owes alex's share of blair's 10.01.
+    expect(nets.get("alex")).toBe(2n * 333_333n * 7n - 333_334n * 1n + 333_334n * 1_001n);
+  });
+
+  test("across a ratio change, it is weighed at its own stretch's ratio and divided at the closing one", () => {
+    const fifty = ratio(500_000);
+    const result = settleStretches(
+      [
+        { ratio: R60, contributions: [], charges: [], potCharges: [pot("sam", 5_000)] },
+        { ratio: fifty, contributions: [], charges: [] },
+      ],
+      fifty,
+    );
+
+    // Still 30.00 owed, weighed at 0.6; reweighed at 0.5 it would be 25.00.
+    // Into a buffer now owned 50:50, 30.00 takes 60.00.
+    expect(result).toMatchObject({ payerId: "sam", netCents: 3_000, depositCents: 6_000 });
+  });
+
+  test("a line owed to the pot is a charge to the pot, weighed in the period of its date", () => {
+    const periods = [period(null, "2026-03-31"), period("2026-04-01", "2026-06-30", 500_000)];
+    const owed = {
+      personId: "sam",
+      date: "2026-03-01",
+      amountCents: 5_000,
+      chargedTo: "sam",
+      owedToPot: true,
+    };
+
+    expect(cumulativeSettlement(periods, [owed], [])).toMatchObject({
+      payerId: "sam",
+      netCents: 3_000,
+      depositCents: 6_000,
+    });
+    expect(
+      cumulativeHouseholdSettlement(
+        [{ start: null, end: "2026-03-31", ratio: three }],
+        [{ ...owed, personId: "casey", chargedTo: "casey", amountCents: 10_000 }],
+        [],
+      ).transfers,
+    ).toEqual([
+      { fromId: "casey", toId: "alex", cents: 5_000 },
+      { fromId: "casey", toId: "blair", cents: 3_000 },
+    ]);
+  });
+
+  test("someone the stretch's ratio does not name owes all of it, to those it does", () => {
+    const nets = netsOf([
+      { ratio: R60, contributions: [], charges: [], potCharges: [pot("casey", 10_000)] },
+    ]);
+
+    expect(nets).toEqual(
+      new Map([
+        ["alex", -6_000n * 1_000_000n],
+        ["sam", -4_000n * 1_000_000n],
+        ["casey", 10_000n * 1_000_000n],
+      ]),
+    );
+  });
+
+  test("between two, one naming a third is refused", () => {
+    expect(() =>
+      settleStretches(
+        [{ ratio: R60, contributions: [], charges: [], potCharges: [pot("casey", 100)] }],
+        R60,
+      ),
+    ).toThrow(expect.objectContaining({ code: "BAD_REQUEST" }));
+  });
+});
+
+function spentBy(personId: string, cents: number): PersonCents {
+  return { personId, cents };
+}
+
+describe("the settlement's promise with charges to the pot, simulated", () => {
+  // lg-91, Done when 1 as the owner worded it on 2026-11-01: the simulation
+  // above, with charges to the pot among its mixes, for two people and for
+  // three, 2 000 trials each, ratios and amounts drawn as above. After the
+  // computed deposits, with the buffer owned at the ratio, each person's cash
+  // out less their share of the buffer is what they consumed. Amounts are
+  // exact, in millionths of a cent.
+  const NAMES = ["alex", "sam", "casey"];
+
+  function sharesFor(next: (below: number) => number, size: number): bigint[] {
+    if (size === 2) {
+      const share = 100_000 + next(800_001);
+      return [BigInt(share), BigInt(1_000_000 - share)];
+    }
+    // Each of the first two from 0.1 to 0.45, so the third is at least 0.1.
+    const first = 100_000 + next(350_001);
+    const second = 100_000 + next(350_001);
+    return [BigInt(first), BigInt(second), BigInt(1_000_000 - first - second)];
+  }
+
+  function simulate(seed: number, size: number, potCharges: "counted" | "left out") {
+    const next = generator(seed);
+    const people = NAMES.slice(0, size);
+    const shares = sharesFor(next, size);
+    const ratioNow: Share[] = people.map((personId, index) => ({
+      personId,
+      partsPerMillion: Number(shares[index] ?? 0n),
+    }));
+    const card = people.map(() => 0);
+    const deposited = people.map(() => 0);
+    const paidFor = people.map(() => 0); // what each paid for someone else
+    const owes = people.map(() => 0); // what someone else paid for each
+    const potFor = people.map(() => 0); // what the pot paid for each alone
+    const charges: Charge[] = [];
+    const owedToPot: PotCharge[] = [];
+    let payments = 0;
+    const events = 5 + next(30);
+    for (let index = 0; index < events; index++) {
+      const who = next(size);
+      const cents = 1 + next(80_000);
+      const kind = next(5);
+      if (kind === 0) card[who] = (card[who] ?? 0) + cents;
+      else if (kind === 1) deposited[who] = (deposited[who] ?? 0) + cents;
+      else if (kind === 2) {
+        const other = (who + 1 + next(size - 1)) % size;
+        paidFor[who] = (paidFor[who] ?? 0) + cents;
+        owes[other] = (owes[other] ?? 0) + cents;
+        charges.push({ owedBy: people[other] ?? "", owedTo: people[who] ?? "", cents });
+      } else if (kind === 3) payments += cents;
+      else {
+        potFor[who] = (potFor[who] ?? 0) + cents;
+        owedToPot.push({ owedBy: people[who] ?? "", cents });
+      }
+    }
+    const stretch: Stretch = {
+      ratio: ratioNow,
+      contributions: people.map((personId, index) =>
+        spentBy(personId, (card[index] ?? 0) + (deposited[index] ?? 0)),
+      ),
+      charges,
+      potCharges: potCharges === "counted" ? owedToPot : [],
+    };
+    const nets = netsOf([stretch]);
+    const settled = settleHousehold([stretch], ratioNow);
+    for (const deposit of settled.deposits ?? []) {
+      const index = people.indexOf(deposit.personId);
+      deposited[index] = (deposited[index] ?? 0) + deposit.depositCents;
+    }
+
+    const total = (values: number[]): number => values.reduce((all, value) => all + value, 0);
+    const buffer = total(deposited) - payments - total(potFor);
+    const sharedSpending = BigInt(total(card) + payments);
+    const differences = people.map((_personId, index) => {
+      const share = shares[index] ?? 0n;
+      const consumed =
+        share * sharedSpending + 1_000_000n * BigInt((owes[index] ?? 0) + (potFor[index] ?? 0));
+      const cashOut = (card[index] ?? 0) + (deposited[index] ?? 0) + (paidFor[index] ?? 0);
+      return BigInt(cashOut) * 1_000_000n - BigInt(buffer) * share - consumed;
+    });
+    return {
+      differences,
+      netsSum: [...nets.values()].reduce((all, net) => all + net, 0n),
+      drawn: owedToPot.length,
+      deposits: settled.deposits?.length ?? 0,
+      inputs: { stretch },
+    };
+  }
+
+  // Within half a cent between two, where one deposit is rounded half-up; within
+  // a cent between three, where the deposits are rounded together
+  // (`roundDeposits`, and household-settlement.test.ts's bound).
+  test.each([
+    [2, 500_000n],
+    [3, 1_000_000n],
+  ])(
+    "for %i people, 2 000 trials: each person's cash out less their buffer share equals what they consumed",
+    (size, bound) => {
+      const found = trials();
+      let withPot = 0;
+      let deposits = 0;
+      let mismatches = 0;
+      for (let trial = 0; trial < 2_000; trial++) {
+        const seed = size * 10_000 + trial + 1;
+        const run = simulate(seed, size, "counted");
+        found.begin(`seed ${String(seed)}`, () => run.inputs);
+        found.holds(run.netsSum === 0n, () => `the nets sum to ${String(run.netsSum)}`);
+        const off = run.differences.filter((difference) =>
+          difference < 0n ? -difference > bound : difference > bound,
+        );
+        if (off.length > 0) mismatches++;
+        found.holds(off.length === 0, () => `off by ${run.differences.map(String).join(", ")}`);
+        if (run.drawn > 0) withPot++;
+        deposits += run.deposits;
+      }
+      found.assertNone();
+      expect(mismatches).toBe(0);
+      // The draw reaches the case: most trials hold a charge to the pot, and
+      // someone deposits in nearly every one.
+      expect(withPot).toBeGreaterThan(1_800);
+      expect(deposits).toBeGreaterThan(1_900 * (size - 1));
+    },
+  );
+
+  test.each([2, 3])(
+    "and it can fail: for %i people, charges to the pot left out of the settlement miss",
+    (size) => {
+      let missed = 0;
+      for (let trial = 0; trial < 2_000; trial++) {
+        const run = simulate(size * 10_000 + trial + 1, size, "left out");
+        const far = run.differences.some(
+          (difference) => difference > 1_000_000n || difference < -1_000_000n,
+        );
+        if (far) missed++;
+      }
+      expect(missed).toBeGreaterThan(1_800);
+    },
+  );
 });
