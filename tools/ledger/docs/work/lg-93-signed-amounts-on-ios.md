@@ -310,13 +310,13 @@ _Why_.
 ## Log
 
 - 2026-11-01: filed from the builder of lg-89 (draft pull request #717, branch
-  `lg-89-fold-rebate-into-item`), which saw the iOS keypad in its own build and
+  `lg-89-fold-rebate-into-item`), which raised the question of the iOS keypad in its own build and
   could not measure it. Reproduction run on `origin/main` `8ad4e91d`, output in
   _Reproduction_ above: ten lines. The table in _Why_ was read from `main`'s
   source, not from the grep alone. It adds Subtotal, GST, QST, Total and Charged,
   which the `field()` helper renders through `inputMode={mode}`, and it covers
   both `salaries/` files, which the grep also matches. No iOS device was used, so
-  nothing in the keypad column is measured. Status is `needs-decision` on the
+  nothing about the keypad is measured. Status is `needs-decision` on the
   owner's pending answer; difficulty is `standard`, rated for the work once an
   option is chosen, all four options being within it.
 - 2026-11-01: web check, on the owner's word that the online documentation may be
@@ -342,3 +342,10 @@ _Why_.
   '^-.*opens the production ledger in'` → `1`, and the same for `'^-.*the keypad
   an iPhone showed: the device, the iOS version, and whether it'` → `1`: the two
   removed lines. The _Decision — open_ options are not touched.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F2 — "it says the lg-89
+  builder 'saw the iOS keypad in its own build and could not measure it' …
+  'nothing in the keypad column is measured', and the table has no keypad
+  column". The first Log entry now says it "raised the question of" the keypad,
+  and "nothing about the keypad is measured". `git diff f6485e7b --
+  <this ticket> | grep -c '^-.*which saw the iOS keypad in its own build and'` →
+  `1`, and `'^-.*nothing in the keypad column is measured'` → `1`.
