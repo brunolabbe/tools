@@ -90,3 +90,28 @@ test helpers with one cell's XML replaced:
   removed (4 failed), and pass with them. Ledger suite: 97 files, 2070 passed.
 - **Not covered.** A chartsheet, which the helpers cannot write; F6 across time
   zones beyond the test runner's own.
+
+### 2026-11-01 — round 1, after gate 1 at `14f6fe59` (orchestrator session)
+
+Gate 1 returned FAIL: one med a Done-when line depends on, one med regression, five
+lows. Its full report is on the pull request thread.
+
+- **F6 had no test (med, Done when 1).** Added: serials 34 699 and 40 907 under
+  `Pacific/Kiritimati`, `Pacific/Apia` and UTC, `TZ` set for the test's body.
+  Both Pacific cases fail with `bac81e33`'s reader swapped in.
+- **No upper bound on a day (med, regression).** A date-formatted serial past
+  9999-12-31 read as `+010000-01`, and NaN or `1e400` threw a bare `RangeError`.
+  `dayOf` now names no day outside 1 to 2 958 465 (2 957 003 under 1904), written
+  negated so NaN falls out. Tested, NaN and `1e400` spliced into the XML since
+  SheetJS's writer turns them into error cells.
+- **`dayOf`'s comment said the opposite of its test (low).** Reworded: rounding to
+  the millisecond makes 44621.9999999999 the next day, as Excel shows it.
+- **An empty shared string no longer shapes a row (low, F8).** Answered 2026-11-01
+  by the owner: accept, from accepting it or keeping the inline/shared difference
+  the reader cannot see. A trailing row of only empty shared strings is no longer
+  counted; Excel writes none.
+- **A merge's cost by area (low, F5).** Answered 2026-11-01 by the owner: filed as
+  lg-88, from filing it or bounding it here.
+- **Not done, low.** The chartsheet skip still has no assertion, and the route
+  test's bit-3 form is one SheetJS itself would refuse; the honest form (both
+  headers declaring 0, compressed size true) is not built by any test.

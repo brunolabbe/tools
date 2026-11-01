@@ -19,6 +19,10 @@ const SSF = XLSX.SSF as { is_date: (format: string) => boolean };
 
 const DAY_MS = 86_400_000;
 
+/** 9999-12-31, Excel's last day, as a serial in each date system. */
+const LAST_DAY_1900 = 2_958_465;
+const LAST_DAY_1904 = 2_957_003;
+
 /**
  * A calendar day, `YYYY-MM-DD`, from a date serial in a date-formatted cell, or
  * `null` for a serial that names no day. Computed in UTC rather than through
@@ -26,11 +30,15 @@ const DAY_MS = 86_400_000;
  * off by a day in two Pacific zones (lg-87).
  */
 function dayOf(serial: number, date1904: boolean): string | null {
-  // To the millisecond first, so a time a hair under midnight stays its own day.
+  // Rounded to the millisecond first, so a serial a float's error under a whole
+  // day is that day: 44621.9999999999 is 2022-03-02 00:00:00, as Excel shows it.
   const day = Math.floor(Math.round(serial * DAY_MS) / DAY_MS);
   // Below 1 is no day: a formula that returns an empty cell's 0 is not 1899-12-30
-  // nor SheetJS's 1900-01-00. Serial 60 is the 1900-02-29 Excel invents.
-  if (day < 1 || (!date1904 && day === 60)) return null;
+  // nor SheetJS's 1900-01-00. Serial 60 is the 1900-02-29 Excel invents. Above
+  // 9999-12-31, Excel's last day, is none either, and written negated so that
+  // NaN is refused too rather than thrown as a RangeError (lg-87 gate 1).
+  if (!(day >= 1 && day <= (date1904 ? LAST_DAY_1904 : LAST_DAY_1900))) return null;
+  if (!date1904 && day === 60) return null;
   // Excel's day 1 is 1900-01-01, and its fictitious 29 February shifts every
   // later serial by one; the 1904 system counts from 1904-01-01 as day 0.
   const epoch = date1904

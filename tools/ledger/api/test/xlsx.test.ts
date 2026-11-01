@@ -243,3 +243,61 @@ describe("reading an .xlsx file, the cases lg-84's gate named (lg-87)", () => {
     expect(sheet?.rows).toEqual([[{ value: { kind: "number", number: 1 }, formula: null }]]);
   });
 });
+
+// lg-87 gate 1: what its first round left without a test, or open.
+describe("a date serial's day, at the ends and in any time zone (lg-87 gate 1)", () => {
+  test("a serial past 9999-12-31, or not a number, names no day", async () => {
+    // The last two are written as 1 and their saved text replaced: SheetJS's
+    // writer turns a NaN or an infinity into an error cell.
+    const serials = [2_958_465, 2_958_466, 20_220_301, 1e9, 1, 1];
+    const written = file((sheet) => {
+      serials.forEach((serial, c) => {
+        sheet.set(XLSX.utils.encode_cell({ r: 0, c }), serial, "yyyy-mm-dd");
+      });
+    });
+    const data = edited(written, (xml) =>
+      ["E1", "F1"].reduce(
+        (acc, address, index) =>
+          acc.replace(
+            new RegExp(`(<c r="${address}"[^>]*>)<v>1</v>`, "u"),
+            `$1<v>${index === 0 ? "NaN" : "1e400"}</v>`,
+          ),
+        xml,
+      ),
+    );
+
+    const [sheet] = await readSheets(data);
+
+    expect(sheet?.rows[0]?.map((cell) => cell?.value ?? null)).toEqual([
+      { kind: "date", date: "9999-12-31" },
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  test.each([
+    ["Pacific/Kiritimati", 34_699, "1994-12-31"],
+    ["Pacific/Apia", 40_907, "2011-12-30"],
+    ["UTC", 34_699, "1994-12-31"],
+  ])("F6: in %s, serial %i is %s", async (zone, serial, day) => {
+    // SheetJS's `parse_date_code`, which the reader used before lg-87, went
+    // through local time and read both Pacific days one later.
+    const was = process.env["TZ"];
+    process.env["TZ"] = zone;
+    try {
+      const data = file((sheet) => {
+        sheet.set("A1", serial, "yyyy-mm-dd");
+      });
+
+      const [sheet] = await readSheets(data);
+
+      expect(sheet?.rows[0]?.[0]?.value).toEqual({ kind: "date", date: day });
+    } finally {
+      if (was === undefined) delete process.env["TZ"];
+      else process.env["TZ"] = was;
+    }
+  });
+});
