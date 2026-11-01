@@ -69,10 +69,18 @@ not this ticket's: after it, the shared header draws the only `h1`.
 
 1. `styles.css` declares none of the base's selectors. repo-130's test, extended
    to the ledger, says so.
-2. No ledger source carries `secondary`, and each card has at most one
-   `primary`. The Log lists them.
+2. ~~No ledger source carries `secondary`, and each card has at most one
+   `primary`. The Log lists them.~~ _Superseded 2026-11-01 by the line below,
+   which fixes what "each card" ranges over._
+   **2.** No ledger source carries `secondary`. Every element whose `className`
+   contains `card`, as
+   `grep -rnoE 'className="[^"]*\bcard\b[^"]*"' tools/ledger/web/src` lists them
+   at the branch head, holds at most one `primary` button, and the Log lists each
+   such card with its `primary` button or "none".
 3. `e2e/layout.spec.ts` passes at 360 px and 1280 px. The before and after
    screenshots are compared in the Log, screen by screen.
 4. `npm run check` and `npm test -- --project ledger` pass.
 
 ## Log
+
+**2026-11-01 — Done when 2 scoped, answered by the owner at intake.** Question (from the intake seam map): "Done when 2 says each card has at most one `primary`, and no list of cards exists, so a gate can always find one more." Options: (1) scope the line to a grep; (2) add a unit test; (3) leave the line as written. The owner chose **(1) scope to the grep**, the orchestrator's recommendation. Done when 2 is reworded above, the old line left beside it and marked superseded. The grep listed 36 elements in 20 files at `686b213c`; at this branch's base (`bb496824`) it lists 36 in 20 files too (`grep -rnoE 'className="[^"]*\bcard\b[^"]*"' tools/ledger/web/src | wc -l` → 36). It does not match `stats/Chart.tsx:170`, whose `className` is a template literal (`card chart-card`); the Log lists it as well.
