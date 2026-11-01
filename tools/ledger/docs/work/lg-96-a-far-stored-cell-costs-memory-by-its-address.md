@@ -15,7 +15,7 @@ difficulty: standard
 
 `readSheets` (`tools/ledger/api/src/xlsx.ts`) builds every sheet's grid before
 anything bounds it. `rowsOf` makes one row for every row up to the last stored
-one, and gives each row as many places as its widest stored column. So a sheet
+one, and makes each row as wide as its own last stored column. So a sheet
 holding one cell at `A1048576` pays for 1 048 576 rows, and a sheet whose rows
 each hold a cell in column `XFD` pays for its row count times 16 384 places.
 Neither cost is bounded where it is built. The rows and cells bounds in
@@ -239,8 +239,10 @@ owner answers, and the answer may change it.
     `peakRssMb` 696.3, `fileBytes` 24 904. The gate's report said +408 MB on the same
     sha; the gate's output file is absent, so the report is its only record.
 - 2026-11-01: a column-axis case was not in the gate's brief and was found by the
-  builder, measured as case 4 above. `rowsOf` gives every row the width of the widest
-  stored column, so the row bound does not see it. It is measured at 4 000 rows and
+  builder, measured as case 4 above. `rowsOf` makes each row as wide as its own last
+  stored column (corrected in round 1 from "the width of the widest stored column"), so
+  a sheet whose rows each hold a far cell is wide in every row, and the row bound does
+  not see it. It is measured at 4 000 rows and
   not beyond, and the 20 000-row figure is an extrapolation.
 - 2026-11-01: the brief's "roughly 2 GB" for 40 sheets was an extrapolation from the
   gate's 408 MB, and was not measured. The ticket states it as an extrapolation, a
@@ -272,3 +274,7 @@ owner answers, and the answer may change it.
     which is the sum of each row's width.
   - F6 (low): left as written, on purpose: `Done when` 2 reads two ways until the answer
     rewrites it, and the Build already says it may.
+  - Also, at the orchestrator's instruction: the Why's and the first measurement Log
+    entry's "widest stored column" per row was false. `rowsOf` computes `width` per row from
+    its own stored cells, so each row ends at its own last stored cell. Both are corrected
+    in place; case 4 is unaffected, since every row there holds `XFD`.
