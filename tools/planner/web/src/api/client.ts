@@ -54,6 +54,17 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
       const carried: AppErrorOptions = details === undefined ? {} : { details };
       throw new AppError(code, message, carried);
     }
+    // A 429 with no body of ours is Cloudflare's rate limiting rule on `/api/`
+    // (pl-67, `docs/02-DEPLOYMENT.md`), whose page is HTML. It means what our
+    // own refusal means, so it reads the same, with the header's wait if sent.
+    if (response.status === 429) {
+      const wait = Number(response.headers.get("retry-after"));
+      throw new AppError(
+        "RATE_LIMITED",
+        undefined,
+        Number.isFinite(wait) && wait > 0 ? { details: { retryAfterSec: wait } } : {},
+      );
+    }
     throw new AppError("INTERNAL", `The API answered ${String(response.status)}.`);
   }
 
