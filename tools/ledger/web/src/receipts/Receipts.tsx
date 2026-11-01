@@ -65,7 +65,8 @@ export const FLAG_LABELS: Record<ReceiptFlag, string> = {
   "parts-differ": "The subtotal and the taxes do not add up to the total.",
   "tax-differs": "The taxes are not 5 % and 9.975 % of the same amount.",
   "signs-differ": "Some amounts are a purchase and some a refund.",
-  "items-differ": "The items, deposits and taxes do not add up to the total. Correct them to file.",
+  "items-differ":
+    "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
   "taxable-differs":
     "The items marked taxable do not give the taxes printed. Check which items are taxable.",
 };
@@ -739,7 +740,7 @@ export function Receipts(): React.ReactElement {
                   <input
                     aria-label={`Rebate on ${name}`}
                     inputMode="decimal"
-                    placeholder="Rebate"
+                    placeholder="Rebate, -2.00"
                     value={item.discount}
                     onChange={(event) => setItem(index, { discount: event.target.value })}
                   />

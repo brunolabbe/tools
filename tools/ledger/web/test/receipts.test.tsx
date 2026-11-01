@@ -443,7 +443,7 @@ test("items that do not add up to the total are shown for correction and not fil
 
   expect(
     screen.getByText(
-      "The items, deposits and taxes do not add up to the total. Correct them to file.",
+      "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
     ),
   ).toBeTruthy();
   expect(screen.queryByLabelText("What is shared")).toBeNull();
@@ -760,7 +760,7 @@ test("entering a rebate on an item updates the add-up check and the split live, 
   fireEvent.change(field("Rebate on BIERE 6X355"), { target: { value: "-2.00" } });
   expect(
     screen.getByText(
-      "The items, deposits and taxes do not add up to the total. Correct them to file.",
+      "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
     ),
   ).toBeTruthy();
   expect(screen.queryByLabelText("What is shared")).toBeNull();
@@ -813,4 +813,11 @@ test("shows a rebate the reader folded into an item, and refuses one that is not
   expect(
     screen.getByText("An item needs its text and its price before the receipt can be filed."),
   ).toBeTruthy();
+});
+
+// lg-89 gate 1, the second low: the field says a rebate is typed negative.
+test("the Rebate field's placeholder shows a rebate typed negative (lg-89)", async () => {
+  await readBasket();
+
+  expect(field("Rebate on BIERE 6X355").placeholder).toBe("Rebate, -2.00");
 });

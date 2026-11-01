@@ -20,6 +20,7 @@ import type {
   ReceiptFiling,
   ReceiptMatchesResponse,
   ReceiptProposal,
+  StoredRow,
 } from "@ledger/contract";
 import { createModelReader } from "@ledger/receipts";
 import type { ReceiptReader } from "@ledger/receipts";
@@ -27,7 +28,7 @@ import { loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
 import type { AppLogger } from "../src/logger.ts";
 import { merchantCategory } from "../src/receipts.ts";
-import { receiptsOnRows } from "../src/slices.ts";
+import { chartedAs, receiptsOnRows } from "../src/slices.ts";
 import { createApp } from "../src/server.ts";
 import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
@@ -1816,5 +1817,53 @@ describe("a rebate folded into an item (lg-89)", () => {
     expect(response.statusCode, response.body).toBe(200);
     const onRow = receiptsOnRows(homeBooks(target)).get(chargeRow(target));
     expect(onRow?.items.map((item) => item.discount)).toEqual([null, -200, null]);
+  });
+});
+
+// lg-89 gate 1, the third low: a stored rebate to a chart amount in one piece.
+describe("a stored rebate reaches the chart (lg-89, gate 1)", () => {
+  test("a rebate on the soap lowers the household slice by its net and taxes, and the remainder stays with the beer", async () => {
+    const target = await start();
+    await pasteRows(target);
+    const receipt = await uploaded(target);
+    // 1,00 $ off the soap: the taxable items net 16,98 $, GST 0,85 $, QST 1,69 $,
+    // and the 0,60 $ deposit makes 23,61 $.
+    const proposal: ReceiptProposal = {
+      ...BASKET,
+      subtotal: 2_047,
+      gst: 85,
+      qst: 169,
+      total: 2_361,
+      items: BASKET.items.map((item, index) => (index === 2 ? { ...item, discount: -100 } : item)),
+    };
+    const rowId = chargeRow(target);
+
+    const response = await file(target, receipt.id, {
+      proposal,
+      destination: { to: "row", rowId },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const row: StoredRow = {
+      id: rowId,
+      date: "2026-10-03",
+      category: "Épicerie",
+      description: "Achat /Marché Exemple",
+      amountCents: -2_650,
+      balanceCents: 0,
+      classification: null,
+      spendingCategory: null,
+    };
+    const charted = chartedAs(row, receiptsOnRows(homeBooks(target)));
+    // Soap: 3,99 $ × 1,14975 = 4,59 $ → 459, not 574 without the rebate. Beer, the
+    // largest, takes the rest of the 26,50 $: 1 554 + (2 650 − 2 362).
+    expect(charted).toEqual({
+      split: true,
+      slices: [
+        { categoryId: GROCERIES, cents: 349 },
+        { categoryId: ALCOHOL, cents: 1_842 },
+        { categoryId: HOUSEHOLD, cents: 459 },
+      ],
+    });
   });
 });

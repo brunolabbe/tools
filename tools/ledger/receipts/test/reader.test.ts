@@ -521,3 +521,52 @@ describe("the model reader's rebates (lg-89)", () => {
     expect(await rebatesOf(reply)).toEqual([{ text: "CAFE", price: 899, discount: null }]);
   });
 });
+
+// lg-89 gate 1, the first low: a malformed discount, each kind of it.
+describe("the model reader's malformed rebates (lg-89)", () => {
+  /** One item with `discount` as given (`undefined` leaves the key out), as the model answered it. */
+  function withDiscount(discount: unknown): string {
+    const item: Record<string, unknown> = {
+      text: "CAFE",
+      price: 899,
+      taxable: false,
+      deposit: null,
+      category: null,
+    };
+    if (discount !== undefined) item["discount"] = discount;
+    return JSON.stringify({
+      receipts: [
+        {
+          merchant: null,
+          date: null,
+          subtotal: 899,
+          gst: null,
+          qst: null,
+          total: 899,
+          items: [item],
+        },
+      ],
+    });
+  }
+
+  test.each([
+    ["a fraction of a cent", -2.5],
+    ["a string", "-200"],
+    ["a key left out", undefined],
+    ["a number past the safe integers", 2 ** 53],
+  ])("refuses the whole reading for %s", async (_name, discount) => {
+    const refused = await reader(answering(() => message(withDiscount(discount))).fetch)
+      .read(PHOTO)
+      .catch((error: unknown) => error);
+
+    expect(refused).toBeInstanceOf(AppError);
+    expect(refused).toMatchObject({ code: "RECEIPT_UNREADABLE" });
+  });
+
+  test("passes a rebate of the wrong sign through as read, for the add-up check to catch", async () => {
+    // A positive rebate on a purchase is the model's mistake, not a malformed value.
+    const [proposal] = await reader(answering(() => message(withDiscount(200))).fetch).read(PHOTO);
+
+    expect(proposal?.items.map((item) => item.discount)).toEqual([200]);
+  });
+});
