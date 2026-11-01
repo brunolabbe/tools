@@ -1,16 +1,16 @@
 /**
  * Whether an upload is an `.xlsx`, and what it inflates to, judged before
- * `exceljs` opens it (lg-66, Build 3.1 and 3.3).
+ * `xlsx.ts` opens it (lg-66, Build 3.1 and 3.3).
  *
  * **From the bytes, never the name.** An `.xlsx` is a zip: it opens with `PK`,
  * ends with a readable end-of-central-directory record pointing at a readable
  * central directory, and holds the workbook's own entries,
  * `[Content_Types].xml` and `xl/workbook.xml`. Opening with `PK` alone is not
  * enough: a CSV whose first header is `PK ID` passes it, and a zip that is not
- * a workbook reads in `exceljs` as no sheet with no error. Every way of failing
+ * a workbook read in `exceljs`, the reader until lg-84, as no sheet with no error. Every way of failing
  * this gets the one plain `WORKBOOK_NOT_XLSX`, never a parser's reason.
  *
- * **The inflated size is bounded twice.** `exceljs` inflates every entry whole,
+ * **The inflated size is bounded twice.** The reader inflates every entry whole,
  * with no hook into its inflate, so a file of 200 KB that inflates to 200 MiB
  * (gate 4's `upload.mts` on lg-66's filing) is bounded only by checking before
  * it is handed over:
@@ -24,24 +24,32 @@
  *    time all the same, so a stop overshoots the bound by at most one chunk,
  *    `INFLATE_CHUNK_BYTES`, whichever kind of entry it falls in.
  *
- * The second pass inflates every accepted file once more than `exceljs` does,
+ * The second pass inflates every accepted file once more than the reader does,
  * 35 ms at the bound; it holds one chunk at a time. **The number of entries
  * is bounded too** (`MAX_WORKBOOK_ENTRIES`), since a zip of many tiny entries
  * costs time per entry whatever their size.
  *
  * **Both bounds hold only because the directory must fill exactly** (lg-66,
  * round 2, gate 2's F2). This parse reads as many entries as the end record
- * counts; `jszip`, which `exceljs` calls, ignores that count and reads every
- * header that follows while its signature matches, and when the directory ends
- * short of the end record it shifts every offset by the gap. Until round 2 an
+ * counts; `jszip`, which `exceljs` called until lg-84, ignored that count and read
+ * every header that followed while its signature matched, and when the directory
+ * ended short of the end record it shifted every offset by the gap. Until round 2 an
  * end record that counted 6 of 7 entries hid a 200 MiB sheet from both bounds:
  * 210,316 bytes reached the model and cost +428 MB. So the walk of `count`
  * entries must end exactly where the directory ends, and the directory exactly
- * where the end record starts; anything else is `WORKBOOK_NOT_XLSX`, and the
- * two parsers read the same entries, or `jszip` refuses the file.
+ * where the end record starts; anything else is `WORKBOOK_NOT_XLSX`.
  *
- * The parse is by hand rather than through `jszip`, which `exceljs` carries
- * but this package does not declare.
+ * **SheetJS walks the same entries** (lg-84): the end record's count, through
+ * the central directory, each at its local header. It takes an entry's method
+ * from the local header, not the directory, but its ESM build has no `zlib` and
+ * inflates in JavaScript into a buffer of the entry's declared size and no more.
+ * So an entry the directory calls stored and the local header deflated is read
+ * as its declared size, which the first bound already summed: measured, a sheet
+ * inflating to 35 178 290 bytes declared as 1 000 was read as 1 000 bytes, no
+ * row, +4 MB. That holds only while nothing calls `XLSX.set_zlib`.
+ *
+ * The parse is by hand rather than through the reader, whose zip walk is not
+ * an API.
  */
 
 import type { Buffer } from "node:buffer";
@@ -50,9 +58,15 @@ import { AppError } from "@ledger/contract";
 
 /**
  * What a workbook may inflate to, summed over its entries: 4 MiB, sized by what
- * `exceljs` costs to read it (lg-66, round 1 on gate 1's F2, 2026-10-26).
+ * `exceljs` cost to read it (lg-66, round 1 on gate 1's F2, 2026-10-26).
  *
- * **What `exceljs` costs is 20 to 27 MB of memory per MiB of cells.** Read
+ * **SheetJS costs about half that** (lg-84, 2026-11-01): read alone in a fresh
+ * process, a sheet just under 4 MiB inflated cost +56 to +57 MB with 100 numeric
+ * columns and +66 to +68 MB with 3, about 0.5 s each, where `exceljs` cost +98
+ * and +109 MB. The bound was not raised: the figures below are what it was
+ * sized by, and a smaller cost is headroom, not a reason.
+ *
+ * **What `exceljs` cost was 20 to 27 MB of memory per MiB of cells.** Read
  * alone, in a fresh process, a sheet of 100 numeric columns cost +37 MB at
  * 1 MiB inflated, +98 MB at 4 MiB, +188 MB at 8 MiB and +287 MB at 15 MiB; a
  * sheet of 3 columns +42, +109, +231 and +321 MB; a 15 MiB shared-strings
@@ -104,7 +118,7 @@ const MAX_COMMENT = 0xffff;
 /** One entry, as the central directory declares it. */
 export interface ZipEntry {
   name: string;
-  /** 0, stored, or 8, deflated: the two `exceljs` reads. */
+  /** 0, stored, or 8, deflated: the two the reader reads. */
   method: 0 | 8;
   compressedSize: number;
   /** As declared, which a zip can understate. */
@@ -135,7 +149,7 @@ function endOfDirectory(bytes: Buffer): number {
 /**
  * The upload's entries, or `WORKBOOK_NOT_XLSX`. Reads only the directory;
  * inflates nothing. A zip64 archive, a split one, an encrypted entry or a
- * compression `exceljs` cannot read are refused the same way: none is a
+ * compression the reader cannot read are refused the same way: none is a
  * workbook a household saves, and so is a directory that the end record's
  * count does not fill exactly, or that ends before the end record starts. A
  * readable directory of more than `MAX_WORKBOOK_ENTRIES` entries is

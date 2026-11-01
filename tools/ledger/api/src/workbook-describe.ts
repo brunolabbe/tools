@@ -25,7 +25,7 @@
  * **The bounds**, each where it can first be known, in this order: the bytes
  * (before anything is parsed); the zip's own structure and its number of
  * entries (`workbook-zip.ts`); the inflated size, declared and then counted,
- * before `exceljs` sees the file;
+ * before the reader (`xlsx.ts`) sees the file;
  * the sheets, then the rows and cells, once parsed; and the request's size, an
  * estimate, before the call. A cell's text is never refused: the view cuts it
  * at `MAX_CELL_TEXT`, and the file is still read in full.
@@ -95,7 +95,7 @@ import type { InflateSpy, ZipEntry } from "./workbook-zip.ts";
 /** Sheets a workbook may hold. The measured workbooks hold 2 to 9. */
 export const MAX_WORKBOOK_SHEETS = 40;
 
-/** Rows over every sheet, as `exceljs` reads them: `lg37`, the largest measured, holds 320. */
+/** Rows over every sheet, as `xlsx.ts` reads them: `lg37`, the largest measured, holds 320. */
 export const MAX_WORKBOOK_ROWS = 20_000;
 
 /** Cells holding a value or a formula, over every sheet. */

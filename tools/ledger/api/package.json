@@ -26,8 +26,8 @@
     "@ledger/receipts": "*",
     "@webtools/core": "*",
     "better-sqlite3": "^12.4.1",
-    "exceljs": "^4.4.0",
-    "fastify": "^5.7.1"
+    "fastify": "^5.7.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13"
