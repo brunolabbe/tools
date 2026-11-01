@@ -3,7 +3,7 @@ id: lg-94
 tool: ledger
 title: A read item charged to a departed member is filed to the first current other
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: [lg-90]
 difficulty: standard
@@ -230,14 +230,28 @@ code involved is `whose` (`main` line 591), `itemOf` (lines 180 and 195), `unfil
 probe does not re-run on the fixed tree: it finds share buttons named `<item>, <label>`,
 which lg-90 removes.
 
-## Decision — open
+## Decision — answered 2026-11-01 by the owner
 
-**Question 1 — open: what a read item's charge to a departed member should do.**
-Nothing in the app produces this input today (see Why), so the choice is about the
-rule the code should follow, not about a live bug. The options below are the
-owner's to choose from, recommended first. Costs for the options that touch lg-90's
-control are read from `bb4968240a0499ba26e14cbeb57be28022d67924` and were not run,
-because lg-90 is not merged.
+**Question 1 — answered: what a read item's charge to a departed member should do.**
+Chosen: **option 1, refuse to file until a current member is picked, with no
+default** (the recommendation), from the five options listed below (1 refuse; 2 keep
+the substitution and say it; 3 file as not shared; 4 leave it and close as latent;
+5 keep the charge on the departed member).
+
+**Question 3 — answered: does option 1 also refuse a `theirs` item charged to nobody
+(C3: three current members, alex paying, casey and sam; the reader marks an item
+`theirs` with no name, and `main` silently files casey)?** The options were (a)
+refuse C3 too: the same unpicked state and refusal, nobody preselected when there are
+two or more others, matching the rule that with more than one other member a `theirs`
+item must name one (recommended); (b) keep C3 as is, with Done when 2 pinning `main`.
+Chosen: **(a)**. Done when 2's C3 line is reworded below; the line it supersedes is
+left beside it.
+
+The five options as they were put, for the record. Nothing in the app produces this
+input today (see Why), so the choice was about the rule the code should follow, not
+about a live bug. Costs for the options that touch lg-90's control were read from
+`bb4968240a0499ba26e14cbeb57be28022d67924` and were not run; lg-90 has since merged
+(8b1a88e0, #724).
 
 1. **Refuse to file until a current member is picked; no default.** The select shows
    an unpicked state whose value is neither `MINE` (`""`) nor any person id, so the
@@ -298,11 +312,12 @@ with its cost, or (b) say why it is excluded. Chosen: (a). It is option 5 above.
      - C1, C2: as stated. Fail on `main`, which file the substitute.
      - C0: the refusal (`NOBODY_ELSE`, nothing filed) is pinned unchanged. Passes on
        `main`, since its refusal is already there.
-     - C3: the option as written covers a charge to a departed member, and C3 has none,
-       so C3 pins `main`'s reading (files `theirs` with `casey`) and passes on `main`.
-       Whether option 1 should also refuse a `theirs` item charged to nobody is not
-       stated by the option; if the owner's answer says so, C3 asserts what C1 and C2
-       assert and fails on `main`.
+     - C3 (answered 2026-11-01 by the owner, Question 3 (a)): the select shows the
+       unpicked state and `fileReceipt` is not called, as for C1 and C2. Fails on
+       `main`, which files `theirs` with `casey`.
+     - ~~C3: the option as written covers a charge to a departed member, and C3 has
+       none, so C3 pins `main`'s reading (files `theirs` with `casey`) and passes on
+       `main`.~~ Superseded by the line above.
    - Option 2: a hint names the departed member and the current one the charge falls
      to, and filing is unchanged.
      - C1, C2: as stated (`dana has left`, and `sam` or `casey`). Fail on `main`, which
