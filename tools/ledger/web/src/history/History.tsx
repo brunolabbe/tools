@@ -41,7 +41,7 @@ import {
   personLabel,
 } from "../labels.ts";
 import { AnswerControls } from "../inbox/AnswerControls.tsx";
-import { usePeopleNames } from "../people.tsx";
+import { byShownName, usePeopleNames } from "../people.tsx";
 import { spendingNames } from "../spending/Picker.tsx";
 
 /** How many rows one request brings. */
@@ -155,11 +155,15 @@ export function History(): React.ReactElement {
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [open, setOpen] = useState(false);
   const [people, setPeople] = useState<string[]>([]);
+  // Who a change may file a row to: the members now, not everyone the books held (lg-95).
+  const [members, setMembers] = useState<string[]>([]);
   const [categories, setCategories] = useState<SpendingCategory[]>([]);
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [more, setMore] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [periods, setPeriods] = useState<ClosedPeriod[]>([]);
+  // `null` until read, and for good if the read failed: then no row is said to be in
+  // a closed period or in the open one.
+  const [periods, setPeriods] = useState<ClosedPeriod[] | null>(null);
   // The row whose person and bucket are open to change, and what the last change said.
   const [changing, setChanging] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -177,17 +181,26 @@ export function History(): React.ReactElement {
     const controller = new AbortController();
     void (async (): Promise<void> => {
       try {
-        const [who, spending, closed] = await Promise.all([
+        const [who, current, spending] = await Promise.all([
           // The history names everyone it ever held, retired at a close or not (lg-35).
           fetchPeople(controller.signal, "everyone"),
+          fetchPeople(controller.signal, "in"),
           fetchSpendingCategories(controller.signal),
-          fetchPeriods(controller.signal),
         ]);
         setPeople(who);
+        setMembers(current);
         setCategories(spending);
-        setPeriods(closed);
       } catch (error: unknown) {
         if (!controller.signal.aborted) setProblem(AppError.from(error).message);
+      }
+    })();
+    // Its own read: a failure here must not take the names and the categories with it.
+    void (async (): Promise<void> => {
+      try {
+        const closed = await fetchPeriods(controller.signal);
+        setPeriods(closed);
+      } catch {
+        // The control says the periods are unknown; the list itself is unaffected.
       }
     })();
     return () => controller.abort();
@@ -265,21 +278,34 @@ export function History(): React.ReactElement {
     setNotice(null);
     try {
       await classifyRow({ rowId: row.id, personId, bucket });
+    } catch (error: unknown) {
+      // Nothing was stored: the control stays open, on what the person chose.
+      setProblem(AppError.from(error).message);
+      setSaving(false);
+      return;
+    }
+    // Stored. The control closes whatever the re-read does, so a second Save cannot
+    // send the same answer again under a message that says the first one failed.
+    setChanging(null);
+    const closed = periods === null ? null : closedPeriodOf(row.date, periods);
+    const carried =
+      periods === null
+        ? " Whether it is in a closed period is not known."
+        : closed === null
+          ? ""
+          : " The next close will carry this correction.";
+    setNotice(`${row.description} is now ${answerLabel({ personId, bucket }, names)}.${carried}`);
+    try {
       const answer = await fetchRows({
         ...(JSON.parse(key) as RowsQuery),
         offset: 0,
         limit: Math.max(PAGE, load.rows.length),
       });
       setLoad({ state: "ready", rows: answer.rows, total: answer.total });
-      setChanging(null);
-      const closed = closedPeriodOf(row.date, periods);
-      setNotice(
-        `${row.description} is now ${answerLabel({ personId, bucket }, names)}.${
-          closed === null ? "" : " The next close will carry this correction."
-        }`,
-      );
     } catch (error: unknown) {
-      setProblem(AppError.from(error).message);
+      setProblem(
+        `The change was saved, but the list could not be read again. ${AppError.from(error).message}`,
+      );
     } finally {
       setSaving(false);
     }
@@ -479,8 +505,9 @@ export function History(): React.ReactElement {
                   <Refile
                     row={row}
                     classification={row.classification}
-                    closed={closedPeriodOf(row.date, periods)}
-                    people={people}
+                    closed={periods === null ? null : closedPeriodOf(row.date, periods)}
+                    periodsKnown={periods !== null}
+                    members={members}
                     open={changing === row.id}
                     saving={saving}
                     onOpen={(next) => setChanging(next ? row.id : null)}
@@ -509,7 +536,10 @@ interface RefileProps {
   classification: NonNullable<StoredRow["classification"]>;
   /** The closed period the row's date falls in, if any. */
   closed: ClosedPeriod | null;
-  people: readonly string[];
+  /** Whether the closed periods were read: if not, `closed` says nothing. */
+  periodsKnown: boolean;
+  /** The people in now; the row's own person is offered besides. */
+  members: readonly string[];
   open: boolean;
   saving: boolean;
   onOpen: (open: boolean) => void;
@@ -525,45 +555,81 @@ function Refile({
   row,
   classification,
   closed,
-  people,
+  periodsKnown,
+  members,
   open,
   saving,
   onOpen,
   onAnswer,
 }: RefileProps): React.ReactElement {
-  if (!open) {
-    return (
+  const names = usePeopleNames();
+  const id = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+
+  // A control that closes hands focus back to the button that opened it: the Save or
+  // Cancel that had it is gone, and focus would fall to the page. Only when it did
+  // fall: opening another row's control moved focus there on purpose.
+  useEffect(() => {
+    if (wasOpen.current && !open && document.activeElement === document.body) {
+      button.current?.focus();
+    }
+    wasOpen.current = open;
+  }, [open]);
+
+  // Who a change may file the row to: the members now, and the row's own person even
+  // if they have left, so the control opens on the answer the row stands at.
+  const own = classification.personId;
+  const offered =
+    own === null || members.includes(own)
+      ? members
+      : [...members, own].toSorted(byShownName(names));
+
+  return (
+    <>
       <button
+        ref={button}
         type="button"
-        aria-expanded={false}
+        aria-expanded={open}
+        aria-controls={open ? id : undefined}
         // The visible words come first in the name (label in name), then the row, so the
         // identical buttons down the list are told apart by a screen reader.
         aria-label={`Change who and what: ${row.description}, ${row.date}`}
-        onClick={() => onOpen(true)}
+        onClick={() => onOpen(!open)}
       >
         Change who and what
       </button>
-    );
-  }
-  return (
-    <fieldset className="offer" aria-label={`Change who and what for ${row.description}`}>
-      {closed !== null && (
-        <p className="muted">
-          This row is in the closed period {closed.start ?? "from the first row"} to {closed.end}.
-          The settlement recorded for it stays as it was paid. Stats and deposit matching follow the
-          new answer at once, and the next close carries the correction.
-        </p>
+      {open && (
+        <fieldset
+          id={id}
+          className="offer"
+          aria-label={`Change who and what for ${row.description}`}
+        >
+          {closed !== null && (
+            <p className="muted">
+              This row is in the closed period {closed.start ?? "from the first row"} to{" "}
+              {closed.end}. The settlement recorded for it stays as it was paid. Stats and deposit
+              matching follow the new answer at once, and the next close carries the correction.
+            </p>
+          )}
+          {!periodsKnown && (
+            <p className="muted">
+              The closed periods have not been read, so this page cannot say whether this row is in
+              one.
+            </p>
+          )}
+          <AnswerControls
+            people={offered}
+            initial={{ personId: classification.personId, bucket: classification.bucket }}
+            submitLabel="Save"
+            disabled={saving}
+            onAnswer={onAnswer}
+          />
+          <button type="button" onClick={() => onOpen(false)}>
+            Cancel
+          </button>
+        </fieldset>
       )}
-      <AnswerControls
-        people={people}
-        initial={{ personId: classification.personId, bucket: classification.bucket }}
-        submitLabel="Save"
-        disabled={saving}
-        onAnswer={onAnswer}
-      />
-      <button type="button" onClick={() => onOpen(false)}>
-        Cancel
-      </button>
-    </fieldset>
+    </>
   );
 }
