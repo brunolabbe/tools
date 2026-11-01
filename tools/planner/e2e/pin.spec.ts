@@ -51,7 +51,7 @@ function pinButton(page: Page, title: string): Locator {
 test("a pin survives a reload, and appends no revision", async ({ page }) => {
   const title = await draftAPlan(page);
 
-  const plan = page.locator("section.panel.plan");
+  const plan = page.locator("section.card.plan");
   // The run placed something. Every rostered schedulable specialist gets a
   // candidate onto a day for all six briefs (`agent/test/placeable.test.ts`), so
   // an empty plan here is a real failure and not a shape this spec tolerates.
@@ -94,7 +94,7 @@ test("a pin survives a reload, and appends no revision", async ({ page }) => {
 test("unpinning survives a reload too", async ({ page }) => {
   const title = await draftAPlan(page);
 
-  const plan = page.locator("section.panel.plan");
+  const plan = page.locator("section.card.plan");
   const pinned = (
     await plan.locator("li.item").first().getByRole("heading").first().innerText()
   ).trim();

@@ -12,6 +12,7 @@
   ],
   "exports": {
     "./tokens.css": "./src/tokens.css",
+    "./base.css": "./src/base.css",
     ".": "./src/index.ts",
     "./theme": "./src/theme.ts",
     "./chrome.css": "./src/chrome.css",

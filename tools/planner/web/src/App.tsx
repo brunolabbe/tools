@@ -157,13 +157,14 @@ export function App(): React.ReactElement {
           <RunView run={watching} onExit={() => setWatching(null)} onOpenPlan={read} />
         </>
       ) : openIntake === null ? (
-        <>
+        // A stack, because the cards are siblings here: a grid's gap reaches only its own children.
+        <div className="stack">
           <Trips onOpen={(id) => open(id)} />
-          <section className="panel">
+          <section className="card">
             <h2>Plans</h2>
             <Plans onOpen={read} />
           </section>
-        </>
+        </div>
       ) : (
         <>
           <p className="crumb">

@@ -26,10 +26,6 @@
   --warn: #8a6d1f;
   --danger: #a3341f;
   --warn-bg: #fdf5e6;
-
-  /* Values for the names `@webtools/ui/tokens.css` declares. */
-  --font-size-base: 16px;
-  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -47,16 +43,6 @@
     --danger: #e8836a;
     --warn-bg: #2a2415;
   }
-}
-
-body {
-  font: var(--font-size-base) / 1.55 var(--font-sans);
-}
-
-.shell {
-  max-width: var(--page-width);
-  margin: 0 auto;
-  padding: 3rem 1.25rem;
 }
 
 h1 {
@@ -118,40 +104,12 @@ dd {
   }
 }
 
-.main,
-.aside {
-  display: grid;
-  gap: var(--gap);
-}
-
-.panel {
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.panel h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1.15rem;
-  letter-spacing: -0.01em;
-}
-
-.panel.warn {
+.card.warn {
   background: var(--warn-bg);
 }
 
-.panel p {
-  margin: 0 0 0.75rem;
-}
-
-.panel p:last-of-type {
-  margin-bottom: 0;
-}
-
 .help,
-.hint,
-.muted {
+.hint {
   color: var(--text-muted);
 }
 
@@ -215,16 +173,6 @@ fieldset.choices.tight {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-.field {
-  width: 100%;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: inherit;
-  font: inherit;
-}
-
 .field.short {
   max-width: 6rem;
   text-transform: uppercase;
@@ -275,27 +223,6 @@ fieldset.choices.tight {
   margin-top: 1.1rem;
 }
 
-button {
-  padding: 0.55rem 0.9rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-button.primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-text);
-}
-
 button.link {
   display: grid;
   width: 100%;
@@ -339,8 +266,7 @@ ul.answers li + li {
   overflow-wrap: anywhere;
 }
 
-.panel.warn ul {
-  margin: 0 0 0.75rem;
+.card.warn ul {
   padding-left: 1.2rem;
 }
 
@@ -356,10 +282,6 @@ ul.answers li + li {
   width: 100%;
   height: 0.5rem;
   margin: 0.5rem 0;
-}
-
-.run .gaps {
-  margin-top: 1rem;
 }
 
 .run .gaps h3 {
@@ -474,11 +396,6 @@ ul.answers li + li {
  * error panel and neither disappears: a plan that says lodging was not checked
  * is the product, and a warning the reader cannot come back to is not.
  */
-.gaps,
-.unchecked {
-  margin-top: 1.25rem;
-}
-
 .gaps h3,
 .unchecked h3 {
   margin: 0 0 0.5rem;
@@ -559,5 +476,15 @@ ul.answers li + li {
 }
 
 .health p {
+  margin: 0;
+}
+
+/*
+ * A card spaces its own children (`@webtools/ui/base.css`), so a margin one of
+ * them brings adds to that gap, and the plan's sections stood twice as far
+ * apart as the rest. Only where the section is a direct child: the same class
+ * elsewhere (the crumb above a card, the actions inside an alert) keeps its own.
+ */
+.card > :is(.crumb, .day, .replan, .version-picker, .actions) {
   margin: 0;
 }

@@ -103,7 +103,7 @@ export function Brief({ brief }: { brief: TripBrief }): React.ReactElement {
   );
 
   return (
-    <section className="panel" aria-labelledby="brief-heading">
+    <section className="card" aria-labelledby="brief-heading">
       <h2 id="brief-heading">The trip so far</h2>
       {settled ? (
         <dl>
