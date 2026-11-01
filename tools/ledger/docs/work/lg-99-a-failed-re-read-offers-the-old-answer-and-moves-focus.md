@@ -212,3 +212,7 @@ answers, and the answer may change it.
 - 2026-11-01 — Not measured, as the gate left it: whether the page scrolls to row A on N1, and
   the Safari and iOS focus behaviour, which rests on MDN's table and was not run in Safari.
 - 2026-11-01 — Id moved from lg-98 to lg-99 before the push, because a peer's lg-98 (`lg-98-tanstack-query-for-the-ledger-web.md`, `ready`) reached `origin/main` first, in #736 (`b9b1f0bf`). Rebased onto `origin/main` at `05a6d450`; the reproduction above still ran on `580dabbe`.
+- 2026-11-01 — Owner's answer, relayed by the orchestrator, to gate 1's CONCERNS at `8bef87a5`
+  (F1 med, F2 to F6 low). The options were: all six findings fixed at landing (the
+  orchestrator's recommendation); F1 at landing with the lows recorded; treat F1 as high and run
+  a gate 2. The owner chose all six at landing, with no re-gate.
