@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.0](https://github.com/brunolabbe/tools/compare/ledger-v0.4.1...ledger-v0.5.0) (2026-11-01)
+
+
+### Features
+
+* **ledger:** a household's members and the admin can rename it (lg-77) ([#686](https://github.com/brunolabbe/tools/issues/686)) ([a1e09bc](https://github.com/brunolabbe/tools/commit/a1e09bc27594771f571285b553d38cc6f77d6806))
+* **ledger:** a new household is created by adding its first person, under a UUID (lg-71) ([#669](https://github.com/brunolabbe/tools/issues/669)) ([be8d9c0](https://github.com/brunolabbe/tools/commit/be8d9c0e7260fb7678df579b3665fffa13ca1198))
+* **ledger:** a new person gets a generated UUID; the name typed is only how they are shown (lg-76) ([#672](https://github.com/brunolabbe/tools/issues/672)) ([207df04](https://github.com/brunolabbe/tools/commit/207df04a109dca68625faf552d25a765eb0700b9))
+* **ledger:** a person without an email counts in the books and never signs in (lg-74) ([#680](https://github.com/brunolabbe/tools/issues/680)) ([ae50a8e](https://github.com/brunolabbe/tools/commit/ae50a8e2285abf5f6ca59d90c5dc11d173e978e5))
+* **ledger:** import a workbook through a layout a model describes (lg-66) ([#670](https://github.com/brunolabbe/tools/issues/670)) ([02ecde1](https://github.com/brunolabbe/tools/commit/02ecde1600cd8690465abb9b19300e8d572fa485))
+* **ledger:** mark an email that has never signed in on the admin card (lg-75) ([#689](https://github.com/brunolabbe/tools/issues/689)) ([d7cd223](https://github.com/brunolabbe/tools/commit/d7cd223f782fdd3b8d7d3380fdfe6ac19325aaa0))
+* **ledger:** read a bank CSV through a described layout into the inbox (lg-67) ([#681](https://github.com/brunolabbe/tools/issues/681)) ([c7bdef2](https://github.com/brunolabbe/tools/commit/c7bdef21d09bd85a45f5a1526f5b8d63dbf9f67b))
+* **ledger:** refuse unseen characters in names and escape stored ones on output (lg-82) ([#691](https://github.com/brunolabbe/tools/issues/691)) ([4b3c4c1](https://github.com/brunolabbe/tools/commit/4b3c4c14c248301e58b87eca3311fc08eccf859b))
+* **ledger:** the import screen asks who a name the household lacks is (lg-78) ([#685](https://github.com/brunolabbe/tools/issues/685)) ([5530971](https://github.com/brunolabbe/tools/commit/5530971a10662aa0d9c60e1bebb0d25a2c8ee1fa))
+* **ledger:** the shared header and footer, and a terms page (lg-72) ([#694](https://github.com/brunolabbe/tools/issues/694)) ([126e1dd](https://github.com/brunolabbe/tools/commit/126e1ddf88d6b464ca7014f81b5013c9d85649cc))
+* **repo:** every tool's footer drops its GitHub links and the version's v, and aligns left ([#697](https://github.com/brunolabbe/tools/issues/697)) ([84135db](https://github.com/brunolabbe/tools/commit/84135dbfc72e28c566a10388157a4b463a94d4c6))
+
+
+### Fixes
+
+* **ledger:** clear oxlint 1.88's React findings in the web UI (repo-119) ([#656](https://github.com/brunolabbe/tools/issues/656)) ([7134af8](https://github.com/brunolabbe/tools/commit/7134af894efa3c34c07af16420933038c8f58404))
+* **ledger:** let an unbroken name wrap on the Admin screen (lg-80) ([#684](https://github.com/brunolabbe/tools/issues/684)) ([6458060](https://github.com/brunolabbe/tools/commit/6458060c8377b5b2381790e515a0ca3590389257))
+* **ledger:** space Admin's cards and restore the stats gridlines (lg-70) ([#664](https://github.com/brunolabbe/tools/issues/664)) ([f69e9b2](https://github.com/brunolabbe/tools/commit/f69e9b2c3bb88b4905cf96733633ead7b65c363b))
+* **ledger:** the Import screen reaches people under generated ids by their shown names (lg-79) ([#677](https://github.com/brunolabbe/tools/issues/677)) ([f05108d](https://github.com/brunolabbe/tools/commit/f05108d22cf9c395314ad3075fb04ce326cf990e))
+
 ## [0.4.1](https://github.com/brunolabbe/tools/compare/ledger-v0.4.0...ledger-v0.4.1) (2026-10-25)
 
 
