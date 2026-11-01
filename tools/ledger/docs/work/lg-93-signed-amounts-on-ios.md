@@ -263,7 +263,8 @@ origin/main:tools/ledger/web/src/salaries/Salaries.tsx:215
 3. **Then the answer is recorded first.** It goes under
    `## Decision — answered <date> by <who>`, with the options it was chosen from,
    in its own commit that moves `status` to `ready`, before any source change.
-   The chosen option's Build steps are written into this section in that commit.
+   The chosen option's Build steps are written into this section in that commit,
+   and so is its check, added to _Done when_ as line 3, before any source change.
 
 ## Decision — open
 
@@ -304,8 +305,6 @@ _Why_.
    not measured is named as not measured.
 2. The owner's answer is recorded under `## Decision — answered <date> by <who>`,
    with the options it was chosen from, and `status` is `ready`.
-3. When the answer is recorded, the chosen option's check is added here as line
-   3, before any source change. Until then this line does not exist.
 
 ## Log
 
@@ -354,3 +353,12 @@ _Why_.
   takes a decimal part (`.` or `,`) and a trailing `%`". The row now says it
   refuses a sign, and what its pattern takes. `git diff f6485e7b -- <this
   ticket> | grep -c '^-.*matches digits only'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F4 — "`Done when` 3 says
+  the chosen option's check 'is added here as line 3 … Until then this line does
+  not exist,' and it is line 3 and does exist". Taken in the gate's second
+  direction, the sentence moved into Build step 3, which already says what the
+  answer commit writes, and line 3 is deleted: _Done when_ now holds the two
+  lines a grader can check at this commit (the readings, and the recorded
+  answer), and the answer commit adds the third. `git diff f6485e7b -- <this
+  ticket> | grep -c "^-.*When the answer is recorded, the chosen option's check
+  is added here as line"` → `1`.
