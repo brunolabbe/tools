@@ -6716,3 +6716,42 @@ refuted one that way. A reading of the environment can expire: the 2026-10-17
 review re-ran an artifact download logged as timing out two days before, and
 it fetched 17 MB. An item a script,
 not a page, got wrong names the script and is filed or recorded, not fixed here.
+
+### Batch 2026-11-01 (tools-36, lg-89 lg-92, lg-93 filed) — base 8ad4e91d
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a955f08ceb670ff7f | seam-mapper, fourteen candidates (dl-130 dl-131 dl-133 dl-134 dl-135 lg-73 lg-89 lg-92 pl-64 pl-65 repo-122 repo-126 repo-129 repo-134) | 3m35s / 3m35s | 0 | $0.6286 |
+| #717 | open, ready, 11/11 green at 54df4ee6 (CodeQL, Windows) | Opus 5.5 / high | a31630306bd471af6 | builder-hard, lg-89 | 17m14s / 17m05s | 0 | $6.7798 |
+| #717 | as above | Sonnet 5.5 / xhigh | a8adec802203a125e | ticket-reviewer-sonnet, lg-89 gate 1 | 12m21s / 12m06s | 0 | $2.2104 |
+| #717 | as above | Sonnet 5.5 / high | a594830ad30903974 | fixer, lg-89 two meds + three lows at landing + `awaiting` line + landing | 6m49s / 6m45s | 0 | $1.2910 |
+| #718 | open, ready, green at 94df2041 (CodeQL; test matrix skipped, docs-only) | Haiku 5.5 / high | a621224d47dd8a1f6 | builder-mechanical, lg-93 filing (maintenance) | 5m37s / 5m34s | 0 | $0.2251 |
+| #718 | as above | Sonnet 5.5 / xhigh | a703db160f79d7b70 | ticket-reviewer-sonnet, lg-93 gate 1, narrow | 6m04s / 6m03s | 0 | $1.1058 |
+| #718 | as above | Sonnet 5.5 / high | a6015c355f7416c56 | builder-web, lg-93 iOS documentation check + gate 1's F1–F4 | 10m02s / 9m56s | 0 | $1.7418 |
+| #718 | as above | Sonnet 5.5 / xhigh | a6fd87563b7599062 | ticket-reviewer-sonnet, lg-93 gate 2, narrow | 8m05s / 8m00s | 0 | $1.5004 |
+| #718 | as above | Sonnet 5.5 / high | af00bdffb2984ee0c | fixer, lg-93 nine lows at landing + thread record | 3m43s / 3m38s | 0 | $0.7097 |
+| #718 | as above | Haiku 5.5 / high | aab261d5206c0b2c6 | builder-mechanical, lg-93 Log line naming the thread (maintenance) | 2m06s / 2m02s | 0 | $0.0266 |
+| #719 | open, draft (stacked on #717, held for merge order), 10/11 green at da4e120a, one leg pending at close | Sonnet 5.5 / high | a8e5358889b5d274e | builder-standard, lg-92, then round 1 (resumed) | 14m22s / 1h01m10s | 0 | $2.3336 |
+| #719 | as above | Opus 5.5 / high | a7ad102e0a4dcb0e7 | ticket-reviewer-opus, lg-92 gate 1 | 12m05s / 11m37s | 0 | $3.3611 |
+| #719 | as above | Opus 5.5 / high | ad33293a28bf77c09 | ticket-reviewer-opus, lg-92 gate 2 | 8m30s / 7m18s | 0 | $2.1598 |
+| #719 | as above | Sonnet 5.5 / high | ae01aa8423eab746d | fixer, lg-92 owner-answer Log entry + landing, held as draft | 5m46s / 4m11s | 0 | $0.3930 |
+| — | — | Opus 5.5 / high | orchestrator 5a28f2c2 | orchestrator (floor) | 1h10m15s / 2h09m45s | 0 | $5.5500 |
+| | | | | **total** (rates read 2026-10-10) | 3h06m34s | 0 | **$30.0168** |
+
+**Tickets:**
+
+- lg-89 → #717: the owner chose the ledger batch over my downloader recommendation at intake. Builder's open decision (iOS `inputMode="decimal"` may show no minus key, pre-existing on `main`) → owner filed it as lg-93. Gate 1 CONCERNS: two meds in the paid-read script (prints the whole key file without a `LEDGER=` line; no `ANTHROPIC_CUSTOM_HEADERS` refusal), three lows. No `Done when` depended on them → owner took all five at landing, no re-gate. Done when 7 `awaiting` the owner's paid read. Total $10.28.
+- lg-93 → #718 (filed, `needs-decision`): gate 1 CONCERNS (one med: option (a) priced by no reading; three lows) → owner took the first direction plus the lows. The owner then allowed an online documentation check, which builder-web did on the branch with the fixes. Its open decision (keep the iPhone step, or accept the documentation) → owner kept the step. Gate 2 PASS, nine lows → all at landing. Total $5.31.
+- lg-92 → #719 (stacked on #717): builder's open decision (where the "readings are lost" note sits) → owner kept it. Gate 1 CONCERNS: a med on Done when 5 (left-out names 749 px at 360) opened round 1. Owner answers in the round: F2 fixed with Read all skipping a typed-in photo; F3 + F4 + F5 (over my F3 + F5). Gate 2 PASS, two lows: an open decision (a typed-in photo can no longer be read) → owner (a) kept, recorded in the Log; the stalled-upload low recorded unfixed by owner choice. Total $8.25.
+
+**Defects in the skill:**
+
+1. `roles/common.md`, _Your worktree_ ("A branch whose diff is markdown only … skips both steps") against `roles/fixer.md`, _Set up_, step 2 ("Farm and build, per `common.md`, even for a docs-only landing"). The two pages disagree, and the skip is the one that fails: `npm run check` needs the farm. Reproduction: `grep -n 'markdown only' .claude/skills/orchestrate-tickets/roles/common.md` → line 32, and `grep -n 'docs-only' .claude/skills/orchestrate-tickets/roles/fixer.md` → line 16. Relayed from lg-93's builder-web, not re-run: without the farm, `npm run check` gave exit 2 with 52 `error TS` lines (stale `dist` in the shared checkout, `'@planner/agent' has no exported member 'NearbyPointRequest'`). After `worktree-farm.sh` and `npm run build` it gave exit 0. lg-93's filer and its maintenance agent each flagged the same conflict.
+2. `reference/records.md`, _When there is no ticket_, against `roles/fixer.md` (its bullet on a pull request that only files a ticket). fixer.md requires "the ticket's Log names the thread". records.md says only that "the body says so in a sentence", and `dispatching.md` points the orchestrator at records.md, so the landing dispatch left the line out and a second maintenance push added it. Reproduction: `sed -n '177,190p' .claude/skills/orchestrate-tickets/reference/records.md | grep -c 'Log names'` → `0`, and `sed -n '95,97p' .claude/skills/orchestrate-tickets/roles/fixer.md` → "…the body says so, and the ticket's Log / names the thread."
+3. `reference/dispatching.md`, _Re-gating_ ("they take the tree and the output directory as arguments (`roles/common.md`)"). lg-92's gate 1 wrote probe scripts that take the tree but hard-code gate 1's own output directory, so gate 2 had to copy and edit them before it could re-run them without overwriting gate 1's outputs. Reproduction: `grep -n 'gate-1' <scratch>/lg-92/gate-1/run-probe.sh <scratch>/lg-92/gate-1/e2e.sh` → `run-probe.sh:5:S=…/lg-92/gate-1` and `e2e.sh:4:S=…/lg-92/gate-1`.
+4. `scripts/next-id.mjs` (a script, not a page). It prints a clash for an id that is on `main` and whose claiming branch is long since merged. Reproduction: `node scripts/next-id.mjs lg` → `branch/docs-glob-minimatch-advisories lg-84`, `on main lg-84`, then `clash: lg-84 is claimed by branch/docs-glob-minimatch-advisories, on main`, with exit 0.
+
+**Worked, and worth keeping:**
+
+- A filing's premise checked against primary documentation by `builder-web` on the filing's own branch, in the same dispatch as gate 1's fixes, then re-checked by a narrow gate 2 that fetched every cited source. Gate 2 found eight lows, two of them quotes that were not in their sources, and one a premise credited with evidence its source did not give.
+- A gate attack naming the population for a header parser (`"0"`, `"-1"`, `"abc"`, an HTTP date, `"1e9"`, absent): lg-92's gate 1 returned a bounded-wait table for every cell and cleared the `client.ts` change in one pass.
