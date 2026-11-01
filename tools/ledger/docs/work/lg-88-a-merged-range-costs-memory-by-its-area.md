@@ -3,7 +3,7 @@ id: lg-88
 tool: ledger
 title: A merged range costs memory in proportion to its area, past every size bound
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -106,6 +106,26 @@ the reading that proves the bug" no longer holds.
 1. The owner's choice is recorded here with its options, and `status` moves on.
 2. A merge of `A1:XFD1000` read through the describe route stays under the memory
    the 4 MiB bound was sized for (+110 MB a request), measured.
+
+## Review
+
+**Gate: PASS** — 2026-11-01 · `83eac952..1dc17728` · Opus 5.5, depth standard
+
+| Done when                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The owner's choice is recorded with its options, and `status` moves on                          | **verified** by reading — the brief's `## Decision — answered 2026-11-01 by the owner` holds option 3 and the three options it was chosen from; `status` moved from `needs-decision` to `ready` when it was answered (the Log's second entry), and moves to `done` in the landing commit                                                                                                                                                                                                                                                                                                                                                                 |
+| 2. A merge of `A1:XFD1000` read through the describe route stays under +110 MB a request, measured | **verified** — the builder's `merge-memory.mts`, re-run three rounds each on the base's and the head's `xlsx.ts`, in a child process capped at 512 MB, through `describeWorkbook` (the describe route's handler body; not over HTTP), every run ending `LAYOUT_UNREADABLE` after the request was built: head +0.4 / +0.6 / +0.5 MB peak RSS growth (process peak 112.7–115.2 MB), base +476.3 / +481.5 / +481.3 MB (process peak 591.3–595.6 MB). The structural cause is asserted by `api/test/xlsx.test.ts` › "a merge of A1:XFD1000 holds no places, whatever its area (lg-88)" (`rows.flat()` has length 1), which fails against the base's `rowsOf` |
+
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · the doc comment on `rowsOf` in `api/src/xlsx.ts` says a merged range's other parts "are not cells and are given no place". That is false for a value stored inside a merge (LibreOffice's "keep the contents of the hidden cells" writes them): the head reads such a value as an ordinary cell. That is what the brief's Decision chose ("read under option 3"), so the code is right and the comment is wrong. A reader who trusts the comment thinks those values are dropped. Nothing in the code relies on it. Measured: a merge over `B2:B4` changed the read value grid in 13 of 13 layout fixtures, and `readWorkbook`'s reading in 10 of them (`moved`: a detail `""` became `"Dépôt"`).
+- **low** · `nfr:maintainability` · no test pins that decided behaviour, a value stored inside a merge being read. None of the four merged-workbook tests in `api/test/xlsx.test.ts` stores anything inside its merge.
+- **low** · the owner's second answer on the measurement is not on the ticket: the before reading is the memory reading, not a kill by the cap. `## Measurement — answered 2026-11-01 by the owner` still says the before run "is expected to hit the cap, and that counts as the reading that proves the bug". The builder's Log entry explains why the cap did not bite, but in its own words, not as the owner's dated choice. The lander should record it.
+- **low** · the Log reports the red run as `Tests 3 failed | 16 passed (19)`. That spec had 19 tests. At this head the spec has 20, and 4 of 20 fail against the base's `rowsOf`: the new `A1:XFD1000` test fails too. The error runs in the safe direction (it understates the control).
+- **dropped** · the test comment's "+484 MB" against the measured +476.3 to +481.5 MB. That is within the machine's spread between runs, so not a defect.
+- **dropped** · a sheet now ends at its last stored row: a merge with nothing stored below it adds no rows. Two readings change because of that. (a) The describe route's rows bound no longer refuses a sheet that a merge pushes past 20 000 rows: a merge to row 25 000 counted 225 000 rows on `lg7` at the base and 73 at the head. (b) `layoutView`'s header (`N rows, columns A to X`) and the rows it samples change for merged sheets. The Decision names both ("a row's trailing width, the row count past the last stored row"), so they are decided changes, not defects. `readWorkbook`'s reading did not change in any of the 39 merged workbooks whose merges cover only empty places (or in the 13 unmerged controls).
+- **dropped** · out of the reviewed range: one stored cell at `A1048576` costs about +50 MB in `readSheets` (49.3 MB at the base, 51.8 MB at the head). With ten such sheets, `describeWorkbook` peaked at +408 MB (592.5 MB for the process) on a 24 904-byte file before it refused the file as `WORKBOOK_TOO_LARGE`. The base has the same cost and the diff does not touch it. Raised in the report as an open decision.
+- **findings** · the hunt returned 7: 4 carried (all low), 3 dropped.
+- NFR: security ✓, removes a memory amplification of about 30 000 times (16 KB file to +480 MB) · performance ✓, 3.2–3.7 s down to 18–23 ms at `A1:XFD1000` · reliability ✓, the value grid and `readWorkbook`'s reading are unchanged in 39 of 39 probed workbooks whose merges cover only empty places · maintainability — the comment and the missing test above.
+- CI on `1dc17728` (PR #733): all 10 checks green, `e2e` and `docker` (ledger) and `test (windows-latest, informational)` included.
 
 ## Log
 
