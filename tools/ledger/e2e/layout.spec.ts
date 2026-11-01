@@ -1245,3 +1245,29 @@ test.describe("on a desktop", () => {
     await expect(page.getByTitle("Take a photo of a receipt")).toBeHidden();
   });
 });
+
+/**
+ * lg-95: History can change who and what a filed row is. The seed's rows are all
+ * September's and its period closed on the 30th, so the open control carries the
+ * closed-period paragraph, the longest thing it says. It is not saved: the books
+ * are shared with every other case in this file.
+ */
+test("History fits a phone and a desktop with a filed row's change open", async ({
+  page,
+}, testInfo) => {
+  await openTab(page, "History");
+  const row = page
+    .getByRole("list", { name: "Bank rows" })
+    .getByRole("listitem")
+    .filter({ hasText: "Hypothèque /Prêteur Exemple" })
+    .filter({ hasText: "2026-09-12" });
+  // The seed's three Hypothèque rows differ by date, and the button's name carries it.
+  await row
+    .getByRole("button", { name: "Change who and what: Hypothèque /Prêteur Exemple, 2026-09-12" })
+    .click();
+  await expect(row.getByText(/closed period/u)).toBeVisible();
+  await expect(row.getByLabel("Belongs to")).toBeVisible();
+  await expect(row.getByLabel("Bucket")).toBeVisible();
+  await expect(row.getByRole("button", { name: "Save" })).toBeVisible();
+  await fitsBothWidths(page, testInfo, "History (change open)");
+});
