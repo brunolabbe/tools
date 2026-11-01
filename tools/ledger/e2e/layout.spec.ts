@@ -243,10 +243,12 @@ async function seed(
     salaryIds: salaries.map((salary) => salary.id),
   });
 
+  // Charged on the 1st, so the month Stats shows last, today's, always has a
+  // charge: from the 15th, the 1st to the 14th of every month read 0.00 (lg-85).
   await post(api, "/api/recurring", {
     personId: alex,
     monthlyCents: 8999,
-    startDate: "2026-08-15",
+    startDate: "2026-08-01",
     endDate: null,
     label: "Internet and phone",
   });
