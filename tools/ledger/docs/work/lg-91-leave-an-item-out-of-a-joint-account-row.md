@@ -133,3 +133,157 @@ ratios and amounts drawn as the existing test draws them, 0 mismatches; (b) a
 fixed, enumerated grid; (c) leave the line as written. Chosen **(a)**, the
 orchestrator's recommendation. Done when 1 is reworded above, the old line left
 beside it and marked superseded.
+
+### 2026-11-01, build
+
+**Build 2's representation: the suggested one.** `PeriodLine.owedToPot: true`,
+with `personId` and `chargedTo` both naming the person who owes the charge.
+`OpenPeriodLine` carries the same field, and `ReceiptCharge.owedToPot` names a
+pot charge in `ReceiptFiling.charges`. It changes the fewest readers because
+every reader that asks `chargedTo === null` for "shared" already leaves a pot
+charge out. That covers the period screen's "Paid by" total and the
+contributions in `periodStretches`. A reader that ignores the field and takes
+the line as a person-to-person charge fails loudly: `netsOf` throws "A charge
+is owed by one person to another". The alternative, `chargedTo: null` with the
+flag, would count the charge as that person's shared card spending in every
+reader not updated, and nothing would say so.
+
+The database cannot store `charged_to = person_id`, because migration 4's CHECK
+refuses it. So migration 17 adds `owed_to_pot` with `charged_to` left NULL, and
+`toLine` in `api/src/periods.ts` answers `chargedTo` as `person_id` on such a
+line. Rebuilding `period_lines` would have meant rebuilding a table three
+others reference, for one read site.
+
+**Readers changed**:
+
+- `periodStretches` (books);
+- `toLine`, `insertLine`, `correctLine`, `retireLine` and `linesThrough` (api
+  periods);
+- `chargesOf` and `fileReceipt` (api receipts);
+- `receiptsOnRows` and `chartedAs` (api slices);
+- `Periods.tsx`, `stats/PeriodLines.tsx` and `Receipts.tsx` (web).
+
+A correction of a pot charge keeps it one. The stats screen's category picker
+and lg-53's backfill both send the line back with `chargedTo` equal to
+`personId`. A correction that would make it a card line is refused ("A charge
+to the pot stays owed to the pot. Remove it instead, if it was a mistake."), and
+`POST /api/period-lines` still refuses a line charged to whoever paid it.
+
+**Build 3.** On a row, `requireRowItems` checks every item before anything is
+written:
+
+- `not-shared` is refused, saying a joint-account purchase has no payer to keep
+  it.
+- A `theirs` item naming nobody is refused.
+- A name the books do not hold is refused, as on a line.
+- A name the books hold but the directory's current members do not is refused
+  too.
+
+`filePotCharges` splits with `splitReceipt(proposal, undefined, -row.amount_cents)`,
+so a tip on the row stays shared, as on a line. It files one pot charge per
+person:
+
+- dated the row's date;
+- under the person's items' category when they share one, and none otherwise;
+- with the merchant as its note;
+- with source `receipt`.
+
+`periodLineId` and `chargeLineId` stay `null` on a row filing. The charges are
+in `charges`.
+
+**Build 4.** `receiptsOnRows` leaves a `theirs` item out of the row while its
+charge line stands, and gives each row a `chargedCents`: what its charges'
+standing versions hold, followed along `supersedes` with a depth guard. That
+way the row and its card lines chart the row's amount between them, whatever is
+corrected. `chartedAs` splits `amount − chargedCents` among the shared items,
+or keeps it whole. A removed charge gives its item back to the row. A row that
+gave anything up is `split`, so the list opened from the chart carries the
+slice.
+
+**Build 5.** The brief did not say how the screen knows the destination is a
+row: the row is only chosen at the end, from the matches. The open decision in
+the build report has the options. As built, **"Paid with the joint card?"**
+turns the form to the joint account. Once it is tapped:
+
+- an unchecked item becomes `theirs` naming nobody, and one that was Mine names
+  nobody too;
+- the select offers every current member, whoever took the photo included,
+  with a disabled "Whose?" until one is picked;
+- the line button gives way to **"Paid with my own card"**, which turns the
+  form back: an item charged to the photo's taker, or to nobody, becomes Mine
+  again;
+- the whole-receipt "This was …'s" box is hidden;
+- the split line reads "Owed to the pot by `<name>` … · Shared …", or "Whose not
+  chosen yet …";
+- the receipt is held, with the reason shown, until every item left out names a
+  person.
+
+Picking whose an item is no longer clears the rows already found, since it
+moves no amount the lookup reads. `fileAs`'s "shared whole" refusal is gone.
+
+**Build 6.** On the period screen, a pot charge leaves its person's "Paid by"
+list and is listed under **"Owed to the pot"**, with its total, a one-line
+hint, "…, owed to the pot by `<name>`" and Remove. The stats card lines read
+"Owed to the pot by `<name>`." The settlement figures are the API's, which
+count the charge.
+
+- **Tests that cover it:** `web/test/periods.test.tsx`, "lists a charge to the
+  pot apart from what each person paid, and closes on the settlement that counts
+  it (lg-91)", and the API side in `api/test/receipts.test.ts`, "files one
+  charge to the pot in the row's period … moves the settlement by (1 − r) × c".
+- **Not covered:** `e2e/layout.spec.ts`. Its seed files no receipt, so the new
+  block's fit at 360 px is unmeasured. That is an open decision in the report.
+
+**For lg-94**, what this changed in its functions, all in `Receipts.tsx`:
+
+- **`whose`** has a new first branch, used only when paid jointly. It answers
+  `item.chargedTo` when it is a current member, and `null` otherwise. It never
+  falls back to `other`. The line branch is unchanged.
+- **`itemOf`** is unchanged.
+- **`unfileable`** gains a `NOBODY_CHOSEN` branch when paid jointly, and its
+  `NOBODY_ELSE` branch now applies only when not paid jointly.
+- **The select** is now two: a new joint one, and lg-90's, unchanged, rendered
+  only when not paid jointly.
+
+In the API, a departed member named on a row is refused by `requireRowItems`
+("An item on a joint-account row is charged to a current member of the
+household."). On a line, `chargedToOf` still takes one.
+
+**What the brief and the dispatch had wrong:**
+
+- **The trial count.** The intake entry above says `the settlement's promise,
+  simulated` uses 2,000 trials. It runs 500 seeds,
+  `for (let seed = 1; seed <= 500; seed++)`. The 2,000-trial loop is
+  `after the asked deposit is paid`. The new simulation follows the owner's
+  wording: 2,000 seeded trials each for two and three people. It is in a new
+  `describe` at the end of the file, so the merged records' lines do not move.
+- **Rounding.** Build 1's "rounded so the nets still sum to zero" needs no
+  rounding. `r_i` is parts per million and `c` is cents, so every term is a
+  whole number of millionths of a cent, and the sum is exact.
+- **A stale line in `tools/ledger/CLAUDE.md`.** Line 259 still says "on a row
+  every item is shared". It is not edited here, because the Build does not name
+  it. The report proposes the replacement.
+
+**Fold-ins: none.** The only free piece in reach was that `CLAUDE.md` line, and
+the dispatch forbids folding into a `CLAUDE.md`.
+
+**Checks** (worktree, branch `lg-91-pot-charges` off `83eac952`):
+
+```
+npx vitest run tools/ledger/books/test/settlement.test.ts   Tests  41 passed (41)
+  mutation: each other member's share + 1 ppm in netsOf's pot loop
+    for 2 people: 10 trials failed; the first was seed 20208, off by 578285, -578285
+    for 3 people: 1 trials failed; the first was seed 30883, off by 1001548, -601940, -399608
+    (and 4 of the worked examples failed; restored from 7d15295a)
+npx vitest run tools/ledger/api/test/receipts.test.ts \
+  …/schema.test.ts …/stats.test.ts …/periods.test.ts        Tests  175 passed (175)
+npx vitest run tools/ledger/web/test/receipts.test.tsx      Tests  51 passed (51)
+npx vitest run tools/ledger/web/test/periods.test.tsx \
+  …/stats-rows.test.tsx …/generated-ids.test.tsx           Tests  56 passed (56)
+npm run check                                               exit 0
+npm test -- --project ledger                                Test Files 99 passed (99), Tests 2159 passed (2159)
+E2E_PORT=8118 npm run e2e:ledger                            33 passed (43.7s), exit 0
+```
+
+`Period-360.png` was opened. The per-person lists drew as before, with no
+charge to the pot in the seed.
