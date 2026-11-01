@@ -99,6 +99,12 @@ interface ItemDraft {
   share: ItemShare;
   /** Whose a `theirs` item is, as picked; `null` until picked, and with one other member. */
   chargedTo: string | null;
+  /**
+   * Still someone else's as the read proposed it, no choice of the person's
+   * touching it (lg-94): going back from the joint card leaves such an item as
+   * it was, so it stays unpicked rather than turning into Mine unchosen.
+   */
+  asRead: boolean;
 }
 
 /** The form's fields, as typed. Amounts are text until filed. */
@@ -127,7 +133,7 @@ const NOT_CHOSEN_YET = "Whose not chosen yet";
 
 /** A read item marked someone else's that names no current member: nobody may be assumed (lg-94). */
 const UNPICKED_CHARGE =
-  "Choose whose each item left out is: it was charged to someone who has left, or to nobody.";
+  "Choose whose each item left out is: the receipt's charge for it names no other member of the household.";
 
 /**
  * The `Whose is` choice that keeps an item with whoever paid (`not-shared`). The
@@ -155,6 +161,7 @@ function itemDraftOf(item: ReceiptItem): ItemDraft {
     spendingCategoryId: item.spendingCategoryId,
     share: item.share,
     chargedTo: item.chargedTo,
+    asRead: item.share === "theirs",
   };
 }
 
@@ -563,7 +570,9 @@ export function Receipts(): React.ReactElement {
     });
     // Whose an item is moves no row the charge may be (lg-91): picking one
     // after the rows are found keeps them.
-    if (Object.keys(change).some((key) => key !== "share" && key !== "chargedTo")) {
+    if (
+      Object.keys(change).some((key) => key !== "share" && key !== "chargedTo" && key !== "asRead")
+    ) {
       setMatches(null);
     }
   };
@@ -593,6 +602,7 @@ export function Receipts(): React.ReactElement {
         spendingCategoryId: null,
         share: "shared",
         chargedTo: null,
+        asRead: false,
       };
       return { ...current, items: [...current.items, blank] };
     });
@@ -644,12 +654,17 @@ export function Receipts(): React.ReactElement {
     lookUp();
   };
 
-  /** Back to a line: an item charged to whoever took the photo, or to nobody yet, is Mine. */
+  /**
+   * Back to a line: an item charged to whoever took the photo, or to nobody yet, is
+   * Mine, unless it is still the read's own charge, which nobody has chosen to keep (lg-94).
+   */
   const payMyself = (): void => {
     setJoint(false);
     setMatches(null);
     setItems((item) =>
-      item.share === "theirs" && (item.chargedTo === null || item.chargedTo === payer)
+      item.share === "theirs" &&
+      !item.asRead &&
+      (item.chargedTo === null || item.chargedTo === payer)
         ? { ...item, share: "not-shared", chargedTo: null }
         : item,
     );
@@ -801,6 +816,7 @@ export function Receipts(): React.ReactElement {
                                 ? "theirs"
                                 : "not-shared",
                             chargedTo: null,
+                            asRead: false,
                           },
                         )
                       }
@@ -812,7 +828,11 @@ export function Receipts(): React.ReactElement {
                       aria-label={`Whose is ${name}`}
                       value={whose(item) ?? ""}
                       onChange={(event) =>
-                        setItem(index, { share: "theirs", chargedTo: event.target.value })
+                        setItem(index, {
+                          share: "theirs",
+                          chargedTo: event.target.value,
+                          asRead: false,
+                        })
                       }
                     >
                       {whose(item) === null && (
@@ -839,8 +859,8 @@ export function Receipts(): React.ReactElement {
                         setItem(
                           index,
                           event.target.value === MINE
-                            ? { share: "not-shared", chargedTo: null }
-                            : { share: "theirs", chargedTo: event.target.value },
+                            ? { share: "not-shared", chargedTo: null, asRead: false }
+                            : { share: "theirs", chargedTo: event.target.value, asRead: false },
                         )
                       }
                     >

@@ -1434,7 +1434,7 @@ test("an item left as Mine names nobody once paid jointly, and is Mine again on 
 });
 
 const UNPICKED_CHARGE =
-  "Choose whose each item left out is: it was charged to someone who has left, or to nobody.";
+  "Choose whose each item left out is: the receipt's charge for it names no other member of the household.";
 
 /** A read item marked someone else's, charged to a person who has left or to nobody (lg-94). */
 async function readBasketCharged(chargedTo: string | null): Promise<void> {
@@ -1544,4 +1544,52 @@ test("with nobody else, a read charge to someone who has left is refused as befo
     "There is nobody else in the household to charge an item to.",
   );
   expect(fileReceipt).not.toHaveBeenCalled();
+});
+
+test.each([
+  ["nobody", null],
+  ["the payer", "alex"],
+])(
+  "a read charge to %s is still unpicked after the joint card and back to my own, and files nothing (lg-94)",
+  async (_name, chargedTo) => {
+    basketRow();
+    vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+    vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+    await readBasketCharged(chargedTo);
+    expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Whose?");
+
+    fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+    await screen.findByRole("button", { name: "Attach to this row" });
+    fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+
+    // Not turned into Mine on the way back: nobody chose that.
+    expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Whose?");
+    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(UNPICKED_CHARGE);
+    expect(fileReceipt).not.toHaveBeenCalled();
+  },
+);
+
+test("an item the person picked on the joint card is Mine again on my own card, a read one or not (lg-94)", async () => {
+  basketRow();
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  await readBasketCharged(null);
+
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  await screen.findByRole("button", { name: "Attach to this row" });
+  fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "alex" } });
+  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+
+  expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Mine");
+});
+
+test("a refusal's words are true for a name the books never held, the payer and a departed member alike (lg-94)", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  await readBasketCharged("zed");
+
+  expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Whose?");
+  expect(screen.getByText(UNPICKED_CHARGE)).toBeTruthy();
+  // The words claim nothing about why: a departed member, the payer and nobody are all named by it.
+  expect(UNPICKED_CHARGE).not.toMatch(/has left|to nobody/u);
 });

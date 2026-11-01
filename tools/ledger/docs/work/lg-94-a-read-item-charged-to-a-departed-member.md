@@ -513,3 +513,21 @@ three answers, relayed by the coordinator).**
     alert, not fixed"; unchanged, and shared with `NOBODY_ELSE` and `NOBODY_CHOSEN`), and the
     household-of-two live line (it reads `Whose not chosen yet` with one candidate). Gate 1's
     section holds their text.
+- **Built, B (the joint round trip).** `ItemDraft` gains `asRead`, true when the read proposed
+  the item `theirs` and cleared by any choice of the person's (the Shared box, either select).
+  `payMyself` returns to Mine only a `theirs` item charged to nobody or the payer that is not
+  `asRead`, so a read charge is left as it was and `unpicked` refuses it again. The alternative
+  gate 1 described, remembering which items `payJointly` moved from `not-shared`, would not
+  cover an item the person unchecked while paid jointly, which lg-91 also returns to Mine.
+  Red before green, with the one line `!item.asRead &&` mutated to `true &&` and restored
+  (`cp` from the scratch copy): `npx vitest run tools/ledger/web/test/receipts.test.tsx`
+  gives `Tests 2 failed | 59 passed (61)`, both `a read charge to nobody|the payer is still
+  unpicked after the joint card and back to my own` with `expected 'Mine' to be 'Whose?'`;
+  unmutated, `Tests 61 passed (61)`. lg-91's `an item left as Mine names nobody once paid
+  jointly, and is Mine again on my own card` passes in both, and a new test pins that an
+  item picked on the joint card is Mine again.
+- **Built, low 2 (the refusal's words).** `UNPICKED_CHARGE` now reads "the receipt's charge
+  for it names no other member of the household", true for a departed member, a name the books
+  never held, the payer and nobody. The records quoted in the build entry carry the old words;
+  they are the readings at `b09aadd2`. Test: `a refusal's words are true for a name the books
+  never held`, which also pins that the words say neither `has left` nor `to nobody`.
