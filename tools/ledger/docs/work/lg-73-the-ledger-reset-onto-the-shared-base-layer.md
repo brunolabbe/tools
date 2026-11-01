@@ -137,3 +137,9 @@ Choices the brief did not make. Per-row buttons that repeat down a list (Inbox's
 - `E2E_PORT=8108 npx playwright test -c tools/ledger/playwright.config.ts layout.spec.ts`: 28 of 28 at the base (exit 0) and 28 of 28 at the head (exit 0). lg-70's cards-apart and gridline cases are among them.
 - `npx vitest run packages/ui tools/ledger/web`: 32 files, 408 of 408.
 - `npm run check`: exit 0.
+
+**Done when 1, red to green.** With `button { color: red; }` and `.shell { padding: 0; }` appended to the ledger's `styles.css` (code at `8c035ce4`, restored with `git checkout 8c035ce4 -- <file>`), `npx vitest run packages/ui/test/base.test.ts` fails `a moved tool declares none of the base's selectors in its own styles.css`, naming `ledger/web/src/styles.css declares \`button\``and`... \`.shell\``: 1 failed, 10 passed. Restored: 11 of 11. As repo-130's Log records, the guard matches selector text exactly, so `button.primary { … }` would not fail it.
+
+**Fold-ins.** None taken. `packages/ui/test/base.test.ts`'s `MOVED` line is the one dl-135 will change next; the conflict is dl-135's, as the dispatch said.
+
+`npm test -- --project ledger` at `8c035ce4`: 99 files, 2133 of 2133.
