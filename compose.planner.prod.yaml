@@ -103,12 +103,19 @@ services:
       # fails on its first run, as a named travel-time gap on somebody's plan.
 
       # --- The one that costs money once it is real -----------------------
-      # `scripted` is the Dockerfile's default and is restated here because this
-      # is the file an operator reads before changing it. A real provider means
-      # outbound egress and an API key, and an endpoint that is reachable
+      # `scripted` is the Dockerfile's default and stays this file's unless the
+      # host's `.env` sets PLANNER_MODEL_PROVIDER: a real model is a deliberate
+      # act per deployment, and this is the line it is made on. A real provider
+      # means outbound egress and an API key, and an endpoint that is reachable
       # without a login is then a stranger spending a token budget:
       # `MAX_OUTPUT_TOKENS` caps one reply and nothing caps how many.
-      MODEL_PROVIDER: "scripted"
+      MODEL_PROVIDER: "${PLANNER_MODEL_PROVIDER:-scripted}"
+      # The key, from the host's `.env`. The fragment names the variable and
+      # never holds the value, as the downloader's does for its Turnstile
+      # secret. Passing it changes nothing on its own: `scripted` ignores it.
+      # Its own name rather than a bare ANTHROPIC_API_KEY, so the planner and
+      # the ledger can spend from separate keys.
+      ANTHROPIC_API_KEY: "${PLANNER_ANTHROPIC_API_KEY:-}"
 
     # A disk guard, added by repo-125. Docker's `json-file` driver keeps every
     # line forever unless told otherwise, so an uncapped log grows until the disk

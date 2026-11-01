@@ -1348,22 +1348,32 @@ model is a deliberate act per deployment, not something a host inherits.
 the first one, Anthropic's. A real provider also means outbound egress from the
 host, which nothing else on this page needs.
 
-| Variable            | Value                         | Required                                     |
-| ------------------- | ----------------------------- | -------------------------------------------- |
-| `MODEL_PROVIDER`    | `anthropic`                   | yes                                          |
-| `ANTHROPIC_API_KEY` | the key                       | yes — **a secret**, see below                |
-| `MODEL`             | `claude-sonnet-5-5` (default) | no                                           |
-| `MODEL_EFFORT`      | `low` (default)               | no — `low`, `medium`, `high`, `xhigh`, `max` |
-| `MODEL_TIMEOUT_MS`  | `120000` (default)            | no — per attempt                             |
-| `MAX_OUTPUT_TOKENS` | `8000` (default)              | no — see the budget trap below               |
+| Variable                              | Value                         | Required                                     |
+| ------------------------------------- | ----------------------------- | -------------------------------------------- |
+| `PLANNER_MODEL_PROVIDER` in `.env`    | `anthropic`                   | yes                                          |
+| `PLANNER_ANTHROPIC_API_KEY` in `.env` | the key                       | yes — **a secret**, see below                |
+| `MODEL`                               | `claude-sonnet-5-5` (default) | no                                           |
+| `MODEL_EFFORT`                        | `low` (default)               | no — `low`, `medium`, `high`, `xhigh`, `max` |
+| `MODEL_TIMEOUT_MS`                    | `120000` (default)            | no — per attempt                             |
+| `MAX_OUTPUT_TOKENS`                   | `8000` (default)              | no — see the budget trap below               |
 
 **The key is a secret, and it never goes in a compose file that is checked in.**
-Put it in the host's `.env` beside `COMPOSE_FILE`, and pass it through from an
-override file that also stays on the host — `ANTHROPIC_API_KEY:
-${ANTHROPIC_API_KEY}` and `MODEL_PROVIDER: "anthropic"` under the `planner`
-service's `environment`, in a file listed after `compose.planner.prod.yaml` in
-`COMPOSE_FILE` so its values win. The service reads the key once at boot and
-logs the provider and the model, never the key.
+Put both in the host's `.env` beside `COMPOSE_FILE`:
+
+```dotenv
+PLANNER_MODEL_PROVIDER=anthropic
+PLANNER_ANTHROPIC_API_KEY=sk-ant-...
+```
+
+`compose.planner.prod.yaml` passes them to the container as `MODEL_PROVIDER` and
+`ANTHROPIC_API_KEY`, the way `compose.downloader.prod.yaml` passes the Turnstile
+secret: the fragment names the variable, never its value. Unset, the provider is
+`scripted` and the key is blank, which `scripted` never reads. The key has the
+planner's own name so the planner and the ledger can spend from separate keys.
+The other rows are not passed through; a host that changes one does it in an
+override file listed after `compose.planner.prod.yaml` in `COMPOSE_FILE`. The
+service reads the key once at boot and logs the provider and the model, never
+the key.
 
 **Both mistakes refuse to boot rather than degrade.** `MODEL_PROVIDER=anthropic`
 with no `ANTHROPIC_API_KEY` stops the process naming the variable, and so does
