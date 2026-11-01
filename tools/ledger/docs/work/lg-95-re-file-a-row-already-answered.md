@@ -3,7 +3,7 @@ id: lg-95
 tool: ledger
 title: Re-file a bank row whose person and bucket were already answered
 kind: work-package
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -37,9 +37,9 @@ So a `manual`, `accepted` or `rule` answer is fixed for good unless someone call
 the API by hand. The spending category is a different, per-row override that can
 already be changed, and it is out of scope here.
 
-## Decision — open
+## Decision — answered 2026-11-01 by the owner
 
-**1. open — what happens when the row falls inside a period that is already
+**1. answered 2026-11-01 by the owner: allow it, caught up at the next close — what happens when the row falls inside a period that is already
 closed.** A recorded settlement is never recomputed; the next close is cumulative
 (`api/src/periods.ts` header). Two reads already follow the current answer:
 `depositMatches` recomputes which closed period a buffer deposit settles "so a
@@ -57,7 +57,18 @@ numbers, and the API accepts it today without a check.
   `@ledger/contract`, a contract change that lg-4's design did not anticipate. It
   also leaves a wrong answer from a past period with no fix at all.
 
-**2. open — where the control lives.**
+**Answer to 1.** Allow the re-file. A row in the open period needs nothing
+special: the open period's settlement (`settlementFor` in `api/src/periods.ts`) is
+computed on every read from current answers, so it moves at once. For a row in a
+closed period, the recorded settlement stays what was actually paid, and the next
+close catches it up: `cumulativeHouseholdSettlement` recomputes every period from
+`bufferRows`, which reads `current_classifications`. History says the row is in a
+closed period and that the next close will carry the correction. The owner first
+answered that the settlement should move, then clarified they meant the current
+one. Rewriting a recorded settlement was offered and declined: it would break
+§9's never-edit rule and stop matching the money people actually moved.
+
+**2. answered 2026-11-01 by the owner: a, on History — where the control lives.**
 
 - **a. On History (recommended).** History is where a person searches for the row
   they got wrong. Each row gets a "Change who and what" action that opens the same
@@ -78,7 +89,7 @@ Once the decisions are answered:
 2. Show the row's current answer: person and bucket through `answerLabel` in
    `web/src/labels.ts`, and its source (a rule, a person, or history). Then send a change through `classifyRow` in
    `web/src/api/inbox.ts`. Re-read the list afterwards; do not patch it locally.
-3. Apply decision 1. For option a, the screen needs to know whether the row's date
+3. Apply decision 1. To say the row is in a closed period, the screen needs to know whether the row's date
    falls inside a closed period. Find out whether `GET /api/rows` (`StoredRow`)
    carries enough to tell. If it does not, adding a field is a contract change, so
    stop and say so rather than editing the contract.
@@ -99,3 +110,4 @@ Once the decisions are answered:
 
 - 2026-11-01 — Filed at the owner's request after they mis-filed a row and found no
   way to change it. They first asked for it to be built, then chose to file it.
+- 2026-11-01 — The owner answered both decisions (see above); status moved to `ready`.
