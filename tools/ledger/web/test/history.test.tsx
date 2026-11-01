@@ -9,13 +9,17 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
-import type { RowsQuery, StoredRow } from "@ledger/contract";
+import type { ClosedPeriod, RowsQuery, StoredRow } from "@ledger/contract";
+import { classifyRow } from "../src/api/inbox.ts";
+import { fetchPeriods } from "../src/api/periods.ts";
 import { fetchRows } from "../src/api/rows.ts";
 import { fetchPeople } from "../src/api/rules.ts";
 import { fetchSpendingCategories } from "../src/api/spending.ts";
-import { History } from "../src/history/History.tsx";
+import { History, closedPeriodOf } from "../src/history/History.tsx";
 
 vi.mock("../src/api/rows.ts", () => ({ fetchRows: vi.fn() }));
+vi.mock("../src/api/inbox.ts", () => ({ classifyRow: vi.fn() }));
+vi.mock("../src/api/periods.ts", () => ({ fetchPeriods: vi.fn() }));
 vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
 vi.mock("../src/api/spending.ts", () => ({ fetchSpendingCategories: vi.fn() }));
 
@@ -51,6 +55,7 @@ beforeEach(() => {
     },
   ]);
   vi.mocked(fetchRows).mockResolvedValue({ rows: [], total: 0 });
+  vi.mocked(fetchPeriods).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -299,4 +304,146 @@ test("a Show more answer that arrives after a filter change is not appended to t
   expect(screen.getByText("2 rows match.")).toBeTruthy();
   const list = screen.getByRole("list", { name: "Bank rows" });
   expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+});
+
+// lg-95: a row a person already answered can be filed again, from the history.
+
+/** A closed period as the API lists it; only the span matters to this screen. */
+function closed(start: string | null, end: string): ClosedPeriod {
+  return { id: 1, start, end } as ClosedPeriod;
+}
+
+test("a row answered by a person is filed again from the history, the list is read again, and no undo is offered (lg-95)", async () => {
+  vi.mocked(fetchRows)
+    .mockResolvedValueOnce({
+      rows: [
+        row(7, "Virement Sam", 40000, {
+          classification: { bucket: "current-expenses", personId: "alex", source: "manual" },
+        }),
+      ],
+      total: 1,
+    })
+    .mockResolvedValue({
+      rows: [
+        row(7, "Virement Sam", 40000, {
+          classification: { bucket: "mortgage", personId: "sam", source: "manual" },
+        }),
+      ],
+      total: 1,
+    });
+  vi.mocked(classifyRow).mockResolvedValue({
+    id: 9,
+    rowId: 7,
+    bucket: "mortgage",
+    personId: "sam",
+    ruleId: null,
+    source: "manual",
+    classifiedAt: "2026-11-01T00:00:00.000Z",
+    classifiedBy: "alex",
+  });
+  render(<History />);
+
+  const item = (await screen.findByRole("list", { name: "Bank rows" })).querySelector("li");
+  if (item === null) throw new Error("no row listed");
+  expect(item.textContent).toContain("alex · Current expenses");
+  expect(item.textContent).toContain("answered by a person");
+
+  fireEvent.click(within(item).getByRole("button", { name: "Change who and what" }));
+  fireEvent.change(within(item).getByLabelText("Belongs to"), { target: { value: "sam" } });
+  fireEvent.change(within(item).getByLabelText("Bucket"), { target: { value: "mortgage" } });
+  fireEvent.click(within(item).getByRole("button", { name: "Save" }));
+
+  await waitFor(() => expect(classifyRow).toHaveBeenCalledTimes(1));
+  expect(classifyRow).toHaveBeenCalledWith({ rowId: 7, personId: "sam", bucket: "mortgage" });
+  // The list is what the server answered the second time, not the first one patched.
+  await waitFor(() => expect(asked()).toHaveLength(2));
+  expect(asked().at(-1)).toEqual({ offset: 0, limit: 50 });
+  const list = screen.getByRole("list", { name: "Bank rows" });
+  await waitFor(() => expect(list.textContent).toContain("sam · Mortgage"));
+  expect(list.textContent).not.toContain("alex · Current expenses");
+  // A row in the open period is not told anything about a close.
+  expect(screen.getByRole("status").textContent).toBe("Virement Sam is now sam · Mortgage.");
+  // The earlier answer is kept by the API; the screen offers no way to take this one back.
+  expect(screen.queryByRole("button", { name: /undo|revert|restore/iu })).toBeNull();
+  expect(screen.queryByRole("group")).toBeNull();
+});
+
+test("a row in a closed period says what the change reaches, and the next close carries it (lg-95)", async () => {
+  vi.mocked(fetchPeriods).mockResolvedValue([closed(null, "2026-09-30")]);
+  vi.mocked(fetchRows).mockResolvedValue({
+    rows: [
+      row(1, "Old row", -2500, { date: "2026-09-20" }),
+      row(2, "New row", -900, { date: "2026-10-04" }),
+    ],
+    total: 2,
+  });
+  vi.mocked(classifyRow).mockResolvedValue({
+    id: 9,
+    rowId: 1,
+    bucket: "mortgage",
+    personId: null,
+    ruleId: null,
+    source: "manual",
+    classifiedAt: "2026-11-01T00:00:00.000Z",
+    classifiedBy: "alex",
+  });
+  render(<History />);
+
+  const [old, recent] = within(await screen.findByRole("list", { name: "Bank rows" })).getAllByRole(
+    "listitem",
+  );
+  if (old === undefined || recent === undefined) throw new Error("two rows expected");
+
+  fireEvent.click(within(recent).getByRole("button", { name: "Change who and what" }));
+  expect(within(recent).queryByText(/closed period/u)).toBeNull();
+  fireEvent.click(within(recent).getByRole("button", { name: "Cancel" }));
+
+  fireEvent.click(within(old).getByRole("button", { name: "Change who and what" }));
+  const said = within(old).getByText(/closed period/u).textContent;
+  expect(said).toContain("from the first row to 2026-09-30");
+  expect(said).toContain("recorded for it stays as it was paid");
+  expect(said).toContain("the next close carries the correction");
+
+  fireEvent.change(within(old).getByLabelText("Bucket"), { target: { value: "mortgage" } });
+  fireEvent.click(within(old).getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(classifyRow).toHaveBeenCalledWith({ rowId: 1, personId: null, bucket: "mortgage" }),
+  );
+  expect((await screen.findByRole("status")).textContent).toBe(
+    "Old row is now Joint · Mortgage. The next close will carry this correction.",
+  );
+});
+
+test("a refused change is said and leaves the control open (lg-95)", async () => {
+  vi.mocked(fetchRows).mockResolvedValue({ rows: [row(1, "Épicerie", -500)], total: 1 });
+  vi.mocked(classifyRow).mockRejectedValue(new AppError("UNREACHABLE", "The ledger API is down."));
+  render(<History />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "Change who and what" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect((await screen.findByRole("alert")).textContent).toContain("down");
+  expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+  expect(asked()).toHaveLength(1);
+});
+
+test("a row not filed yet is not offered a change here; the inbox files it (lg-95)", async () => {
+  vi.mocked(fetchRows).mockResolvedValue({
+    rows: [row(1, "Café du coin", -500, { classification: null })],
+    total: 1,
+  });
+  render(<History />);
+
+  await screen.findByText("Café du coin");
+  expect(screen.queryByRole("button", { name: "Change who and what" })).toBeNull();
+});
+
+test("closedPeriodOf holds a period's first and last day, and the first period has no start (lg-95)", () => {
+  const periods = [closed("2026-10-01", "2026-10-31"), closed(null, "2026-09-30")];
+  expect(closedPeriodOf("2026-09-30", periods)?.end).toBe("2026-09-30");
+  expect(closedPeriodOf("2026-10-01", periods)?.end).toBe("2026-10-31");
+  expect(closedPeriodOf("2026-10-31", periods)?.end).toBe("2026-10-31");
+  expect(closedPeriodOf("2000-01-01", periods)?.end).toBe("2026-09-30");
+  expect(closedPeriodOf("2026-11-01", periods)).toBeNull();
+  expect(closedPeriodOf("2026-11-01", [])).toBeNull();
 });
