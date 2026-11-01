@@ -1162,3 +1162,51 @@ test("the receipt queue fits a phone and a desktop, kept and then read", async (
   await expect(page.getByRole("button", { name: /^Épicerie du Marché Central/u })).toHaveCount(4);
   await fitsBothWidths(page, testInfo, "Receipt queue (read)");
 });
+
+/**
+ * lg-92 gate 1: the list of photos left out. Its names are whatever the phone
+ * called the files, so each is 80 characters with no space in it: one over the
+ * size limit and one whose upload the server refuses, beside one that is kept.
+ */
+test("the receipt queue fits a phone and a desktop with photos left out, by long names", async ({
+  page,
+}, testInfo) => {
+  let uploads = 0;
+  await page.route("**/api/receipts", (route) => {
+    uploads += 1;
+    if (uploads === 2) {
+      return route.fulfill({
+        status: 500,
+        json: { error: { code: "INTERNAL", message: "The photo was not kept.", retryable: false } },
+      });
+    }
+    return route.fulfill({
+      status: 201,
+      json: {
+        id: 950 + uploads,
+        mediaType: "image/png",
+        bytes: PHOTO.length,
+        uploadedAt: "2026-10-05T15:00:00.000Z",
+        uploadedBy: "alex",
+        reader: "claude-haiku-5-5",
+      },
+    });
+  });
+  const long = (word: string): string => `${word}_`.repeat(20).slice(0, 76) + ".png";
+  await openTab(page, "Receipt");
+  await page.getByLabel("Choose several photos").setInputFiles([
+    { name: long("kept"), mimeType: "image/png", buffer: PHOTO },
+    { name: long("refused_by_the_server"), mimeType: "image/png", buffer: PHOTO },
+    // One byte over the limit: `MAX_RECEIPT_PHOTO_BYTES`, 7 MiB.
+    {
+      name: long("over_the_size_limit"),
+      mimeType: "image/png",
+      buffer: Buffer.alloc(7 * 1024 * 1024 + 1),
+    },
+  ]);
+  await expect(
+    page.getByRole("list", { name: "Photos left out" }).getByRole("listitem"),
+  ).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Read all" })).toBeVisible();
+  await fitsBothWidths(page, testInfo, "Receipt queue (left out)");
+});

@@ -201,7 +201,9 @@ export function useReceiptQueue(): ReceiptQueue {
     add,
     readAll: () =>
       void readThese(() =>
-        current.current.filter((photo) => photo.phase === "kept").map((photo) => photo.key),
+        current.current
+          .filter((photo) => photo.phase === "kept" && !typedIn(photo))
+          .map((photo) => photo.key),
       ),
     retry: (key) => void readThese(() => [key]),
     markFiled: (key, part) => {
@@ -213,6 +215,14 @@ export function useReceiptQueue(): ReceiptQueue {
       setRefused([]);
     },
   };
+}
+
+/**
+ * A photo with a receipt typed in and filed from it, never read: it is handled,
+ * so **Read all** spends no read on it, and the count of photos to read leaves it out.
+ */
+function typedIn(photo: QueuedPhoto): boolean {
+  return photo.read === null && photo.filed.length > 0;
 }
 
 /** A receipt as its button reads. */
@@ -235,9 +245,10 @@ export interface ReceiptQueueViewProps {
 export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactElement {
   const { id, queue, said, problem, onOpen, onChoose, onStartOver } = props;
   const { photos, refused, reading } = queue;
-  const unread = photos.filter((photo) => photo.phase === "kept");
+  const unread = photos.filter((photo) => photo.phase === "kept" && !typedIn(photo));
   const uploading = photos.some((photo) => photo.phase === "uploading");
   const readCount = photos.filter((photo) => photo.phase === "read").length;
+  const toRead = photos.filter((photo) => !typedIn(photo)).length;
   // All photos of one server share one reader; the first kept one names it.
   const reader = photos.find((photo) => photo.receipt !== null)?.receipt?.reader ?? null;
   const settled = photos.length > 0 && !uploading;
@@ -260,7 +271,7 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
       )}
       {(reading || readCount > 0) && (
         <output aria-label="Reading progress">
-          {String(readCount)} of {String(photos.length)} read
+          {String(readCount)} of {String(toRead)} read
         </output>
       )}
       <ul className="queue" aria-label="The photos">
@@ -268,7 +279,25 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
           <li key={photo.key}>
             <span className="name">{photo.name}</span>
             {photo.phase === "uploading" && <span className="muted hint">Keeping the photo…</span>}
-            {photo.phase === "kept" && (
+            {typedIn(photo) && (
+              <>
+                <span className="muted hint">
+                  {String(photo.filed.length)} {photo.filed.length === 1 ? "receipt" : "receipts"}{" "}
+                  typed in from this photo, filed.
+                </span>
+                {!reading && (
+                  <div className="actions">
+                    <button
+                      type="button"
+                      onClick={() => onOpen(photo, nextPart(photo.filed), null)}
+                    >
+                      Type it in
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+            {photo.phase === "kept" && !typedIn(photo) && (
               <>
                 <span className="muted hint">Kept, not read yet.</span>
                 {!reading && (
@@ -286,14 +315,18 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
                 Waiting {String(photo.waitSec)} s: reads are limited to a few a minute.
               </span>
             )}
-            {photo.phase === "failed" && (
+            {photo.phase === "failed" && !typedIn(photo) && (
               <>
                 <span className="bad hint">The read failed: {photo.message}</span>
                 <div className="actions">
                   <button type="button" disabled={reading} onClick={() => queue.retry(photo.key)}>
                     Try again
                   </button>
-                  <button type="button" disabled={reading} onClick={() => onOpen(photo, 1, null)}>
+                  <button
+                    type="button"
+                    disabled={reading}
+                    onClick={() => onOpen(photo, nextPart(photo.filed), null)}
+                  >
                     Type it in
                   </button>
                 </div>
@@ -365,7 +398,8 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
         />
       </label>
       <div className="actions">
-        <button type="button" disabled={reading} onClick={onStartOver}>
+        {/* Not while photos go up: the uploads would finish into a queue that was cleared. */}
+        <button type="button" disabled={reading || uploading} onClick={onStartOver}>
           Start over
         </button>
       </div>
