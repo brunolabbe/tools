@@ -542,9 +542,11 @@ function isSummary(plan: AccountPlan, sheet: Sheet, row: number): boolean {
   return plan.summary.labels.some((start) => key.startsWith(start));
 }
 
-/** A formula that adds rows up: a summing function, or any range. */
-const ADDS_UP =
-  /\b(?:SUM|SUMIFS?|SUBTOTAL|SUMPRODUCT|AGGREGATE)\s*\(|\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+/iu;
+/** A formula that adds rows up. A range alone does not: `VLOOKUP(D5,A1:B20,2)` reads one value. */
+const ADDS_UP = /\b(?:SUM|SUMIFS?|SUBTOTAL|SUMPRODUCT|AGGREGATE)\s*\(/iu;
+
+/** Quoted text and quoted sheet names, where `SUM(` is a word and not a call. */
+const QUOTED = /"[^"]*"|'[^']*'/gu;
 
 /**
  * A total wherever it sits, whatever the layout says of summaries (lg-86): a
@@ -557,7 +559,7 @@ function isTotal(sheet: Sheet, row: number, read: AmountRead): boolean {
   if (read.kind !== "amount") return false;
   return read.figures.every((figure) => {
     const formula = cellAt(sheet, row, figure.column)?.formula;
-    return formula !== null && formula !== undefined && ADDS_UP.test(formula);
+    return formula !== null && formula !== undefined && ADDS_UP.test(formula.replace(QUOTED, ""));
   });
 }
 

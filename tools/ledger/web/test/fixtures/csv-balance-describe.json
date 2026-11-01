@@ -42,7 +42,7 @@
   },
   "ok": true,
   "problems": [],
-  "report": "Dry run: nothing will be written.\n\nRows\n  movements read  40\n  skipped         0\n  summaries       0\n\nPlacement\n  first import: no history is stored\n\nVerifications\n  ok      The running balance follows from row to row through all 40 movements, from the 2512.10 the first row implies.\n\nEvery verification held. This was a dry run: nothing was written. Confirm to store the rows.\n",
+  "report": "Dry run: nothing will be written.\n\nRows\n  movements read  40\n  skipped         0\n\nPlacement\n  first import: no history is stored\n\nVerifications\n  ok      The running balance follows from row to row through all 40 movements, from the 2512.10 the first row implies.\n\nEvery verification held. This was a dry run: nothing was written. Confirm to store the rows.\n",
   "confirmation": {
     "dateColumn": {
       "column": "A",

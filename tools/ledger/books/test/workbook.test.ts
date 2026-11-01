@@ -1035,4 +1035,22 @@ describe("a total with no date, wherever it is", () => {
     expect(reading.problems).toEqual([]);
     expect(reading.summaries).toEqual([{ sheet: "2022", row: 1 }]);
   });
+
+  test("a formula that reads one value, or names SUM only in text, is still money with no date", () => {
+    const rows: Input[][] = [
+      total("VLOOKUP(D5,Prix!A1:B20,2,FALSE)"),
+      total('IF(D2="SUM(",1,2)'),
+      total("'SUM(2022)'!G5"),
+      header,
+      ...movements,
+    ];
+    const reading = readWorkbook([sheet("2022", rows), ACCUEIL], { people, layout: noSummary });
+
+    expect(reading.problems).toEqual([
+      "2022!B1: an amount with no date.",
+      "2022!B2: an amount with no date.",
+      "2022!B3: an amount with no date.",
+    ]);
+    expect(reading.summaries).toEqual([]);
+  });
 });
