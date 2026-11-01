@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0](https://github.com/brunolabbe/tools/compare/ledger-v0.5.0...ledger-v0.6.0) (2026-11-01)
+
+
+### Features
+
+* **ledger:** a Shared checkbox on each receipt item, and a select of whose it is (lg-90) ([#724](https://github.com/brunolabbe/tools/issues/724)) ([8b1a88e](https://github.com/brunolabbe/tools/commit/8b1a88e06c1b79ff1531760acf525bbb435ff7ea))
+* **ledger:** fold a rebate into the item it reduces, wherever it is printed (lg-89) ([#717](https://github.com/brunolabbe/tools/issues/717)) ([25ef6ac](https://github.com/brunolabbe/tools/commit/25ef6ac718c27beb048895759a17451961707a05))
+* **ledger:** one receipt queue for every photo, its sources as icon tiles ([#728](https://github.com/brunolabbe/tools/issues/728)) ([104f68f](https://github.com/brunolabbe/tools/commit/104f68f43917ff22a6301d59860b5674e4e672f5))
+* **ledger:** reset the ledger onto the shared base layer, its buttons quiet by default (lg-73) ([#726](https://github.com/brunolabbe/tools/issues/726)) ([4933ca3](https://github.com/brunolabbe/tools/commit/4933ca3de4965f53c891f5670641dfa37c065c66))
+* **ledger:** upload several receipt photos at once and confirm them from a queue (lg-92) ([#719](https://github.com/brunolabbe/tools/issues/719)) ([0158ae6](https://github.com/brunolabbe/tools/commit/0158ae6ca4e9d34e5a0216bea4a012230d9be841))
+* **ledger:** use the shared page width, as wide as the other tools ([#713](https://github.com/brunolabbe/tools/issues/713)) ([89b1caf](https://github.com/brunolabbe/tools/commit/89b1caf268a0e178799649cf8f07e88c3ea48dd1))
+
+
+### Fixes
+
+* **ledger:** keep value-less formulas, refuse day 0, and bind the zip check to SheetJS (lg-87) ([#714](https://github.com/brunolabbe/tools/issues/714)) ([1bd9920](https://github.com/brunolabbe/tools/commit/1bd99209493e5d9307ec7fb54361590b210a0a7d))
+* **ledger:** read a total with no date as a summary wherever it is (lg-86) ([#715](https://github.com/brunolabbe/tools/issues/715)) ([e226033](https://github.com/brunolabbe/tools/commit/e22603361088a8f44a8581e83a8d084d91aac7a2))
+* **ledger:** read workbooks with SheetJS instead of exceljs, clearing six advisories (lg-84) ([#710](https://github.com/brunolabbe/tools/issues/710)) ([bac81e3](https://github.com/brunolabbe/tools/commit/bac81e33ae3baf9f8d97be1c1150c78fa63112e9))
+
 ## [0.5.0](https://github.com/brunolabbe/tools/compare/ledger-v0.4.1...ledger-v0.5.0) (2026-11-01)
 
 
