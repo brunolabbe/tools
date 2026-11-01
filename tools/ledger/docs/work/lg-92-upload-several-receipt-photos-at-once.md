@@ -104,6 +104,50 @@ If lg-90 has merged when this is built, rebase onto it, since both touch
 - **findings** · the hunt returned 7; 5 carried, 2 dropped.
 - NFR: security ✓ (web only; no new route; a read happens only on the tap that names the model) · performance ✓ (reads one at a time; waits held to 1–120 s, 15 s with no number) · reliability — F2 above · maintainability — the low above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-11-01 · `0587e1d3..987a3461` (round: `12be04fc`, `987a3461`; stacked on lg-89's head, PR #717) · Opus 5.5, depth medium
+
+| Done when                                                                                 | Proof                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Three photos, three uploads, three reads one at a time after **Read all**, none before | `web/test/receipts.test.tsx` › "three photos go up one at a time and nothing is read before Read all, then three reads, one at a time (lg-92)" ✓. Red under the fan-out control (`expected 3 to be 1`)                                                                                                                         |
+| 2. A 429 with `Retry-After` delays the second read, drops nothing, reaches "3 of 3 read"  | `web/test/receipts.test.tsx` › "a 429 with Retry-After delays that read, drops nothing, and the count reaches 3 of 3 (lg-92)" ✓. Red under the fan-out control                                                                                                                                                                 |
+| 3. A read failing for another reason keeps a retry, the others read                       | `web/test/receipts.test.tsx` › "a read that fails for another reason keeps that photo with a retry and reads the rest (lg-92)" ✓                                                                                                                                                                                               |
+| 4. A photo of two receipts gives two entries; filing one marks only that one              | `web/test/receipts.test.tsx` › "a photo of two receipts gives two entries, and filing one marks only that one (lg-92)" ✓                                                                                                                                                                                                       |
+| 5. `e2e/layout.spec.ts` covers the queue at 360 and 1280 px, no horizontal page scroll    | `e2e/layout.spec.ts` › "the receipt queue fits a phone and a desktop, kept and then read" ✓ and › "the receipt queue fits a phone and a desktop with photos left out, by long names" ✓. The second is red with the selector put back to `.queue .name` ("697 px wide in a 360 px window"). ledger.yml `e2e` pass on `987a3461` |
+| 6. `npm run check`, `npm test -- --project ledger`, `npm run e2e:ledger` pass             | ci.yml `check` and `test (ubuntu-latest)` pass, ledger.yml `e2e` pass, all on `987a3461`. Locally, `npx vitest run tools/ledger/web` gave 322 of 322                                                                                                                                                                           |
+
+Gate 1's findings:
+
+- **F1 (med, Done when 5) · fixed.** Gate 1's `e2e.sh` probe, with 80-character names for an oversize photo and a failed upload, now measures `scrollWidth=360` at 360 px (749 at `0587e1d3`) and 1280 at 1280 px. The 360 px screenshot shows the names breaking inside the card. The wider `.name` selector reaches the left-out `li.name` and the queue's `span.name` in `receipts/Queue.tsx`, and nothing else. A scan of every class expression in the ledger's `web/src`, `packages/ui/src` and `index.html` (64 files, 457 expressions, string and ternary forms) found no other `name` token. `packages/ui`'s header uses `app-header__name`, which `.name` does not match. No other stylesheet declares `.name`.
+- **F2 (med) · fixed, as the owner chose (Read all skips it).** Gate 1's probes now give `[[11,1],[11,2]]` for a kept photo typed in twice (was `[[11,1],[11,1]]`). A failed photo reads "1 receipt typed in from this photo, filed." once its receipt is filed. The edge cases:
+  - A read photo with two receipts, one of them filed, is not read again: adding a photo and tapping Read all reads `[11,12]`. Its second part stays a button and files as part 2.
+  - A kept photo with a typed-in receipt is skipped by Read all, which reads `[12]`.
+  - "n of N read" leaves out exactly the typed-in photos, and nothing else. It cannot show more read than N: a read photo has `read !== null`, so it is never counted as typed in. With 4 photos, one typed in and one failed, it read "2 of 3", and "2 of 2" once the failed photo was typed in. A failed photo nobody types in still keeps the count below N, as it did at `0587e1d3`.
+- **F3 (low) · fixed.** The Log's correction says what gate 1's finding said: the header was not reachable from the screen, but its number was, through the body's `details`.
+- **F4 (low) · fixed.** "Start over" is disabled while a photo is going up. Measured:
+  - It is enabled again once the uploads settle, including when every upload fails, and in a mixed batch of a failure and a slow upload.
+  - "Add more photos" stays enabled during uploads, as before.
+  - Nothing else's `disabled` changed in the diff.
+- **F5 (low) · fixed.** I planted each mutation alone. Each turns exactly one test red, and the other 38 of 39 stay green:
+  - With the `readingNow` guard removed, "a second Read all while one is running reads nothing twice" fails (`[11,12,12]`).
+  - With `MAX_WAITS` at 1,000,000, "a photo refused five times in a row …" fails (61 calls, not 6).
+  - With the `alive` check after the sleep removed, "leaving the screen during a wait reads nothing more" fails (6 calls, not 1).
+
+  The guard test calls `readAll` twice through the hook, and that reaches the same guard the screen relies on. Gate 1's A1 probe double-taps Read all through the screen within one `act`. With the guard removed it reads `[11,12,12,13,13]` with two reads in flight at once, against `[11,12,13]` with one at the head.
+
+New in the round:
+
+- **low** · no `Done when` line depends on it · **open decision**: a photo with a typed-in receipt can no longer be read at all. The round removes "Try again" from a failed photo once one of its receipts is filed, and a kept photo with a typed-in receipt has no read control at all. Measured: the only buttons left are "Type it in", the read parts and "Start over". The owner's answer covered **Read all**, not the per-photo retry. The Log records that the retry is dropped, but not why. Nothing is lost, because "Type it in" still files the next part. Options:
+  - (a) Keep it, and say in the Log that a typed-in photo is not read again (recommended). By `ReceiptQueueView`, a read part's "filed" mark is matched to the filed parts by index. A later read's part 1 would therefore show as filed whether or not it is the receipt that was typed in.
+  - (b) Restore "Try again" on such a photo, and accept that mismatch.
+- **low** · `nfr:reliability` · if an upload stalls, "Start over" stays disabled. `uploadReceipt` passes no signal and `requestJson` sets no timeout, so the button stays disabled until the browser gives up on the request. Leaving the Receipt tab is the way out. Not measured in a browser.
+- **dropped** · the bare `.name` selector as a risk to other elements: it reaches only the two intended elements (F1 above).
+- **dropped** · whether the hook-level guard test misses the screen's path: the screen reaches the same `readThese` guard (F5 above).
+- **dropped** · "n of N" exceeding N: impossible by construction, and never seen in the measurements (F2 above).
+- **findings** · the hunt returned 5; 2 carried, 3 dropped.
+- NFR: security n/a (no route, no request added; a typed-in photo now sends fewer reads) · performance ✓ · reliability — the low above · maintainability ✓ (each new test is red under its own mutation). Layout: left-out state at 360 and 1280 px measured and screenshot read.
+
 ## Log
 
 2026-11-01, builder (Sonnet 5.5), branch `lg-92-multi-photo-queue`, stacked on
