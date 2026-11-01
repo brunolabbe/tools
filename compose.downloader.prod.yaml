@@ -163,6 +163,11 @@ services:
       TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:-}"
       TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:-}"
 
+      # Whether a page's age gate may be pressed on the user's behalf. That
+      # press is an attestation, so it is off unless the host's `.env` turns it
+      # on; with it off such a page fails AGE_CONFIRMATION_REQUIRED.
+      ENABLE_AGE_CONFIRMATION: "${DOWNLOADER_ENABLE_AGE_CONFIRMATION:-false}"
+
       # --- Limits for traffic that is not just you (dl-52) -----------------
       # Every value below is set even where it equals `API_DEFAULTS`
       # (`tools/downloader/api/src/config.ts`) or what `compose.downloader.yaml`

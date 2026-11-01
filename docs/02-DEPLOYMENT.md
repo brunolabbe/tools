@@ -795,6 +795,16 @@ ever scaled out, are in
 
 What follows applies to a host that merges `compose.downloader.prod.yaml`.
 
+**The container never reads `tools/downloader/.env`.** That file is for
+`npm run dev:downloader`. The deployed downloader takes the `Dockerfile`'s
+defaults, the values `compose.downloader.prod.yaml` sets, and from the host's
+`.env` only the variables that fragment names: `REQUIRE_HUMAN_CHECK`, the two
+`TURNSTILE_*` keys, and `DOWNLOADER_ENABLE_AGE_CONFIRMATION`, which turns on
+pressing a page's age gate (off by default, because the press attests on the
+user's behalf). Anything else, the stricter production rate limits included, is
+changed in an override file listed after `compose.downloader.prod.yaml` in
+`COMPOSE_FILE`.
+
 ### Things that will bite you
 
 **On a host that keeps the downloader behind Access, an expiring session looks
