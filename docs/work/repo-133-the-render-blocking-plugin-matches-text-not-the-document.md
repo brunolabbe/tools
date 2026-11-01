@@ -341,8 +341,7 @@ needs the most judgement. Parse5 would be `standard`; accepting R1 would be
    the ratio between the last two sizes: a one-pass scan 1.8, parse5 with
    `sourceCodeLocationInfo` 3.2, an `indexOf` scan that forgets a missing closer
    (quadratic) 15.1, and the landing 16.9. One run each, so eight is a direction to
-   re-run on the real remedy. The real remedies are unmeasured. Under the option
-   named "Accept R1", Build step 5 rewords this item.
+   re-run on the real remedy. The real remedies are unmeasured.
 4. The default-setup `CodeQL` check is green on the pull request's head.
 5. `npm run check` passes.
 
@@ -429,3 +428,15 @@ needs the most judgement. Parse5 would be `standard`; accepting R1 would be
   table's Expected cells, which say "remote unmarked; as Decision 2 records", so
   no cell was edited. This is the expected verdict only; no tree was built or
   probed in this commit.
+- 2026-11-01 — Owner's answer at intake, recorded before any source change.
+  Question: "repo-133's Done when 3 still carries the clause 'Under the option
+  named "Accept R1", Build step 5 rewords this item', although you chose parse5.
+  Its bound ('eight is a direction to re-run on the real remedy') was never
+  measured on parse5. How should this be handled?" Options: (1) strike the
+  clause and measure parse5: the builder deletes the dead R1 clause and runs the
+  probe on the parse5 remedy, and the gate grades the bound against that
+  measurement; (2) leave the line as written: the gate grades the line as it
+  stands. The owner chose (1), the orchestrator's recommendation. Done when 3
+  loses exactly one clause, the sentence `Under the option named "Accept R1",
+  Build step 5 rewords this item.`; nothing else in the line changed. The figure
+  the bound is graded against is recorded in the round's Log entry below.
