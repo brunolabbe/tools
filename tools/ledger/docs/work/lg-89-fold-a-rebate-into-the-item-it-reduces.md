@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: hard
+awaiting: Done when 7 — the owner's paid read of the three rebate fixtures (`read-rebate-fixtures.ts --paid`) after the merge and `npm run build`, its three verdict lines recorded in a dated Log entry
 ---
 
 # lg-89 — Fold a rebate into the item it reduces, wherever it is printed
