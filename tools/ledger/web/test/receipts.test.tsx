@@ -414,7 +414,7 @@ test("unchecking an item leaves it out, picking a person charges it, and checkin
   // Unchecked, it is Mine: it stays with whoever paid, and the split moves by its cost.
   leaveOut("BIERE 6X355");
   expect(sharedBox("BIERE 6X355").checked).toBe(false);
-  expect(whoseSelect("BIERE 6X355").value).toBe("mine");
+  expect(whoseSelect("BIERE 6X355").value).toBe("");
   expect(shared()).toBe("Not shared 15.54 $ · sam's 0.00 $ · Shared 9.22 $");
 
   // A person is the choice made on purpose, and the charge moves with it.
@@ -429,7 +429,7 @@ test("unchecking an item leaves it out, picking a person charges it, and checkin
 
   // Unchecked again, it starts on Mine and not on the person picked before.
   leaveOut("BIERE 6X355");
-  expect(whoseSelect("BIERE 6X355").value).toBe("mine");
+  expect(whoseSelect("BIERE 6X355").value).toBe("");
 });
 
 test("files the items as marked, on what the card was charged", async () => {
@@ -572,9 +572,9 @@ test("among three people, an unchecked item names whose it is from one select (l
   leaveOut("BIERE 6X355");
   // Mine first, then each of the others; nobody is charged until one is picked.
   const beer = whoseSelect("BIERE 6X355");
-  expect([...beer.options].map((option) => option.value)).toEqual(["mine", "casey", "sam"]);
+  expect([...beer.options].map((option) => option.value)).toEqual(["", "casey", "sam"]);
   expect(optionsOf(beer)).toEqual(["Mine", "casey", "sam"]);
-  expect(beer.value).toBe("mine");
+  expect(beer.value).toBe("");
   fireEvent.change(beer, { target: { value: "sam" } });
   expect(beer.value).toBe("sam");
   leaveOut("SAVON");
@@ -787,7 +787,7 @@ test.each([
 
     // The read item is someone else's, which the select says; Mine moves it off, and then it files, charging nobody.
     expect(whoseSelect("BIERE 6X355").value).toBe("");
-    fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "mine" } });
+    fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
     await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
     const filed = vi.mocked(fileReceipt).mock.calls[0]?.[1];
@@ -1189,7 +1189,7 @@ test.each([
 
     expect(optionsOf(whoseSelect("SAVON"))).toEqual(offered);
     // Mine is the start; a person is only ever picked.
-    expect(whoseSelect("SAVON").value).toBe("mine");
+    expect(whoseSelect("SAVON").value).toBe("");
     // Only the unchecked item carries one.
     expect(screen.getAllByLabelText(/^Whose is/u)).toHaveLength(1);
   },
@@ -1274,4 +1274,18 @@ test("two taxable items can show a cent more apart than the split takes off toge
       .map((node) => node.textContent),
   ).toEqual(["Takes off 15.54 $", "Takes off 5.74 $"]);
   expect(shared()).toBe("Not shared 21.27 $ · sam's 0.00 $ · Shared 3.49 $");
+});
+
+// The Mine choice's value is one no person id can take: the contract's
+// `chargedTo` is `z.string().min(1).max(100)`, so "" is refused there. A member
+// whose id was the sentinel itself was filed `not-shared` (lg-90's gate 1).
+test("a member whose person id is mine is charged as theirs, not kept as Mine (lg-90)", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "mine", "sam"]));
+  await readBasket();
+  leaveOut("BIERE 6X355");
+  fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "mine" } });
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  const filed = vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items[1];
+  expect([filed?.share, filed?.chargedTo]).toEqual(["theirs", "mine"]);
 });

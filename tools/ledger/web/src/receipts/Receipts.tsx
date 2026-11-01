@@ -110,8 +110,13 @@ type TextField = Exclude<keyof Draft, "items">;
 
 const NOBODY_ELSE = "There is nobody else in the household to charge an item to.";
 
-/** The `Whose is` choice that keeps an item with whoever paid (`not-shared`). */
-const MINE = "mine";
+/**
+ * The `Whose is` choice that keeps an item with whoever paid (`not-shared`). The
+ * empty string, because it is a value no person id can take: the contract's
+ * `chargedTo` is `z.string().min(1).max(100)`, and a member whose id was a word
+ * here was filed Mine when picked (lg-90's gate 1).
+ */
+const MINE = "";
 
 let lastItemKey = 0;
 

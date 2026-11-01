@@ -142,3 +142,12 @@ gate 1. Each answer, with its options and the one chosen:
   fix the first only; record all three. **Chosen: fix the first, reword the
   second, record the third.** The third (the unlabelled selects) stays
   recorded and unfixed.
+
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the first low —
+  "MINE shares the value space of person ids". The Mine option's value is now
+  the empty string, which the contract's `chargedTo` (`z.string().min(1).max(100)`
+  in `contract/src/receipts.ts`) refuses, so no person id can take it. Proof:
+  `receipts.test.tsx`, "a member whose person id is mine is charged as theirs,
+  not kept as Mine (lg-90)" read `["not-shared", null]` before the fix and
+  `["theirs", "mine"]` after; the file is 45 of 45. Six assertions that read
+  Mine's value as the word `mine` (one select change, five reads) now read `""`.
