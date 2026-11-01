@@ -215,12 +215,48 @@ origin/main:tools/ledger/web/src/salaries/Salaries.tsx:215
 ## Build
 
 1. **Measure on a real iPhone first, and record it in the Log before anything
-   else.** The owner, or anyone with an iPhone, opens the production ledger in
-   Safari on a current iOS, names the device and the iOS version, and taps into
-   each field the table marks **Yes** or **Not settled**. For each, the Log
-   records whether the keypad offers a minus key. The Rebate field is included
-   only if #717 has merged; until then it is recorded as not measured. An Android
-   phone or a desktop browser is not this measurement.
+   else.** One session prices all four options. The owner, or anyone with an
+   iPhone, names the device and the iOS version, and also Settings > General >
+   Language & Region (the Language and the Region) and Settings > General >
+   Keyboard > Keyboards (those enabled), because the documentation does not
+   settle which of them sets the decimal separator. Then two readings, in Safari:
+   - **The fields as they are.** Open the production ledger and tap into each
+     field the table marks **Yes** or **Not settled**. For each, the Log records
+     whether the keypad offers a minus key and which decimal separator (`.` or
+     `,`) it shows. The Rebate field is included only if #717 has merged; until
+     then it is recorded as not measured.
+   - **The alternatives.** The production site cannot be made to show them, so
+     use a scratch page that is not part of the repository: type this into
+     Safari's address bar (it is on one line; copy it from a computer to the
+     phone, in Notes or a message, rather than retyping it):
+
+     ```
+     data:text/html,<meta name="viewport" content="width=device-width"><p>A <input inputmode="decimal"><p>B <input inputmode="decimal" pattern="-?[0-9.,]*"><p>C <input inputmode="text"><p>D <input inputmode="numeric"><p>E <input pattern="-?[0-9.,]*"><p>F <input type="number">
+     ```
+
+     If Safari does not open it, save the same line's HTML as `keys.html`, serve
+     it from a computer on the same network (`python3 -m http.server`, from the
+     directory holding it) and open that address; say which was used. Tap into
+     each of A to F. For each, the Log records the keypad's kind (a number pad
+     with digits only, a digits-and-decimal pad, the full keyboard, or the
+     numbers-and-punctuation layer), whether it has a minus key, whether it has a
+     decimal separator and which, and how many taps from the keypad as it first
+     opens a minus key takes (0 if shown at once; 1 if it sits behind the `123`
+     key). What the documentation expects of each, to be confirmed or refuted by
+     the device and cited from _What the documentation says_:
+
+     | Row | What it is                                                                                         | The documentation expects                                               |
+     | --- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+     | A   | `inputmode="decimal"`, as the fields are now                                                       | the decimal pad, with no minus key                                      |
+     | B   | `inputmode="decimal"` and a `pattern`: does a `pattern` change what an explicit `inputmode` shows? | the same as A, since the source does not consult `pattern` there        |
+     | C   | `inputmode="text"`: option (a)                                                                     | the default keyboard; a minus behind `123` is expected, not sourced     |
+     | D   | `inputmode="numeric"`                                                                              | a digits-only number pad                                                |
+     | E   | no `inputmode`, a `pattern` that is not `\d*` or `[0-9]*`: does a `pattern` alone change anything? | the default keyboard                                                    |
+     | F   | `type="number"`, no `inputmode`                                                                    | the numbers-and-punctuation keyboard, which the sources say has a minus |
+
+     An Android phone or a desktop browser is not this measurement. A row the
+     session did not reach is recorded as not measured, and the option it prices
+     is then priced by the documentation alone.
 2. **Stop there.** The owner answers the decision below with the reading in front
    of them. If every **Yes** field's keypad offers a minus key, option (d) is the
    answer.
@@ -259,9 +295,13 @@ _Why_.
 
 ## Done when
 
-1. The Log records, for each field the table marks **Yes** or **Not settled**,
-   the keypad an iPhone showed: the device, the iOS version, and whether it
-   offers a minus key. A field not measured is named as not measured.
+1. The Log records the device, the iOS version, the Language, the Region and the
+   enabled keyboards; and then, for each field the table marks **Yes** or **Not
+   settled**, the keypad an iPhone showed, whether it offers a minus key and
+   which decimal separator it shows; and, for each of the rows A to F of Build
+   step 1's scratch page, the keypad's kind, whether it has a minus key, a
+   decimal separator and which, and the taps a minus key takes. A field or a row
+   not measured is named as not measured.
 2. The owner's answer is recorded under `## Decision — answered <date> by <who>`,
    with the options it was chosen from, and `status` is `ready`.
 3. When the answer is recorded, the chosen option's check is added here as line
@@ -293,3 +333,12 @@ _Why_.
   keyboards, Region and Language sets the decimal separator is claimed three ways
   and settled by none. The `Decision — open` options are unchanged and none is
   chosen.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F1 — "option (a)'s
+  premise is not measured, and not scheduled to be". The owner chose the gate's
+  first direction (2026-11-01): Build step 1 and Done when 1 now also record the
+  alternative keyboards (`inputmode="text"`, `"numeric"`, a `pattern`,
+  `type="number"`) on a scratch page, named in Build step 1, so one iPhone
+  session prices all four options. `git diff f6485e7b -- <this ticket> | grep -c
+  '^-.*opens the production ledger in'` → `1`, and the same for `'^-.*the keypad
+  an iPhone showed: the device, the iOS version, and whether it'` → `1`: the two
+  removed lines. The _Decision — open_ options are not touched.
