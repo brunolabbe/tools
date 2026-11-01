@@ -1162,7 +1162,7 @@ test("the receipt queue fits a phone and a desktop, kept and then read", async (
     mimeType: "image/png",
     buffer: PHOTO,
   }));
-  await page.getByLabel("Choose several photos").setInputFiles(photos);
+  await page.getByLabel("Choose photos of receipts").setInputFiles(photos);
   await expect(page.getByRole("button", { name: "Read all" })).toBeVisible();
   await expect(page.getByRole("list", { name: "The photos" }).getByRole("listitem")).toHaveCount(4);
   await fitsBothWidths(page, testInfo, "Receipt queue (kept)");
@@ -1204,7 +1204,7 @@ test("the receipt queue fits a phone and a desktop with photos left out, by long
   });
   const long = (word: string): string => `${word}_`.repeat(20).slice(0, 76) + ".png";
   await openTab(page, "Receipt");
-  await page.getByLabel("Choose several photos").setInputFiles([
+  await page.getByLabel("Choose photos of receipts").setInputFiles([
     { name: long("kept"), mimeType: "image/png", buffer: PHOTO },
     { name: long("refused_by_the_server"), mimeType: "image/png", buffer: PHOTO },
     // One byte over the limit: `MAX_RECEIPT_PHOTO_BYTES`, 7 MiB.
@@ -1217,6 +1217,31 @@ test("the receipt queue fits a phone and a desktop with photos left out, by long
   await expect(
     page.getByRole("list", { name: "Photos left out" }).getByRole("listitem"),
   ).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "Read all" })).toBeVisible();
+  // One photo kept, so the button is the one-photo wording.
+  await expect(page.getByRole("button", { name: "Read it" })).toBeVisible();
   await fitsBothWidths(page, testInfo, "Receipt queue (left out)");
+});
+
+/**
+ * A photo's two sources are icon tiles. The camera tile is a touch screen's
+ * only (`.pick-camera`): a desktop ignores `capture`, so there it would be a
+ * second gallery. This spec takes touch off above, so each side sets its own.
+ */
+test.describe("on a touch screen", () => {
+  test.use({ hasTouch: true, isMobile: true });
+
+  test("the receipt screen offers its photo sources as icons", async ({ page }, testInfo) => {
+    await openTab(page, "Receipt");
+    await expect(page.getByTitle("Take a photo of a receipt")).toBeVisible();
+    await expect(page.getByTitle("Choose photos of receipts")).toBeVisible();
+    await fitsBothWidths(page, testInfo, "Receipt (photo sources)");
+  });
+});
+
+test.describe("on a desktop", () => {
+  test("the receipt screen shows no camera tile", async ({ page }) => {
+    await openTab(page, "Receipt");
+    await expect(page.getByTitle("Choose photos of receipts")).toBeVisible();
+    await expect(page.getByTitle("Take a photo of a receipt")).toBeHidden();
+  });
 });

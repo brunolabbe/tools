@@ -42,7 +42,7 @@ import {
   splitReceipt,
 } from "@ledger/books";
 import type { ReceiptSplit } from "@ledger/books";
-import { AppError, MAX_RECEIPT_PHOTO_BYTES, MAX_RECEIPTS_PER_PHOTO } from "@ledger/contract";
+import { AppError } from "@ledger/contract";
 import type {
   CheckedProposal,
   ItemShare,
@@ -56,9 +56,10 @@ import type {
 import { fetchHousehold } from "../api/households.ts";
 import { fetchMe } from "../api/me.ts";
 import { fetchSpendingCategories } from "../api/spending.ts";
-import { fetchReceiptMatches, fileReceipt, readReceipt, uploadReceipt } from "../api/receipts.ts";
+import { fetchReceiptMatches, fileReceipt } from "../api/receipts.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
-import { nextPart, ReceiptQueueView, useReceiptQueue } from "./Queue.tsx";
+import { PhotoPickers } from "./PhotoPickers.tsx";
+import { ReceiptQueueView, useReceiptQueue } from "./Queue.tsx";
 import type { QueuedPhoto } from "./Queue.tsx";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
@@ -229,16 +230,14 @@ interface Photo {
 
 type Stage =
   | { step: "photo" }
-  | ({ step: "kept"; said: string | null } & Photo)
   | { step: "queue"; said: string | null }
   | ({
       step: "form";
       part: number;
       merchantCategoryId: number | null;
-      /** The queue's photo this form came from (lg-92), or `null` for the single photo. */
-      queueKey: number | null;
-    } & Photo)
-  | ({ step: "filed"; said: string } & Photo);
+      /** The queue's photo this form came from (lg-92). */
+      queueKey: number;
+    } & Photo);
 
 /** An item's share as the live line reads it: someone else's names whose, when known. */
 function shareLabel(share: ItemShare, person: string | null, shown: ShownNames): string {
@@ -350,7 +349,7 @@ export function Receipts(): React.ReactElement {
     photo: Photo,
     part: number,
     checked: CheckedProposal | null,
-    queueKey: number | null = null,
+    queueKey: number,
   ): void => {
     const merchantCategoryId = checked?.merchantCategoryId ?? null;
     setDraft(draftOf(checked?.proposal ?? null, photo.receipt));
@@ -371,21 +370,7 @@ export function Receipts(): React.ReactElement {
     });
   };
 
-  const choose = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    const photo = event.target.files?.[0];
-    event.target.value = "";
-    if (photo === undefined) return;
-    if (photo.size > MAX_RECEIPT_PHOTO_BYTES) {
-      setProblem("That photo is over 7 MB. Take it again, closer.");
-      return;
-    }
-    void run(async () => {
-      const receipt = await uploadReceipt(photo);
-      setStage({ step: "kept", receipt, read: null, filed: [], said: null });
-    });
-  };
-
-  /** Several photos at once (lg-92): they join the queue, which keeps them one at a time. */
+  /** One photo or several (lg-92): they join the queue, which keeps them one at a time. */
   const chooseMany = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -413,6 +398,15 @@ export function Receipts(): React.ReactElement {
     );
   };
 
+  const readAll = async (): Promise<void> => {
+    const photos = await queue.readAll();
+    // One photo of one receipt opens straight into its form: there is no list to pick from.
+    const [only] = photos;
+    const [checked] = only?.read ?? [];
+    if (photos.length !== 1 || only?.read?.length !== 1 || checked === undefined) return;
+    if (only.filed.length === 0) openQueued(only, 1, checked);
+  };
+
   const problemLine =
     problem === null ? null : (
       <p className="bad" role="alert">
@@ -420,44 +414,13 @@ export function Receipts(): React.ReactElement {
       </p>
     );
 
-  if (stage.step === "photo" || stage.step === "filed") {
+  if (stage.step === "photo") {
     return (
       <section className="card" aria-labelledby={`${id}-title`}>
         <h2 id={`${id}-title`}>Receipt</h2>
-        {stage.step === "filed" && <output>{stage.said}</output>}
-        {stage.step === "filed" && nextPart(stage.filed) <= MAX_RECEIPTS_PER_PHOTO && (
-          <div className="actions">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => open(stage, nextPart(stage.filed), null)}
-            >
-              Type another receipt from this photo
-            </button>
-          </div>
-        )}
-        <label className="camera">
-          {busy ? "Keeping the photo…" : "Take a photo of a receipt"}
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            capture="environment"
-            disabled={busy}
-            onChange={choose}
-          />
-        </label>
-        <label className="camera">
-          Choose several photos
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            disabled={busy}
-            onChange={chooseMany}
-          />
-        </label>
+        <PhotoPickers disabled={busy} onChoose={chooseMany} />
         <p className="muted hint">
-          The photo stays on the household&rsquo;s server until you ask for it to be read.
+          Photos stay on the household&rsquo;s server until you ask for them to be read.
         </p>
         {problemLine}
       </section>
@@ -472,77 +435,10 @@ export function Receipts(): React.ReactElement {
         said={stage.said}
         problem={problemLine}
         onOpen={openQueued}
+        onReadAll={() => void readAll()}
         onChoose={chooseMany}
         onStartOver={startOver}
       />
-    );
-  }
-
-  if (stage.step === "kept") {
-    const { receipt, read, filed } = stage;
-    const ask = (): void => {
-      void run(async () => {
-        const answer = await readReceipt(receipt.id);
-        const photo = { receipt, read: answer.proposals, filed };
-        const [only] = answer.proposals;
-        if (answer.proposals.length === 1 && only !== undefined) open(photo, 1, only);
-        else setStage({ step: "kept", ...photo, said: null });
-      });
-    };
-    // Each receipt read keeps its place in the photo as its part, filed or not.
-    const waiting = (read ?? [])
-      .map((checked, index) => ({ checked, part: index + 1 }))
-      .filter(({ part }) => !filed.includes(part));
-    return (
-      <section className="card" aria-labelledby={`${id}-title`}>
-        <h2 id={`${id}-title`}>Receipt</h2>
-        {stage.said === null ? <p>Photo kept.</p> : <output>{stage.said}</output>}
-        {read !== null && read.length === 0 && (
-          <p className="bad">Nothing in the photo was read as a receipt. Type it in instead.</p>
-        )}
-        {read !== null && (read.length > 1 || filed.length > 0) && waiting.length > 0 && (
-          <div className="offer">
-            <h3>
-              {filed.length === 0
-                ? `The photo holds ${String(read.length)} receipts`
-                : `The photo holds ${String(waiting.length)} more to file`}
-            </h3>
-            {waiting.map(({ checked, part }) => (
-              <button key={part} type="button" onClick={() => open(stage, part, checked)}>
-                {checked.proposal.merchant ?? "Unnamed"}
-                {checked.proposal.total === null ? "" : `, ${formatCents(checked.proposal.total)}`}
-              </button>
-            ))}
-          </div>
-        )}
-        {read === null && filed.length === 0 && receipt.reader !== null && (
-          <div className="offer">
-            <p className="hint">
-              Reading sends this photo out of the house, to Anthropic, where{" "}
-              <strong>{receipt.reader}</strong> reads it. Typing it in sends nothing.
-            </p>
-            <div className="actions">
-              <button className="primary" type="button" disabled={busy} onClick={ask}>
-                {busy ? "Reading…" : "Read it"}
-              </button>
-            </div>
-          </div>
-        )}
-        {receipt.reader === null && (
-          <p className="muted hint">
-            Reading receipts is not set up here, so this one is typed in.
-          </p>
-        )}
-        <div className="actions">
-          <button type="button" disabled={busy} onClick={() => open(stage, nextPart(filed), null)}>
-            Type it in
-          </button>
-          <button type="button" disabled={busy} onClick={startOver}>
-            Start over
-          </button>
-        </div>
-        {problemLine}
-      </section>
     );
   }
 
@@ -721,18 +617,9 @@ export function Receipts(): React.ReactElement {
             : `Filed as ${shownName(shown, payer)}'s line in the period, and ${listed(chargedPeople)} items as ${
                 chargedPeople.length === 1 ? "a charge" : "charges"
               }.`;
-      const photo = { receipt, read: stage.read, filed: [...stage.filed, part] };
-      if (stage.queueKey !== null) {
-        // Filing from the queue marks that receipt and returns to the list.
-        queue.markFiled(stage.queueKey, part);
-        backToQueue(said);
-        return;
-      }
-      setDraft(null);
-      setMatches(null);
-      // A photo of two receipts goes back to the one not filed yet.
-      const more = (photo.read ?? []).some((_checked, index) => !photo.filed.includes(index + 1));
-      setStage(more ? { step: "kept", ...photo, said } : { step: "filed", ...photo, said });
+      // Filing marks that receipt in the queue and returns to the list.
+      queue.markFiled(stage.queueKey, part);
+      backToQueue(said);
     });
   };
 
@@ -971,15 +858,9 @@ export function Receipts(): React.ReactElement {
         </ul>
       )}
       <div className="actions">
-        {stage.queueKey === null ? (
-          <button type="button" disabled={busy} onClick={startOver}>
-            Start over
-          </button>
-        ) : (
-          <button type="button" disabled={busy} onClick={() => backToQueue(null)}>
-            Back to the queue
-          </button>
-        )}
+        <button type="button" disabled={busy} onClick={() => backToQueue(null)}>
+          Back to the queue
+        </button>
       </div>
       {problemLine}
     </section>

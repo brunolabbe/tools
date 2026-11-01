@@ -141,7 +141,7 @@ async function takePhoto(size = 1_234): Promise<void> {
 test("keeps the photo, and says where it goes before anything sends it there", async () => {
   await takePhoto();
 
-  expect(await screen.findByText("Photo kept.")).toBeTruthy();
+  expect(await screen.findByText("Kept, not read yet.")).toBeTruthy();
   expect(uploadReceipt).toHaveBeenCalledTimes(1);
   const notice = screen.getByText(/Reading sends this photo out of the house, to Anthropic/u);
   expect(notice.textContent).toContain("claude-haiku-5-5");
@@ -739,7 +739,8 @@ test("a household that has not answered yet holds the form, and files nothing (l
   vi.mocked(fetchHousehold).mockReturnValue(new Promise(() => undefined));
   await readBasketWithTheirs();
 
-  expect((await screen.findByRole("status")).textContent).toBe("Loading the household…");
+  // Not by role: the queue's read count is an output too, until the form opens.
+  expect((await screen.findByText("Loading the household…")).tagName).toBe("OUTPUT");
   expectNoTwoPersonForm();
 });
 
@@ -900,7 +901,7 @@ function oneShopEach(id: number): ReadReceiptResponse {
 
 function chooseSeveral(files: File[]): ReturnType<typeof render> {
   const screenRendered = render(<Receipts />);
-  fireEvent.change(field("Choose several photos"), { target: { files } });
+  fireEvent.change(field("Choose photos of receipts"), { target: { files } });
   return screenRendered;
 }
 
@@ -1004,7 +1005,7 @@ test("a photo of two receipts gives two entries, and filing one marks only that 
   });
 
   chooseSeveral([jpeg("two.jpg")]);
-  fireEvent.click(await screen.findByRole("button", { name: "Read all" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
   fireEvent.click(await screen.findByRole("button", { name: "Café Un, 10.00 $" }));
   fireEvent.click(await screen.findByRole("button", { name: "File as alex’s line" }));
 
@@ -1062,7 +1063,7 @@ test("a receipt typed in from a kept photo shows it filed, files the next one as
     [11, 2],
   ]);
 
-  fireEvent.click(screen.getByRole("button", { name: "Read all" }));
+  fireEvent.click(screen.getByRole("button", { name: "Read it" }));
   await screen.findByText("1 of 1 read");
   expect(vi.mocked(readReceipt).mock.calls.map(([id]) => id)).toEqual([12]);
 });
@@ -1071,7 +1072,7 @@ test("a receipt typed in from a photo whose read failed shows it filed and drops
   uploadsNumbered();
   vi.mocked(readReceipt).mockRejectedValue(new AppError("INTERNAL", "The reader broke."));
   chooseSeveral([jpeg("a.jpg")]);
-  fireEvent.click(await screen.findByRole("button", { name: "Read all" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
   await screen.findByText("The read failed: The reader broke.");
 
   await typeInFirstAndFile("10.00");
@@ -1133,7 +1134,7 @@ test("a photo refused five times in a row is reported failed, with a retry, and 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Read all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Read it" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
@@ -1158,7 +1159,7 @@ test("leaving the screen during a wait reads nothing more (lg-92 F5)", async () 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Read all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Read it" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -1288,4 +1289,32 @@ test("a member whose person id is mine is charged as theirs, not kept as Mine (l
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   const filed = vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items[1];
   expect([filed?.share, filed?.chargedTo]).toEqual(["theirs", "mine"]);
+});
+
+test("the camera and the gallery feed one queue, and its words follow the count", async () => {
+  uploadsNumbered();
+  await takePhoto();
+
+  await screen.findByRole("button", { name: "Read it" });
+  expect(screen.getByRole("heading", { name: "Receipt" })).toBeTruthy();
+  expect(screen.getByText(/Reading sends this photo out of the house/u)).toBeTruthy();
+
+  fireEvent.change(field("Choose photos of receipts"), { target: { files: [jpeg("b.jpg")] } });
+
+  await screen.findByRole("button", { name: "Read all" });
+  expect(screen.getByRole("heading", { name: "Receipts" })).toBeTruthy();
+  expect(screen.getByText(/Reading sends these photos out of the house/u)).toBeTruthy();
+});
+
+test("a photo of one receipt opens its form, files back to the queue, and offers another from it", async () => {
+  await takePhoto();
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  fireEvent.click(await screen.findByRole("button", { name: "File as alex’s line" }));
+
+  await screen.findByText("Marché Exemple, 26.50 $, filed");
+  fireEvent.click(screen.getByRole("button", { name: "Type another receipt from this photo" }));
+
+  expect(field("Merchant").value).toBe("");
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+  expect(readReceipt).toHaveBeenCalledTimes(1);
 });
