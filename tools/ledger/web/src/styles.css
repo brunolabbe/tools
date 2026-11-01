@@ -110,9 +110,13 @@ h1 {
   color: var(--danger);
 }
 
-.health {
-  font-size: 0.875rem;
-  border-top: 1px solid var(--border);
+/*
+ * The shared header (`@webtools/ui/chrome.css`, lg-72) brings its own bottom
+ * margin; the shell's grid gap already spaces its children, as it did the
+ * `<header>` this replaced, so the margin would be counted twice.
+ */
+.app-header {
+  margin-bottom: 0;
 }
 
 /*

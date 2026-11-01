@@ -316,9 +316,13 @@ function registerErrorHandling(server: FastifyInstance, context: AppContext): vo
     // carry the offending row's description, amount and balance (lg-1 left this
     // decision to lg-2), and a log outlives the request and is read by whoever
     // reads logs. The caller already has them in the response body.
+    //
+    // The same goes for the URL's query: History's search (`/api/rows?q=`) and a
+    // receipt's matches (`?amountCents=&date=`) carry a statement's text and an
+    // amount there, so only the path is logged (lg-72's gate 1, F1).
     const fields = {
       method: request.method,
-      url: request.url,
+      url: pathOf(request.url),
       code: appError.code,
       status,
       detailKeys: Object.keys(appError.details ?? {}),
@@ -328,6 +332,11 @@ function registerErrorHandling(server: FastifyInstance, context: AppContext): vo
 
     void reply.code(status).send(body);
   });
+}
+
+/** A URL without its query string, which is where a request's values travel. */
+function pathOf(url: string): string {
+  return url.split("?")[0] ?? "";
 }
 
 /**

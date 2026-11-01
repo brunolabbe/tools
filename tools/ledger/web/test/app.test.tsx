@@ -11,7 +11,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { AppError } from "@ledger/contract";
 import type { InboxRow } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
-import { fetchHealth } from "../src/api/health.ts";
 import { fetchAdminHouseholds, fetchHousehold } from "../src/api/households.ts";
 import { fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
 import { fetchMe } from "../src/api/me.ts";
@@ -23,7 +22,6 @@ import { fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
 import { App } from "../src/App.tsx";
 import { LIVE } from "./mortgage-fixtures.ts";
 
-vi.mock("../src/api/health.ts", () => ({ fetchHealth: vi.fn() }));
 vi.mock("../src/api/me.ts", () => ({ fetchMe: vi.fn() }));
 vi.mock("../src/api/mortgage.ts", () => ({ fetchMortgage: vi.fn(), saveMortgage: vi.fn() }));
 vi.mock("../src/api/people.ts", () => ({ fetchPeopleNames: vi.fn() }));
@@ -50,14 +48,6 @@ vi.mock("../src/api/rules.ts", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(fetchHealth).mockResolvedValue({
-    ok: true,
-    shuttingDown: false,
-    version: "0.0.0",
-    uptimeSec: 1,
-    database: { open: true },
-    directory: { open: true },
-  });
   vi.mocked(fetchMe).mockResolvedValue({
     person: { id: "alex", email: "alex@example.test", household: "home" },
     admin: false,
@@ -409,4 +399,53 @@ test("the inbox tab's count changes when a paste is stored, with no change of ta
 
   fireEvent.click(screen.getByRole("button", { name: "Open the inbox" }));
   expect(await screen.findByRole("heading", { name: "Inbox" })).toBeTruthy();
+});
+
+// lg-72: the shared header and footer on all three screens, and no `/health`
+// fetch. `@webtools/ui` owns what they render; this is the ledger's use of them.
+const HOUSEHOLD_TAGLINE = "The household’s shared account.";
+
+test("the household's own screen has the shared header and footer, and asks nothing of /health", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  render(<App />);
+  await screen.findByRole("heading", { name: "Mortgage" });
+
+  const banner = screen.getByRole("banner");
+  expect(within(banner).getByRole("heading", { level: 1, name: "Ledger" })).toBeTruthy();
+  expect(within(banner).getByText(HOUSEHOLD_TAGLINE)).toBeTruthy();
+  expect(within(banner).getByRole("group", { name: "Colour theme" })).toBeTruthy();
+  const footer = screen.getByRole("contentinfo");
+  expect(within(footer).getByRole("link", { name: "Terms" }).getAttribute("href")).toBe(
+    "/terms.html",
+  );
+  // No `define` runs under vitest, so the version is unknown and left out: Terms is all there is.
+  expect(within(footer).getAllByRole("link")).toHaveLength(1);
+  expect(screen.queryByText(/Server v|Checking the server/u)).toBeNull();
+});
+
+test("the no-household screen has the header with the household's tagline, and the footer", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  vi.mocked(fetchMe).mockRejectedValue(new AppError("FORBIDDEN"));
+
+  render(<App />);
+  await screen.findByRole("heading", { name: "No household" });
+
+  const banner = screen.getByRole("banner");
+  expect(within(banner).getByRole("heading", { level: 1, name: "Ledger" })).toBeTruthy();
+  expect(within(banner).getByText(HOUSEHOLD_TAGLINE)).toBeTruthy();
+  expect(within(screen.getByRole("contentinfo")).getByRole("link", { name: "Terms" })).toBeTruthy();
+});
+
+test("the admin's screen has the header tagged Admin, and the footer", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  vi.mocked(fetchMe).mockRejectedValue(new AppError("FORBIDDEN"));
+  vi.mocked(fetchAdminHouseholds).mockResolvedValue([]);
+
+  render(<App />);
+  await screen.findByRole("heading", { name: "Households" });
+
+  const banner = screen.getByRole("banner");
+  expect(within(banner).getByRole("heading", { level: 1, name: "Ledger" })).toBeTruthy();
+  expect(within(banner).getByText("Admin")).toBeTruthy();
+  expect(within(screen.getByRole("contentinfo")).getByRole("link", { name: "Terms" })).toBeTruthy();
 });

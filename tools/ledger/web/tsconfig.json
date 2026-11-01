@@ -15,5 +15,9 @@
     "outDir": "./dist"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "references": [{ "path": "../contract" }, { "path": "../books" }]
+  "references": [
+    { "path": "../contract" },
+    { "path": "../books" },
+    { "path": "../../../packages/ui" }
+  ]
 }

@@ -7,9 +7,11 @@
          theme is active, so native widgets match the CSS variables below. -->
     <meta name="color-scheme" content="light dark" />
     <title>Ledger</title>
+    <!-- Same-origin SVG, the header's glyph. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/main.tsx" blocking="render"></script>
   </body>
 </html>
