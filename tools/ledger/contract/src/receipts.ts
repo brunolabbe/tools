@@ -49,17 +49,32 @@ export type ItemShare = (typeof ITEM_SHARES)[number];
 
 /**
  * One item line of a receipt (lg-10), as read and then as the person confirmed
- * it. The reader reads the text, the price, the taxable mark and the deposit,
- * and proposes a category; it decides no `share`, and computes nothing.
+ * it. The reader reads the text, the price, the taxable mark, the deposit and the
+ * rebates applied to it, and proposes a category; it decides no `share`, and
+ * computes nothing.
+ *
+ * An item's **net** is `price + (discount ?? 0)` (lg-89): what it cost once its
+ * rebates are counted, and what every sum in `books` reads.
  */
 export interface ReceiptItem {
   text: string;
-  /** As printed. A discount or a returned item is negative. */
+  /**
+   * As printed, before any rebate folded into `discount`. A returned item is
+   * negative; so is a rebate the reader could not place on an item, or one on
+   * the whole receipt, which stays an item of its own (lg-89).
+   */
   price: number;
-  /** Marked taxable on the receipt: GST and QST are charged on its price. */
+  /** Marked taxable on the receipt: GST and QST are charged on its net. */
   taxable: boolean;
   /** The deposit (`consigne`) printed for it, or `null`. A deposit carries no tax. */
   deposit: number | null;
+  /**
+   * The rebates (`RABAIS`, `ÉCONOMIE`, a coupon) applied to it, added up, or
+   * `null` when none is folded in (lg-89). Negative on a purchase, the opposite
+   * sign on a returned item. It follows the item's `taxable` mark, so a rebate on
+   * a taxable item lowers the taxed amount. Every filing before lg-89 has `null`.
+   */
+  discount: number | null;
   /**
    * A category from lg-15's list: the model's proposal until the person
    * confirms. `null` when it proposed none, or one that is not in the list.
@@ -115,6 +130,8 @@ export const receiptItemSchema = z
     price: cents,
     taxable: z.boolean(),
     deposit: cents.nullable(),
+    // Omitted, as every request before lg-89 omits it, it is `null`.
+    discount: cents.nullable().default(null),
     spendingCategoryId: z.number().int().positive().nullable(),
     share: z.enum(ITEM_SHARES),
     // Omitted, as every request before lg-30 omits it, it is `null`.
@@ -146,16 +163,16 @@ export const receiptProposalSchema = z.strictObject({
  * - `tax-differs`: no taxable part of the subtotal gives both taxes, GST at 5 %
  *   and QST at 9.975 %, each rounded to the cent.
  * - `signs-differ`: some parts are a purchase and some a refund.
- * - `taxable-differs` (lg-26): the prices of the items marked taxable, taken as
- *   the taxable part, do not give both printed taxes; a receipt with items and no
+ * - `taxable-differs` (lg-26): the nets of the items marked taxable (lg-89),
+ *   taken as the taxable part, do not give both printed taxes; a receipt with items and no
  *   tax lines counts both as zero. It points at the Taxable boxes, and does not
  *   block filing. Where it is **not** raised: a receipt with no items; one tax
  *   read and the other not (`tax-missing`); mixed signs (`signs-differ`). Beside
  *   `tax-differs`, where no marks can give both taxes, it is raised only when the
  *   marks give neither tax on its own, so a misread tax is not blamed on the
  *   marks. A store that rounds tax per line can raise it on marks that are right.
- * - `items-differ` (lg-10): the items, their deposits and the two taxes do not
- *   make the total, to the cent. Unlike the others it **blocks filing**: the
+ * - `items-differ` (lg-10): the items' nets, their deposits and the two taxes do
+ *   not make the total, to the cent. Unlike the others it **blocks filing**: the
  *   shared amount is computed from the items, so items that do not add up would
  *   file an amount nobody paid (`RECEIPT_DOES_NOT_ADD_UP`).
  *

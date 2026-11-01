@@ -20,6 +20,7 @@ interface ItemOfRow {
   price_cents: number;
   taxable: 0 | 1;
   deposit_cents: number | null;
+  discount_cents: number | null;
   spending_category_id: number | null;
   share: ReceiptItem["share"];
 }
@@ -33,7 +34,7 @@ export function receiptsOnRows(db: Database): Map<number, ReceiptOnRow> {
   const found = db
     .prepare(
       `SELECT receipt_filings.row_id, receipt_filings.date, receipt_items.price_cents,
-              receipt_items.taxable, receipt_items.deposit_cents,
+              receipt_items.taxable, receipt_items.deposit_cents, receipt_items.discount_cents,
               receipt_items.spending_category_id, receipt_items.share
        FROM receipt_filings
        JOIN receipt_items ON receipt_items.filing_id = receipt_filings.id
@@ -50,6 +51,8 @@ export function receiptsOnRows(db: Database): Map<number, ReceiptOnRow> {
       price: item.price_cents,
       taxable: item.taxable === 1,
       deposit: item.deposit_cents,
+      // A rebate folded into the item comes off its category with it (lg-89).
+      discount: item.discount_cents,
       spendingCategoryId: item.spending_category_id,
       share: item.share,
       chargedTo: null,

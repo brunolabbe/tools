@@ -78,6 +78,8 @@ interface ItemDraft {
   price: string;
   taxable: boolean;
   deposit: string;
+  /** The rebates folded into it (lg-89), negative on a purchase; blank for none. */
+  discount: string;
   spendingCategoryId: number | null;
   share: ItemShare;
   /** Whose a `theirs` item is, as picked; `null` until picked, and with one other member. */
@@ -129,6 +131,7 @@ function itemDraftOf(item: ReceiptItem): ItemDraft {
     price: centsText(item.price),
     taxable: item.taxable,
     deposit: centsText(item.deposit),
+    discount: centsText(item.discount),
     spendingCategoryId: item.spendingCategoryId,
     share: item.share,
     chargedTo: item.chargedTo,
@@ -174,13 +177,16 @@ function amountOf(text: string): number | null {
 function itemOf(draft: ItemDraft, whose: (draft: ItemDraft) => string | null): ReceiptItem | null {
   const price = amountOf(draft.price);
   const deposit = amountOf(draft.deposit);
+  const discount = amountOf(draft.discount);
   if (draft.text.trim() === "" || price === null) return null;
   if (draft.deposit.trim() !== "" && deposit === null) return null;
+  if (draft.discount.trim() !== "" && discount === null) return null;
   return {
     text: draft.text.trim(),
     price,
     taxable: draft.taxable,
     deposit,
+    discount,
     spendingCategoryId: draft.spendingCategoryId,
     share: draft.share,
     chargedTo: draft.share === "theirs" ? whose(draft) : null,
@@ -575,6 +581,7 @@ export function Receipts(): React.ReactElement {
         price: "",
         taxable: false,
         deposit: "",
+        discount: "",
         spendingCategoryId: null,
         share: "shared",
         chargedTo: null,
@@ -728,6 +735,13 @@ export function Receipts(): React.ReactElement {
                     placeholder="Deposit"
                     value={item.deposit}
                     onChange={(event) => setItem(index, { deposit: event.target.value })}
+                  />
+                  <input
+                    aria-label={`Rebate on ${name}`}
+                    inputMode="decimal"
+                    placeholder="Rebate"
+                    value={item.discount}
+                    onChange={(event) => setItem(index, { discount: event.target.value })}
                   />
                   <label className="check">
                     <input

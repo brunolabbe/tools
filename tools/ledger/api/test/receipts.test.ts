@@ -27,6 +27,7 @@ import { loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
 import type { AppLogger } from "../src/logger.ts";
 import { merchantCategory } from "../src/receipts.ts";
+import { receiptsOnRows } from "../src/slices.ts";
 import { createApp } from "../src/server.ts";
 import { migratedBooks } from "./helpers/template.ts";
 import type { App } from "../src/server.ts";
@@ -825,6 +826,7 @@ const BASKET: ReceiptProposal = {
       price: 349,
       taxable: false,
       deposit: null,
+      discount: null,
       spendingCategoryId: GROCERIES,
       share: "shared",
       chargedTo: null,
@@ -834,6 +836,7 @@ const BASKET: ReceiptProposal = {
       price: 1_299,
       taxable: true,
       deposit: 60,
+      discount: null,
       spendingCategoryId: ALCOHOL,
       share: "shared",
       chargedTo: null,
@@ -843,6 +846,7 @@ const BASKET: ReceiptProposal = {
       price: 499,
       taxable: true,
       deposit: null,
+      discount: null,
       spendingCategoryId: HOUSEHOLD,
       share: "shared",
       chargedTo: null,
@@ -1383,7 +1387,16 @@ function couponItem(
   taxable: boolean,
   share: "not-shared" | "theirs",
 ): ReceiptProposal["items"][number] {
-  return { text, price, taxable, deposit: null, spendingCategoryId: null, share, chargedTo: null };
+  return {
+    text,
+    price,
+    taxable,
+    deposit: null,
+    discount: null,
+    spendingCategoryId: null,
+    share,
+    chargedTo: null,
+  };
 }
 
 // --- lg-30: whose a receipt item's charge is, among more than two people ---
@@ -1722,5 +1735,86 @@ describe("a free theirs item names a person the household does not hold (lg-30, 
       count(target, "receipt_filings"),
       count(target, "receipt_items"),
     ]).toEqual([0, 0, 0]);
+  });
+});
+
+// --- lg-89: a rebate folded into the item it reduces ---
+
+/**
+ * `BASKET` with 2,00 $ off the six-pack, folded into it: taxable nets 15,98 $,
+ * GST 0,80 $, QST 1,59 $, total 22,46 $. The six-pack alone, at its net, with
+ * its deposit and taxes, is 13,2357525 $ → 13,24 $.
+ */
+const REBATED: ReceiptProposal = {
+  ...BASKET,
+  subtotal: 2_007,
+  gst: 80,
+  qst: 159,
+  total: 2_246,
+  items: BASKET.items.map((item, index) => (index === 1 ? { ...item, discount: -200 } : item)),
+};
+
+describe("a rebate folded into an item (lg-89)", () => {
+  test("stores the rebate with its item, reads it back, and takes it off with the item", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+    const proposal = {
+      ...REBATED,
+      items: REBATED.items.map((item, index) =>
+        index === 1 ? { ...item, share: "not-shared" as const } : item,
+      ),
+    };
+
+    const response = await file(target, receipt.id, { proposal, destination: asLine(2_246) });
+
+    expect(response.statusCode, response.body).toBe(200);
+    // 22,46 $ less 13,24 $.
+    expect(storedLines(target)).toEqual([{ amount_cents: 922, charged_to: null }]);
+    expect(response.json<ReceiptFiling>().proposal).toEqual(proposal);
+    expect(
+      homeBooks(target)
+        .prepare("SELECT position, discount_cents FROM receipt_items ORDER BY position")
+        .all(),
+    ).toEqual([
+      { position: 1, discount_cents: null },
+      { position: 2, discount_cents: -200 },
+      { position: 3, discount_cents: null },
+    ]);
+  });
+
+  test("reads an item a request sends with no rebate, as every client before lg-89 does, as none", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+    const unaware = {
+      ...BASKET,
+      items: BASKET.items.map(({ discount: _discount, ...item }) => item),
+    };
+
+    const response = await file(target, receipt.id, {
+      proposal: unaware,
+      destination: asLine(2_476),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json<ReceiptFiling>().proposal.items.map((item) => item.discount)).toEqual([
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  test("passes a rebate on a row's item to the chart's split", async () => {
+    const target = await start();
+    await pasteRows(target);
+    const receipt = await uploaded(target);
+
+    const response = await file(target, receipt.id, {
+      proposal: REBATED,
+      destination: { to: "row", rowId: chargeRow(target) },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const onRow = receiptsOnRows(homeBooks(target)).get(chargeRow(target));
+    expect(onRow?.items.map((item) => item.discount)).toEqual([null, -200, null]);
   });
 });

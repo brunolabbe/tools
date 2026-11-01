@@ -738,6 +738,15 @@ const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (split_id, person_id)
   );
   `,
+
+  // 16 — the rebates folded into a receipt item (lg-89): RABAIS, ÉCONOMIE, a
+  // coupon the reader placed on the item it reduces. An added column, since it
+  // carries no CHECK: a rebate is negative on a purchase and positive on a
+  // returned item. Every item filed before this migration reads NULL, which is
+  // no rebate, so its net is its price and its split is what it was.
+  `
+  ALTER TABLE receipt_items ADD COLUMN discount_cents INTEGER;
+  `,
 ];
 
 /**

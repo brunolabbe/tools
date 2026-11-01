@@ -323,6 +323,7 @@ const BASKET: ReceiptProposal = {
       price: 349,
       taxable: false,
       deposit: null,
+      discount: null,
       spendingCategoryId: 1,
       share: "shared",
       chargedTo: null,
@@ -332,6 +333,7 @@ const BASKET: ReceiptProposal = {
       price: 1_299,
       taxable: true,
       deposit: 60,
+      discount: null,
       spendingCategoryId: 2,
       share: "shared",
       chargedTo: null,
@@ -341,6 +343,7 @@ const BASKET: ReceiptProposal = {
       price: 499,
       taxable: true,
       deposit: null,
+      discount: null,
       spendingCategoryId: null,
       share: "shared",
       chargedTo: null,
@@ -744,3 +747,70 @@ test.each([
     expect(filed?.destination).toMatchObject({ to: "line", chargedTo: null });
   },
 );
+
+// --- lg-89: a rebate folded into the item it reduces ---
+
+test("entering a rebate on an item updates the add-up check and the split live, and files it (lg-89)", async () => {
+  await readBasket();
+  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
+  expect(shared()).toBe("Not shared 15.54 $ · sam's 0.00 $ · Shared 9.22 $");
+  expect(field("Rebate on BIERE 6X355").value).toBe("");
+
+  // 2,00 $ off the six-pack: the printed total no longer matches the items.
+  fireEvent.change(field("Rebate on BIERE 6X355"), { target: { value: "-2.00" } });
+  expect(
+    screen.getByText(
+      "The items, deposits and taxes do not add up to the total. Correct them to file.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByLabelText("What is shared")).toBeNull();
+
+  // The receipt as printed with the rebate: taxes on 15,98 $, total 22,46 $.
+  fireEvent.change(field("Subtotal"), { target: { value: "20.07" } });
+  fireEvent.change(field("GST (TPS)"), { target: { value: "0.80" } });
+  fireEvent.change(field("QST (TVQ)"), { target: { value: "1.59" } });
+  fireEvent.change(field("Total"), { target: { value: "22.46" } });
+  expect(screen.getByText("It adds up.")).toBeTruthy();
+  // The six-pack takes its rebate and the taxes on it off with it.
+  expect(shared()).toBe("Not shared 13.24 $ · sam's 0.00 $ · Shared 9.22 $");
+
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  const request = vi.mocked(fileReceipt).mock.calls[0]?.[1];
+  expect(request?.proposal.items.map((item) => item.discount)).toEqual([null, -200, null]);
+  expect(request?.destination).toMatchObject({ to: "line", amountCents: 2_246 });
+});
+
+test("shows a rebate the reader folded into an item, and refuses one that is not an amount (lg-89)", async () => {
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 3,
+    model: "claude-haiku-5-5",
+    proposals: [
+      {
+        proposal: {
+          ...BASKET,
+          subtotal: 2_007,
+          gst: 80,
+          qst: 159,
+          total: 2_246,
+          items: BASKET.items.map((item, index) =>
+            index === 1 ? { ...item, discount: -200 } : item,
+          ),
+        },
+        flags: [],
+        merchantCategoryId: null,
+      },
+    ],
+  });
+  await takePhoto();
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await waitFor(() => expect(field("Total").value).toBe("22.46"));
+
+  expect(field("Rebate on BIERE 6X355").value).toBe("-2.00");
+  expect(screen.getByText("It adds up.")).toBeTruthy();
+
+  fireEvent.change(field("Rebate on BIERE 6X355"), { target: { value: "two" } });
+  expect(
+    screen.getByText("An item needs its text and its price before the receipt can be filed."),
+  ).toBeTruthy();
+});

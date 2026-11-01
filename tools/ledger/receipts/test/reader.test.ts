@@ -245,10 +245,38 @@ const WITH_ITEMS = JSON.stringify({
       qst: 179,
       total: 2_476,
       items: [
-        { text: "PAIN", price: 349, taxable: false, deposit: null, category: "Groceries" },
-        { text: "BIERE 6X355", price: 1_299, taxable: true, deposit: 60, category: " alcohol " },
-        { text: "SAVON", price: 499, taxable: true, deposit: null, category: "Toiletries" },
-        { text: "RABAIS", price: -100, taxable: false, deposit: null, category: null },
+        {
+          text: "PAIN",
+          price: 349,
+          taxable: false,
+          deposit: null,
+          discount: null,
+          category: "Groceries",
+        },
+        {
+          text: "BIERE 6X355",
+          price: 1_299,
+          taxable: true,
+          deposit: 60,
+          discount: null,
+          category: " alcohol ",
+        },
+        {
+          text: "SAVON",
+          price: 499,
+          taxable: true,
+          deposit: null,
+          discount: null,
+          category: "Toiletries",
+        },
+        {
+          text: "RABAIS",
+          price: -100,
+          taxable: false,
+          deposit: null,
+          discount: null,
+          category: null,
+        },
       ],
     },
   ],
@@ -280,6 +308,7 @@ describe("the model reader's items (lg-10)", () => {
         price: 349,
         taxable: false,
         deposit: null,
+        discount: null,
         spendingCategoryId: 1,
         share: "shared",
         chargedTo: null,
@@ -289,6 +318,7 @@ describe("the model reader's items (lg-10)", () => {
         price: 1_299,
         taxable: true,
         deposit: 60,
+        discount: null,
         spendingCategoryId: 2,
         share: "shared",
         chargedTo: null,
@@ -299,6 +329,7 @@ describe("the model reader's items (lg-10)", () => {
         price: 499,
         taxable: true,
         deposit: null,
+        discount: null,
         spendingCategoryId: null,
         share: "shared",
         chargedTo: null,
@@ -308,6 +339,7 @@ describe("the model reader's items (lg-10)", () => {
         price: -100,
         taxable: false,
         deposit: null,
+        discount: null,
         spendingCategoryId: null,
         share: "shared",
         chargedTo: null,
@@ -328,9 +360,30 @@ describe("the model reader's items (lg-10)", () => {
               qst: null,
               total: 349,
               items: [
-                { text: "PAIN", price: 349, taxable: false, deposit: null, category: null },
-                { text: "ILLISIBLE", price: null, taxable: false, deposit: null, category: null },
-                { text: "  ", price: 120, taxable: false, deposit: null, category: null },
+                {
+                  text: "PAIN",
+                  price: 349,
+                  taxable: false,
+                  deposit: null,
+                  discount: null,
+                  category: null,
+                },
+                {
+                  text: "ILLISIBLE",
+                  price: null,
+                  taxable: false,
+                  deposit: null,
+                  discount: null,
+                  category: null,
+                },
+                {
+                  text: "  ",
+                  price: 120,
+                  taxable: false,
+                  deposit: null,
+                  discount: null,
+                  category: null,
+                },
               ],
             },
           ],
@@ -354,5 +407,117 @@ describe("the model reader's items (lg-10)", () => {
       null,
       null,
     ]);
+  });
+});
+
+// --- lg-89: a rebate folded into the item it reduces, wherever it is printed ---
+
+/**
+ * One receipt's reading, its items given as the model answered them. The three
+ * recorded replies below are what the prompt asks for of the three synthetic
+ * receipts in `test/fixtures/` (lg-89's Build 6); the owner's paid read is what
+ * proves the model answers them so.
+ */
+function rebateReading(
+  total: number,
+  items: {
+    text: string;
+    price: number | null;
+    taxable: boolean;
+    deposit: number | null;
+    discount: number | null;
+  }[],
+): string {
+  return JSON.stringify({
+    receipts: [
+      {
+        merchant: "Épicerie Exemple",
+        date: "2026-10-30",
+        subtotal: total,
+        gst: null,
+        qst: null,
+        total,
+        items: items.map((item) => ({ ...item, category: null })),
+      },
+    ],
+  });
+}
+
+/** The fields lg-89 reads, of each item a reading gave. */
+async function rebatesOf(reply: string) {
+  const [proposal] = await reader(answering(() => message(reply)).fetch).read(PHOTO);
+  return proposal?.items.map(({ text, price, discount }) => ({ text, price, discount }));
+}
+
+describe("the model reader's rebates (lg-89)", () => {
+  test("asks for each rebate folded into its item, matched by code or text, and a whole-receipt one left alone", () => {
+    expect(RECEIPT_PROMPT).toContain("Fold each rebate, coupon or price reduction");
+    expect(RECEIPT_PROMPT).toContain("match it to its item by the product code or the text");
+    expect(RECEIPT_PROMPT).toContain("Several rebates on one item add up into its discount");
+    expect(RECEIPT_PROMPT).toContain(
+      "A rebate that applies to the whole receipt, or that you cannot place on one item with confidence, stays an item of its own with a negative price",
+    );
+    expect(RECEIPT_PROMPT).not.toContain("A discount is an item with a negative price");
+  });
+
+  test("returns a rebate printed under its item as that item's discount", async () => {
+    const reply = rebateReading(1_048, [
+      { text: "CAFE MOULU 340G", price: 899, taxable: false, deposit: null, discount: -200 },
+      { text: "PAIN", price: 349, taxable: false, deposit: null, discount: null },
+    ]);
+
+    expect(await rebatesOf(reply)).toEqual([
+      { text: "CAFE MOULU 340G", price: 899, discount: -200 },
+      { text: "PAIN", price: 349, discount: null },
+    ]);
+  });
+
+  test("returns a rebate printed three lines below its item, naming its code, folded into that item", async () => {
+    // Printed: 0412 FROMAGE, PAIN, LAIT, POMMES, then "RABAIS 0412 -1,50".
+    const reply = rebateReading(1_827, [
+      { text: "0412 FROMAGE", price: 799, taxable: false, deposit: null, discount: -150 },
+      { text: "PAIN", price: 349, taxable: false, deposit: null, discount: null },
+      { text: "LAIT 2L", price: 479, taxable: false, deposit: null, discount: null },
+      { text: "POMMES", price: 350, taxable: false, deposit: null, discount: null },
+    ]);
+
+    const items = await rebatesOf(reply);
+
+    expect(items).toEqual([
+      { text: "0412 FROMAGE", price: 799, discount: -150 },
+      { text: "PAIN", price: 349, discount: null },
+      { text: "LAIT 2L", price: 479, discount: null },
+      { text: "POMMES", price: 350, discount: null },
+    ]);
+    // No rebate line of its own is left to be shared by mistake.
+    expect(items?.some((item) => item.price < 0)).toBe(false);
+  });
+
+  test("keeps a coupon on the whole receipt as an item of its own, with a negative price", async () => {
+    const reply = rebateReading(1_048, [
+      { text: "CAFE MOULU 340G", price: 899, taxable: false, deposit: null, discount: null },
+      { text: "PAIN", price: 349, taxable: false, deposit: null, discount: null },
+      {
+        text: "COUPON 2,00 $ SUR 10 $",
+        price: -200,
+        taxable: false,
+        deposit: null,
+        discount: null,
+      },
+    ]);
+
+    expect(await rebatesOf(reply)).toEqual([
+      { text: "CAFE MOULU 340G", price: 899, discount: null },
+      { text: "PAIN", price: 349, discount: null },
+      { text: "COUPON 2,00 $ SUR 10 $", price: -200, discount: null },
+    ]);
+  });
+
+  test("reads a rebate past any amount as none, as it reads a deposit", async () => {
+    const reply = rebateReading(899, [
+      { text: "CAFE", price: 899, taxable: false, deposit: null, discount: -1e12 },
+    ]);
+
+    expect(await rebatesOf(reply)).toEqual([{ text: "CAFE", price: 899, discount: null }]);
   });
 });

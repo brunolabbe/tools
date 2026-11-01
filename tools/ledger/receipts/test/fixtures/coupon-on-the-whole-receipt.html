@@ -1,0 +1,44 @@
+<!doctype html>
+<!--
+  lg-89, fixture 3 of 3: a coupon on the whole receipt, which no one item
+  owns. Synthetic: the store, the numbers and every amount are invented.
+  Rendered to the .png beside it by test/live/render-rebate-fixtures.ts.
+
+  Expected read: the coupon an item of its own, price -200, and no discount on
+  any item. Every item is zero-rated, so there are no tax lines.
+-->
+<html lang="fr-CA">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { margin: 0; background: #fff; }
+      .receipt { width: 340px; padding: 24px 20px; font: 15px/1.45 "DejaVu Sans Mono", monospace; color: #111; }
+      .center { text-align: center; }
+      .row { display: flex; justify-content: space-between; gap: 12px; }
+      .rule { border-top: 1px dashed #333; margin: 8px 0; }
+      .big { font-size: 18px; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="receipt">
+      <div class="center big">ÉPICERIE EXEMPLE</div>
+      <div class="center">123, rue Inventée</div>
+      <div class="center">Montréal QC</div>
+      <div class="center">2026-11-01 17:05</div>
+      <div class="rule"></div>
+      <div class="row"><span>0412 FROMAGE CHEDDAR</span><span>7,99</span></div>
+      <div class="row"><span>0907 PAIN BLANC</span><span>3,49</span></div>
+      <div class="row"><span>0631 LAIT 2% 2L</span><span>4,79</span></div>
+      <div class="row"><span>0218 POMMES GALA</span><span>3,50</span></div>
+      <div class="rule"></div>
+      <div class="row"><span>COUPON 2,00 $ SUR</span><span></span></div>
+      <div class="row"><span>&nbsp;&nbsp;ACHAT DE 15 $ ET PLUS</span><span>-2,00</span></div>
+      <div class="rule"></div>
+      <div class="row"><span>SOUS-TOTAL</span><span>17,77</span></div>
+      <div class="row big"><span>TOTAL</span><span>17,77</span></div>
+      <div class="rule"></div>
+      <div class="row"><span>DÉBIT</span><span>17,77</span></div>
+      <div class="center">MERCI DE VOTRE VISITE</div>
+    </div>
+  </body>
+</html>
