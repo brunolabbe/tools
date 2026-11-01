@@ -73,3 +73,51 @@ The screen maps onto them exactly as the button does today.
 5. `npm run check`, `npm test -- --project ledger` and `npm run e2e:ledger` pass.
 
 ## Log
+
+### 2026-11-01, build
+
+Web only, as the brief said: `ItemShare`, `chargedTo` and `splitReceipt` are
+untouched. In `web/src/receipts/Receipts.tsx` the share button, `NEXT_SHARE` and
+`nextShare` are gone. Each item has a `Shared` checkbox (`aria-label` "`<item>`
+is shared"), and an unchecked one a `Whose is <item>` select: **Mine**
+(`not-shared`) first, then each other current member (`theirs`). Unchecking
+starts on Mine; checking again sets `shared` and `chargedTo: null`. The separate
+`several` picker is the same select now. A household of one gets a select with
+Mine alone; a read item that is `theirs` in such a household shows a disabled
+"Someone else's" option, so the existing "nobody else in the household" refusal
+reads on the screen, and picking Mine clears it. Each unchecked item shows
+"Takes off `<amount>`", `sharedAmount(proposal, [index]).excludedCents`, and only
+while the items make the total (otherwise there is no split to read it against).
+`fileAs` and its joint-row refusal are as they were (lg-91).
+
+What the brief had wrong or left open:
+
+- **`web/test/generated-ids.test.tsx` taps no item button.** Its Receipts case
+  only reads "File as Alex's line"; the brief's Build 5 names it, and nothing in
+  it needed a rewrite. The tests that tapped the button were all in
+  `web/test/receipts.test.tsx`.
+- **Done when 3's "the sum shown matches the totals" is not always true to the
+  cent.** Each item is rounded alone through `sharedAmount`, as Build 3 says,
+  and the split rounds one person's items together once. The basket's six-pack
+  (15.54 $) and soap (5.74 $) show 21.28 $ apart and the live line says "Not
+  shared 21.27 $". The test with the bread and the soap (3.49 $ and 5.74 $)
+  sums exactly, and a second test pins the one-cent case. If the owner wants
+  the figures on the items to always sum to the line, the items would share the
+  person's rounded total between them (largest remainder), which needs new
+  code and is not what Build 3 names.
+- The e2e household has sam, so the Receipt case's select offers Mine and sam.
+  To show "Takes off" at 360 px the case now types a subtotal, taxes and total
+  that the one item makes.
+
+Checks, in the worktree at the base `686b213c` plus this change:
+
+```
+npx vitest run tools/ledger/web/test/receipts.test.tsx   Tests  44 passed (44)
+npm run check                                             exit 0
+npm test -- --project ledger                              Test Files  99 passed (99), Tests  2132 passed (2132)
+npm run e2e:ledger                                        31 passed (41.6s), exit 0
+```
+
+`Receipt-360.png` and `Receipt-1280.png` under `e2e/.artifacts/layout/` were
+opened: the item shows the unchecked box, the Mine select, and "Takes off 12.99
+$", and nothing runs past the right edge at 360 px.

@@ -16,6 +16,7 @@ import {
   renderHook,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import type {
   HouseholdResponse,
@@ -384,19 +385,51 @@ function shared(): string {
   return screen.getByLabelText("What is shared").textContent ?? "";
 }
 
-test("a tap cycles an item through shared, not shared and the other's, and the amounts follow live", async () => {
+/** An item's Shared box (lg-90). */
+function sharedBox(item: string): HTMLInputElement {
+  return screen.getByRole("checkbox", { name: `${item} is shared` });
+}
+
+/** The choice of whose an unchecked item is; it exists only while the box is unchecked. */
+function whoseSelect(item: string): HTMLSelectElement {
+  return screen.getByLabelText(`Whose is ${item}`);
+}
+
+function optionsOf(select: HTMLSelectElement): string[] {
+  return [...select.options].map((option) => option.text);
+}
+
+/** Unchecks an item; it starts with whoever paid. */
+function leaveOut(item: string): void {
+  fireEvent.click(sharedBox(item));
+}
+
+test("unchecking an item leaves it out, picking a person charges it, and checking it again shares it (lg-90)", async () => {
   await readBasket();
 
   expect(shared()).toBe("Not shared 0.00 $ · sam's 0.00 $ · Shared 24.76 $");
+  expect(sharedBox("BIERE 6X355").checked).toBe(true);
+  expect(screen.queryByLabelText("Whose is BIERE 6X355")).toBeNull();
 
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
+  // Unchecked, it is Mine: it stays with whoever paid, and the split moves by its cost.
+  leaveOut("BIERE 6X355");
+  expect(sharedBox("BIERE 6X355").checked).toBe(false);
+  expect(whoseSelect("BIERE 6X355").value).toBe("mine");
   expect(shared()).toBe("Not shared 15.54 $ · sam's 0.00 $ · Shared 9.22 $");
 
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Not shared" }));
+  // A person is the choice made on purpose, and the charge moves with it.
+  fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "sam" } });
   expect(shared()).toBe("Not shared 0.00 $ · sam's 15.54 $ · Shared 9.22 $");
 
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, sam's" }));
-  expect(screen.getByRole("button", { name: "BIERE 6X355, Shared" })).toBeTruthy();
+  // Checking it again shares it, and nothing of the choice is left.
+  fireEvent.click(sharedBox("BIERE 6X355"));
+  expect(sharedBox("BIERE 6X355").checked).toBe(true);
+  expect(screen.queryByLabelText("Whose is BIERE 6X355")).toBeNull();
+  expect(shared()).toBe("Not shared 0.00 $ · sam's 0.00 $ · Shared 24.76 $");
+
+  // Unchecked again, it starts on Mine and not on the person picked before.
+  leaveOut("BIERE 6X355");
+  expect(whoseSelect("BIERE 6X355").value).toBe("mine");
 });
 
 test("files the items as marked, on what the card was charged", async () => {
@@ -413,8 +446,8 @@ test("files the items as marked, on what the card was charged", async () => {
     filedBy: "alex",
   });
   await readBasket();
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Not shared" }));
+  leaveOut("BIERE 6X355");
+  fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "sam" } });
 
   fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
 
@@ -481,7 +514,7 @@ test("keeps an item left out off a joint-account row, before asking the server",
     },
   ]);
   await readBasket();
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
+  leaveOut("BIERE 6X355");
 
   fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
   fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
@@ -516,7 +549,7 @@ test("shows the Taxable check when a mark does not give the printed taxes, and s
 
 // lg-23 gate 1, F2: among more than two, "the other's" named nobody, and the
 // screen did not offer it. lg-30 names whose on each item, from a picker.
-test("among three people, an item cycles to someone else's and names whose it is", async () => {
+test("among three people, an unchecked item names whose it is from one select (lg-23, lg-30, lg-90)", async () => {
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
   vi.mocked(fileReceipt).mockResolvedValue({
     id: 1,
@@ -536,16 +569,17 @@ test("among three people, an item cycles to someone else's and names whose it is
   await readBasket();
 
   expect(shared()).toBe("Not shared 0.00 $ · Shared 24.76 $");
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Not shared" }));
-  // Someone else's, starting on the first of the others.
-  const beer = screen.getByLabelText("Whose is BIERE 6X355") as HTMLSelectElement;
-  expect([...beer.options].map((option) => option.value)).toEqual(["casey", "sam"]);
+  leaveOut("BIERE 6X355");
+  // Mine first, then each of the others; nobody is charged until one is picked.
+  const beer = whoseSelect("BIERE 6X355");
+  expect([...beer.options].map((option) => option.value)).toEqual(["mine", "casey", "sam"]);
+  expect(optionsOf(beer)).toEqual(["Mine", "casey", "sam"]);
+  expect(beer.value).toBe("mine");
   fireEvent.change(beer, { target: { value: "sam" } });
-  expect(screen.getByRole("button", { name: "BIERE 6X355, sam's" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "SAVON, Shared" }));
-  fireEvent.click(screen.getByRole("button", { name: "SAVON, Not shared" }));
-  expect(screen.getByRole("button", { name: "SAVON, casey's" })).toBeTruthy();
+  expect(beer.value).toBe("sam");
+  leaveOut("SAVON");
+  fireEvent.change(whoseSelect("SAVON"), { target: { value: "casey" } });
+  expect(whoseSelect("SAVON").value).toBe("casey");
 
   // Apart 15,54 $ and 5,74 $; the shared amount takes the cent.
   expect(shared()).toBe("Not shared 0.00 $ · sam's 15.54 $ · casey's 5.74 $ · Shared 3.48 $");
@@ -598,11 +632,10 @@ test("two current members and one who has left: the screen is the two-person one
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "sam"], ["casey"]));
   await readBasket();
 
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Not shared" }));
-
-  expect(screen.getByRole("button", { name: "BIERE 6X355, sam's" })).toBeTruthy();
-  expect(screen.queryByLabelText(/^Whose is/u)).toBeNull();
+  leaveOut("BIERE 6X355");
+  // Mine and the one other current member; casey has left and is not offered.
+  expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Mine", "sam"]);
+  fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "sam" } });
   expect(screen.queryByText("This was someone else's")).toBeNull();
   expect(screen.queryByLabelText("Whose it was")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
@@ -739,11 +772,11 @@ test.each([
 
     // The whole receipt cannot be someone else's.
     expect(screen.queryByRole("checkbox", { name: /^This was/u })).toBeNull();
-    // A tap cycles shared and not shared, and never lands on someone else's.
-    fireEvent.click(screen.getByRole("button", { name: "PAIN, Shared" }));
-    expect(screen.getByRole("button", { name: "PAIN, Not shared" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "PAIN, Not shared" }));
-    expect(screen.getByRole("button", { name: "PAIN, Shared" })).toBeTruthy();
+    // Unchecking offers Mine alone: nobody else is there to be picked.
+    leaveOut("PAIN");
+    expect(optionsOf(whoseSelect("PAIN"))).toEqual(["Mine"]);
+    fireEvent.click(sharedBox("PAIN"));
+    expect(sharedBox("PAIN").checked).toBe(true);
 
     // The six-pack was read as someone else's: it is said, and nothing is filed.
     fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
@@ -752,8 +785,9 @@ test.each([
     );
     expect(fileReceipt).not.toHaveBeenCalled();
 
-    // Tapping it moves it off someone else's, and then it files, charging nobody.
-    fireEvent.click(screen.getByRole("button", { name: /^BIERE 6X355, / }));
+    // The read item is someone else's, which the select says; Mine moves it off, and then it files, charging nobody.
+    expect(whoseSelect("BIERE 6X355").value).toBe("");
+    fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "mine" } });
     fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
     await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
     const filed = vi.mocked(fileReceipt).mock.calls[0]?.[1];
@@ -766,7 +800,7 @@ test.each([
 
 test("entering a rebate on an item updates the add-up check and the split live, and files it (lg-89)", async () => {
   await readBasket();
-  fireEvent.click(screen.getByRole("button", { name: "BIERE 6X355, Shared" }));
+  leaveOut("BIERE 6X355");
   expect(shared()).toBe("Not shared 15.54 $ · sam's 0.00 $ · Shared 9.22 $");
   expect(field("Rebate on BIERE 6X355").value).toBe("");
 
@@ -1137,4 +1171,107 @@ test("leaving the screen during a wait reads nothing more (lg-92 F5)", async () 
   } finally {
     vi.useRealTimers();
   }
+});
+
+// --- lg-90: a Shared box on each item, and a select of whose it is once unchecked ---
+
+test.each([
+  ["two", ["alex", "sam"], ["Mine", "sam"]],
+  ["three", ["alex", "casey", "sam"], ["Mine", "casey", "sam"]],
+])(
+  "on a household of %s an unchecked item offers Mine and each other member, and a checked one offers nothing (lg-90)",
+  async (_name, members, offered) => {
+    vi.mocked(fetchHousehold).mockResolvedValue(household(members));
+    await readBasket();
+
+    expect(screen.queryByLabelText(/^Whose is/u)).toBeNull();
+    leaveOut("SAVON");
+
+    expect(optionsOf(whoseSelect("SAVON"))).toEqual(offered);
+    // Mine is the start; a person is only ever picked.
+    expect(whoseSelect("SAVON").value).toBe("mine");
+    // Only the unchecked item carries one.
+    expect(screen.getAllByLabelText(/^Whose is/u)).toHaveLength(1);
+  },
+);
+
+test("among three people, checking a charged item again files it shared with nobody charged (lg-90)", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  vi.mocked(fileReceipt).mockResolvedValue({
+    id: 1,
+    receiptId: 3,
+    part: 1,
+    proposal: BASKET,
+    periodLineId: 9,
+    chargeLineId: 10,
+    charges: [{ chargedTo: "casey", lineId: 10 }],
+    rowId: null,
+    filedAt: "x",
+    filedBy: "alex",
+  });
+  await readBasket();
+  leaveOut("BIERE 6X355");
+  fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "sam" } });
+  leaveOut("SAVON");
+  fireEvent.change(whoseSelect("SAVON"), { target: { value: "casey" } });
+  // The six-pack is shared after all: the person it was charged to is gone with the box.
+  fireEvent.click(sharedBox("BIERE 6X355"));
+  expect(shared()).toBe("Not shared 0.00 $ · casey's 5.74 $ · Shared 19.02 $");
+
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(
+    vi
+      .mocked(fileReceipt)
+      .mock.calls[0]?.[1].proposal.items.map((item) => [item.share, item.chargedTo]),
+  ).toEqual([
+    ["shared", null],
+    ["shared", null],
+    ["theirs", "casey"],
+  ]);
+});
+
+test("each unchecked item shows what it takes off, and one person's items sum to their total (lg-90)", async () => {
+  await readBasket();
+
+  // Checked items show nothing.
+  expect(screen.queryByText(/^Takes off/u)).toBeNull();
+  leaveOut("PAIN");
+  leaveOut("SAVON");
+
+  const list = screen.getByRole("list", { name: "The items" });
+  const takes = within(list)
+    .getAllByText(/^Takes off/u)
+    .map((node) => node.textContent);
+  // Each item through `sharedAmount` alone: the bread has no tax, the soap has both.
+  expect(takes).toEqual(["Takes off 3.49 $", "Takes off 5.74 $"]);
+  // Both are Mine, so the live line's "Not shared" is their sum, 9.23 $.
+  expect(shared()).toBe("Not shared 9.23 $ · sam's 0.00 $ · Shared 15.53 $");
+
+  // Handed to sam, the same two sum to what sam is charged.
+  fireEvent.change(whoseSelect("PAIN"), { target: { value: "sam" } });
+  fireEvent.change(whoseSelect("SAVON"), { target: { value: "sam" } });
+  expect(shared()).toBe("Not shared 0.00 $ · sam's 9.23 $ · Shared 15.53 $");
+  // Checking one back takes its amount off the page, and the total follows.
+  fireEvent.click(sharedBox("SAVON"));
+  expect(within(list).getAllByText(/^Takes off/u)).toHaveLength(1);
+  expect(shared()).toBe("Not shared 0.00 $ · sam's 3.49 $ · Shared 21.27 $");
+});
+
+// Each item is rounded alone, as `sharedAmount` is asked of it, and the split
+// rounds a person's items together once: two taxable items can differ by a cent.
+// Pinned so the difference is a known one, not a surprise (lg-90's Log).
+test("two taxable items can show a cent more apart than the split takes off together (lg-90)", async () => {
+  await readBasket();
+  leaveOut("BIERE 6X355");
+  leaveOut("SAVON");
+
+  const list = screen.getByRole("list", { name: "The items" });
+  expect(
+    within(list)
+      .getAllByText(/^Takes off/u)
+      .map((node) => node.textContent),
+  ).toEqual(["Takes off 15.54 $", "Takes off 5.74 $"]);
+  expect(shared()).toBe("Not shared 21.27 $ · sam's 0.00 $ · Shared 3.49 $");
 });
