@@ -50,7 +50,7 @@ through the `field()` helper in `receipts/Receipts.tsx`, which defaults to
 | `periods/Recurring.tsx:148`              | Each month                                     | **No**                                 | The form refuses `monthlyCents <= 0` (`Recurring.tsx:78`). The contract is `min(1)` (`api.ts:1161`).                                                                                                                                                                                         |
 | `rules/RuleForm.tsx:110`                 | Exact amount of a rule                         | **Yes**                                | Bank rows are signed, "negative for money out" (`contract/src/layout.ts:93`), and a rule matches a row on its exact amount. `ruleDraftSchema` has `amountCents: z.number().int().nullable()` with no sign bound (`api.ts:531`).                                                              |
 | `salaries/Salaries.tsx:215`              | A person's salary                              | **No**                                 | The form refuses `amountCents < 0` (`Salaries.tsx:140`). `salaryEntrySchema` is `min(0)` (`api.ts:784`).                                                                                                                                                                                     |
-| `salaries/MortgageSplit.tsx:159`         | A person's part, in %                          | **No**                                 | `parseShare` (`web/src/labels.ts:82`) matches digits only. `partsPerMillion` is `min(0)` (`api.ts:965`).                                                                                                                                                                                     |
+| `salaries/MortgageSplit.tsx:159`         | A person's part, in %                          | **No**                                 | `parseShare` (`web/src/labels.ts:82`) refuses a sign: its pattern takes digits, a `.` or `,` decimal part and a trailing `%`. `partsPerMillion` is `min(0)` (`api.ts:965`).                                                                                                                  |
 
 So the fields where a minus key would matter are the five rows marked **Yes**
 (the Price, the receipt's money fields and Charged, the period line's Amount and
@@ -349,3 +349,8 @@ _Why_.
   and "nothing about the keypad is measured". `git diff f6485e7b --
   <this ticket> | grep -c '^-.*which saw the iOS keypad in its own build and'` →
   `1`, and `'^-.*nothing in the keypad column is measured'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F3 — "the table says
+  `parseShare` in `web/src/labels.ts` 'matches digits only'. Its pattern also
+  takes a decimal part (`.` or `,`) and a trailing `%`". The row now says it
+  refuses a sign, and what its pattern takes. `git diff f6485e7b -- <this
+  ticket> | grep -c '^-.*matches digits only'` → `1`.
