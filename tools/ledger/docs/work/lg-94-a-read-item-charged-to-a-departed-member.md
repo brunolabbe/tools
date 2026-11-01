@@ -511,7 +511,7 @@ three answers, relayed by the coordinator).**
     nobody", false for a read naming the payer or a name the books never held.
   - **Recorded, not fixed:** the stale alert after a refused tap (the build entry's "Stale
     alert, not fixed"; unchanged, and shared with `NOBODY_ELSE` and `NOBODY_CHOSEN`), and the
-    household-of-two live line (it reads `Whose not chosen yet` with one candidate). Gate 1's
+    household-of-two live line (it reads `Whose not chosen yet` for the whole charged amount whenever any item is unpicked, an item that is the one other member's included). Gate 1's
     section holds their text.
 - **Built, B (the joint round trip).** `ItemDraft` gains `asRead`, true when the read proposed
   the item `theirs` and cleared by any choice of the person's (the Shared box, either select).
@@ -538,3 +538,7 @@ answer on gate 2's three lows, relayed by the coordinator).**
 - **Answer D, gate 2's three lows.** Options: all three at landing (recommended); the second
   and third only; record all three. Chosen by the owner: **all three at landing, with no
   re-gate.** Each is marked below as _Fixed at landing_.
+
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, the first new low — "Three behaviours of asRead have no test on the branch". Three tests added at the end of `web/test/receipts.test.tsx`, `npx vitest run tools/ledger/web/test/receipts.test.tsx -t lg-94` → `13 passed | 51 skipped (64)` (10 before). Under `mutate2.mjs`'s mutation (`!item.asRead &&` removed from `payMyself`, committed tree, restored by checking the file out of the tests commit) the result is `4 failed | 9 passed`: the two lg-94 round-trip tests of the branch, plus `with one other member, a read charge to nobody stays theirs through the joint card and back (lg-94)` and `with nobody else, a read charge to nobody is still refused after the joint card and back (lg-94)`. The third, `an item unchecked while paid jointly is Mine again on my own card, though the read charged it to nobody (lg-94)`, cannot fail under that mutation: the mutation makes every such item Mine, which is that test's expected result. It fails under the opposite one, the Shared box's `asRead: false` removed from its `onChange`: `1 failed | 12 passed`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, the second new low — "reads only zed. Its title claims more than its body asserts". The body of `a refusal's words are true for a name the books never held, the payer and a departed member alike (lg-94)` now loops over `zed`, `alex` (the payer) and `dana` (a departed member), each asserting `Whose?` selected and the `UNPICKED_CHARGE` hint shown; it passes in the `-t lg-94` run above (`13 passed`).
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, the third new low — "The Log's round 1 entry describes gate 1's third low as it reads Whose not chosen yet with one candidate". The round 1 entry now carries gate 1's wording, in place. `git diff 6a294daa HEAD -- tools/ledger/docs/work/lg-94-a-read-item-charged-to-a-departed-member.md | grep -c '^-.*with one candidate'` → `1`.

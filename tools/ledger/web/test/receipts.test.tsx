@@ -1585,11 +1585,82 @@ test("an item the person picked on the joint card is Mine again on my own card, 
 });
 
 test("a refusal's words are true for a name the books never held, the payer and a departed member alike (lg-94)", async () => {
-  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-  await readBasketCharged("zed");
+  // Each charge is a different reason for the same refusal: a name the books never held (zed),
+  // the payer (alex), a member who has left (dana).
+  for (const [chargedTo, left] of [
+    ["zed", []],
+    ["alex", []],
+    ["dana", ["dana"]],
+  ] as const) {
+    vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"], left));
+    await readBasketCharged(chargedTo);
 
-  expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Whose?");
-  expect(screen.getByText(UNPICKED_CHARGE)).toBeTruthy();
+    expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Whose?");
+    expect(screen.getByText(UNPICKED_CHARGE)).toBeTruthy();
+    cleanup();
+  }
   // The words claim nothing about why: a departed member, the payer and nobody are all named by it.
   expect(UNPICKED_CHARGE).not.toMatch(/has left|to nobody/u);
+});
+
+test("an item unchecked while paid jointly is Mine again on my own card, though the read charged it to nobody (lg-94)", async () => {
+  basketRow();
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
+  await readBasketCharged(null);
+
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  await screen.findByRole("button", { name: "Attach to this row" });
+  // The person's own taps on the Shared box clear what the read proposed.
+  fireEvent.click(sharedBox("BIERE 6X355"));
+  fireEvent.click(sharedBox("BIERE 6X355"));
+  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+
+  expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Mine");
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(filedItems()).toEqual([
+    ["PAIN", "shared", null],
+    ["BIERE 6X355", "not-shared", null],
+    ["SAVON", "shared", null],
+  ]);
+});
+
+test("with one other member, a read charge to nobody stays theirs through the joint card and back (lg-94)", async () => {
+  basketRow();
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "sam"]));
+  vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  await readBasketCharged(null);
+  expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("sam");
+
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  await screen.findByRole("button", { name: "Attach to this row" });
+  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+
+  // Not Mine: nobody chose that, and the one other member is still the item's.
+  expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("sam");
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(filedItems()).toEqual([
+    ["PAIN", "shared", null],
+    ["BIERE 6X355", "theirs", null],
+    ["SAVON", "shared", null],
+  ]);
+});
+
+test("with nobody else, a read charge to nobody is still refused after the joint card and back (lg-94)", async () => {
+  basketRow();
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex"]));
+  vi.mocked(fetchPeople).mockResolvedValue(["alex"]);
+  await readBasketCharged(null);
+
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  await screen.findByRole("button", { name: "Attach to this row" });
+  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "There is nobody else in the household to charge an item to.",
+  );
+  expect(fileReceipt).not.toHaveBeenCalled();
 });
