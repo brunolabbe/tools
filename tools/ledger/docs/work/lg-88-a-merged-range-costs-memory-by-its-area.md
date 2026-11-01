@@ -58,6 +58,24 @@ width, the row count past the last stored row, and a value stored inside a merge
    are absent. Simplest, and changes row widths for every merged layout, which the
    books' column positions may rely on — unverified.
 
+## Measurement — answered 2026-11-01 by the owner
+
+**Option (a): both runs, capped.** Asked at intake, because Done when 2 measures
+`A1:XFD1000`, which before the fix is about +570 MB: over the production
+container's 512 MB (`compose.ledger.prod.yaml`), on a shared machine. The options:
+
+- **(a) both runs, capped (chosen).** Measure before and after the fix, each in a
+  child node process with its heap capped at 512 MB (`--max-old-space-size=512`).
+  The before run is expected to hit the cap, and that counts as the reading that
+  proves the bug. The after run must stay under the +110 MB a request the 4 MiB
+  bound was sized for.
+- (b) after the fix only, citing lg-87's estimate for the before figure.
+- (c) as written, uncapped.
+
+lg-87's `mergecost.mts` is not in the repo, so the measuring script is written
+here and its path is in the Log. A heap cap bounds the V8 old space only, not
+off-heap `Buffer`s; what RSS then shows is said beside each number.
+
 ## Build
 
 1. In `api/src/xlsx.ts`, `rowsOf`: delete the `covered` map and its loop over
@@ -80,3 +98,4 @@ width, the row count past the last stored row, and a value stored inside a merge
 
 - 2026-11-01: filed from lg-87's gate (its F5 bullet), on the owner's choice.
 - 2026-11-01: owner answered the decision: option 3. Build written from it; status `ready`.
+- 2026-11-01: owner answered the measurement question at intake: option (a), both runs capped at 512 MB. Recorded above.
