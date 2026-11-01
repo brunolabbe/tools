@@ -54,3 +54,49 @@ test("another refusal is not given a wait", async () => {
 
   expect((await caught()).details).toBeUndefined();
 });
+
+// lg-97: Cloudflare's rate limiting rule answers 429 with an HTML page, which
+// read as "The API answered 429." until the status alone was enough.
+function edgeRefuse(headers: Record<string, string>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response("<!DOCTYPE html><title>Access denied | Error 1015</title>", {
+          status: 429,
+          headers: { "content-type": "text/html", ...headers },
+        }),
+    ),
+  );
+}
+
+test("an edge 429 with no body of ours reads as RATE_LIMITED, with the header's wait (lg-97)", async () => {
+  edgeRefuse({ "retry-after": "10" });
+
+  const error = await caught();
+
+  expect(error.code).toBe("RATE_LIMITED");
+  expect(error.message).toBe("Too many requests. Try again shortly.");
+  expect(error.details).toEqual({ retryAfterSec: 10 });
+});
+
+test("an edge 429 with no header carries no wait (lg-97)", async () => {
+  edgeRefuse({});
+
+  const error = await caught();
+
+  expect(error.code).toBe("RATE_LIMITED");
+  expect(error.details).toBeUndefined();
+});
+
+test("another status with no body of ours still names the status (lg-97)", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("<html></html>", { status: 502 })),
+  );
+
+  const error = await caught();
+
+  expect(error.code).toBe("INTERNAL");
+  expect(error.message).toBe("The API answered 502.");
+});

@@ -1062,9 +1062,13 @@ Security → WAF → Rate limiting rules → Create rule:
 tell the downloader's `/api/` from the planner's or the ledger's, so it counts
 all of them against one budget per visitor address: 20 requests in 10 seconds,
 shared across every tool this host serves. The figures below are sized from the
-downloader's traffic alone; **the planner's and the ledger's request counts were
-not measured**, so if either trips the rule in ordinary use, raise the threshold
-rather than the period. **Whether to create this rule at all is the owner's
+downloader's traffic alone; **the planner's request count was not measured**.
+**The ledger's does trip it in ordinary use** (lg-97, 2026-11-01): one tab
+switch costs 3 to 8 `/api/` requests, read from what each screen fetches when it
+opens, so three screens opened in a few seconds reach 20, and the household on one
+home connection shares that count. A blocked ledger request shows "Too many
+requests. Try again shortly.". Raise the threshold rather than the period; lg-98
+cuts the ledger's count. **Whether to create this rule at all is the owner's
 choice at the dashboard:** accept a limit shared by every tool, or create none and
 rely on the in-process limiters, which a redeploy resets. Do not widen the path
 past `/api/`: the page and its assets are not what this protects, and a first
