@@ -76,6 +76,19 @@ lg-87's `mergecost.mts` is not in the repo, so the measuring script is written
 here and its path is in the Log. A heap cap bounds the V8 old space only, not
 off-heap `Buffer`s; what RSS then shows is said beside each number.
 
+**Second answer — 2026-11-01, after the build, by the owner. This supersedes
+the bullet above:** the before run is not expected to hit the cap. The 512 MB
+cap limits only V8's heap, and the before run at `A1:XFD1000` did not stop at
+it. The question was what should count as the before reading. The options:
+
+- **(a) the memory reading: +480.9 MB growth, 606 MB peak RSS (chosen).** The
+  builder's recommendation.
+- (b) also add a 256 MB cap-kill run.
+
+So the before reading is the memory reading, not a kill by the cap; the bullet
+above that says the before run "is expected to hit the cap, and that counts as
+the reading that proves the bug" no longer holds.
+
 ## Build
 
 1. In `api/src/xlsx.ts`, `rowsOf`: delete the `covered` map and its loop over
@@ -152,3 +165,10 @@ off-heap `Buffer`s; what RSS then shows is said beside each number.
   expectation that the 512 MB cap would stop the before run at `A1:XFD1000` was
   wrong, above.
   (3) Fold-in: none. Nothing else was made free by this change.
+- 2026-11-01: owner's answer after the build (landing, fixer, Sonnet 5.5): the
+  intake answer expected the 512 MB cap to stop the before run, and it did not.
+  The owner chose option (a), the memory reading (+480.9 MB growth, 606 MB
+  peak), over (b), also adding a 256 MB cap-kill run. Recorded under
+  `## Measurement` above, which says the owner superseded the expectation.
+- 2026-11-01: Fixed at landing by owner choice: gate 1, the third low — "the owner's second answer on the measurement is not on the ticket". The answer is under `## Measurement`, and the entry above dates it. `git diff 1dc17728 HEAD -- tools/ledger/docs/work/lg-88-a-merged-range-costs-memory-by-its-area.md | grep -v 'Fixed at landing' | grep -c "^+.*builder[']s recommendation"` → `1`.
+- 2026-11-01: gate 1's open decision, answered by the owner: a stored cell far from the origin (`A1048576`) costs about +50 MB per sheet in `readSheets` (49.3 MB at the base, 51.8 MB at the head), and this branch does not introduce it. The owner chose to file it as a separate ticket; it is not fixed here, and its filing is dispatched apart from this landing.
