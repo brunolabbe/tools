@@ -100,10 +100,10 @@ describe("reading an .xlsx file", () => {
 
     const [sheet] = await readSheets(data);
 
-    expect(sheet?.rows[0]).toEqual([
-      { value: { kind: "text", text: "Alex" }, formula: null },
-      null,
-    ]);
+    // The merge's other part has no place at all (lg-88): the row ends at its
+    // one cell, and a reader's `rows[0]?.[1] ?? null` reads the same `null`.
+    expect(sheet?.rows[0]).toEqual([{ value: { kind: "text", text: "Alex" }, formula: null }]);
+    expect(sheet?.rows[0]?.[1] ?? null).toBeNull();
   });
 
   test("a file that is not a workbook is refused, with the reader's reason", async () => {
@@ -207,7 +207,7 @@ describe("reading an .xlsx file, the cases lg-84's gate named (lg-87)", () => {
     );
   });
 
-  test("a merge past the last stored row holds its places to its own end", async () => {
+  test("a merge past the last stored row does not extend the sheet (lg-88)", async () => {
     const data = file((sheet) => {
       sheet.set("A1", "Alex");
       sheet.merge("A3:B5");
@@ -215,13 +215,10 @@ describe("reading an .xlsx file, the cases lg-84's gate named (lg-87)", () => {
 
     const [sheet] = await readSheets(data);
 
-    expect(sheet?.rows).toHaveLength(5);
-    expect(sheet?.rows[1]).toEqual([]);
-    expect(sheet?.rows[2]).toEqual([null, null]);
-    expect(sheet?.rows[4]).toEqual([null, null]);
+    expect(sheet?.rows).toEqual([[{ value: { kind: "text", text: "Alex" }, formula: null }]]);
   });
 
-  test("F5: a merge over 150 000 rows is read, not a RangeError", async () => {
+  test("F5: a merge over 150 000 rows is read, not a RangeError, and costs no rows (lg-88)", async () => {
     const data = file((sheet) => {
       sheet.set("A1", "Alex");
       sheet.merge("A1:B150000");
@@ -229,7 +226,8 @@ describe("reading an .xlsx file, the cases lg-84's gate named (lg-87)", () => {
 
     const [sheet] = await readSheets(data);
 
-    expect(sheet?.rows).toHaveLength(150_000);
+    expect(sheet?.rows).toHaveLength(1);
+    expect(sheet?.rows[0]).toHaveLength(1);
     expect(sheet?.rows[0]?.[0]?.value).toEqual({ kind: "text", text: "Alex" });
   });
 
@@ -299,5 +297,21 @@ describe("a date serial's day, at the ends and in any time zone (lg-87 gate 1)",
       if (was === undefined) delete process.env["TZ"];
       else process.env["TZ"] = was;
     }
+  });
+});
+
+// lg-88: what a merged range costs.
+describe("a merged range costs no memory of its own (lg-88)", () => {
+  test("a merge of A1:XFD1000 holds no places, whatever its area (lg-88)", async () => {
+    const data = file((sheet) => {
+      sheet.set("A1", "Alex");
+      sheet.merge("A1:XFD1000");
+    });
+
+    const [sheet] = await readSheets(data);
+
+    // 16 384 columns by 1 000 rows was +484 MB of memory from a 16 KB file; the
+    // measurement is in lg-88's Log, since a test of memory measures the machine.
+    expect(sheet?.rows.flat()).toHaveLength(1);
   });
 });

@@ -97,38 +97,23 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
   return { value, formula };
 }
 
-/** One sheet's rows, each a row of cells with gaps kept as `null`. */
+/**
+ * One sheet's rows, each a row of cells with gaps kept as `null`.
+ *
+ * A merged range's other parts are not cells and are given no place: a reader
+ * indexes a row as `rows[r]?.[c] ?? null`, so an absent place reads as the `null`
+ * a gap does. Giving each its own `null`, as `exceljs` did, cost memory in
+ * proportion to the merge's area (+76 MB at A1:XFD100, +227 MB at A1:XFD400)
+ * past every size bound, a 2.5 KB file (lg-88).
+ */
 function rowsOf(sheet: XLSX.DenseSheet, date1904: boolean): (Cell | null)[][] {
-  // A merged cell's other parts are not cells: only the first part is read, and
-  // the rest hold a place, as they did under `exceljs`.
-  const covered = new Map<number, Set<number>>();
-  let last = 0;
-  for (const range of sheet["!merges"] ?? []) {
-    last = Math.max(last, range.e.r + 1);
-    for (let r = range.s.r; r <= range.e.r; r += 1) {
-      for (let c = range.s.c; c <= range.e.c; c += 1) {
-        if (r === range.s.r && c === range.s.c) continue;
-        const row = covered.get(r) ?? new Set<number>();
-        row.add(c);
-        covered.set(r, row);
-      }
-    }
-  }
   const data = sheet["!data"] ?? [];
   const rows: (Cell | null)[][] = [];
-  // Loops, not a spread into `Math.max`: a merge over 150 000 rows is a call
-  // with 150 000 arguments, which throws a `RangeError` (lg-87).
-  last = Math.max(last, data.length);
-  for (let r = 0; r < last; r += 1) {
-    const source = data[r] ?? [];
-    const placed = covered.get(r) ?? new Set<number>();
+  for (const source of data) {
     let width = 0;
-    for (const [c, cell] of source.entries()) if (holds(cell)) width = c + 1;
-    for (const c of placed) width = Math.max(width, c + 1);
+    for (const [c, cell] of (source ?? []).entries()) if (holds(cell)) width = c + 1;
     const cells: (Cell | null)[] = [];
-    for (let c = 0; c < width; c += 1) {
-      cells.push(placed.has(c) ? null : cellOf(source[c], date1904));
-    }
+    for (let c = 0; c < width; c += 1) cells.push(cellOf(source?.[c], date1904));
     // A row with nothing stored in it is a gap, as an absent row is.
     rows.push(cells);
   }
