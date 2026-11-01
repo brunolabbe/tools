@@ -350,7 +350,7 @@ export function PlanView({
 
   if (state.kind === "loading") {
     return (
-      <section className="panel plan">
+      <section className="card plan">
         <p className="muted">Reading the plan…</p>
       </section>
     );
@@ -358,7 +358,7 @@ export function PlanView({
 
   if (state.kind === "failed") {
     return (
-      <section className="panel plan">
+      <section className="card plan">
         <p className="bad">{state.message}</p>
         <div className="actions">
           <button type="button" className="primary" onClick={onExit}>
@@ -419,7 +419,7 @@ function Document({
 
   if (latest === null) {
     return (
-      <section className="panel plan">
+      <section className="card plan">
         <h2>{plan.title}</h2>
         {/* Real and reachable: the plan row is written before the fan-out, so a
             plan with no revisions is one whose first run has not finished. It
@@ -447,7 +447,7 @@ function Document({
   const caution = shape === null ? undefined : AUTHORITATIVE_SOURCES[shape];
 
   return (
-    <section className="panel plan">
+    <section className="card plan">
       <h2>{plan.title}</h2>
 
       <p className="crumb">

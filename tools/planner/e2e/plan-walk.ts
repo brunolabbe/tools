@@ -51,7 +51,7 @@ export async function draftAPlan(page: Page): Promise<string> {
   });
   await page.getByRole("button", { name: "Read the plan" }).click();
 
-  const plan = page.locator("section.panel.plan");
+  const plan = page.locator("section.card.plan");
   await expect(plan).toBeVisible();
   return (await plan.getByRole("heading").first().innerText()).trim();
 }
@@ -72,5 +72,5 @@ export async function reopenFromTheList(page: Page, title: string): Promise<void
   if ((await crumb.count()) > 0) await crumb.click();
 
   await page.locator("ul.plans button.link").filter({ hasText: title }).first().click();
-  await expect(page.locator("section.panel.plan")).toBeVisible();
+  await expect(page.locator("section.card.plan")).toBeVisible();
 }

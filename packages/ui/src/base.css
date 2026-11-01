@@ -1,0 +1,185 @@
+/*
+ * The base layer every web UI shares (repo-130): the look of the elements and
+ * the few classes all three tools drew, each in its own way, until this reset
+ * them onto one. Import it after the tokens and before the components and the
+ * tool's own stylesheet:
+ *
+ *     import "@webtools/ui/tokens.css";
+ *     import "@webtools/ui/base.css";
+ *     import "@webtools/ui/chrome.css";
+ *     import "./styles.css";
+ *
+ * EVERY SELECTOR IS WRAPPED IN :where(), so it has no specificity. A class, from
+ * a shared component or from a tool, beats it whatever the load order. Without
+ * that, a bare `input[type="radio"]` size rule would out-rank the `.sr-only` that
+ * hides the theme switch's radios, and the two rules would fight.
+ *
+ * A tool differs from this file in one way: it sets a custom property one of
+ * these rules reads with a fallback (`--card-shadow`, `--card-padding`) in its
+ * own `:root`. It never re-declares a rule from here; `packages/ui/test` fails
+ * a moved tool whose stylesheet does. Those properties are NOT declared in
+ * `tokens.css`: the fallback below is the default, and a name `tokens.css`
+ * declares must be read by a tool.
+ *
+ * Not here, because one tool uses each or they differ too much to pick between
+ * at a glance: form labels, tables, tabs, notices, the ledger's `.small` button
+ * and the downloader's `.card--quiet`. Each moves when a second tool needs it.
+ * `h1` is not here either: the only one in a tool is inside `AppHeader`.
+ */
+
+/* --- text --- */
+
+/* 16px, not the downloader's old 15: a field that inherits 15 is under the 16 iOS needs not to zoom the page on focus. */
+:where(body) {
+  font: var(--font-size-base) / 1.55 var(--font-sans);
+}
+
+:where(code) {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+:where(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:where(.muted) {
+  color: var(--text-muted);
+}
+
+/* --- buttons --- */
+
+/*
+ * Quiet by default; `.primary` is the one main action. 44px is the phone's
+ * tap-target floor. A `<button>` centres its own label in that height; `.button`
+ * is for a link styled as a button, which does not, so it takes the flex.
+ */
+:where(button, .button) {
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+:where(.button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:where(.primary) {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+:where(button:disabled, .button:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+:where(button:hover:not(:disabled), .button:hover:not(:disabled)) {
+  border-color: var(--accent);
+}
+
+/* --- fields --- */
+
+/*
+ * One rule for every text field. `font: inherit` and then `font-size: 1rem`
+ * again, so a tool that sets a smaller body size still keeps its fields at the
+ * 16px iOS needs. Checkboxes and radios are sized below, not here.
+ */
+:where(input:not([type="checkbox"], [type="radio"]), select, textarea) {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+}
+
+/* A textarea has no fixed height to centre its text in, so it needs padding above and below. */
+:where(textarea) {
+  padding: 0.5rem 0.75rem;
+  resize: vertical;
+}
+
+:where([aria-invalid="true"]) {
+  border-color: var(--danger);
+}
+
+/* `flex: none`: in a flex row beside a long label the box is squeezed under its width, and radios in one list come out in two sizes. */
+:where(input[type="checkbox"], input[type="radio"]) {
+  flex: none;
+  width: 1.25rem;
+  min-height: 1.25rem;
+}
+
+/* --- the card, and the stack of cards --- */
+
+/*
+ * The card spaces its own children with `gap`, so a child's margin would add to
+ * it: that is how the ledger's "People" gap opened (lg-70). The last rule below
+ * zeroes the margins a heading, paragraph or list brings.
+ */
+:where(.card) {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: var(--card-padding, var(--gap));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--card-shadow, none);
+}
+
+/* `h3` too, for a card under a screen's own `h2` (lg-70). */
+:where(.card > :is(h2, h3):first-child) {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+:where(.card > :is(p, ul, ol, dl, h2, h3, h4)) {
+  margin: 0;
+}
+
+/*
+ * A grid's `gap` reaches only the grid's own children. Put the cards in a
+ * `.stack` and they are spaced; put them one level down, inside a wrapper that
+ * is not the grid, and they stand flush (lg-70's Admin cards did). The
+ * `min-width: 0` is because a grid item will not shrink below its content, and a
+ * wide chart or table then widens the page (lg-9).
+ */
+:where(.stack) {
+  display: grid;
+  gap: var(--gap);
+}
+
+:where(.stack > *) {
+  min-width: 0;
+}
+
+/* --- the page column --- */
+
+/* Pads less on a phone than a desktop: the one of the three that did. */
+:where(.shell) {
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: var(--gap);
+}
+
+@media (min-width: 48rem) {
+  :where(.shell) {
+    padding: calc(var(--gap) * 2);
+  }
+}

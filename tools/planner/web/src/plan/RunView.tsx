@@ -267,7 +267,7 @@ export function RunView({
   };
 
   return (
-    <section className="panel run">
+    <section className="card run">
       <h2>{progress.status === null ? "Connecting…" : LABELS[progress.status]}</h2>
 
       {progress.status === null ? (

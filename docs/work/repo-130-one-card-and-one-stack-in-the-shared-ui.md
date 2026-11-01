@@ -3,7 +3,7 @@ id: repo-130
 tool: repo
 title: A shared base layer in `@webtools/ui`, every tool reset onto it, the planner first
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -186,11 +186,50 @@ written).
    selector.
 3. The planner's `styles.css` declares no `body`, `button`, `.panel`,
    field or column rule of its own.
-4. Every planner text field shows the page font at 16px. The planner's layout
-   spec says so at 360px and at 1280px.
+4. ~~Every planner text field shows the page font at 16px. The planner's layout
+   spec says so at 360px and at 1280px.~~ _Superseded 2026-11-01 by the line
+   below, which fixes the scope; the wording is unchanged._
+   **4.** Every planner text field in the set the Why enumerates (17 inputs, 3
+   textareas, 3 of the 4 selects: 23 fields) shows the page font at 16px. The
+   planner's layout spec says so at 360px and at 1280px. A planner field on
+   `main` outside that set is named in the Log; the work is not widened for it.
 5. The planner's layout spec and e2e suite pass. The before and after
    screenshots are compared in the Log, screen by screen.
 6. `npm run check` and `npm test` pass.
+
+## Review
+
+**Gate: PASS** — 2026-11-01 · `84135dbf..4e13bd96` · Opus 5.5, depth full
+
+| Done when                                                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. `base.css` exists, holds the table's rules, planner imports it after `tokens.css`                                               | `packages/ui/test/base.test.ts` › "holds the rules the table names" (selector presence) and › "a moved tool imports base.css, and every importer does so after tokens and before the rest" ✓. Values **verified** by reading `base.css` against all 17 table rows: every row is there. The named departures (checkbox and radio `flex: none`, textarea padding and `resize`, `.button`-only centring, the `@media` block for `.shell`) are in the Log; three unnamed ones are a `low` below      |
+| 2. Build 3's test passes, and fails when a moved tool re-declares a base selector                                                  | `base.test.ts` › "a moved tool declares none of the base's selectors in its own styles.css" ✓, 11 of 11. Planted `button { … }` in the planner's `styles.css` and it failed, naming `button`. Planted the base import out of `main.tsx` and it failed with "planner is moved and does not import base.css". It matches selectors literally: `low` below                                                                                                                                          |
+| 3. Planner `styles.css` declares no `body`, `button`, `.panel`, field or column rule                                               | **verified** by reading the file at head. What remains: `button.link` (kept by the brief), `.card.warn` (renamed by the brief), and the width overrides `.row .field`, `.measure .field`, `.field.short` and `.move-control select`. Those four set a field's width in one context and existed before; they do not restyle a field                                                                                                                                                               |
+| 4. Every planner text field shows the page font at 16px, at 360 and 1280 (owner, 2026-11-01: met on all 24, as a regression guard) | `tools/planner/e2e/layout.spec.ts` › "the checkpoint fits a phone and a desktop, with the answers beside it" (the `watchTextFields` assertion) and › "a plan fits a phone and a desktop" (`readTextFields` at both widths, at least 3). Planner `e2e` passed on CI at `4e13bd96`, and 5 of 5 passed locally. With the base import removed, both cases fail on `13.3333px` readings. The watch saw 6 intake fields (textarea, `input:date`, `input:number`); the Plan screen read 7 at each width |
+| 5. Layout spec and e2e suite pass; before and after screenshots compared in the Log                                                | Planner `e2e` passed on CI at `4e13bd96` (whole suite). Locally, `layout.spec.ts` passed 5 of 5 in light and 5 of 5 in dark. The Log compares the screens; the gate also took the base and head sets in both themes and opened the screens the builder had not (dark, and 1280 trips, Run and Plan). Every difference seen is a table row, the `.stack` fix, or a named finding. **verified**                                                                                                    |
+| 6. `npm run check` and `npm test` pass                                                                                             | CI `check` and `test (ubuntu-latest)` passed at `4e13bd96`. Locally, `npx vitest run packages/ui tools/downloader/web/test/vite-config.test.ts`: 71 of 71 across 8 files. `npx vitest run tools/planner/web packages/core/test/image-closure.test.ts`: 140 of 140 ✓                                                                                                                                                                                                                              |
+
+- **low** · no `Done when` line depends on it · `nfr:maintainability` — the re-declaration guard in `packages/ui/test/support/base.ts` (`redeclaredSelectors`) matches selector text exactly. Two of the rules this branch deleted could come back without failing it: `button.primary { … }` and `.field { font: 13px serif }`, appended to the planner's `styles.css`, each leave `base.test.ts` at 11 of 11. `ui-package.md` describes this accurately ("a selector the base declares"), so Done when 2 is met as written. Done when 3 rests on reading the file, not on the guard.
+- **low** · Done when 5 (the rule departures are now recorded here) — `base.css` departs from the table in three places the Log does not name:
+  - `text-decoration: none` on `button, .button`;
+  - `color: var(--text)` on text fields;
+  - button states scoped to `button:disabled, .button:disabled` and `button:hover:not(:disabled), .button:hover:not(:disabled)`, where the table writes bare `:disabled` and `:hover:not(:disabled)`.
+
+  None of the three changed anything visible in the 20 head screenshots.
+
+- **low** · false in the safe direction · the Log's Fold-ins says "the downloader and ledger still declare their own `--font-sans`". The ledger declares none: its `body` reads `var(--font-sans)`, so the new stack in `tokens.css` changes the ledger's computed `font-family`. This is the change the table asked for. It renders the same wherever `system-ui` resolves, and the ledger `e2e` passed on CI at `4e13bd96`. A pixel comparison of the ledger was not made.
+- **low** · false in the safe direction · the Log says "Buttons: 40px to 44px". A base button computes to about 44.4px (`0.55rem` padding twice, a 1.55 line and the border), and "Describe a new trip" is 44px tall in the base `Trips and plans-360` screenshot. Button height is essentially unchanged.
+- **low** · `nfr:maintainability` — the planner rule `.card > :is(.crumb, .day, .replan, .version-picker, .actions) { margin: 0 }` re-declares no base selector and states its reason. It is still a second place that decides how a card spaces its children, and `base.test.ts` cannot see it. Three of the five classes (`.day`, `.replan`, `.version-picker`) appear only as direct children of a card, so their own margins could be deleted instead. Only `.crumb` and `.actions` also appear outside a card.
+- **low** · a comment that contradicts the rule page · the `tokens.css` header says "a tool that differs (the body size, the font stack) sets its own in its `:root`". The next sentence, and `ui-package.md`, say a tool differs from the base only through a fallback-read property. dl-135 will meet both readings for the downloader's `15px`.
+- **dropped** · four planner rules that set a field's width in one context (`.row .field`, `.measure .field`, `.field.short`, `.move-control select`) — not a field look, and they existed before. A class beating a `:where()` rule is the design.
+- **dropped** · the "Change the dates or budget" fieldset's browser border, and the Nights field touching the budget radios — the same in the base `Plan-1280` screenshot. Outside the reviewed range.
+- **dropped** · the crumb's `button.link.inline` is now 44px tall — the table's Buttons row, the same mechanism as `.pin`.
+- **dropped** · `ui-package.md` states the import order for every web package while two tools do not import the base yet — the same paragraph names the `MOVED` list, which is accurate.
+- **dropped** · the widened tokens guard counting a read in a `base.css` comment — refuted: a planted `--gate-unread` that was read only inside a `base.css` comment still failed "declares no name that no tool reads".
+- **CI at `4e13bd96`** · every check passed except the downloader's `e2e (direct)`, still in progress when this was written. The diff reaches the downloader only through a `tokens.css` comment and the font-stack default, which the downloader overrides in its own `:root`.
+- **findings** · the hunt returned 11; 6 carried, 5 dropped.
+- NFR: security n/a · performance n/a · reliability ✓ (the positive controls go red) · maintainability — above. Layout read at 360 and 1280, light and dark: no screen overflows.
 
 ## Log
 
@@ -230,3 +269,221 @@ Fold-in: the 2026-10-25 entry above says lg-70 is "open as pull request #664",
 which is stale. lg-70 merged as `f69e9b2c`. `git log --oneline -1 f69e9b2c`
 prints `f69e9b2c fix(ledger): space Admin's cards and restore the stats gridlines
 (lg-70) (#664)`. The old sentence is left as it was written.
+
+**2026-11-01 — Done when 4 scoped, answered by the owner at intake.** Question
+(from the builder's dispatch): "Done when 4 says 'Every planner text field shows
+the page font at 16px'. The fields are listed only in the Why: 17 inputs, 3
+textareas, 3 of the 4 selects. What does the gate grade it against?" Options: (1)
+the Why's 23 fields, the dispatch naming that enumerated set as the scope, with
+a field on `main` outside it a Log line and not extra scope; (2) re-enumerate on
+`main` first, the builder listing every field in the Log and the gate grading
+against that list. The owner chose **(1) the Why's 23 fields**, the
+orchestrator's recommendation. Done when 4 is reworded above, the old line left
+beside it and marked superseded.
+
+**2026-11-01 — built (builder).** Branch `repo-130-shared-base-layer`, code at
+`e8410108` on base `84135dbf`. Build 1 to 5 done. Shipped: `packages/ui/src/base.css`
+(exported as `@webtools/ui/base.css`), the font stack in `tokens.css`, the
+planner moved, `packages/ui/test/base.test.ts` (with `test/support/base.ts`),
+`.claude/rules/ui-package.md`. `--font-size-base` stays `1rem`; the planner's
+own `16px` and its `--font-sans` are gone. `h1` is untouched, left for pl-65.
+`tokens.test.ts`'s "no name no tool reads" guard now also reads `base.css` and
+`chrome.css`, because once a rule moves into the base the tools stop reading
+its names themselves and the guard would fail on the next tool's move.
+
+**What the brief had wrong.** The Why says the planner's text fields "have no
+rule" and take the browser's 13.33px. On `84135dbf` they do not: every `<input>`,
+`<textarea>` and `<select>` that is not a checkbox or radio carries `className="field"`,
+and `.field` set `font: inherit`. The planner's layout spec, with the new
+font assertion added and nothing else changed, **passed at the base**
+(`e2e-probe-before`, 5 of 5), so Done when 4 was already true before this
+ticket and is not a red-to-green here. It is now a guard: with `base.css` no
+longer imported, the same spec fails with `textarea 13.3333px monospace`,
+`input:date 13.3333px monospace`, `input:number 13.3333px Arial`,
+`select 13.3333px Arial` (measured, the browser's form font). The counts in the Why
+also do not match the code: 17 inputs (9 text-like, 5 radios, 3 checkboxes), 3 textareas and **4**
+selects, all four with `.field`: `controls.tsx` (currency), `PlanView.tsx`
+(the version picker and the move form's two). 24 fields by that count, not 23;
+the owner's answer scopes the work to the Why's set, and no field outside it
+needed work, so none was left out. A planner field the Why's set misses, named
+as asked: the fourth select, which the set's "3 of the 4" does not say which of
+the four it leaves out.
+
+**Where the build departs from the table, each with its reason.**
+
+- `flex: none` on checkbox and radio. In the planner's `.choice` (a flex row)
+  the 1.25rem box was squeezed beside a long label, and radios in one list came
+  out in two sizes (seen in the first screenshot after the move).
+- `textarea` takes `padding: 0.5rem 0.75rem` and `resize: vertical`. The table's
+  `padding: 0 0.75rem` puts a textarea's text on its border. The ledger's own
+  textarea rule had both.
+- `.button` alone takes `display: inline-flex` and centring. On `button` too, it
+  centred `button.link`'s grid and moved the trip and plan titles to the middle.
+- `:where(.shell)`'s `calc(var(--gap) * 2)` from `48rem` sits in an
+  `@media (min-width: 48rem)` block, since breakpoints are literals.
+- Three more departures the builder's list left out, named by gate 1's second
+  low. `text-decoration: none` on `button, .button`. `color: var(--text)` on text
+  fields. Button states scoped to `button:disabled, .button:disabled` and
+  `button:hover:not(:disabled), .button:hover:not(:disabled)`, where the table
+  writes bare `:disabled` and `:hover:not(:disabled)`. None changed anything
+  visible in the 20 head screenshots.
+
+**The planner's own changes beyond the table.** `.panel` is `.card` (13
+`className` uses across six files; the 11 `section.panel.*` e2e locators and
+the comment in `web/test/stylesheet.test.ts` moved with them), `.panel.warn` is
+`.card.warn`, `.main` and `.aside` are `.stack`, `.muted` left the planner's
+`.help, .hint, .muted` rule, and the trips-and-plans list is wrapped in one
+`.stack` in `App.tsx`: its two cards were siblings under `main.shell` with no
+gap at all, flush on `84135dbf` (lg-70's defect, in the planner too; read off
+the "before" screenshot, `Trips and plans-360`, where "Your trips" and "Plans"
+touch). One local rule, `.card > :is(.crumb, .day, .replan, .version-picker, .actions) { margin: 0 }`,
+and two deleted margin-tops (`.gaps, .unchecked`; `.run .gaps`), because the
+card now spaces its children and those margins added to its gap: the plan's
+first screenshot after the move showed a blank band between the crumb and
+"Day 1".
+
+**Screenshots, screen by screen** (`layout.spec.ts`, 360 and 1280, before at
+`84135dbf` and after at `e8410108`; opened one at a time, long ones in crops;
+the files are in the builder's scratch directory, not in the repository). Each
+difference is a table row unless it says finding.
+
+- Every screen at 360: side padding 20px to 16px and top padding 48px to 16px
+  (page column row); at 1280 the column pads 32px on every side where it was
+  48px top and 20px sides (same row, `calc(var(--gap) * 2)`).
+- Cards: padding 20px to 16px (`var(--gap)`); the title goes from 1.15rem with
+  a tight letter-spacing to 1.125rem without; children are spaced by the card's
+  `0.75rem` gap, not their margins. The Checkpoint's three buttons wrap to two
+  rows at 360 where they fitted in one before, since each is wider (44px tall,
+  `padding: 0 1rem`).
+- WITHDRAWN — do not cite this sentence: "Buttons: 40px to 44px (buttons row)."
+  Gate 1's fourth low shows it false, and the error is the builder's. A base
+  button computes to about 44.4px (`0.55rem` padding twice, a 1.55 line and the
+  border), and "Describe a new trip" is 44px tall in the base
+  `Trips and plans-360` screenshot, so button height is essentially unchanged.
+  The sentence it began is left standing: Finding: `.pin`, a deliberately small
+  button, is also 44px tall now (about 24px before), and `.item-controls`'
+  Move and Remove stack in the item's narrow column at 360 as they did before.
+  Left as the table has it; it is a design question for the owner, not a defect
+  of the reset, and pl-65 or a later ticket can give `.pin` its own height.
+- Fields (Plan screen, the move form opened, and the re-plan form): 44px
+  tall, `--surface-2` background where `.field` had `--bg`, 16px in the page
+  font. Radios and checkboxes 20px where they were 13px (radio row).
+- Keyboard focus: an accent outline where the planner had the browser's.
+- The trips-and-plans list: a 1rem gap between its two cards where they touched.
+- Checkpoint and Question at 1280: the wizard grid and the aside stack look as
+  before, with the new padding. Run at 360: the same row differences, nothing
+  else. Finding: in a `.choice` the 20px radio sits a few pixels above the
+  label's text, because the row is `align-items: baseline` and the box is taller
+  than the 13px it was; left, a one-line fix for whichever ticket next touches
+  `.choice`.
+- Not opened: the dark theme (no layout spec case), and the 1280 versions of
+  the trips-and-plans, Run and Plan screens (the spec passes at both widths; I
+  did not look at those three images).
+
+**Checks.** `npm run check` exit 0 at `e8410108`. `npx vitest run
+tools/planner/web packages/ui`: 14 files, 198 of 198. `npx vitest run
+packages/core/test/image-closure.test.ts`: 8 of 8 (the three Dockerfiles'
+`COPY packages packages` carries `base.css`; no change needed). Planner e2e,
+whole suite, `E2E_PORT=8317`: 10 of 10. Mutations, each reverted from the
+commit: a planner `button` and `.shell` rule appended fails
+`base.test.ts > a moved tool declares none of the base's selectors` naming
+both; the `base.css` import deleted fails the same file's import test
+(`planner is moved and does not import base.css`) and `layout.spec.ts`'s
+Checkpoint and Plan cases on the 13.33px readings above. The checkpoint case
+reads every field the intake walk meets through a `MutationObserver` (kinds
+seen: textarea, `input:date`, `input:number`), not only the last question's.
+
+**Fold-ins.** WITHDRAWN — do not cite the clause "the downloader and ledger
+still declare their own `--font-sans`": gate 1's third low shows it false for
+the ledger, and the error is the builder's. The ledger declares no `--font-sans`;
+its `body` reads `var(--font-sans)`, so the new stack in `tokens.css` changes the
+ledger's computed `font-family`. That is the change the table asked for. It
+renders the same wherever `system-ui` resolves, and the ledger e2e passed on CI
+at `4e13bd96`; a pixel comparison of the ledger was not made. Only the
+downloader declares its own. The rest of the sentence stands as written. None
+taken beyond the ones above. Left: the downloader and ledger
+still declare their own `--font-sans` and body size, which are lg-73's and
+dl-135's, and each adds itself to `MOVED` in `base.test.ts`.
+
+**2026-11-01 — the owner's answers at the landing.** Each is the question, the
+options, the choice and whose recommendation it was.
+
+1. **Done when 4, asked three times.** At intake: what the gate grades "Every
+   planner text field" against; options "the Why's 23 fields" and "re-enumerate
+   on `main` first"; chosen the Why's 23 fields, the orchestrator's
+   recommendation (entry above). The builder then measured 24 fields (17 inputs,
+   3 textareas, 4 selects, all with `.field`, all already 16px on `main`);
+   re-asked, with the options "met on 24, as a regression guard" and "spec names
+   each of the 24"; chosen **met on 24, as a regression guard**, the
+   orchestrator's recommendation. Gate 1 then measured the guard's reach: 6
+   intake fields and 7 on the Plan screen, **13 of the 24**. It misses the
+   version-picker select, the intake's text inputs and the currency select.
+   Re-asked, with the options "stands, met as graded" and "extend the watch
+   first"; chosen **stands**, the orchestrator's recommendation. The 13-of-24
+   reach is the guard's reach, and Done when 4 is met as graded.
+2. **`.pin` at 44px** (the builder's open decision). Options: keep 44px per the
+   table, or a smaller `.pin` through a token in pl-65. Chosen **keep 44px**, the
+   builder's and the orchestrator's recommendation.
+3. **The `.choice` radio above its label** (`align-items: baseline`; the
+   builder's second open decision). Options: add it to pl-65's Build, fix it in
+   repo-130 now, or leave it. Chosen **add it to pl-65's Build**, the
+   orchestrator's recommendation. Done: pl-65's Build step 7.
+4. **Gate 1, the sixth low** (the two pages disagree on how a tool differs).
+   Options: "both, each with a reason", "fallback properties only", "defer to
+   dl-135". Chosen **both, each with a reason**, the orchestrator's
+   recommendation. Done in `.claude/rules/ui-package.md` and the `tokens.css`
+   header.
+5. **Gate 1, the second to fifth lows:** fix at landing, the fifth knowing it is
+   CSS after the gate. **The first low is recorded, not fixed**: the
+   re-declaration guard in `packages/ui/test/support/base.ts` matches selector
+   text exactly, so `button.primary { … }` or `.field { font: 13px serif }`
+   appended to the planner's `styles.css` would not fail it. `ui-package.md`
+   describes the guard as "a selector the base declares", so Done when 2 is met
+   as written.
+
+**Fold-in, the orchestrator's and not the owner's.** pl-65's Build step 2 said
+`AppFooter` takes `tool="planner"`. On `main`, `AppFooter` takes only `version`
+and `termsHref` (`packages/ui/src/AppFooter.tsx`, since #697), which this
+landing read before editing. The step now reads `AppFooter` with `version` and
+`termsHref`.
+
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the second low —
+  "`base.css` departs from the table in three places the Log does not name". The
+  three are in the departures list above. Proof:
+  `git diff 4e13bd96 HEAD -- docs/work/repo-130-one-card-and-one-stack-in-the-shared-ui.md | grep -c '^+.*departures the builder.s list left ou[t]'`
+  → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the third low — "the
+  Log's Fold-ins says the downloader and ledger still declare their own
+  `--font-sans`". Withdrawn in place under Fold-ins, with the correction. Proof:
+  `git diff 4e13bd96 HEAD -- docs/work/repo-130-one-card-and-one-stack-in-the-shared-ui.md | grep -c '^+.*third low shows it fals[e] for'`
+  → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the fourth low — "the
+  Log says Buttons: 40px to 44px". Withdrawn in place under the screenshots,
+  with the correction. Proof:
+  `git diff 4e13bd96 HEAD -- docs/work/repo-130-one-card-and-one-stack-in-the-shared-ui.md | grep -c '^+.*fourth low shows it fals[e], and'`
+  → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the fifth low — "the
+  planner rule `.card > :is(.crumb, .day, .replan, .version-picker, .actions)`
+  is a second place that decides how a card spaces its children". The own
+  margins of `.day` and `.version-picker` are deleted, and the card rule is
+  narrowed to `.card > :is(.crumb, .actions)`. `grep` found `className="day"`,
+  `className="replan"` and `className="version-picker"` once each, all direct
+  children of `section.card.plan`. `.replan` is the one departure from the
+  finding as stated: its own `margin: 1.5rem 0` is deleted, but the rule keeps
+  `margin: 0`, because deleting it alone leaves the browser's 2px side margin on
+  a fieldset, and the pure deletion moved the Re-plan box 2px in on each side
+  (`Plan-1280` and `Plan-360` differed from gate 1's head screenshots in 31689
+  and 32104 pixels). With the `margin: 0` kept, all 10 layout screenshots
+  (`layout.spec.ts`, 360 and 1280) are pixel-identical to gate 1's head. Proof:
+  `git diff 4e13bd96 HEAD -- tools/planner/web/src/styles.css | grep -c '^-.*version-picker, .actions'`
+  → 1. Owner's answer, 2026-11-01: asked whether `.replan` lands as the pure
+  deletion (accepting the 2px fieldset shift) or as the variant (keep
+  `margin: 0` with a comment, 0 differing pixels); chosen **the variant**, the
+  fixer's and the orchestrator's recommendation.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the sixth low — "the
+  `tokens.css` header says a tool that differs sets its own in its `:root`. The
+  next sentence, and `ui-package.md`, say a tool differs only through a
+  fallback-read property". Both are now said, each with a reason, in the header
+  and in the rule page. Proof:
+  `git diff 4e13bd96 HEAD -- packages/ui/src/tokens.css | grep -c '^-.*differs from it only through a property'`
+  → 1.

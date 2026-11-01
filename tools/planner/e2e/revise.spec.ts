@@ -35,7 +35,7 @@ import { draftAPlan, reopenFromTheList, RUN_TIMEOUT } from "./plan-walk.ts";
 
 /** Every `<article class="day">` on the open plan, in document order. */
 function dayArticles(page: Page): Locator {
-  return page.locator("section.panel.plan article.day");
+  return page.locator("section.card.plan article.day");
 }
 
 /**
@@ -116,7 +116,7 @@ async function expectItemOnlyOnDay(page: Page, title: string, dayIndex: number):
 
 test("re-plan, move, reload, restore, reload — the plan keeps every version", async ({ page }) => {
   const title = await draftAPlan(page);
-  const plan = page.locator("section.panel.plan");
+  const plan = page.locator("section.card.plan");
 
   await expect(plan.locator("p.crumb")).toContainText("Version 1 of 1");
 

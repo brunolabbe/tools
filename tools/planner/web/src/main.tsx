@@ -6,6 +6,8 @@ import { App } from "./App.tsx";
 // oxlint-disable-next-line import/no-unassigned-import -- Vite injects the stylesheet; there is nothing to bind.
 import "@webtools/ui/tokens.css";
 // oxlint-disable-next-line import/no-unassigned-import -- Vite injects the stylesheet; there is nothing to bind.
+import "@webtools/ui/base.css";
+// oxlint-disable-next-line import/no-unassigned-import -- Vite injects the stylesheet; there is nothing to bind.
 import "./styles.css";
 
 const container = document.querySelector("#root");

@@ -140,7 +140,7 @@ export function Wizard({ intakeId, onExit, onDraft }: WizardProps): React.ReactE
 
   return (
     <div className="wizard">
-      <div className="main">
+      <div className="stack">
         <ProgressLine answered={answered.length} coreComplete={state.progress.coreComplete} />
         {discarded.length > 0 && <DiscardNotice discarded={discarded} />}
         {error !== null && <p className="bad">{error}</p>}
@@ -165,7 +165,7 @@ export function Wizard({ intakeId, onExit, onDraft }: WizardProps): React.ReactE
             onExit={onExit}
           />
         ) : current === null ? (
-          <section className="panel">
+          <section className="card">
             <h2>Every question is answered.</h2>
             <p className="muted">There is nothing left to ask about this trip.</p>
             <button type="button" className="primary" onClick={onExit}>
@@ -190,7 +190,7 @@ export function Wizard({ intakeId, onExit, onDraft }: WizardProps): React.ReactE
         )}
       </div>
 
-      <aside className="aside">
+      <aside className="stack">
         <Brief brief={state.brief} />
         <AnsweredList
           questions={answered}
@@ -254,7 +254,7 @@ function QuestionCard({
   const initial = existing !== null && existing.state === "answered" ? existing.value : null;
 
   return (
-    <section className="panel question">
+    <section className="card question">
       {/* The heading is what names the bare fields below — `controls.tsx` points
           at these two ids rather than restating the prompt in an `aria-label`. */}
       <h2 id={promptId(question.id)}>{question.prompt}</h2>
@@ -320,7 +320,7 @@ function Checkpoint({
   onExit: () => void;
 }): React.ReactElement {
   return (
-    <section className="panel checkpoint">
+    <section className="card checkpoint">
       <h2>The essentials are done.</h2>
       <p>
         There is enough here to plan from. Everything after this sharpens the plan rather than
@@ -382,7 +382,7 @@ function ConfirmDiscard({
   const { named, unnamed } = discardedNames(write.discarded);
 
   return (
-    <section className="panel warn" role="alertdialog" aria-labelledby="discard-heading">
+    <section className="card warn" role="alertdialog" aria-labelledby="discard-heading">
       <h2 id="discard-heading">
         That change costs {String(write.discarded.length)}{" "}
         {write.discarded.length === 1 ? "answer" : "answers"}.
@@ -437,7 +437,7 @@ function AnsweredList({
   if (questions.length === 0) return null;
 
   return (
-    <section className="panel" aria-labelledby="answers-heading">
+    <section className="card" aria-labelledby="answers-heading">
       <h2 id="answers-heading">Your answers</h2>
       <ul className="answers">
         {questions.map((question) => {

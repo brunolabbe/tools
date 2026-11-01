@@ -45,7 +45,7 @@ export function Trips({ onOpen }: TripsProps): React.ReactElement {
   };
 
   return (
-    <section className="panel" aria-labelledby="trips-heading">
+    <section className="card" aria-labelledby="trips-heading">
       <h2 id="trips-heading">Your trips</h2>
       {error !== null && <p className="bad">{error}</p>}
 

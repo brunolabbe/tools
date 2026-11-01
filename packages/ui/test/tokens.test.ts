@@ -146,7 +146,15 @@ describe("tokens.css", () => {
   test("declares no name that no tool reads", () => {
     // repo-130: a spacing and a font-size scale sat here a week, read by no tool,
     // and were removed. A name arrives with the tool that first reads it.
-    const sources = WEBS.flatMap(sourceFiles).map((file) => fs.readFileSync(file, "utf8"));
+    // The shared stylesheets count as readers: once a rule moves into `base.css`
+    // the tools stop reading its names themselves, and the name is still read.
+    const shared = ["base.css", "chrome.css"].map((name) =>
+      fs.readFileSync(path.join(REPO_ROOT, "packages", "ui", "src", name), "utf8"),
+    );
+    const sources = [
+      ...shared,
+      ...WEBS.flatMap(sourceFiles).map((file) => fs.readFileSync(file, "utf8")),
+    ];
     expect(
       unreadNames(css, sources),
       "names in tokens.css no tool reads: add one with the tool that first reads it",

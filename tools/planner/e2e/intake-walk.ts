@@ -103,7 +103,7 @@ export async function fillField(card: Locator): Promise<void> {
  * is against the prompts this walk actually saw.
  */
 export async function answerCurrent(page: Page): Promise<string> {
-  const card = page.locator("section.panel.question");
+  const card = page.locator("section.card.question");
   await expect(card).toBeVisible();
 
   const prompt = (await card.getByRole("heading").first().innerText()).trim();
@@ -161,5 +161,5 @@ export async function startATrip(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "Planner", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Describe a new trip" }).click();
-  await expect(page.locator("section.panel.question")).toBeVisible();
+  await expect(page.locator("section.card.question")).toBeVisible();
 }

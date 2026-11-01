@@ -133,7 +133,7 @@ describe("every name the stylesheet reads is defined", () => {
 
 describe("the provenance marks are readable on the surface they sit on", () => {
   const marks = ["--ok", "--warn"] as const;
-  // `ProvenanceNote` renders inside `section.panel.plan`, whose background is
+  // `ProvenanceNote` renders inside `section.card.plan`, whose background is
   // `--surface`; `--bg` is the page behind it.
   const backgrounds = ["--surface", "--bg"] as const;
 

@@ -65,7 +65,7 @@ test("changing an early answer names what it costs, and refusing keeps them", as
   if (first === undefined) throw new Error("the intake asked nothing");
   await page.locator("aside .answers button").filter({ hasText: first }).first().click();
 
-  const card = page.locator("section.panel.question");
+  const card = page.locator("section.card.question");
   await expect(card.getByRole("heading", { name: first })).toBeVisible();
 
   // A different answer to the same question — whichever one is not already
@@ -79,7 +79,7 @@ test("changing an early answer names what it costs, and refusing keeps them", as
   await card.getByRole("button", { name: "Save the change" }).click();
 
   // --- The warning --------------------------------------------------------
-  const warning = page.locator("section.panel.warn");
+  const warning = page.locator("section.card.warn");
   await expect(warning).toBeVisible();
 
   const doomed = await warning.locator("li").allInnerTexts();

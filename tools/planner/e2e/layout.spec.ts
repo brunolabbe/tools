@@ -48,8 +48,18 @@ const SHOTS = path.join(here, ".artifacts/layout");
  * window's: a document wider than the window is a page that scrolls sideways.
  * `expect.soft`, so one screen failing at both widths says so twice rather than
  * hiding the second.
+ *
+ * It also reads every text field on the page (repo-130): each shows the page's
+ * font, at 16px, which is what keeps iOS from zooming the page when one takes
+ * focus. `fields` is the least number of them the screen must have, so a screen
+ * whose fields never rendered cannot pass by having none to read.
  */
-async function fitsBothWidths(page: Page, testInfo: TestInfo, screen: string): Promise<void> {
+async function fitsBothWidths(
+  page: Page,
+  testInfo: TestInfo,
+  screen: string,
+  fields = 0,
+): Promise<void> {
   for (const { width, height } of WIDTHS) {
     await page.setViewportSize({ width, height });
     // A frame for the layout to settle after the resize.
@@ -74,7 +84,85 @@ async function fitsBothWidths(page: Page, testInfo: TestInfo, screen: string): P
         `${screen} is ${String(measured.scrollWidth)} px wide in a ${String(measured.innerWidth)} px window`,
       )
       .toBeLessThanOrEqual(measured.innerWidth);
+    const read = await readTextFields(page);
+    expect
+      .soft(read.count, `${screen} has ${String(read.count)} text fields at ${String(width)}px`)
+      .toBeGreaterThanOrEqual(fields);
+    expect
+      .soft(read.wrong, `${screen}: fields not in the page font at 16px, at ${String(width)}px`)
+      .toEqual([]);
   }
+}
+
+/**
+ * Every text field on the page (an input that is not a checkbox or a radio, a
+ * select, a textarea) and the ones among them that do not show the page's font
+ * at 16px, each named by its tag and its computed values.
+ */
+async function readTextFields(page: Page): Promise<{ count: number; wrong: string[] }> {
+  return page.evaluate(() => {
+    const bodyStyle = getComputedStyle(document.body);
+    const fields = [
+      ...document.querySelectorAll(
+        'input:not([type="checkbox"]):not([type="radio"]), select, textarea',
+      ),
+    ];
+    const wrong = fields.flatMap((field) => {
+      const style = getComputedStyle(field);
+      return style.fontSize === "16px" && style.fontFamily === bodyStyle.fontFamily
+        ? []
+        : [`${field.tagName.toLowerCase()} ${style.fontSize} ${style.fontFamily}`];
+    });
+    return { count: fields.length, wrong };
+  });
+}
+
+/**
+ * Record every text field the page ever shows, and the ones that did not show
+ * the page's font at 16px (repo-130). The intake's controls come and go as the
+ * walk answers them, so reading the page once at the end sees only the last
+ * question's. Installed before the first navigation; read with `fieldsSeen`.
+ */
+async function watchTextFields(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const seen = new WeakSet<Element>();
+    const record = { count: 0, kinds: new Set<string>(), wrong: [] as string[] };
+    const scan = (): void => {
+      const body = getComputedStyle(document.body);
+      const fields = document.querySelectorAll(
+        'input:not([type="checkbox"]):not([type="radio"]), select, textarea',
+      );
+      for (const field of fields) {
+        if (seen.has(field)) continue;
+        seen.add(field);
+        const style = getComputedStyle(field);
+        const kind = `${field.tagName.toLowerCase()}:${field.getAttribute("type") ?? ""}`;
+        record.count += 1;
+        record.kinds.add(kind);
+        if (style.fontSize !== "16px" || style.fontFamily !== body.fontFamily) {
+          record.wrong.push(`${kind} ${style.fontSize} ${style.fontFamily}`);
+        }
+      }
+    };
+    document.addEventListener("DOMContentLoaded", () => {
+      new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
+    });
+    Object.assign(window, { fieldsSeen: () => ({ ...record, kinds: [...record.kinds] }) });
+  });
+}
+
+/** What `watchTextFields` has recorded so far. */
+async function fieldsSeen(
+  page: Page,
+): Promise<{ count: number; kinds: string[]; wrong: string[] }> {
+  return page.evaluate(() => {
+    const read = Reflect.get(window, "fieldsSeen") as () => {
+      count: number;
+      kinds: string[];
+      wrong: string[];
+    };
+    return read();
+  });
 }
 
 /** The title of the plan `beforeAll` drafted, read off the page. */
@@ -107,9 +195,14 @@ test("a question fits a phone and a desktop", async ({ page }, testInfo) => {
 test("the checkpoint fits a phone and a desktop, with the answers beside it", async ({
   page,
 }, testInfo) => {
+  await watchTextFields(page);
   await startATrip(page);
   await answerThroughCore(page);
   await expect(page.getByRole("heading", { name: CHECKPOINT })).toBeVisible();
+  // Every text field the walk met, not the last question's: the page font at 16px.
+  const seen = await fieldsSeen(page);
+  expect(seen.count, "the walk met no text field to read").toBeGreaterThan(0);
+  expect(seen.wrong, `fields not in the page font at 16px, of ${seen.kinds.join(" ")}`).toEqual([]);
   await fitsBothWidths(page, testInfo, "Checkpoint");
 });
 
@@ -126,7 +219,9 @@ test("a finished run fits a phone and a desktop", async ({ page }, testInfo) => 
 test("a plan fits a phone and a desktop", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.locator("ul.plans button.link").filter({ hasText: title }).first().click();
-  await expect(page.locator("section.panel.plan")).toBeVisible();
+  await expect(page.locator("section.card.plan")).toBeVisible();
   await expect(page.locator("li.item").first()).toBeVisible();
-  await fitsBothWidths(page, testInfo, "Plan");
+  // The move form is the plan's two selects; the re-plan note below the days is its textarea.
+  await page.getByRole("button", { name: "Move", exact: true }).first().click();
+  await fitsBothWidths(page, testInfo, "Plan", 3);
 });
