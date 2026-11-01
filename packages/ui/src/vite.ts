@@ -75,7 +75,7 @@ function entries(html: string): Entry[] {
       blocking: value("blocking") !== undefined,
     });
   }
-  return found.sort((a, b) => a.at - b.at);
+  return found.toSorted((a, b) => a.at - b.at);
 }
 
 /**
