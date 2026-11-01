@@ -101,11 +101,12 @@ step 1. Where a source states an iOS version or a date, it is given.
   reporter's guess being iOS 13 on
   (<https://github.com/dm4t2/vue-currency-input/issues/372>); and a report on
   Xamarin.Forms of 2019-06-19 that the iPhone's `DecimalPad` has no sign key
-  "while the iPad layout does"
+  ("The iPad behaves correct and shows a more complete numeric keyboard")
   (<https://github.com/xamarin/Xamarin.Forms/issues/6580>). A Mantine issue opened
-  on 2026-11-01 (<https://github.com/mantinedev/mantine/issues/9370>) repeats the
-  claim, and says it comes from reading source with no device recording, so it
-  adds nothing.
+  by a user on 2026-11-01 (<https://github.com/mantinedev/mantine/issues/9370>)
+  repeats the claim and gives no source for it; the issue's own sentence, "This
+  behavior is evident from the source; I have not attached a device recording",
+  is about a prop-ordering regression, so the issue adds nothing.
 - **No source found states a measurement of the decimal pad's keys on a current
   iOS.** The premise is documented and consistent across sources; it is not
   measured on iOS 26.
@@ -150,24 +151,28 @@ step 1. Where a source states an iOS version or a date, it is given.
 **(iii) Digits, a decimal separator and a minus key together.**
 
 - No `inputmode` keyword is documented to give all three: the standard's list has
-  none, and bug 193825 says UIKit has no number pad with a minus key.
+  none, and bug 193825's engineer writes that "it doesn't look like UIKit
+  supports a number pad UIKeyboardType with a minus key".
 - `UIKeyboardTypeNumbersAndPunctuation` is the keyboard named for it. The WebKit
   engineer in bug 193825 says it "contains all the relevant keys, but it isn't a
   number pad"; a forum user's answer (not Apple's) of August 2022 on the Apple
   Developer Forums to "KeyboardType for negative numbers?" gives it, or the default keyboard, as the way to type a
-  negative, and adds that "a keyboard with only digits, a decimal separator, and
-  +/-" would be better (<https://developer.apple.com/forums/thread/711839>). Apple
+  negative, and adds that it "would be better to have just digits, separator and
+  +/-" (<https://developer.apple.com/forums/thread/711839>; read through
+  `WebFetch`, not raw). Apple
   lists no keys for it ("the numbers and punctuation keyboard"). On the web the
   source reaches it by `type="number"` with no `inputmode` and no `\d*` pattern,
   which is a different field from the ledger's (every one of the ten sites is a
   text field today) and has a locale defect recorded under (iv).
-- `inputmode="text"` is what the two library maintainers above reached for
-  (vue-currency-input #372, Mantine #9370); both are secondary reports, and the
-  second is unmeasured.
-- A commenter on bug 193825 (2023-09-12) tests on an iPhone with a `data:` URL
-  typed into Safari (`data:text/html,<input type="number" inputmode="decimal">`),
-  which is how Build step 1 reaches the alternatives. That Safari accepts such a
-  URL typed by hand is that one comment's evidence, not a measurement here.
+- `inputmode="text"` is what a maintainer of vue-currency-input proposes to
+  preserve, in a comment on #372, and what the user who opened Mantine #9370 asks
+  for; both are secondary reports, and the second is unmeasured.
+- A commenter on bug 193825 (2023-09-12) posts a `data:` URL
+  (`data:text/html,<input type="number" inputmode="decimal">`) with the words "to
+  test this on an iOS device." The comment names neither Safari nor typing and
+  reports no result, so it is no evidence that Safari opens such a URL typed by
+  hand. Build step 1 uses a `data:` URL to reach the alternatives and labels that
+  premise unverified.
 
 **(iv) Does the decimal separator follow the locale?**
 
@@ -215,7 +220,7 @@ origin/main:tools/ledger/web/src/salaries/Salaries.tsx:215
 ## Build
 
 1. **Measure on a real iPhone first, and record it in the Log before anything
-   else.** One session prices all four options. The owner, or anyone with an
+   else.** One session prices options (a) and (d). The owner, or anyone with an
    iPhone, names the device and the iOS version, and also Settings > General >
    Language & Region (the Language and the Region) and Settings > General >
    Keyboard > Keyboards (those enabled), because the documentation does not
@@ -226,9 +231,12 @@ origin/main:tools/ledger/web/src/salaries/Salaries.tsx:215
      `,`) it shows. The Rebate field is included only if #717 has merged; until
      then it is recorded as not measured.
    - **The alternatives.** The production site cannot be made to show them, so
-     use a scratch page that is not part of the repository: type this into
-     Safari's address bar (it is on one line; copy it from a computer to the
-     phone, in Notes or a message, rather than retyping it):
+     use a scratch page that is not part of the repository. **Unverified: that
+     Safari opens a `data:` URL typed into its address bar.** No source found
+     says it does (the one comment that posts such a URL reports no result), and
+     it was not tried on a device. Type this into Safari's address bar (it is on
+     one line; copy it from a computer to the phone, in Notes or a message,
+     rather than retyping it):
 
      ```
      data:text/html,<meta name="viewport" content="width=device-width"><p>A <input inputmode="decimal"><p>B <input inputmode="decimal" pattern="-?[0-9.,]*"><p>C <input inputmode="text"><p>D <input inputmode="numeric"><p>E <input pattern="-?[0-9.,]*"><p>F <input type="number">
@@ -236,7 +244,8 @@ origin/main:tools/ledger/web/src/salaries/Salaries.tsx:215
 
      If Safari does not open it, save the same line's HTML as `keys.html`, serve
      it from a computer on the same network (`python3 -m http.server`, from the
-     directory holding it) and open that address; say which was used. Tap into
+     directory holding it) and open `http://<the computer's address>:8000/keys.html`
+     on the phone; say which was used. Tap into
      each of A to F. For each, the Log records the keypad's kind (a number pad
      with digits only, a digits-and-decimal pad, the full keyboard, or the
      numbers-and-punctuation layer), whether it has a minus key, whether it has a
@@ -274,9 +283,10 @@ _Why_.
 
 1. **(a) A keyboard that offers a minus key** on each field the table marks
    **Yes**, by an `inputMode` the measurement shows gives one (`inputMode="text"`
-   is the obvious one). Costs: the full keyboard replaces the number pad on those
-   fields for every phone, so every amount is typed more slowly, not only the
-   negative ones. Whether a `pattern` attribute changes the iOS keypad at all is
+   is the obvious one). Costs, as the documentation expects (row C records the
+   keypad's kind, never the speed of typing): the full keyboard would replace the
+   number pad on those fields for every phone, so every amount would be typed
+   more slowly, not only the negative ones. Whether a `pattern` attribute changes the iOS keypad at all is
    part of the measurement and is not assumed.
 2. **(b) Unsigned entry on the Rebate field only**, with the sign implied by the
    field. Costs: it applies only to lg-89's Rebate field, which is not on `main`
@@ -301,8 +311,12 @@ _Why_.
    settled**, the keypad an iPhone showed, whether it offers a minus key and
    which decimal separator it shows; and, for each of the rows A to F of Build
    step 1's scratch page, the keypad's kind, whether it has a minus key, a
-   decimal separator and which, and the taps a minus key takes. A field or a row
-   not measured is named as not measured.
+   decimal separator and which, and the taps a minus key takes; and, for each
+   row, whether the device confirmed or refuted what the documentation expects
+   of it; and which delivery of the scratch page was used (the `data:` URL typed
+   into Safari, or the served `keys.html`); and, once #717 has merged, the Rebate
+   field's keypad, minus key and separator. A field or a row not measured is
+   named as not measured, the Rebate field included.
 2. The owner's answer is recorded under `## Decision — answered <date> by <who>`,
    with the options it was chosen from, and `status` is `ready`.
 
@@ -321,12 +335,13 @@ _Why_.
 - 2026-11-01: web check, on the owner's word that the online documentation may be
   consulted. Documentation, not a device measurement; the findings and their
   sources are in _What the documentation says_ in _Why_. In short: WebKit's
-  source maps `inputmode="decimal"` to UIKit's decimal pad, and the sources that
-  state the keys (a WebKit engineer in bug 193825, filed 2019-01-25, still NEW;
-  two third-party reports) say UIKit has no number pad with a minus key. None
-  measures it on a current iOS, and Apple's and MDN's pages are silent or
-  say "may or may not". `numeric`,
-  `tel` and `search` are not candidates. Per WebKit's source a `pattern` does not
+  source maps `inputmode="decimal"` to UIKit's decimal pad, and the source that
+  states the keys (a WebKit engineer in bug 193825, filed 2019-01-25, still NEW)
+  writes that "it doesn't look like UIKit supports a number pad UIKeyboardType
+  with a minus key"; two third-party reports speak only of the `decimal` and
+  `numeric` pads and of `DecimalPad`. None measures it on a current iOS, and
+  Apple's and MDN's pages are silent or say "may or may not". No source gives
+  `numeric`, `tel` or `search` a minus key. Per WebKit's source a `pattern` does not
   change what an explicit `inputmode` shows, and `type="number"` with no
   `inputmode` asks for the numbers-and-punctuation keyboard. Which of
   keyboards, Region and Language sets the decimal separator is claimed three ways
@@ -362,3 +377,12 @@ _Why_.
   answer), and the answer commit adds the third. `git diff f6485e7b -- <this
   ticket> | grep -c "^-.*When the answer is recorded, the chosen option's check
   is added here as line"` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, F1 (remainder, per gate 2) — "Decision (a) still says as fact that "the full keyboard replaces the number pad on those fields for every phone, so every amount is typed more slowly"". The cost sentence is now documented expectation ("as the documentation expects", "would replace", "would be typed"), with row C recorded as the keypad's kind, never its speed; the option's meaning is unchanged. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*so every amount is typed more slowly'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, N1 — "_Why_ (i) quotes a Xamarin.Forms report as saying the iPhone's `DecimalPad` has no sign key "while the iPad layout does"". The quotation is now the issue's own words, taken as the gate's first direction. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*"while the iPad layout does"'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, N2 — "_Why_ (iii) puts quotation marks round "a keyboard with only digits, a decimal separator, and +/-" as the forum answer's words". It now quotes the answer's words, "would be better to have just digits, separator and +/-", and says the thread was read through `WebFetch`. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*negative, and adds that "a keyboard with only digits'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, N3 — "the one unverified premise of Build step 1 has no evidence behind it, where the text credits it with some. The label sits in _Why_ and not at Build step 1". _Why_ (iii) now says the comment names neither Safari nor typing and reports no result; Build step 1 carries the "Unverified" label and gives `http://<the computer's address>:8000/keys.html` for the served page. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*tests on an iPhone with a'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, N4 — "_Why_ (iii) and the second Log entry restate it flat, "bug 193825 says UIKit has no number pad with a minus key", and the Log gives "two third-party reports" the same sentence". Both places now quote the engineer's hedge, and the Log says the two reports speak only of the `decimal` and `numeric` pads and of `DecimalPad`. Two removed lines, each counted: the second grep is `'^-.*two third-party reports) say UIKit'` and also gives `1`. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*bug 193825 says UIKit has no number pad with a minus key'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, N5 — "_Why_ (iii) calls the two issues' authors "the two library maintainers" who "reached for" `inputmode="text"`". _Why_ (iii) now names a maintainer's comment on #372 and the user who opened Mantine #9370; _Why_ (i) now says the Mantine issue is opened by a user, gives no source for its keypad claim, and that its "evident from the source" sentence concerns a prop-ordering regression. The Mantine reporter's request for `inputmode="text"` was read from the issue (`WebFetch`, 2026-11-01), not taken from the gate. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*the two library maintainers above reached for'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, N6 — "_Why_ (ii) concludes "on a current iOS `numeric` is documented as digits only" and the Log says "`numeric`, `tel` and `search` are not candidates" ... Reword the Log to the bullet's wording". The Log now says "No source gives `numeric`, `tel` or `search` a minus key", the bullet's wording. The _Why_ (ii) sentence is not among the lines the gate told me to change. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*are not candidates. Per WebKit'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, N7 — "Build step 1's new first sentence says "One session prices all four options"". It now reads "One session prices options (a) and (d)", the gate's first direction. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*One session prices all four options'` → `1`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 2, N8 — "`Done when` 1 does not grade three things Build step 1 asks for: the Rebate field's reading once #717 has merged ..., which delivery was used ..., and each row's confirm-or-refute against the documentation". `Done when` 1 now asks for all three, taken as the gate's first direction ("Add them"). `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*not measured is named as not measured'` → `1`.
