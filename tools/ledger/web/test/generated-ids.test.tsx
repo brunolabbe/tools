@@ -219,6 +219,8 @@ describe("no generated id reaches a screen (lg-76)", () => {
       spendingCategory: { id: 1, source: "map" },
     };
     vi.mocked(fetchRows).mockResolvedValue(generated({ rows: [row], total: 1 }));
+    // lg-95: History reads the closed periods to say when a row is in one.
+    vi.mocked(fetchPeriods).mockResolvedValue([]);
     render(withNames(<History />));
 
     await showsNamesOnly("Alex · Mortgage");
