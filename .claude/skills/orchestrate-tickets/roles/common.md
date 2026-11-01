@@ -1,7 +1,8 @@
 # What every dispatched agent needs
 
-Read by every builder, fixer and gate before its own role page, in the same
-`git show`. Your model and effort are pinned in your agent definition; if your
+Read by every builder, fixer and gate before its own role page, from the same
+commit — one `git show` per page for a gate: its three pages run past the tool's
+output cap in one call (51 KB against 50 KB, repo-117's gate). Your model and effort are pinned in your agent definition; if your
 prompt did not tell you which model you are, say so rather than guessing in
 anything you write, a pull request body included.
 
@@ -18,9 +19,12 @@ worktree: several sessions run against this repo at once.
   your dispatch names, or `git rev-parse origin/main` once and reuse it.
 - **Populate and build before you measure anything**, in the order your role
   page gives (a builder farms before it branches, a gate after it detaches):
-  1. `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`. **Never
-     `npm install` or `npm ci`**, and no npm command that writes the lockfile.
-     If the farm warns that the shared checkout is stale, stop and report it:
+  1. `bash .claude/scripts/worktree-farm.sh`, from your worktree root: the
+     absolute path under `/workspaces/tools` runs `main`'s copy, which measured
+     the old script on the branch that changed it (repo-117). **Never
+     `npm install` or `npm ci`**, and no npm command that writes `node_modules`
+     or the lockfile, other than the one relock the dependency bullet below
+     allows. If the farm warns that the shared checkout is stale, stop and report it:
      the remedy is the orchestrator's, and you may not apply it.
   2. `npm run build`. Without `dist`, suites fail with `packageEntryFailure`,
      which reads as a test failure and is not. `api` resolves `engine` and
@@ -29,28 +33,61 @@ worktree: several sessions run against this repo at once.
 
   Neither step fails loudly if skipped: Node resolves workspace packages from
   the shared checkout instead, so a correct change looks broken or a broken one
-  looks fine. **A branch whose diff is markdown only** — `git diff --name-only
-  <base sha>...HEAD` lists nothing but `.md` — skips both steps and says so in
-  the report (eight filing and ticket-only gates did, 2026-10-20 to
-  2026-10-24); a measurement that runs a workspace's code builds first.
-- **A dependency your ticket adds is not in the farm.** Run
-  `npm install --ignore-scripts` in your worktree once, and say so in your
-  report; it is the one install allowed here. **A workspace the shared
-  checkout has no link for is different** — one your branch adds, or one
-  `main` added after the shared checkout's last install: that install replaces
-  the farm's links and leaves native modules unbuilt (lg-8: 63 of 101 failed on
-  `better_sqlite3.node`). **The farm links these itself** (repo-117): after its
-  copy loop it reads the worktree's own `package.json` `workspaces` and links
-  each one `node_modules` lacks, printing a `linked workspace <name> -> <path>`
-  line for each, and it names (stderr, with the `ln -s`) any it could not link.
-  Read those lines rather than comparing directories; every agent of four
-  batches linked `packages/ui` by hand before it did (2026-10-20 to
-  2026-10-21). **The hand-link is the fallback for a workspace your branch adds
-  after you farmed**, since the farm reads `package.json` as it stood: run the
-  farm again (it is idempotent), or `ln -s ../../packages/<name>
-  node_modules/@webtools/<name>` for a `packages/` workspace,
-  `ln -s ../../tools/<tool>/<package> node_modules/@<tool>/<package>` for a
-  tool's, and say so in your report; a gate on that branch does the same.
+  looks fine. **The farm is never skipped**: it is half a second, and `vitest`,
+  `npm run check` and `oxfmt --check` all live in `node_modules` (repo-133's
+  gate 2 found no `node_modules` at all on an unfarmed markdown-only tree). **A
+  gate skips the build** when the diff is markdown only — `git diff --name-only
+  <base sha>...HEAD` lists nothing but `.md` (eight filing and ticket-only
+  gates, 2026-10-20 to 2026-10-24) — or touches only `scripts/` files whose
+  imports are `node:` builtins and `vitest` (`grep ^import` on each; repo-124's
+  gates), and says so in the report; a measurement that runs a workspace's code
+  builds first. **A lander skips neither, whatever the diff**: `--land` runs
+  preflight's `npm run check`, which typechecks every workspace, and an unfarmed
+  or unbuilt tree fails it in files the branch never touched (lg-82's lander:
+  `TS2353` in `tools/ledger/web/test/import.test.tsx`, exit 2; exit 0 after the
+  farm and build).
+- **Never `npm install` in a farmed worktree, `--ignore-scripts` included.**
+  The farm's `node_modules/.bin` and `node_modules/.package-lock.json` are
+  symlinks into the shared checkout, so an install here rewrites both for every
+  agent of every session at once — a gate's build read `sh: 1: tsc: not found`
+  in the minute of a sibling builder's install (repo-120 and repo-133,
+  2026-11-01) — and it leaves native modules unbuilt in your own tree
+  (`Could not locate the bindings file`, 21 planner files; lg-8: 63 of 101 on
+  `better_sqlite3.node`). The farm links every third-party package to the
+  shared checkout's copy, so **a dependency your branch adds or moves is not in
+  your tree, and nothing warns**: `vite --version` read `7.3.7` on repo-121's
+  branch whose lockfile said 8.3.4, and `oxfmt` ran at the shared checkout's
+  version on a branch pinning another (repo-117). Three cases:
+  - **A version change or a new package.** Edit `package.json`, then relock
+    with `npx -y npm@11.21.1 update <package> --before=<date>
+    --package-lock-only --ignore-scripts` — the date rule and why npm 10 cannot
+    do it are in `.claude/rules/dependency-updates.md` — which writes the
+    lockfile and nothing under `node_modules` (repo-119's oxlint, repo-131);
+    it is the one lockfile-writing command allowed here. Your tree still runs the old
+    version: the draft pull request's CI is the run on the new one, so a
+    `Done when` line about it is `unproven (gate)` for you and for the gate
+    until that leg has read, and your report says so.
+  - **A workspace the shared checkout has no link for** — one your branch
+    adds, or one `main` added after the shared checkout's last install. **The
+    farm links these itself** (repo-117): after its copy loop it reads the
+    worktree's own `package.json` `workspaces` and links each one
+    `node_modules` lacks, printing a `linked workspace <name> -> <path>` line
+    for each, and it names (stderr, with the `ln -s`) any it could not link.
+    Read those lines rather than comparing directories; every agent of four
+    batches linked `packages/ui` by hand before it did (2026-10-20 to
+    2026-10-21). **The hand-link is the fallback for a workspace your branch
+    adds after you farmed**, since the farm reads `package.json` as it stood:
+    run the farm again (it is idempotent), or `ln -s ../../packages/<name>
+    node_modules/@webtools/<name>` for a `packages/` workspace,
+    `ln -s ../../tools/<tool>/<package> node_modules/@<tool>/<package>` for a
+    tool's, and say so in your report; a gate on that branch does the same.
+  - **A package the lockfile declares and the shared checkout lacks** — the
+    farm's `missing N package(s)` warning. When the package is the one your own
+    relock added, that is the expected state: say so and go on. When it is not
+    — the lockfile is `main`'s, or a parent branch's on a stacked branch
+    (repo-123) — stop and report it, naming the packages: the remedy is the
+    orchestrator's `npm install` in the shared checkout, and never a copy of
+    another agent's `node_modules` into yours (repo-120's lander).
 - **Undo a temporary mutation from a commit, never with `git checkout -- <file>`**,
   which restores the index and discards every uncommitted edit to that file,
   yours included (lg-8's builder lost its three Dockerfile lines that way).
@@ -71,7 +108,15 @@ worktree: several sessions run against this repo at once.
 - **End every commit message with the `Co-Authored-By` trailer** your session's
   attribution reminder gives, in the commit that lands it; never rewrite a
   pushed commit, or one a Log cites, to add it (repo-101 moved three cited shas
-  that way).
+  that way). **A merge or a revert carries it too**, and git writes none:
+  `git merge --no-commit origin/<base>` or `git revert --no-commit <sha>`, then
+  `git commit -F <file>`, the file's first line git's own subject — `Merge
+  remote-tracking branch 'origin/main' into <branch>`, `Revert "<subject>"` —
+  and its last the trailer. The commit-msg hook accepts both subjects and
+  rejects any other on a merge (checked 2026-11-01; the 41 `Not committing
+  merge` lines since 2026-10-10 were written subjects). `--no-edit` on either
+  writes no trailer (repo-131's lander amended before its push; lg-67's
+  maintenance merge used the file).
 - **A red/green across packages needs a rebuild between the two states** —
   `contract` included; `e2e:serve` builds only `web` — and a grep of `dist` for
   an identifier the change introduced, to prove which state you measured. A
@@ -80,9 +125,20 @@ worktree: several sessions run against this repo at once.
   `node scripts/check-lockfile-sync.mjs`**, not `npm ls`.
 - **A `\uXXXX` escape typed into Write or Edit can land as the literal
   character** (lg-57: U+FEFF reached tests, the ticket and two gate sections,
-  each repaired by a script). Build an invisible character in code with
-  `String.fromCharCode`, and check any file you typed one into with
-  `grep -cP '\x{feff}'` before you commit it.
+  each repaired by a script; lg-82: 17 U+200B and U+200D in one round, and
+  three gates' scripts). Build an invisible character in code with
+  `String.fromCharCode`, and check any file you typed one into before you
+  commit it with
+  `LC_ALL=C.UTF-8 grep -cP '[\x{200b}-\x{200f}\x{2028}\x{2029}\x{2060}\x{feff}]' <file>`
+  → `0`: `'\x{feff}'` alone misses every other one. A file that handles those
+  characters as data holds them on purpose (lg-82's `unseen.ts`): read the
+  count against the file, not as a verdict. A printable escape (`\u00e9`)
+  landing as its glyph is the same mechanism and harms nothing.
+- **Another branch's files are read, never checked out**: `git fetch origin
+  <branch>`, then `git show <sha>:<path>` in your own worktree. A second tree
+  (`git worktree add --detach …`, above) is for running them, and `git -C
+  <that tree>` is refused there as a redirect out of your worktree (repo-133's
+  filer).
 
 ## Your scratch directory
 
@@ -97,10 +153,17 @@ arguments: dl-115's gate scripts and dl-125's `boundary.mjs` hard-coded both,
 so the next agent could not run them on its own tree. A script there is
 `.mts` — a `.ts` runs as CommonJS with no `package.json` beside it, and
 top-level `await` fails — and it imports worktree modules by absolute path
-through a dynamic `import()`. **Run every scratch script with your worktree as
+through a dynamic `import()`. **A bare specifier inside the file resolves from
+the file's own directory, whatever the working directory**:
+`import("better-sqlite3")` and `import("@anthropic-ai/sdk/helpers/zod")` were
+`ERR_MODULE_NOT_FOUND` from a scratch `.mts` run from the worktree root (lg-66's
+and lg-67's builders). Reach a package through
+`createRequire("<worktree>/<package>/package.json")` or by its absolute path
+under the worktree's `node_modules`. **Run every scratch script with your worktree as
 the working directory** — `node --import tsx <scratch>/<script>.mts <tree>
-<out>` from the worktree root: from the scratch directory `tsx`,
-`vitest/config` and every bare package are `ERR_MODULE_NOT_FOUND`, and `gh`
+<out>` from the worktree root: from the scratch directory `tsx` and
+`vitest/config` are `ERR_MODULE_NOT_FOUND` — the working directory fixes the
+command's own resolution, never the file's — and `gh`
 answers `not a git repository` (five gates and two builders, 2026-10-18 to
 2026-10-24).
 
@@ -127,6 +190,15 @@ What works:
   lets it through where the bare call "cannot be shown not to run git"
   (lg-65's Build 1);
 - an exit code written to a file by the script itself, read in the next call.
+
+**Waiting is the harness's.** The Bash tool refuses `sleep` ("Do not chain
+shorter sleeps to work around this block") and names `Monitor`, a tool no
+builder, fixer or gate has (`No such tool available: Monitor`, repo-133's
+filer): the one wait that works is `run_in_background: true` on a script, and
+the harness re-invokes you when it exits (_Preflight runs longer_, below). A
+report sent while your own background runs are alive is not final: the Haiku
+repo-123 builder reported with four `sleep` waits running and was re-notified
+six times.
 
 A shape this list does not cover is not a defect in this page: say so in your
 report only when a shape listed here was refused (the reviews of 2026-10-10
@@ -168,6 +240,10 @@ naming the sha in anything you conclude, run from your worktree: `gh` needs a
 git working directory, and from the scratch directory `gh run view` fails
 "failed to determine base repo" (repo-106's builder).
 
+- **Same-named checks of different tools are told apart by workflow**, which
+  `gh pr checks` does not print: #669 showed three `docker` rows, one failing.
+  `gh pr view <n> --json statusCheckRollup --jq '.statusCheckRollup[] | [.name, .workflowName, .conclusion] | @tsv'`
+  names each one's workflow.
 - **Checks register up to a minute after a push.** An empty list is not green:
   `until ! gh pr checks <n> | grep -q pending` returns at once on it (dl-106).
 - **A run still in progress has no log.** `gh run view <run> --log` and
@@ -189,7 +265,9 @@ git working directory, and from the scratch directory `gh run view` fails
   then `gh run view <id> --json jobs` down the list until a
   `test (windows-latest…)` job has a conclusion — a docs-only push skips the
   matrix and the next merge cancels the run before it (lg-30's gate walked
-  back four).
+  back four). Its per-test log needs the whole run finished: `--job <id>
+  --log` printed nothing while another leg of that run was still going
+  (repo-120's gate), so walk on to a run whose every job has a conclusion.
 - **Do not wait on a running leg past a few minutes.** A gate grades the line
   `unproven (gate)` and names the sha; the lander reads the leg before its push
   (`SKILL.md` step 9).
@@ -235,6 +313,10 @@ accepts it:
 - **End with what these pages got wrong or omitted for this job.** A refused
   shell shape is one only when _The sandbox refuses_ says that shape works.
 - **Never write `# Done`**, and **do not spawn subagents**.
+- **Your report is delivered once.** An interim hand-back (`SubagentHandback`)
+  consumes the delivery, and a second answers `Nothing was sent: your report
+  was already delivered` (repo-122's builder): report at the end, in your final
+  message, never partway.
 
 ## Findings you are handed
 

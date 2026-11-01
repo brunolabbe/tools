@@ -108,6 +108,10 @@ the batch cannot proceed, put it to the user at once.
    decision in the report goes to the owner now, before the gate**: lg-63 and
    lg-58 then ran builder → gate → lander with no round and no gate 2 ($14.06
    and $17.01, against $20.01 and $17.40 for lg-35 and lg-40 with a round).
+   One that turns on a CI leg still `pending` on the head is the exception:
+   dispatch the gate, and ask once the leg has read, with the reading
+   (repo-121's e2e line and repo-123's flake, 2026-10-25) — _Batch the
+   questions_ holds a question until it carries its measurement.
 
 5. **Gate each accepted branch** with the reviewer the pairing table names,
    spawned by you. **Give the gate nothing from the build** — the ticket, the
@@ -184,7 +188,7 @@ the batch cannot proceed, put it to the user at once.
    or a direct message from you. If a gate's table has an `awaiting` row, the
    lander first commits the ticket's `awaiting:` line. Then one command per
    ticket ([reference/records.md](reference/records.md)):
-   `node scripts/review-record.mjs --land <ticket-path> <gate files…> --base origin/<base> --status done --title "<PR title>" --branch <branch>`.
+   `node scripts/review-record.mjs --land <ticket-path> <gate section files…> --base origin/<base> --status done --title "<PR title>" --branch <branch>`.
    A pull request that only files a ticket gets no `--land`, and its fixes at
    the landing are committed all the same (records.md, _When there is no
    ticket_); a ticket already holding `## Review` takes its new gates as
@@ -195,7 +199,9 @@ the batch cannot proceed, put it to the user at once.
    file name, `report.md`, and nothing else: measured 2026-10-17 with one body
    under four names, and every refusal in the transcripts since 2026-10-10 (4,
    "Subagents should return findings as text") was on that name, beside 316
-   `gate-*.md` writes that went through. Hand the lander both paths. **The
+   `gate-*.md` writes that went through. Hand the lander both paths — the section file as `--land`'s argument, the
+   full report to post, never as an argument: repo-119's lander and both of
+   2026-11-01's caught a dispatch that passed both. **The
    section in the full report is the section file's text, pasted**: compare
    the two before you route anything (`git diff --no-index` on the section
    file against the full file's opening lines), and send a difference back to
@@ -234,7 +240,9 @@ the batch cannot proceed, put it to the user at once.
     about twenty items, or five entries, tell the user a review is due — at
     intake, before you offer a batch, and again at close: the 2026-10-17 review
     was followed by seventeen entries and about a hundred items before the
-    next, and one records.md gap was logged fourteen times over.
+    next, and one records.md gap was logged fourteen times over; the
+    2026-10-24 review by eight entries and 64 items, one `common.md` install
+    sentence logged six times.
 
 ## Which model built it, and which gated it
 

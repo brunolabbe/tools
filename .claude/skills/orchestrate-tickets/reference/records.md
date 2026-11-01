@@ -122,7 +122,10 @@ it so: repo-104's `ba703486`, lg-26's `611e7547`):
 
 **Name the finding as the gate did** — `F2`, `N1` — or, when the section's
 bullets carry no ids, by severity and ordinal ("gate 1, the first low";
-dl-129). One entry per finding, even when one commit fixes two (lg-55, lg-61,
+dl-129). A fix the owner chose on a reading of their own rather than a gate
+finding — a red CI leg read at step 10 (repo-117's Windows skip) — names the
+reading in the finding's place: `Fixed at landing by owner choice: CI, <check>
+red at <sha> — "<what it showed>". <the proof>.` One entry per finding, even when one commit fixes two (lg-55, lg-61,
 lg-63). It names the finding, not the commit: a commit cannot carry its own sha
 (lg-19 spent two commits on one line), and the fix is the commit before the
 records whose subject names the finding. **The proof depends on what was
@@ -132,12 +135,20 @@ fixed:**
   file and name;
 - a wording fix — in the ticket or any other file, in the brief or in the Log:
   `git diff <gated sha> HEAD -- <path> | grep -c '^-.*<a fragment of the
-  removed text that sits on one line>'` → `1`. It reads the removed line, so
-  the entry's own quotation cannot count (dl-127: `2` for one fixed line and
-  pl-56: `3`, under an unscoped `grep -c`), and it reaches a Log sentence, a
-  source comment or `tokens.css`, where a count scoped above `## Log` could
-  not: fourteen landers between 2026-10-17 and 2026-10-24 each improvised a
-  scope of their own;
+  removed text that sits on one line>'` → `1`, **run after the commit that
+  carries the fix and this entry**: before it the range holds nothing and the
+  count reads `0` (lg-83's and repo-131's landers; `git diff HEAD -- <path>`
+  shows the same hunk uncommitted). It reads the removed line, so the entry's
+  own quotation cannot count (dl-127: `2` for one fixed line and pl-56: `3`,
+  under an unscoped `grep -c`), and it reaches a Log sentence, a source comment
+  or `tokens.css`, where a count scoped above `## Log` could not: fourteen
+  landers between 2026-10-17 and 2026-10-24 each improvised a scope of their
+  own. A fix that only adds a sentence has no removed line: then
+  `git diff <gated sha> HEAD -- <path> | grep -v 'Fixed at landing' | grep -c '^+.*<fragment>'`
+  → `1`, the `grep -v` keeping this entry's own quotation out (lg-76's
+  lander). The fragment is plain words: a backtick inside it breaks the entry's
+  code span (repo-118's lander put `.` in its place), and `[`, `.` and `*` are
+  regex to `grep`;
 - a figure the finding states against its own arithmetic (repo-106: "245
   spawns" beside 30 × 5 + 18 × 5): apply the arithmetic, quote both in the
   entry, and say which you took.
@@ -181,6 +192,11 @@ ticket to commit a section to. **The pull request thread is the record**, in
 full, and the body says so in a sentence. A pull request that only files a
 ticket is the same case, and **its fixes at the landing** (`SKILL.md` step 6)
 are committed on the branch with _Fixed at landing_ entries in the filed
-ticket's Log, no `--land`, the ticket left `ready` (lg-52, pl-59, lg-64). A gate row `awaiting` has no
+ticket's Log, no `--land`, the ticket left `ready` (lg-52, pl-59, lg-64). The
+Log names the thread in one entry of the same shape, in the fixes' commit or
+one of its own: `- <date> — Gate 1's full report is on the pull request thread,
+#<n>; status unchanged.` (lg-80's lander improvised one). A fix made only in
+the pull request body — a Summary corrected at the landing — gets no entry:
+the body is not a record (lg-72's lander). A gate row `awaiting` has no
 `awaiting:` field to go in here: the body names the event and the reading, and
 nothing else in the repo tracks them after the merge.

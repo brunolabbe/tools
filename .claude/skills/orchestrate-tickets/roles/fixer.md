@@ -13,9 +13,11 @@ re-read its whole transcript on every turn.
    branch you create is your own, for a maintenance pull request whose branch
    your dispatch names and which does not exist yet:
    `git checkout --no-track -b <branch> origin/<base>` (#414).
-2. Farm and build, per `common.md`, even for a docs-only landing: preflight's
-   `npm run check` typechecks every workspace, and a fresh tree without `dist`
-   fails it in files you never touched.
+2. Farm and build, per `common.md`, whatever the diff — the build skip there
+   is a gate's, never a lander's: preflight's `npm run check` typechecks every
+   workspace, and a fresh tree without `dist` fails it in files you never
+   touched (lg-82's lander: `TS2353` in a ledger web test on a markdown-only
+   branch, exit 2; exit 0 after the farm and build).
 
 ## The work
 
@@ -34,8 +36,10 @@ re-read its whole transcript on every turn.
   (lg-32's `680b2155`, lg-30's `de159b5f`, lg-40's `deef575a`). Then
   `git fetch origin`.
   **Merge `origin/<base>` only when your dispatch asks for it or preflight's
-  merge-tree probe fails against it** — with no `-m`, since the hook accepts
-  only git's own merge subject, and never a rebase, which cannot reach `origin`
+  merge-tree probe fails against it** — committed as `common.md`'s trailer bullet says
+  (`--no-commit`, then `git commit -F <file>`: git's own subject plus the
+  trailer, and the same for a `git revert`, repo-131's lander), and never a
+  rebase, which cannot reach `origin`
   without the force-push forbidden below. A landing-only dispatch pinned to a
   gated head does not merge: the merge moves the head past the gate and
   restarts CI (lg-15), and before a third gate it puts `main`'s commits into
@@ -94,12 +98,18 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
 - **A pull request that only files a ticket, or only records a decision, gets no
   `--land`** (records.md): it leaves the ticket `ready` or `needs-decision`, its
   gate's full report goes on the thread, the body says so, and the ticket's Log
-  names the thread. Fixes the owner chose at that landing are committed on the
+  names the thread in the entry records.md's _When there is no ticket_ gives. Fixes the owner chose at that landing are committed on the
   branch with the _Fixed at landing_ Log entries all the same (lg-52, pl-59,
   lg-64); the ticket stays `ready`. Ship authority on one is `gh pr ready`
   after that.
 - **A fix applied at the landing by owner choice** is applied as the finding
-  states it and marked as records.md's _Fixed at landing_ says.
+  states it and marked as records.md's _Fixed at landing_ says, its proof run
+  after the commit that carries both.
+- **An owner's answer that arrived after the build report** — at a gate's
+  checkpoint, on the builder's open decision — is recorded by you, as
+  `roles/builder.md`'s _Scope_ says for an answer (who, the date, the options),
+  in its own commit before the records: four such answers went unrecorded on
+  2026-10-25, and #660's body then read "open decision" off the Log.
 - **A ticket you are told to file during a landing** follows
   `docs/01-TICKETS.md` and adds nothing the dispatch did not name — no roadmap
   row, no status move (lg-23).

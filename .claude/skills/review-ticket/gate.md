@@ -12,11 +12,13 @@ numbering is shared with it.
 names the commit message as the brief: trace each supplied line as you would a
 ticket's, and say in the section that the acceptance came from the prompt.
 
-**When the pull request only files a ticket, or only records a decision on
-one**, no `Done when` line was built and none is traced. The dispatch supplies
-the checks — the ticket format, the id's freedom, the reproduction's fidelity to
-what was measured, and whether `status` and `difficulty` are honest for the work
-as filed — and you trace those as acceptance, saying they came from the prompt.
+**When the pull request only files a ticket, only records a decision on one,
+or only corrects a ticket's brief** (pl-65's Build line), no `Done when` line
+was built and none is traced. The dispatch supplies the checks — the ticket
+format, the id's freedom, the reproduction's fidelity to what was measured or a
+correction's to what it corrects, and whether `status` and `difficulty` are
+honest for the work as filed — and you trace those as acceptance, saying they
+came from the prompt.
 A ticket the branch files beside its own work is checked the same way, as one
 finding block. The section goes on the pull request thread, not into the file
 (`orchestrate-tickets`' `records.md`, _When there is no ticket_); the lander's
@@ -62,7 +64,9 @@ continuing its gate numbering (#623: lg-66 filed, lg-38 closed).
    the header names the sha you read, and a line number is true only of that sha
    (adr/006). Name code by file and symbol. That governs what you write; a
    tool's printed output quoted in a reproduction stands as printed,
-   `file:line:col` included.
+   `file:line:col` included, and so does a line citation the branch's own
+   ticket carries when the finding is about that citation (lg-82's gates: an
+   off-by-one `sed -n` range in the filed ticket).
 
    - **Read the assertion, not the test's name.** A test whose name covers half
      the clause proves half the clause. Say which assertion carries the line.
@@ -98,7 +102,12 @@ continuing its gate numbering (#623: lg-66 filed, lg-38 closed).
      run: a tool's `e2e` suite, its container build, the Windows leg. When the
      pull request's CI has run that leg green on the head you are gating, say so
      and count it proven, naming the check and the sha — a check named with its
-     sha is a measurement, not a commit pin.
+     sha is a measurement, not a commit pin. A leg that has run and is red on
+     this head leaves the row `unproven (gate)` and is a `med` the line depends
+     on — the line is unproven, not false (lg-17's gate 1; repo-131's gate 1
+     read `e2e (direct) fail` at `17b45fd8` with no rule for it and graded a
+     row `not met`) — unless the failing test is the line's own named proof,
+     which is **not met**.
    - **awaiting** — nothing that can run before the merge proves it, and an
      event after the merge will. The test is the one `docs/01-TICKETS.md` gives
      the `awaiting` field: the event is nameable (a release commit, the first
@@ -175,7 +184,7 @@ sections, in the same pull request as the fix. Name them in the finding.
 
 | Severity | Means |
 | --- | --- |
-| **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested — including a test that passes when the thing it claims to prove is broken, and shipped text that promises a guarantee the code does not keep (a bound, a guard order, a coverage claim), so that a reader relying on it is unsafe; and, on a measurement ticket, a conclusion the owner will choose from that the numbers do not support, even when every number is right and every `Done when` line is literally met (pl-56 gate 1; owner, 2026-10-17) — a `med` when nothing the owner chooses rests on it |
+| **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested — including a test that passes when the thing it claims to prove is broken, and shipped text that promises a guarantee the code does not keep (a bound, a guard order, a coverage claim), so that a reader relying on it is unsafe; and, on a measurement ticket or a `needs-decision` filing, a conclusion or an option's stated cost the owner will choose from that the numbers do not support, even when every number is right and every `Done when` line is literally met (pl-56 gate 1; owner, 2026-10-17; lg-83's gate 1 graded a false "only remedy" `med` for want of this clause) — a `med` when nothing the owner chooses rests on it |
 | **med** | An acceptance line unproven, a rule bent with no reason given, a defect behind a condition that will occur, a new branch in a file with no test file of its own |
 | **low** | Style, a missing fixture, a defect with no live call site, and shipped text or a comment that is false in the safe direction or about a detail nothing relies on |
 
@@ -216,7 +225,11 @@ hypothetical with no caller as `low`, and say "no live call site" in the bullet.
   the build had to decide (lg-10's joint-account row, where "joint" appears
   nowhere above the Log), and a measurement of the gate's own that turns a risk
   the brief's Decision lists as unmeasured into a regression (dl-125: 9 of 37
-  sources, against the Decision's "low or variable frame rates"). The row names the two facts that contradict. It is one
+  sources, against the Decision's "low or variable frame rates"). A brief that contradicts itself is this entry too: a test on the branch
+  asserts the opposite of one `Done when` line because it is the proof of
+  another (lg-67: Done when 2, 7 and 12 serve a fixture whose first line holds
+  no comma, against a line that says the first line must), and the row names
+  both lines, not the test as a `high`. The row names the two facts that contradict. It is one
   finding, a `med` that the line depends on, so the
   decision goes to the owner before any round (`orchestrate-tickets`, step 6),
   and it does not force FAIL: the verdict is CONCERNS unless something else is

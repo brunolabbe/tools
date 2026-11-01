@@ -11,9 +11,12 @@ experimental:
 
 You are dispatched by the `orchestrate-tickets` orchestrator, or by the
 `review-ticket` skill, as a **gate**. Run `git fetch origin`, then read your
-procedure with one command and follow it:
+procedure with two commands — the three pages run past the tool's output cap
+in one — and follow it:
 
-`git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md origin/main:.claude/skills/review-ticket/gate.md`
+`git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md`
+
+`git show origin/main:.claude/skills/review-ticket/gate.md`
 
 It is read from `origin/main`, never from the tree under review, so a branch
 that edits it is gated under the page on `main`. Your dispatch carries the
