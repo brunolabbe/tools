@@ -280,3 +280,29 @@ decision, asked through `AskUserQuestion`:
   wrong part filed. Nothing is lost: "Type it in" still files the next part of
   the photo.
 - No code changed for this entry.
+
+2026-11-01, after the merge, the owner's follow-up on the photo step (asked
+through `AskUserQuestion`). **This supersedes Build step 1's "the camera input
+stays as it is".**
+
+- **The question.** The photo step showed two browser file boxes, "Take a photo
+  of a receipt" and "Choose several photos", which read as a form, and behind
+  them two paths that did the same thing differently. One input with `multiple`
+  and no `capture` was the obvious merge, but recent Android Chrome's gallery
+  picker offers no camera (a tester's report on Android 16, Chrome 151,
+  Aug 2026), and the household has at least one Android phone. iPhone keeps the
+  camera in its picker's menu; a desktop ignores `capture`.
+- **The owner chose:** every photo goes through the queue, from either source;
+  the two sources are icon tiles (a camera, and a stack of photos), the camera
+  tile on a touch screen only (`@media (hover: hover) and (pointer: fine)` hides
+  it). The queue's words follow its count: "Read it" and "Receipt" for one
+  photo, "Read all" and "Receipts" for several.
+- **What went.** The single photo's `kept` and `filed` stages and its `choose`
+  handler. What they did that the queue did not is now the queue's: one photo
+  of one receipt opens straight into its form after the read, and a read photo
+  whose receipts are all filed offers "Type another receipt from this photo".
+  The gallery input's name is now "Choose photos of receipts".
+- **What the e2e found.** `layout.spec.ts` takes touch off for every case, so a
+  touch-only element is hidden there unless a `describe` turns touch back on;
+  the photo-sources case does, and a desktop case checks the camera tile is
+  hidden.

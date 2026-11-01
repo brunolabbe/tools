@@ -804,6 +804,48 @@ svg.chart .selected-band {
   font-weight: 600;
 }
 
+/* A receipt photo's two sources as thumb-sized icon tiles, the file input hidden
+   inside each: the browser's "Choose file" box made two sources read as a form. */
+.pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.pick {
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.pick svg {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* The input is hidden, so the tile carries its focus ring. */
+.pick:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pick:has(:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* A desktop ignores `capture`, so its camera tile would be a second gallery. */
+@media (hover: hover) and (pointer: fine) {
+  .pick-camera {
+    display: none;
+  }
+}
+
 /* lg-92: the queue of photos, one block each with the receipts it holds beneath.
    A photo's file name is whatever the phone called it, so it breaks anywhere
    rather than widening a phone's screen. */

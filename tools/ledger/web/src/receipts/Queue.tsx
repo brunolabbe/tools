@@ -1,7 +1,9 @@
 /**
  * Several receipt photos at once (lg-92): chosen together, kept one at a time,
  * read one at a time on a single tap, and confirmed one receipt at a time from
- * a list. The screen is `Receipts.tsx`; this file is the queue it holds.
+ * a list. The screen is `Receipts.tsx`; this file is the queue it holds. Every
+ * photo goes through it, one or twelve, from the camera or the gallery: a photo
+ * on its own was a second path that did the same thing differently.
  *
  * **Reads go one at a time, and a 429 waits.** A read is the paid call and is
  * limited per person (`rateLimitReceiptReadsPerMinute`, five a minute); a batch
@@ -20,7 +22,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatCents } from "@ledger/books";
-import { AppError, MAX_RECEIPT_PHOTO_BYTES } from "@ledger/contract";
+import { AppError, MAX_RECEIPT_PHOTO_BYTES, MAX_RECEIPTS_PER_PHOTO } from "@ledger/contract";
 import type { CheckedProposal, UploadedReceipt } from "@ledger/contract";
 import { readReceipt, uploadReceipt } from "../api/receipts.ts";
 
@@ -75,7 +77,8 @@ export interface ReceiptQueue {
   /** A read, or a wait between two, is in progress. */
   reading: boolean;
   add: (files: readonly File[]) => void;
-  readAll: () => void;
+  /** Resolves with the queue as the reads left it. */
+  readAll: () => Promise<readonly QueuedPhoto[]>;
   retry: (key: number) => void;
   markFiled: (key: number, part: number) => void;
   clear: () => void;
@@ -179,15 +182,16 @@ export function useReceiptQueue(): ReceiptQueue {
   };
 
   /** Reads `keys()` one after another; a second call while one runs does nothing. */
-  const readThese = async (keys: () => number[]): Promise<void> => {
-    if (readingNow.current) return;
+  const readThese = async (keys: () => number[]): Promise<readonly QueuedPhoto[]> => {
+    if (readingNow.current) return current.current;
     readingNow.current = true;
     setReading(true);
     try {
       for (const key of keys()) {
-        if (!alive.current) return;
+        if (!alive.current) return current.current;
         await readPhoto(key);
       }
+      return current.current;
     } finally {
       readingNow.current = false;
       if (alive.current) setReading(false);
@@ -200,7 +204,7 @@ export function useReceiptQueue(): ReceiptQueue {
     reading,
     add,
     readAll: () =>
-      void readThese(() =>
+      readThese(() =>
         current.current
           .filter((photo) => photo.phase === "kept" && !typedIn(photo))
           .map((photo) => photo.key),
@@ -238,12 +242,13 @@ export interface ReceiptQueueViewProps {
   said: string | null;
   problem: React.ReactElement | null;
   onOpen: (photo: QueuedPhoto, part: number, checked: CheckedProposal | null) => void;
+  onReadAll: () => void;
   onChoose: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onStartOver: () => void;
 }
 
 export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactElement {
-  const { id, queue, said, problem, onOpen, onChoose, onStartOver } = props;
+  const { id, queue, said, problem, onOpen, onReadAll, onChoose, onStartOver } = props;
   const { photos, refused, reading } = queue;
   const unread = photos.filter((photo) => photo.phase === "kept" && !typedIn(photo));
   const uploading = photos.some((photo) => photo.phase === "uploading");
@@ -252,10 +257,12 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
   // All photos of one server share one reader; the first kept one names it.
   const reader = photos.find((photo) => photo.receipt !== null)?.receipt?.reader ?? null;
   const settled = photos.length > 0 && !uploading;
+  // The words follow the count, so one photo reads as one photo.
+  const one = unread.length === 1;
 
   return (
     <section className="card" aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`}>Receipts</h2>
+      <h2 id={`${id}-title`}>{photos.length === 1 ? "Receipt" : "Receipts"}</h2>
       {said !== null && <output>{said}</output>}
       {refused.length > 0 && (
         <div className="bad" role="alert">
@@ -362,24 +369,40 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
                 })}
               </ul>
             )}
+            {/* A receipt the read missed, once every one it found is filed. */}
+            {photo.phase === "read" &&
+              photo.read !== null &&
+              photo.read.length > 0 &&
+              photo.read.every((_checked, index) => photo.filed.includes(index + 1)) &&
+              nextPart(photo.filed) <= MAX_RECEIPTS_PER_PHOTO &&
+              !reading && (
+                <div className="actions">
+                  <button type="button" onClick={() => onOpen(photo, nextPart(photo.filed), null)}>
+                    Type another receipt from this photo
+                  </button>
+                </div>
+              )}
           </li>
         ))}
       </ul>
       {settled && unread.length > 0 && reader !== null && (
         <div className="offer">
           <p className="hint">
-            Reading sends these photos out of the house, to Anthropic, where{" "}
-            <strong>{reader}</strong> reads them, one at a time. Typing a receipt in sends nothing.
+            {one ? "Reading sends this photo" : "Reading sends these photos"} out of the house, to
+            Anthropic, where <strong>{reader}</strong>{" "}
+            {one ? "reads it." : "reads them, one at a time."} Typing a receipt in sends nothing.
           </p>
           <div className="actions">
-            <button type="button" disabled={reading} onClick={queue.readAll}>
-              {reading ? "Reading…" : "Read all"}
+            <button type="button" disabled={reading} onClick={onReadAll}>
+              {reading ? "Reading…" : one ? "Read it" : "Read all"}
             </button>
           </div>
         </div>
       )}
       {settled && reader === null && unread.length > 0 && (
-        <p className="muted hint">Reading receipts is not set up here, so these are typed in.</p>
+        <p className="muted hint">
+          Reading receipts is not set up here, so {one ? "this one is" : "these are"} typed in.
+        </p>
       )}
       {photos.length > 0 && (
         <p className="muted hint">
@@ -387,16 +410,7 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
           photos stay on the household&rsquo;s server, but they do not come back here.
         </p>
       )}
-      <label className="camera">
-        Add more photos
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          disabled={reading}
-          onChange={onChoose}
-        />
-      </label>
+      <PhotoPickers disabled={reading} onChoose={onChoose} />
       <div className="actions">
         {/* Not while photos go up: the uploads would finish into a queue that was cleared. */}
         <button type="button" disabled={reading || uploading} onClick={onStartOver}>
@@ -405,6 +419,102 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
       </div>
       {problem}
     </section>
+  );
+}
+
+const TAKE_PHOTO = "Take a photo of a receipt";
+const CHOOSE_PHOTOS = "Choose photos of receipts";
+
+/**
+ * The two ways a photo joins the queue, as icons. The camera opens straight on
+ * a phone (`capture`), and is the only way to it on recent Android, whose
+ * gallery picker offers no camera. A desktop ignores `capture`, so there the
+ * camera would be a second gallery button: the stylesheet shows it only to a
+ * touch screen. The input is the label's own, hidden, so its name is the
+ * label's text and a keyboard still reaches it.
+ */
+export function PhotoPickers(props: {
+  disabled: boolean;
+  onChoose: (event: React.ChangeEvent<HTMLInputElement>) => void;
+}): React.ReactElement {
+  const { disabled, onChoose } = props;
+  const accept = "image/jpeg,image/png,image/webp";
+  return (
+    <div className="pickers">
+      <label className="pick pick-camera" title={TAKE_PHOTO}>
+        <CameraIcon />
+        <span className="sr-only">{TAKE_PHOTO}</span>
+        <input
+          className="sr-only"
+          type="file"
+          accept={accept}
+          capture="environment"
+          disabled={disabled}
+          onChange={onChoose}
+        />
+      </label>
+      <label className="pick" title={CHOOSE_PHOTOS}>
+        <PhotosIcon />
+        <span className="sr-only">{CHOOSE_PHOTOS}</span>
+        <input
+          className="sr-only"
+          type="file"
+          accept={accept}
+          multiple
+          disabled={disabled}
+          onChange={onChoose}
+        />
+      </label>
+    </div>
+  );
+}
+
+function CameraIcon(): React.ReactElement {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.8l1.5-2.2h6.4L16.7 7h2.8A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12.8" r="3.6" fill="none" stroke="currentColor" strokeWidth="1.75" />
+    </svg>
+  );
+}
+
+/** Two photos stacked, the back one peeking out: several, from the gallery. */
+function PhotosIcon(): React.ReactElement {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M7 4.5h12A1.5 1.5 0 0 1 20.5 6v10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <rect
+        x="3.5"
+        y="7.5"
+        width="14"
+        height="12"
+        rx="1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <path
+        d="m3.5 17 4-4 3 3 2-2 5 5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <circle cx="13.5" cy="11" r="1.2" fill="currentColor" />
+    </svg>
   );
 }
 
