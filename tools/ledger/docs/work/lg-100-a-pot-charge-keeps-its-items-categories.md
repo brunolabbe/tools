@@ -199,7 +199,7 @@ reworded with whichever option the owner chooses.
 **Who decides:** the owner. Where a person's charge takes its category on a
 joint-account row is a design choice that changes what the period screen lists
 and, for two of the options, the contract. lg-91's own Build fixed "one line per
-person", so any option but D supersedes a sentence of a finished ticket's brief.
+person", so A supersedes a sentence of a finished ticket's brief.
 
 Every reader of a pot charge's category, from a grep of `spendingCategoryId` and
 `spending_category_id` across `api/src`, `books/src` and `web/src` on `bd95ab0b`:
@@ -222,8 +222,9 @@ Every reader of a pot charge's category, from a grep of `spendingCategoryId` and
   today.
 - `web/src/periods/Periods.tsx` — shows the category name on the line.
 
-Nothing reads the item categories of a row filing except `receiptsOnRows`
-(slices.ts), for the shared items.
+Beyond `merchantCategory`'s most-common-category read above, nothing reads the
+item categories of a row filing except `receiptsOnRows` (slices.ts), for the
+shared items.
 
 1. **A. One pot charge per person per category — recommended.** Described under
    Build. Costs: `receipts.ts` and one web message; the period screen's "Owed to
@@ -252,7 +253,9 @@ Nothing reads the item categories of a row filing except `receiptsOnRows`
    fact.
 4. **D. Leave it, and say so.** Nothing changes: the 21,27 $ charts as
    uncategorised until a person sets a category on the line from the stats
-   screen's picker, which works on a pot charge today. Costs nothing now. The
+   screen's picker, which works on a pot charge today but sets one category for
+   the whole charge, so the split does not come back (measured: Alcohol 2 127,
+   with the soap's 574 under Alcohol). Costs nothing now. The
    reader's item categories are thrown away on every such receipt, and a
    household that files its groceries this way reads a growing "uncategorised"
    bar.
@@ -309,12 +312,44 @@ written, and read the same figures: the two-category filing's pot line was
 `amount_cents` 2 127, `spending_category_id` `null`, with the chart
 `[["Groceries",523],["(uncategorised)",2127]]`.
 
+WITHDRAWN — do not cite this paragraph.
+
 **What the gate had right, and what it had not run.** The finding reproduces as
 described. One addition: the gate wrote that the person's items "re-enter it
 uncategorised"; the amount that re-enters is the _whole_ charge (2 127), not only
 the part that had no category, so the chart loses both categories' bars at once.
 
+Retraction, by the lander at the owner's choice, on gate 1's finding: the filer
+(builder-standard) was wrong. lg-91's gate wrote "them", which already meant all
+of the person's items, so the whole 2 127 re-entering is what the gate said and
+nothing is added. And "the chart loses both categories' bars at once" is true of
+this reproduction only; elsewhere a category's bar shrinks by the amount.
+
 **Not measured:** the web screens (the Spending bars and the period screen) were
 not rendered; the figures above are the API's. Option A's 1 553 against 1 554 was
 computed by running `splitByCategory` on the person's two items (the fourth test),
 not by filing under A.
+
+### 2026-11-01, landing
+
+- 2026-11-01 — Owner's answer on gate 1's four findings (one medium, three lows),
+  given to the orchestrator. Options: all four at landing (the orchestrator's
+  recommendation); the medium only at landing; record all four. The owner chose
+  **all four at landing**, with no re-gate. The `## Decision — open` section above
+  is a different question and stays open.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the medium — "so any
+  option but D supersedes a sentence of a finished ticket's brief". Now "so A
+  supersedes …". `git diff 7576eb26 HEAD -- tools/ledger/docs/work/lg-100-a-pot-charge-keeps-its-items-categories.md | grep -c '^-.*any option but D'` → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the first low — "Nothing
+  reads the item categories of a row filing except `receiptsOnRows`". Now opens
+  with the `merchantCategory` read the ticket's own bullet names. `git diff 7576eb26 HEAD -- tools/ledger/docs/work/lg-100-a-pot-charge-keeps-its-items-categories.md | grep -c '^-.*Nothing reads the item categories'` → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the second low — the
+  Log's "What the gate had right" paragraph, which claimed an addition to lg-91's
+  gate. Withdrawn in place with a retraction beneath, not deleted. `git diff 7576eb26 HEAD -- tools/ledger/docs/work/lg-100-a-pot-charge-keeps-its-items-categories.md | grep -v 'Fixed at landing' | grep -c '^+.*Retraction, by the lander'` → 1.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the third low — Option
+  D's cost left out what the stats picker does to a pot charge. Option D now says
+  the picker puts the whole charge under one category, with the measured figures.
+  `git diff 7576eb26 HEAD -- tools/ledger/docs/work/lg-100-a-pot-charge-keeps-its-items-categories.md | grep -v 'Fixed at landing' | grep -c '^+.*so the split does not come back'` → 1.
+- 2026-11-01 — Gate 1's full report is on the pull request thread, #743; status
+  unchanged (`needs-decision`). Filed by builder-standard (Sonnet 5.5, high), gated
+  by ticket-reviewer-opus (Opus 5.5, high), landed by the fixer (Sonnet 5.5, high).
