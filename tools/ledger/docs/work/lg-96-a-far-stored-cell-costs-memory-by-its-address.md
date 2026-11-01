@@ -88,17 +88,26 @@ The cases:
 4. **A far column.** 4 000 rows, each row `r` holding `XFD` + `r` = `far`, and
    `A1` = `Alex`, through `readSheets`. The control is the same with the cell in
    column `B`.
+5. **Forty `<sheet>` entries over one far sheet.** One worksheet part holding `A1` =
+   `Alex` and `A100000` = `far` (not case 1's address), with `xl/workbook.xml` listing 40
+   `<sheet>` entries (`r:id` `dup1` to `dup40`) and `xl/_rels/workbook.xml.rels` giving
+   each a relationship to `worksheets/sheet1.xml`. The file stays 10 parts. Through
+   `readSheets`. The control is the same file with one entry. Gate 3's `dup-far.mts`
+   builds it: `workbookOf` for the base file, the test helper's `entriesOf` to open it, the
+   two files patched, `zipOf` to write it.
 
-| Case                                       | Gate 1 of this ticket, `c9b1afdd`                                                   | Gate of PR #733, `83eac952`              |
-| ------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------- |
-| 1. one far cell, `readSheets`              | +62.9, +62.0, +62.5 MB; 131–158 ms; 15 909 B                                        | +49.3 MB                                 |
-| 2. one far sheet, through the route        | +63.0, +58.0 MB; process peak 203.3, 197.7 MB; `WORKBOOK_TOO_LARGE`                 | not run                                  |
-| 3. ten far sheets, through the route       | +532.9, +497.6, +522.9 MB; process peak 673.6, 643.7, 663.2 MB; 1.6–1.8 s; 24 986 B | +408 MB; process peak 592.5 MB; 24 904 B |
-| 3. five far sheets, through the route      | +282.7 MB (one run)                                                                 | not run                                  |
-| 4. 1 000 / 2 000 / 4 000 rows at `XFD`     | +186.1 / +363.6 / +719.2 and +728.6 MB; 1.7 / 3.4 / 6.4–8.0 s; 71 / 128 / 242 KB    | not run                                  |
-| 4. control, 4 000 rows at `B`              | +4.3, +4.7 MB; 60 ms; 234 KB                                                        | not run                                  |
-| 40 far sheets (the count the bound admits) | **not measured**: linear extrapolation from case 3, about +1.9 to +2.1 GB           | not measured                             |
-| 20 000 rows at `XFD` (the row bound)       | **not measured**: linear extrapolation from case 4, about +3.6 GB                   | not measured                             |
+| Case                                                                          | Gate 1 of this ticket, `c9b1afdd`                                                   | Gate of PR #733, `83eac952`              |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------- |
+| 1. one far cell, `readSheets`                                                 | +62.9, +62.0, +62.5 MB; 131–158 ms; 15 909 B                                        | +49.3 MB                                 |
+| 2. one far sheet, through the route                                           | +63.0, +58.0 MB; process peak 203.3, 197.7 MB; `WORKBOOK_TOO_LARGE`                 | not run                                  |
+| 3. ten far sheets, through the route                                          | +532.9, +497.6, +522.9 MB; process peak 673.6, 643.7, 663.2 MB; 1.6–1.8 s; 24 986 B | +408 MB; process peak 592.5 MB; 24 904 B |
+| 3. five far sheets, through the route                                         | +282.7 MB (one run)                                                                 | not run                                  |
+| 4. 1 000 / 2 000 / 4 000 rows at `XFD`                                        | +186.1 / +363.6 / +719.2 and +728.6 MB; 1.7 / 3.4 / 6.4–8.0 s; 71 / 128 / 242 KB    | not run                                  |
+| 4. control, 4 000 rows at `B`                                                 | +4.3, +4.7 MB; 60 ms; 234 KB                                                        | not run                                  |
+| 5. 40 `<sheet>` entries over one far sheet, `readSheets` (gate 3, `9f1069cc`) | +198.3, +197.5 MB; 40 sheets read; 516–522 ms; 6 029 B                              | not run                                  |
+| 5. control, one entry                                                         | +9.6, +9.5 MB; 1 sheet read; 38–39 ms; 5 614 B                                      | not run                                  |
+| 40 far sheets (the count the bound admits)                                    | **not measured**: linear extrapolation from case 3, about +1.9 to +2.1 GB           | not measured                             |
+| 20 000 rows at `XFD` (the row bound)                                          | **not measured**: linear extrapolation from case 4, about +3.6 GB                   | not measured                             |
 
 The fixer of the round that rewrote this section re-ran three of these cases with
 gate 1's `measure2.mts`, once each, one at a time, on a tree at `c9b1afdd`: case 1
@@ -120,6 +129,20 @@ that reading and no output file stands behind it, so it is a figure in a report 
 nothing more. None of the five ten-sheet readings gate 1 took, +497.6 to +532.9 in the
 table and +496.0 and +496.3 with the fixture built in the measuring process, is near
 it. This ticket does not use it, and does not explain the difference.
+
+Case 5 is the multiplier's reproduction, and gate 3's measurement, not the filer's. The
+row count of one entry is 100 000, and 40 entries cost about 20 times one (+198 against
++9.6 MB), so the cost is `rowsOf`'s, once per entry: SheetJS's own parse of the two files
+adds nothing above the process's load peak (0.0 on four runs). The inflate bound counts
+a worksheet part once and `readSheets` builds it once per entry, so a 10-part file of
+20 000 entries, 214 034 bytes, declaring 3 950 299 bytes inflated against the 4 194 304
+bound, passes `workbookEntries`, `declaredInflatedSize` and `countInflated`, and the
+same shape holding `A1` only reads as 20 000 sheets through `readSheets` (1 062 ms). 20
+000 far sheets are not run: about 100 GB at the 40-entry rate, an extrapolation. The
+mechanism needs no far cell. A real sheet full of cells is multiplied the same way (the
+cells bound counts its cells only after the build), and `Confirm` takes the same path as
+`Describe`; both are by reading, not run. Option 1's running total across sheets, or its
+early `<sheet>` count, is what closes it.
 
 Why case 4 is not caught: at 4 000 rows, and at the 20 000-row bound, the
 describe bounds count rows (20 000 at most) and non-null cells (200 000 at most).
@@ -149,8 +172,13 @@ it leaves open across sheets is its second cost. Costs:
 - The bound is per sheet, and the multiplier is the file's sheet count, which nothing
   bounds before the grids are built. `describeWorkbook` calls `readSheets` first and
   checks `MAX_WORKBOOK_SHEETS` (40) after, so every sheet in the file is built whatever
-  its count; only `MAX_WORKBOOK_ENTRIES` (1 000 parts) limits it, about 990 sheets (not
-  run). Gate 2 of this ticket measured it through `describeWorkbook`, each sheet holding
+  its count; the parts do not bound it: `workbook.xml` can list any number of `<sheet>`
+  entries that relate to one worksheet part, and each entry is built; only the 4 MiB
+  inflated bound, applied to `workbook.xml` and its relationships, limits the count, at
+  about 20 000 (gate 3 of this ticket: a 214 034-byte file of 10 parts and 20 000 entries
+  passes the zip and inflate checks; 40 entries over one far sheet read +198.3, +197.5 MB
+  against +9.6, +9.5 for one; 20 000 far sheets not run). Gate 2 of this ticket measured
+  it through `describeWorkbook`, each sheet holding
   `A1` and `A100000` (not the Reproduction's fixture), the file written by one process and
   read by another: 1 sheet +7.6, +8.8 MB; 40 sheets +184.6, +180.1 MB
   (`WORKBOOK_TOO_LARGE`, `bound` `rows`); 100 sheets +416.8, +434.7 MB
@@ -163,7 +191,10 @@ it leaves open across sheets is its second cost. Costs:
   built. What bounds a workbook is a running total across sheets, kept in `readSheets`
   and refused when it passes a workbook-wide slot cap, or a sheet count checked before
   the build. The running total is a second number to choose and a second
-  `details.bound` question. Without one of the two, option 1 closes a sheet and not a
+  `details.bound` question. The sheet count meant here counts the `<sheet>` entries of
+  `workbook.xml`, not the zip's parts, which `workbookEntries` already bounds and which do
+  not see this; a names-only read (`bookSheets`) is a direction for it, not run. Either
+  one closes case 5 below. Without one of the two, option 1 closes a sheet and not a
   workbook.
 - "Rows times its widest stored column" overstates the cost. `rowsOf` ends a row at its
   last cell that holds a value (`holds`: a stub with no formula, an empty string and an
@@ -186,8 +217,9 @@ it leaves open across sheets is its second cost. Costs:
 - The owner's import command changes. It has no row bound today, so it would now
   refuse a sheet past `MAX_WORKBOOK_ROWS`. Whether the command keeps the route's
   bounds is a separate choice, and the owner makes it.
-- Small: one function and a test per axis. It is the mechanism lg-88's option 2
-  would use.
+- Small for one sheet: one function and a test per axis. It is the mechanism lg-88's
+  option 2 would use. Closing a workbook adds a second piece in `readSheets`, a running
+  total across sheets or an early `<sheet>` count, and a test of its own (case 5).
 
 **2. Build only the stored rows and cells (sparse).** `rowsOf` keeps a row for each
 stored row and leaves gaps and unstored columns absent, not `null` places. Memory
@@ -209,9 +241,10 @@ checked before the build would. Neither cuts the column axis, which is still bui
 every row, or one sheet's cost. The saving from a shared row is unmeasured. The sheet
 limit is a product limit, so it is the owner's.
 
-**4. Accept the ceiling and document it.** No code change. By extrapolation, 40 far
-sheets reach about 1.9 to 2.1 GB and a 20 000-row far-column sheet about 3.6 GB, against a
-512 MB container (`compose.ledger.prod.yaml`). The process is killed rather than
+**4. Accept the ceiling and document it.** No code change. By extrapolation, 40 far sheets
+(the count the bound admits; a file can hold far more, option 1's second cost) reach about
+1.9 to 2.1 GB and a 20 000-row far-column sheet about 3.6 GB, against a 512 MB container
+(`compose.ledger.prod.yaml`). The process is killed rather than
 refused. Not recommended.
 
 Option 2 closes both axes. Option 1 closes them for a sheet, and for a workbook only
@@ -227,12 +260,19 @@ owner answers, and the answer may change it.
 1. In `readSheets` (`api/src/xlsx.ts`), before `rowsOf`: refuse a sheet whose `!data`
    length passes `MAX_WORKBOOK_ROWS`, and one whose rows times its widest stored
    column pass the slot cap, each as `WORKBOOK_TOO_LARGE` with the `details.bound`
-   the answer names. Do not build the grid to find the width.
+   the answer names. Do not build the grid to find the width. Keep a running total of
+   the slots across sheets and refuse when it passes a workbook-wide cap, or count the
+   `<sheet>` entries of `workbook.xml` before any grid is built and refuse past
+   `MAX_WORKBOOK_SHEETS`; the answer names which.
 2. In `describeWorkbook`, let the refusal through its `readSheets` `try`, so the code
    stays `WORKBOOK_TOO_LARGE`.
 3. Tests in `api/test/xlsx.test.ts` and `api/test/workbook-describe.test.ts`: one per
    axis (case 1 and case 4), each asserting the code and `details.bound`, plus case 4's
-   control at column `B` reading unchanged.
+   control at column `B` reading unchanged. One more for the multiplier: case 5 with
+   its far cell moved under the per-sheet bound, so that every entry passes it and only
+   the running total or the early count refuses (case 5 as measured, at `A100000`, is
+   past a 20 000-row bound at its first entry, so it is refused with or without the total;
+   the variant is not run).
 4. Re-run the Reproduction's four cases on the branch with the same script (or one that
    loads the same modules before its baseline), and on the base with it, and put
    each figure in the Log beside the base figures above.
@@ -244,7 +284,9 @@ owner answers, and the answer may change it.
 1. The owner's answer is recorded under the Decision heading with its options, and
    `status` moves to `ready` in that commit.
 2. Each measured case in the Reproduction, run on the branch, stays under the bound
-   the answer sets: case 1, case 3 through the route, and case 4 at 4 000 rows. The
+   the answer sets: case 1, case 3 through the route, case 4 at 4 000 rows, and case 5 with
+   its far cell under the per-sheet bound, which fails on a per-sheet bound alone and
+   passes only with the running total or the early `<sheet>` count. The
    readings are in the Log beside the base figures.
 3. Each refusal the answer adds is `WORKBOOK_TOO_LARGE` with its `details.bound`, and
    no refusal reaches the route as `WORKBOOK_NOT_XLSX`. A test in `api/test/` asserts
@@ -312,17 +354,47 @@ owner answers, and the answer may change it.
   authority.
   - F2, remaining clause (high): the multiplier is the file's sheet count, not 40.
     `describeWorkbook` builds every sheet and checks `MAX_WORKBOOK_SHEETS` after, so only
-    `MAX_WORKBOOK_ENTRIES` bounds it. Corrected in option 1's second cost (with gate 2's
+    `MAX_WORKBOOK_ENTRIES` bounds it (corrected at the landing, gate 3, P1: the 4 MiB
+    inflated bound does, not the parts). Corrected in option 1's second cost (with gate
+    2's
     1, 40 and 100-sheet readings), the table's 40-sheet row and the paragraph after it,
     option 3's "lower `MAX_WORKBOOK_SHEETS`" (which changes no cost on its own), the
     closing comparison of the options, and round 1's F2 Log bullet. "The sheet count it
     is multiplied by" is dropped as an alternative; the running total, or a count check
-    ahead of the build, is named as what bounds a workbook. Not run: a file near 990
-    sheets.
+    ahead of the build, is named as what bounds a workbook. Not run: 20 000 far sheets.
   - F1, remaining clause (low): the Reproduction now says what the second process has
     loaded before its baseline moves the delta, with gate 2's two orderings beside gate
     1's, and the "never exceeds" sentence is softened. Build 4 names the condition.
   - N1 (low): "0.2 s" dropped from the PR #733 column; that thread gives +49.3 and no
     time for it.
-  - N2 (low): the F5 cost and the Why now say a row ends at its last cell that holds a
-    value, or at a merge-covered place, and that stubs do not widen it.
+  - N2 (low): the F5 cost now says a row ends at its last cell that holds a value, or at a
+    merge-covered place, and that stubs do not widen it. The Why and the first measurement
+    Log entry say only "its own last cell that holds a value" (corrected at the landing,
+    gate 3, P2: this bullet said the Why said all of it).
+- 2026-11-01 — Owner's answer, O1 (gate 3's open decision: the duplicate-`<sheet>`-entry
+  mechanism, a defect on `main` that needs no far cell). Options: (a) fold it into lg-96
+  as the multiplier's reproduction, case 5, and let option 1's running total or early
+  count close it (gate 3's recommendation); (b) file a sibling ticket and keep lg-96 to
+  the two address axes. The owner chose (a). Case 5 and its paragraph are in the
+  Reproduction.
+- 2026-11-01 — Owner's answer, gate 3's P1, P2 and P3 (below the floor, no `high`).
+  Options: P1 and P2 at the landing with P3 recorded (the orchestrator's recommendation);
+  all three at the landing; record all three. The owner chose all three at the landing,
+  with no re-gate.
+- 2026-11-01 — Fixed at landing by owner choice: gate 3, P1 — "only
+  `MAX_WORKBOOK_ENTRIES` (1 000 parts) limits it, about 990 sheets (not run)". Replaced
+  with the gate's text in option 1's second cost; the Log's "a file near 990 sheets" is
+  "20 000 far sheets"; option 4's "40 far sheets" gains the gate's parenthesis; and "a
+  sheet count" is said to count the `<sheet>` entries, not the zip's parts. Proof: no
+  line outside this entry mentions "990".
+- 2026-11-01 — Fixed at landing by owner choice: gate 3, P2 — "the Log's N2 bullet says
+  the Why now says ... the Why, and the first measurement Log entry, say only 'its own
+  last cell that holds a value'". The N2 bullet now says what the Why says and where the
+  merge clause and the stubs are.
+- 2026-11-01 — Fixed at landing by owner choice: gate 3, P3 — "'Small: one function and a
+  test per axis', Build 1 and `Done when` 2 ... describe option 1 as the per-sheet bound
+  alone". The three now carry the running total across sheets or the early `<sheet>`
+  count, and a case that fails without it (case 5 with its far cell under the per-sheet
+  bound, not run).
+- 2026-11-01 — Gate 1's, gate 2's and gate 3's full reports are on the pull request
+  thread, #735; status unchanged (`needs-decision`).
