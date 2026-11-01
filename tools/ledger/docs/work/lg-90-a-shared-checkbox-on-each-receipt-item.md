@@ -3,7 +3,7 @@ id: lg-90
 tool: ledger
 title: A shared checkbox on each receipt item, and a picker for whose it is once unchecked
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [lg-89]
 difficulty: standard
@@ -71,6 +71,58 @@ The screen maps onto them exactly as the button does today.
 4. `e2e/layout.spec.ts` covers an unchecked item with its select shown at 360 px
    and 1280 px, with no horizontal page scroll.
 5. `npm run check`, `npm test -- --project ledger` and `npm run e2e:ledger` pass.
+
+## Review
+
+**Gate: PASS** — 2026-11-01 · `686b213c..a2ab1d56` · Opus 5.5, depth standard
+
+| Done when                                                                                                                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Unchecking → `not-shared`, split moves by the item's cost; a person → `theirs` with that `chargedTo` in `fileReceipt`'s request; re-checking → `shared`, `chargedTo: null` | Proven across three tests in `web/test/receipts.test.tsx`: "unchecking an item leaves it out, picking a person charges it, and checking it again shares it (lg-90)" (select value `mine`, live line `Not shared 15.54 $ … Shared 9.22 $` from 24.76 $, and `mine` again after a re-uncheck); "among three people, an unchecked item names whose it is from one select (lg-23, lg-30, lg-90)" (request items `["theirs","sam"]`, `["theirs","casey"]`); "among three people, checking a charged item again files it shared with nobody charged (lg-90)" (request `["shared", null]`). Positive control: a plant that resurrects the old `chargedTo` on a re-uncheck turned the first test red (`expected 'sam' to be 'mine'`) ✓ |
+| 2. Household of two offers Mine + the other; of three, Mine + both others                                                                                                     | `web/test/receipts.test.tsx` › "on a household of %s an unchecked item offers Mine and each other member, and a checked one offers nothing (lg-90)", two cases, `optionsOf` equals `["Mine","sam"]` / `["Mine","casey","sam"]` ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 3. Each unchecked item shows what it takes off; the sum matches the "Not shared" and charge totals for one person's items                                                     | `web/test/receipts.test.tsx` › "each unchecked item shows what it takes off, and one person's items sum to their total (lg-90)": `Takes off 3.49 $` + `5.74 $` against `Not shared 9.23 $` and `sam's 9.23 $` ✓. Per-item rounding as settled by the owner on 2026-11-01; the one-cent case is pinned by "two taxable items can show a cent more apart than the split takes off together (lg-90)"                                                                                                                                                                                                                                                                                                                              |
+| 4. `e2e/layout.spec.ts` covers an unchecked item with its select open at 360 and 1280 px, no horizontal scroll                                                                | `e2e/layout.spec.ts` › "Receipt fits a phone and a desktop, with a photo kept and an item typed": unchecks, focuses `Whose is`, measures both widths. Local `npm run e2e:ledger` 31 passed; PR #724 `e2e` (ledger) SUCCESS at `a2ab1d56`; both screenshots opened ✓ ("open" is focus: see the `low` below)                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 5. `npm run check`, `npm test -- --project ledger`, `npm run e2e:ledger` pass                                                                                                 | Re-run at `a2ab1d56`: check exit 0; ledger 2132 of 2132 in 99 files; e2e 31 passed. PR #724: every check SUCCESS at `a2ab1d56` ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+
+- **low** · no `Done when` line depends on it · `MINE = "mine"` in
+  `web/src/receipts/Receipts.tsx` shares the value space of person ids, which the
+  contract allows as any 1–64-character string. A member whose id is `mine` gets
+  an option of value `mine`, and picking that person files the item
+  `not-shared` with `chargedTo: null`, measured: options
+  `["Mine=mine","mine=mine","sam=sam"]`, filed `["not-shared",null]`. No such
+  household is known (no live call site). Direction: a select value no person id
+  can take.
+- **low** · Done when 4's wording · "with its select open": the spec focuses the
+  `Whose is` select, and a native select's list is drawn outside the document,
+  so no page measure or screenshot can hold it open. The property — the select
+  on screen and no sideways page scroll at either width — is met; the owner may
+  reword "open" to "shown".
+- **low** · `nfr:maintainability` (usability) · at both widths the `Whose is`
+  select and the category select stand one above the other at full width with
+  no visible label, reading as two bare selects ("Mine", "None"); each has an
+  `aria-label`. The category select was already unlabelled on screen at the base.
+- **dropped** · a read item `theirs` charged to a departed member is shown and
+  filed as the first current other's (`casey` among three; `chargedTo: null`,
+  meaning `sam`, among two), with no choice made. `whose` is unchanged by this
+  diff, so it is behaviour from before the range; carried to the report as an
+  open decision.
+- **dropped** · the live line reads `The other's 0.00 $` in a household of one;
+  that line is not in the diff.
+- **dropped** · with every item out, a half-cent item (20.00 $ taxable, 2299.5
+  hundredths) and the bread show `23.00 $` + `3.49 $` = 26.49 $ against `Not
+  shared 26.48 $`: `splitReceipt`'s nothing-shared rounding moves a cent the
+  per-item figures do not. Same outcome as the owner's 2026-11-01 settlement
+  (per-item rounding kept), so not a finding.
+- **findings** · the hunt returned 6; 3 carried, 3 dropped.
+- Attacks: re-checking files `shared`/`null` and a re-uncheck starts on Mine in
+  households of one, two and three (15 of 15 steps); a household of one shows a
+  disabled "Someone else's" option and the refusal on screen; a queued receipt's
+  choices do not reach the other in the queue, and the joint-row refusal holds
+  there; "Takes off" disappears when the total is not reached, emptied, a price
+  is emptied or GST is emptied (with an empty subtotal the items still make the
+  total, and it stays, matching the live line).
+- NFR: security n/a (web only) · performance ✓ (one `sharedAmount` per unchecked
+  item per render) · reliability ✓ · maintainability — above.
 
 ## Log
 
