@@ -3,7 +3,7 @@ id: repo-135
 tool: repo
 title: The ready view lists tickets whose own note says they cannot start
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -41,7 +41,11 @@ skip the compile` and `note: not startable until @fastify/static depends on
 glob ^14`. repo-126 carried `Not before 2026-10-28` in its Build section and was
 listed every day before that date.
 
-## Decision — open
+## Decision — answered 2026-11-01 by the owner
+
+**Answer: (a)**, the `note: held: …` prefix, chosen from (a), (b) and (c) below
+with (a) recommended. Rated `standard` as filed; the answer does not change it.
+The options stay as they were put.
 
 How a `ready` ticket says it cannot start yet, so that `--ready` leaves it out.
 
@@ -88,3 +92,5 @@ Under the chosen option:
 
 - 2026-11-01 — Filed by the review of the orchestration log (tools-5e's item 7,
   tools-e6's item 7). Reproduction above run on `main` at `8ad4e91d`.
+- 2026-11-01 — Owner chose (a) at the review session's checkpoint (asked beside
+  repo-137's question); `status` moved to `ready` in the same commit.

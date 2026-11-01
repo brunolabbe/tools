@@ -3,7 +3,7 @@ id: repo-137
 tool: repo
 title: The farm's freshness remedy names an install the pages forbid, and has no case for a stacked branch
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -61,7 +61,11 @@ The stacked case (relayed from repo-123's builder and lander, 2026-10-25, not
 re-run): farming on a branch cut from `origin/repo-121-vite-8-vitest-5` →
 `warning: … is missing 3 package(s)` and the remedy above.
 
-## Decision — open
+## Decision — answered 2026-11-01 by the owner
+
+**Answer: (a)**, no install in a farmed worktree, chosen from (a), (b) and (c)
+below with (a) recommended; `roles/common.md`'s dependency bullet stands as the
+review wrote it. Rated `mechanical` as filed. The options stay as they were put.
 
 Which rule the remedy follows. `roles/common.md` was written under (a) by the
 2026-11-01 review, pending this answer; (b) would change it back.
@@ -113,3 +117,6 @@ Which rule the remedy follows. `roles/common.md` was written under (a) by the
   2 and 10, tools-18's item 2, tools-97's item 3, tools-54 third's item 2,
   tools-e6's items 1 to 3). The symlink reading and the remedy grep are re-run
   on `main` at `8ad4e91d`; the stacked case is relayed.
+- 2026-11-01 — Owner chose (a) at the review session's checkpoint (asked beside
+  repo-135's question); `status` moved to `ready` in the same commit. Build 3
+  does not apply.
