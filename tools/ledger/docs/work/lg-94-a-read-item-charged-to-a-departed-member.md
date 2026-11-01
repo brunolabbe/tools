@@ -531,3 +531,10 @@ three answers, relayed by the coordinator).**
   never held, the payer and nobody. The records quoted in the build entry carry the old words;
   they are the readings at `b09aadd2`. Test: `a refusal's words are true for a name the books
   never held`, which also pins that the words say neither `has left` nor `to nobody`.
+
+**2026-11-01, landing (gate 2, ticket-reviewer-opus, graded `6a294daa` PASS; the owner's
+answer on gate 2's three lows, relayed by the coordinator).**
+
+- **Answer D, gate 2's three lows.** Options: all three at landing (recommended); the second
+  and third only; record all three. Chosen by the owner: **all three at landing, with no
+  re-gate.** Each is marked below as _Fixed at landing_.
