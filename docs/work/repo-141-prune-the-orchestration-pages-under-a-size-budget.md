@@ -77,10 +77,29 @@ checks that by reading each removed sentence against what remains.
 1. Read the current sizes (Reproduction) and write them into the Log.
 2. For each page, list every sentence that meets (i) or (ii) with the sentence
    that supersedes it, as a table in the pull request body; remove them.
-3. If (a): a header line per page, `<!-- budget: N lines -->`, and a test in
+3. Move four blocks to where only their readers pay for them, measured on
+   #720's head at four bytes a token (a gate reads 60.5 KB, about 15 k tokens;
+   a builder 37 KB; a fixer 29.7 KB; the orchestrator 28 KB of `SKILL.md` on
+   every turn and compaction):
+   - the three dependency cases of `roles/common.md`'s _Your worktree_ into
+     `roles/builder.md` — only a builder relocks, and gates and fixers read
+     about 40 lines they never use; the gate's three pages then fit under the
+     50 KB output cap again;
+   - `review-ticket/gate.md`'s _Worked cases_ (about 45 lines of provenance)
+     to a reference page no dispatched gate reads at its first command;
+   - `review-ticket/SKILL.md`'s _A different model reviews_ (126 lines) and
+     `reference/model-pairing.md` (22 KB, "never needed to dispatch") into one
+     why-page, since both reason about the same table;
+   - `SKILL.md`'s _If the session dies_ and the away-owner block of
+     _Decisions_ (about 60 lines together) to reference pages the loop points
+     at, read on the day they apply.
+     A separate build or review skill is not one of the moves: builders and
+     gates already read only their own pages, and a new skill would duplicate
+     `common.md`.
+4. If (a): a header line per page, `<!-- budget: N lines -->`, and a test in
    `scripts/test/` that fails naming the page and its overrun; set N at the
    pruned size plus ten percent.
-4. Record the before-and-after sizes in the Log, and the gate agents' read
+5. Record the before-and-after sizes in the Log, and the gate agents' read
    command in `.claude/agents/ticket-reviewer-*.md` goes back to one `git
    show` if the three pages fit under the output cap again.
 
@@ -97,3 +116,7 @@ checks that by reading each removed sentence against what remains.
 - 2026-11-01 — Filed from the 2026-11-01 review (session tools-5d); the sizes
   above are read from `main` at `8ad4e91d`, the 51,368-byte figure from the
   tools-18 entry's item 9.
+- 2026-11-01 — Build 3 added at the owner's choice, from the session's
+  measurement of who reads which page; a gate's procedure is 4 to 9 percent
+  of its per-turn context (171 k to 392 k cached tokens in the log), so the
+  moves are for the output cap and clarity more than for cost.
