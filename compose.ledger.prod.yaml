@@ -71,6 +71,14 @@ services:
       # with the household command (`docs/02-DEPLOYMENT.md`).
       LEDGER_ADMINS: "${LEDGER_ADMINS:-}"
 
+      # The key that reads receipts (lg-8) and describes workbooks (lg-66), from
+      # the host's `.env`. The fragment names the variable and never holds the
+      # value, as the downloader's does for its Turnstile secret. Unset is blank,
+      # which the API reads as no key: no reader, no describer, nothing leaves
+      # the host. Its own name rather than a bare ANTHROPIC_API_KEY, so the
+      # ledger and the planner can spend from separate keys.
+      ANTHROPIC_API_KEY: "${LEDGER_ANTHROPIC_API_KEY:-}"
+
     # A disk guard, added by repo-125. Docker's `json-file` driver keeps every
     # line forever unless told otherwise, so an uncapped log grows until the disk
     # is full. Unlike the downloader's cap (dl-54), this one promises nothing
