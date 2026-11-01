@@ -6676,3 +6676,41 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - A stacked draft based on the parent's branch: GitHub retargeted #694 to `main` when #692's branch was deleted, and a `git merge-tree --write-tree origin/main <branch>` dry run (exit 0, 23 files, all lg-72's) priced the maintenance merge before dispatch.
 - Reverting to the last gated state instead of a gate 4 when a third gate's fix drew a third CodeQL alert on the same code (repo-131's N1 → repo-133).
 - A low the owner ticks whose fix the finding does not fully state is re-asked before the lander gets it (repo-131's N1).
+
+### Batch 2026-11-01 (tools-e6, repo-130 repo-133 repo-120) — base 84135dbf
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a9d6b599a26c262ad | seam-mapper, thirteen candidates (dl-130 dl-131 dl-133 dl-134 pl-64 pl-65 repo-120 repo-122 repo-126 repo-129 repo-130 repo-133 repo-134) | 1m50s / 1m50s | 0 | $0.4608 |
+| #705 | open, ready, CodeQL green at 8b490104, e2e pending at close | Sonnet 5.5 / high | a188585cf55b72144 | builder-standard, repo-130 | 12m18s / 12m18s | 0 | $2.1342 |
+| #705 | as above | Opus 5.5 / high | a13948a25296173e9 | ticket-reviewer-opus, repo-130 gate 1 | 10m58s / 10m25s | 0 | $3.6669 |
+| #705 | as above | Sonnet 5.5 / high | a7b7b1d463ea50816 | fixer, repo-130 five lows + owner answers at landing, one owner stop (`.replan` variant), landing | 12m07s / 11m48s | 0 | $1.4435 |
+| #703 | open, ready, 15/15 green at 85893240 | Sonnet 5.5 / high | a9b861052dbb50d44 | builder-standard, repo-133 | 7m48s / 7m24s | 0 | $1.2519 |
+| #703 | as above | Opus 5.5 / high | a9b25b58e28a24bb9 | ticket-reviewer-opus, repo-133 gate 1 | 12m39s / 12m33s | 0 | $2.6522 |
+| #703 | as above | Sonnet 5.5 / high | a90fa4c9148792fd4 | fixer, repo-133 one low at landing + landing | 4m35s / 4m35s | 0 | $0.3579 |
+| #704 | open, ready, CodeQL and unit green at ee24e7d6, e2e (direct) pending at close | Sonnet 5.5 / high | a8c603f0e61809f0f | builder-standard, repo-120 | 6m37s / 6m37s | 0 | $1.2524 |
+| #704 | as above | Opus 5.5 / high | ad53efd821d7f2651 | ticket-reviewer-opus, repo-120 gate 1 | 11m08s / 11m07s | 0 | $3.6215 |
+| #704 | as above | Sonnet 5.5 / high | acea1dd2fa406dfd6 | fixer, repo-120 three lows at landing (two new specs) + `awaiting` line + landing | 8m07s / 8m01s | 0 | $1.2925 |
+| — | — | Opus 5.5 / high | orchestrator 53276b98 | orchestrator (floor) | 53m37s / 59m17s | 0 | $3.7979 |
+| | | | | **total** (rates read 2026-10-10) | 2h21m44s | 0 | **$21.9317** |
+
+**Tickets:**
+
+- repo-130 → #705: intake answer Done when 4 graded on the Why's 23 fields; the build measured 24, already 16px on `main` → re-asked, met on 24 as a regression guard; builder's `.pin` (keep 44px) and `.choice` (to pl-65's Build) → owner. Gate 1 PASS, six lows → owner: L2–L5 at landing, L6 both routes with a reason (ui-package.md and tokens.css made to agree), L1 recorded; gate's 13-of-24 reach re-asked, stands. Lander stopped on L5's 2px fieldset shift → owner took the 0-pixel variant. Total $7.24.
+- repo-133 → #703: intake answer struck Done when 3's dead R1 clause and graded the bound on parse5 (10.9 ms at 352,000 characters, ratio 3.62). Gate 1 PASS, five lows → owner: L1 (RangeError at 300,000 siblings) fixed at landing, parse5 kept in `dependencies`, rest recorded. Total $4.26.
+- repo-120 → #704: builder's open decision (ship on the notes alone) → owner: gate, merge, then paid reads, written as an `awaiting` line. Gate 1 PASS, four lows → owner: OpenTelemetry disabled on the four clients, two wording lows fixed, L4 recorded. Total $6.17.
+
+**Defects in the skill:**
+
+1. `roles/common.md`, _Your worktree_, "A dependency your ticket adds is not in the farm" — the `npm install --ignore-scripts` it offers runs in a tree whose `node_modules/.bin` and `.package-lock.json` are symlinks into the shared checkout, so it rewrites both for every concurrent agent. A gate's build at that minute failed, and the farm check said nothing. Reproduction: `ls -la .claude/worktrees/agent-a8c603f0e61809f0f/node_modules | grep -E '\.bin|package-lock'` → `.bin -> /workspaces/tools/node_modules/.bin`, `.package-lock.json -> /workspaces/tools/node_modules/.package-lock.json`; `ls -la --time-style=full-iso node_modules/.bin | head -2` in the shared checkout → `2026-11-01 00:44:59`. Relayed from repo-133's gate 1, not re-run: its `farm-build.log` printed `farm exit 0`, then `sh: 1: tsc: not found` and `build exit 127`, and the same script a minute later printed `build exit 0`. (The 2026-10-31 third entry's item 2 logged the `.package-lock.json` rewrite; this is its consequence.)
+2. `roles/common.md`, same paragraph — the install also leaves `better-sqlite3` unbuilt in the worktree, and the page names that only for the workspace-link case. Relayed from repo-120's builder and gate 1, not re-run: `ls node_modules/better-sqlite3/build/Release` → `No such file or directory`, then `npm test -- --project planner` → `Test Files 21 failed | 63 passed (84)` with `Could not locate the bindings file`. It was repaired by copying or relinking the shared checkout's `build/`.
+3. `roles/common.md`, same paragraph — no route for an agent told not to install, whose farm links a dependency to the shared checkout's older copy. Relayed from repo-120's lander, not re-run: `bash .claude/scripts/worktree-farm.sh` → `missing 1 package(s) … @opentelemetry/api`, and `grep '"version"' node_modules/@anthropic-ai/sdk/package.json` → `0.125.0`. It copied both packages from the builder's worktree.
+4. `reference/dispatching.md`, _Routing a round_, and `SKILL.md` step 9 — "the gate files to land, each gate's `.full.md` report file beside them" and "Hand the lander both paths" do not say that only the section file is an argument to `--land`. The orchestrator's two landing dispatches this batch wrote `--land <ticket> <section> <full report>`, and both landers had to catch it. Reproduction: `grep -n 'full.md' .claude/skills/orchestrate-tickets/reference/dispatching.md` → `166: gate files to land, each gate's .full.md report file beside them`.
+5. `roles/common.md`, _Reading a pull request's checks_ — the Windows recipe compares the leg with `main`'s, but `main`'s per-test log cannot be read while another leg of that run is going. Relayed from repo-120's gate 1, not re-run: `gh run view 41256635578 --job 124701371888 --log` → no output.
+6. `roles/builder.md`, _Before you report_ — the commit-msg hook's rejections it lists leave out a body line that begins with the words "breaking change". Relayed from repo-120's builder, not re-run: the hook printed `"breaking change in the migration notes…" will be ignored — the footer has to read exactly "BREAKING CHANGE: "`.
+7. `scripts/status.mjs` (a script, not a page) — `--ready` lists two tickets whose own `note:` says they cannot start. Reproduction: `npm run -s status -- --ready | grep -E '^repo-122|^repo-134'` → both listed, beside `note: held at 12 until a lockfile install can skip the compile` and `note: not startable until @fastify/static depends on glob ^14` in their frontmatter.
+
+**Worked, and worth keeping:**
+
+- A scratch merge of every branch in the batch, followed by `check-lockfile-sync` (`git merge-tree --write-tree`, `git commit-tree`, `git archive`, then `node scripts/check-lockfile-sync.mjs` → `up to date`), before the landings. It priced three lockfile-touching branches as needing no draft hold.
+- A lander dispatch that names a visible condition ("if any spacing changes visibly, stop") with a pixel diff against the gate's screenshots: repo-130's lander stopped on a 2px fieldset shift, and the owner chose its 0-pixel variant.
