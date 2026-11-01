@@ -3,7 +3,7 @@ id: lg-95
 tool: ledger
 title: Re-file a bank row whose person and bucket were already answered
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -106,8 +106,125 @@ Once the decisions are answered:
 - `layout.spec.ts` covers the open control at 360 px and at desktop width.
 - `npm run check` and `npm test -- --project ledger` pass.
 
+## Review
+
+**Gate: CONCERNS** — 2026-11-01 · `83eac952..cb1b036d` · Opus 5.5, depth standard
+
+| Done when                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A `manual` row is re-filed to another person and bucket from History, driven by a test, and then shows the new answer | `web/test/history.test.tsx` › "a row answered by a person is filed again from the history, the list is read again, and no undo is offered (lg-95)" ✓ — `classifyRow` called once with `{ rowId: 7, personId: "sam", bucket: "mortgage" }`, a second `fetchRows` asked, and the list then reads "sam · Mortgage" and not "alex · Current expenses". Positive control: dropping the `classifyRow` call fails it ("expected to be called 1 times, but got 0 times"), and swapping the re-read for a local patch fails it ("expected [ { offset: +0, limit: 50 } ] to have a length of 2 but got 1") |
+| The earlier record is still stored; the UI sends a new answer and offers no undo                                      | API half: `api/test/classifications.test.ts` › "classifying a row again" › "keeps the earlier classification, with who changed it and when" ✓ (two records, the first untouched). UI half: the same History test ✓ — the `classifyRow` call, then `queryByRole("button", { name: /undo\|revert\|restore/iu })` is null, with the status line asserted beside it so an empty screen fails                                                                                                                                                                                                         |
+| Decision 1's behaviour is tested on a row in a closed period                                                          | `web/test/history.test.tsx` › "a row in a closed period says what the change reaches, and the next close carries it (lg-95)" ✓ — the closed-period paragraph (settlement stays as paid, next close carries it), none on the open-period row, and the after-save notice; `closedPeriodOf` bounds › "closedPeriodOf holds a period's first and last day, and the first period has no start (lg-95)" ✓. Gate probe: 16 dates over two closed periods (first `start: null`, then a chosen first start) agree with books' `periodIndexOf` on every one                                                |
+| `layout.spec.ts` covers the open control at 360 px and desktop                                                        | `e2e/layout.spec.ts` › "History fits a phone and a desktop with a filed row's change open" — `e2e` (ledger workflow) success at `cb1b036d`, and the whole layout spec passed locally on `E2E_PORT=8291`, 31 of 31 ✓                                                                                                                                                                                                                                                                                                                                                                              |
+| `npm run check` and `npm test -- --project ledger` pass                                                               | **verified** — `npm run check` exit 0; ledger project 2140 of 2140, 99 files, exit 0, at `cb1b036d`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+- **med** · no `Done when` line depends on it · **open decision** · History's
+  change control offers every person the books ever held, retired ones
+  included, for every row — an open-period row too. `History` loads
+  `fetchPeople(signal, "everyone")` for its filter and passes the same list to
+  `AnswerControls`; `fetchPeople`'s own header in `web/src/api/rules.ts` says
+  `"in"` is "what a screen offers to pick" and `"everyone"` is for the
+  history's filter and a stored row's owner, and the inbox and Auto-filed both
+  offer `"in"`. The API's `requireKnownPerson` accepts any known person
+  (read, not run). Gate probe: a row dated after the close that retired `pat`
+  is offered `Joint, alex, pat, sam`. A row already answered to `pat` does
+  preselect `pat`, which is right. What filing an open-period row to a retired
+  person does to the next close is unmeasured. Options in the report.
+- **low** · `nfr:reliability` · a save whose `classifyRow` succeeds and whose
+  re-read fails shows the re-read's error with the control still open, enabled
+  and showing the old answer; a second Save sends a second identical answer
+  (probe: 2 `classifyRow` calls). Nothing wrong is stored — the duplicate holds
+  the same answer — but the screen says a saved change failed.
+- **low** · `nfr:reliability` · `fetchPeriods` joins the `Promise.all` that
+  loads people and spending categories, so a failed periods read now also drops
+  the names and category names History shows. Same `read` guard as `GET
+  /api/rows`; needs a transient failure.
+- **low** · a11y · the closed button carries `aria-expanded={false}` but is
+  replaced by the fieldset on open, so nothing ever reports `true`, and focus
+  falls to the body when the button unmounts.
+- **low** · the Log's build entry places the bound in `api/src/periods.ts`
+  (`date >= start`, `date <= end`); the server assigns a dated amount to a
+  period with books' `periodIndexOf` (first period whose end is on or after the
+  date, `-1` before the first's start). The two agree on contiguous periods,
+  which `closePeriod` enforces (`PERIOD_NOT_OPEN`), and the probe measured them
+  equal; false in the safe direction.
+- **dropped** · `web/src/inbox/AnswerControls.tsx` has no test file of its
+  own: every branch is exercised through `inbox.test.tsx`, `app.test.tsx` and
+  `history.test.tsx` (a person and `null` both sent), and a base/head DOM dump
+  of Inbox and Auto-filed is byte-identical.
+- **dropped** · a row dated before a chosen first-period start gets no
+  closed-period wording: the server counts it in no period either (`-1`), so
+  saying nothing is correct.
+- **dropped** · a Save while a Show more request is in flight could append a
+  stale page after the re-read: `refile` does not abort `moreRequest`. Read,
+  not reproduced; needs a click during a pending page. Folded into nothing,
+  recorded here as unmeasured rather than as a finding.
+- **findings** · the hunt returned 8; 5 carried, 3 dropped.
+- NFR: security ✓ (no new route, no logging) · performance ✓ (one extra GET
+  on open; the re-read asks `max(50, shown)` rows) · reliability — above ·
+  maintainability ✓ (one shared control replaces two hand copies). 360 px and
+  desktop read through the layout case.
+- CI at `cb1b036d`: every check success — `check`, `changes`, `test
+  (ubuntu-latest)`, `test (windows-latest, informational)` (CI); `e2e`,
+  `docker` (ledger); `codeql`, `dependency-review` (security); `CodeQL`;
+  `pr-title`.
+
+### Gate 2
+
+**Gate: PASS** — 2026-11-01 · `cb1b036d..f6e06db1` · Opus 5.5, depth standard, scoped to the round (d8e32503, cf652270, f6e06db1)
+
+| Done when                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A `manual` row is re-filed to another person and bucket from History, driven by a test, and then shows the new answer | `web/test/history.test.tsx` › "a row answered by a person is filed again from the history, the list is read again, and no undo is offered (lg-95)" ✓. The round left it unchanged, and it still asserts the re-read: replacing the re-read with a local patch fails it ("expected [ { offset: +0, limit: 50 } ] to have a length of 2 but got 1") |
+| The earlier record is still stored; the UI sends a new answer and offers no undo                                      | API half: `api/test/classifications.test.ts` › "classifying a row again" › "keeps the earlier classification, with who changed it and when" ✓. UI half: the same History test ✓, unchanged by the round                                                                                                                                           |
+| Decision 1's behaviour is tested on a row in a closed period                                                          | `web/test/history.test.tsx` › "a row in a closed period says what the change reaches, and the next close carries it (lg-95)" ✓ and "closedPeriodOf holds a period's first and last day, and the first period has no start (lg-95)" ✓. Gate 1's 16-date boundary probe, re-run at this head, agrees with books' `periodIndexOf` on 16 of 16        |
+| `layout.spec.ts` covers the open control at 360 px and desktop                                                        | `e2e/layout.spec.ts` › "History fits a phone and a desktop with a filed row's change open" ✓. `e2e` (ledger) is SUCCESS at `f6e06db1`, and the whole spec passed locally on `E2E_PORT=8293`, 31 of 31. The 360 px screenshot shows the button above the open control, inside the width                                                            |
+| `npm run check` and `npm test -- --project ledger` pass                                                               | **verified**: `npm run check` exits 0. The ledger project passed 2144 of 2144 tests in 99 files, exit 0, at `f6e06db1`. Gate 1 counted 2140; the round adds 4 tests and changes or removes no existing assertion                                                                                                                                  |
+
+- **F1 (med), fixed.** History's control now offers the members plus the row's own person, and the person filter still names everyone. Gate 1's probe, re-run at this head, gives an open-period row `Joint, alex, sam`; at `cb1b036d` the same row got `Joint, alex, pat, sam`. Gate 2's probe:
+  - A row filed to retired `pat` is offered `Joint, alex, pat, sam` and opens on `pat`. This holds in both the open and the closed period.
+  - Rows filed to `alex` (open or closed) and Joint rows are offered `Joint, alex, sam`.
+  - The filter offers `alex, pat, sam` and Joint.
+- **F2 (low), fixed in part.** The duplicate Save is gone:
+  - A stored save whose re-read fails makes one `classifyRow` call. The control closes, `aria-expanded` goes back to false, focus returns to the button, and the alert says "The change was saved, but the list could not be read again."
+  - A refused save leaves the control open, on the choice, with Save enabled.
+  - **What remains, from the same mechanism (a failed re-read leaves the list stale):** the row still shows its old answer, "alex · Current expenses", while the notice says "R is now sam". Re-opening the control preselects `alex`, so a Save then sends the old answer back without anything saying so (probe: `reread-fails-reopen` → `person: "alex"`; after a successful re-read it is `"sam"`). This needs a transient read failure, then the person re-opens the control and saves without looking. Severity stays low, and no `Done when` line depends on it. Direction only: offer no change on that row until a re-read succeeds.
+- **F3 (low), fixed.** A failed `fetchPeriods` keeps the names and categories (the round's test, and the probe). The wording never claims the open period for lack of periods:
+  - While periods are loading and after they fail, both a closed-period row and an open-period row say "The closed periods have not been read, so this page cannot say whether this row is in one."
+  - A save in that state says "Whether it is in a closed period is not known."
+  - When the periods arrive while a control is open, it switches to the closed-period wording.
+- **F4 (low), fixed.** The button stays mounted. `aria-expanded` is true while the control is open, and `aria-controls` resolves to the fieldset. Focus comes back to the button after Cancel, after a Save whose re-read succeeds, and after a Save whose re-read fails. The behaviour this fix introduces when another row's control is opened is N1.
+- **F5 (low), fixed.** The build entry now cites `periodIndexOf` in `books/src/periods.ts`, and its rule (the first period whose end is on or after the date, none before the first's start) matches the source.
+- **N1 · low** · a11y. Closing a control by opening another row's control can send focus back to the first row's button. `Refile`'s effect focuses its button whenever its control closes while `document.activeElement` is the body. A browser that does not focus a button on click leaves the body focused when the second button is clicked, so the first row takes focus. That is the premise for Safari and iOS; MDN's "Clicking and focus" table, read, not run in Safari. Probe (jsdom, which does not focus on click either): open A, then click B → `focusIsA: true`, B open. When B is focused before its click, as in Chrome and Firefox, focus stays on B. Whether `focus()` also scrolls the page to A is unmeasured. No `Done when` line depends on it. This is a new finding rather than F4: F4's defect, focus falling to the body, is fixed, and this one is a misplacement the fix introduced.
+- **dropped** · History now reads `/api/people` twice, for `"everyone"` and for `"in"`, from the same route. That is one extra small GET when the screen opens, and not a defect.
+- **dropped** · A row's own person who is unknown even to `"everyone"` would be offered under their id. No live call site: `requireKnownPerson` refuses to store such an answer.
+- **findings** · the hunt returned 4: 1 carried (N1), 1 folded into F2 as its remaining clause, 2 dropped. Gate 1's five: 4 fixed, 1 fixed in part.
+- NFR: security n/a (no new route, no logging) · performance ✓ (one extra GET on open, above) · reliability — F2's remaining clause · maintainability ✓. At 360 px and desktop the control was read through the layout case and its screenshot.
+- The round did not touch `AnswerControls.tsx`, `Inbox.tsx` or `AutoFiled.tsx` (`git diff --stat cb1b036d f6e06db1`), so gate 1's DOM comparison still stands.
+- CI at `f6e06db1`: every check passed. CI: `check`, `changes`, `test (ubuntu-latest)`, `test (windows-latest, informational)`. ledger: `e2e`, `docker`. security: `codeql`, `dependency-review`. Also `CodeQL`, and `check` (pr-title).
+
 ## Log
 
 - 2026-11-01 — Filed at the owner's request after they mis-filed a row and found no
   way to change it. They first asked for it to be built, then chose to file it.
 - 2026-11-01 — The owner answered both decisions (see above); status moved to `ready`.
+- 2026-11-01 — Built on branch `lg-95-refile-from-history` from `83eac952`.
+  - **Build 3 holds, no contract change.** `StoredRow` carries `date` and `classification.source`, and `GET /api/periods` (`fetchPeriods`) lists each closed period's `start` (`null` for the first) and `end`, the server assigns a dated amount to the first period whose end is on or after it, and none before the first's start (`periodIndexOf` in `books/src/periods.ts`), which for periods that touch end to end, as `closePeriod` enforces (`PERIOD_NOT_OPEN`), is the same as `start <= date <= end`, both ends inclusive. `closedPeriodOf` in `web/src/history/History.tsx` is that test on the client; `history.test.tsx`'s last test holds its first day, last day, null start and a day after every close.
+  - **Shared controls.** `web/src/inbox/AnswerControls.tsx` is the `.answer` block (two selects and a button) that `Inbox.tsx` and `AutoFiled.tsx` each drew by hand; the two now render it, with the same labels and the same markup, and History is the third use. Their own tests (`inbox.test.tsx`, `app.test.tsx`: 42 of 42) pass unchanged.
+  - **History.** Each row with an answer gets a "Change who and what" button, which opens a `fieldset.offer` holding the controls, a Save button and a Cancel. The row's source reads beside its answer ("answered by a person", "filed by a rule", ...: `CLASSIFICATION_SOURCE_LABELS` in `labels.ts`). A row with no answer has no button: it is the inbox's. Saving sends `classifyRow`, then reads the list again with the same query and as many rows as were shown; nothing is patched locally. There is no undo: changing it back is one more change.
+  - **Decision 1.** A row in a closed period says, before the change, that the recorded settlement stays as paid, that stats and deposit matching follow at once, and that the next close carries the correction; the notice after saving repeats the last. A row in the open period says nothing of a close.
+  - **What the brief had slightly wrong.** The e2e seed (`layout.spec.ts`) has every one of its 12 rows dated July to September 2026 and closes through 2026-09-30, so every History row there is in a closed period; the layout case therefore measures the longest text the control says, and the open-period wording is covered by the web test only. Three seeded rows share the description "Hypothèque /Prêteur Exemple", so that case takes the first.
+  - **A fake the brief did not name.** `web/test/generated-ids.test.tsx` automocks `api/periods.ts`, so its History case read `fetchPeriods` as `undefined` once History called it: the first full `npm test -- --project ledger` was 1 failed of 2140 (`history/History.tsx: History`, "expected '' to match 'Alex · Mortgage'"). The case now sets `fetchPeriods` to `[]`.
+  - **Folded in: none.** Nothing else was made free. Not done, and not asked: History's identical "Change who and what" buttons are told apart for a screen reader only by their row's position; a per-row accessible name would break the exact name the ticket gives the action.
+- 2026-11-01 — Owner's answer, relayed by the coordinator, to a question the build left open: should each History "Change who and what" button's accessible name also name its row? Options: **A** leave the identical names (the builder's recommendation); **B** keep the visible text and give each button an `aria-label` that also names the row, "Change who and what: <description>, <date>". **The owner chose B**, over the builder's recommendation. This supersedes the build entry's last bullet ("Not done, and not asked: ..."), which said a per-row name would break the exact name the ticket gives the action: the visible text is unchanged and the accessible name starts with it, so label-in-name holds.
+  - **Applied.** The button's visible text is still "Change who and what"; its `aria-label` is "Change who and what: <description>, <date>" (`Refile` in `web/src/history/History.tsx`). `history.test.tsx` finds each button by that full name and asserts the visible text is the start of the label; the layout case finds the Hypothèque row of 2026-09-12 by its name, which also drops the `.first()` the three same-named seeded rows had forced. `history.test.tsx` 12 of 12; `layout.spec.ts -g History` on `E2E_PORT=8273`, 2 of 2.
+- 2026-11-01 — Gate 1 (cb1b036d) graded CONCERNS, nothing high, and the owner answered its two questions. This is the one round. Each is recorded with its options, before the code.
+  - **Whom History's change control offers (medium).** The control was given every person the books ever held (`fetchPeople(signal, "everyone")`, built for the filter), so an open-period row could be filed to someone who left; the inbox and Auto-filed offer `"in"`. Options: **(a)** current members plus the row's own current person (the gate's recommendation); **(b)** everyone on a closed-period row and (a) on an open-period row; **(c)** leave it as built. **The owner chose (a).** Cost, accepted: a closed-period row can no longer be moved to someone who left after that period.
+  - **The four lows.** Options: fix the one fully stated Log line and record the other three (the coordinator's recommendation); fix all four; record all four. **The owner chose to fix all four:** the Log's bound (the entry above is corrected in place, to `periodIndexOf`), a save whose re-read fails, a failed periods read dropping the names, and the button's `aria-expanded` and focus.
+  - **Applied, in `web/src/history/History.tsx`, each with a test in `history.test.tsx` that fails on `cb1b036d`'s source** (that file restored from `cb1b036d` into the tree, then `npx vitest run tools/ledger/web/test/history.test.tsx`: 4 failed, 12 passed; at `cf652270`: 16 of 16):
+    - _Whom it offers._ `fetchPeople(signal, "in")` is read beside `"everyone"`, which stays for the filter. The control gets the members plus the row's own person if they left, in shown order, and opens on that person. Test: "the control offers the people in now, and a row's own person even if they left; the filter still names everyone".
+    - _A save whose re-read fails._ `classifyRow` and the re-read are two steps now. A refused save keeps the control open, as before; once stored, the control closes and the alert reads "The change was saved, but the list could not be read again. ...", so there is no second Save to send a duplicate. Test: "a save whose re-read fails closes the control ..." (one `classifyRow` call).
+    - _Periods read on their own._ A failed `fetchPeriods` leaves the names and categories, and the open control says the closed periods have not been read, instead of saying nothing. Test: "a failed read of the closed periods leaves the names and the categories ...".
+    - _The button._ It stays mounted with `aria-expanded` true while its control is open and `aria-controls` naming it, and takes focus back when the control closes by Cancel or Save, only if focus fell to the page (opening another row's control moves it there on purpose). Test: "the button reports whether its control is open, and takes focus back when it closes".
+  - **Not changed:** `closedPeriodOf` still tests `start <= date <= end` on the client rather than `periodIndexOf`'s rule. The two agree on contiguous periods and differ only in a gap, where the server's answer is the later period. Not asked.
+- 2026-11-01 — Owner's answer, relayed by the orchestrator, to gate 2's two unfixed lows: what is left of F2 (after a failed re-read the row shows the old answer, and reopening preselects it, so a second save would quietly send the old answer back) and N1 (on Safari and iOS, focus returns to row A's button when row B is opened). Options: **A** file one ticket for both (the orchestrator's recommendation); **B** record both; **C** fix F2 now, with a third gate. **The owner chose A.** The ticket is filed separately after this pull request merges, so it is not filed here; both stay in gate 2's section as the gate wrote them.

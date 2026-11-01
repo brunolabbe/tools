@@ -2,6 +2,7 @@
 
 import type {
   Bucket,
+  ClassificationSource,
   InboxHistory,
   InboxReason,
   MortgageSplitMode,
@@ -31,6 +32,14 @@ export function personLabel(personId: string | null, names: ShownNames): string 
 export function answerLabel(rule: Pick<Rule, "personId" | "bucket">, names: ShownNames): string {
   return `${personLabel(rule.personId, names)} · ${BUCKET_LABELS[rule.bucket]}`;
 }
+
+/** Who or what filed a row, after its answer in the history (lg-95). */
+export const CLASSIFICATION_SOURCE_LABELS: Record<ClassificationSource, string> = {
+  rule: "filed by a rule",
+  accepted: "a rule's suggestion, accepted by a person",
+  manual: "answered by a person",
+  auto: "filed automatically",
+};
 
 /** What a rule asks of a row, beyond its description. */
 export function criteriaLabel(rule: Pick<Rule, "category" | "amountCents">): string {

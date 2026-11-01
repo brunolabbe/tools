@@ -20,23 +20,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatCents } from "@ledger/books";
-import { AppError, BUCKETS } from "@ledger/contract";
+import { AppError } from "@ledger/contract";
 import type { AutoFiledRow, Bucket, InboxRow, SpendingCategory } from "@ledger/contract";
 import { classifyRow, fetchAutoFiled, fetchInbox } from "../api/inbox.ts";
 import { createRule, fetchPeople } from "../api/rules.ts";
 import { fetchSpendingCategories, setRowSpendingCategory } from "../api/spending.ts";
-import {
-  BUCKET_LABELS,
-  REASON_LABELS,
-  answerLabel,
-  criteriaLabel,
-  historyLabel,
-  personLabel,
-} from "../labels.ts";
+import { REASON_LABELS, answerLabel, criteriaLabel, historyLabel } from "../labels.ts";
 import { RuleForm } from "../rules/RuleForm.tsx";
 import { RowSpending } from "../spending/RowSpending.tsx";
+import { usePeopleNames } from "../people.tsx";
+import { AnswerControls } from "./AnswerControls.tsx";
 import { AutoFiled } from "./AutoFiled.tsx";
-import { shownName, usePeopleNames } from "../people.tsx";
 
 interface Ready {
   state: "ready";
@@ -311,10 +305,6 @@ function InboxItem({
     history !== null &&
     suggestion.personId === history.personId &&
     suggestion.bucket === history.bucket;
-  const [person, setPerson] = useState(suggestion?.personId ?? history?.personId ?? "");
-  const [bucket, setBucket] = useState<Bucket>(
-    suggestion?.bucket ?? history?.bucket ?? "current-expenses",
-  );
 
   return (
     <li>
@@ -371,32 +361,15 @@ function InboxItem({
           </button>
         </div>
       )}
-      <div className="answer">
-        <label>
-          Belongs to
-          <select value={person} onChange={(event) => setPerson(event.target.value)}>
-            <option value="">{personLabel(null, shown)}</option>
-            {people.map((name) => (
-              <option key={name} value={name}>
-                {shownName(shown, name)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Bucket
-          <select value={bucket} onChange={(event) => setBucket(event.target.value as Bucket)}>
-            {BUCKETS.map((value) => (
-              <option key={value} value={value}>
-                {BUCKET_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" onClick={() => onAnswer(person === "" ? null : person, bucket)}>
-          Classify
-        </button>
-      </div>
+      <AnswerControls
+        people={people}
+        initial={{
+          personId: suggestion?.personId ?? history?.personId ?? null,
+          bucket: suggestion?.bucket ?? history?.bucket ?? "current-expenses",
+        }}
+        submitLabel="Classify"
+        onAnswer={onAnswer}
+      />
     </li>
   );
 }

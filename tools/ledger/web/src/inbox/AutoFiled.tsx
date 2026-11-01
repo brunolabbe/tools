@@ -8,13 +8,12 @@
  * answer that superseded it.
  */
 
-import { useState } from "react";
 import { formatCents } from "@ledger/books";
-import { BUCKETS } from "@ledger/contract";
 import type { AutoFiledRow, Bucket, SpendingCategory } from "@ledger/contract";
-import { BUCKET_LABELS, answerLabel, personLabel } from "../labels.ts";
+import { answerLabel } from "../labels.ts";
 import { RowSpending } from "../spending/RowSpending.tsx";
 import { shownName, usePeopleNames } from "../people.tsx";
+import { AnswerControls } from "./AnswerControls.tsx";
 
 export interface AutoFiledProps {
   rows: readonly AutoFiledRow[];
@@ -68,8 +67,6 @@ function AutoFiledItem({
 }: AutoFiledItemProps): React.ReactElement {
   const shown = usePeopleNames();
   const filed = row.classification;
-  const [person, setPerson] = useState(filed.personId ?? "");
-  const [bucket, setBucket] = useState<Bucket>(filed.bucket);
 
   return (
     <li>
@@ -103,32 +100,12 @@ function AutoFiledItem({
           Confirm
         </button>
       </div>
-      <div className="answer">
-        <label>
-          Belongs to
-          <select value={person} onChange={(event) => setPerson(event.target.value)}>
-            <option value="">{personLabel(null, shown)}</option>
-            {people.map((name) => (
-              <option key={name} value={name}>
-                {shownName(shown, name)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Bucket
-          <select value={bucket} onChange={(event) => setBucket(event.target.value as Bucket)}>
-            {BUCKETS.map((value) => (
-              <option key={value} value={value}>
-                {BUCKET_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" onClick={() => onAnswer(person === "" ? null : person, bucket)}>
-          Change
-        </button>
-      </div>
+      <AnswerControls
+        people={people}
+        initial={{ personId: filed.personId, bucket: filed.bucket }}
+        submitLabel="Change"
+        onAnswer={onAnswer}
+      />
     </li>
   );
 }
