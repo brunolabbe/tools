@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { AppError, MODEL_ASSERTED, RETRYABLE_CODES } from "@planner/contract";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { loadFixture } from "../../contract/test/fixtures.ts";
 import {
@@ -119,6 +119,10 @@ async function failure(promise: Promise<unknown>): Promise<AppError> {
   throw new Error("expected the request to fail");
 }
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("the fixture file", () => {
   test("says in its header that it was written by hand and not captured", () => {
     expect(FIXTURES.header).toMatch(/^HAND-WRITTEN, NOT CAPTURED/u);
@@ -133,7 +137,9 @@ describe("what the provider sends", () => {
 
     expect(sent).toHaveLength(1);
     const [request] = sent;
-    expect(request?.url).toBe("https://api.anthropic.com/v1/messages?beta=true");
+    // SDK 1.3 no longer puts `?beta=true` on the wire; the beta is the header below.
+    expect(request?.url).toBe("https://api.anthropic.com/v1/messages");
+    expect(request?.headers.get("anthropic-version")).toBe("2026-10-21");
 
     const body = request?.body ?? {};
     expect(body["model"]).toBe("claude-opus-5");
@@ -162,13 +168,15 @@ describe("what the provider sends", () => {
   });
 
   test("the key it was given, and no bearer token from anywhere else", async () => {
+    // The key and a token share `Authorization` in SDK 1.x, so this is the only
+    // thing that shows `authToken: null` still keeps a host's token off the wire.
+    vi.stubEnv("ANTHROPIC_AUTH_TOKEN", "a-token-from-the-host");
     const { fetch, sent } = answering(fixture("ordinary"));
     await provider(fetch).send(REQUEST);
 
-    expect(sent[0]?.headers.get("x-api-key")).toBe(KEY);
-    // `authToken: null` is explicit so a stray ANTHROPIC_AUTH_TOKEN on a host
-    // is never sent beside the key.
-    expect(sent[0]?.headers.get("authorization")).toBeNull();
+    // SDK 1.x sends the key as a bearer credential, not in `x-api-key`.
+    expect(sent[0]?.headers.get("authorization")).toBe(`Bearer ${KEY}`);
+    expect(sent[0]?.headers.get("x-api-key")).toBeNull();
   });
 
   test("no format at all when the caller sent no schema", async () => {

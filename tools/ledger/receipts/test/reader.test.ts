@@ -108,7 +108,10 @@ describe("the model reader", () => {
     expect(api.sent).toHaveLength(1);
     const [request] = api.sent;
     expect(request?.url).toBe("https://api.anthropic.com/v1/messages");
-    expect(request?.headers.get("x-api-key")).toBe(KEY);
+    // SDK 1.x sends the key as a bearer credential, not in `x-api-key`.
+    expect(request?.headers.get("authorization")).toBe(`Bearer ${KEY}`);
+    expect(request?.headers.get("x-api-key")).toBeNull();
+    expect(request?.headers.get("anthropic-version")).toBe("2026-10-21");
     expect(request?.body["model"]).toBe("claude-haiku-5-5");
     const [content] = (request?.body["messages"] ?? []) as { content: Record<string, unknown>[] }[];
     expect(content?.content[0]).toEqual({
@@ -212,7 +215,8 @@ describe("the model reader", () => {
     await reader(api.fetch).read(PHOTO);
 
     expect(api.sent[0]?.url).toBe("https://api.anthropic.com/v1/messages");
-    expect(api.sent[0]?.headers.get("authorization")).toBeNull();
+    // The key, and not the host's token: both travel in `Authorization` now.
+    expect(api.sent[0]?.headers.get("authorization")).toBe(`Bearer ${KEY}`);
   });
 
   test("refuses to be built without a key", () => {
