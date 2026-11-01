@@ -52,10 +52,10 @@ through the `field()` helper in `receipts/Receipts.tsx`, which defaults to
 | `salaries/Salaries.tsx:215`              | A person's salary                              | **No**                                 | The form refuses `amountCents < 0` (`Salaries.tsx:140`). `salaryEntrySchema` is `min(0)` (`api.ts:784`).                                                                                                                                                                                     |
 | `salaries/MortgageSplit.tsx:159`         | A person's part, in %                          | **No**                                 | `parseShare` (`web/src/labels.ts:82`) matches digits only. `partsPerMillion` is `min(0)` (`api.ts:965`).                                                                                                                                                                                     |
 
-So the fields where a minus key would matter are the five marked **Yes** (the
-Price, the receipt's money fields, the period line's Amount and the rule's
-Exact amount), plus Deposit once its answer is known. The rest are not
-negative entries, and a keyboard change there is not needed.
+So the fields where a minus key would matter are the five rows marked **Yes**
+(the Price, the receipt's money fields and Charged, the period line's Amount and
+the rule's Exact amount), plus Deposit once its answer is known. The rest are
+not negative entries, and a keyboard change there is not needed.
 
 **Not on `main` yet.** lg-89 (draft pull request #717) adds a Rebate input beside
 each item's Price and Deposit, with `inputMode="decimal"` and the placeholder
