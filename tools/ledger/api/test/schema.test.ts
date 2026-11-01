@@ -1,7 +1,9 @@
 import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
+import { splitByCategory, splitReceipt } from "@ledger/books";
 import { migrate } from "../src/db/schema.ts";
 import { storedFiling } from "../src/receipts.ts";
+import { receiptsOnRows } from "../src/slices.ts";
 
 function open(): Database.Database {
   const db = new Database(":memory:");
@@ -13,7 +15,7 @@ describe("the schema's migrations", () => {
   test("migration 1 stores the statement rows and the imports they came from", () => {
     const db = open();
 
-    expect(db.pragma("user_version", { simple: true })).toBe(15);
+    expect(db.pragma("user_version", { simple: true })).toBe(16);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()
@@ -83,7 +85,7 @@ describe("the schema's migrations", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(15);
+    expect(db.pragma("user_version", { simple: true })).toBe(16);
     expect(db.prepare("SELECT count(*) AS n FROM statement_imports").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -103,7 +105,7 @@ describe("the schema's migrations", () => {
     migrate(db);
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(15);
+    expect(db.pragma("user_version", { simple: true })).toBe(16);
     expect(db.prepare("SELECT source FROM statement_imports").all()).toEqual([{ source: "paste" }]);
     expect(db.prepare("SELECT note FROM statement_rows").all()).toEqual([{ note: null }]);
     expect(() =>
@@ -170,7 +172,7 @@ describe("migration 9's receipt items (lg-10)", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(15);
+    expect(db.pragma("user_version", { simple: true })).toBe(16);
     expect(db.prepare("SELECT period_line_id, charge_line_id FROM receipt_filings").all()).toEqual([
       { period_line_id: 1, charge_line_id: null },
     ]);
@@ -239,7 +241,7 @@ describe("migration 11's whose (lg-30)", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(15);
+    expect(db.pragma("user_version", { simple: true })).toBe(16);
     expect(
       db
         .prepare(
@@ -308,6 +310,99 @@ describe("migration 11's whose (lg-30)", () => {
     expect(() => item.run(3, "shared", "sam", null)).toThrow(/CHECK/u);
     expect(() => item.run(3, "theirs", null, 2)).toThrow(/CHECK/u);
     expect(() => item.run(3, "theirs", "sam", 2)).not.toThrow();
+    db.close();
+  });
+});
+
+/**
+ * Two filings as lg-10 and lg-30 made them, at version 15, before any item had
+ * a rebate: a line whose six-pack was not shared, and the same basket on a
+ * joint-account row, split by category. Bread, zero-rated; a taxable six-pack
+ * with its 0,60 $ deposit; taxable soap: 2 476 cents with both taxes.
+ */
+function atVersion15(): Database.Database {
+  const db = new Database(":memory:");
+  migrate(db, 15);
+  db.prepare("INSERT INTO people (id, added_at) VALUES ('alex', '2026-10-01')").run();
+  db.prepare("INSERT INTO statement_imports (imported_at, imported_by) VALUES (?, ?)").run(
+    "2026-10-02T00:00:00.000Z",
+    "alex",
+  );
+  db.prepare(
+    `INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id)
+     VALUES (0, '2026-10-04', 'Achats', 'Marché Exemple', -2476, 10000, 1)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO period_lines (person_id, date, amount_cents, source, entered_at, entered_by)
+     VALUES ('alex', '2026-10-04', 922, 'receipt', '2026-10-05T00:00:00.000Z', 'alex')`,
+  ).run();
+  const receipt = db.prepare(
+    `INSERT INTO receipts (photo, media_type, bytes, uploaded_at, uploaded_by)
+     VALUES (?, 'image/jpeg', 64, '2026-10-02T00:00:00.000Z', 'alex')`,
+  );
+  receipt.run("1.jpg");
+  receipt.run("2.jpg");
+  const filing = db.prepare(
+    `INSERT INTO receipt_filings (receipt_id, part, date, subtotal_cents, gst_cents, qst_cents, total_cents, period_line_id, row_id, filed_at, filed_by)
+     VALUES (?, 1, '2026-10-04', 2207, 90, 179, 2476, ?, ?, '2026-10-05T00:00:00.000Z', 'alex')`,
+  );
+  filing.run(1, 1, null);
+  filing.run(2, null, 1);
+  const item = db.prepare(
+    `INSERT INTO receipt_items (filing_id, position, text, price_cents, taxable, deposit_cents, spending_category_id, share)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const [filingId, beer] of [
+    [1, "not-shared"],
+    [2, "shared"],
+  ] as const) {
+    item.run(filingId, 1, "PAIN", 349, 0, null, 1, "shared");
+    item.run(filingId, 2, "BIERE 6X355", 1_299, 1, 60, 2, beer);
+    item.run(filingId, 3, "SAVON", 499, 1, null, 3, "shared");
+  }
+  return db;
+}
+
+/**
+ * What the books make of the two filings: the line's split, and the row's
+ * slices. `receiptsOnRows` names the new column, so the row's receipt is read
+ * through the filing before the migration and through the chart's own query after.
+ */
+function splitsOf(db: Database.Database, migrated: boolean) {
+  const onRow = migrated
+    ? receiptsOnRows(db).get(1)
+    : { date: storedFiling(db, 2).proposal.date, items: storedFiling(db, 2).proposal.items };
+  return {
+    split: splitReceipt(storedFiling(db, 1).proposal),
+    slices: onRow === undefined ? null : splitByCategory(2_476, onRow),
+  };
+}
+
+describe("migration 16's rebates (lg-89)", () => {
+  test("reads a filing stored before it with no rebate on any item, and splits it as before", () => {
+    const db = atVersion15();
+    const before = splitsOf(db, false);
+
+    migrate(db);
+
+    expect(db.pragma("user_version", { simple: true })).toBe(16);
+    const items = [1, 2].flatMap((id) => storedFiling(db, id).proposal.items);
+    expect(items.map((each) => each.discount)).toEqual([null, null, null, null, null, null]);
+    const after = splitsOf(db, true);
+    expect(after).toEqual(before);
+    // The six-pack, its deposit and its taxes: 1 553,525 25 cents, rounded once.
+    expect(after.split).toEqual({
+      sharedCents: 922,
+      notSharedCents: 1_554,
+      chargedCents: 0,
+      charges: [],
+    });
+    // 349 + 1 554 + 574 is a cent over the row, and the cent comes off the largest.
+    expect(after.slices).toEqual([
+      { categoryId: 1, cents: 349 },
+      { categoryId: 2, cents: 1_553 },
+      { categoryId: 3, cents: 574 },
+    ]);
     db.close();
   });
 });

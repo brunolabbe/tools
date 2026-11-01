@@ -12,7 +12,9 @@ rather than making it.
 the owner's answer.** Then your first commit writes that answer on the ticket —
 who gave it, the date, and the options it was chosen from — and sets `status` to
 `ready`, before any source changes. Handed one with no answer, report it
-instead.
+instead. A ticket with several questions, some answered: record each answer
+the same way and leave `status` as `needs-decision` while any question is open
+(repo-133's filer).
 
 ## Set up
 
@@ -51,7 +53,11 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   the Log.**
 - **One exception to "do not widen":** if the work in front of you makes some
   other small, already-specified piece of work free, fold it in — and if you
-  decide not to, say in the Log that you could have and why you did not. A
+  decide not to, say in the Log that you could have and why you did not. Never
+  into a rule under `.claude/rules/`, a role or skill page, an agent definition
+  or a `CLAUDE.md`: `SKILL.md`'s preamble reserves those to the owner, and
+  repo-121's fold-in of a `.claude/rules/testing.md` line cost an owner stop and
+  a revert at the landing. A
   ticket for another tool is filed in its own `docs` pull request, never in this
   one: release-please routes by path.
 - **A ticket you file in this branch is left `ready`**, whether it is the
@@ -91,7 +97,8 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   exits 2 when every file named is under an ignore pattern (`.claude/`,
   `**/test/fixtures/`), which is not a fault: read the message, and never chain
   it ahead of a commit (pl-62's builder committed under the previous message
-  when it did). `npm run format` walks the whole repo (1,105 files on pl-56).
+  when it did). A page under `.claude/` is formatted by nothing, so a `repo-`
+  ticket's skill-page edits get no check and need none (repo-117). `npm run format` walks the whole repo (1,105 files on pl-56).
   Fix lint by hand; never `npm run lint:fix`, which rewrites files outside the
   branch.
 - `npx oxlint <the packages you touched>`, `npm run check`, and the narrowest
@@ -117,9 +124,11 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   worktree holds, and `main` moves during a batch. **A moved `main` is taken by
   `git merge origin/<base>`, never by a rebase**: a rebased branch cannot reach
   `origin` without a force-push, and a merge of the same sha gives the same tree
-  (dl-81). Run the merge with no `-m`: the commit-msg hook bypasses git's own
-  `Merge remote-tracking branch…` subject and rejects any subject you write (41
-  `Not committing merge` lines in the transcripts since 2026-10-10).
+  (dl-81). Commit the merge as `common.md`'s trailer bullet says —
+  `--no-commit`, then `git commit -F <file>` with git's own subject and the
+  trailer: the hook rejects any subject you write (41 `Not committing merge`
+  lines in the transcripts since 2026-10-10), and `--no-edit` writes no
+  trailer.
 - **A reproduction only another OS can give is the orchestrator's to arrange**
   (`reference/dispatching.md`, _A probe pull request_): never add a file under
   `.github/workflows/` unasked. The pull request's own Windows leg is the
@@ -127,7 +136,10 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
 - **A `Done when` bar you measure to cost hours** (dl-105: ten whole-file runs
   at 615 s each, about 3.4 h) is an open decision in your report, with the
   measurement, not a run; take the line's own escape only when it gives one.
-- A new dependency: `npm audit --package-lock-only` before the push. CI's
+- A new or moved dependency: the relock in `common.md`'s dependency bullet,
+  under the seven-day rule and the npm 11 `--before` procedure in
+  `.claude/rules/dependency-updates.md` (repo-123's builder found that page
+  only by itself), then `npm audit --package-lock-only` before the push. CI's
   `dependency-review` job is not in preflight and goes red on a moderate
   advisory (lg-7).
 - **Commit, then run the fast preflight checks, not the suites**:
@@ -137,8 +149,9 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   commands, the `## Review` presence test and the title's type against the
   paths. `--only` cannot run `npm run check` without the tool suites (both are
   its `check`), so `npm run check` above is the other half. **On a first build
-  you run no full suite**: CI runs every project on the draft while the gate
-  works. A round runs preflight in full before its push (_When you are resumed
+  you run no full suite**: CI runs on the draft, while the gate works, the
+  projects the branch's paths reach (repo-127) — a project the paths do not
+  reach has no CI run, and the narrowest run above is its only reading. A round runs preflight in full before its push (_When you are resumed
   with findings_), and so does the landing's `--land`. A downloader preflight
   is about two to three minutes here: on 2026-10-18 at `335efcd4`,
   `npm test -- --project downloader` ran 84–104 s and `npm run check` 9 s
@@ -166,7 +179,9 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   says which checks did not run.
 - A new `scripts/*.mjs` needs an `include` line in `scripts/test/tsconfig.json`.
 - **A commit subject is under 100 characters**; the hook rejects longer, and
-  ticket titles often exceed it.
+  ticket titles often exceed it. A body line that opens with the words
+  `breaking change`, in any case, is rejected too unless it is the footer
+  `BREAKING CHANGE: ` exactly (repo-120's builder).
 - Append a dated entry to the ticket's Log in the commit that earns it: a claim,
   its command, and that command's output. **Leave `status` as it is** — the
   lander sets it with the gate record, and the one move that is yours is
@@ -209,7 +224,11 @@ the gate's own; where they disagree, the disagreement comes back as a finding.
    condition, or beside the findings — is recorded first, as _Scope_ says for
    an answer, in its own commit; then the work (lg-59's builder met both).
 3. Fix, run the narrowest checks, then preflight, then commit and push.
-4. Report per finding: fixed, with the command that failed before and passes
+4. After the push, read the pull request's checks once more, `CodeQL` first
+   (`common.md`, _Reading a pull request's checks_): repo-131's and lg-72's
+   round pushes each raised a new default-setup alert in the round's own test
+   file, and each needed a second push.
+5. Report per finding: fixed, with the command that failed before and passes
    after; refuted, with the command and output that refute it; or an open
    decision, as options. Name the new head sha.
 

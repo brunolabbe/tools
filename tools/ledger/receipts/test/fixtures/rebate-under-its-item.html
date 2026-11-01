@@ -1,0 +1,44 @@
+<!doctype html>
+<!--
+  lg-89, fixture 1 of 3: a rebate printed directly under its item. Synthetic:
+  the store, the numbers and every amount are invented. Rendered to the .png
+  beside it by test/live/render-rebate-fixtures.ts.
+
+  Expected read: 0412 FROMAGE CHEDDAR, price 799, discount -150; no item of its
+  own with a negative price. Taxable 4,49 $: TPS 0,22 $, TVQ 0,45 $.
+-->
+<html lang="fr-CA">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { margin: 0; background: #fff; }
+      .receipt { width: 340px; padding: 24px 20px; font: 15px/1.45 "DejaVu Sans Mono", monospace; color: #111; }
+      .center { text-align: center; }
+      .row { display: flex; justify-content: space-between; gap: 12px; }
+      .rule { border-top: 1px dashed #333; margin: 8px 0; }
+      .big { font-size: 18px; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="receipt">
+      <div class="center big">ÉPICERIE EXEMPLE</div>
+      <div class="center">123, rue Inventée</div>
+      <div class="center">Montréal QC</div>
+      <div class="center">2026-10-30 14:12</div>
+      <div class="rule"></div>
+      <div class="row"><span>0412 FROMAGE CHEDDAR</span><span>7,99</span></div>
+      <div class="row"><span>&nbsp;&nbsp;RABAIS</span><span>-1,50</span></div>
+      <div class="row"><span>2231 SAVON VAISSELLE FP</span><span>4,49</span></div>
+      <div class="row"><span>0907 PAIN BLANC</span><span>3,49</span></div>
+      <div class="rule"></div>
+      <div class="row"><span>SOUS-TOTAL</span><span>14,47</span></div>
+      <div class="row"><span>TPS 5%</span><span>0,22</span></div>
+      <div class="row"><span>TVQ 9,975%</span><span>0,45</span></div>
+      <div class="row big"><span>TOTAL</span><span>15,14</span></div>
+      <div class="rule"></div>
+      <div class="row"><span>DÉBIT</span><span>15,14</span></div>
+      <div class="center">FP = TAXABLE TPS/TVQ</div>
+      <div class="center">MERCI DE VOTRE VISITE</div>
+    </div>
+  </body>
+</html>

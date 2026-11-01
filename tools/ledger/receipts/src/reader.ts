@@ -74,13 +74,18 @@ export const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 
 /**
  * The prompt the measurement ran, and what lg-10 adds to it: the items, their
- * deposits and a category for each, from the household's list. A photo that is
+ * deposits and a category for each, from the household's list; and lg-89's
+ * rebates, each folded into the item it reduces wherever it is printed, so that
+ * leaving an item out takes its rebate with it. A rebate the reader cannot place
+ * stays an item of its own, as every rebate was before, so none is lost. A photo that is
  * not a printed receipt gives no proposal, and the person types it in. The
  * handwritten amounts the measurement also asked for are left out: nothing reads
  * them.
  *
  * The lg-10 lines are unmeasured against real photos: no key was available to
- * the build. The reconciliation check catches a misread price or deposit, which
+ * the build. lg-89's rebate lines are measured by the owner's paid read of the
+ * three synthetic receipts in `test/fixtures/` (lg-89's Log); a rebate folded
+ * into the wrong item still adds up, so only that read and the person catch it. The reconciliation check catches a misread price or deposit, which
  * stops the items making the total. It does **not** catch a misread taxable
  * mark: the items still add up and the money moves between shared and not. The
  * `taxable-differs` flag (lg-26) catches a mark that does not give the printed
@@ -93,7 +98,8 @@ export const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
  */
 export const RECEIPT_PROMPT = `Read this photo of one or more Québec receipts. All money is in integer cents (12,49 $ -> 1249; a refund is negative).
 For each printed receipt: the merchant, the date, the subtotal, GST (TPS), QST (TVQ) and total exactly as printed (null when the line is absent or unreadable).
-Also each item line, in the order printed: its text, its price, whether it is marked taxable (a tax code such as T, F, FP or TPS/TVQ beside it), and the deposit (consigne) printed for it, folded into the item it follows rather than listed as an item of its own (null when it has none). A discount is an item with a negative price.
+Also each item line, in the order printed: its text, its price as printed, whether it is marked taxable (a tax code such as T, F, FP or TPS/TVQ beside it), and the deposit (consigne) printed for it, folded into the item it follows rather than listed as an item of its own (null when it has none).
+Fold each rebate, coupon or price reduction (RABAIS, ÉCONOMIE, COUPON, PRIX MEMBRE and the like) into the item it applies to, as its discount, rather than listing it as an item of its own: negative on a purchase, the opposite sign on a returned item, and null when the item has none. A rebate is usually printed directly under its item; when it is not, match it to its item by the product code or the text it names. Several rebates on one item add up into its discount. A rebate that applies to the whole receipt, or that you cannot place on one item with confidence, stays an item of its own with a negative price.
 Propose a category for each item from the list given, by its exact name, or null when none fits. Compute nothing: read what is printed.
 If the photo is not a printed receipt, such as a handwritten note, return no receipts.`;
 
@@ -126,6 +132,7 @@ const readingSchema = z.object({
           price: cents,
           taxable: z.boolean(),
           deposit: cents.describe("consigne"),
+          discount: cents.describe("rebates folded into this item, added up"),
           category: z.string().nullable(),
         }),
       ),
@@ -179,6 +186,7 @@ function toItem(read: ReadItem, categories: ReadonlyMap<string, number>): Receip
     price,
     taxable: read.taxable,
     deposit: amount(read.deposit),
+    discount: amount(read.discount),
     spendingCategoryId:
       read.category === null ? null : (categories.get(folded(read.category)) ?? null),
     share: "shared",

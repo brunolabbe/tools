@@ -62,6 +62,15 @@ export function ratesOn(
   return found;
 }
 
+/**
+ * What an item cost once its rebates are counted (lg-89): its price as printed
+ * plus the `discount` folded into it. Every sum here reads this, never `price`
+ * alone, so a rebate comes off with its item wherever it was printed.
+ */
+export function netPrice(item: ReceiptItem): number {
+  return item.price + (item.discount ?? 0);
+}
+
 /** The integers `t` for which `rate × t`, rounded half-up to a whole, is `tax`. */
 function taxableRange(tax: number, rate: number): [number, number] {
   // round(rate·t / SCALE) = tax  ⇔  tax·SCALE − SCALE/2 ≤ rate·t ≤ tax·SCALE + SCALE/2 − 1
@@ -91,7 +100,7 @@ function taxesFit(
 
 /**
  * Whether the items marked taxable, taken as the taxable part, are what the
- * printed taxes say (lg-26): the same arithmetic as `taxesFit`, with the part
+ * printed taxes say (lg-26), each at its net (lg-89): the same arithmetic as `taxesFit`, with the part
  * fixed instead of searched for. A tax not printed counts as zero, so an item
  * marked taxable on a receipt with no tax lines does not fit. A refund is checked
  * as its magnitudes.
@@ -108,7 +117,9 @@ function taxableFits(
   rates: SalesTaxRates,
   taxesConsistent: boolean,
 ): boolean {
-  const taxable = Math.abs(items.reduce((sum, item) => sum + (item.taxable ? item.price : 0), 0));
+  const taxable = Math.abs(
+    items.reduce((sum, item) => sum + (item.taxable ? netPrice(item) : 0), 0),
+  );
   const [gstLow, gstHigh] = taxableRange(Math.abs(gst), rates.gst);
   const [qstLow, qstHigh] = taxableRange(Math.abs(qst), rates.qst);
   const fitsGst = taxable >= gstLow && taxable <= gstHigh;
@@ -125,10 +136,10 @@ function taxableFits(
  * - **A receipt with no tax lines** — both taxes `null`, the measured case for
  *   zero-rated groceries — passes when its subtotal is its total.
  * - **Items, with their deposits and the taxes, make the total** (lg-10), when
- *   there are items. A tax not printed counts as none. This is the one flag that
+ *   there are items, each at its net (lg-89). A tax not printed counts as none. This is the one flag that
  *   blocks filing (`itemsAddUp`).
  * - **The Taxable marks give the printed taxes** (lg-26), when there are items:
- *   the prices of the items marked taxable are a taxable part that gives both
+ *   the nets of the items marked taxable are a taxable part that gives both
  *   taxes. Both taxes `null` count as printed zero here, so a mark on a receipt
  *   with no tax lines is flagged. Beside `tax-differs` it is raised only when the
  *   marks give **neither** tax; not raised with one tax missing, which
@@ -181,28 +192,29 @@ export function checkReceipt(
 }
 
 /**
- * Whether a receipt's items reconcile (lg-10): items + deposits + GST + QST =
- * total, to the cent. A receipt with no items has nothing to reconcile and is
+ * Whether a receipt's items reconcile (lg-10): items' nets + deposits + GST +
+ * QST = total, to the cent. A rebate folded into an item counts here (lg-89). A receipt with no items has nothing to reconcile and is
  * filed on its total, as lg-8 filed one; a receipt with items and no total
  * cannot reconcile.
  */
 export function itemsAddUp(proposal: ReceiptProposal): boolean {
   if (proposal.items.length === 0) return true;
   if (proposal.total === null) return false;
-  const items = proposal.items.reduce((sum, item) => sum + item.price + (item.deposit ?? 0), 0);
+  const items = proposal.items.reduce((sum, item) => sum + netPrice(item) + (item.deposit ?? 0), 0);
   return items + (proposal.gst ?? 0) + (proposal.qst ?? 0) === proposal.total;
 }
 
 /**
- * What some items cost, in hundred-thousandths of a cent, exactly: each price,
- * each deposit, and GST and QST on a taxable price. A deposit carries no tax.
+ * What some items cost, in hundred-thousandths of a cent, exactly: each net
+ * (lg-89), each deposit, and GST and QST on a taxable net. A deposit carries no
+ * tax; a rebate follows its item's mark, so it lowers the taxed amount.
  * In `bigint`, since a large price times a rate passes a safe integer.
  */
 function itemsCost(items: readonly ReceiptItem[], rates: SalesTaxRates): bigint {
   const scale = BigInt(RATE_SCALE);
   const tax = BigInt(rates.gst + rates.qst);
   return items.reduce((sum, item) => {
-    const price = BigInt(item.price);
+    const price = BigInt(netPrice(item));
     const deposit = BigInt(item.deposit ?? 0);
     return sum + price * scale + deposit * scale + (item.taxable ? price * tax : 0n);
   }, 0n);
@@ -223,8 +235,8 @@ function totalOf(receipt: ReceiptProposal): number {
 
 /**
  * The shared amount of a receipt with some items excluded (lg-10): the excluded
- * part is each excluded item's price, its deposit, and GST and QST on it if it
- * is taxable, at the rates in effect on the receipt's date, rounded once,
+ * part is each excluded item's net (its price and the rebates folded into it,
+ * lg-89), its deposit, and GST and QST on that net if it is taxable, at the rates in effect on the receipt's date, rounded once,
  * half-up; the shared part is the total minus it, so the two always make the
  * total. `excluded` is the items' places in `receipt.items`, from 0.
  *
@@ -273,7 +285,7 @@ export interface ReceiptSplit {
 
 /**
  * The receipt split by its items' `share`. Each part taken off is computed as
- * `sharedAmount` computes an excluded one — price, deposit and taxes, rounded
+ * `sharedAmount` computes an excluded one — net, deposit and taxes, rounded
  * once — so an item that is someone else's costs them exactly what it would come
  * off as not shared. Each charged person's items are such a part of their own
  * (lg-30), so a person is charged what their items cost whoever else is charged
@@ -284,7 +296,7 @@ export interface ReceiptSplit {
  *
  * **A few cents of rounding are not an excess** (lg-32, and lg-30 for the rule).
  * On a receipt with **nothing left shared**, read by cost (lg-30, owner
- * 2026-10-18) — every item not shared or `theirs`, or shared with price 0 and no
+ * 2026-10-18) — every item not shared or `theirs`, or shared with net 0 and no
  * deposit — the items make the printed total (`itemsAddUp`), so when the
  * payment is at or beyond that total, at its sign, whatever the parts rounded
  * apart leave over the payment is rounding: each part is rounded once, and the
@@ -322,9 +334,10 @@ export function splitReceipt(
   const sharedCents = paidCents - notSharedCents - charged();
 
   // By cost, not by mark (lg-30 gate 1, F1): a shared item that costs nothing, a
-  // `SAC 0,00` line, leaves nothing shared to take the cent from.
+  // `SAC 0,00` line or one its rebate makes free (lg-89), leaves nothing shared
+  // to take the cent from.
   const nothingShared = receipt.items.every(
-    (item) => item.share !== "shared" || (item.price === 0 && (item.deposit ?? 0) === 0),
+    (item) => item.share !== "shared" || (netPrice(item) === 0 && (item.deposit ?? 0) === 0),
   );
   const parts = (notShared.length > 0 ? 1 : 0) + charges.length;
   const excess = sharedCents !== 0 && Math.sign(sharedCents) !== Math.sign(paidCents);
@@ -420,8 +433,8 @@ export interface CategoryAmount {
  * A joint-account row's amount divided among its receipt items' spending
  * categories (lg-27, the owner's answer of 2026-10-17).
  *
- * **Each item costs what `sharedAmount` takes off for an excluded one** — price,
- * deposit, and GST and QST on a taxable price at the rates on the receipt's date
+ * **Each item costs what `sharedAmount` takes off for an excluded one** — net
+ * (lg-89), deposit, and GST and QST on a taxable net at the rates on the receipt's date
  * — summed per category and rounded once, half-up. What the card was charged and
  * those figures do not make the same number: the printed taxes are on the
  * taxable items together, so the items' own can differ by a cent, and a tip

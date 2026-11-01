@@ -54,8 +54,17 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
     if (parsed.success) {
       const { code, message, details } = parsed.data;
       // `details` travel with the code, so a caller can point at what the
-      // server named rather than only repeat its sentence.
-      const carried: AppErrorOptions = details === undefined ? {} : { details };
+      // server named rather than only repeat its sentence. A refusal for
+      // asking too often carries the header's wait as `retryAfterSec` (lg-92):
+      // the header is what every client is told to obey, and the body's copy is
+      // only the same number.
+      const wait = Number(response.headers.get("retry-after"));
+      const carried: AppErrorOptions =
+        code === "RATE_LIMITED" && Number.isFinite(wait) && wait > 0
+          ? { details: { ...details, retryAfterSec: wait } }
+          : details === undefined
+            ? {}
+            : { details };
       throw new AppError(code, message, carried);
     }
     throw new AppError("INTERNAL", `The API answered ${String(response.status)}.`);

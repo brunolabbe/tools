@@ -9,6 +9,7 @@ import {
   RECEIPT_MATCH_DAYS,
   SALES_TAX_RATES,
   checkReceipt,
+  itemsAddUp,
   matchReceipt,
   ratesOn,
   sharedAmount,
@@ -156,6 +157,7 @@ const BASKET: ReceiptProposal = {
       price: 349,
       taxable: false,
       deposit: null,
+      discount: null,
       spendingCategoryId: 1,
       share: "shared",
       chargedTo: null,
@@ -165,6 +167,7 @@ const BASKET: ReceiptProposal = {
       price: 1_299,
       taxable: true,
       deposit: 60,
+      discount: null,
       spendingCategoryId: 2,
       share: "shared",
       chargedTo: null,
@@ -174,6 +177,7 @@ const BASKET: ReceiptProposal = {
       price: 499,
       taxable: true,
       deposit: null,
+      discount: null,
       spendingCategoryId: 3,
       share: "shared",
       chargedTo: null,
@@ -421,6 +425,7 @@ describe("the taxable marks (lg-26)", () => {
         ...each,
         price: -each.price,
         deposit: each.deposit === null ? null : -each.deposit,
+        discount: each.discount === null ? null : -each.discount,
       })),
     };
 
@@ -606,6 +611,7 @@ describe("a joint-account row's amount, split by its items' categories (lg-27)",
       ...one,
       price: -one.price,
       deposit: one.deposit === null ? null : -one.deposit,
+      discount: one.discount === null ? null : -one.discount,
     }));
 
     const split = splitByCategory(-2_476, { date: BASKET.date, items: refund });
@@ -703,6 +709,7 @@ describe("a receipt with nothing left shared (lg-32)", () => {
       ...each,
       price: -each.price,
       deposit: each.deposit === null ? null : -each.deposit,
+      discount: each.discount === null ? null : -each.discount,
     })),
   };
 
@@ -758,6 +765,7 @@ const COUPON: ReceiptProposal = {
       price: 100,
       taxable: false,
       deposit: null,
+      discount: null,
       spendingCategoryId: null,
       share: "not-shared",
       chargedTo: null,
@@ -767,6 +775,7 @@ const COUPON: ReceiptProposal = {
       price: -87,
       taxable: true,
       deposit: null,
+      discount: null,
       spendingCategoryId: null,
       share: "not-shared",
       chargedTo: null,
@@ -776,6 +785,7 @@ const COUPON: ReceiptProposal = {
       price: 491,
       taxable: true,
       deposit: null,
+      discount: null,
       spendingCategoryId: null,
       share: "theirs",
       chargedTo: null,
@@ -826,6 +836,7 @@ const BASKET_REFUND: ReceiptProposal = {
     ...each,
     price: -each.price,
     deposit: each.deposit === null ? null : -each.deposit,
+    discount: each.discount === null ? null : -each.discount,
   })),
 };
 
@@ -851,6 +862,7 @@ function TWO_TAXED(price: number): ReceiptProposal {
         price: 1_000,
         taxable: true,
         deposit: null,
+        discount: null,
         spendingCategoryId: null,
         share: "not-shared",
         chargedTo: null,
@@ -860,6 +872,7 @@ function TWO_TAXED(price: number): ReceiptProposal {
         price,
         taxable: true,
         deposit: null,
+        discount: null,
         spendingCategoryId: null,
         share: "theirs",
         chargedTo: "sam",
@@ -904,6 +917,7 @@ describe("a charge per person (lg-30)", () => {
           price: 0,
           taxable: false,
           deposit: null,
+          discount: null,
           spendingCategoryId: null,
           share: "theirs",
           chargedTo: "sam",
@@ -1049,6 +1063,7 @@ describe("the rounding judged against the printed total (lg-30)", () => {
         price,
         taxable: true,
         deposit: null,
+        discount: null,
         spendingCategoryId: null,
         share: "theirs",
         chargedTo: `person${String(at + 1)}`,
@@ -1126,6 +1141,7 @@ function itemLine(
     price,
     taxable,
     deposit: null,
+    discount: null,
     spendingCategoryId: null,
     share,
     chargedTo,
@@ -1178,3 +1194,170 @@ describe("what still shared means, and where the bound ends (lg-30, gate 1)", ()
     expect(splitReceipt(untaxed).sharedCents).toBe(-2);
   });
 });
+
+// --- lg-89: a rebate folded into the item it reduces ---
+
+/**
+ * `BASKET` with 2,00 $ off the six-pack, folded into it. Taxable nets 10,99 $ +
+ * 4,99 $ = 15,98 $: GST 0,799 $ → 0,80 $, QST 1,594 $ → 1,59 $. Subtotal 20,07 $
+ * with the deposit, total 22,46 $.
+ */
+const REBATED: ReceiptProposal = {
+  ...BASKET,
+  subtotal: 2_007,
+  gst: 80,
+  qst: 159,
+  total: 2_246,
+  items: [item(0), { ...item(1), discount: -200 }, item(2)],
+};
+
+/**
+ * The same printed receipt read as every receipt was before lg-89: the rebate an
+ * item of its own, taxable as the six-pack it was printed under.
+ */
+const REBATE_ON_ITS_OWN: ReceiptProposal = {
+  ...REBATED,
+  items: [
+    item(0),
+    item(1),
+    { ...item(1), text: "RABAIS BIERE", price: -200, deposit: null },
+    item(2),
+  ],
+};
+
+describe("a rebate folded into its item (lg-89)", () => {
+  test("a taxable item left out takes its price, rebate, deposit and both taxes on its net off the shared amount", () => {
+    // 12,99 $ − 2,00 $ + 0,60 $ + 10,99 $ × 14,975 % = 13,2357525 $ → 13,24 $, rounded once.
+    const { excludedCents, sharedCents } = sharedAmount(REBATED, [1]);
+
+    expect(excludedCents).toBe(1_324);
+    expect(sharedCents).toBe(922);
+    expect(excludedCents + sharedCents).toBe(REBATED.total);
+    expect(splitReceipt(markedAs(REBATED, "shared", "not-shared", "shared"))).toEqual({
+      sharedCents: 922,
+      notSharedCents: 1_324,
+      chargedCents: 0,
+      charges: [],
+    });
+  });
+
+  test("the rebate is the only difference from reading it on its own, and both still make what was paid", () => {
+    // Before lg-89 the six-pack left out alone kept its rebate shared: 15,54 $
+    // came off, 2,30 $ more than the six-pack cost — the rebate and its taxes.
+    const before = sharedAmount(REBATE_ON_ITS_OWN, [1]);
+    const after = sharedAmount(REBATED, [1]);
+
+    expect(before).toEqual({ excludedCents: 1_554, sharedCents: 692 });
+    expect(after).toEqual({ excludedCents: 1_324, sharedCents: 922 });
+    expect(before.excludedCents - after.excludedCents).toBe(230);
+    expect(before.excludedCents + before.sharedCents).toBe(REBATED.total);
+    expect(after.excludedCents + after.sharedCents).toBe(REBATED.total);
+    // Folded, it comes off exactly as tapping the rebate's own line too did.
+    expect(sharedAmount(REBATE_ON_ITS_OWN, [1, 2])).toEqual(after);
+  });
+
+  test("items that make the total only with their rebates counted add up", () => {
+    const gross = { ...REBATED, items: [item(0), item(1), item(2)] };
+
+    expect(itemsAddUp(REBATED)).toBe(true);
+    expect(checkReceipt(REBATED)).toEqual([]);
+    // The prices as printed are 2,00 $ over the total.
+    expect(itemsAddUp(gross)).toBe(false);
+    expect(checkReceipt(gross)).toContain("items-differ");
+  });
+
+  test("the taxable marks are held against the nets, not the printed prices", () => {
+    // Taxes printed on 17,98 $, the six-pack's price before its rebate: the
+    // prices would give them, the nets do not.
+    const taxedGross: ReceiptProposal = {
+      ...REBATED,
+      gst: 90,
+      qst: 179,
+      total: 2_007 + 90 + 179,
+    };
+
+    expect(checkReceipt(taxedGross)).toEqual(["taxable-differs"]);
+    expect(checkReceipt(REBATED)).not.toContain("taxable-differs");
+  });
+
+  test("a rebate on an untaxed item lowers its price and nothing else", () => {
+    // 3,49 $ of bread with 0,50 $ off: the total is 0,50 $ under `BASKET`'s.
+    const bread: ReceiptProposal = {
+      ...BASKET,
+      subtotal: 2_157,
+      total: 2_426,
+      items: [{ ...item(0), discount: -50 }, item(1), item(2)],
+    };
+
+    expect(checkReceipt(bread)).toEqual([]);
+    expect(sharedAmount(bread, [0])).toEqual({ excludedCents: 299, sharedCents: 2_127 });
+  });
+
+  test("a returned item's rebate, the opposite sign, comes back off with it", () => {
+    const refund: ReceiptProposal = {
+      ...REBATED,
+      subtotal: -2_007,
+      gst: -80,
+      qst: -159,
+      total: -2_246,
+      items: REBATED.items.map((each) => ({
+        ...each,
+        price: -each.price,
+        deposit: each.deposit === null ? null : -each.deposit,
+        discount: each.discount === null ? null : -each.discount,
+      })),
+    };
+
+    expect(checkReceipt(refund)).toEqual([]);
+    expect(sharedAmount(refund, [1])).toEqual({ excludedCents: -1_324, sharedCents: -922 });
+  });
+
+  test("a row split by category charts each item at its net", () => {
+    // The 2,00 $ off the soap instead, so the remainder, which goes to the
+    // largest category, cannot hide it: the same taxes and total as `REBATED`.
+    const soap = { ...REBATED, items: [item(0), item(1), { ...item(2), discount: -200 }] };
+
+    expect(checkReceipt(soap)).toEqual([]);
+    // 3,49 $ + 15,54 $ + 2,99 $ × 1,14975 = 3,44 $ is a cent over the row,
+    // which comes off the largest.
+    expect(splitByCategory(2_246, soap)).toEqual([
+      { categoryId: 1, cents: 349 },
+      { categoryId: 2, cents: 1_553 },
+      { categoryId: 3, cents: 344 },
+    ]);
+  });
+
+  test("a shared item its rebate makes free leaves nothing shared to take a cent from", () => {
+    // lg-30 gate 1's receipt, its `SAC 0,00` line a 2,00 $ bag with 2,00 $ off.
+    const withFree: ReceiptProposal = {
+      merchant: null,
+      date: "2026-10-04",
+      subtotal: 4_275,
+      gst: 214,
+      qst: 426,
+      total: 4_915,
+      items: [
+        itemLine(2_074, true, "not-shared"),
+        { ...itemLine(200, false, "shared"), discount: -200 },
+        itemLine(309, true, "theirs", "sam"),
+        itemLine(1_892, true, "theirs", "sam"),
+      ],
+    };
+
+    expect(checkReceipt(withFree)).toEqual([]);
+    expect(splitReceipt(withFree)).toEqual({
+      sharedCents: 0,
+      notSharedCents: 2_384,
+      chargedCents: 2_531,
+      charges: [{ personId: "sam", cents: 2_531 }],
+    });
+  });
+});
+
+/** A receipt's items marked in order, each a share. */
+function markedAs(receipt: ReceiptProposal, ...shares: ReceiptItem["share"][]): ReceiptProposal {
+  return {
+    ...receipt,
+    items: receipt.items.map((each, index) => ({ ...each, share: shares[index] ?? "shared" })),
+  };
+}

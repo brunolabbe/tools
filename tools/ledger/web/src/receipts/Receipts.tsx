@@ -55,6 +55,8 @@ import { fetchMe } from "../api/me.ts";
 import { fetchSpendingCategories } from "../api/spending.ts";
 import { fetchReceiptMatches, fileReceipt, readReceipt, uploadReceipt } from "../api/receipts.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
+import { nextPart, ReceiptQueueView, useReceiptQueue } from "./Queue.tsx";
+import type { QueuedPhoto } from "./Queue.tsx";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
@@ -65,7 +67,8 @@ export const FLAG_LABELS: Record<ReceiptFlag, string> = {
   "parts-differ": "The subtotal and the taxes do not add up to the total.",
   "tax-differs": "The taxes are not 5 % and 9.975 % of the same amount.",
   "signs-differ": "Some amounts are a purchase and some a refund.",
-  "items-differ": "The items, deposits and taxes do not add up to the total. Correct them to file.",
+  "items-differ":
+    "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
   "taxable-differs":
     "The items marked taxable do not give the taxes printed. Check which items are taxable.",
 };
@@ -78,6 +81,8 @@ interface ItemDraft {
   price: string;
   taxable: boolean;
   deposit: string;
+  /** The rebates folded into it (lg-89), negative on a purchase; blank for none. */
+  discount: string;
   spendingCategoryId: number | null;
   share: ItemShare;
   /** Whose a `theirs` item is, as picked; `null` until picked, and with one other member. */
@@ -129,6 +134,7 @@ function itemDraftOf(item: ReceiptItem): ItemDraft {
     price: centsText(item.price),
     taxable: item.taxable,
     deposit: centsText(item.deposit),
+    discount: centsText(item.discount),
     spendingCategoryId: item.spendingCategoryId,
     share: item.share,
     chargedTo: item.chargedTo,
@@ -174,13 +180,16 @@ function amountOf(text: string): number | null {
 function itemOf(draft: ItemDraft, whose: (draft: ItemDraft) => string | null): ReceiptItem | null {
   const price = amountOf(draft.price);
   const deposit = amountOf(draft.deposit);
+  const discount = amountOf(draft.discount);
   if (draft.text.trim() === "" || price === null) return null;
   if (draft.deposit.trim() !== "" && deposit === null) return null;
+  if (draft.discount.trim() !== "" && discount === null) return null;
   return {
     text: draft.text.trim(),
     price,
     taxable: draft.taxable,
     deposit,
+    discount,
     spendingCategoryId: draft.spendingCategoryId,
     share: draft.share,
     chargedTo: draft.share === "theirs" ? whose(draft) : null,
@@ -223,7 +232,14 @@ interface Photo {
 type Stage =
   | { step: "photo" }
   | ({ step: "kept"; said: string | null } & Photo)
-  | ({ step: "form"; part: number; merchantCategoryId: number | null } & Photo)
+  | { step: "queue"; said: string | null }
+  | ({
+      step: "form";
+      part: number;
+      merchantCategoryId: number | null;
+      /** The queue's photo this form came from (lg-92), or `null` for the single photo. */
+      queueKey: number | null;
+    } & Photo)
   | ({ step: "filed"; said: string } & Photo);
 
 /** An item's share as its button reads: someone else's names whose, when known. */
@@ -241,13 +257,6 @@ function shareLabel(share: ItemShare, person: string | null, shown: ShownNames):
 function listed(names: readonly string[]): string {
   const last = names.at(-1) ?? "";
   return names.length < 2 ? last : `${names.slice(0, -1).join(", ")} and ${last}`;
-}
-
-/** The first part of the photo not filed yet. */
-function nextPart(filed: readonly number[]): number {
-  let part = 1;
-  while (filed.includes(part)) part += 1;
-  return part;
 }
 
 /** A request's answer as the screen holds it: not yet, failed with what to say, or in. */
@@ -314,6 +323,7 @@ export function Receipts(): React.ReactElement {
   const [loadedCategories, retryCategories] = useLoad(fetchSpendingCategories);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const queue = useReceiptQueue();
 
   const run = async (step: () => Promise<void>): Promise<void> => {
     setBusy(true);
@@ -335,9 +345,15 @@ export function Receipts(): React.ReactElement {
     setWholeChosen("");
     setMatches(null);
     setProblem(null);
+    queue.clear();
   };
 
-  const open = (photo: Photo, part: number, checked: CheckedProposal | null): void => {
+  const open = (
+    photo: Photo,
+    part: number,
+    checked: CheckedProposal | null,
+    queueKey: number | null = null,
+  ): void => {
     const merchantCategoryId = checked?.merchantCategoryId ?? null;
     setDraft(draftOf(checked?.proposal ?? null, photo.receipt));
     // The merchant's last category is proposed for the line (lg-10).
@@ -350,6 +366,7 @@ export function Receipts(): React.ReactElement {
       step: "form",
       part,
       merchantCategoryId,
+      queueKey,
       receipt: photo.receipt,
       read: photo.read,
       filed: photo.filed,
@@ -368,6 +385,34 @@ export function Receipts(): React.ReactElement {
       const receipt = await uploadReceipt(photo);
       setStage({ step: "kept", receipt, read: null, filed: [], said: null });
     });
+  };
+
+  /** Several photos at once (lg-92): they join the queue, which keeps them one at a time. */
+  const chooseMany = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0) return;
+    setProblem(null);
+    queue.add(files);
+    setStage((before) => ({ step: "queue", said: before.step === "queue" ? before.said : null }));
+  };
+
+  /** Back to the queue, the form's draft dropped: what was filed is marked there. */
+  const backToQueue = (said: string | null): void => {
+    setDraft(null);
+    setMatches(null);
+    setProblem(null);
+    setStage({ step: "queue", said });
+  };
+
+  const openQueued = (photo: QueuedPhoto, part: number, checked: CheckedProposal | null): void => {
+    if (photo.receipt === null) return;
+    open(
+      { receipt: photo.receipt, read: photo.read, filed: photo.filed },
+      part,
+      checked,
+      photo.key,
+    );
   };
 
   const problemLine =
@@ -403,11 +448,35 @@ export function Receipts(): React.ReactElement {
             onChange={choose}
           />
         </label>
+        <label className="camera">
+          Choose several photos
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            disabled={busy}
+            onChange={chooseMany}
+          />
+        </label>
         <p className="muted hint">
           The photo stays on the household&rsquo;s server until you ask for it to be read.
         </p>
         {problemLine}
       </section>
+    );
+  }
+
+  if (stage.step === "queue") {
+    return (
+      <ReceiptQueueView
+        id={id}
+        queue={queue}
+        said={stage.said}
+        problem={problemLine}
+        onOpen={openQueued}
+        onChoose={chooseMany}
+        onStartOver={startOver}
+      />
     );
   }
 
@@ -575,6 +644,7 @@ export function Receipts(): React.ReactElement {
         price: "",
         taxable: false,
         deposit: "",
+        discount: "",
         spendingCategoryId: null,
         share: "shared",
         chargedTo: null,
@@ -654,6 +724,12 @@ export function Receipts(): React.ReactElement {
                 chargedPeople.length === 1 ? "a charge" : "charges"
               }.`;
       const photo = { receipt, read: stage.read, filed: [...stage.filed, part] };
+      if (stage.queueKey !== null) {
+        // Filing from the queue marks that receipt and returns to the list.
+        queue.markFiled(stage.queueKey, part);
+        backToQueue(said);
+        return;
+      }
       setDraft(null);
       setMatches(null);
       // A photo of two receipts goes back to the one not filed yet.
@@ -728,6 +804,13 @@ export function Receipts(): React.ReactElement {
                     placeholder="Deposit"
                     value={item.deposit}
                     onChange={(event) => setItem(index, { deposit: event.target.value })}
+                  />
+                  <input
+                    aria-label={`Rebate on ${name}`}
+                    inputMode="decimal"
+                    placeholder="Rebate, -2.00"
+                    value={item.discount}
+                    onChange={(event) => setItem(index, { discount: event.target.value })}
                   />
                   <label className="check">
                     <input
@@ -858,9 +941,15 @@ export function Receipts(): React.ReactElement {
         </ul>
       )}
       <div className="actions">
-        <button type="button" disabled={busy} onClick={startOver}>
-          Start over
-        </button>
+        {stage.queueKey === null ? (
+          <button type="button" disabled={busy} onClick={startOver}>
+            Start over
+          </button>
+        ) : (
+          <button type="button" disabled={busy} onClick={() => backToQueue(null)}>
+            Back to the queue
+          </button>
+        )}
       </div>
       {problemLine}
     </section>
