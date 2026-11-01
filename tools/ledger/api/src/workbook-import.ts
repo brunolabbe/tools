@@ -697,6 +697,7 @@ function run(
   }
   say(`  repaired        ${String(reading.repairs.length)}`);
   say(`  skipped         ${String(reading.skipped.length)}`);
+  say(`  summaries       ${String(reading.summaries.length)}`);
   const corrected = reading.movements.filter((movement) => movement.workbook !== null);
   say(`  corrected       ${String(corrected.length)}`);
   for (const repair of reading.repairs) {
@@ -706,6 +707,9 @@ function run(
   }
   for (const skip of reading.skipped) {
     say(`  skipped: ${skip.sheet} row ${String(skip.row)}, no amount`);
+  }
+  for (const summary of reading.summaries) {
+    say(`  summary: ${summary.sheet} row ${String(summary.row)}, a total of the sheet, not read`);
   }
   for (const late of reading.outOfOrder) {
     say(

@@ -17,8 +17,10 @@
  *   note. A row whose `B` is a date is a movement; a row with `Solde reporté`
  *   in it is a carry-over, one per bucket, and is verified, never imported.
  *   Above the first movement, a row labelled `Solde …` or `Total` in `C` is
- *   the sheet's own summary of its buckets, and is not read (lg-37).
- *   Anything else (a header, a blank) is not a row of the account.
+ *   the sheet's own summary of its buckets, and is not read (lg-37); nor is
+ *   any undated row, wherever it is, whose amount is a formula adding rows up
+ *   (lg-86). Each is named in the report. Anything else (a header, a blank)
+ *   is not a row of the account.
  * - **Period sheets** (`$ (…)`): row 1 names the two people, each over the
  *   column that holds their amounts; row 6 holds the start and, once closed,
  *   the end; rows 8 onward are the lines, with the item to the left of the
@@ -237,6 +239,8 @@ export interface WorkbookReading {
   opening: Record<Bucket, number>;
   repairs: Repair[];
   skipped: Skip[];
+  /** Undated rows read as a sheet's own totals, and so not read as money (lg-37, lg-86). */
+  summaries: Skip[];
   outOfOrder: OutOfOrder[];
   /** Closed periods, oldest first. */
   periods: WorkbookPeriod[];
@@ -538,6 +542,27 @@ function isSummary(plan: AccountPlan, sheet: Sheet, row: number): boolean {
   return plan.summary.labels.some((start) => key.startsWith(start));
 }
 
+/** A formula that adds rows up. A range alone does not: `VLOOKUP(D5,A1:B20,2)` reads one value. */
+const ADDS_UP = /\b(?:SUM|SUMIFS?|SUBTOTAL|SUMPRODUCT|AGGREGATE)\s*\(/iu;
+
+/** Quoted text and quoted sheet names, where `SUM(` is a word and not a call. */
+const QUOTED = /"[^"]*"|'[^']*'/gu;
+
+/**
+ * A total wherever it sits, whatever the layout says of summaries (lg-86): a
+ * description names one summary column, and a workbook whose sheets put their
+ * summaries in different places, or below the movements, has rows it misses.
+ * Every figure of the amount must be a formula that adds rows up: a movement
+ * typed as `=12.50*2` is money, and still refused when it has no date.
+ */
+function isTotal(sheet: Sheet, row: number, read: AmountRead): boolean {
+  if (read.kind !== "amount") return false;
+  return read.figures.every((figure) => {
+    const formula = cellAt(sheet, row, figure.column)?.formula;
+    return formula !== null && formula !== undefined && ADDS_UP.test(formula.replace(QUOTED, ""));
+  });
+}
+
 /** An amount as the layout gives it: one signed column, or a withdrawal and a deposit. */
 type AmountRead =
   | { kind: "none" }
@@ -620,7 +645,7 @@ function readYear(
   year: number | null,
   plan: AccountPlan,
   people: People,
-  out: Pick<WorkbookReading, "repairs" | "skipped" | "outOfOrder" | "problems">,
+  out: Pick<WorkbookReading, "repairs" | "skipped" | "summaries" | "outOfOrder" | "problems">,
 ): YearRead {
   const rows: UnfiledRow[] = [];
   const carryOvers: CarryOver[] = [];
@@ -655,10 +680,13 @@ function readYear(
 
     const written = dateOf(cellAt(sheet, row, plan.date));
     if (written === null) {
-      // A header, a title, a blank, or the summary above the movements. An
-      // amount with no date anywhere else would be money nobody can place,
-      // which is never skipped quietly.
-      if (amount !== null && amount !== 0 && !(!dated && isSummary(plan, sheet, row))) {
+      // A header, a title, a blank, or a summary of the sheet. Any other
+      // amount with no date would be money nobody can place, which is never
+      // skipped quietly; a summary is named in the report instead.
+      if (amount === null || amount === 0) continue;
+      if ((!dated && isSummary(plan, sheet, row)) || isTotal(sheet, row, read)) {
+        out.summaries.push({ sheet: sheet.name, row });
+      } else {
         out.problems.push(`${at(plan.date)}: an amount with no date.`);
       }
       continue;
@@ -1308,6 +1336,7 @@ function emptyReading(): WorkbookReading {
     opening: { mortgage: 0, "current-expenses": 0 },
     repairs: [],
     skipped: [],
+    summaries: [],
     outOfOrder: [],
     periods: [],
     open: null,
