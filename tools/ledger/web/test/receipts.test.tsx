@@ -8,9 +8,14 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { HouseholdResponse, ReceiptProposal, UploadedReceipt } from "@ledger/contract";
-import { MAX_RECEIPT_PHOTO_BYTES } from "@ledger/contract";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type {
+  HouseholdResponse,
+  ReadReceiptResponse,
+  ReceiptProposal,
+  UploadedReceipt,
+} from "@ledger/contract";
+import { AppError, MAX_RECEIPT_PHOTO_BYTES } from "@ledger/contract";
 import { fetchHousehold } from "../src/api/households.ts";
 import { fetchMe } from "../src/api/me.ts";
 import {
@@ -820,4 +825,170 @@ test("the Rebate field's placeholder shows a rebate typed negative (lg-89)", asy
   await readBasket();
 
   expect(field("Rebate on BIERE 6X355").placeholder).toBe("Rebate, -2.00");
+});
+
+// --- lg-92: several photos at once, read one at a time, confirmed from a queue ---
+
+function jpeg(name: string, size = 1_234): File {
+  return new File([new Uint8Array(size)], name, { type: "image/jpeg" });
+}
+
+/** Each upload is its own receipt, numbered from 11 in the order they go up. */
+function uploadsNumbered(): void {
+  let next = 10;
+  vi.mocked(uploadReceipt).mockImplementation(async () => {
+    next += 1;
+    return { ...RECEIPT, id: next };
+  });
+}
+
+function readOf(merchant: string, total: number): ReadReceiptResponse["proposals"][number] {
+  return { proposal: { ...READ, merchant, total }, flags: [], merchantCategoryId: null };
+}
+
+/** One shop per photo, named by the photo's receipt id. */
+function oneShopEach(id: number): ReadReceiptResponse {
+  return {
+    receiptId: id,
+    model: "claude-haiku-5-5",
+    proposals: [readOf(`Shop ${String(id)}`, 1_000)],
+  };
+}
+
+function chooseSeveral(files: File[]): void {
+  render(<Receipts />);
+  fireEvent.change(field("Choose several photos"), { target: { files } });
+}
+
+const THREE = ["a.jpg", "b.jpg", "c.jpg"];
+
+test("three photos go up one at a time and nothing is read before Read all, then three reads, one at a time (lg-92)", async () => {
+  uploadsNumbered();
+  let inFlight = 0;
+  let widest = 0;
+  vi.mocked(readReceipt).mockImplementation(async (id) => {
+    inFlight += 1;
+    widest = Math.max(widest, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    inFlight -= 1;
+    return oneShopEach(id);
+  });
+
+  chooseSeveral(THREE.map((name) => jpeg(name)));
+  const notice = await screen.findByText(/Reading sends these photos out of the house/u);
+  expect(notice.textContent).toContain("claude-haiku-5-5");
+  expect(uploadReceipt).toHaveBeenCalledTimes(3);
+  expect(vi.mocked(uploadReceipt).mock.calls.map(([photo]) => (photo as File).name)).toEqual(THREE);
+  expect(readReceipt).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Read all" }));
+  await screen.findByText("3 of 3 read");
+  expect(vi.mocked(readReceipt).mock.calls.map(([id]) => id)).toEqual([11, 12, 13]);
+  expect(widest).toBe(1);
+  expect(screen.getByRole("button", { name: "Shop 12, 10.00 $" })).toBeTruthy();
+});
+
+test("a 429 with Retry-After delays that read, drops nothing, and the count reaches 3 of 3 (lg-92)", async () => {
+  uploadsNumbered();
+  let refusedOnce = false;
+  vi.mocked(readReceipt).mockImplementation(async (id) => {
+    if (id === 12 && !refusedOnce) {
+      refusedOnce = true;
+      throw new AppError("RATE_LIMITED", undefined, { details: { retryAfterSec: 7 } });
+    }
+    return oneShopEach(id);
+  });
+  vi.useFakeTimers();
+  try {
+    chooseSeveral(THREE.map((name) => jpeg(name)));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Read all" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The first is read, the second was refused and is waiting; the third is not asked yet.
+    expect(vi.mocked(readReceipt).mock.calls.map(([id]) => id)).toEqual([11, 12]);
+    expect(screen.getByText("1 of 3 read")).toBeTruthy();
+    expect(screen.getByText(/Waiting 7 s/u)).toBeTruthy();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6_999);
+    });
+    expect(readReceipt).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(vi.mocked(readReceipt).mock.calls.map(([id]) => id)).toEqual([11, 12, 12, 13]);
+    expect(screen.getByText("3 of 3 read")).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a read that fails for another reason keeps that photo with a retry and reads the rest (lg-92)", async () => {
+  uploadsNumbered();
+  let failing = true;
+  vi.mocked(readReceipt).mockImplementation(async (id) => {
+    if (id === 12 && failing) throw new AppError("INTERNAL", "The reader broke.");
+    return oneShopEach(id);
+  });
+
+  chooseSeveral(THREE.map((name) => jpeg(name)));
+  fireEvent.click(await screen.findByRole("button", { name: "Read all" }));
+
+  await screen.findByText("2 of 3 read");
+  expect(vi.mocked(readReceipt).mock.calls.map(([id]) => id)).toEqual([11, 12, 13]);
+  expect(screen.getByText("The read failed: The reader broke.")).toBeTruthy();
+
+  failing = false;
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findByText("3 of 3 read");
+  expect(vi.mocked(readReceipt).mock.calls.map(([id]) => id)).toEqual([11, 12, 13, 12]);
+  expect(screen.queryByText(/The read failed/u)).toBeNull();
+});
+
+test("a photo of two receipts gives two entries, and filing one marks only that one (lg-92)", async () => {
+  uploadsNumbered();
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 11,
+    model: "claude-haiku-5-5",
+    proposals: [readOf("Café Un", 1_000), readOf("Café Deux", 2_000)],
+  });
+
+  chooseSeveral([jpeg("two.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Read all" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Café Un, 10.00 $" }));
+  fireEvent.click(await screen.findByRole("button", { name: "File as alex’s line" }));
+
+  await screen.findByText("Café Un, 10.00 $, filed");
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[0]).toBe(11);
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1]).toMatchObject({ part: 1 });
+  expect(screen.getByRole("button", { name: "Café Deux, 20.00 $" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Café Un, 10.00 $" })).toBeNull();
+
+  // Opened and left again, the second stays unfiled.
+  fireEvent.click(screen.getByRole("button", { name: "Café Deux, 20.00 $" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Back to the queue" }));
+  expect(screen.getByRole("button", { name: "Café Deux, 20.00 $" })).toBeTruthy();
+  expect(fileReceipt).toHaveBeenCalledTimes(1);
+});
+
+test("a photo over the size limit is listed as left out and the rest go on (lg-92)", async () => {
+  uploadsNumbered();
+  chooseSeveral([
+    jpeg("small.jpg"),
+    jpeg("huge.jpg", MAX_RECEIPT_PHOTO_BYTES + 1),
+    jpeg("also.jpg"),
+  ]);
+
+  await screen.findByRole("button", { name: "Read all" });
+  expect(screen.getByRole("list", { name: "Photos left out" }).textContent).toContain("huge.jpg");
+  expect(vi.mocked(uploadReceipt).mock.calls.map(([photo]) => (photo as File).name)).toEqual([
+    "small.jpg",
+    "also.jpg",
+  ]);
 });

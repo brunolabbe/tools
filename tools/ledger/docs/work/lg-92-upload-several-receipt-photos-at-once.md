@@ -82,3 +82,62 @@ If lg-90 has merged when this is built, rebase onto it, since both touch
 6. `npm run check`, `npm test -- --project ledger` and `npm run e2e:ledger` pass.
 
 ## Log
+
+2026-11-01, builder (Sonnet 5.5), branch `lg-92-multi-photo-queue`, stacked on
+lg-89's landed head `54df4ee6` (PR #717): web only, as the Build says. The
+contract and the routes did not change.
+
+- **Where it lives.** `web/src/receipts/Queue.tsx` holds the queue (a hook,
+  `useReceiptQueue`, and its view); `Receipts.tsx` gained a `queue` stage and a
+  second input, "Choose several photos" (`multiple`, no `capture`), on the photo
+  step. The queue's state is the hook's, held by `Receipts`, so it survives
+  opening a form and coming back; `Start over` clears it. The form is today's,
+  with lg-89's Rebate input untouched; from the queue its last button reads
+  "Back to the queue" instead of "Start over", and filing returns to the list
+  with that receipt marked "filed".
+- **The brief's `Retry-After` header was not reachable from the screen.**
+  `requestJson` threw an `AppError` that dropped the response headers. The
+  server sends the same number in the body (`details.retryAfterSec`,
+  `rate-limit.ts`), but the Build says the header, so `client.ts` now puts the
+  header's seconds into `details.retryAfterSec` of a `RATE_LIMITED` error, over
+  the body's copy, and the queue reads that. A wait is held between 1 and 120 s,
+  and 15 s with no usable number; five waits in a row on one photo and the read
+  is reported failed, with its retry. Not a contract or route change.
+- **Upload failures** are listed with the oversize photos as left out, rather
+  than kept in the queue: the file is not held for a retry, and choosing it
+  again is the retry. The Build named only the size check.
+- **Existing e2e case changed.** `Receipt fits a phone and a desktop, with a
+  photo kept and an item typed` found its file input with
+  `input[type="file"]`, which the screen's second input made ambiguous; it now
+  asks for it by the camera label.
+- **Not folded in:** nothing else already specified became free. lg-90 and lg-91
+  (per-item checkbox, leaving an item out of a joint row) are unbuilt and wait
+  on lg-89's merge; their item controls were left alone.
+
+Proof, from the worktree root (`/tmp/.../lg-92/build/` holds the logs):
+
+- `npx vitest run tools/ledger/web/test/receipts.test.tsx`: 33 of 33 (28 before
+  this change; the five new are at the end of the file: the four below and a
+  size-limit one).
+- Done when 1: "three photos go up one at a time and nothing is read before Read
+  all, then three reads, one at a time": three uploads in selection order, no read
+  before the tap, reads `[11, 12, 13]`, at most one in flight.
+- Done when 2: "a 429 with Retry-After delays that read, drops nothing, and the
+  count reaches 3 of 3": fake timers; 7 s wait, still two calls at 6,999 ms,
+  reads `[11, 12, 12, 13]` at 7,000 ms, "3 of 3 read".
+- Done when 3: "a read that fails for another reason keeps that photo with a
+  retry and reads the rest": "2 of 3 read", the failure shown, `Try again` reads
+  that photo alone, "3 of 3 read".
+- Done when 4: "a photo of two receipts gives two entries, and filing one marks
+  only that one": one `file` request with `part: 1`, the other still a button.
+- `npx vitest run tools/ledger/web/test/client-retry-after.test.ts`: 3 of 3 (the
+  header over the body's copy; no header keeps the body; a 500 is given no wait).
+- `npx vitest run tools/ledger/web`: 316 of 316 in 25 files.
+- Done when 5: `E2E_PORT=8392 npm run e2e:ledger`: 30 passed, exit 0, including
+  `the receipt queue fits a phone and a desktop, kept and then read` at the end
+  of the suite, which measures the queue before a read and after one (four
+  photos with 70-character names, a 55-character merchant) at 360 and 1280 px.
+  The 360 px screenshots were opened: names wrap, buttons stay inside the card.
+- Done when 6: `npm run check` exit 0. `npm test -- --project ledger` was not run
+  whole on this first build (CI runs it on the draft); the web project is the
+  316 above.

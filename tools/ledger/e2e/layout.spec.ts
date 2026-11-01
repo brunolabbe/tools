@@ -496,7 +496,7 @@ test("Receipt fits a phone and a desktop, with a photo kept and an item typed", 
 }, testInfo) => {
   await openTab(page, "Receipt");
   await page
-    .locator('input[type="file"]')
+    .getByLabel("Take a photo of a receipt")
     .setInputFiles({ name: "receipt.png", mimeType: "image/png", buffer: PHOTO });
   await page.getByRole("button", { name: "Type it in" }).click();
   // Long enough to wrap in a phone's column: a form with a long entry in it is
@@ -1094,4 +1094,71 @@ test("the terms page fits a phone and a desktop", async ({ page }, testInfo) => 
   await expect(page.getByRole("link", { name: "Back to the ledger" })).toBeVisible();
 
   await fitsBothWidths(page, testInfo, "Terms");
+});
+
+/**
+ * lg-92: the queue of receipt photos, kept and then read. The reader is not set
+ * up in this e2e server, so the upload and the read are answered here, with
+ * names as long as a phone gives a photo and a merchant as long as a shop does;
+ * a screen of short ones is the case that proves least.
+ */
+test("the receipt queue fits a phone and a desktop, kept and then read", async ({
+  page,
+}, testInfo) => {
+  let uploaded = 0;
+  await page.route("**/api/receipts", (route) => {
+    uploaded += 1;
+    return route.fulfill({
+      status: 201,
+      json: {
+        id: 900 + uploaded,
+        mediaType: "image/png",
+        bytes: PHOTO.length,
+        uploadedAt: "2026-10-05T15:00:00.000Z",
+        uploadedBy: "alex",
+        reader: "claude-haiku-5-5",
+      },
+    });
+  });
+  const proposal = (merchant: string, total: number) => ({
+    proposal: {
+      merchant,
+      date: "2026-10-04",
+      subtotal: total,
+      gst: null,
+      qst: null,
+      total,
+      items: [],
+    },
+    flags: ["tax-missing"],
+    merchantCategoryId: null,
+  });
+  await page.route("**/api/receipts/*/read", (route) =>
+    route.fulfill({
+      json: {
+        receiptId: 901,
+        model: "claude-haiku-5-5",
+        proposals: [
+          proposal("Épicerie du Marché Central, rue Sainte-Catherine Est", 12_345),
+          proposal("Pharmacie Exemple", 2_650),
+        ],
+      },
+    }),
+  );
+
+  await openTab(page, "Receipt");
+  const photos = [1, 2, 3, 4].map((n) => ({
+    name: `IMG_20261005_153012_receipt_of_the_week_number_${String(n)}_of_the_big_shop.png`,
+    mimeType: "image/png",
+    buffer: PHOTO,
+  }));
+  await page.getByLabel("Choose several photos").setInputFiles(photos);
+  await expect(page.getByRole("button", { name: "Read all" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "The photos" }).getByRole("listitem")).toHaveCount(4);
+  await fitsBothWidths(page, testInfo, "Receipt queue (kept)");
+
+  await page.getByRole("button", { name: "Read all" }).click();
+  await expect(page.getByText("4 of 4 read")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Épicerie du Marché Central/u })).toHaveCount(4);
+  await fitsBothWidths(page, testInfo, "Receipt queue (read)");
 });
