@@ -64,6 +64,136 @@ opposite sign on a returned item. So a Rebate is a further field where a negativ
 is the normal entry. It lands with #717, not with this ticket, and the table does
 not list it.
 
+### What the documentation says — not a device measurement
+
+Read on 2026-11-01 from the sources named, none of them a measurement on an
+iPhone of the ledger's fields. It informs the choice and does not replace Build
+step 1. Where a source states an iOS version or a date, it is given.
+
+**(i) `inputmode="decimal"`.**
+
+- The HTML standard defines `decimal` as "a virtual keyboard capable of
+  fractional numeric input. Numeric keys and the format separator for the locale
+  should be shown." It does not mention a minus key
+  (<https://html.spec.whatwg.org/multipage/interaction.html#input-modalities:-the-inputmode-attribute>;
+  its compatibility note gives Safari on iOS 12.2+ for `inputmode`).
+- MDN says of both `decimal` and `numeric`: "Devices may or may not show a minus
+  key" (<https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/inputmode>,
+  undated).
+- WebKit's source maps `inputmode="decimal"` to UIKit's `UIKeyboardTypeDecimalPad`
+  (`WKContentViewInteraction.mm`, the `switch (_focusedElementInformation.inputMode)`
+  block, `main` read 2026-11-01; the file's newest commit is `1e6d8280` of
+  2026-10-30:
+  <https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/ios/WKContentViewInteraction.mm>).
+  Apple describes that type as "a keyboard with numbers and a decimal point",
+  available from iOS 4.1, with no mention of a sign
+  (<https://developer.apple.com/documentation/uikit/uikeyboardtype/decimalpad>).
+  The source says which UIKit keyboard is asked for, not which keys it has: the
+  key layout is UIKit's and not published.
+- A WebKit bug filed 2019-01-25 against iOS 12.2, "inputmode="decimal" on iOS 12.2
+  doesn't have a button for negative", is answered the same day by a WebKit
+  engineer: "it doesn't look like UIKit supports a number pad UIKeyboardType with
+  a minus key (hyphen)". Status NEW, no resolution recorded
+  (<https://bugs.webkit.org/show_bug.cgi?id=193825>). This is the strongest source
+  for the premise, and it is seven years old.
+- Third-party reports, secondary: "Both decimal and numeric inputmode does not
+  support a minus on the IOS keyboard", 2023-02-02, iOS version not given, the
+  reporter's guess being iOS 13 on
+  (<https://github.com/dm4t2/vue-currency-input/issues/372>); and a report on
+  Xamarin.Forms of 2019-06-19 that the iPhone's `DecimalPad` has no sign key
+  "while the iPad layout does"
+  (<https://github.com/xamarin/Xamarin.Forms/issues/6580>). A Mantine issue opened
+  on 2026-11-01 (<https://github.com/mantinedev/mantine/issues/9370>) repeats the
+  claim, and says it comes from reading source with no device recording, so it
+  adds nothing.
+- **No source found states a measurement of the decimal pad's keys on a current
+  iOS.** The premise is documented and consistent across sources; it is not
+  measured on iOS 26.
+
+**(ii) The other keypads, and `pattern` and `type`.**
+
+- `numeric` maps to `UIKeyboardTypeNumberPad` (same WebKit block). Apple:
+  "a numeric keypad for PIN entry", which "prominently features the numbers 0
+  through 9" (<https://developer.apple.com/documentation/uikit/uikeyboardtype/numberpad>).
+  WebKit's own bugs record the change: before it, iOS 12 `numeric` showed the
+  numeric keyplane with "all sorts of punctuation" (bug 200226, 2019-07-29,
+  <https://bugs.webkit.org/show_bug.cgi?id=200226>); bug 197916, 2019-05-15, fixed
+  in r245338, made it "a number pad with digits 0-9"
+  (<https://bugs.webkit.org/show_bug.cgi?id=197916>), in the iOS 13 beta. A WHATWG
+  thread of January 2020 says iOS 13 dropped the punctuation from `numeric`
+  (<https://github.com/whatwg/html/issues/3478>). So on a current iOS `numeric`
+  is documented as digits only.
+- `text` maps to `UIKeyboardTypeDefault` (Apple: "the default keyboard for the
+  current input method"); the HTML standard: "a virtual keyboard capable of text
+  input in the user's locale". Neither source lists its keys. That it carries a
+  minus behind its numbers layer is common knowledge, not a sourced claim here.
+- `tel` maps to `UIKeyboardTypePhonePad`; the standard gives the digits 0 to 9,
+  `#` and `*`. `search` maps to `UIKeyboardTypeWebSearch`, which Apple calls "a
+  keyboard for web search terms and URL entry". Neither is a candidate: no source
+  gives either a minus key.
+- **`pattern` and `type="number"`**, from `WebPage::inputTypeForElement` and the
+  block above
+  (<https://github.com/WebKit/WebKit/blob/main/Source/WebKit/WebProcess/WebPage/WebPage.cpp>,
+  `main` read 2026-11-01). When `inputmode` is unspecified or `none`: a
+  `type="number"` field, or a text field, whose `pattern` is exactly `\d*` or
+  `[0-9]*` gets the number pad; any other `type="number"` gets
+  `UIKeyboardTypeNumbersAndPunctuation`; a text field with any other pattern gets
+  the default keyboard. **When `inputmode` is set to a keyword, that block decides
+  and the field's type and `pattern` are not consulted**, so per the source a
+  `pattern` cannot change what `inputmode="decimal"` shows. The HTML standard says
+  `type` and `pattern` "should be used" for the case where `inputmode` is
+  unspecified. The
+  `\d*` trick is also documented as the pre-12.2 way, "the only way", to steer
+  Safari's keyboard (<https://catskull.net/ios-inputmode.html>, 2019-04-17). These
+  are source readings of `main`, not of the build on a given iPhone.
+
+**(iii) Digits, a decimal separator and a minus key together.**
+
+- No `inputmode` keyword is documented to give all three: the standard's list has
+  none, and bug 193825 says UIKit has no number pad with a minus key.
+- `UIKeyboardTypeNumbersAndPunctuation` is the keyboard named for it. The WebKit
+  engineer in bug 193825 says it "contains all the relevant keys, but it isn't a
+  number pad"; a forum user's answer (not Apple's) of August 2022 on the Apple
+  Developer Forums to "KeyboardType for negative numbers?" gives it, or the default keyboard, as the way to type a
+  negative, and adds that "a keyboard with only digits, a decimal separator, and
+  +/-" would be better (<https://developer.apple.com/forums/thread/711839>). Apple
+  lists no keys for it ("the numbers and punctuation keyboard"). On the web the
+  source reaches it by `type="number"` with no `inputmode` and no `\d*` pattern,
+  which is a different field from the ledger's (every one of the ten sites is a
+  text field today) and has a locale defect recorded under (iv).
+- `inputmode="text"` is what the two library maintainers above reached for
+  (vue-currency-input #372, Mantine #9370); both are secondary reports, and the
+  second is unmeasured.
+- A commenter on bug 193825 (2023-09-12) tests on an iPhone with a `data:` URL
+  typed into Safari (`data:text/html,<input type="number" inputmode="decimal">`),
+  which is how Build step 1 reaches the alternatives. That Safari accepts such a
+  URL typed by hand is that one comment's evidence, not a measurement here.
+
+**(iv) Does the decimal separator follow the locale?**
+
+- The standard and MDN both say yes: "the format separator for the locale", "the
+  digits and decimal separator for the user's locale (typically . or ,)". Apple's
+  page for `decimalPad` says nothing on it.
+- **What the locale is, on iOS, is not settled by any source.** An Apple Developer
+  Forums thread, August 2018 to January 2019, on iOS 12, finds the pad's separator
+  differing from `Locale.current.decimalSeparator`: with a German primary
+  keyboard and an en-US one also enabled the pad showed `.`, and removing the
+  en-US keyboard made it `,`; another poster says it follows the Region, another
+  that German language with German region gave `.` and English with German region
+  `,`. No Apple answer; the original report was filed as rdar://42338031
+  (<https://developer.apple.com/forums/thread/107269>). So enabled keyboards,
+  Region and Language are each claimed, and none is confirmed.
+- A separate, newer defect concerns `type="number"` only: in iOS 26.2, 26.3 and
+  26.4 beta, Safari inserts `.` for the comma key on a comma-decimal system
+  language; an Apple engineer reproduced it, in French too; not seen on iOS 26.1
+  and earlier; filed as FB22063448; March 2026
+  (<https://developer.apple.com/forums/thread/818268>). It says nothing of
+  `inputmode`.
+- For this ledger: `parseTypedAmountCents` (`books/src/amount.ts`, line 46) reads
+  both `400.50` and `400,50` and `-1 100,00`, so the form takes either separator;
+  the open question is only which one the pad shows on a French-Canadian phone,
+  and Build step 1 records it.
+
 ## Reproduction
 
 Run on 2026-11-01 from a worktree at `origin/main` `8ad4e91d`:
@@ -149,3 +279,17 @@ _Why_.
   nothing in the keypad column is measured. Status is `needs-decision` on the
   owner's pending answer; difficulty is `standard`, rated for the work once an
   option is chosen, all four options being within it.
+- 2026-11-01: web check, on the owner's word that the online documentation may be
+  consulted. Documentation, not a device measurement; the findings and their
+  sources are in _What the documentation says_ in _Why_. In short: WebKit's
+  source maps `inputmode="decimal"` to UIKit's decimal pad, and the sources that
+  state the keys (a WebKit engineer in bug 193825, filed 2019-01-25, still NEW;
+  two third-party reports) say UIKit has no number pad with a minus key. None
+  measures it on a current iOS, and Apple's and MDN's pages are silent or
+  say "may or may not". `numeric`,
+  `tel` and `search` are not candidates. Per WebKit's source a `pattern` does not
+  change what an explicit `inputmode` shows, and `type="number"` with no
+  `inputmode` asks for the numbers-and-punctuation keyboard. Which of
+  keyboards, Region and Language sets the decimal separator is claimed three ways
+  and settled by none. The `Decision — open` options are unchanged and none is
+  chosen.
