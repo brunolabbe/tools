@@ -70,15 +70,17 @@ name: CI
 # matrix here and every job in those three files carry the same `if`: skip a
 # `push` whose commit opens `chore(` and carries `): release ` — the shape of
 # `pull-request-title-pattern` in `release-please-config.json`. `head_commit` is
-# absent on every other event, so a pull request, the nightly and a manual
-# re-run are untouched. `check` still runs; `release.yml` does the work the
-# merge is for.
+# absent on every other event, so a pull request, the nightly and a
+# `workflow_dispatch` are untouched — but the Re-run button on a release push
+# replays that push, and skips again. `check` still runs; `release.yml` does the
+# work the merge is for. `scripts/test/release-merge-skip.test.ts` holds the
+# copies to one string.
 #
 # **The concurrency group is split for the same commits, and the skip is unsafe
 # without it.** A release merged straight after a code merge would otherwise
 # cancel that code's `main` run, and then skip its own — so the merged state of
-# the code would be recorded by nothing. In its own group the release run
-# cancels no one.
+# the code would be recorded by nothing. In its own group a release run cancels
+# only an earlier release run, whose tree its own supersedes.
 on:
   push:
     branches: [main]
