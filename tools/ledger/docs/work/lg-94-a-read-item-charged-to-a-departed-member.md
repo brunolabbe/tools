@@ -15,12 +15,11 @@ difficulty: standard
 
 An item that a receipt's proposal marks as someone else's, and charges to a person
 who has since left the household, is shown and filed as the first current other,
-with nobody having chosen it. The screen gives no sign of it: the item's share
-button reads the substitute's name, and nothing on the form says the original
-charge was dropped.
+with nobody having chosen it. The form says nothing about the original charge being
+dropped.
 
-The code is `whose`, a closure inside the `Receipts` component in
-`tools/ledger/web/src/receipts/Receipts.tsx` (on `main` at `686b213c`, line 591):
+On `main` (`686b213c`) the code is `whose`, a closure inside the `Receipts` component
+in `tools/ledger/web/src/receipts/Receipts.tsx` (line 591):
 
 ```ts
 const whose = (item: ItemDraft): string | null =>
@@ -32,30 +31,40 @@ const whose = (item: ItemDraft): string | null =>
 ```
 
 A `chargedTo` that is not among the current `others` falls through to `other`.
-`itemOf` (line 180) takes the answer for a `theirs` item (line 195), so the request
+`itemOf` (line 180) takes that answer for a `theirs` item (line 195), so the request
 carries the substitute's name, or `null` when there are only two members, which the
 API reads as that one other member. `whose` predates lg-90.
 
 lg-90's Build step 2 (branch `lg-90-shared-item-checkbox`, PR #724) says a charge to
 someone is always the person's choice, never a default. lg-90 applies that to
 unchecking an item, and its brief does not reach a charge that a read brings in.
-The finding was raised by lg-90's gate 1 (Opus 5.5), which recorded it as dropped
-(outside the diff) and carried it to the owner as an open decision on 2026-11-01.
-The owner chose to file it as this ticket.
+lg-90's gate 1 (Opus 5.5) recorded this as dropped (outside the diff) and carried it
+to the owner as an open decision; the owner chose on 2026-11-01 to file it here.
 
-**lg-90 rewrites the share control in `Receipts.tsx`**, so this ticket is built
-after lg-90 merges (`depends_on: [lg-90]`). At PR #724's current head,
-`bb4968240a0499ba26e14cbeb57be28022d67924`, `whose` is unchanged, which was checked
-by reading that head's file. Its diff to `Receipts.tsx` is wider than the control:
-the share cycle (`NEXT_SHARE`), the `Stage` type, an import, the file's header
-comment, and the item row around the share button. Rebase or merge onto it
-rather than onto `main`'s lines.
+### What lg-90 changes in `Receipts.tsx`
+
+lg-90 rewrites the share control, so this ticket is built after lg-90 merges
+(`depends_on: [lg-90]`). Read with `git diff -U0 686b213c bb4968240a0499ba26e14cbeb57be28022d67924`
+(PR #724's landed head), not run. Its hunks change five things:
+
+- the file's header comment;
+- an import, `sharedAmount`;
+- `NEXT_SHARE` and `nextShare`, the tap cycle, deleted;
+- `MINE`, added as `""`: the `Whose is` value for not-shared, which the contract
+  cannot take as a person id;
+- the `shareLabel` doc comment;
+- the item row: the share button becomes a Shared checkbox and a `Whose is` select.
+
+`whose`, `itemOf` and `unfileable` are not in its diff. At that head the select's
+value is `item.share === "not-shared" ? MINE : (whose(item) ?? other ?? "")`, so with
+two members a departed charge makes the select show the substitute as the chosen
+value. The disabled `Someone else's` option renders only for a `theirs` item in a
+household of one. Rebase or merge onto lg-90's result, not onto `main`'s line numbers.
 
 ### Is this reachable today? No, not from the app as built
 
-The probe below feeds a `theirs` item with a `chargedTo` through a mocked read,
-which is a response shape the current reader never produces. Read on `main` at
-`686b213c`:
+The probe below feeds a `theirs` item with a `chargedTo` through a mocked read, a
+response shape the current reader never produces. Read on `main` at `686b213c`:
 
 - **The reader never proposes a charge.** `toItem` in
   `tools/ledger/receipts/src/reader.ts` (line 180) sets `share: "shared"` and
@@ -73,22 +82,69 @@ which is a response shape the current reader never produces. Read on `main` at
   `api/test/schema.test.ts`.
 
 So today a read item reaches `whose` with `chargedTo: null` and `share: "shared"`,
-and it can become `theirs` only by the person's own tap, from a current member.
-The defect is latent. It becomes live when the reader or a stored draft starts to
-propose a share or a charge.
+and it becomes `theirs` only by the person's own tap, from a current member. The
+defect is latent: it becomes live when the reader or a stored draft starts to propose
+a share or a charge.
 
 ### Reproduction
 
-Run on `main` at `686b213c` (the branch's base), 2026-11-01. No source was changed.
-The gate's `probe-tail.tsx` could not run here: it calls helpers from lg-90
-(`sharedBox`, `whoseSelect`, `leaveOut`, `optionsOf`) that `main` does not have.
-So the probe was adapted to `main`'s share button, which is named
-`<item>, <label>`, and kept to the departed-member cases (its section B).
+Run on `main` at `686b213c`, from the repository root. The command reads the probe
+from this ticket, appends it to a copy of `web/test/receipts.test.tsx` (which defines
+`household`, `takePhoto`, `BASKET` and `shared` on `main`), runs the `LG94` tests,
+prints the records and removes its own files. It names no scratch path.
 
-The probe file is appended to a copy of `web/test/receipts.test.tsx`, run, and
-removed from the test tree in the same script. Its departed-member part:
+The probe is a recorder, not a verdict: each case appends one record to `LG94_OUT`,
+and the records are the reading. Its last test fails if fewer than four were written.
 
-```tsx
+````sh lg94-run
+export LG94_OUT=lg94-probe.out
+rm -f "$LG94_OUT"
+{ cat tools/ledger/web/test/receipts.test.tsx; awk '/^```tsx lg94-probe$/{f=1;next} /^```$/{f=0} f' tools/ledger/docs/work/lg-94-a-read-item-charged-to-a-departed-member.md; } > tools/ledger/web/test/lg94-probe.test.tsx
+npx vitest run tools/ledger/web/test/lg94-probe.test.tsx -t LG94; echo "vitest exit $?"
+rm -f tools/ledger/web/test/lg94-probe.test.tsx
+cat "$LG94_OUT"
+rm -f "$LG94_OUT"
+````
+
+The probe, which the command extracts from the block below:
+
+```tsx lg94-probe
+// ---- LG94 probe (lg-94): a recorder, not a verdict. Each case appends one record to
+// LG94_OUT; the records are the reading. The last test checks all four were written.
+import { appendFileSync, readFileSync } from "node:fs";
+
+const OUT = process.env.LG94_OUT ?? "lg94-probe.out";
+function rec(line: string): void {
+  appendFileSync(OUT, `${line}\n`);
+}
+
+// Main's share control is a plain button named "<item>, <label>" (no checkbox).
+function itemButton(item: string): HTMLButtonElement {
+  const found = screen
+    .getAllByRole("button")
+    .find((button) => button.getAttribute("aria-label")?.startsWith(`${item}, `));
+  if (found === undefined) throw new Error(`no share button for ${item}`);
+  return found as HTMLButtonElement;
+}
+
+function filedItems(): string {
+  const filed = vi.mocked(fileReceipt).mock.calls.at(-1)?.[1];
+  return JSON.stringify(
+    filed?.proposal.items.map((item) => [item.text, item.share, item.chargedTo]),
+  );
+}
+
+async function fileLine(): Promise<string> {
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  try {
+    await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1), { timeout: 500 });
+    return filedItems();
+  } catch {
+    return `NOT FILED, alert=${JSON.stringify(screen.queryByRole("alert")?.textContent ?? null)}`;
+  }
+}
+
+// A read item someone else's, charged to a person who has left (or to nobody).
 async function readBasketCharged(chargedTo: string | null): Promise<void> {
   vi.mocked(readReceipt).mockResolvedValue({
     receiptId: 3,
@@ -119,85 +175,132 @@ test.each([
 ])("LG94 departed: %s", async (name, members, left, chargedTo) => {
   vi.mocked(fetchHousehold).mockResolvedValue(household(members, left));
   await readBasketCharged(chargedTo);
-  // then: the item's share button, its "Whose is" select if rendered, the live
-  // line, and the items the mocked fileReceipt was called with
+  const button = itemButton("BIERE 6X355");
+  const select = screen.queryByLabelText("Whose is BIERE 6X355") as HTMLSelectElement | null;
+  const selectState =
+    select === null
+      ? "none"
+      : `value=${JSON.stringify(select.value)} shows=${JSON.stringify(select.selectedOptions[0]?.text ?? null)} options=${JSON.stringify([...select.options].map((option) => option.text))}`;
+  const hints = [...document.querySelectorAll("p.hint.bad")].map((node) => node.textContent);
+  rec(
+    `B ${name} button=${JSON.stringify(button.getAttribute("aria-label"))} select=${selectState} live="${shared()}" hint=${JSON.stringify(hints)} filed=${await fileLine()}`,
+  );
+});
+
+test("LG94 wrote all four records", () => {
+  const written = readFileSync(OUT, "utf8")
+    .split("\n")
+    .filter((line) => line.startsWith("B "));
+  expect(written).toHaveLength(4);
 });
 ```
 
-Command and output:
+Output of the command, at `686b213c`:
 
 ```
-$ bash <scratch>/lg-94/build/probe-main.sh      # cat receipts.test.tsx + probe; npx vitest run <probe> -t LG94; rm probe
  Test Files  1 passed (1)
-      Tests  4 passed | 39 skipped (43)
-exit 0
-```
-
-The records, one per case, as the probe wrote them:
-
-```
+      Tests  5 passed | 39 skipped (44)
+vitest exit 0
 B one+left dana button="BIERE 6X355, The other's" select=none live="Not shared 0.00 $ · The other's 15.54 $ · Shared 9.22 $" hint=["There is nobody else in the household to charge an item to."] filed=NOT FILED, alert="There is nobody else in the household to charge an item to."
 B two+left dana button="BIERE 6X355, sam's" select=none live="Not shared 0.00 $ · sam's 15.54 $ · Shared 9.22 $" hint=[] filed=[["PAIN","shared",null],["BIERE 6X355","theirs",null],["SAVON","shared",null]]
 B three+left dana button="BIERE 6X355, casey's" select=value="casey" shows="casey" options=["casey","sam"] live="Not shared 0.00 $ · casey's 15.54 $ · Shared 9.22 $" hint=[] filed=[["PAIN","shared",null],["BIERE 6X355","theirs","casey"],["SAVON","shared",null]]
 B three, read null button="BIERE 6X355, casey's" select=value="casey" shows="casey" options=["casey","sam"] live="Not shared 0.00 $ · casey's 15.54 $ · Shared 9.22 $" hint=[] filed=[["PAIN","shared",null],["BIERE 6X355","theirs","casey"],["SAVON","shared",null]]
 ```
 
-Read against the gate's measurements:
+Read against the gate's measurements (lg-90's gate 1, on lg-90's tree):
 
 - **Three current members, charged to dana:** the select shows casey, and the request
-  carries `theirs` with `"casey"`. Reproduced.
-- **Three members, read item charged to nobody:** it files casey. Reproduced.
+  carries `theirs` with `"casey"`. Reproduced on `main`.
+- **Three members, read item charged to nobody:** it files casey. Reproduced on `main`.
 - **Two current members, charged to dana:** the request carries `theirs` with `null`,
-  which the API reads as sam. Reproduced. The gate also said "the select shows sam".
-  That is lg-90's tree. On `main` a household of two has **no** select: the select
-  renders only with more than one other member (`several && item.share === "theirs"`,
-  line 830), so the item reads `sam's` and nothing shows the choice.
+  which the API reads as sam. Reproduced on `main`. The gate also said "the select
+  shows sam", which describes lg-90's tree. On `main` a household of two has no select:
+  it renders only with more than one other member (`several && item.share === "theirs"`).
+  The item reads `sam's` and nothing shows the choice.
 - **One current member, charged to dana:** the form refuses to file, with
-  `NOBODY_ELSE` on screen. That is correct, and it is the one case that is not
-  silent.
+  `NOBODY_ELSE` on screen. That is correct, and it is the one case that is not silent.
+
+## Build
+
+Not dispatchable until Question 1 in Decision is answered. Then build the chosen
+option after lg-90 merges, against the merged `web/src/receipts/Receipts.tsx`. The
+code involved is `whose` (`main` line 591), `itemOf` (lines 180 and 195), `unfileable`
+(lines 665–670) and, on lg-90's head, the select's value expression. The Reproduction
+probe does not re-run on the fixed tree: it finds share buttons named `<item>, <label>`,
+which lg-90 removes.
 
 ## Decision — open
 
-**Open: what a read item's charge to a departed member should do.** Nothing in
-the app produces this input today (see Why), so the choice is about the rule the
-code should follow, not about a live bug.
+**Question 1 — open: what a read item's charge to a departed member should do.**
+Nothing in the app produces this input today (see Why), so the choice is about the
+rule the code should follow, not about a live bug. The options below are the
+owner's to choose from, recommended first. Costs for the options that touch lg-90's
+control are read from `bb4968240a0499ba26e14cbeb57be28022d67924` and were not run,
+because lg-90 is not merged.
 
-1. **Refuse to file until a current member is picked, with no default.** A departed
-   charge shows as unpicked, the select gets an empty first option, and the form
-   says which item needs a person, as `unfileable` already does for NOBODY_ELSE.
-   This is the rule lg-90's Build step 2 states. _Recommended._ Cost: a new refusal
-   line and an empty option in the select. Open sub-question: with exactly one
-   current other, the lg-30 path makes the request name nobody, and that is a
-   default too. Does this option cover that case, or only three or more members?
-   Changes the lg-30 tests that pin the two-person path.
-2. **Keep the substitution, and say it on the item.** The button reads, for
-   example, `dana's, no longer a member: sam's`, with a hint, and the filing still
-   goes to the current other. Cost: still a default, now visible. The smallest
-   change, and the amounts stay as they are.
-3. **File the departed charge as not shared.** The item stays with whoever paid,
-   with a hint. Cost: the money moves to the payer, a reading that is wrong if the
-   person meant the other member, and the live line changes under the reader.
-4. **Leave it as it is, and close the ticket as latent.** Cost: nothing changes
-   today, since no path reaches it. Whoever later makes the reader propose shares,
-   or stores a draft, inherits a silent substitution, with no ticket pointing at it.
+1. **Refuse to file until a current member is picked; no default.** The select shows
+   an unpicked state whose value is neither `MINE` (`""`) nor any person id, so the
+   item cannot read as Mine. `whose` returns `null` for a departed charge, `unfileable`
+   names the item, and filing sends nothing. This is the rule lg-90's Build step 2
+   states, and it covers two members too, since lg-90's select renders for two.
+   Cost, not priced on lg-90's tree: a second sentinel, checked against the contract's
+   person-id shape (`chargedTo` is `z.string().min(1).max(100)`, and lg-90's gate 1
+   recorded a 1–64 character id); a new refusal line; and the disabled `Someone else's`
+   option, which sits in the same select for a household of one, needs reconciling
+   with the unpicked state.
+2. **Keep the substitution, and say it beside the select.** The select keeps showing
+   the current other, with a hint such as `dana has left: this is sam's now`, and
+   filing is unchanged. Cost: still a default, now visible. lg-90's control has no
+   share button, so the name would appear in the hint. Whether the name map resolves a
+   departed id (`shownName`) is not checked.
+3. **File the departed charge as not shared.** The select shows Mine, with a hint such
+   as `dana has left: this stays with alex`, and the item files `not-shared`. Cost: the
+   money moves to the payer, and a person who meant the other member is charged
+   nothing; the amounts change under the reader.
+4. **Leave it as it is, and close the ticket as latent.** Cost: nothing changes today,
+   since no path reaches it. Whoever later makes the reader propose shares, or stores a
+   draft, inherits a silent substitution, with no ticket pointing at it.
+5. **Keep the charge on the departed member.** The filing keeps `chargedTo` as the
+   departed name. lg-30's brief allows this: a name "need not be a current member, so a
+   charge to someone who has since left stays possible and the screen offers current
+   members only". The select must then show a name it does not offer, which needs an
+   extra option labelled as departed, since a select value with no option renders as
+   its first option. Cost: the select lists a name that is not a member, and the line
+   is owed by someone no longer in the household. The server accepts it: `chargedToOf`
+   in `api/src/receipts.ts` (line 512) checks a named `chargedTo` with
+   `requireKnownPerson` against `context.people`, which `ruleContext` builds from
+   `knownPeople` (`api/src/people.ts`, every row of the books' `people` table, a retired
+   person included), and returns it without checking the current members. Read, not run.
 
 Difficulty is rated for the work once answered: the change is contained to `whose`,
 `itemOf`'s caller, `unfileable` and the select in `Receipts.tsx`, but the owner's
 answer carries the judgement (`standard`).
 
+**Question 2 — answered 2026-11-01 by the owner: should "keep the charge on the
+departed member" be among the options?** The two answers offered were (a) list it,
+with its cost, or (b) say why it is excluded. Chosen: (a). It is option 5 above.
+
 ## Done when
 
-1. The owner's answer is recorded under `## Decision — answered <date> by <who>`,
-   with the option chosen, before any source changes. Status becomes `ready` in
-   the commit that records it.
-2. Each of the four cases in Reproduction behaves as the chosen option says, and
-   a test in `web/test/receipts.test.tsx` pins each one. Under option 1, each
-   test fails on `main` at `686b213c`, and the probe's `B` records show the
-   behaviour the test asserts.
-3. The fix is built after lg-90 merges, and the branch is rebased or merged onto
-   the lg-90 result (`depends_on: [lg-90]`), with line numbers re-resolved against
-   the merged file.
-4. `npm run check` and `npm test -- --project ledger` pass.
+1. The owner's answer to Question 1 is recorded under `## Decision — answered <date> by <who>`,
+   with the option chosen and the options it was chosen from, before any source change.
+   Status becomes `ready` in that commit. Option 4 closes the ticket on this line alone.
+2. Under the option chosen, its test in `web/test/receipts.test.tsx` asserts, for each
+   departed case C1 to C4 in Reproduction:
+   - Option 1: the select shows the unpicked state, and `fileReceipt` is not called.
+     Fails on `main` for C1–C4, which file the substitute. C0 (one member) passes on
+     `main`, since its refusal is already there, and the test pins it unchanged.
+   - Option 2: a hint names the departed member and the current one the charge falls
+     to, and filing is unchanged. Fails on `main`, which shows no hint.
+   - Option 3: the select shows Mine, a hint shows, and the item files `not-shared`
+     with `chargedTo: null`. Fails on `main`.
+   - Option 5: the select keeps the departed name and the filing names it. Fails on `main`.
+     Option 4 has no test. The tests for options 1–3 and 5 can only be run after lg-90
+     merges, against the merged file; the `main` reading in Reproduction is the only
+     reading taken before then.
+3. The fix is built after lg-90 merges, rebased or merged onto lg-90's result, with
+   line numbers re-resolved against the merged file. Not applicable to option 4.
+4. `npm run check` and `npm test -- --project ledger` pass. Not applicable to option 4.
 
 ## Log
 
@@ -207,8 +310,9 @@ answer carries the judgement (`standard`).
   line 195), the select (line 830), `unfileable` (lines 665–670). `whose` gives the
   first current other for any charge outside `others`.
 - Build: `npm run build` exit 0 at `686b213c` after `worktree-farm.sh`.
-- Probe (see Reproduction): four cases, exit 0, `Tests 4 passed | 39 skipped (43)`.
-  The gate's probe tail does not run on `main`; the adapted one is recorded here.
+- Probe: the four-case run recorded here reported `Tests 4 passed | 39 skipped (43)`,
+  exit 0. That run used a scratch script that is not part of this ticket; round 1 below
+  replaces it with the command in Reproduction.
 - Reachability, from `grep` on `686b213c`:
   - `grep -n 'share: "shared"\|chargedTo: null' tools/ledger/receipts/src/reader.ts`
     gives `192:    share: "shared",` and `193:    chargedTo: null,`.
@@ -221,5 +325,37 @@ answer carries the judgement (`standard`).
   not `a2ab1d56` as the gate read it. `whose` is unchanged there
   (`git show origin/lg-90-shared-item-checkbox:tools/ledger/web/src/receipts/Receipts.tsx`,
   `589: const whose = (item: ItemDraft)`, the same expression).
-- The gate's two-member reading ("the select shows sam") describes lg-90's tree;
-  on `main` there is no select for a household of two (see Reproduction).
+- The gate's two-member reading ("the select shows sam") describes lg-90's tree; on
+  `main` there is no select for a household of two.
+
+**2026-11-01, round 1 (the narrow gate graded `0f65e8cb` FAIL with five findings; all five
+accepted after reading the code, and fixed here).**
+
+- **F1, reproduction recorded nothing and rested on a scratch file.** Fixed: the probe is
+  inline in Reproduction, and the command extracts it from this ticket and names no
+  scratch path. The probe writes one record per case, and its last test fails when fewer
+  than four were written. Run from the repository root on this tree (`686b213c` plus the
+  ticket): `Tests 5 passed | 39 skipped (44)`, `vitest exit 0`, the four `B` records shown
+  in Reproduction. Positive control: those records diffed against the filer's earlier
+  probe run, `diff` silent over 4 lines. Negative control: the count test alone, with no
+  records file, `Error: ENOENT`, `Tests 1 failed | 43 skipped (44)`, `vitest exit 1`.
+- **F2, Done when read three ways.** Fixed: Done when is per option. It states what each
+  option's test asserts for cases C1 to C4, and which of them fail on `main`. C0 (one
+  member) passes on `main` by design, since its refusal is already there. Option 4 closes
+  on line 1 alone.
+- **F3, options priced against `main`'s control.** Fixed: options 1 to 3 and 5 are restated
+  against lg-90's select at `bb4968240a0499ba26e14cbeb57be28022d67924` (the value
+  expression, `MINE` as `""`, the disabled `Someone else's` option for a household of one,
+  and the Shared checkbox in place of the share button). Costs are read from that head,
+  not run, and the Decision says so.
+- **F4, a fifth option missing.** Added as option 5, "keep the charge on the departed
+  member", with its cost. Recorded as **Question 2, answered 2026-11-01 by the owner**:
+  the options offered were (a) list it, with its cost, or (b) say why it is excluded;
+  chosen (a).
+- **F5, the `Stage` claim.** Fixed: the Why lists the five hunks of lg-90's diff, read from
+  `git diff -U0 686b213c bb496824`: the header comment, the `sharedAmount` import, the
+  deletion of `NEXT_SHARE` and `nextShare`, the addition of `MINE`, the `shareLabel` doc
+  comment (the hunk the gate's header `@@ -245 +243 @@ type Stage =` labels), and the item
+  row. `Stage` is not among them.
+- Also: a `## Build` section (absent before), and the empty `## Review` placeholder removed,
+  since the format leaves that heading absent until the work is reviewed.
