@@ -1064,9 +1064,9 @@ all of them against one budget per visitor address: 20 requests in 10 seconds,
 shared across every tool this host serves. The figures below are sized from the
 downloader's traffic alone; **the planner's request count was not measured**.
 **The ledger's does trip it in ordinary use** (lg-97, 2026-11-01): one tab
-switch costs 3 to 8 `/api/` requests, read from what each screen fetches when it
-opens, so three screens opened in a few seconds reach 20, and the household on one
-home connection shares that count. A blocked ledger request shows "Too many
+switch costs 2 to 11 `/api/` requests, counted by rendering the app over a stubbed
+`fetch` (Stats is the 11, Period 8), so two or three screens opened in a few
+seconds reach 20, and the household on one home connection shares that count. A blocked ledger request shows "Too many
 requests. Try again shortly.". Raise the threshold rather than the period; lg-98
 cuts the ledger's count. **Whether to create this rule at all is the owner's
 choice at the dashboard:** accept a limit shared by every tool, or create none and

@@ -14,14 +14,17 @@ difficulty: hard
 ## Why
 
 Each ledger screen fetches its own data from scratch every time it opens. It does
-this by hand with `useEffect` and an `AbortController`, in about 41 call sites
-under `web/src`. The shell also asks again for the inbox count and the people's
-names on every tab change (`web/src/App.tsx`, lg-33 and lg-54). One tab switch costs
-between 3 and 8 `/api/` requests, and the same data is asked for repeatedly:
+this by hand with `useEffect` and an `AbortController`: 42 `fetch*` calls outside
+`web/src/api/`, in 23 effects, and the work is sized by the 23. The shell also asks
+again for the inbox count and the people's names on every tab change
+(`web/src/App.tsx`, lg-33 and lg-54). One tab switch costs between 2 and 11 `/api/`
+requests (Stats is 11, Period 8; lg-97 has the per-tab counts), and the same data is
+asked for repeatedly:
 
-- `ROUTES.people` (`fetchPeople` and `fetchPeopleNames`) is asked on six screens
-  and by the shell.
-- `ROUTES.spendingCategories` is asked on six screens.
+- `ROUTES.people` (`fetchPeople` and `fetchPeopleNames`) is asked from six call
+  sites on five tabs (Salaries asks twice, through `Salaries` and
+  `MortgageSplitCard`), and by the shell.
+- `ROUTES.spendingCategories` is asked on six tabs, once each.
 
 That volume trips Cloudflare's rate limiting rule on `/api/`, which allows 20
 requests per 10 seconds per IP address and is shared by every tool in the zone.
@@ -47,12 +50,19 @@ the repo's rule, `packages/ui` gets shared code only when a second tool needs it
      `details.retryAfterSec` (lg-92, lg-97). Cap the wait at about 15 s, and don't
      retry anything else that the taxonomy does not mark `retryable`.
 3. **Query keys from the route**: `ROUTES.*` together with the request's
-   parameters. That way the people a screen asks for and the names the shell asks
-   for are one entry, because they are one route.
+   parameters, and **the cache entry holds the route's whole response**. Each
+   caller takes what it needs from it with `select`. People is the case that
+   decides this. `fetchPeople` (`api/rules.ts`) returns a `string[]`, filtered by
+   `who`. `fetchPeopleNames` (`api/people.ts`) returns the `names` map. Both read
+   the one `ROUTES.people` URL with no parameter. One key holding either shape
+   hands a caller the other's data, and neither the compiler nor the mocked tests
+   catch it, because a query key is untyped. A key per shape asks `/api/people` up
+   to three times, which fails Done when 2.
 4. **Move each screen** from `useEffect` + `AbortController` to `useQuery`, one
-   screen at a time. `queryFn` receives `{ signal }`, so the `fetch*` functions in
-   `web/src/api/` stay as they are. Keep each screen's loading and failure wording:
-   the tests read it.
+   screen at a time. `queryFn` receives `{ signal }`, so most `fetch*` functions in
+   `web/src/api/` stay as they are. The exceptions are the ones that reshape a
+   response that another caller shares (step 3): those become a raw fetch plus a
+   `select`. Keep each screen's loading and failure wording: the tests read it.
 5. **Writes become `useMutation`s that invalidate what they change.** For each
    write, list the queries it can change, and test that list rather than guess it.
    A rename invalidates people. A paste, a filing or an import invalidates the
@@ -66,8 +76,9 @@ the repo's rule, `packages/ui` gets shared code only when a second tool needs it
    reworded where they describe how the guarantee was met rather than what it is.
 7. **Tests**: one `renderWithClient` helper that gives each test a fresh
    `QueryClient` with `retry: false`. Without it, cached answers carry from one test
-   into the next and a test passes on another test's data. The 25 web test files
-   mock the `api/` modules, and they keep doing that.
+   into the next and a test passes on another test's data. Of the 25 web test
+   files, 19 mock an `api/` module, and they keep doing that; the other six do not
+   render screens.
 8. **`web/src/receipts/Queue.tsx`** already waits out a `RATE_LIMITED` read on its
    own (lg-92). It is a write queue, not a query, so leave it as it is unless moving
    it becomes free.
