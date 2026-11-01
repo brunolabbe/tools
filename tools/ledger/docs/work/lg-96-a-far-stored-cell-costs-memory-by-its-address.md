@@ -24,8 +24,9 @@ counts only after every sheet has been read. None of `workbook-zip.ts`'s bounds
 (bytes, inflated size, entries) sees the cost, because the cost follows the
 address, not the file's size.
 
-Found by lg-88's gate (PR #733, its finding F5 on the row axis, recorded there
-as an open decision and not fixed in lg-88). It is not lg-88's to fix.
+Found by lg-88's gate (PR #733, the row axis: its section carries the far cell as a
+`dropped` bullet, "out of the reviewed range", and its full report as an open
+decision; it was not fixed in lg-88). It is not lg-88's to fix.
 [lg-88](./lg-88-a-merged-range-costs-memory-by-its-area.md) is the sibling: the
 same function, the same missing bound, a cost by area instead of by address. lg-88's
 decision (option 3) removes merged places but keeps `last = data.length`, so the
@@ -38,20 +39,31 @@ at all, so a fix in describe alone would leave the command as it is.
 
 ## Reproduction
 
-Measured on `83eac952`, the base this ticket was filed on (`origin/main` on
-2026-11-01). Each case runs in its own process, after a `gc`, and the figure is
-the growth of the process's peak resident memory across the call
-(`process.resourceUsage().maxRSS` before and after). The machine is WSL2 on
-Linux, so a reading varies by run and by machine: the gate's readings for the
-same sha are beside each case.
+Measured on `c9b1afdd` (this ticket's filing; its only difference from `83eac952`,
+the base it was filed on and `origin/main` on 2026-11-01, is this file, so the code
+read is the same). The readings are gate 1's of this ticket, not the filer's: the filer
+ran the lg-88 gate's scripts (see the Log), and gate 1 found that the first version of
+this section, run as it described, did not give its figures.
 
-Fixtures are synthetic. Build each workbook with the test helper
-`tools/ledger/api/test/helpers/xlsx-file.ts` (`SheetWriter`, `workbookOf`), and
-read it with `readSheets` from `tools/ledger/api/src/xlsx.ts`. The repo holds no
-script for this: write one in a scratch directory as an `.mts` file that imports
-the worktree's modules by absolute path, and run it from the worktree root as
-`node --expose-gc --import tsx <script>`. The script does three things per case:
-build the workbook, take the memory reading around the call, print one line.
+**The fixture is written by one process and read by another.** Each case is two
+processes, run one at a time. The first builds the workbook with the test helper
+`tools/ledger/api/test/helpers/xlsx-file.ts` (`SheetWriter`, `workbookOf`), writes
+the bytes to a file and exits. The second reads the file, calls `gc()`, takes
+`process.resourceUsage().maxRSS`, makes the call, takes `maxRSS` again, and prints
+the growth. Building in the measuring process does not work: writing a sheet whose
+`!ref` spans `A1:A1048576` or `A1:XFD1000` costs more than the read, so it raises the
+process's peak first and the call's own peak never exceeds it. Run that way, case 1
+read +20.7, +21.2 and +20.4 MB, and case 4 at 1 000 rows +31.8 MB, against the figures
+below. The machine is WSL2 on Linux, so a reading varies by run: every reading a case
+was given is in the table.
+
+Fixtures are synthetic. Read the file with `readSheets` from
+`tools/ledger/api/src/xlsx.ts`. The repo holds no script for this: gate 1's is
+`measure2.mts` in its scratch directory, an `.mts` file that imports the worktree's
+modules by absolute path and runs from the worktree root as
+`node --expose-gc --import tsx <script>`, once with a `build` argument and once with
+a `run` argument. Write an equivalent in a scratch directory; that directory does not
+outlive the session.
 
 The cases:
 
@@ -67,21 +79,35 @@ The cases:
    `A1` = `Alex`, through `readSheets`. The control is the same with the cell in
    column `B`.
 
-| Case                                      | This run, `83eac952`                                                       | Gate, `83eac952` (PR #733)               |
-| ----------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------- |
-| 1. one far cell, `readSheets`             | +54.3, +55.3, +56.2 MB; 0.4–0.9 s                                          | +49.3 MB; 0.2 s                          |
-| 2. one far sheet, through the route       | +35.8 MB; process peak 218.2 MB; `WORKBOOK_TOO_LARGE`; 0.3 s               | not run                                  |
-| 3. ten far sheets, through the route      | +530.7 MB; process peak 696.3 MB; `WORKBOOK_TOO_LARGE`; 1.5 s; 24 904 B    | +408 MB; process peak 592.5 MB; 24 904 B |
-| 4. 1 000 / 2 000 / 4 000 rows at `XFD`    | +147.8 / +362.9 / +691.1 MB; 1.5 / 3.3 / 7.9 s; 71 / 128 / 242 KB          | not run                                  |
-| 4. control, 4 000 rows at `B`             | +7.3 MB; 61 ms; 234 KB                                                     | not run                                  |
-| 40 far sheets (the most the bound admits) | **not measured**: linear extrapolation from cases 1 and 3, +1.6 to +2.1 GB | not measured                             |
-| 20 000 rows at `XFD` (the row bound)      | **not measured**: linear extrapolation from case 4, about +3.4 GB          | not measured                             |
+| Case                                      | Gate 1 of this ticket, `c9b1afdd`                                                   | Gate of PR #733, `83eac952`              |
+| ----------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------- |
+| 1. one far cell, `readSheets`             | +62.9, +62.0, +62.5 MB; 131–158 ms; 15 909 B                                        | +49.3 MB; 0.2 s                          |
+| 2. one far sheet, through the route       | +63.0, +58.0 MB; process peak 203.3, 197.7 MB; `WORKBOOK_TOO_LARGE`                 | not run                                  |
+| 3. ten far sheets, through the route      | +532.9, +497.6, +522.9 MB; process peak 673.6, 643.7, 663.2 MB; 1.6–1.8 s; 24 986 B | +408 MB; process peak 592.5 MB; 24 904 B |
+| 3. five far sheets, through the route     | +282.7 MB (one run)                                                                 | not run                                  |
+| 4. 1 000 / 2 000 / 4 000 rows at `XFD`    | +186.1 / +363.6 / +719.2 and +728.6 MB; 1.7 / 3.4 / 6.4–8.0 s; 71 / 128 / 242 KB    | not run                                  |
+| 4. control, 4 000 rows at `B`             | +4.3, +4.7 MB; 60 ms; 234 KB                                                        | not run                                  |
+| 40 far sheets (the most the bound admits) | **not measured**: linear extrapolation from case 3, about +1.9 to +2.1 GB           | not measured                             |
+| 20 000 rows at `XFD` (the row bound)      | **not measured**: linear extrapolation from case 4, about +3.6 GB                   | not measured                             |
 
-Case 3's two readings differ by 120 MB on one sha. The code is the same; the
-machine is not. The gate's ten-sheet reading has no output file behind it, so
-the figure is its report alone, and this run is the second reading. Neither
-figure is the bound: both are one run, and the ticket's remedy has to be sized
-against the range, not the mean.
+The fixer of the round that rewrote this section re-ran three of these cases with
+gate 1's `measure2.mts`, once each, one at a time, on a tree at `c9b1afdd`: case 1
+read +60.6 MB (gate 1: +62.0 to +62.9), case 4 at 1 000 rows +182.7 MB (+186.1) and the
+control +4.9 MB (+4.3, +4.7); the rest of the table is gate 1's alone.
+
+The two extrapolations are linear and read off these rows, not run. Case 3's three
+ten-sheet readings give 49.8 to 53.3 MB a sheet, and 40 sheets then come to about
+2.0 to 2.1 GB; the step from five sheets (+282.7, one run) to ten gives about 47 MB a
+sheet, and 40 sheets then come to about 1.9 GB. Case 4's three readings give 0.18 to
+0.19 MB a row, so 20 000 rows come to about 3.6 GB. Both are several times the 512 MB
+container, and neither is the bound: the readings are one to three runs each, and the
+ticket's remedy has to be sized against the range, not the mean.
+
+The gate of PR #733 read +408 MB for the same ten sheets. Its report gives no sha for
+that reading and no output file stands behind it, so it is a figure in a report and
+nothing more. None of the five ten-sheet readings gate 1 took, +497.6 to +532.9 in the
+table and +496.0 and +496.3 with the fixture built in the measuring process, is near
+it. This ticket does not use it, and does not explain the difference.
 
 Why case 4 is not caught: at 4 000 rows, and at the 20 000-row bound, the
 describe bounds count rows (20 000 at most) and non-null cells (200 000 at most).
@@ -103,10 +129,27 @@ found in one pass over `!data`. Refuse the sheet as `WORKBOOK_TOO_LARGE` when it
 rows pass `MAX_WORKBOOK_ROWS` (the gate's example), and when rows times width pass
 a new slot cap. This covers both measured axes, and both callers. Costs:
 
-- A slot cap to choose. Case 4 prices a slot at about 11 MB per million, from one
-  run. The cap has to sit above the largest real sheet, whose extent only the owner
-  can read off a real workbook; the repo holds no real data, and the ticket does
+- A slot cap to choose. Case 4 prices a slot at about 11 MB per million (its 4 000-row
+  readings, 719.2 and 728.6 MB over 65.5 million slots). The cap has to sit above the
+  largest real sheet, whose extent only the owner can read off a real workbook; the repo holds no real data, and the ticket does
   not guess one.
+- The bound is per sheet, and a workbook holds up to 40 sheets. `readSheets` reads every
+  sheet before `describeWorkbook`'s sheet-count, rows and cells bounds run, and those
+  count over every sheet together. So a per-sheet cap is multiplied by up to 40 sheets:
+  at about 11 MB per million slots, a cap sized only above the largest real sheet can
+  still admit hundreds of MB, against the 512 MB container, and a per-sheet row cap of
+  20 000 admits 40 sheets at 20 000 narrow rows, which the workbook-wide row check then
+  refuses after they are built. The owner choosing the cap needs both numbers: the
+  per-sheet cap, and either the sheet count it is multiplied by or a running total
+  across sheets, kept in `readSheets` and refused when it passes a workbook-wide slot
+  cap. The running total is a second number to choose, and a second `details.bound`
+  question.
+- "Rows times its widest stored column" overstates the cost. A row ends at its own last
+  stored cell (`rowsOf`), so the cost is the sum of each row's width, and the product
+  is that sum only if every row is as wide as the widest. A sheet with one wide row and
+  many narrow ones costs far less than the product, and a cap sized by the product
+  refuses it sooner than its memory justifies. The sum comes out of the same single
+  pass over `!data`, so the owner picks which of the two the cap is written against.
 - The refusal must pass through `describeWorkbook`. Its `readSheets` call sits in a
   `try` that turns any error into `WORKBOOK_NOT_XLSX`, so a `WORKBOOK_TOO_LARGE`
   thrown inside `readSheets` would be reported as the wrong code. The describe
@@ -140,7 +183,7 @@ sheet's cost. The saving from a shared row is unmeasured. Lowering the sheet cou
 is a product limit, so it is the owner's.
 
 **4. Accept the ceiling and document it.** No code change. By extrapolation, 40 far
-sheets reach 1.6 to 2.1 GB and a 20 000-row far-column sheet about 3.4 GB, against a
+sheets reach about 1.9 to 2.1 GB and a 20 000-row far-column sheet about 3.6 GB, against a
 512 MB container (`compose.ledger.prod.yaml`). The process is killed rather than
 refused. Not recommended.
 
@@ -182,7 +225,7 @@ owner answers, and the answer may change it.
 
 ## Log
 
-- 2026-11-01: filed from lg-88's gate (PR #733, PASS, its finding F5 raised as an open
+- 2026-11-01: filed from lg-88's gate (PR #733, PASS, the far cell raised as an open
   decision). The owner chose to file a ticket, over folding it into lg-88 or logging it
   only. Filed on `83eac952`, `origin/main` at filing.
 - 2026-11-01: the builder re-ran the gate's `far-cell.mts` and `far-sheets.mts` on
@@ -206,3 +249,26 @@ owner answers, and the answer may change it.
   before the sheet-count, rows and cells bounds, and its `try` turns any error into
   `WORKBOOK_NOT_XLSX`. That is why Build step 2 and the first option's cost name the
   rethrow.
+- 2026-11-01: gate 1 (FAIL at `c9b1afdd`) round applied by a fixer, no ship authority.
+  - F1 (high): the Reproduction, run as it described, did not give its figures. The
+    fixture was built in the measuring process, which raised the peak before the call
+    (case 1 read +20.7 to +21.2 MB, case 4 at 1 000 rows +31.8 MB). The section now
+    says the fixture is written by one process and read by another, and its table holds
+    gate 1's method-B readings (`measure2.mts`, `run-clean.sh`, `clean.jsonl`), cited as
+    the gate's. The fixer re-ran three cases by that procedure on `c9b1afdd`: case 1
+    +60.6, case 4 at 1 000 rows +182.7, control +4.9 MB. The figures in the earlier Log
+    entries above (+54.3 to +56.2, +35.8, +530.7) are the filer's in-process readings and
+    are superseded by the table.
+  - F2 (med): option 1's costs now say the bound is per sheet, multiplied by up to 40
+    sheets, and name a running total across sheets as the other way to size it.
+  - F3 (low): the two causal claims about the ten-sheet gap are dropped, and the 40-sheet
+    extrapolation is restated from the readings that stand (about 1.9 to 2.1 GB, replacing
+    1.6 to 2.1 GB, still extrapolated). The Log entry above that says the +408 reading was
+    "on the same sha" and the one giving 1.6 GB are superseded the same way. The 20 000-row
+    figure moves from about 3.4 GB to about 3.6 GB on the new case 4 readings.
+  - F4 (low): "its finding F5" corrected in the Why and in the first Log entry. lg-88's
+    gate carried the far cell as a `dropped` bullet and an open decision.
+  - F5 (low): option 1 now states that rows times widest column overstates the cost,
+    which is the sum of each row's width.
+  - F6 (low): left as written, on purpose: `Done when` 2 reads two ways until the answer
+    rewrites it, and the Build already says it may.
