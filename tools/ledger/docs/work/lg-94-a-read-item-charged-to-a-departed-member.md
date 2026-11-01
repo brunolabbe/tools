@@ -45,7 +45,8 @@ to the owner as an open decision; the owner chose on 2026-11-01 to file it here.
 
 lg-90 rewrites the share control, so this ticket is built after lg-90 merges
 (`depends_on: [lg-90]`). Read with `git diff -U0 686b213c bb4968240a0499ba26e14cbeb57be28022d67924`
-(PR #724's landed head), not run. Its hunks change five things:
+(PR #724's landed head), not run. It prints five hunks, which make six changes (the
+third hunk both deletes `NEXT_SHARE` and `nextShare` and adds `MINE`):
 
 - the file's header comment;
 - an import, `sharedAmount`;
@@ -168,10 +169,10 @@ async function readBasketCharged(chargedTo: string | null): Promise<void> {
 }
 
 test.each([
-  ["one+left dana", ["alex"], ["dana"], "dana"],
-  ["two+left dana", ["alex", "sam"], ["dana"], "dana"],
-  ["three+left dana", ["alex", "casey", "sam"], ["dana"], "dana"],
-  ["three, read null", ["alex", "casey", "sam"], [], null],
+  ["C0 one+left dana", ["alex"], ["dana"], "dana"],
+  ["C1 two+left dana", ["alex", "sam"], ["dana"], "dana"],
+  ["C2 three+left dana", ["alex", "casey", "sam"], ["dana"], "dana"],
+  ["C3 three, read null", ["alex", "casey", "sam"], [], null],
 ])("LG94 departed: %s", async (name, members, left, chargedTo) => {
   vi.mocked(fetchHousehold).mockResolvedValue(household(members, left));
   await readBasketCharged(chargedTo);
@@ -201,23 +202,23 @@ Output of the command, at `686b213c`:
  Test Files  1 passed (1)
       Tests  5 passed | 39 skipped (44)
 vitest exit 0
-B one+left dana button="BIERE 6X355, The other's" select=none live="Not shared 0.00 $ · The other's 15.54 $ · Shared 9.22 $" hint=["There is nobody else in the household to charge an item to."] filed=NOT FILED, alert="There is nobody else in the household to charge an item to."
-B two+left dana button="BIERE 6X355, sam's" select=none live="Not shared 0.00 $ · sam's 15.54 $ · Shared 9.22 $" hint=[] filed=[["PAIN","shared",null],["BIERE 6X355","theirs",null],["SAVON","shared",null]]
-B three+left dana button="BIERE 6X355, casey's" select=value="casey" shows="casey" options=["casey","sam"] live="Not shared 0.00 $ · casey's 15.54 $ · Shared 9.22 $" hint=[] filed=[["PAIN","shared",null],["BIERE 6X355","theirs","casey"],["SAVON","shared",null]]
-B three, read null button="BIERE 6X355, casey's" select=value="casey" shows="casey" options=["casey","sam"] live="Not shared 0.00 $ · casey's 15.54 $ · Shared 9.22 $" hint=[] filed=[["PAIN","shared",null],["BIERE 6X355","theirs","casey"],["SAVON","shared",null]]
+B C0 one+left dana button="BIERE 6X355, The other's" select=none live="Not shared 0.00 $ · The other's 15.54 $ · Shared 9.22 $" hint=["There is nobody else in the household to charge an item to."] filed=NOT FILED, alert="There is nobody else in the household to charge an item to."
+B C1 two+left dana button="BIERE 6X355, sam's" select=none live="Not shared 0.00 $ · sam's 15.54 $ · Shared 9.22 $" hint=[] filed=[["PAIN","shared",null],["BIERE 6X355","theirs",null],["SAVON","shared",null]]
+B C2 three+left dana button="BIERE 6X355, casey's" select=value="casey" shows="casey" options=["casey","sam"] live="Not shared 0.00 $ · casey's 15.54 $ · Shared 9.22 $" hint=[] filed=[["PAIN","shared",null],["BIERE 6X355","theirs","casey"],["SAVON","shared",null]]
+B C3 three, read null button="BIERE 6X355, casey's" select=value="casey" shows="casey" options=["casey","sam"] live="Not shared 0.00 $ · casey's 15.54 $ · Shared 9.22 $" hint=[] filed=[["PAIN","shared",null],["BIERE 6X355","theirs","casey"],["SAVON","shared",null]]
 ```
 
 Read against the gate's measurements (lg-90's gate 1, on lg-90's tree):
 
-- **Three current members, charged to dana:** the select shows casey, and the request
+- **C2, three current members, charged to dana:** the select shows casey, and the request
   carries `theirs` with `"casey"`. Reproduced on `main`.
-- **Three members, read item charged to nobody:** it files casey. Reproduced on `main`.
-- **Two current members, charged to dana:** the request carries `theirs` with `null`,
+- **C3, three members, read item charged to nobody:** nobody has departed in it. It files casey. Reproduced on `main`.
+- **C1, two current members, charged to dana:** the request carries `theirs` with `null`,
   which the API reads as sam. Reproduced on `main`. The gate also said "the select
   shows sam", which describes lg-90's tree. On `main` a household of two has no select:
   it renders only with more than one other member (`several && item.share === "theirs"`).
   The item reads `sam's` and nothing shows the choice.
-- **One current member, charged to dana:** the form refuses to file, with
+- **C0, one current member, charged to dana:** the form refuses to file, with
   `NOBODY_ELSE` on screen. That is correct, and it is the one case that is not silent.
 
 ## Build
@@ -271,6 +272,9 @@ because lg-90 is not merged.
    `requireKnownPerson` against `context.people`, which `ruleContext` builds from
    `knownPeople` (`api/src/people.ts`, every row of the books' `people` table, a retired
    person included), and returns it without checking the current members. Read, not run.
+   With one member the filing cannot name it: at lg-90's head `unfileable` (line 667)
+   refuses a `theirs` item whenever the household is `alone`, whatever `chargedTo` is,
+   so C0 stays refused unless option 5 also changes `unfileable`. Read, not run.
 
 Difficulty is rated for the work once answered: the change is contained to `whose`,
 `itemOf`'s caller, `unfileable` and the select in `Receipts.tsx`, but the owner's
@@ -286,18 +290,44 @@ with its cost, or (b) say why it is excluded. Chosen: (a). It is option 5 above.
    with the option chosen and the options it was chosen from, before any source change.
    Status becomes `ready` in that commit. Option 4 closes the ticket on this line alone.
 2. Under the option chosen, its test in `web/test/receipts.test.tsx` asserts, for each
-   departed case C1 to C4 in Reproduction:
+   of the four labelled records in Reproduction (the `test.each` names, and so the
+   printed records, carry the labels): C0 `one+left dana`, C1 `two+left dana`, C2
+   `three+left dana` and C3 `three, read null`. C0 to C2 each have dana departed;
+   nobody has departed in C3. "Fails on `main`" is read off the records printed there.
    - Option 1: the select shows the unpicked state, and `fileReceipt` is not called.
-     Fails on `main` for C1–C4, which file the substitute. C0 (one member) passes on
-     `main`, since its refusal is already there, and the test pins it unchanged.
+     - C1, C2: as stated. Fail on `main`, which file the substitute.
+     - C0: the refusal (`NOBODY_ELSE`, nothing filed) is pinned unchanged. Passes on
+       `main`, since its refusal is already there.
+     - C3: the option as written covers a charge to a departed member, and C3 has none,
+       so C3 pins `main`'s reading (files `theirs` with `casey`) and passes on `main`.
+       Whether option 1 should also refuse a `theirs` item charged to nobody is not
+       stated by the option; if the owner's answer says so, C3 asserts what C1 and C2
+       assert and fails on `main`.
    - Option 2: a hint names the departed member and the current one the charge falls
-     to, and filing is unchanged. Fails on `main`, which shows no hint.
+     to, and filing is unchanged.
+     - C1, C2: as stated (`dana has left`, and `sam` or `casey`). Fail on `main`, which
+       shows no hint.
+     - C0: no current member for the charge to fall to, so the refusal is pinned
+       unchanged. Passes on `main`.
+     - C3: no hint, filing unchanged (`casey`). Passes on `main`.
    - Option 3: the select shows Mine, a hint shows, and the item files `not-shared`
-     with `chargedTo: null`. Fails on `main`.
-   - Option 5: the select keeps the departed name and the filing names it. Fails on `main`.
-     Option 4 has no test. The tests for options 1–3 and 5 can only be run after lg-90
-     merges, against the merged file; the `main` reading in Reproduction is the only
-     reading taken before then.
+     with `chargedTo: null`.
+     - C0, C1, C2: as stated. Fail on `main`; for C0 this replaces the refusal with a
+       filing, which is the option's cost for a household of one.
+     - C3: no hint, files `theirs` with `casey`. Passes on `main`.
+   - Option 5: the select keeps the departed name and the filing names it.
+     - C1, C2: as stated, `chargedTo: "dana"`. Fail on `main`.
+     - C0: the filing cannot name it, because `unfileable` refuses a `theirs` item
+       whenever the household is alone (see option 5's cost). The refusal is pinned
+       unchanged and passes on `main`, unless option 5 also changes `unfileable`.
+     - C3: no extra option, files `theirs` with `casey`. Passes on `main`.
+
+   Option 4 has no test.
+
+   The tests for options 1–3 and 5 can only be run after lg-90 merges, against the
+   merged file; the `main` reading in Reproduction is the only reading taken before
+   then.
+
 3. The fix is built after lg-90 merges, rebased or merged onto lg-90's result, with
    line numbers re-resolved against the merged file. Not applicable to option 4.
 4. `npm run check` and `npm test -- --project ledger` pass. Not applicable to option 4.
@@ -359,3 +389,34 @@ accepted after reading the code, and fixed here).**
   row. `Stage` is not among them.
 - Also: a `## Build` section (absent before), and the empty `## Review` placeholder removed,
   since the format leaves that heading absent until the work is reviewed.
+
+**2026-11-01, landing (gate 2 graded `a20392e7` CONCERNS, no `high`; the fixer applied F2
+and F5 as stated, base `686b213c`, no third gate).**
+
+- 2026-11-01 — Fixed at landing: gate 2, F2 — "label the four records with
+  the labels Done when 2 uses, in the probe's test.each names and so in the printed
+  records". The four records are now C0 `one+left dana`, C1 `two+left dana`, C2
+  `three+left dana` and C3 `three, read null`, in the probe, in the printed output and in
+  the "Read against" bullets. Done when 2 now says per option what each labelled case
+  asserts, including C3 (nobody departed) and C0 under option 5, which `unfileable` keeps
+  refused (read at lg-90's head, not run), now also in option 5's cost line; and "Option 4
+  has no test." is on its own line. One departure from the stated direction: Done when 2
+  used five labels (C0 to C4) for four records, so it now uses C0 to C3, and "C1 to C4"
+  became "C1 to C3". Proof: `git diff a20392e7 HEAD -- tools/ledger/docs/work/lg-94-a-read-item-charged-to-a-departed-member.md | grep -c '^-.*departed case C1 to C4 in Reproduction'`
+  gives `1`. The reproduction command was re-run from the repository root at this tree
+  (`686b213c` plus the ticket, built): `Tests 5 passed | 39 skipped (44)`, `vitest exit 0`,
+  the four `B C0` to `B C3` records now in Reproduction (`diff` against the ticket's
+  `B` lines, silent); the count test alone with no records file, `Error: ENOENT`,
+  `Tests 1 failed | 43 skipped (44)`, exit 1.
+- 2026-11-01 — Fixed at landing: gate 2, F5 — "The Why lists six bullets,
+  because the third hunk is both the NEXT_SHARE/nextShare deletion and the MINE addition".
+  The Why now says "It prints five hunks, which make six changes", and names the third
+  hunk's two. Proof:
+  `git diff a20392e7 HEAD -- tools/ledger/docs/work/lg-94-a-read-item-charged-to-a-departed-member.md | grep -c '^-.*Its hunks change five things'`
+  gives `1`; `git diff -U0 686b213c bb4968240a0499ba26e14cbeb57be28022d67924 -- tools/ledger/web/src/receipts/Receipts.tsx | grep -c '^@@'`
+  gives `5`.
+- Open, for the owner's answer to Question 1: whether option 1 also refuses a `theirs`
+  item charged to nobody (C3). The option as written covers a departed charge only, so
+  Done when 2 has C3 pin `main`'s reading under it.
+- 2026-11-01 — Gate 1's and gate 2's full reports are on the pull request thread, #725;
+  status unchanged (`needs-decision`; Question 1 is open for the owner).
