@@ -68,7 +68,7 @@ The screen maps onto them exactly as the button does today.
    others.
 3. A web test proves each unchecked item shows what it takes off, and the sum
    shown matches the "Not shared" and charge totals for one person's items.
-4. `e2e/layout.spec.ts` covers an unchecked item with its select open at 360 px
+4. `e2e/layout.spec.ts` covers an unchecked item with its select shown at 360 px
    and 1280 px, with no horizontal page scroll.
 5. `npm run check`, `npm test -- --project ledger` and `npm run e2e:ledger` pass.
 
@@ -151,3 +151,7 @@ gate 1. Each answer, with its options and the one chosen:
   not kept as Mine (lg-90)" read `["not-shared", null]` before the fix and
   `["theirs", "mine"]` after; the file is 45 of 45. Six assertions that read
   Mine's value as the word `mine` (one select change, five reads) now read `""`.
+- 2026-11-01 — Fixed at landing by owner choice: gate 1, the second low —
+  "with its select open". Done when 4 now reads "with its select shown", since a
+  native select's list is drawn outside the document and no page measure holds
+  it open. Proof: `git diff a2ab1d56 HEAD -- <ticket> | grep -c "^-.*with its select open"` → `1`.
