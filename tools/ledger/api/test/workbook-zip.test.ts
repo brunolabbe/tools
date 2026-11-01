@@ -151,23 +151,21 @@ describe("the entries' bytes, found through their local headers", () => {
 });
 
 describe("stored entries are counted too", () => {
-  test("forty directory entries over one stored entry, each declaring 0, are stopped at the bound", async () => {
+  test("forty directory entries over one stored entry are stopped at the bound", async () => {
     // Nothing inflates a stored entry, but a reader that follows the directory
     // reads each name's bytes: forty names over one block of 300 000 are 12 MB.
     // Not a divisor of the bound, so a stop on a whole entry would overshoot.
+    // Each declared 0 until lg-87, which refuses a directory size the local
+    // header does not repeat; the count is what this test is about.
     const block = Buffer.alloc(300_000, 0x20);
     const sheets: RawEntry[] = Array.from({ length: 40 }, (_, index) => ({
       name: `xl/worksheets/sheet${String(index + 1)}.xml`,
       data: block,
       method: 0,
-      declaredSize: 0,
       ...(index === 0 ? {} : { sameAs: 2 }),
     }));
     const zip = rawZip(workbook(...sheets));
     const entries = workbookEntries(zip);
-    expect(entries.reduce((sum, entry) => sum + entry.declaredSize, 0)).toBe(
-      TYPES.length + WORKBOOK.length,
-    );
     const bound = 1024 * 1024;
     const counted: number[] = [];
 
@@ -266,5 +264,112 @@ describe("what the walk may read, and when the entries bound is read (lg-66 gate
     const zip = reEnded(rawZip(workbook(SHEET)), { count: MAX_WORKBOOK_ENTRIES - 2 });
     expect(zip.readUInt16LE(zip.length - 22 + 10)).toBe(MAX_WORKBOOK_ENTRIES + 1);
     expect(codeOf(() => workbookEntries(zip))).toBe("WORKBOOK_TOO_LARGE");
+  });
+});
+
+// lg-87: SheetJS takes an entry's method and sizes from its local header or a
+// zip64 record, and finds the end record from four bytes before the file's end.
+// Each disagreement with what this parse counted is refused, one field at a time.
+describe("what SheetJS reads that the directory does not say (lg-87)", () => {
+  const SHEET = "xl/worksheets/sheet1.xml";
+  /** The control's zip, with the sheet stored, and its local header's offset. */
+  function stored(): { zip: Buffer; at: number } {
+    const zip = rawZip(workbook({ name: SHEET, data: Buffer.from("<x/>"), method: 0 }));
+    const at = workbookEntries(zip).find((entry) => entry.name === SHEET)?.localHeaderOffset;
+    if (at === undefined) throw new Error("no sheet in the control");
+    return { zip, at };
+  }
+
+  async function counted(zip: Buffer): Promise<string> {
+    return codeOfAsync(() => countInflated(zip, workbookEntries(zip), BIG));
+  }
+
+  test("the stored control is read", async () => {
+    expect(await counted(stored().zip)).toBe("nothing thrown");
+  });
+
+  test("a local header that says deflated where the directory says stored is refused", async () => {
+    const { zip, at } = stored();
+    zip.writeUInt16LE(8, at + 8);
+    expect(await counted(zip)).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test.each([
+    ["compressed", 18],
+    ["inflated", 22],
+  ])("a local %s size other than the directory's is refused", async (_what, field) => {
+    const { zip, at } = stored();
+    zip.writeUInt32LE(0, at + field);
+    expect(await counted(zip)).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("local sizes of 0 under bit 3, a data descriptor's, are read", async () => {
+    const { zip, at } = stored();
+    zip.writeUInt16LE(8, at + 6);
+    zip.writeUInt32LE(0, at + 18);
+    zip.writeUInt32LE(0, at + 22);
+    expect(await counted(zip)).toBe("nothing thrown");
+  });
+
+  test("a local header that says encrypted is refused", async () => {
+    const { zip, at } = stored();
+    zip.writeUInt16LE(1, at + 6);
+    expect(await counted(zip)).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  /** A zip64 record, header id 1, with a 4-byte body. */
+  const ZIP64 = Buffer.from([1, 0, 4, 0, 0, 0, 0, 0]);
+  const OTHER = Buffer.from([0x55, 0x54, 4, 0, 0, 0, 0, 0]);
+
+  /** The control's zip with `extra` as the last local header's extra field. */
+  function localExtra(extra: Buffer): Buffer {
+    const { zip, at } = stored();
+    const name = zip.readUInt16LE(at + 26);
+    const end = zip.length - 22;
+    const patched = Buffer.concat([
+      zip.subarray(0, at + 30 + name),
+      extra,
+      zip.subarray(at + 30 + name),
+    ]);
+    patched.writeUInt16LE(extra.length, at + 28);
+    patched.writeUInt32LE(zip.readUInt32LE(end + 16) + extra.length, end + extra.length + 16);
+    return patched;
+  }
+
+  /** The control's zip with `extra` as the last central entry's extra field. */
+  function centralExtra(extra: Buffer): Buffer {
+    const { zip } = stored();
+    const end = zip.length - 22;
+    const last = zip.lastIndexOf(Buffer.from(SHEET), end) - 46;
+    const name = zip.readUInt16LE(last + 28);
+    const patched = Buffer.concat([
+      zip.subarray(0, last + 46 + name),
+      extra,
+      zip.subarray(last + 46 + name),
+    ]);
+    patched.writeUInt16LE(extra.length, last + 30);
+    patched.writeUInt32LE(zip.readUInt32LE(end + 12) + extra.length, end + extra.length + 12);
+    return patched;
+  }
+
+  test("another extra field is read, in either header", async () => {
+    expect(await counted(localExtra(OTHER))).toBe("nothing thrown");
+    expect(await counted(centralExtra(OTHER))).toBe("nothing thrown");
+  });
+
+  test("a zip64 record is refused in the local header and in the directory", async () => {
+    expect(await counted(localExtra(ZIP64))).toBe("WORKBOOK_NOT_XLSX");
+    expect(codeOf(() => workbookEntries(centralExtra(ZIP64)))).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("an end-record signature in the last 21 bytes is refused; other trailing bytes are not", () => {
+    const { zip } = stored();
+    const signature = Buffer.from([0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0]);
+    expect(codeOf(() => workbookEntries(Buffer.concat([zip, signature])))).toBe(
+      "WORKBOOK_NOT_XLSX",
+    );
+    expect(codeOf(() => workbookEntries(Buffer.concat([zip, Buffer.alloc(8)])))).toBe(
+      "nothing thrown",
+    );
   });
 });
