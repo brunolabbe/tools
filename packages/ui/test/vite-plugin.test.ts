@@ -91,3 +91,119 @@ test("fails the build when there is no entry to mark, instead of doing nothing",
     /no external module script/u,
   );
 });
+
+// repo-133: the plugin reads the document, not the text. Rows are the ticket's
+// probe (`P8`..`P16`, `D1`, `D2`); each of these fails on the regexp the plugin
+// had before, which read all of them as markup.
+
+const REMOTE = '<script type="module" src="https://cdn.example.test/x.js"></script>';
+const ENTRY = '<script type="module" src="/main.js"></script>';
+
+function page(head: string): string {
+  return `<!doctype html><html><head>${head}</head><body></body></html>`;
+}
+
+/** A real build with a remote origin external, then each script tag as `[src, marked]`. */
+async function builtScripts(html: string): Promise<Array<[string | undefined, boolean]>> {
+  const root = fixture(html);
+  const outDir = path.join(root, "dist");
+  await build({
+    root,
+    configFile: false,
+    logLevel: "silent",
+    plugins: [renderBlockingEntry() as Plugin],
+    build: {
+      outDir,
+      emptyOutDir: true,
+      rollupOptions: { external: [/^https?:/u, /^\/\//u] },
+    },
+  });
+  const built = fs.readFileSync(path.join(outDir, "index.html"), "utf8");
+  return [...built.matchAll(/<script\b[^>]*>/giu)].map((match) => [
+    /\ssrc="([^"]*)"/u.exec(match[0])?.[1],
+    /\sblocking="render"/u.test(match[0]),
+  ]);
+}
+
+test("P8: a remote module script beside the entry stays unmarked; the entry is marked", async () => {
+  const scripts = await builtScripts(page(REMOTE + ENTRY));
+  expect(scripts.map(([src, marked]) => [src?.startsWith("/assets/") ?? false, marked])).toEqual([
+    [false, false],
+    [true, true],
+  ]);
+});
+
+test("P9: a remote module script only: the build passes on Vite's helper, the remote stays unmarked", async () => {
+  const scripts = await builtScripts(page(REMOTE));
+  const remote = scripts.find(([src]) => src?.startsWith("https://"));
+  const helper = scripts.find(([src]) => src?.startsWith("/assets/"));
+  expect(remote?.[1]).toBe(false);
+  expect(helper?.[1]).toBe(true);
+});
+
+test.each([
+  ["P10", "an HTML comment", `<!-- ${ENTRY} -->`],
+  ["P11", "an unterminated comment", `<!-- ${ENTRY}`],
+  ["P12", "<title>", `<title>${ENTRY}</title>`],
+  ["P13", "<textarea>", `<textarea>${ENTRY}</textarea>`],
+  ["P14", "a script's string", `<script>var s = '${ENTRY}';</script>`],
+  [
+    "P16",
+    "a comment, beside a blocking link",
+    `<!-- ${ENTRY} --><link rel="stylesheet" href="/a.css" blocking="render">`,
+  ],
+])("%s: the entry as text in %s fails the guard", (_row, _where, head) => {
+  expect(() => runHook(page(head))).toThrow(/no external module script/u);
+  expect(addRenderBlocking(page(head)).tagged).toBe(0);
+});
+
+test("P15: an entity-encoded remote src is read as the remote it is, and stays unmarked", async () => {
+  const src = "&#47;&#47;cdn.example.test/x.js";
+  const input = page(`<script type="module" src="${src}"></script>`);
+  expect(addRenderBlocking(input)).toEqual({ html: input, tagged: 0 });
+  const scripts = await builtScripts(input);
+  expect(scripts.find(([found]) => found?.startsWith("/assets/"))?.[1]).toBe(true);
+  expect(scripts.find(([found]) => found?.startsWith("&#47;"))?.[1]).toBe(false);
+});
+
+test("D1: a module script with data-src and no src is not an external module script", () => {
+  const input = '<script type="module" data-src="/x.js">inline()</script>';
+  expect(addRenderBlocking(input)).toEqual({ html: input, tagged: 0 });
+});
+
+test("D2: <script-x> is not a script", () => {
+  const input = '<script-x type="module" src="/x.js"></script-x>';
+  expect(addRenderBlocking(input)).toEqual({ html: input, tagged: 0 });
+});
+
+test("a remote origin in any spelling a browser reads as one is left alone", () => {
+  for (const src of [
+    "https://cdn.example.test/x.js",
+    "//cdn.example.test/x.js",
+    "\\\\cdn.example.test/x.js",
+    " \t//cdn.example.test/x.js",
+    "data:text/javascript,1",
+  ]) {
+    const input = `<script type="module" src="${src}"></script>`;
+    expect(addRenderBlocking(input).tagged, src).toBe(0);
+  }
+  for (const src of ["/a.js", "a.js", "./a.js", "../a.js", "/a.js?x=//y"]) {
+    const input = `<script type="module" src="${src}"></script>`;
+    expect(addRenderBlocking(input).tagged, src).toBe(1);
+  }
+});
+
+test("offsets stay right past CRLF, astral characters and an earlier tag", () => {
+  const { html, tagged } = addRenderBlocking(
+    `<!-- \u{1F600}\r\n -->\r\n<script type="module" src="/a.js"></script>\r\n<script type="module" src="/b.js"></script>`,
+  );
+  expect(tagged).toBe(2);
+  expect(html).toBe(
+    `<!-- \u{1F600}\r\n -->\r\n<script blocking="render" type="module" src="/a.js"></script>\r\n<script blocking="render" type="module" src="/b.js"></script>`,
+  );
+});
+
+test("a template's script is inert and is not an entry", () => {
+  const input = `<template>${ENTRY}</template>`;
+  expect(addRenderBlocking(input)).toEqual({ html: input, tagged: 0 });
+});
