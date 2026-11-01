@@ -246,3 +246,108 @@ a field on `main` outside it a Log line and not extra scope; (2) re-enumerate on
 against that list. The owner chose **(1) the Why's 23 fields**, the
 orchestrator's recommendation. Done when 4 is reworded above, the old line left
 beside it and marked superseded.
+
+**2026-11-01 — built (builder).** Branch `repo-130-shared-base-layer`, code at
+`e8410108` on base `84135dbf`. Build 1 to 5 done. Shipped: `packages/ui/src/base.css`
+(exported as `@webtools/ui/base.css`), the font stack in `tokens.css`, the
+planner moved, `packages/ui/test/base.test.ts` (with `test/support/base.ts`),
+`.claude/rules/ui-package.md`. `--font-size-base` stays `1rem`; the planner's
+own `16px` and its `--font-sans` are gone. `h1` is untouched, left for pl-65.
+`tokens.test.ts`'s "no name no tool reads" guard now also reads `base.css` and
+`chrome.css`, because once a rule moves into the base the tools stop reading
+its names themselves and the guard would fail on the next tool's move.
+
+**What the brief had wrong.** The Why says the planner's text fields "have no
+rule" and take the browser's 13.33px. On `84135dbf` they do not: every `<input>`,
+`<textarea>` and `<select>` that is not a checkbox or radio carries `className="field"`,
+and `.field` set `font: inherit`. The planner's layout spec, with the new
+font assertion added and nothing else changed, **passed at the base**
+(`e2e-probe-before`, 5 of 5), so Done when 4 was already true before this
+ticket and is not a red-to-green here. It is now a guard: with `base.css` no
+longer imported, the same spec fails with `textarea 13.3333px monospace`,
+`input:date 13.3333px monospace`, `input:number 13.3333px Arial`,
+`select 13.3333px Arial` (measured, the browser's form font). The counts in the Why
+also do not match the code: 17 inputs (9 text-like, 5 radios, 3 checkboxes), 3 textareas and **4**
+selects, all four with `.field`: `controls.tsx` (currency), `PlanView.tsx`
+(the version picker and the move form's two). 24 fields by that count, not 23;
+the owner's answer scopes the work to the Why's set, and no field outside it
+needed work, so none was left out. A planner field the Why's set misses, named
+as asked: the fourth select, which the set's "3 of the 4" does not say which of
+the four it leaves out.
+
+**Where the build departs from the table, each with its reason.**
+
+- `flex: none` on checkbox and radio. In the planner's `.choice` (a flex row)
+  the 1.25rem box was squeezed beside a long label, and radios in one list came
+  out in two sizes (seen in the first screenshot after the move).
+- `textarea` takes `padding: 0.5rem 0.75rem` and `resize: vertical`. The table's
+  `padding: 0 0.75rem` puts a textarea's text on its border. The ledger's own
+  textarea rule had both.
+- `.button` alone takes `display: inline-flex` and centring. On `button` too, it
+  centred `button.link`'s grid and moved the trip and plan titles to the middle.
+- `:where(.shell)`'s `calc(var(--gap) * 2)` from `48rem` sits in an
+  `@media (min-width: 48rem)` block, since breakpoints are literals.
+
+**The planner's own changes beyond the table.** `.panel` is `.card` (13
+`className` uses across six files; the 11 `section.panel.*` e2e locators and
+the comment in `web/test/stylesheet.test.ts` moved with them), `.panel.warn` is
+`.card.warn`, `.main` and `.aside` are `.stack`, `.muted` left the planner's
+`.help, .hint, .muted` rule, and the trips-and-plans list is wrapped in one
+`.stack` in `App.tsx`: its two cards were siblings under `main.shell` with no
+gap at all, flush on `84135dbf` (lg-70's defect, in the planner too; read off
+the "before" screenshot, `Trips and plans-360`, where "Your trips" and "Plans"
+touch). One local rule, `.card > :is(.crumb, .day, .replan, .version-picker, .actions) { margin: 0 }`,
+and two deleted margin-tops (`.gaps, .unchecked`; `.run .gaps`), because the
+card now spaces its children and those margins added to its gap: the plan's
+first screenshot after the move showed a blank band between the crumb and
+"Day 1".
+
+**Screenshots, screen by screen** (`layout.spec.ts`, 360 and 1280, before at
+`84135dbf` and after at `e8410108`; opened one at a time, long ones in crops;
+the files are in the builder's scratch directory, not in the repository). Each
+difference is a table row unless it says finding.
+
+- Every screen at 360: side padding 20px to 16px and top padding 48px to 16px
+  (page column row); at 1280 the column pads 32px on every side where it was
+  48px top and 20px sides (same row, `calc(var(--gap) * 2)`).
+- Cards: padding 20px to 16px (`var(--gap)`); the title goes from 1.15rem with
+  a tight letter-spacing to 1.125rem without; children are spaced by the card's
+  `0.75rem` gap, not their margins. The Checkpoint's three buttons wrap to two
+  rows at 360 where they fitted in one before, since each is wider (44px tall,
+  `padding: 0 1rem`).
+- Buttons: 40px to 44px (buttons row). Finding: `.pin`, a deliberately small
+  button, is also 44px tall now (about 24px before), and `.item-controls`'
+  Move and Remove stack in the item's narrow column at 360 as they did before.
+  Left as the table has it; it is a design question for the owner, not a defect
+  of the reset, and pl-65 or a later ticket can give `.pin` its own height.
+- Fields (Plan screen, the move form opened, and the re-plan form): 44px
+  tall, `--surface-2` background where `.field` had `--bg`, 16px in the page
+  font. Radios and checkboxes 20px where they were 13px (radio row).
+- Keyboard focus: an accent outline where the planner had the browser's.
+- The trips-and-plans list: a 1rem gap between its two cards where they touched.
+- Checkpoint and Question at 1280: the wizard grid and the aside stack look as
+  before, with the new padding. Run at 360: the same row differences, nothing
+  else. Finding: in a `.choice` the 20px radio sits a few pixels above the
+  label's text, because the row is `align-items: baseline` and the box is taller
+  than the 13px it was; left, a one-line fix for whichever ticket next touches
+  `.choice`.
+- Not opened: the dark theme (no layout spec case), and the 1280 versions of
+  the trips-and-plans, Run and Plan screens (the spec passes at both widths; I
+  did not look at those three images).
+
+**Checks.** `npm run check` exit 0 at `e8410108`. `npx vitest run
+tools/planner/web packages/ui`: 14 files, 198 of 198. `npx vitest run
+packages/core/test/image-closure.test.ts`: 8 of 8 (the three Dockerfiles'
+`COPY packages packages` carries `base.css`; no change needed). Planner e2e,
+whole suite, `E2E_PORT=8317`: 10 of 10. Mutations, each reverted from the
+commit: a planner `button` and `.shell` rule appended fails
+`base.test.ts > a moved tool declares none of the base's selectors` naming
+both; the `base.css` import deleted fails the same file's import test
+(`planner is moved and does not import base.css`) and `layout.spec.ts`'s
+Checkpoint and Plan cases on the 13.33px readings above. The checkpoint case
+reads every field the intake walk meets through a `MutationObserver` (kinds
+seen: textarea, `input:date`, `input:number`), not only the last question's.
+
+**Fold-ins.** None taken beyond the ones above. Left: the downloader and ledger
+still declare their own `--font-sans` and body size, which are lg-73's and
+dl-135's, and each adds itself to `MOVED` in `base.test.ts`.
