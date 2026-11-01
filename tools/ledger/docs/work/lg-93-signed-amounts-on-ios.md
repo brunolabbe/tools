@@ -386,3 +386,8 @@ _Why_.
 - 2026-11-01 — Fixed at landing by owner choice: gate 2, N6 — "_Why_ (ii) concludes "on a current iOS `numeric` is documented as digits only" and the Log says "`numeric`, `tel` and `search` are not candidates" ... Reword the Log to the bullet's wording". The Log now says "No source gives `numeric`, `tel` or `search` a minus key", the bullet's wording. The _Why_ (ii) sentence is not among the lines the gate told me to change. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*are not candidates. Per WebKit'` → `1`.
 - 2026-11-01 — Fixed at landing by owner choice: gate 2, N7 — "Build step 1's new first sentence says "One session prices all four options"". It now reads "One session prices options (a) and (d)", the gate's first direction. `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*One session prices all four options'` → `1`.
 - 2026-11-01 — Fixed at landing by owner choice: gate 2, N8 — "`Done when` 1 does not grade three things Build step 1 asks for: the Rebate field's reading once #717 has merged ..., which delivery was used ..., and each row's confirm-or-refute against the documentation". `Done when` 1 now asks for all three, taken as the gate's first direction ("Add them"). `git diff 961f3d1c HEAD -- <this ticket> | grep -c '^-.*not measured is named as not measured'` → `1`.
+- 2026-11-01: the review record for this filing is PR #718's thread, not a `## Review`
+  section here. Gate 1's full report is at
+  https://github.com/brunolabbe/tools/pull/718#issuecomment-6558993188, and gate 2's at
+  https://github.com/brunolabbe/tools/pull/718#issuecomment-6558993946. The pull request
+  only files this ticket, so it has no `--land`; status stays `needs-decision`.
