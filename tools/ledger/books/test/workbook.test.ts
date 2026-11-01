@@ -959,3 +959,80 @@ describe("a shown name with a control or a zero-width character", () => {
     ]);
   });
 });
+
+// lg-86: a description names one summary column, and a workbook whose older sheets put their
+// totals in another, or below the movements, read them as money with no date.
+describe("a total with no date, wherever it is", () => {
+  const noSummary: Layout = {
+    ...HOUSEHOLD_LAYOUT,
+    account: { ...HOUSEHOLD_LAYOUT.account, summary: null },
+  };
+  const header: Input[] = [null, "Date", "Compte", "Détail", "Personne", "Solde", "Montant"];
+  const movements: Input[][] = [
+    [null, d("2022-03-05"), "Hypothèque", "Versement", "Sam", 800, 300],
+    [null, d("2022-03-01"), "Hypothèque", "Versement", "Alex", 500, 500],
+  ];
+  const total = (formula: string): Input[] => [
+    null,
+    null,
+    null,
+    "Total",
+    null,
+    null,
+    { formula, result: 800 },
+  ];
+
+  test("above the movements, in a column the layout does not name, is named and not read", () => {
+    const rows: Input[][] = [total("SUMIF(C3:C4,Labels!B3,'2022'!G3:G4)"), header, ...movements];
+    const reading = readWorkbook([sheet("2022", rows), ACCUEIL], { people, layout: noSummary });
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.summaries).toEqual([{ sheet: "2022", row: 1 }]);
+    expect(reading.movements.map((movement) => movement.row)).toEqual([4, 3]);
+  });
+
+  test("below the movements, or between them, is named and not read", () => {
+    const rows: Input[][] = [
+      header,
+      movements[0] ?? [],
+      total("SUBTOTAL(9,G2:G4)"),
+      movements[1] ?? [],
+      total("SUM(G2,G4)"),
+    ];
+    const reading = readWorkbook([sheet("2022", rows), ACCUEIL], { people, layout: noSummary });
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.summaries).toEqual([
+      { sheet: "2022", row: 3 },
+      { sheet: "2022", row: 5 },
+    ]);
+  });
+
+  test("an amount typed as arithmetic, or as a figure, is still money with no date", () => {
+    const rows: Input[][] = [
+      total("150*2"),
+      header,
+      ...movements,
+      [null, null, null, "Total", null, null, 800],
+    ];
+    const reading = readWorkbook([sheet("2022", rows), ACCUEIL], { people, layout: noSummary });
+
+    expect(reading.problems).toEqual([
+      "2022!B1: an amount with no date.",
+      "2022!B5: an amount with no date.",
+    ]);
+    expect(reading.summaries).toEqual([]);
+  });
+
+  test("the layout's own summary rows are named too", () => {
+    const rows: Input[][] = [
+      [null, null, "Solde Hypothèque", null, null, null, 800],
+      header,
+      ...movements,
+    ];
+    const reading = readWorkbook([sheet("2022", rows), ACCUEIL], { people });
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.summaries).toEqual([{ sheet: "2022", row: 1 }]);
+  });
+});

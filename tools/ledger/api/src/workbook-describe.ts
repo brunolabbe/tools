@@ -551,9 +551,15 @@ function csvReport(input: {
     "Rows",
     `  movements read  ${String(rows.length)}`,
     `  skipped         ${String(reading.skipped.length)}`,
+    `  summaries       ${String(reading.summaries.length)}`,
   ];
   for (const skip of reading.skipped) {
     out.push(`  skipped: ${skip.sheet} row ${String(skip.row)}, no amount`);
+  }
+  for (const summary of reading.summaries) {
+    out.push(
+      `  summary: ${summary.sheet} row ${String(summary.row)}, a total of the sheet, not read`,
+    );
   }
   for (const late of reading.outOfOrder) {
     out.push(

@@ -159,7 +159,7 @@ describe("scoring a proposed layout", () => {
       (copy) => swapColumns(copy, "person", "detail"),
       "refused",
     ],
-    ["lg37", "no summary rows", (copy) => void (copy.account.summary = null), "refused"],
+    ["lg37", "no summary rows", (copy) => void (copy.account.summary = null), "same-import"],
     [
       "lg37",
       "no carry-overs, no year per sheet",
