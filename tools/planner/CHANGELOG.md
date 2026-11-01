@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/brunolabbe/tools/compare/planner-v0.11.0...planner-v0.11.1) (2026-11-01)
+
+
+### Fixes
+
+* **planner:** an edge 429 reads as a rate limit, not "The API answered 429." (pl-67) ([#738](https://github.com/brunolabbe/tools/issues/738)) ([05a6d45](https://github.com/brunolabbe/tools/commit/05a6d4502231b589843170da1108baf16a51a430))
+
 ## [0.11.0](https://github.com/brunolabbe/tools/compare/planner-v0.10.0...planner-v0.11.0) (2026-11-01)
 
 
