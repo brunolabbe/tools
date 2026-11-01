@@ -3,7 +3,7 @@ id: repo-133
 tool: repo
 title: The render-blocking plugin matches text, not the document
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [repo-131]
 difficulty: standard
@@ -344,6 +344,42 @@ needs the most judgement. Parse5 would be `standard`; accepting R1 would be
    re-run on the real remedy. The real remedies are unmeasured.
 4. The default-setup `CodeQL` check is green on the pull request's head.
 5. `npm run check` passes.
+
+## Review
+
+**Gate: PASS** — 2026-11-01 · `84135dbf..bf83402e` · Opus 5.5, depth full
+
+| Done when                                                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Each row gives its Expected verdict on a tree built with the fix; P9 and P15 as Decision 2 records                                     | **verified** — the gate ran `repo-133-population.mts` on its own tree built at the head: 18 of 18 rows match the Expected column. P8 marks only the entry. P9 and P15 are BUILD-OK, marking only Vite's helper and leaving the remote unmarked. P10–P14 and P16 are BUILD-FAIL (guard). D1 and D2 are `tagged=0`                                                                                                                                                                                                                                                               |
+| 2. One new case each for P8, P9, P10–P16, D1, D2; the four existing cases pass; P1–P7 Expected in the probe; `npm test -- --project core` | **proven** — `packages/ui/test/vite-plugin.test.ts` › "P8: a remote module script beside the entry stays unmarked; the entry is marked", "P9: a remote module script only: …", "%s: the entry as text in %s fails the guard" (P10–P14, P16; asserts both the guard throw and `tagged` 0), "P15: an entity-encoded remote src …", "D1: …", "D2: …" ✓. 18 of 18 pass on the head. With `vite.ts` from the base, 13 fail and 5 pass, and every named row is among the 13. `npm test -- --project core`: 137 of 137 in 14 files. P1–P7 give their Expected in the gate's probe run |
+| 3. R1: 352,000-char median under 1,000,000 µs and under 8× the 88,000-char median                                                         | **verified** — the gate's `repo-133-redos.mts` run, median of five: 1,621.2 / 2,996.7 / 10,850.2 µs. 10,850.2 µs is under the 1,000,000 µs bound, and the ratio is 3.62, under 8                                                                                                                                                                                                                                                                                                                                                                                               |
+| 4. Default-setup `CodeQL` check green on the pull request's head                                                                          | **proven** — `CodeQL` COMPLETED SUCCESS on `bf83402e` (`gh pr view 703`), with "No new alerts in code changed by this pull request" on its details page                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 5. `npm run check` passes                                                                                                                 | **verified** — `npm run check` exits 0 on the gate's tree at `bf83402e`. CI `check` passes on the same sha                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+
+- **low** · `nfr:reliability` · no `Done when` line depends on it. `entries` in `packages/ui/src/vite.ts` calls `stack.push(...node.childNodes)`, which throws `RangeError: Maximum call stack size exceeded` on a document with 300,000 sibling elements. Parse5 alone parses that input in 225 ms. The build fails as a non-guard error, so it fails closed, and no tool's page has this shape. Pushing the children one at a time in a loop was tried: 300,000 siblings took 292 ms, 1,000,000 took 1,184 ms, and the spec passed 18 of 18. The comment about the explicit stack is true for depth, and this is the width case beside it.
+- **low** · `nfr:security` · no `Done when` line depends on it. `sameOrigin` resolves against a fixed `http://webtools.invalid/` and ignores any `<base href>` in the document. Three inputs that a browser on the https deployment reads as another origin are therefore marked and counted by the guard:
+  - `<base href="https://cdn.example.test/">` before `/main.js`;
+  - `src="http:/cdn.example.test/x.js"`;
+  - `src="http:cdn.example.test/x.js"`.
+
+  On an https page the last two are mixed content and are blocked. The `PAGE` comment ("keeps this origin only if a browser would fetch it from the page's own origin") is false for these inputs, and it errs in the direction that marks a remote. The result is a stall in painting, not an exposure. No tool's `index.html` has a `<base>`, and Vite rewrites the entry to `/assets/`.
+
+- **low** · `nfr:performance` · no `Done when` line depends on it. Parse5 is quadratic on nested open elements. Parsing 6,250 / 12,500 / 25,000 nested `<div>` took 260 / 991 / 3,877 ms with parse5 alone, and the plugin adds nothing on top. This is not R1, and Done when 3 is met. The input is the tool's own build output. Recorded only.
+- **low** · open decision · no `Done when` line depends on it. `parse5` is declared under `dependencies`, which makes `parse5` and `entities` production packages. They now survive each Dockerfile's `npm prune --omit=dev` and ship in all three runtime images, where nothing imports them. Their on-disk size is 444K + 488K in the shared `node_modules`; the size inside an image was not measured. Options:
+  - (a) keep `dependencies`, because the package's `src` imports it (recommended);
+  - (b) list it under `devDependencies` and `peerDependencies`, as `vite` is, which keeps `dev: true` and leaves it out of the images but relies on the consumer's hoist.
+- **low** · no `Done when` line depends on it. A tag with `type=" module "` (surrounding whitespace) is not treated as a module script: it is left unmarked, and the guard fails if it is the page's only one. That is the fail-closed direction, and no tool reaches it. Whether a browser strips that whitespace was not verified: the spec fetch was refused.
+- **dropped** · a whitespace-only `src` (`" "`, `"\t\n"`) is marked and counted. It resolves to the page's own URL, which is same-origin, so the result is what Decision 2 literally says. Its recorded cost ("some module script is there") covers it.
+- **dropped** · `src` on the plugin's own `webtools.invalid` origin, including a `blob:` URL there, is read as same-origin. `.invalid` is reserved, so it can never be a page's origin.
+- **dropped** · duplicate `type` (the first one wins), an `<svg>` script left unmarked, and `<noscript>` content read as text. In each case parse5 reads the input as the HTML standard does, so none is a defect.
+- **dropped** · the +1 offset plant is caught only by "offsets stay right past CRLF, astral characters and an earlier tag". The real-build cases use `/\sblocking="render"/`, which accepts `<script  blocking="render"type=…`. One case catches the plant, so this is not a gap in proof.
+- **findings** · the hunt returned 9: 5 carried, 4 dropped.
+- NFR:
+  - security: low, above (remote origins in a `<base>` or `http:` spelling);
+  - performance ✓ (R1 at 10.9 ms; parse5's nesting cost, low, above);
+  - reliability: low, above (wide input);
+  - maintainability ✓ (every row in the brief has a case, and two positive controls go red).
 
 ## Log
 
