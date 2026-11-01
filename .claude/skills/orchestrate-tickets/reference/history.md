@@ -6791,3 +6791,69 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 
 - lg-73's gate 1 replaced reading screenshots by eye with a computed-style diff of every element on all 66 shots, base against head, in both themes, and grouped every change under a repo-130 row. That is how it disproved the Log's account of the hover border.
 - Asking at intake whether a serial follower stacks on the first ticket's landing or waits for its merge kept lg-73 inside the batch.
+
+### Batch 2026-11-01 (tools-9d, lg-95 lg-88 lg-91 lg-94, lg-96 lg-99 lg-100 filed) — base 83eac952
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | af90d047269d77fd7 | seam-mapper, lg-88 lg-91 lg-94 (+ lg-95 in flight) | 1m23s / 1m23s | 0 | $0.2819 |
+| #732 | merged 283e4425 | Sonnet 5.5 / high | afa27505f3b0d8d6c | builder-standard, lg-95, one owner stop (aria-label), one round | 14m27s / 55m44s | 0 | $3.3219 |
+| #732 | as above | Opus 5.5 / high | a9e88bcbcfce01763 | ticket-reviewer-opus, lg-95 gate 1 | 10m13s / 9m33s | 0 | $2.6628 |
+| #732 | as above | Opus 5.5 / high | a8773c171d362b599 | ticket-reviewer-opus, lg-95 gate 2 | 8m32s / 8m23s | 0 | $2.3977 |
+| #732 | as above | Sonnet 5.5 / high | a2accda2fbbb843f5 | fixer, lg-95 owner answer + landing | 2m42s / 2m17s | 0 | $0.3891 |
+| #733 | merged 13a2602b | Sonnet 5.5 / high | adc8e8d91cc06f5db | builder-standard, lg-88 | 6m20s / 6m20s | 0 | $0.8405 |
+| #733 | as above | Opus 5.5 / high | ab78cfd7266324282 | ticket-reviewer-opus, lg-88 gate 1 | 12m36s / 12m35s | 0 | $3.2699 |
+| #733 | as above | Sonnet 5.5 / high | a8fbc8530f996f9c7 | fixer, lg-88 owner answer + four lows at landing + landing | 5m19s / 5m09s | 0 | $0.8368 |
+| #734 | merged a5f4acf2 | Opus 5.5 / high | affbe402472fa7978 | builder-hard, lg-91, one owner stop + round (layout seed) | 36m10s / 42m54s | 0 | $15.0155 |
+| #734 | as above | Sonnet 5.5 / xhigh | a335e2427ad6ea56f | ticket-reviewer-sonnet, lg-91 gate 1 | 10m55s / 10m35s | 0 | $2.6027 |
+| #734 | as above | Sonnet 5.5 / high | a1504fa7a05b07301 | fixer, lg-91 one low at landing + landing, held as draft | 2m56s / 2m40s | 0 | $0.4690 |
+| #734 | as above | Haiku 5.5 / high | a2ede0a4d42fc464e | builder-mechanical, two merges from main (maintenance), stopped with TaskStop | 12m06s / 11m39s | 0 | $0.3787 |
+| #735 | merged 580dabbe | Haiku 5.5 / high | a7bfacea138108b2d | builder-mechanical, lg-96 filing (maintenance) | 9m02s / 9m02s | 0 | $0.3710 |
+| #735 | as above | Sonnet 5.5 / xhigh | ac533288937671985 | ticket-reviewer-sonnet, lg-96 gate 1, narrow (FAIL) | 10m36s / 9m48s | 0 | $1.9330 |
+| #735 | as above | Sonnet 5.5 / high | a0c877d58546f75ba | fixer, lg-96 rounds 1 and 2 + landing (resumed three times) | 10m55s / 35m08s | 0 | $1.9078 |
+| #735 | as above | Sonnet 5.5 / xhigh | a75771047525ef066 | ticket-reviewer-sonnet, lg-96 gate 2, narrow (FAIL) | 12m06s / 11m28s | 0 | $1.9409 |
+| #735 | as above | Sonnet 5.5 / xhigh | a582d6d8e9f7a5a91 | ticket-reviewer-sonnet, lg-96 gate 3, narrow | 10m06s / 9m59s | 0 | $1.5756 |
+| #742 | merged bd95ab0b | Haiku 5.5 / high | aff082bf19a7dd860 | builder-mechanical, lg-99 filing (maintenance), re-id'd from lg-98 | 10m32s / 10m32s | 0 | $0.4631 |
+| #742 | as above | Sonnet 5.5 / xhigh | a68c29aa51056973b | ticket-reviewer-sonnet, lg-99 gate 1, narrow | 7m18s / 7m08s | 0 | $1.3786 |
+| #742 | as above | Sonnet 5.5 / high | ab514c927a4a05ec0 | fixer, lg-99 six findings at landing + thread record | 2m14s / 2m10s | 0 | $0.5321 |
+| #743 | open, ready, 6/7 green at b80e5875 (test matrix skipped, docs-only) | Sonnet 5.5 / high | a414819a50ddf7ca1 | builder-standard, lg-100 filing, reproduced on main | 4m38s / 4m38s | 0 | $1.1729 |
+| #743 | as above | Opus 5.5 / high | a4fb1faf795f88826 | ticket-reviewer-opus, lg-100 gate 1, narrow | 7m56s / 7m56s | 0 | $2.4124 |
+| #743 | as above | Sonnet 5.5 / high | a03b41f89c40ca4d3 | fixer, lg-100 four findings at landing + thread record | 2m43s / 2m42s | 0 | $0.4685 |
+| #744 | open, ready, 10/11 green at 58b703f5 incl. CodeQL; Windows (informational) pending at close | Sonnet 5.5 / high | a7ad9e74d3855cc0c | builder-standard, lg-94, one round (joint round trip) | 12m35s / 54m40s | 0 | $2.1116 |
+| #744 | as above | Opus 5.5 / high | a3b12832703276c42 | ticket-reviewer-opus, lg-94 gate 1 | 9m07s / 8m54s | 0 | $2.7251 |
+| #744 | as above | Opus 5.5 / high | a9217d7acecc22b08 | ticket-reviewer-opus, lg-94 gate 2 | 8m16s / 7m56s | 0 | $2.5253 |
+| #744 | as above | Sonnet 5.5 / high | ac9a341a9f442ba6b | fixer, lg-94 three lows at landing (tests) + landing | 4m51s / 4m50s | 0 | $0.7743 |
+| — | — | Opus 5.5 / high | orchestrator f48a77cc | orchestrator (floor) | 2h34m52s / 4h22m16s | 0 | $15.5818 |
+| | | | | **total** (rates read 2026-10-10) | 6h41m28s | 0 | **$70.3406** |
+
+**Tickets:**
+
+- lg-95 → #732: gate 1 CONCERNS (Opus; med: History offered retired people), gate 2 PASS (Opus); two lows filed as lg-99.
+- lg-88 → #733: gate 1 PASS (Opus); four lows fixed at landing; far-cell defect filed as lg-96.
+- lg-91 → #734: gate 1 PASS (Sonnet); one low reworded at landing, one filed as lg-100; held as draft for merge order, main merged in twice.
+- lg-96 (filing) → #735: gate 1 FAIL (repro steps understated), gate 2 FAIL (sheet multiplier 40, not ~990), gate 3 CONCERNS (multiplier ~20 000 via duplicate `<sheet>` entries, folded in).
+- lg-99 (filing, re-id'd from lg-98) → #742: gate 1 CONCERNS; six findings fixed at landing.
+- lg-100 (filing) → #743: gate 1 CONCERNS; four findings fixed at landing.
+- lg-94 → #744: gate 1 CONCERNS (Opus; med: joint round trip defeats option 1, lg-91's mechanism), gate 2 PASS (Opus); three lows fixed at landing.
+
+**Defects in the skill:**
+
+1. `reference/concurrency.md`, _Ticket ids are an unlocked shared namespace_ — the union rule is checked once, and nothing says to re-run `next-id.mjs` immediately before the push; an id free at the check was taken on `main` by a peer's merge before the push. Reproduction: `git ls-remote --heads origin 'lg-98*'` → empty at the filer's check (580dabbe); then `git ls-tree origin/main tools/ledger/docs/work/ | grep -c lg-98` → `1` at 05a6d450 (peer's lg-98 arrived with b9b1f0bf, #736). The filer stopped unpushed and re-id'd to lg-99.
+2. `SKILL.md`, opening paragraph ("You never edit … any `CLAUDE.md`, and you dispatch no agent to") — names one exception (a `repo-` ticket the owner selects at step 2) and no path for an owner's direct mid-batch instruction to fix a stale `CLAUDE.md` line; the builder refused it as an agent relay, and the orchestrator made the edit itself on a second owner answer. Reproduction: `git diff --stat 1510ecfa f123a755` → `tools/ledger/CLAUDE.md | 2 +-` (orchestrator's commit f123a755 on lg-91-pot-charges, after the builder's refusal in its round-1 report).
+3. `roles/reviewer.md`, _Read the pull request's CI_ — a later head stands for the gated one only if it differs "only by the ticket file"; silent on a non-ticket markdown file beside it. Reproduction: `git diff --stat 1510ecfa f123a755` → `tools/ledger/CLAUDE.md` and the ticket, 2 files; lg-91's gate let it stand and said so. (Relayed from the gate; the diff re-run by the orchestrator.)
+4. `roles/common.md`, opening paragraph — "51 KB against 50 KB" understates the cap: two gates in this batch were cut at 36.8 KB printing two pages. Reproduction (relayed, not re-run): lg-96 gate 1 and gate 2 each reported `Output too large (36.8KB). Full output saved to: …/tool-results/<id>.txt`.
+5. `roles/reviewer.md`, _When you are dispatched as gate 2, or later_, and `gate.md`, _The section_ — no rule for grading a `fixed in part` finding whose remaining clause grades differently from the original; lg-96's gate 2 graded F2's remainder `high` from an original `med` by the table. Reproduction (relayed, not re-run): `grep -n "fixed in part" roles/reviewer.md` → `:230`, `:232`, neither naming a regrade.
+6. `roles/builder.md`, _Set up_ step 2 — the continuation recipe's merge subject reads `… into <branch>`, but on the detached checkout it creates git writes `into HEAD`; and it leaves a same-named local branch at an older sha unmentioned. Reproduction: `git rev-parse --short lg-91-pot-charges` in the shared checkout → `f123a755` while `origin/lg-91-pot-charges` was `a6274cf1` then `d4b5ef33`; the merge commit 34b71a1b's subject ends `into HEAD`.
+7. `roles/builder.md` — the rule that a moved `main` is merged again sits inside the findings round; a maintenance merge dispatch has none, and #734's agent stopped to ask when main moved between its merge and preflight. Reproduction: main 580dabbe → 05a6d450 during the dispatch (`git log 580dabbe..05a6d450 --oneline` → b9b1f0bf, ab464a28, 05a6d450); the owner chose to merge again.
+8. `roles/common.md`, _Preflight runs longer_ — names no foreground wait that works; a lander polled a bare background job several times. Reproduction (relayed, not re-run): `timeout 110 tail --pid=<pid> -f /dev/null` waited in one foreground call and was not refused (lg-91 lander).
+9. `roles/common.md` (no heading covers it) — background `sleep` timers left by a finished agent each resumed it: #734's maintenance agent notified six times after its report, each a paid turn, until `TaskStop`. Reproduction: six task notifications for a2ede0a4d42fc464e after its final report, each "another wait-timer notice … nothing changed". Dispatches that then said "leave no background timers running" got none.
+10. `roles/builder.md` / dispatch shape for a filing — builder.md asks for preflight before the push; a filing dispatch listed none, and the filer ran it anyway and asked which wins. Reproduction (relayed, not re-run): lg-99 filer report, preflight `--only mergeTree,ciCommands,review,title` exit 0, "the two lists disagree".
+11. `roles/common.md` — silent that a PostToolUse hook reformats a written `.md`, so a `Write` then `Edit` can miss its anchor. Reproduction (relayed, not re-run): lg-96 filer report, "a PostToolUse hook … reformat[ted] a written `.md` file … after my `Write`".
+12. `SKILL.md` step 9 / `roles/fixer.md` — no instruction on how long a lander waits on the landing head's checks before reporting; every lander in this batch reported with legs pending, and the orchestrator read them after. Reproduction: `gh pr checks 744` at 58b703f5 → codeql, e2e, docker, both test legs pending at the lander's report.
+
+**Worked, and worth keeping:**
+
+- A narrow third gate scoped to gate 2's `high` (lg-96) found the real multiplier (~20 000 duplicate `<sheet>` entries, +198 MB from a 6 KB file); gates 1 and 2 had each carried a wrong one.
+- Fixed-at-landing for fully stated lows, on owner choice, closed four tickets with no extra gate.
+- Holding #734 as a draft for merge order, then a maintenance merge from main (twice), kept both layout tests and no rebase.
+- `node scripts/next-id.mjs <prefix> --rev origin/main` re-run just before the push caught nothing the second time, but is the check that would have prevented the lg-98 collision.
