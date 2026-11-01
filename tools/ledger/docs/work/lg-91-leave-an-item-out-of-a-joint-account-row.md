@@ -316,3 +316,63 @@ Relayed by the coordinator after the build report.
    - Options: (a) keep 2,000 trials each, as built, measured at 65 ms and 48 ms
      on the build's head; (b) drop to 500 seeds, the existing convention.
    - **Chosen: (a), keep 2,000.** Done when 1 stays as reworded.
+
+### 2026-11-01, round: the e2e case for "Owed to the pot" (answer 2)
+
+**The seed.** `seed` in `e2e/layout.spec.ts` now ends with `fileOnJointRow`.
+It uploads the spec's PNG and files a receipt on the paste's September
+insurance row (−89.99 $):
+
+- "Habitation", 60.00 $, shared;
+- "Automobile", 29.99 $, sam's.
+
+It is filed after the September close. That way the charge is late into the
+open period, and the closed period's recorded settlement (`29.27 $` on Stats)
+does not move. The row stays in the inbox, unfiled, so nothing charts it, and
+the charge charts as a September card line.
+
+**The new case** is
+`Period fits a phone and a desktop with a charge to the pot listed apart`, at
+the end of the file. It checks:
+
+- the "Owed to the pot" list has one item, with the full label and `29.99 $`;
+- at each width, the label, the amount and Remove each lie inside the window,
+  besides `fitsBothWidths`' own measures.
+
+**Other cases whose seeded figures moved: none.** Two figures did move:
+
+- The open period's settlement on the Period screen went from "sam deposits
+  38.57 $ / Or pays alex 22.04 $ directly" to "68.56 $ / 39.18 $". That is
+  22.04 $ plus 0.571429 × 29.99 $, which is 39.18 $.
+- Stats' September spending gained a 29.99 $ uncategorised card line.
+
+No case asserts either figure. The first full run passed every case unchanged.
+
+**Red, on a seed without the receipt.** The filing call was guarded off
+(`if (sam === "")`), and the new case was run alone:
+`E2E_PORT=8118 npm run e2e:ledger -- --grep "charge to the pot listed apart"`.
+It failed, exit 1:
+
+```
+✘ … layout.spec.ts:1294:1 › Period fits a phone and a desktop with a charge to the pot listed apart (16.4s)
+  Error: expect(locator).toHaveCount(expected) failed
+  Expected: 1
+  Received: 0
+  > 1299 |   await expect(owed.getByRole("listitem")).toHaveCount(1);
+```
+
+The file was then restored from `f0b0860d`.
+
+**Green.** `E2E_PORT=8118 npm run e2e:ledger` passed 34 of 34 (43.6 s), exit 0.
+
+**`Period (owed to the pot)-360.png`, opened.**
+
+- The open-period card shows "Paid by alex 119.73 $" with its three lines,
+  then "Paid by sam 0.00 $ / Nothing yet.", then the new block.
+- The block is "Owed to the pot 29.99 $", the hint in muted type, and one line.
+  Its label "2026-09-01 · Assureur Exemple, habitation et automobile, owed to
+  the pot by sam, entered after its period closed" wraps to six lines in the
+  left column, with "29.99 $" and the Remove button on the right.
+- Nothing runs past the card's right edge.
+- The close card reads "sam deposits 68.56 $ into the buffer. / Or pays alex
+  39.18 $ directly."
