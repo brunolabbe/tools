@@ -3,7 +3,7 @@ id: lg-95
 tool: ledger
 title: Re-file a bank row whose person and bucket were already answered
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -105,6 +105,69 @@ Once the decisions are answered:
 - Decision 1's behaviour is tested on a row in a closed period.
 - `layout.spec.ts` covers the open control at 360 px and at desktop width.
 - `npm run check` and `npm test -- --project ledger` pass.
+
+## Review
+
+**Gate: CONCERNS** — 2026-11-01 · `83eac952..cb1b036d` · Opus 5.5, depth standard
+
+| Done when                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A `manual` row is re-filed to another person and bucket from History, driven by a test, and then shows the new answer | `web/test/history.test.tsx` › "a row answered by a person is filed again from the history, the list is read again, and no undo is offered (lg-95)" ✓ — `classifyRow` called once with `{ rowId: 7, personId: "sam", bucket: "mortgage" }`, a second `fetchRows` asked, and the list then reads "sam · Mortgage" and not "alex · Current expenses". Positive control: dropping the `classifyRow` call fails it ("expected to be called 1 times, but got 0 times"), and swapping the re-read for a local patch fails it ("expected [ { offset: +0, limit: 50 } ] to have a length of 2 but got 1") |
+| The earlier record is still stored; the UI sends a new answer and offers no undo                                      | API half: `api/test/classifications.test.ts` › "classifying a row again" › "keeps the earlier classification, with who changed it and when" ✓ (two records, the first untouched). UI half: the same History test ✓ — the `classifyRow` call, then `queryByRole("button", { name: /undo\|revert\|restore/iu })` is null, with the status line asserted beside it so an empty screen fails                                                                                                                                                                                                         |
+| Decision 1's behaviour is tested on a row in a closed period                                                          | `web/test/history.test.tsx` › "a row in a closed period says what the change reaches, and the next close carries it (lg-95)" ✓ — the closed-period paragraph (settlement stays as paid, next close carries it), none on the open-period row, and the after-save notice; `closedPeriodOf` bounds › "closedPeriodOf holds a period's first and last day, and the first period has no start (lg-95)" ✓. Gate probe: 16 dates over two closed periods (first `start: null`, then a chosen first start) agree with books' `periodIndexOf` on every one                                                |
+| `layout.spec.ts` covers the open control at 360 px and desktop                                                        | `e2e/layout.spec.ts` › "History fits a phone and a desktop with a filed row's change open" — `e2e` (ledger workflow) success at `cb1b036d`, and the whole layout spec passed locally on `E2E_PORT=8291`, 31 of 31 ✓                                                                                                                                                                                                                                                                                                                                                                              |
+| `npm run check` and `npm test -- --project ledger` pass                                                               | **verified** — `npm run check` exit 0; ledger project 2140 of 2140, 99 files, exit 0, at `cb1b036d`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+- **med** · no `Done when` line depends on it · **open decision** · History's
+  change control offers every person the books ever held, retired ones
+  included, for every row — an open-period row too. `History` loads
+  `fetchPeople(signal, "everyone")` for its filter and passes the same list to
+  `AnswerControls`; `fetchPeople`'s own header in `web/src/api/rules.ts` says
+  `"in"` is "what a screen offers to pick" and `"everyone"` is for the
+  history's filter and a stored row's owner, and the inbox and Auto-filed both
+  offer `"in"`. The API's `requireKnownPerson` accepts any known person
+  (read, not run). Gate probe: a row dated after the close that retired `pat`
+  is offered `Joint, alex, pat, sam`. A row already answered to `pat` does
+  preselect `pat`, which is right. What filing an open-period row to a retired
+  person does to the next close is unmeasured. Options in the report.
+- **low** · `nfr:reliability` · a save whose `classifyRow` succeeds and whose
+  re-read fails shows the re-read's error with the control still open, enabled
+  and showing the old answer; a second Save sends a second identical answer
+  (probe: 2 `classifyRow` calls). Nothing wrong is stored — the duplicate holds
+  the same answer — but the screen says a saved change failed.
+- **low** · `nfr:reliability` · `fetchPeriods` joins the `Promise.all` that
+  loads people and spending categories, so a failed periods read now also drops
+  the names and category names History shows. Same `read` guard as `GET
+  /api/rows`; needs a transient failure.
+- **low** · a11y · the closed button carries `aria-expanded={false}` but is
+  replaced by the fieldset on open, so nothing ever reports `true`, and focus
+  falls to the body when the button unmounts.
+- **low** · the Log's build entry places the bound in `api/src/periods.ts`
+  (`date >= start`, `date <= end`); the server assigns a dated amount to a
+  period with books' `periodIndexOf` (first period whose end is on or after the
+  date, `-1` before the first's start). The two agree on contiguous periods,
+  which `closePeriod` enforces (`PERIOD_NOT_OPEN`), and the probe measured them
+  equal; false in the safe direction.
+- **dropped** · `web/src/inbox/AnswerControls.tsx` has no test file of its
+  own: every branch is exercised through `inbox.test.tsx`, `app.test.tsx` and
+  `history.test.tsx` (a person and `null` both sent), and a base/head DOM dump
+  of Inbox and Auto-filed is byte-identical.
+- **dropped** · a row dated before a chosen first-period start gets no
+  closed-period wording: the server counts it in no period either (`-1`), so
+  saying nothing is correct.
+- **dropped** · a Save while a Show more request is in flight could append a
+  stale page after the re-read: `refile` does not abort `moreRequest`. Read,
+  not reproduced; needs a click during a pending page. Folded into nothing,
+  recorded here as unmeasured rather than as a finding.
+- **findings** · the hunt returned 8; 5 carried, 3 dropped.
+- NFR: security ✓ (no new route, no logging) · performance ✓ (one extra GET
+  on open; the re-read asks `max(50, shown)` rows) · reliability — above ·
+  maintainability ✓ (one shared control replaces two hand copies). 360 px and
+  desktop read through the layout case.
+- CI at `cb1b036d`: every check success — `check`, `changes`, `test
+  (ubuntu-latest)`, `test (windows-latest, informational)` (CI); `e2e`,
+  `docker` (ledger); `codeql`, `dependency-review` (security); `CodeQL`;
+  `pr-title`.
 
 ## Log
 
