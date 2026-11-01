@@ -3,7 +3,7 @@ id: repo-130
 tool: repo
 title: A shared base layer in `@webtools/ui`, every tool reset onto it, the planner first
 kind: work-package
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -46,7 +46,7 @@ The stack is where the ledger's flush cards came from: a grid gap reaches only
 the grid's own children. One shared stack, with that sentence beside it, is
 where the lesson should live.
 
-## Decision — open
+## Decision — answered 2026-11-01 by the owner
 
 **Question 1 — answered 2026-10-25 by the owner. Share the names, or the look?**
 The look, reset first. Every tool is moved onto one shared base layer in a first
@@ -70,10 +70,15 @@ styles elements, and its plain buttons are already quiet, so its diff is mostly
 deletions. The ledger follows (lg-73), then the downloader (dl-135). The other
 options were the ledger first, or the downloader first.
 
-**Question 5 — open. Are the proposed values below right?** They are proposed in
+**Question 5 — answered 2026-11-01 by the owner. Are the proposed values below right?** They are proposed in
 this ticket so the build starts from settled numbers (the owner's choice over
 having the builder propose them in its pull request). Approve them or amend any
 row on the pull request that files this. The answer moves this ticket to `ready`.
+
+The options were: approve the table as proposed; approve with amendments; not
+now. The owner chose **approve the table as proposed**, which was the
+orchestrator's recommendation. The table under "The proposed baseline" stands as
+written.
 
 ### The proposed baseline
 
@@ -214,3 +219,14 @@ request here touches one tool.
 gone, because the shared header owns the only `h1`. Base selectors are wrapped
 in `:where()`, the stylesheet order names the components layer, and the seams
 are listed above `Done when`.
+
+**2026-11-01 — Question 5 answered; ready.** The owner chose approve the table
+as proposed, the orchestrator's recommendation, from the three options under
+Question 5 (approve as proposed; approve with amendments; not now). Status is
+`ready`; `difficulty` stays `standard`. Questions 1 to 4 were already answered on
+2026-10-25, so this is the only answer the ticket was waiting on.
+
+Fold-in: the 2026-10-25 entry above says lg-70 is "open as pull request #664",
+which is stale. lg-70 merged as `f69e9b2c`. `git log --oneline -1 f69e9b2c`
+prints `f69e9b2c fix(ledger): space Admin's cards and restore the stats gridlines
+(lg-70) (#664)`. The old sentence is left as it was written.
