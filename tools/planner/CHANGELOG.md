@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0](https://github.com/brunolabbe/tools/compare/planner-v0.10.0...planner-v0.11.0) (2026-11-01)
+
+
+### Features
+
+* **planner:** move the planner onto a shared base layer in the UI package (repo-130) ([#705](https://github.com/brunolabbe/tools/issues/705)) ([6f88738](https://github.com/brunolabbe/tools/commit/6f88738609b91af4113928c49c5aeb974d354a27))
+
+
+### Fixes
+
+* **planner:** clear oxlint 1.88's React findings in the plan view (repo-119) ([#655](https://github.com/brunolabbe/tools/issues/655)) ([2cb890f](https://github.com/brunolabbe/tools/commit/2cb890f7e101963384991a769fd6503078c838b1))
+* **planner:** merging compose.planner.yaml points the planner at its grounding services (pl-63) ([#644](https://github.com/brunolabbe/tools/issues/644)) ([ffb5fd5](https://github.com/brunolabbe/tools/commit/ffb5fd59634dd5ae8389951b96cac2b10af2776c))
+
 ## [0.10.0](https://github.com/brunolabbe/tools/compare/planner-v0.9.0...planner-v0.10.0) (2026-10-25)
 
 
