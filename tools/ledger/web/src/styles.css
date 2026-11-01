@@ -38,9 +38,6 @@
   --series-8: #e34948;
   /* No spending category: a neutral, so it recedes behind the ones that mean something. */
   --series-none: #898781;
-
-  /* A phone-first column, narrower than the shared default on purpose. */
-  --page-width: 40rem;
 }
 
 @media (prefers-color-scheme: dark) {
