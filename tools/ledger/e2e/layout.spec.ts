@@ -362,30 +362,33 @@ const TABS: readonly (readonly [tab: string, arrived: readonly RegExp[]])[] = [
 function radiosBesideTheirLabels(count: number, screen: string) {
   return async (page: Page, width: number): Promise<void> => {
     const at = `${screen} at ${String(width)} px`;
-    await expect(page.getByRole("radio"), `${at}: the radios`).toHaveCount(count);
-    const boxes = await page.getByRole("radio").evaluateAll((radios) =>
-      radios.map((radio) => {
-        const own = radio.getBoundingClientRect();
-        const label = radio.closest("label");
-        const text = [...(label?.childNodes ?? [])].find(
-          (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "",
-        );
-        const range = document.createRange();
-        if (text !== undefined) range.selectNodeContents(text);
-        const first = range.getClientRects()[0];
-        const row = label?.getBoundingClientRect();
-        return {
-          width: own.width,
-          height: own.height,
-          right: own.right,
-          bottom: own.bottom,
-          textLeft: first?.left ?? null,
-          textTop: first?.top ?? null,
-          rowTop: row?.top ?? null,
-          rowBottom: row?.bottom ?? null,
-        };
-      }),
-    );
+    await expect(page.getByRole("main").getByRole("radio"), `${at}: the radios`).toHaveCount(count);
+    const boxes = await page
+      .getByRole("main")
+      .getByRole("radio")
+      .evaluateAll((radios) =>
+        radios.map((radio) => {
+          const own = radio.getBoundingClientRect();
+          const label = radio.closest("label");
+          const text = [...(label?.childNodes ?? [])].find(
+            (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "",
+          );
+          const range = document.createRange();
+          if (text !== undefined) range.selectNodeContents(text);
+          const first = range.getClientRects()[0];
+          const row = label?.getBoundingClientRect();
+          return {
+            width: own.width,
+            height: own.height,
+            right: own.right,
+            bottom: own.bottom,
+            textLeft: first?.left ?? null,
+            textTop: first?.top ?? null,
+            rowTop: row?.top ?? null,
+            rowBottom: row?.bottom ?? null,
+          };
+        }),
+      );
     boxes.forEach((box, index) => {
       const one = `${at}: radio ${String(index + 1)}`;
       expect
@@ -1003,4 +1006,90 @@ test("Admin fits a phone and a desktop with an email marked never signed in, bes
   await expect(admit.getByText("Never signed in")).toHaveCount(2);
   await expect(page.getByText("Never signed in")).toHaveCount(4);
   await fitsBothWidths(page, testInfo, "Admin (never signed in)");
+});
+
+/**
+ * lg-72: the shared header on each of its three screens, and the terms page.
+ *
+ * The header is `@webtools/ui`'s and is drawn once per screen the shell gives
+ * it: the household's own, the page for an address in no household, and the
+ * admin's alone. The seed's alex is a member and an admin both, so the last two
+ * are reached by refusing `/api/me` as the API does for them (`App.tsx`), and,
+ * for the second, refusing the admin list as well.
+ *
+ * Each theme segment is a tap target of at least 44 px both ways, the floor
+ * repo-130 sets for every button and field, and the switch sits on the name's
+ * line rather than wrapping under it, which at 360 px is the case that fails.
+ */
+async function headerFits(page: Page, width: number): Promise<void> {
+  const at = `${String(width)} px`;
+  const header = page.getByRole("banner");
+  const segments = header.locator(".theme-toggle label");
+  await expect(segments, `the theme segments at ${at}`).toHaveCount(3);
+  for (const segment of await segments.all()) {
+    const box = await segment.boundingBox();
+    expect(box?.height ?? 0, `a theme segment's height at ${at}`).toBeGreaterThanOrEqual(44);
+    expect(box?.width ?? 0, `a theme segment's width at ${at}`).toBeGreaterThanOrEqual(44);
+  }
+
+  const name = await header.getByRole("heading", { level: 1 }).boundingBox();
+  const toggle = await header.getByRole("group", { name: "Colour theme" }).boundingBox();
+  expect(name).not.toBeNull();
+  expect(toggle).not.toBeNull();
+  // On one line: the name's vertical middle falls inside the switch's height.
+  const middle = (name?.y ?? 0) + (name?.height ?? 0) / 2;
+  expect(middle, `the name's line at ${at}`).toBeGreaterThanOrEqual(toggle?.y ?? Infinity);
+  expect(middle, `the name's line at ${at}`).toBeLessThanOrEqual(
+    (toggle?.y ?? 0) + (toggle?.height ?? 0),
+  );
+}
+
+const REFUSED = {
+  status: 403,
+  json: {
+    error: { code: "FORBIDDEN", message: "This address is in no household.", retryable: false },
+  },
+};
+
+test("the household's header fits a phone and a desktop", async ({ page }, testInfo) => {
+  await openTab(page, "Home");
+  await expect(page.getByRole("banner")).toContainText("The household\u2019s shared account.");
+
+  await fitsBothWidths(page, testInfo, "Header (household)", (_page, width) =>
+    headerFits(page, width),
+  );
+});
+
+test("the header fits a phone and a desktop for an address in no household", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/api/me", (route) => route.fulfill(REFUSED));
+  await page.route("**/api/admin/households", (route) => route.fulfill(REFUSED));
+  await open(page);
+  await expect(page.getByRole("heading", { name: "No household" })).toBeVisible();
+  await expect(page.getByRole("banner")).toContainText("The household\u2019s shared account.");
+
+  await fitsBothWidths(page, testInfo, "Header (no household)", (_page, width) =>
+    headerFits(page, width),
+  );
+});
+
+test("the header fits a phone and a desktop on the admin's own screen", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/api/me", (route) => route.fulfill(REFUSED));
+  await open(page);
+  await expect(page.getByRole("heading", { name: "Households" })).toBeVisible();
+  await expect(page.getByRole("banner")).toContainText("Admin");
+  await expect(page.getByRole("navigation", { name: "Screens" })).toHaveCount(0);
+
+  await fitsBothWidths(page, testInfo, "Header (admin)", (_page, width) => headerFits(page, width));
+});
+
+test("the terms page fits a phone and a desktop", async ({ page }, testInfo) => {
+  await page.goto("/terms.html");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to the ledger" })).toBeVisible();
+
+  await fitsBothWidths(page, testInfo, "Terms");
 });

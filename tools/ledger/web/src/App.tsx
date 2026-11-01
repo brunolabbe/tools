@@ -28,13 +28,14 @@
 
 import { useEffect, useState } from "react";
 import { AppError } from "@ledger/contract";
-import type { HealthResponse, MeResponse } from "@ledger/contract";
+import type { MeResponse } from "@ledger/contract";
+import { AppFooter, AppHeader, TOOL_VERSION } from "@webtools/ui";
 import { Admin } from "./admin/Admin.tsx";
-import { fetchHealth } from "./api/health.ts";
 import { fetchAdminHouseholds } from "./api/households.ts";
 import { fetchInbox } from "./api/inbox.ts";
 import { fetchMe } from "./api/me.ts";
 import { fetchPeopleNames } from "./api/people.ts";
+import { Glyph } from "./Glyph.tsx";
 import { History } from "./history/History.tsx";
 import { Home } from "./home/Home.tsx";
 import { Household } from "./household/Household.tsx";
@@ -66,6 +67,9 @@ type Tab =
   | "import"
   | "household"
   | "admin";
+
+/** What the ledger is, said under its name on every screen but the admin's. */
+const HOUSEHOLD_TAGLINE = "The household\u2019s shared account.";
 
 export function App(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("home");
@@ -127,14 +131,11 @@ export function App(): React.ReactElement {
   if (adminOnly) {
     return (
       <div className="shell">
-        <header>
-          <h1>Ledger</h1>
-          <p className="muted">Admin</p>
-        </header>
+        <AppHeader name="Ledger" tagline="Admin" glyph={<Glyph />} />
         <main>
           <Admin />
         </main>
-        <Health />
+        <AppFooter tool="ledger" version={TOOL_VERSION} termsHref="/terms.html" />
       </div>
     );
   }
@@ -142,23 +143,18 @@ export function App(): React.ReactElement {
   if (inNoHousehold) {
     return (
       <div className="shell">
-        <header>
-          <h1>Ledger</h1>
-        </header>
+        <AppHeader name="Ledger" tagline={HOUSEHOLD_TAGLINE} glyph={<Glyph />} />
         <main>
           <NoHousehold />
         </main>
-        <Health />
+        <AppFooter tool="ledger" version={TOOL_VERSION} termsHref="/terms.html" />
       </div>
     );
   }
 
   return (
     <div className="shell">
-      <header>
-        <h1>Ledger</h1>
-        <p className="muted">The household&rsquo;s shared account.</p>
-      </header>
+      <AppHeader name="Ledger" tagline={HOUSEHOLD_TAGLINE} glyph={<Glyph />} />
       <nav className="tabs" aria-label="Screens">
         <button type="button" aria-pressed={tab === "home"} onClick={() => setTab("home")}>
           Home
@@ -235,37 +231,7 @@ export function App(): React.ReactElement {
           {tab === "admin" && me?.admin === true && <Admin />}
         </PeopleNamesProvider>
       </main>
-      <Health />
+      <AppFooter tool="ledger" version={TOOL_VERSION} termsHref="/terms.html" />
     </div>
-  );
-}
-
-type Status =
-  | { state: "loading" }
-  | { state: "ready"; health: HealthResponse }
-  | { state: "failed"; message: string };
-
-function Health(): React.ReactElement {
-  const [status, setStatus] = useState<Status>({ state: "loading" });
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchHealth(controller.signal)
-      .then((health) => setStatus({ state: "ready", health }))
-      .catch((error: unknown) => {
-        // A cancelled request is the effect being cleaned up, not a failure to
-        // report — under StrictMode it happens on every mount in development.
-        if (controller.signal.aborted) return;
-        setStatus({ state: "failed", message: AppError.from(error).message });
-      });
-    return () => controller.abort();
-  }, []);
-
-  return (
-    <footer className="health muted" aria-live="polite">
-      {status.state === "loading" && <p>Checking the server…</p>}
-      {status.state === "failed" && <p className="bad">{status.message}</p>}
-      {status.state === "ready" && <p>Server v{status.health.version}</p>}
-    </footer>
   );
 }
