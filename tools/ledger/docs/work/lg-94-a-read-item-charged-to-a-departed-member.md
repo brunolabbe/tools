@@ -456,7 +456,8 @@ recorded in the first commit, which also set `status: ready`.
   (`readBasketWithTheirs`, a `theirs` item with no name, two members) files it and still does.
   A charge naming someone who is not a current member is unpicked at any size above one other
   (C1). Refusing the null case in a household of two as well is a one-token change
-  (`several` in `unpicked`); it is open to the owner.
+  (`several` in `unpicked`). Answered by the owner on 2026-11-01, see the round 1 entry
+  below: keep filing it to the one other member.
 - **Done when 2, per case.** Test: `web/test/receipts.test.tsx`, `a read item charged to someone
   who has left, or to nobody, files nothing until a current member is picked` (`test.each` of
   C1 to C3), `with nobody else, a read charge to someone who has left is refused as before
@@ -489,3 +490,26 @@ recorded in the first commit, which also set `status: ready`.
   `NOBODY_ELSE` and lg-91's `NOBODY_CHOSEN` already behave; the test notes it. Not folded in:
   it touches lg-91's and the lg-39 refusals too, and has no reproduction filed.
 - **Fold-ins: none.** Nothing other than the stale alert was in reach.
+
+**2026-11-01, round 1 (gate 1, ticket-reviewer-opus, graded `b09aadd2` CONCERNS; the owner's
+three answers, relayed by the coordinator).**
+
+- **Answer A, the build's open decision: a `theirs` item with no name in a household of
+  two.** Options: keep filing it to the one other member (recommended), or refuse it too
+  (`several` dropped from `unpicked`, and the lg-39 test rewritten). Chosen: **keep filing
+  it.** The sentence in the build entry that left it open is replaced above.
+- **Answer B, gate 1's medium: the joint round trip.** A read `theirs` item charged to nobody
+  (C3) or to the payer is filed `not-shared` after "Paid with the joint card?" then "Paid with
+  my own card" with no pick, because `payMyself` (lg-91) turns every `theirs` item charged to
+  `null` or the payer into Mine, which defeats option 1's rule that the item cannot read as
+  Mine. Options: (a) fix it in lg-94 (the gate's direction, recommended); (b) file it as a
+  ticket; (c) accept it as the person's choice. Chosen: **(a).** Built below.
+- **Answer C, gate 1's lows.** Options: fix the second (the refusal text) and record the first
+  and third (recommended); that, and also file the stale alert; record all three. Chosen: **fix
+  the second, record the first and third.**
+  - Low 2, fixed below: `UNPICKED_CHARGE` said "charged to someone who has left, or to
+    nobody", false for a read naming the payer or a name the books never held.
+  - **Recorded, not fixed:** the stale alert after a refused tap (the build entry's "Stale
+    alert, not fixed"; unchanged, and shared with `NOBODY_ELSE` and `NOBODY_CHOSEN`), and the
+    household-of-two live line (it reads `Whose not chosen yet` with one candidate). Gate 1's
+    section holds their text.
