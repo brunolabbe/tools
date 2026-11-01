@@ -119,8 +119,8 @@ the reading that proves the bug" no longer holds.
   `a merge past the last stored row holds its places to its own end` became `... does
   not extend the sheet (lg-88)`; the 150 000-row test expects one row of one
   cell; a new `a merge of A1:XFD1000 holds no places, whatever its area (lg-88)`
-  at the end of the file. Against the base's `xlsx.ts` the first three fail
-  (`Tests 3 failed | 16 passed (19)`); against the fix `npx vitest run
+  at the end of the file. Against the base's `xlsx.ts` the first three, and the
+  new `A1:XFD1000` test, fail (`Tests 4 failed | 16 passed (20)`); against the fix `npx vitest run
   tools/ledger/api/test/xlsx.test.ts` is 20 of 20, and `npm test -- --project
   ledger` is 2136 of 2136 in 99 files. No reader needed the places: nothing in
   `books` or `layout-view.ts` failed.
@@ -172,3 +172,6 @@ the reading that proves the bug" no longer holds.
   `## Measurement` above, which says the owner superseded the expectation.
 - 2026-11-01: Fixed at landing by owner choice: gate 1, the third low — "the owner's second answer on the measurement is not on the ticket". The answer is under `## Measurement`, and the entry above dates it. `git diff 1dc17728 HEAD -- tools/ledger/docs/work/lg-88-a-merged-range-costs-memory-by-its-area.md | grep -v 'Fixed at landing' | grep -c "^+.*builder[']s recommendation"` → `1`.
 - 2026-11-01: gate 1's open decision, answered by the owner: a stored cell far from the origin (`A1048576`) costs about +50 MB per sheet in `readSheets` (49.3 MB at the base, 51.8 MB at the head), and this branch does not introduce it. The owner chose to file it as a separate ticket; it is not fixed here, and its filing is dispatched apart from this landing.
+- 2026-11-01: Fixed at landing by owner choice: gate 1, the first low — "the doc comment on `rowsOf` in `api/src/xlsx.ts` says a merged range's other parts are not cells and are given no place". The comment now says the parts that store nothing are given no place, and that a value stored inside a merge is read as an ordinary cell. `git diff 1dc17728 HEAD -- tools/ledger/api/src/xlsx.ts | grep -c '^-.* A merged range.s other parts are not cells'` → `1`.
+- 2026-11-01: Fixed at landing by owner choice: gate 1, the second low — "no test pins that decided behaviour, a value stored inside a merge being read". `api/test/xlsx.test.ts` › "a value stored inside a merge is read as an ordinary cell (lg-88)", appended at the end: B2 and B3 stored, B2:B4 merged, both read. Against a `rowsOf` that drops values stored inside a merge (a scratch copy of the head's `xlsx.ts` that nulls any place inside a merge but its first) `npx vitest run tools/ledger/api/test/xlsx.test.ts` is `Tests 1 failed | 20 passed (21)`, that test alone; against the head's `xlsx.ts` it is 21 of 21. Against the base's `xlsx.ts` it is `Tests 5 failed | 16 passed (21)`: the four of gate 1's fourth low, and this test, because the base's `covered` places overwrote a stored `B3` (`expected undefined to deeply equal { kind: 'text', text: 'Dépôt' }`).
+- 2026-11-01: Fixed at landing by owner choice: gate 1, the fourth low — "the Log reports the red run as `Tests 3 failed | 16 passed (19)`. That spec had 19 tests". The builder's Log entry now reads `Tests 4 failed | 16 passed (20)`, with the new `A1:XFD1000` test named among the four, as the gate measured at the gated head. `git diff 1dc17728 HEAD -- tools/ledger/docs/work/lg-88-a-merged-range-costs-memory-by-its-area.md | grep -c '^-.*Tests 3 failed'` → `1`.

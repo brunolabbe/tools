@@ -100,9 +100,11 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
 /**
  * One sheet's rows, each a row of cells with gaps kept as `null`.
  *
- * A merged range's other parts are not cells and are given no place: a reader
+ * A merged range's other parts that store nothing are given no place: a reader
  * indexes a row as `rows[r]?.[c] ?? null`, so an absent place reads as the `null`
- * a gap does. Giving each its own `null`, as `exceljs` did, cost memory in
+ * a gap does. A value stored inside a merge (LibreOffice's "keep the contents of
+ * the hidden cells" writes one) is read as an ordinary cell. Giving each part its
+ * own `null`, as `exceljs` did, cost memory in
  * proportion to the merge's area (+76 MB at A1:XFD100, +227 MB at A1:XFD400)
  * past every size bound, a 2.5 KB file (lg-88).
  */

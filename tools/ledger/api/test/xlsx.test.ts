@@ -314,4 +314,19 @@ describe("a merged range costs no memory of its own (lg-88)", () => {
     // measurement is in lg-88's Log, since a test of memory measures the machine.
     expect(sheet?.rows.flat()).toHaveLength(1);
   });
+
+  test("a value stored inside a merge is read as an ordinary cell (lg-88)", async () => {
+    // LibreOffice's "keep the contents of the hidden cells" writes one; the
+    // brief's decision was to read it, not to drop it.
+    const data = file((sheet) => {
+      sheet.set("B2", "Alex");
+      sheet.set("B3", "Dépôt");
+      sheet.merge("B2:B4");
+    });
+
+    const [sheet] = await readSheets(data);
+
+    expect(sheet?.rows[1]?.[1]?.value).toEqual({ kind: "text", text: "Alex" });
+    expect(sheet?.rows[2]?.[1]?.value).toEqual({ kind: "text", text: "Dépôt" });
+  });
 });
