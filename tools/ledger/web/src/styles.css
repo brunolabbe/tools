@@ -843,9 +843,9 @@ svg.chart .selected-band {
   border-bottom: 1px solid var(--border);
 }
 
-/* lg-10: a receipt's items, one per block on a phone, each tapped through
-   shared, not shared and the other's. What is not shared is muted and what is
-   the other's is marked, so the state reads without the button's word. */
+/* lg-10: a receipt's items, one per block on a phone, each with a Shared box and,
+   once unchecked, a select of whose it is (lg-90). What is not shared is muted and
+   what is the other's is marked, so the state reads without the select's word. */
 .items {
   margin: 0;
   min-width: 0;
@@ -883,6 +883,14 @@ svg.chart .selected-band {
    basis above it showed 8 to 13 characters of "Organic rolled oats, …". */
 .items .item > input:first-child {
   flex-basis: 100%;
+}
+
+.items .item .takes-off {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
 .items .item.not-shared > input {
