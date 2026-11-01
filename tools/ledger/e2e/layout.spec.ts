@@ -279,7 +279,46 @@ async function seed(
     chargedTo: null,
   });
 
+  // lg-91: a receipt on a joint-account row with one item sam's alone, so the
+  // Period screen lists a charge to the pot. The row is September's, filed after
+  // the close, so the charge is late into the open period and the closed
+  // period's recorded figures do not move. Nothing charts the row, which stays
+  // in the inbox; the charge charts as a card line in September.
+  await fileOnJointRow(api, sam);
+
   await api.dispose();
+}
+
+/** The house insurance row of the paste, with sam's car on its receipt (lg-91). */
+async function fileOnJointRow(api: APIRequestContext, sam: string): Promise<void> {
+  const found = (await (await api.get("/api/rows?q=Assurance")).json()) as {
+    rows: { id: number; amountCents: number }[];
+  };
+  const [row] = found.rows;
+  if (row === undefined) throw new Error("the insurance row is not in the books");
+  const uploaded = await api.post("/api/receipts", {
+    data: PHOTO,
+    headers: { "content-type": "image/png" },
+  });
+  expect(uploaded.ok(), `upload: ${await uploaded.text()}`).toBe(true);
+  const { id } = (await uploaded.json()) as { id: number };
+  const item = { taxable: false, deposit: null, discount: null, spendingCategoryId: null };
+  await post(api, `/api/receipts/${String(id)}/file`, {
+    part: 1,
+    proposal: {
+      merchant: "Assureur Exemple, habitation et automobile",
+      date: "2026-09-01",
+      subtotal: 8_999,
+      gst: 0,
+      qst: 0,
+      total: 8_999,
+      items: [
+        { ...item, text: "Habitation", price: 6_000, share: "shared", chargedTo: null },
+        { ...item, text: "Automobile", price: 2_999, share: "theirs", chargedTo: sam },
+      ],
+    },
+    destination: { to: "row", rowId: row.id },
+  });
 }
 
 test.beforeAll(async ({ playwright }) => {
@@ -1243,5 +1282,45 @@ test.describe("on a desktop", () => {
     await openTab(page, "Receipt");
     await expect(page.getByTitle("Choose photos of receipts")).toBeVisible();
     await expect(page.getByTitle("Take a photo of a receipt")).toBeHidden();
+  });
+});
+
+/**
+ * lg-91: a charge to the pot is listed apart from what each person paid, under
+ * "Owed to the pot". The seed files one from a receipt on September's insurance
+ * row after the close, so its line carries the longest label the screen makes:
+ * its note, whose it is, and that it was entered after its period closed.
+ */
+test("Period fits a phone and a desktop with a charge to the pot listed apart", async ({
+  page,
+}, testInfo) => {
+  await openTab(page, "Period");
+  const owed = page.getByRole("list", { name: "Owed to the pot" });
+  await expect(owed.getByRole("listitem")).toHaveCount(1);
+  await expect(owed).toContainText(
+    "2026-09-01 · Assureur Exemple, habitation et automobile, owed to the pot by sam, entered after its period closed",
+  );
+  await expect(owed).toContainText("29.99 $");
+  await fitsBothWidths(page, testInfo, "Period (owed to the pot)", async (_page, width) => {
+    const at = `Period (owed to the pot) at ${String(width)} px`;
+    // The line's label, its amount and its Remove button, each inside the window.
+    const parts = [
+      owed.getByText(/owed to the pot by sam/u),
+      owed.getByText("29.99 $"),
+      owed.getByRole("button", { name: /^Remove /u }),
+    ];
+    for (const part of parts) {
+      await expect(part, `${at}: one part of the line`).toHaveCount(1);
+      const edge = await part.evaluate((element) => {
+        const { left, right } = element.getBoundingClientRect();
+        return { left, right, inner: window.innerWidth };
+      });
+      expect
+        .soft(edge.left, `${at}: a part starts at ${String(edge.left)}`)
+        .toBeGreaterThanOrEqual(0);
+      expect
+        .soft(edge.right, `${at}: a part ends at ${String(edge.right)} in ${String(edge.inner)}`)
+        .toBeLessThanOrEqual(edge.inner);
+    }
   });
 });
