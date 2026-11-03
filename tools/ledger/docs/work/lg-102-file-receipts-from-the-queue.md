@@ -82,7 +82,10 @@ shape is a stop and a question.
 
 4. **What batch filing refuses.** A row is not filed, and says why on the row,
    when the screen would refuse it opened: items that do not add up, a missing
-   date or amount charged, or an item charge with nobody chosen. The other
+   date or amount charged, an item charge with nobody chosen, or Taxable marks
+   that do not give the printed taxes where they move money (an item left out,
+   or a joint-account row's items in several categories: `TAXABLE_MATTERS`,
+   from PR #748). The other
    rows still file. Filing goes one receipt at a time, and each row shows
    filed or its error as it comes back. No progress is faked.
 5. **The receipt view** (`web/src/receipts/Receipts.tsx`) becomes the place to
@@ -115,7 +118,8 @@ receipts are refused.
    tapping **File selected** sends three filings with those destinations, one
    at a time, and marks each row filed.
 3. A web test proves that a row whose items do not add up is not filed and says
-   why, while the other selected rows file.
+   why, while the other selected rows file; another proves the same of a row
+   whose Taxable marks are held (Build 4).
 4. A web test proves Joint card attaches on exactly one match and leaves the row
    unfiled with "Open it to choose the row" on two.
 5. A web test proves an edit made in the receipt view is still there after
@@ -133,3 +137,7 @@ Filed from the owner's report on the receipt screen, with lg-101. Keeping edits
 for the visit was going to be a third ticket. It is folded in here, because
 filing from the list is what needs the edits kept, and it has nothing left to
 decide on its own.
+
+- 2026-11-03 — Build 4 and Done when 3 now name the Taxable hold that PR #748
+  added to the receipt screen after this ticket was filed. Its gate found a batch
+  built from the brief as written would file what the opened form refuses.
