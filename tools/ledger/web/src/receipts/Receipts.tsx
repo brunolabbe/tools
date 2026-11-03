@@ -11,8 +11,11 @@
  *
  * **Nothing is filed until the person taps a filing button**, and what is filed
  * is the form as they left it. The arithmetic check runs on the form as it is
- * edited (`checkReceipt`), and flags; it never corrects, and blocks only items
- * that do not make the total (lg-10), which the API refuses too.
+ * edited (`checkReceipt`), and flags; it never corrects. It blocks items that
+ * do not make the total (lg-10), which the API refuses too, and Taxable marks
+ * that do not give the printed taxes when they move money: an item left out, or
+ * items in more than one category (`TAXABLE_MATTERS`). That one the API does not
+ * refuse, since it files the form as the person left it.
  *
  * **The items** (lg-10, lg-90): each item has a Shared box, checked until it is
  * left out; unchecked, a select says whose it is, Mine (not shared) first and
@@ -93,7 +96,11 @@ interface ItemDraft {
   price: string;
   taxable: boolean;
   deposit: string;
-  /** The rebates folded into it (lg-89), negative on a purchase; blank for none. */
+  /**
+   * The rebates folded into it (lg-89), as a magnitude: a phone's decimal keypad
+   * has no minus sign, so it is typed positive and takes the price's opposite
+   * sign in `itemOf`. Blank for none.
+   */
   discount: string;
   spendingCategoryId: number | null;
   share: ItemShare;
@@ -122,6 +129,15 @@ interface Draft {
 
 /** The form's fields that are a line of text. */
 type TextField = Exclude<keyof Draft, "items">;
+
+/**
+ * The Taxable marks refused only where they move money: an item left out takes
+ * off its price and the taxes on it if it is marked taxable, and a row's
+ * categories are given the same figures (`splitByCategory`). On a receipt that
+ * is all shared and all in one category, a wrong mark changes nothing filed.
+ */
+const TAXABLE_MATTERS =
+  "The items marked taxable do not give the taxes printed, and they set what an item left out or each category comes to. Check which items are taxable to file.";
 
 const NOBODY_ELSE = "There is nobody else in the household to charge an item to.";
 
@@ -157,7 +173,7 @@ function itemDraftOf(item: ReceiptItem): ItemDraft {
     price: centsText(item.price),
     taxable: item.taxable,
     deposit: centsText(item.deposit),
-    discount: centsText(item.discount),
+    discount: centsText(item.discount === null ? null : Math.abs(item.discount)),
     spendingCategoryId: item.spendingCategoryId,
     share: item.share,
     chargedTo: item.chargedTo,
@@ -204,10 +220,14 @@ function amountOf(text: string): number | null {
 function itemOf(draft: ItemDraft, whose: (draft: ItemDraft) => string | null): ReceiptItem | null {
   const price = amountOf(draft.price);
   const deposit = amountOf(draft.deposit);
-  const discount = amountOf(draft.discount);
+  const typed = amountOf(draft.discount);
   if (draft.text.trim() === "" || price === null) return null;
   if (draft.deposit.trim() !== "" && deposit === null) return null;
-  if (draft.discount.trim() !== "" && discount === null) return null;
+  if (draft.discount.trim() !== "" && typed === null) return null;
+  // A rebate lowers what the item costs: negative on a purchase, positive on a refund.
+  // A typed minus is read as the same rebate, not as one that raises the price.
+  const discount =
+    typed === null || typed === 0 ? typed : price < 0 ? Math.abs(typed) : -Math.abs(typed);
   return {
     text: draft.text.trim(),
     price,
@@ -428,13 +448,10 @@ export function Receipts(): React.ReactElement {
     );
   };
 
+  // Even one receipt comes back to the list: what was read is summed up there
+  // before any form opens, whatever the batch's size.
   const readAll = async (): Promise<void> => {
-    const photos = await queue.readAll();
-    // One photo of one receipt opens straight into its form: there is no list to pick from.
-    const [only] = photos;
-    const [checked] = only?.read ?? [];
-    if (photos.length !== 1 || only?.read?.length !== 1 || checked === undefined) return;
-    if (only.filed.length === 0) openQueued(only, 1, checked);
+    await queue.readAll();
   };
 
   const problemLine =
@@ -616,18 +633,23 @@ export function Receipts(): React.ReactElement {
     proposal.items.length > 0 && !itemsUnread && itemsAddUp(proposal) && charged !== null
       ? splitReceipt(proposal, undefined, charged)
       : null;
+  const marksMatter =
+    proposal.items.some((item) => item.share !== "shared") ||
+    new Set(proposal.items.map((item) => item.spendingCategoryId)).size > 1;
   /** Why the form cannot be filed yet, or `null`. */
   const unfileable = itemsUnread
     ? "An item needs its text and its price before the receipt can be filed."
     : flags.includes("items-differ")
       ? FLAG_LABELS["items-differ"]
-      : joint && form.items.some((item) => item.share !== "shared" && whose(item) === null)
-        ? NOBODY_CHOSEN
-        : !joint && alone && form.items.some((item) => item.share === "theirs")
-          ? NOBODY_ELSE
-          : form.items.some(unpicked)
-            ? UNPICKED_CHARGE
-            : null;
+      : flags.includes("taxable-differs") && marksMatter
+        ? TAXABLE_MATTERS
+        : joint && form.items.some((item) => item.share !== "shared" && whose(item) === null)
+          ? NOBODY_CHOSEN
+          : !joint && alone && form.items.some((item) => item.share === "theirs")
+            ? NOBODY_ELSE
+            : form.items.some(unpicked)
+              ? UNPICKED_CHARGE
+              : null;
 
   const lookUp = (): void => {
     if (charged === null || charged === 0 || !dated) {
@@ -787,7 +809,7 @@ export function Receipts(): React.ReactElement {
                   <input
                     aria-label={`Rebate on ${name}`}
                     inputMode="decimal"
-                    placeholder="Rebate, -2.00"
+                    placeholder="Rebate"
                     value={item.discount}
                     onChange={(event) => setItem(index, { discount: event.target.value })}
                   />
@@ -900,12 +922,18 @@ export function Receipts(): React.ReactElement {
                     noneLabel="None"
                     onChange={(value) => setItem(index, { spendingCategoryId: value })}
                   />
+                  {/*
+                    Small, at the row's end: it is for a line the reader made up or
+                    read twice. Leaving an item out of what is shared is the Shared box.
+                  */}
                   <button
                     type="button"
-                    aria-label={`Remove ${name}`}
+                    className="delete-line"
+                    aria-label={`Delete ${name}`}
+                    title="Delete this line, if it is not on the receipt"
                     onClick={() => removeItem(index)}
                   >
-                    Remove
+                    ×
                   </button>
                 </li>
               );
@@ -950,7 +978,8 @@ export function Receipts(): React.ReactElement {
           {(itemsUnread ||
             unfileable === NOBODY_ELSE ||
             unfileable === NOBODY_CHOSEN ||
-            unfileable === UNPICKED_CHARGE) && <p className="hint bad">{unfileable}</p>}
+            unfileable === UNPICKED_CHARGE ||
+            unfileable === TAXABLE_MATTERS) && <p className="hint bad">{unfileable}</p>}
         </fieldset>
         {field("charged", "Charged to the card (with any tip)")}
         <label htmlFor={`${id}-spending`}>Spending category</label>

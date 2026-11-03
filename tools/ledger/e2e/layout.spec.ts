@@ -578,7 +578,7 @@ test("Receipt fits a phone and a desktop, with a photo kept and an item typed", 
       items.getByRole("checkbox", { name: "Taxable" }),
       items.getByLabel(/^Whose is /u),
       items.getByText(/^Takes off /u),
-      items.getByRole("button", { name: /^Remove /u }),
+      items.getByRole("button", { name: /^Delete /u }),
     ];
     for (const control of controls) {
       await expect(control, `${at}: one control`).toHaveCount(1);

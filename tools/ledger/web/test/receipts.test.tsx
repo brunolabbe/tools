@@ -188,7 +188,7 @@ test("typing it in never sends the photo, and starts the date at the upload's", 
 
 test("reads only on the tap, fills the form, and flags what stops adding up as it is edited", async () => {
   await takePhoto();
-  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await readOne();
 
   await waitFor(() => expect(field("Total").value).toBe("26.50"));
   expect(readReceipt).toHaveBeenCalledWith(3);
@@ -203,7 +203,7 @@ test("reads only on the tap, fills the form, and flags what stops adding up as i
 
 test("files the charge with its tip, which differs from the total", async () => {
   await takePhoto();
-  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await readOne();
   await waitFor(() => expect(field("Total").value).toBe("26.50"));
 
   fireEvent.change(field("Charged to the card (with any tip)"), { target: { value: "30" } });
@@ -236,7 +236,7 @@ test("offers the joint-account rows for the charge, and attaches the receipt to 
     },
   ]);
   await takePhoto();
-  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await readOne();
   await waitFor(() => expect(field("Total").value).toBe("26.50"));
 
   fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
@@ -377,7 +377,7 @@ async function readBasket(merchantCategoryId: number | null = null): Promise<voi
     proposals: [{ proposal: BASKET, flags: [], merchantCategoryId }],
   });
   await takePhoto();
-  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await readOne();
   await waitFor(() => expect(field("Total").value).toBe("24.76"));
 }
 
@@ -530,7 +530,7 @@ test("keeps an item left out that names nobody off a joint-account row, before a
   expect(fileReceipt).not.toHaveBeenCalled();
 });
 
-test("shows the Taxable check when a mark does not give the printed taxes, and still files (lg-26)", async () => {
+test("shows the Taxable check when a mark does not give the printed taxes, and refuses filing while the items span categories (lg-26)", async () => {
   await readBasket();
   const label =
     "The items marked taxable do not give the taxes printed. Check which items are taxable.";
@@ -542,13 +542,17 @@ test("shows the Taxable check when a mark does not give the printed taxes, and s
 
   expect(screen.getByText(label)).toBeTruthy();
   expect(screen.queryByText("It adds up.")).toBeNull();
-  // Not blocked: the items still make the total, and the person files.
-  expect(screen.queryByRole("alert")).toBeNull();
+  // The basket's items are in three categories, which the marks give their taxes to.
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  expect((await screen.findByRole("alert")).textContent).toBe(TAXABLE_MATTERS);
+  expect(fileReceipt).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getAllByLabelText("Taxable")[1] as HTMLElement);
   fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(
     vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items.map((each) => each.taxable),
-  ).toEqual([false, false, true]);
+  ).toEqual([false, true, true]);
 });
 
 // lg-23 gate 1, F2: among more than two, "the other's" named nobody, and the
@@ -653,7 +657,7 @@ test("two current members and one who has left: the screen is the two-person one
 test("among three people, the whole receipt can be someone else's, picked by name", async () => {
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
   await takePhoto();
-  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await readOne();
   await waitFor(() => expect(field("Total").value).toBe("26.50"));
 
   expect(screen.queryByText(/as a line charged to them/u)).toBeNull();
@@ -696,7 +700,7 @@ async function readBasketWithTheirs(): Promise<void> {
     ],
   });
   await takePhoto();
-  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await readOne();
 }
 
 function expectNoTwoPersonForm(): void {
@@ -856,10 +860,10 @@ test("shows a rebate the reader folded into an item, and refuses one that is not
     ],
   });
   await takePhoto();
-  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await readOne();
   await waitFor(() => expect(field("Total").value).toBe("22.46"));
 
-  expect(field("Rebate on BIERE 6X355").value).toBe("-2.00");
+  expect(field("Rebate on BIERE 6X355").value).toBe("2.00");
   expect(screen.getByText("It adds up.")).toBeTruthy();
 
   fireEvent.change(field("Rebate on BIERE 6X355"), { target: { value: "two" } });
@@ -868,11 +872,11 @@ test("shows a rebate the reader folded into an item, and refuses one that is not
   ).toBeTruthy();
 });
 
-// lg-89 gate 1, the second low: the field says a rebate is typed negative.
-test("the Rebate field's placeholder shows a rebate typed negative (lg-89)", async () => {
+// lg-89 gate 1, the second low, undone: a rebate is typed positive, so the field says only what it is.
+test("the Rebate field's placeholder names it and nothing more", async () => {
   await readBasket();
 
-  expect(field("Rebate on BIERE 6X355").placeholder).toBe("Rebate, -2.00");
+  expect(field("Rebate on BIERE 6X355").placeholder).toBe("Rebate");
 });
 
 // --- lg-92: several photos at once, read one at a time, confirmed from a queue ---
@@ -1310,9 +1314,9 @@ test("the camera and the gallery feed one queue, and its words follow the count"
   expect(screen.getByText(/Reading sends these photos out of the house/u)).toBeTruthy();
 });
 
-test("a photo of one receipt opens its form, files back to the queue, and offers another from it", async () => {
+test("a photo of one receipt is summed up in the queue, opens from it, files back, and offers another", async () => {
   await takePhoto();
-  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await readOne();
   fireEvent.click(await screen.findByRole("button", { name: "File as alex’s line" }));
 
   await screen.findByText("Marché Exemple, 26.50 $, filed");
@@ -1455,7 +1459,7 @@ async function readBasketCharged(chargedTo: string | null): Promise<void> {
     ],
   });
   await takePhoto();
-  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await readOne();
   await waitFor(() => expect(field("Total").value).toBe("24.76"));
 }
 
@@ -1663,4 +1667,117 @@ test("with nobody else, a read charge to nobody is still refused after the joint
     "There is nobody else in the household to charge an item to.",
   );
   expect(fileReceipt).not.toHaveBeenCalled();
+});
+
+// --- The receipt view's QoL pass: one receipt summed up, a rebate typed positive, the marks held ---
+
+const TAXABLE_MATTERS =
+  "The items marked taxable do not give the taxes printed, and they set what an item left out or each category comes to. Check which items are taxable to file.";
+
+/**
+ * "Read it", then the one receipt it read opened from the queue: even a single
+ * receipt is summed up in the list before its form opens.
+ */
+async function readOne(): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  const parts = await screen.findByRole("list", { name: /^Receipts in /u });
+  fireEvent.click(within(parts).getByRole("button"));
+}
+
+test("reading one photo of one receipt stays on the queue, with the receipt summed up there", async () => {
+  await takePhoto();
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+
+  const parts = await screen.findByRole("list", { name: "Receipts in receipt.jpg" });
+  expect(within(parts).getByRole("button", { name: "Marché Exemple, 26.50 $" })).toBeTruthy();
+  expect(screen.queryByLabelText("Total")).toBeNull();
+});
+
+test("a rebate typed positive comes off a purchase, and a typed minus is the same rebate", async () => {
+  await readBasket();
+  fireEvent.change(field("Subtotal"), { target: { value: "20.07" } });
+  fireEvent.change(field("GST (TPS)"), { target: { value: "0.80" } });
+  fireEvent.change(field("QST (TVQ)"), { target: { value: "1.59" } });
+  fireEvent.change(field("Total"), { target: { value: "22.46" } });
+
+  fireEvent.change(field("Rebate on BIERE 6X355"), { target: { value: "2.00" } });
+  expect(screen.getByText("It adds up.")).toBeTruthy();
+  fireEvent.change(field("Rebate on BIERE 6X355"), { target: { value: "-2.00" } });
+  expect(screen.getByText("It adds up.")).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(
+    vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items.map((item) => item.discount),
+  ).toEqual([null, -200, null]);
+});
+
+test("a rebate typed positive on a refunded item is filed against the refund", async () => {
+  await readBasket();
+  fireEvent.click(screen.getByRole("button", { name: "Add an item" }));
+  fireEvent.change(field("Text of item 4"), { target: { value: "RETOUR" } });
+  fireEvent.change(field("Price of RETOUR"), { target: { value: "-5.00" } });
+  fireEvent.change(field("Rebate on RETOUR"), { target: { value: "1.00" } });
+  // The items now make 4.00 $ less: a rebate turned against the refund would make 2.00 $ less.
+  fireEvent.change(field("Total"), { target: { value: "20.76" } });
+  expect(
+    screen.queryByText(
+      "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
+    ),
+  ).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(
+    vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items.map((item) => item.discount),
+  ).toEqual([null, null, null, 100]);
+});
+
+test("a wrong Taxable mark refuses filing once an item is left out, and not on a shared receipt of one category", async () => {
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 3,
+    model: "claude-haiku-5-5",
+    proposals: [
+      {
+        proposal: {
+          ...BASKET,
+          items: BASKET.items.map((item) => ({ ...item, spendingCategoryId: 1 })),
+        },
+        flags: [],
+        merchantCategoryId: null,
+      },
+    ],
+  });
+  await takePhoto();
+  await readOne();
+  await waitFor(() => expect(field("Total").value).toBe("24.76"));
+  fireEvent.click(screen.getAllByLabelText("Taxable")[1] as HTMLElement);
+
+  // All shared, one category: the mark moves no money, so it is only flagged.
+  expect(screen.queryByText(TAXABLE_MATTERS)).toBeNull();
+
+  leaveOut("BIERE 6X355");
+  expect(screen.getByText(TAXABLE_MATTERS)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  expect((await screen.findByRole("alert")).textContent).toBe(TAXABLE_MATTERS);
+  expect(fileReceipt).not.toHaveBeenCalled();
+
+  fireEvent.click(sharedBox("BIERE 6X355"));
+  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+});
+
+test("a line the reader made up is deleted from a small mark at its row's end", async () => {
+  await readBasket();
+  const deleting = screen.getByRole("button", { name: "Delete SAVON" });
+  expect(deleting.textContent).toBe("×");
+
+  fireEvent.click(deleting);
+
+  expect(screen.queryByLabelText("Text of SAVON")).toBeNull();
+  expect(
+    screen.getByText(
+      "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
+    ),
+  ).toBeTruthy();
 });
