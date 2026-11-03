@@ -1808,3 +1808,40 @@ test("paid with the joint card, a wrong Taxable mark refuses attaching items in 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toEqual({ to: "row", rowId: 41 });
 });
+
+test("paid with the joint card, a wrong Taxable mark still attaches a shared receipt of one category", async () => {
+  vi.mocked(fetchReceiptMatches).mockResolvedValue([
+    {
+      rowId: 41,
+      date: "2026-10-03",
+      description: "Achat /Marché Exemple",
+      amountCents: -2_476,
+      daysApart: 1,
+    },
+  ]);
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 3,
+    model: "claude-haiku-5-5",
+    proposals: [
+      {
+        proposal: {
+          ...BASKET,
+          items: BASKET.items.map((item) => ({ ...item, spendingCategoryId: 1 })),
+        },
+        flags: [],
+        merchantCategoryId: null,
+      },
+    ],
+  });
+  await takePhoto();
+  await readOne();
+  await waitFor(() => expect(field("Total").value).toBe("24.76"));
+  fireEvent.click(screen.getAllByLabelText("Taxable")[1] as HTMLElement);
+
+  // One category on the row: the split gives it the whole amount whatever the marks.
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  expect(screen.queryByText(TAXABLE_MATTERS)).toBeNull();
+  fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toEqual({ to: "row", rowId: 41 });
+});
