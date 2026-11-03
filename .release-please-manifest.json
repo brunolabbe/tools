@@ -1,5 +1,5 @@
 {
   "tools/downloader": "0.11.0",
-  "tools/planner": "0.11.0",
+  "tools/planner": "0.11.1",
   "tools/ledger": "0.7.0"
 }
