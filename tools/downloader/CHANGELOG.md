@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.1](https://github.com/brunolabbe/tools/compare/downloader-v0.11.0...downloader-v0.11.1) (2026-11-03)
+
+
+### Fixes
+
+* **downloader:** an edge 429 reads as a rate limit, not INTERNAL (dl-136) ([#737](https://github.com/brunolabbe/tools/issues/737)) ([ab464a2](https://github.com/brunolabbe/tools/commit/ab464a28835d1d81cd80873ea41ee5c38ebe9197))
+* **downloader:** bump yt-dlp to 2026.10.26 ([#746](https://github.com/brunolabbe/tools/issues/746)) ([f7b31c4](https://github.com/brunolabbe/tools/commit/f7b31c4dc9eb61f796c5ad042be84576bada9e60))
+
 ## [0.11.0](https://github.com/brunolabbe/tools/compare/downloader-v0.10.0...downloader-v0.11.0) (2026-11-01)
 
 
