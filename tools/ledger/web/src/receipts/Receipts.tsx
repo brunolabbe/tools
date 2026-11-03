@@ -13,9 +13,9 @@
  * is the form as they left it. The arithmetic check runs on the form as it is
  * edited (`checkReceipt`), and flags; it never corrects. It blocks items that
  * do not make the total (lg-10), which the API refuses too, and Taxable marks
- * that do not give the printed taxes when they move money: an item left out, or
- * items in more than one category (`TAXABLE_MATTERS`). That one the API does not
- * refuse, since it files the form as the person left it.
+ * that do not give the printed taxes when they move money: an item left out, or,
+ * paid with the joint card, items in more than one category (`TAXABLE_MATTERS`).
+ * That one the API does not refuse, since it files the form as the person left it.
  *
  * **The items** (lg-10, lg-90): each item has a Shared box, checked until it is
  * left out; unchecked, a select says whose it is, Mine (not shared) first and
@@ -132,9 +132,12 @@ type TextField = Exclude<keyof Draft, "items">;
 
 /**
  * The Taxable marks refused only where they move money: an item left out takes
- * off its price and the taxes on it if it is marked taxable, and a row's
- * categories are given the same figures (`splitByCategory`). On a receipt that
- * is all shared and all in one category, a wrong mark changes nothing filed.
+ * off its price and the taxes on it if it is marked taxable, and a joint-account
+ * row's categories are given the same figures (`splitByCategory`). A line keeps
+ * its one category, so its items' categories divide nothing. On a receipt that
+ * is all shared, and filed as a line or all in one category, a wrong mark
+ * changes nothing filed. A store that rounds tax per line flags marks that are
+ * right, which is why the flag held nothing before (lg-26).
  */
 const TAXABLE_MATTERS =
   "The items marked taxable do not give the taxes printed, and they set what an item left out or each category comes to. Check which items are taxable to file.";
@@ -633,9 +636,10 @@ export function Receipts(): React.ReactElement {
     proposal.items.length > 0 && !itemsUnread && itemsAddUp(proposal) && charged !== null
       ? splitReceipt(proposal, undefined, charged)
       : null;
+  // Only a joint-account row is split by its items' categories: a line has one.
   const marksMatter =
     proposal.items.some((item) => item.share !== "shared") ||
-    new Set(proposal.items.map((item) => item.spendingCategoryId)).size > 1;
+    (joint && new Set(proposal.items.map((item) => item.spendingCategoryId)).size > 1);
   /** Why the form cannot be filed yet, or `null`. */
   const unfileable = itemsUnread
     ? "An item needs its text and its price before the receipt can be filed."

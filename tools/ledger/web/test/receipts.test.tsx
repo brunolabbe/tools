@@ -530,7 +530,7 @@ test("keeps an item left out that names nobody off a joint-account row, before a
   expect(fileReceipt).not.toHaveBeenCalled();
 });
 
-test("shows the Taxable check when a mark does not give the printed taxes, and refuses filing while the items span categories (lg-26)", async () => {
+test("shows the Taxable check when a mark does not give the printed taxes, and still files (lg-26)", async () => {
   await readBasket();
   const label =
     "The items marked taxable do not give the taxes printed. Check which items are taxable.";
@@ -542,17 +542,13 @@ test("shows the Taxable check when a mark does not give the printed taxes, and r
 
   expect(screen.getByText(label)).toBeTruthy();
   expect(screen.queryByText("It adds up.")).toBeNull();
-  // The basket's items are in three categories, which the marks give their taxes to.
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
-  expect((await screen.findByRole("alert")).textContent).toBe(TAXABLE_MATTERS);
-  expect(fileReceipt).not.toHaveBeenCalled();
-
-  fireEvent.click(screen.getAllByLabelText("Taxable")[1] as HTMLElement);
+  // Not blocked: the items still make the total, and the person files.
+  expect(screen.queryByRole("alert")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(
     vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items.map((each) => each.taxable),
-  ).toEqual([false, true, true]);
+  ).toEqual([false, false, true]);
 });
 
 // lg-23 gate 1, F2: among more than two, "the other's" named nobody, and the
@@ -1771,6 +1767,7 @@ test("a line the reader made up is deleted from a small mark at its row's end", 
   await readBasket();
   const deleting = screen.getByRole("button", { name: "Delete SAVON" });
   expect(deleting.textContent).toBe("×");
+  expect(deleting.title).toBe("Delete this line, if it is not on the receipt");
 
   fireEvent.click(deleting);
 
@@ -1780,4 +1777,34 @@ test("a line the reader made up is deleted from a small mark at its row's end", 
       "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
     ),
   ).toBeTruthy();
+});
+
+test("paid with the joint card, a wrong Taxable mark refuses attaching items in several categories to the row", async () => {
+  vi.mocked(fetchReceiptMatches).mockResolvedValue([
+    {
+      rowId: 41,
+      date: "2026-10-03",
+      description: "Achat /Marché Exemple",
+      amountCents: -2_476,
+      daysApart: 1,
+    },
+  ]);
+  await readBasket();
+  fireEvent.click(screen.getAllByLabelText("Taxable")[1] as HTMLElement);
+
+  // All shared and filed as a line, the basket's three categories divide nothing.
+  expect(screen.queryByText(TAXABLE_MATTERS)).toBeNull();
+
+  // On the row they do: the chart splits it by its items' categories (`splitByCategory`).
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  expect(screen.getByText(TAXABLE_MATTERS)).toBeTruthy();
+  fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
+  expect((await screen.findByRole("alert")).textContent).toBe(TAXABLE_MATTERS);
+  expect(fileReceipt).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getAllByLabelText("Taxable")[1] as HTMLElement);
+  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toEqual({ to: "row", rowId: 41 });
 });
