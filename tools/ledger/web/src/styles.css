@@ -794,14 +794,14 @@ svg.chart .selected-band {
   min-width: 0;
 }
 
-.pick {
+.picks > span {
   display: grid;
   gap: 0.25rem;
   flex: 1 1 10rem;
   min-width: 0;
 }
 
-.pick select {
+.picks select {
   width: 100%;
   min-width: 0;
 }

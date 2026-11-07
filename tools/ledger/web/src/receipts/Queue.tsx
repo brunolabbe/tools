@@ -498,7 +498,7 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
     labelled ? { id: `${id}-${field}` } : { "aria-label": label };
   return (
     <div className="picks">
-      <span className="pick">
+      <span>
         {labelled && <label htmlFor={`${id}-paid`}>{paidByLabel}</label>}
         <select
           {...naming("paid", paidByLabel)}
@@ -520,7 +520,7 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
           <option value={JOINT_CARD}>Joint card</option>
         </select>
       </span>
-      <span className="pick">
+      <span>
         {labelled && <label htmlFor={`${id}-whose`}>{whoseLabel}</label>}
         <select
           {...naming("whose", whoseLabel)}
