@@ -167,7 +167,8 @@ largest remaining category, now land on the bread.
 
 ## Build
 
-**Pending the decision below.** The recommended option (A) is:
+**Chosen by the owner on 2026-11-07: option A**, one pot charge per person per
+category. The steps are:
 
 1. **`api/src/receipts.ts`, `filePotCharges`.** For each person with a charge, group
    their `theirs` items by `spendingCategoryId` and divide the person's charge
@@ -191,8 +192,8 @@ largest remaining category, now land on the bread.
    from one line of 2 127, and the chart; one removed; the sign-guard fallback.
    `web/test/receipts.test.tsx` for the message.
 
-No contract change, no migration. `Done when` below is written for A and is
-reworded with whichever option the owner chooses.
+No contract change, no migration. `Done when` below is written for A, the option the
+owner chose on 2026-11-07.
 
 ## Decision — answered 2026-11-07 by the owner
 
@@ -274,7 +275,7 @@ rather than hidden.
 
 ## Done when
 
-Written for A; reworded with the owner's answer.
+Written for A, the option the owner chose on 2026-11-07; it needed no rewording.
 
 1. An `api` test files a receipt on a joint row with one member's items in two
    categories and proves: two pot charge lines, each carrying its category, the
@@ -377,3 +378,9 @@ not by filing under A.
   commit changes nothing else. It is stale now: the Build is option A's, as written.
 - The 2026-11-01 landing entry's "stays open" refers to the question open on that day,
   and stands as history.
+- Round 1 (gate 1 on lg-103's filing, PR #754, `5629dcab`, F5): the three sentences
+  that the answer made false are reworded, and nothing else in the ticket changed. The
+  Build's opening, "Pending the decision below. The recommended option (A) is:", now
+  reads "Chosen by the owner on 2026-11-07: option A". The Build's closing sentence and
+  the `Done when` preamble now say the owner chose A on 2026-11-07. The first bullet
+  above, "left as written", is superseded by this one.
