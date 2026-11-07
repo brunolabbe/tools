@@ -406,3 +406,8 @@ so it stands as written.
   fix it, then run a narrow gate 4; record it and add it to lg-103's brief; record it only.
   Option (a): in `refile`'s success path, after the re-read replaces the list, run
   `setChanging((current) => (current === row.id ? null : current))`.
+- 2026-11-07 — Fixed at landing by owner choice: gate 3, N1 — "in `refile`'s success path, also
+  run `setChanging((current) => (current === row.id ? null : current))`". Tests, appended to
+  `web/test/history.test.tsx`: "a re-read that succeeds closes the control that was reopened
+  while it ran (lg-99)", red at `06adad74`'s `History.tsx` and green with the fix; and "a
+  re-read that succeeds leaves another row's control open (lg-99)", which guards the condition.

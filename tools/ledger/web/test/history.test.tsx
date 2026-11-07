@@ -830,3 +830,73 @@ test("a re-read that fails leaves another row's control open (lg-99)", async () 
   expect(b.getAttribute("aria-expanded")).toBe("true");
   expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
 });
+
+// The re-read is held back, the row's control is reopened while it runs, and then the re-read
+// succeeds with the new answer. The control was opened on the old answer, which the list no longer
+// shows, so it must close: with it left open, a second Save would file the old answer again.
+test("a re-read that succeeds closes the control that was reopened while it ran (lg-99)", async () => {
+  let finish: (answer: { rows: StoredRow[]; total: number }) => void = () => undefined;
+  vi.mocked(fetchRows)
+    .mockResolvedValueOnce({ rows: [filedTo(1, "R")], total: 1 })
+    .mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+  vi.mocked(classifyRow).mockResolvedValue(SAVED);
+  render(<History />);
+
+  const button = await screen.findByRole("button", { name: /^Change who and what/u });
+  fireEvent.click(button);
+  fireEvent.change(screen.getByLabelText("Belongs to"), { target: { value: "sam" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
+  expect(fetchRows).toHaveBeenCalledTimes(2);
+
+  // The button is enabled while the re-read runs, and the control opens on the old answer.
+  fireEvent.click(button);
+  expect(button.getAttribute("aria-expanded")).toBe("true");
+  expect((screen.getByLabelText("Belongs to") as HTMLSelectElement).value).toBe("alex");
+  expect(screen.getByRole("button", { name: "Save" }).hasAttribute("disabled")).toBe(true);
+
+  await act(async () => {
+    finish({ rows: [filedTo(1, "R", "sam")], total: 1 });
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(screen.getByRole("list").textContent).toContain("sam · Current"));
+
+  expect(button.getAttribute("aria-expanded")).toBe("false");
+  expect(screen.queryByLabelText("Belongs to")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  expect(button.hasAttribute("disabled")).toBe(false);
+  expect(classifyRow).toHaveBeenCalledTimes(1);
+});
+
+test("a re-read that succeeds leaves another row's control open (lg-99)", async () => {
+  const { a, b } = await twoRows();
+  let finish: (answer: { rows: StoredRow[]; total: number }) => void = () => undefined;
+  vi.mocked(fetchRows).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+
+  fireEvent.click(a);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
+  expect(fetchRows).toHaveBeenCalledTimes(2);
+
+  // B opens while A's re-read runs.
+  fireEvent.click(b);
+  expect(b.getAttribute("aria-expanded")).toBe("true");
+
+  await act(async () => {
+    finish({ rows: [filedTo(1, "A", "sam"), filedTo(2, "B")], total: 2 });
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(screen.getByRole("list").textContent).toContain("sam · Current"));
+
+  expect(a.getAttribute("aria-expanded")).toBe("false");
+  expect(b.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+});

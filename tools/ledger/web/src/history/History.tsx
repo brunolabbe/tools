@@ -307,6 +307,11 @@ export function History(): React.ReactElement {
       });
       setLoad({ state: "ready", rows: answer.rows, total: answer.total });
       setUnread(new Set());
+      // The button was enabled while the re-read ran, so this row's control may have been
+      // reopened on the answer the list has just replaced (it keeps the answer it opened with).
+      // It closes, or a second Save would file the old answer again; another row's open
+      // control is not this row's to close.
+      setChanging((current) => (current === row.id ? null : current));
     } catch (error: unknown) {
       // Marked only now, not when the save was stored: the button must be enabled while the
       // control closes, or the focus it is handed back goes nowhere, and a re-read that is
