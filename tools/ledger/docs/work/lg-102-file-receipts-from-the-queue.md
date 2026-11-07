@@ -252,3 +252,86 @@ Recorded unfixed, on the owner's word: `repick`'s path dependence through the
 joint card, and the layout low (the checkbox's size, `.picks > span` matching
 the joint hint, the dead `.part` class). The low's "no filed-row case at 360 px"
 was to be folded in if the remove control made it free.
+
+### 2026-11-07 — round 1, after gate 1 (Claude Opus 5.5, builder)
+
+Each answer above is built. Every test named below was red before its change
+and is green after it.
+
+- **(a) The four surviving plants.** Four tests, appended to
+  `receipts.test.tsx`. Each one alone turns red under its plant
+  (`build/plants.mjs`, the gate's plant text re-cut for the formatted source),
+  and 85 of 85 pass without the plants:
+  - "a receipt with no amount charged, or no date, is held in the list and says
+    why, as its form would (lg-102 gate 1, M13)"
+  - "with two members, a read charge to nobody was the other's: paid by that
+    other, it is theirs to keep (lg-102 gate 1, M15)"
+  - "a receipt is never wholly its payer's: Whose goes back to Shared when its
+    person pays, and stays there (lg-102 gate 1, M17)"
+  - "a row's refusal goes when one of its picks changes in the list (lg-102
+    gate 1, M19)"
+- **(b) The two weakened assertions are restored as their nearest equivalents
+  under the new flow.**
+  - "files each receipt in a photo of two, and goes back to the one not filed
+    yet": the second receipt is opened, then filed alone from the list. The test
+    now proves the list is what remains, with no form open and the first
+    receipt still unselected and openable. The first receipt is filed after it,
+    in the old order (part 2, then part 1).
+  - "an item left as Mine names nobody once paid jointly, and is Mine again on
+    my own card": once back on alex's card, the receipt files as a line with
+    `paidBy: null`, the six-pack `not-shared`.
+- **(c) Each row's status line is an `<output>`**, which is a polite live
+  region. It is on the page before the row says anything, and it stays the same
+  element from `Filing…` to `Not filed: …` or filed, so what it says is
+  announced. Test: "each row says Filing…, why not and what it was filed as in
+  a live region that was there before it spoke (lg-102 gate 1)". Before the
+  change it failed: no element with the role `status`. A first try kept the
+  filed row as a separate branch, and React then replaced the element; the
+  test's `document.body.contains` check caught it (`[false, true]`).
+- **The remove control (answer 1).** Every row not filed has a **Remove**
+  button. A photo left with no receipt, and none filed, is handed back:
+  - a typed-in photo gets "Read it" back, or "Try again" after a failed read;
+  - a read photo goes back to "Kept, not read yet", with **Read it** and
+    **Type it in**.
+
+  Tests:
+  - "a receipt typed in and left half done can be removed, which hands its
+    photo back to the reader";
+  - "a receipt typed in from a photo whose read failed can be removed, and the
+    retry is back";
+  - "a receipt the model made up is removed from its photo, the other stays,
+    and the last removed hands the photo back";
+  - "removing every receipt read from a photo, none filed, hands it back to the
+    reader".
+
+- **The bar (answer 2)** changes only the pick the person changed:
+  `PickSelects` now tells its caller which of its two selects moved. Test: "the
+  bar sets only the pick the person changed on the selected rows (lg-102 gate
+  1)", with three members. Before the change, the row paid by sam was paid by
+  alex after the bar's Whose alone was changed.
+- **`e2e/layout.spec.ts`.** The lg-102 case now covers the remove control, the
+  bar's Whose alone keeping a joint-card row's payer, and **a filed row with its
+  "Filed as" line at 360 px and 1280 px**. That last part is the layout low's,
+  folded in because routing the filing in the browser made it free. The upload,
+  the read, the rows a joint-card receipt may match and the filing are all
+  answered by the spec, so the case writes nothing to the shared books.
+- **Recorded unfixed, on the owner's word:** `repick`'s path dependence through
+  the joint card, the checkbox's size, `.picks > span` matching the joint hint,
+  and the dead `.part` class. The last is now gone, since the row lost its class
+  in the change for (c).
+- **`tools/ledger/CLAUDE.md`** is the owner's to edit after #753 merges (answer
+  4). This branch does not touch it.
+
+Checks for round 1:
+
+- The six tests for the remove control, the bar and the live region were run
+  against `e6f8ede2`, before the change: 6 of 6 fail. At `59946ece`, 91 of 91
+  receipt tests pass. At the same commit, each of the four plants still turns
+  exactly its own test red, 1 of 91.
+- The lg-102 e2e case failed against `e6f8ede2`'s `Queue.tsx` and
+  `styles.css`: `locator.click: Test timeout of 60000ms exceeded`, waiting for
+  the Remove button. At `59946ece` it passes, 36 of 36 on `E2E_PORT=8202`, and
+  both `Receipt queue (to file)` screenshots were opened.
+- `npx vitest run tools/ledger/web/test` read 1 failed of 387 once, while the
+  e2e suite ran beside it. The run named no test, and two runs after it read
+  387 of 387. The failure is unidentified, recorded here so that it is not lost.
