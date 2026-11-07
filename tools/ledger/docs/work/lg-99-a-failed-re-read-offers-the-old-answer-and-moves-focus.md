@@ -411,3 +411,29 @@ so it stands as written.
   `web/test/history.test.tsx`: "a re-read that succeeds closes the control that was reopened
   while it ran (lg-99)", red at `06adad74`'s `History.tsx` and green with the fix; and "a
   re-read that succeeds leaves another row's control open (lg-99)", which guards the condition.
+- 2026-11-07 — The landing fix's readings, after `88bccb28`, `npx vitest run
+  tools/ledger/web/test/history.test.tsx`. The first test is "a re-read that succeeds closes the
+  control that was reopened while it ran (lg-99)": it holds the re-read, reopens the row's
+  control (`aria-expanded` "true", "Belongs to" reads `alex`, Save disabled while `saving`),
+  resolves the re-read with `sam`, and asserts the button `aria-expanded` "false", no "Belongs to",
+  no Save, the button enabled and one `classifyRow` call.
+  - Red on `06adad74`'s `History.tsx`, test added alone: `-t "a re-read that succeeds closes"`
+    gives `Tests 1 failed | 26 skipped (27)`, and the whole file `Tests 1 failed | 26 passed
+    (27)`, at `expect(button.getAttribute("aria-expanded")).toBe("false")`: `Expected: "false"`,
+    `Received: "true"`.
+  - Green with the fix: that test and its guard alone, `Tests 2 passed | 25 skipped (27)`; the
+    whole file `Tests 27 passed (27)`, which holds lg-95's tests, the existing lg-99 tests and
+    the two new ones.
+  - The guard, "a re-read that succeeds leaves another row's control open (lg-99)", passes on
+    `06adad74` as it must, and is red (`Expected: "true"`, `Received: "false"`, `Tests 1 failed |
+    26 skipped (27)`) when the success path's line is changed to an unconditional
+    `setChanging(null)`, restored from `88bccb28`.
+  - P4 is on `origin/main` (`1eafa0c6`) too, not only on the lg-99 branch: with `main`'s
+    `History.tsx` in place, the first test is red alone, `Tests 1 failed | 26 skipped (27)`,
+    `Expected: "false"`, `Received: "true"`. `main` never disables the button during the
+    re-read, so it was reachable there; the early mark of round 1 only hid it at `191f8927`.
+  - Focus after this close was measured with a temporary assertion, removed: the row's own
+    button, enabled (`FOCUS BUTTON same=true`), with the reopening click focusing it and with it
+    not focusing it. Nothing restores it for this close (`closedByOwn` is false); the first
+    close, from Save, hands focus back to that button (read from the code, not separately
+    measured). Chromium and Safari with a reopen are not measured here.
