@@ -3,7 +3,7 @@ id: lg-96
 tool: ledger
 title: A stored cell far down or across a sheet costs memory by its address
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -150,7 +150,47 @@ Case 4 has 4 001 non-null cells and 4 000 rows, so both bounds admit it, and it
 is not refused. This is counted from the source, not run through the route.
 Case 4's file is 242 KB, far below the 4 MiB bound.
 
-## Decision — open
+## Decision — answered 2026-11-07
+
+**The owner's answers, 2026-11-07, at two checkpoints, relayed in the dispatch
+(the options below are the ones offered; the orchestrator's recommendation was
+first in each).**
+
+1. **Which bound stops a stored address from costing memory in `readSheets`, and
+   where it sits.** Offered: option 1 bound the extent (the ticket's
+   recommendation) / option 2 sparse rows and cells / option 3 cut per-sheet cost /
+   keep waiting. **Chosen: option 1.**
+2. **What the cap counts, and how a workbook is closed.** Offered: the sum of each
+   row's width as a running total across sheets (the orchestrator's recommendation) /
+   rows times the widest row, as a running total / a per-sheet cap plus an early
+   `<sheet>` count. **Chosen: the sum of each row's width, kept as a running total
+   across sheets in `readSheets` and refused once it passes one workbook-wide slot
+   cap.** No early `<sheet>` count and no separate per-sheet slot cap: the running
+   total also bounds a single sheet. The per-sheet row refusal past
+   `MAX_WORKBOOK_ROWS` from Build 1 stays.
+3. **The cap's value.** Offered: 2,000,000 (recommended) / 1,000,000 / 4,000,000
+   slots. **Chosen: 2,000,000 slots, workbook-wide.** The owner's basis: at this
+   ticket's ~11 MB per million slots that is about 22 MB. The orchestrator read one
+   real workbook's extent, structure only and no content: 14 sheets, 1,719 rows,
+   11,196 slots by the sum (15,016 by rows times widest), the largest sheet 121 rows
+   by 13 columns. That workbook is not in the repo.
+4. **The `details.bound` name.** Offered: `slots` with the contract edit approved
+   (recommended) / `area` with the edit approved / reuse `cells`, no edit. **Chosen:
+   `slots`.** The owner approves the one prose edit to the `WORKBOOK_TOO_LARGE` doc
+   comment's list of bounds in `tools/ledger/contract/src/errors.ts` (currently "its
+   sheets, its rows or cells, or the request it would make"). It is the only
+   contract edit approved.
+5. **The import command.** Offered: the same bounds (recommended) / the import stays
+   unbounded. **Chosen: the same bounds.** The command refuses what the route
+   refuses, so the unbounded test the Build had is replaced by one that the command
+   refuses past the slot cap.
+
+Intake read at `08f78f69`: lg-88 (#733, `13a2602b`) has merged, so `rowsOf` no longer
+extends a row to a merge-covered place and the cost bullet that names "on `main`
+before lg-88 merges" no longer applies. The base figures above were taken at
+`c9b1afdd`, before lg-88, and are re-run at `08f78f69` (Build 4).
+
+The question and the options as filed, left as they were:
 
 The question: which bound stops a stored address from costing memory in
 `readSheets`, and where it sits.
@@ -254,43 +294,48 @@ leave the column axis open.
 
 ## Build
 
-Written from the recommended option, option 1. It is not to be dispatched until the
-owner answers, and the answer may change it.
+Option 1, as the owner answered it (Decision, above).
 
-1. In `readSheets` (`api/src/xlsx.ts`), before `rowsOf`: refuse a sheet whose `!data`
-   length passes `MAX_WORKBOOK_ROWS`, and one whose rows times its widest stored
-   column pass the slot cap, each as `WORKBOOK_TOO_LARGE` with the `details.bound`
-   the answer names. Do not build the grid to find the width. Keep a running total of
-   the slots across sheets and refuse when it passes a workbook-wide cap, or count the
-   `<sheet>` entries of `workbook.xml` before any grid is built and refuse past
-   `MAX_WORKBOOK_SHEETS`; the answer names which.
+1. In `readSheets` (`api/src/xlsx.ts`), before `rowsOf`: read each sheet's extent
+   from `!data` in one pass, without building the grid. Refuse a sheet whose last
+   stored row passes `MAX_WORKBOOK_ROWS` (`details.bound` `rows`), and keep a running
+   total across sheets of the sum of each row's width, refusing once it passes
+   2,000,000 slots (`details.bound` `slots`). No per-sheet slot cap, no early
+   `<sheet>` count. Both as `WORKBOOK_TOO_LARGE`.
 2. In `describeWorkbook`, let the refusal through its `readSheets` `try`, so the code
    stays `WORKBOOK_TOO_LARGE`.
-3. Tests in `api/test/xlsx.test.ts` and `api/test/workbook-describe.test.ts`: one per
+3. In `contract/src/errors.ts`, the one approved prose edit: the `WORKBOOK_TOO_LARGE`
+   doc comment's list of bounds names the slots. No code, schema or type changes.
+4. Tests in `api/test/xlsx.test.ts` and `api/test/workbook-describe.test.ts`: one per
    axis (case 1 and case 4), each asserting the code and `details.bound`, plus case 4's
    control at column `B` reading unchanged. One more for the multiplier: case 5 with
-   its far cell moved under the per-sheet bound, so that every entry passes it and only
-   the running total or the early count refuses (case 5 as measured, at `A100000`, is
-   past a 20 000-row bound at its first entry, so it is refused with or without the total;
-   the variant is not run).
-4. Re-run the Reproduction's four cases on the branch with the same script (or one that
-   loads the same modules before its baseline), and on the base with it, and put
-   each figure in the Log beside the base figures above.
-5. If the owner keeps the import command unbounded, test that it is unbounded, so the
-   choice is recorded in a test and not only here.
+   its far cell moved under the per-sheet row bound, so that every entry passes the
+   row refusal and only the running total refuses.
+5. Re-run the Reproduction's cases that the base figures were taken for, on the branch
+   with the same script (or one that loads the same modules before its baseline), and on
+   the base at `08f78f69` with it, one at a time, and put each figure in the Log
+   beside the base figures above. The extrapolated cases that were never run (20,000 far
+   sheets, a 20,000-row far-column sheet) are not run.
+6. The import command keeps the same bounds: a test that `import:ledger` refuses a
+   workbook past the slot cap, with `WORKBOOK_TOO_LARGE`'s message and exit 2.
 
 ## Done when
 
-1. The owner's answer is recorded under the Decision heading with its options, and
+1. The owner's answers are recorded under the Decision heading with their options, and
    `status` moves to `ready` in that commit.
-2. Each measured case in the Reproduction, run on the branch, stays under the bound
-   the answer sets: case 1, case 3 through the route, case 4 at 4 000 rows, and case 5 with
-   its far cell under the per-sheet bound, which fails on a per-sheet bound alone and
-   passes only with the running total or the early `<sheet>` count. The
-   readings are in the Log beside the base figures.
-3. Each refusal the answer adds is `WORKBOOK_TOO_LARGE` with its `details.bound`, and
-   no refusal reaches the route as `WORKBOOK_NOT_XLSX`. A test in `api/test/` asserts
-   the code for each axis.
+2. Each case in the Reproduction that was measured, run on the branch, stays under the
+   bound the answer sets, and each names the bound it hits: case 1 (one far cell,
+   `A1048576`) is refused as `rows`; case 3 through the route (ten such sheets) is
+   refused as `rows` at its first sheet; case 4 at 4 000 rows (a cell at `XFD` in each
+   row) is refused as `slots`, at the 123rd row (123 times 16 384 passes 2,000,000);
+   case 5 with its far cell under the per-sheet row bound is refused as `slots` by the
+   running total across its entries, which no per-sheet check refuses. The readings
+   are in the Log beside the base figures, the base re-run at `08f78f69`. The cases
+   that were never run are named in the Log with why they were skipped.
+3. Each refusal is `WORKBOOK_TOO_LARGE` with `details.bound` `rows` or `slots`, in
+   `readSheets` itself, through `describeWorkbook` (never `WORKBOOK_NOT_XLSX`) and
+   through the import command (exit 2, the message on stderr). A test in `api/test/`
+   asserts the code and the bound for each axis and for each caller.
 4. The control (4 000 rows at column `B`) and the full `api/test/xlsx.test.ts` suite
    hold: no value a reader sees changes for a sheet inside the bound.
 
@@ -398,3 +443,9 @@ owner answers, and the answer may change it.
   bound, not run).
 - 2026-11-01 — Gate 1's, gate 2's and gate 3's full reports are on the pull request
   thread, #735; status unchanged (`needs-decision`).
+- 2026-11-07 — Owner's answers, recorded under the Decision heading before any source
+  change: option 1; the sum of each row's width as a running total across sheets, one
+  workbook-wide cap of 2,000,000 slots, `details.bound` `slots` with the one prose edit
+  to `contract/src/errors.ts` approved, and the import command on the same bounds. The
+  Build and `Done when` 1 to 3 are reworded to them; the intake's stale point (lg-88
+  has merged, base re-run at `08f78f69`) is recorded beside the answers.
