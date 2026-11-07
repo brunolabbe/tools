@@ -1350,3 +1350,95 @@ test("History fits a phone and a desktop with a filed row's change open", async 
   await expect(row.getByRole("button", { name: "Save" })).toBeVisible();
   await fitsBothWidths(page, testInfo, "History (change open)");
 });
+
+/**
+ * lg-102: the receipt queue as a list to file from — on every receipt a box to
+ * select it, who paid and whose it is, and the bar that sets both on the selected
+ * and files them. The upload and the read are answered here, as in the queue's
+ * case above, by whoever the e2e server signs in as, so the selects offer the
+ * household's own members. Every receipt read has no total, so filing them is
+ * refused on the screen, with the longest thing a row says, and nothing reaches
+ * the books every other case shares; one row is on the joint card, whose Whose
+ * is held with its hint.
+ */
+test("the receipt queue fits a phone and a desktop with who paid, whose and a box on each receipt", async ({
+  page,
+}, testInfo) => {
+  const me = (await (await page.request.get("/api/me")).json()) as { person: { id: string } };
+  let uploaded = 0;
+  await page.route("**/api/receipts", (route) => {
+    uploaded += 1;
+    return route.fulfill({
+      status: 201,
+      json: {
+        id: 950 + uploaded,
+        mediaType: "image/png",
+        bytes: PHOTO.length,
+        uploadedAt: "2026-10-05T15:00:00.000Z",
+        uploadedBy: me.person.id,
+        reader: "claude-haiku-5-5",
+      },
+    });
+  });
+  const proposal = (merchant: string) => ({
+    proposal: {
+      merchant,
+      date: "2026-10-04",
+      subtotal: null,
+      gst: null,
+      qst: null,
+      total: null,
+      items: [],
+    },
+    flags: ["total-missing"],
+    merchantCategoryId: null,
+  });
+  await page.route("**/api/receipts/*/read", (route) =>
+    route.fulfill({
+      json: {
+        receiptId: 951,
+        model: "claude-haiku-5-5",
+        proposals: [
+          proposal("Épicerie du Marché Central, rue Sainte-Catherine Est"),
+          proposal("Pharmacie Exemple"),
+        ],
+      },
+    }),
+  );
+
+  await openTab(page, "Receipt");
+  const photos = [1, 2].map((n) => ({
+    name: `IMG_20261005_153012_receipt_of_the_week_number_${String(n)}_of_the_big_shop.png`,
+    mimeType: "image/png",
+    buffer: PHOTO,
+  }));
+  await page.getByLabel("Choose photos of receipts").setInputFiles(photos);
+  await page.getByRole("button", { name: "Read all" }).click();
+  await expect(page.getByText("2 of 2 read")).toBeVisible();
+
+  await page.getByRole("checkbox", { name: "Select all" }).check();
+  // Whose: the other member owes all of it, the longest choice the select has.
+  await page.getByLabel("Whose, for the selected").selectOption({ index: 1 });
+  await page.getByLabel("Paid by, Pharmacie Exemple").first().selectOption({ label: "Joint card" });
+  await expect(page.getByText(/whose each item is, is chosen item by item/u)).toBeVisible();
+  await page.getByRole("button", { name: "File selected" }).click();
+  await expect(page.getByText(/^Not filed: /u)).toHaveCount(4);
+  // Refused, each receipt is still in the list, with its box: Select all is the fifth.
+  await expect(page.getByRole("checkbox", { name: /^Select /u })).toHaveCount(5);
+  await fitsBothWidths(page, testInfo, "Receipt queue (to file)", async (_page, width) => {
+    const at = `Receipt queue at ${String(width)} px`;
+    // Every select on a row can be reached without scrolling the page sideways.
+    for (const select of await page.getByRole("combobox").all()) {
+      const edge = await select.evaluate((element) => {
+        const { left, right } = element.getBoundingClientRect();
+        return { left, right, inner: window.innerWidth };
+      });
+      expect
+        .soft(edge.left, `${at}: a select starts at ${String(edge.left)}`)
+        .toBeGreaterThanOrEqual(0);
+      expect
+        .soft(edge.right, `${at}: a select ends at ${String(edge.right)} in ${String(edge.inner)}`)
+        .toBeLessThanOrEqual(edge.inner);
+    }
+  });
+});

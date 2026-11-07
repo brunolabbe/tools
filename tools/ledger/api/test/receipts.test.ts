@@ -2215,7 +2215,9 @@ describe("a line paid by someone other than whoever uploaded the photo (lg-102)"
     });
 
     expect(response.statusCode, response.body).toBe(200);
-    expect(linesOf(target)).toEqual([{ person_id: "sam", amount_cents: 2_650, charged_to: "alex" }]);
+    expect(linesOf(target)).toEqual([
+      { person_id: "sam", amount_cents: 2_650, charged_to: "alex" },
+    ]);
   });
 
   test("a request with no paidBy files exactly as before: paid by whoever uploaded the photo", async () => {

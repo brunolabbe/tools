@@ -770,6 +770,53 @@ svg.chart .selected-band {
   overflow-wrap: anywhere;
 }
 
+/* lg-102: a receipt's row in the list, its box beside its name, then who paid and
+   whose it is, side by side where they fit and one under the other on a phone. A
+   select takes the room there is and never more, since a name in it can be long. */
+.parts > li {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.opener {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.picks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.pick {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.pick select {
+  width: 100%;
+  min-width: 0;
+}
+
+/* The bar that sets both picks on every selected receipt and files them. */
+.batch {
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 0.5rem;
+  padding: var(--gap);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
 .matching > li {
   display: grid;
   gap: 0.5rem;

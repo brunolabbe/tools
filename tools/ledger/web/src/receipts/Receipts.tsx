@@ -1,7 +1,8 @@
 /**
- * The receipt screen (lg-8), mobile first: take a photo, have it read or type
- * it in, correct what was read, and file it — as a line for whoever took the
- * photo, or on the joint-account row it documents.
+ * The receipt screen (lg-8), mobile first: take photos, have them read or type
+ * one in, and file each from the list (lg-102) — as a line for whoever paid, or
+ * on the joint-account row it documents. Opening a receipt is where it is
+ * corrected; the list is where it is filed.
  *
  * **The photo leaves the house only on the "Read it" tap**, and the screen says
  * so beside that button, naming the model, at the moment it matters: not in a
@@ -10,149 +11,76 @@
  * in never sends it anywhere.
  *
  * **Nothing is filed until the person taps a filing button**, and what is filed
- * is the form as they left it. The arithmetic check runs on the form as it is
- * edited (`checkReceipt`), and flags; it never corrects. It blocks items that
+ * is the receipt as they left it. The arithmetic check runs on the form as it
+ * is edited (`checkReceipt`), and flags; it never corrects. It blocks items that
  * do not make the total (lg-10), which the API refuses too, and Taxable marks
  * that do not give the printed taxes when they move money: an item left out, or,
  * paid with the joint card, items in more than one category (`TAXABLE_MATTERS`).
- * That one the API does not refuse, since it files the form as the person left it.
+ * That one the API does not refuse, since it files the form as the person left
+ * it. The list holds a receipt for exactly the same reasons (`receiptState`).
+ *
+ * **Who paid, and whose it is** (lg-102). At the top of the receipt, bound to
+ * its row in the list: Paid by is each current member or the joint card, and
+ * Whose is Shared or one other member, who owes all of it. They replace lg-8's
+ * "File as …'s line", "This was …'s" and lg-91's two "Paid with" buttons. The
+ * receipt keeps one **File it** button, for the joint card, which looks up the
+ * row and lists the ones it may be; a line is filed from the list.
  *
  * **The items** (lg-10, lg-90): each item has a Shared box, checked until it is
- * left out; unchecked, a select says whose it is, Mine (not shared) first and
- * then each other member (someone else's), and the item shows what it takes off.
- * The amounts that come off and the shared amount update as it changes,
- * computed by the same `splitReceipt` the API files with. Each item's
- * category is editable, and the category the merchant was last given is offered
- * first.
+ * left out; unchecked, a select says whose it is, the payer first (Mine, when
+ * that is whoever took the photo) and then each other member (someone else's),
+ * and the item shows what it takes off. The amounts that come off and the
+ * shared amount update as it changes, computed by the same `splitReceipt` the
+ * API files with. Each item's category is editable, and the category the
+ * merchant was last given is offered first.
  *
  * **Whose** (lg-30). The people offered are the household's current members,
  * from its record (`fetchHousehold`), never every name the books hold. With one
  * other member an item marked someone else's is theirs, as it always was, and
- * names nobody in the request; with more, it carries a picker of the others, and
- * so does the whole receipt. **The form is held until the household has loaded**
- * (lg-39): while it is slow, or after it failed, the screen says so with a retry
- * and offers no filing, since without the members it cannot name whose an item
- * is. The categories load on their own, so one request failing drops no other.
+ * names nobody in the request; with more, it carries a picker of the others.
+ * **The form is held until the household has loaded** (lg-39): while it is
+ * slow, or after it failed, the screen says so with a retry and offers no
+ * filing, since without the members it cannot name whose an item is. The
+ * categories load on their own, so one request failing drops no other.
  *
- * **Paid with the joint card** (lg-91). Tapping "Paid with the joint card?"
- * looks for the row and turns the items to the joint account: nobody paid, so
- * there is no Mine. An unchecked item's select offers every current member,
- * whoever took the photo included, and nothing is chosen until the person
- * picks; the item becomes a charge that person owes the pot, and the receipt is
- * held until each such item names one. "Paid with my own card" turns them back,
- * an item charged to whoever took the photo, or to nobody yet, becoming Mine.
+ * **Paid with the joint card** (lg-91). The items turn to the joint account:
+ * nobody paid, so there is no Mine. An unchecked item's select offers every
+ * current member, whoever took the photo included, and nothing is chosen until
+ * the person picks; the item becomes a charge that person owes the pot, and the
+ * receipt is held until each such item names one. Paid by a member again, an
+ * item charged to them, or to nobody yet, becomes theirs to keep (`repick`).
  */
 
 import { useEffect, useId, useState } from "react";
-import {
-  checkReceipt,
-  formatCents,
-  itemsAddUp,
-  parseTypedAmountCents,
-  sharedAmount,
-  splitReceipt,
-} from "@ledger/books";
-import type { ReceiptSplit } from "@ledger/books";
+import { formatCents, sharedAmount } from "@ledger/books";
 import { AppError } from "@ledger/contract";
-import type {
-  CheckedProposal,
-  ItemShare,
-  ReceiptFlag,
-  ReceiptItem,
-  ReceiptMatch,
-  ReceiptProposal,
-  SpendingCategory,
-  UploadedReceipt,
-} from "@ledger/contract";
+import type { ItemShare, ReceiptMatch, SpendingCategory } from "@ledger/contract";
 import { fetchHousehold } from "../api/households.ts";
 import { fetchMe } from "../api/me.ts";
 import { fetchSpendingCategories } from "../api/spending.ts";
 import { fetchReceiptMatches, fileReceipt } from "../api/receipts.ts";
 import { SpendingCategoryPicker } from "../spending/Picker.tsx";
 import { PhotoPickers } from "./PhotoPickers.tsx";
-import { ReceiptQueueView, useReceiptQueue } from "./Queue.tsx";
+import { PickSelects, ReceiptQueueView, entryOf, useReceiptQueue } from "./Queue.tsx";
 import type { QueuedPhoto } from "./Queue.tsx";
+import {
+  FLAG_LABELS,
+  ITEMS_UNREAD,
+  NOBODY_CHOSEN,
+  NOBODY_ELSE,
+  TAXABLE_MATTERS,
+  UNPICKED_CHARGE,
+  blankItem,
+  filedAs,
+  receiptState,
+  untouched,
+} from "./filing.ts";
+import type { Draft, ItemDraft, TextField } from "./filing.ts";
 import { shownName, usePeopleNames } from "../people.tsx";
 import type { ShownNames } from "../people.tsx";
 
-export const FLAG_LABELS: Record<ReceiptFlag, string> = {
-  "total-missing": "The total was not read.",
-  "subtotal-missing": "The subtotal was not read.",
-  "tax-missing": "One tax was read and the other was not.",
-  "parts-differ": "The subtotal and the taxes do not add up to the total.",
-  "tax-differs": "The taxes are not 5 % and 9.975 % of the same amount.",
-  "signs-differ": "Some amounts are a purchase and some a refund.",
-  "items-differ":
-    "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
-  "taxable-differs":
-    "The items marked taxable do not give the taxes printed. Check which items are taxable.",
-};
-
-/** One item's fields, as typed. */
-interface ItemDraft {
-  /** The list's key: an item has no id until filed, and the list adds and removes. */
-  key: number;
-  text: string;
-  price: string;
-  taxable: boolean;
-  deposit: string;
-  /**
-   * The rebates folded into it (lg-89), as a magnitude: a phone's decimal keypad
-   * has no minus sign, so it is typed positive and takes the price's opposite
-   * sign in `itemOf`. Blank for none.
-   */
-  discount: string;
-  spendingCategoryId: number | null;
-  share: ItemShare;
-  /** Whose a `theirs` item is, as picked; `null` until picked, and with one other member. */
-  chargedTo: string | null;
-  /**
-   * Still someone else's as the read proposed it, no choice of the person's
-   * touching it (lg-94): going back from the joint card leaves such an item as
-   * it was, so it stays unpicked rather than turning into Mine unchosen.
-   */
-  asRead: boolean;
-}
-
-/** The form's fields, as typed. Amounts are text until filed. */
-interface Draft {
-  merchant: string;
-  date: string;
-  subtotal: string;
-  gst: string;
-  qst: string;
-  total: string;
-  /** What the card was charged: the total, unless a tip was added under it. */
-  charged: string;
-  items: ItemDraft[];
-}
-
-/** The form's fields that are a line of text. */
-type TextField = Exclude<keyof Draft, "items">;
-
-/**
- * The Taxable marks refused only where they move money: an item left out takes
- * off its price and the taxes on it if it is marked taxable, and a joint-account
- * row's categories are given the same figures (`splitByCategory`). A line keeps
- * its one category, so its items' categories divide nothing. On a receipt that
- * is all shared, and filed as a line or all in one category, a wrong mark
- * changes nothing filed. A store that rounds tax per line flags marks that are
- * right, which is why the flag held nothing before (lg-26).
- */
-const TAXABLE_MATTERS =
-  "The items marked taxable do not give the taxes printed, and they set what an item left out or each category comes to. Check which items are taxable to file.";
-
-const NOBODY_ELSE = "There is nobody else in the household to charge an item to.";
-
-const NOBODY_CHOSEN =
-  "Choose whose each item left out is: a joint-account purchase has no payer to keep one.";
-
 /** The live line's words for a charge no one has been picked for (lg-91, lg-94). */
 const NOT_CHOSEN_YET = "Whose not chosen yet";
-
-/** A read item marked someone else's that names no current member: nobody may be assumed (lg-94). */
-const UNPICKED_CHARGE =
-  "Choose whose each item left out is: the receipt's charge for it names no other member of the household.";
 
 /**
  * The `Whose is` choice that keeps an item with whoever paid (`not-shared`). The
@@ -161,100 +89,6 @@ const UNPICKED_CHARGE =
  * here was filed Mine when picked (lg-90's gate 1).
  */
 const MINE = "";
-
-let lastItemKey = 0;
-
-function itemKey(): number {
-  lastItemKey += 1;
-  return lastItemKey;
-}
-
-function itemDraftOf(item: ReceiptItem): ItemDraft {
-  return {
-    key: itemKey(),
-    text: item.text,
-    price: centsText(item.price),
-    taxable: item.taxable,
-    deposit: centsText(item.deposit),
-    discount: centsText(item.discount === null ? null : Math.abs(item.discount)),
-    spendingCategoryId: item.spendingCategoryId,
-    share: item.share,
-    chargedTo: item.chargedTo,
-    asRead: item.share === "theirs",
-  };
-}
-
-function centsText(cents: number | null): string {
-  return cents === null ? "" : (cents / 100).toFixed(2);
-}
-
-function pad(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
-/** The upload's day by the phone's calendar: where the form starts a date the photo did not show. */
-function dayOf(instant: string): string {
-  const at = new Date(instant);
-  return `${String(at.getFullYear())}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
-}
-
-function draftOf(proposal: ReceiptProposal | null, receipt: UploadedReceipt): Draft {
-  return {
-    merchant: proposal?.merchant ?? "",
-    date: proposal?.date ?? dayOf(receipt.uploadedAt),
-    subtotal: centsText(proposal?.subtotal ?? null),
-    gst: centsText(proposal?.gst ?? null),
-    qst: centsText(proposal?.qst ?? null),
-    total: centsText(proposal?.total ?? null),
-    charged: centsText(proposal?.total ?? null),
-    items: (proposal?.items ?? []).map(itemDraftOf),
-  };
-}
-
-function amountOf(text: string): number | null {
-  return text.trim() === "" ? null : parseTypedAmountCents(text);
-}
-
-/**
- * An item as the contract has it, or `null` while its text or price is not one:
- * the form then says so and files nothing, rather than file the item as
- * something it is not. `whose` names a `theirs` item's person, or `null`.
- */
-function itemOf(draft: ItemDraft, whose: (draft: ItemDraft) => string | null): ReceiptItem | null {
-  const price = amountOf(draft.price);
-  const deposit = amountOf(draft.deposit);
-  const typed = amountOf(draft.discount);
-  if (draft.text.trim() === "" || price === null) return null;
-  if (draft.deposit.trim() !== "" && deposit === null) return null;
-  if (draft.discount.trim() !== "" && typed === null) return null;
-  // A rebate lowers what the item costs: negative on a purchase, positive on a refund.
-  // A typed minus is read as the same rebate, not as one that raises the price.
-  const discount =
-    typed === null || typed === 0 ? typed : price < 0 ? Math.abs(typed) : -Math.abs(typed);
-  return {
-    text: draft.text.trim(),
-    price,
-    taxable: draft.taxable,
-    deposit,
-    discount,
-    spendingCategoryId: draft.spendingCategoryId,
-    share: draft.share,
-    chargedTo: draft.share === "theirs" ? whose(draft) : null,
-  };
-}
-
-/** The form as a proposal; an amount that is not one is `null`, and the check says so. */
-function proposalOf(draft: Draft, whose: (draft: ItemDraft) => string | null): ReceiptProposal {
-  return {
-    merchant: draft.merchant.trim() === "" ? null : draft.merchant.trim(),
-    date: /^\d{4}-\d{2}-\d{2}$/u.test(draft.date) ? draft.date : null,
-    subtotal: amountOf(draft.subtotal),
-    gst: amountOf(draft.gst),
-    qst: amountOf(draft.qst),
-    total: amountOf(draft.total),
-    items: draft.items.flatMap((item) => itemOf(item, whose) ?? []),
-  };
-}
 
 /** The list with the merchant's last category first, which is what proposing it first means. */
 function merchantFirst(
@@ -265,27 +99,17 @@ function merchantFirst(
   return [...first, ...categories.filter((category) => category.id !== merchantCategoryId)];
 }
 
-/**
- * Where a photo stands: what was read from it, if anything, and which of the
- * receipts it holds are filed. A photo of two receipts files each as its own
- * part, from 1 (gate 1, F2).
- */
-interface Photo {
-  receipt: UploadedReceipt;
-  read: CheckedProposal[] | null;
-  filed: number[];
-}
-
 type Stage =
   | { step: "photo" }
-  | { step: "queue"; said: string | null }
-  | ({
+  | { step: "queue" }
+  | {
       step: "form";
-      part: number;
-      merchantCategoryId: number | null;
-      /** The queue's photo this form came from (lg-92). */
+      /** The queue's photo this form came from (lg-92), and which receipt in it. */
       queueKey: number;
-    } & Photo);
+      part: number;
+      /** Typed in, not read: left untouched, it leaves no row in the list. */
+      typed: boolean;
+    };
 
 /** An item's share as the live line reads it: someone else's names whose, when known. */
 function shareLabel(share: ItemShare, person: string | null, shown: ShownNames): string {
@@ -296,12 +120,6 @@ function shareLabel(share: ItemShare, person: string | null, shown: ShownNames):
       : person === null
         ? "The other's"
         : `${shownName(shown, person)}'s`;
-}
-
-/** "a", "a and b", "a, b and c". */
-function listed(names: readonly string[]): string {
-  const last = names.at(-1) ?? "";
-  return names.length < 2 ? last : `${names.slice(0, -1).join(", ")} and ${last}`;
 }
 
 /** A request's answer as the screen holds it: not yet, failed with what to say, or in. */
@@ -358,14 +176,7 @@ export function Receipts(): React.ReactElement {
   const id = useId();
   const shown = usePeopleNames();
   const [stage, setStage] = useState<Stage>({ step: "photo" });
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [spendingCategoryId, setSpendingCategoryId] = useState<number | null>(null);
-  const [theirs, setTheirs] = useState(false);
-  /** Whose the whole receipt is, when it is someone's among several (lg-30). */
-  const [wholeChosen, setWholeChosen] = useState("");
   const [matches, setMatches] = useState<ReceiptMatch[] | null>(null);
-  /** Paid with the joint card (lg-91): an item left out is owed to the pot, and there is no Mine. */
-  const [joint, setJoint] = useState(false);
   const [members, retryMembers] = useLoad(loadMembers);
   const [loadedCategories, retryCategories] = useLoad(fetchSpendingCategories);
   const [busy, setBusy] = useState(false);
@@ -386,40 +197,19 @@ export function Receipts(): React.ReactElement {
 
   const startOver = (): void => {
     setStage({ step: "photo" });
-    setDraft(null);
-    setSpendingCategoryId(null);
-    setTheirs(false);
-    setWholeChosen("");
     setMatches(null);
-    setJoint(false);
     setProblem(null);
     queue.clear();
   };
 
-  const open = (
-    photo: Photo,
-    part: number,
-    checked: CheckedProposal | null,
-    queueKey: number,
-  ): void => {
-    const merchantCategoryId = checked?.merchantCategoryId ?? null;
-    setDraft(draftOf(checked?.proposal ?? null, photo.receipt));
-    // The merchant's last category is proposed for the line (lg-10).
-    setSpendingCategoryId(merchantCategoryId);
-    setTheirs(false);
-    setWholeChosen("");
+  /** A receipt opened from the list, its draft and picks the list's own (lg-102). */
+  const openQueued = (photo: QueuedPhoto, part: number): void => {
+    if (photo.receipt === null) return;
+    const typed = photo.entries[part] === undefined;
+    if (typed) queue.keep(photo.key, part, entryOf(null, photo.receipt, null));
     setMatches(null);
-    setJoint(false);
-    // The photo's own three fields, not a stage spread in whole: its `step` would win.
-    setStage({
-      step: "form",
-      part,
-      merchantCategoryId,
-      queueKey,
-      receipt: photo.receipt,
-      read: photo.read,
-      filed: photo.filed,
-    });
+    setProblem(null);
+    setStage({ step: "form", queueKey: photo.key, part, typed });
   };
 
   /** One photo or several (lg-92): they join the queue, which keeps them one at a time. */
@@ -429,26 +219,7 @@ export function Receipts(): React.ReactElement {
     if (files.length === 0) return;
     setProblem(null);
     queue.add(files);
-    setStage((before) => ({ step: "queue", said: before.step === "queue" ? before.said : null }));
-  };
-
-  /** Back to the queue, the form's draft dropped: what was filed is marked there. */
-  const backToQueue = (said: string | null): void => {
-    setDraft(null);
-    setMatches(null);
-    setJoint(false);
-    setProblem(null);
-    setStage({ step: "queue", said });
-  };
-
-  const openQueued = (photo: QueuedPhoto, part: number, checked: CheckedProposal | null): void => {
-    if (photo.receipt === null) return;
-    open(
-      { receipt: photo.receipt, read: photo.read, filed: photo.filed },
-      part,
-      checked,
-      photo.key,
-    );
+    setStage({ step: "queue" });
   };
 
   // Even one receipt comes back to the list: what was read is summed up there
@@ -462,6 +233,31 @@ export function Receipts(): React.ReactElement {
       <p className="bad" role="alert">
         {problem}
       </p>
+    );
+
+  /**
+   * Where the household stands, while the screen cannot name whose anything is
+   * (lg-39). The list has its own Start over, so only the held form adds one.
+   */
+  const householdState = (startOverToo: boolean): React.ReactElement | null =>
+    members.state === "loaded" ? null : members.state === "loading" ? (
+      <output className="muted hint">Loading the household…</output>
+    ) : (
+      <>
+        <p className="bad" role="alert">
+          The household did not load: {members.message}
+        </p>
+        <div className="actions">
+          <button type="button" onClick={retryMembers}>
+            Try again
+          </button>
+          {startOverToo && (
+            <button type="button" onClick={startOver}>
+              Start over
+            </button>
+          )}
+        </div>
+      </>
     );
 
   if (stage.step === "photo") {
@@ -482,7 +278,9 @@ export function Receipts(): React.ReactElement {
       <ReceiptQueueView
         id={id}
         queue={queue}
-        said={stage.said}
+        people={members.state === "loaded" ? members.value : null}
+        household={householdState(false)}
+        shown={shown}
         problem={problemLine}
         onOpen={openQueued}
         onReadAll={() => void readAll()}
@@ -492,102 +290,64 @@ export function Receipts(): React.ReactElement {
     );
   }
 
+  const { queueKey, part } = stage;
+  const photo = queue.photos.find((each) => each.key === queueKey);
+  const receipt = photo?.receipt ?? null;
+  const entry = photo?.entries[part];
+
+  /**
+   * Back to the list, the receipt's edits kept there (lg-102); one typed in and
+   * left blank is dropped. What was filed is said on its row.
+   */
+  const backToQueue = (filed: boolean): void => {
+    if (stage.typed && entry !== undefined && untouched(entry.draft) && !filed) {
+      queue.drop(queueKey, part);
+    }
+    setMatches(null);
+    setProblem(null);
+    setStage({ step: "queue" });
+  };
+
   // The form is not offered until the household is known (lg-39): without its
   // members the screen cannot say whose an item is, and would file "someone
   // else's" as though the household were two people.
-  if (members.state !== "loaded") {
+  if (members.state !== "loaded" || receipt === null || entry === undefined) {
     return (
       <section className="card" aria-labelledby={`${id}-title`}>
         <h2 id={`${id}-title`}>Receipt</h2>
-        {members.state === "loading" ? (
-          <output className="muted hint">Loading the household…</output>
-        ) : (
-          <>
-            <p className="bad" role="alert">
-              The household did not load: {members.message}
-            </p>
-            <div className="actions">
-              <button type="button" onClick={retryMembers}>
-                Try again
-              </button>
-              <button type="button" onClick={startOver}>
-                Start over
-              </button>
-            </div>
-          </>
-        )}
+        {householdState(true)}
       </section>
     );
   }
   const people = members.value;
   const categories = loadedCategories.state === "loaded" ? loadedCategories.value : [];
-  const { receipt, part } = stage;
-  const form = draft ?? draftOf(null, receipt);
-  const payer = receipt.uploadedBy;
-  const others = people.filter((person) => person !== payer);
-  const [other = null] = others;
-  // With one other member "someone else's" is theirs and the request names
-  // nobody, as it always did; with more, each item names whose (lg-30).
-  const several = others.length > 1;
-  // With nobody else, nothing can be someone else's: an item cannot be charged
-  // and the receipt cannot be, and filing either would name no one (lg-39).
-  const alone = other === null;
-  // Paid with the joint card, an item names any current member, and nobody
-  // until one is picked (lg-91): a row has no payer to be "the other" of.
-  // Not paid jointly, a charge to someone who has left, or to nobody, is not
-  // filed to the first other either: it is nobody's until the person picks (lg-94).
-  // The select's own picks always name a current other, so only a read brings one.
-  const whose = (item: ItemDraft): string | null =>
-    joint
-      ? item.chargedTo !== null && people.includes(item.chargedTo)
-        ? item.chargedTo
-        : null
-      : !several
-        ? null
-        : item.chargedTo !== null && others.includes(item.chargedTo)
-          ? item.chargedTo
-          : null;
-  // With nobody else the item is refused as it always was (NOBODY_ELSE), not unpicked.
-  // With one other member a charge to nobody is that member's, as the request has
-  // always read it; a charge naming someone who is not a current member never is.
-  const unpicked = (item: ItemDraft): boolean =>
-    !joint &&
-    !alone &&
-    item.share === "theirs" &&
-    (item.chargedTo === null ? several : !others.includes(item.chargedTo));
-  const wholeWhose = others.includes(wholeChosen) ? wholeChosen : other;
-  const proposal = proposalOf(form, whose);
-  const flags = checkReceipt(proposal);
-  const offered = merchantFirst(categories, stage.merchantCategoryId);
-  // An item whose text or price is not one yet is left out of the proposal.
-  const itemsUnread = proposal.items.length !== form.items.length;
+  const form = entry.draft;
+  const { picks } = entry;
+  const state = receiptState(form, picks, people);
+  const { proposal, flags, itemsUnread, split, unfileable, whose, unpicked } = state;
+  const { payer, others, other, several, alone, joint } = state;
+  const offered = merchantFirst(categories, entry.merchantCategoryId);
+
+  const setDraft = (change: (draft: Draft) => Draft): void => queue.edit(queueKey, part, change);
   const set =
     (field: TextField) =>
     (event: React.ChangeEvent<HTMLInputElement>): void => {
       const value = event.target.value;
       setDraft((before) => {
-        const next = { ...(before ?? form), [field]: value };
+        const next = { ...before, [field]: value };
         // The charge follows the total until it is changed on its own.
-        if (field === "total" && (before ?? form).charged === (before ?? form).total) {
-          next.charged = value;
-        }
+        if (field === "total" && before.charged === before.total) next.charged = value;
         return next;
       });
       setMatches(null);
     };
 
-  const charged = parseTypedAmountCents(form.charged);
-  const dated = /^\d{4}-\d{2}-\d{2}$/u.test(form.date);
-
   /** One item changed, the rest as they are. */
   const setItem = (index: number, change: Partial<ItemDraft>): void => {
-    setDraft((before) => {
-      const current = before ?? form;
-      return {
-        ...current,
-        items: current.items.map((item, at) => (at === index ? { ...item, ...change } : item)),
-      };
-    });
+    setDraft((before) => ({
+      ...before,
+      items: before.items.map((item, at) => (at === index ? { ...item, ...change } : item)),
+    }));
     // Whose an item is moves no row the charge may be (lg-91): picking one
     // after the rows are found keeps them.
     if (
@@ -596,67 +356,17 @@ export function Receipts(): React.ReactElement {
       setMatches(null);
     }
   };
-  /** Every item changed at once, by `change`. */
-  const setItems = (change: (item: ItemDraft) => ItemDraft): void => {
-    setDraft((before) => {
-      const current = before ?? form;
-      return { ...current, items: current.items.map(change) };
-    });
-  };
   const removeItem = (index: number): void => {
-    setDraft((before) => {
-      const current = before ?? form;
-      return { ...current, items: current.items.filter((_item, at) => at !== index) };
-    });
+    setDraft((before) => ({ ...before, items: before.items.filter((_item, at) => at !== index) }));
   };
   const addItem = (): void => {
-    setDraft((before) => {
-      const current = before ?? form;
-      const blank: ItemDraft = {
-        key: itemKey(),
-        text: "",
-        price: "",
-        taxable: false,
-        deposit: "",
-        discount: "",
-        spendingCategoryId: null,
-        share: "shared",
-        chargedTo: null,
-        asRead: false,
-      };
-      return { ...current, items: [...current.items, blank] };
-    });
+    setDraft((before) => ({ ...before, items: [...before.items, blankItem()] }));
   };
 
-  /**
-   * What comes off and what stays shared, live: `null` until the items make the
-   * total, when no split is meaningful, and for a receipt with no items.
-   */
-  const split: ReceiptSplit | null =
-    proposal.items.length > 0 && !itemsUnread && itemsAddUp(proposal) && charged !== null
-      ? splitReceipt(proposal, undefined, charged)
-      : null;
-  // Only a joint-account row is split by its items' categories: a line has one.
-  const marksMatter =
-    proposal.items.some((item) => item.share !== "shared") ||
-    (joint && new Set(proposal.items.map((item) => item.spendingCategoryId)).size > 1);
-  /** Why the form cannot be filed yet, or `null`. */
-  const unfileable = itemsUnread
-    ? "An item needs its text and its price before the receipt can be filed."
-    : flags.includes("items-differ")
-      ? FLAG_LABELS["items-differ"]
-      : flags.includes("taxable-differs") && marksMatter
-        ? TAXABLE_MATTERS
-        : joint && form.items.some((item) => item.share !== "shared" && whose(item) === null)
-          ? NOBODY_CHOSEN
-          : !joint && alone && form.items.some((item) => item.share === "theirs")
-            ? NOBODY_ELSE
-            : form.items.some(unpicked)
-              ? UNPICKED_CHARGE
-              : null;
-
+  /** The joint card's **File it** (lg-102): the rows the charge may be, to attach it to one. */
   const lookUp = (): void => {
-    if (charged === null || charged === 0 || !dated) {
+    const { charged } = state;
+    if (charged === null || charged === 0 || !state.dated) {
       setProblem("The amount charged and the date are needed to look for the row.");
       return;
     }
@@ -665,81 +375,20 @@ export function Receipts(): React.ReactElement {
     });
   };
 
-  /**
-   * Paid with the joint card (lg-91): an item left out is a member's, and one
-   * that was Mine names nobody until the person picks, since a joint purchase
-   * has no payer to keep it. Then the rows are looked for.
-   */
-  const payJointly = (): void => {
-    if (!joint) {
-      setJoint(true);
-      setItems((item) =>
-        item.share === "not-shared" ? { ...item, share: "theirs", chargedTo: null } : item,
-      );
-    }
-    lookUp();
-  };
-
-  /**
-   * Back to a line: an item charged to whoever took the photo, or to nobody yet, is
-   * Mine, unless it is still the read's own charge, which nobody has chosen to keep (lg-94).
-   */
-  const payMyself = (): void => {
-    setJoint(false);
-    setMatches(null);
-    setItems((item) =>
-      item.share === "theirs" &&
-      !item.asRead &&
-      (item.chargedTo === null || item.chargedTo === payer)
-        ? { ...item, share: "not-shared", chargedTo: null }
-        : item,
-    );
-  };
-
-  const fileAs = (destination: "line" | number): void => {
-    if (charged === null || charged === 0 || !dated) {
-      setProblem("The amount charged and the date are needed to file it.");
-      return;
-    }
-    if (unfileable !== null) {
-      setProblem(unfileable);
+  const attach = (rowId: number): void => {
+    if (state.refusal !== null) {
+      setProblem(state.refusal);
       return;
     }
     void run(async () => {
       const filing = await fileReceipt(receipt.id, {
         part,
         proposal,
-        destination:
-          destination === "line"
-            ? {
-                to: "line",
-                date: form.date,
-                amountCents: charged,
-                spendingCategoryId,
-                note: form.merchant.trim() === "" ? null : form.merchant.trim(),
-                chargedTo: theirs && !alone ? wholeWhose : null,
-              }
-            : { to: "row", rowId: destination },
+        destination: { to: "row", rowId },
       });
-      // Each person charged, by the filing's own record of whose (lg-30).
-      const chargedPeople = filing.charges.map(
-        (charge) => `${shownName(shown, charge.chargedTo)}'s`,
-      );
-      const said =
-        destination !== "line"
-          ? chargedPeople.length === 0
-            ? "Attached to the joint-account row."
-            : `Attached to the joint-account row, and ${listed(chargedPeople)} items as ${
-                chargedPeople.length === 1 ? "a charge" : "charges"
-              } to the pot.`
-          : chargedPeople.length === 0
-            ? `Filed as ${shownName(shown, payer)}'s line in the period.`
-            : `Filed as ${shownName(shown, payer)}'s line in the period, and ${listed(chargedPeople)} items as ${
-                chargedPeople.length === 1 ? "a charge" : "charges"
-              }.`;
-      // Filing marks that receipt in the queue and returns to the list.
-      queue.markFiled(stage.queueKey, part);
-      backToQueue(said);
+      // Filing marks that receipt in the queue, with what it became, and returns to the list.
+      queue.markFiled(queueKey, part, filedAs(filing, null, shown));
+      backToQueue(true);
     });
   };
 
@@ -766,6 +415,19 @@ export function Receipts(): React.ReactElement {
         aria-label="The receipt"
         onSubmit={(event) => event.preventDefault()}
       >
+        <PickSelects
+          picks={picks}
+          people={people}
+          shown={shown}
+          paidByLabel="Paid by"
+          whoseLabel="Whose"
+          labelled
+          disabled={busy}
+          onChange={(next) => {
+            queue.pick(queueKey, part, next, people);
+            setMatches(null);
+          }}
+        />
         {field("merchant", "Merchant", "text")}
         <label htmlFor={`${id}-date`}>Date</label>
         <input id={`${id}-date`} type="date" value={form.date} onChange={set("date")} />
@@ -906,7 +568,10 @@ export function Receipts(): React.ReactElement {
                           Whose?
                         </option>
                       )}
-                      <option value={MINE}>Mine</option>
+                      {/* The payer keeps it: Mine when that is whoever took the photo (lg-102). */}
+                      <option value={MINE}>
+                        {payer === receipt.uploadedBy ? "Mine" : shownName(shown, payer)}
+                      </option>
                       {others.map((person) => (
                         <option key={person} value={person}>
                           {shownName(shown, person)}
@@ -980,6 +645,7 @@ export function Receipts(): React.ReactElement {
             </output>
           )}
           {(itemsUnread ||
+            unfileable === ITEMS_UNREAD ||
             unfileable === NOBODY_ELSE ||
             unfileable === NOBODY_CHOSEN ||
             unfileable === UNPICKED_CHARGE ||
@@ -990,68 +656,33 @@ export function Receipts(): React.ReactElement {
         <SpendingCategoryPicker
           id={`${id}-spending`}
           categories={offered}
-          value={spendingCategoryId}
+          value={form.spendingCategoryId}
           noneLabel="None"
-          onChange={setSpendingCategoryId}
+          onChange={(value) => setDraft((before) => ({ ...before, spendingCategoryId: value }))}
         />
-        {/* The whole receipt as someone's is a line's; a joint row has its items (lg-91). */}
-        {other !== null && !joint && (
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={theirs}
-              onChange={(event) => setTheirs(event.target.checked)}
-            />
-            {several ? "This was someone else's" : `This was ${shownName(shown, other)}'s`}
-          </label>
-        )}
-        {theirs && several && !joint && (
-          <>
-            <label htmlFor={`${id}-whose`}>Whose it was</label>
-            <select
-              id={`${id}-whose`}
-              value={wholeWhose ?? ""}
-              onChange={(event) => setWholeChosen(event.target.value)}
-            >
-              {others.map((person) => (
-                <option key={person} value={person}>
-                  {shownName(shown, person)}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-        <div className="actions">
-          {joint ? (
-            <button type="button" disabled={busy} onClick={payMyself}>
-              Paid with my own card
+        {joint ? (
+          <div className="actions">
+            <button className="primary" type="button" disabled={busy} onClick={lookUp}>
+              File it
             </button>
-          ) : (
-            <button
-              className="primary"
-              type="button"
-              disabled={busy}
-              onClick={() => fileAs("line")}
-            >
-              File as {shownName(shown, payer)}&rsquo;s line
-            </button>
-          )}
-          <button type="button" disabled={busy} onClick={payJointly}>
-            Paid with the joint card?
-          </button>
-        </div>
+          </div>
+        ) : (
+          <p className="muted hint">
+            Filed from the list: go back to the queue, select it and tap File selected.
+          </p>
+        )}
       </form>
-      {matches !== null && matches.length === 0 && (
+      {joint && matches !== null && matches.length === 0 && (
         <p className="muted hint">No joint-account row of that amount within a few days.</p>
       )}
-      {matches !== null && matches.length > 0 && (
+      {joint && matches !== null && matches.length > 0 && (
         <ul className="matching" aria-label="Rows it may be">
           {matches.map((match) => (
             <li key={match.rowId}>
               <span>
                 {match.date} · {match.description} · {formatCents(match.amountCents)}
               </span>
-              <button type="button" disabled={busy} onClick={() => fileAs(match.rowId)}>
+              <button type="button" disabled={busy} onClick={() => attach(match.rowId)}>
                 Attach to this row
               </button>
             </li>
@@ -1059,7 +690,7 @@ export function Receipts(): React.ReactElement {
         </ul>
       )}
       <div className="actions">
-        <button type="button" disabled={busy} onClick={() => backToQueue(null)}>
+        <button type="button" disabled={busy} onClick={() => backToQueue(false)}>
           Back to the queue
         </button>
       </div>

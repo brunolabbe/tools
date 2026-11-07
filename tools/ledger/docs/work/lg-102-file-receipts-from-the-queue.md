@@ -141,3 +141,61 @@ decide on its own.
 - 2026-11-03 — Build 4 and Done when 3 now name the Taxable hold that PR #748
   added to the receipt screen after this ticket was filed. Its gate found a batch
   built from the brief as written would file what the opened form refuses.
+
+### 2026-11-07 — built (Claude Opus 5.5, builder)
+
+Built on `1eafa0c6`. Every step of the Build is in; the gate is pending.
+
+- **Contract and API (Build 1, 2).** The `line` destination has
+  `paidBy: string | null`, `.nullable().default(null)`. `fileReceipt` resolves
+  the payer once (`payerOf`) and hands it to `chargedToOf` and `fileLines`.
+- **The code for an unknown or departed `paidBy` is `BAD_REQUEST`.** The
+  dispatch named `PERSON_NOT_FOUND` as a candidate. It is not the code this path
+  uses: `fileReceipt` already refuses a person it cannot take with
+  `BAD_REQUEST`, through `requireKnownPerson` ("That person is not one of the
+  household.") and `requireRowItems` for a departed member on a row. Its message
+  is also wrong for a departed member, who was added: "That person is not one
+  this household's members have been added as." A name the books never held
+  gets `requireKnownPerson`'s message. A member who has left gets "Whoever paid
+  is a current member of the household." No code was added and the taxonomy is
+  unchanged.
+- **The web.** `web/src/receipts/filing.ts` is new. It holds the draft, the two
+  picks and `receiptState`, which the form and the batch both read, so a row in
+  the list is held for exactly what its opened form holds (`refusal`). The queue
+  (`Queue.tsx`) keeps each receipt's draft and picks by photo and part
+  (`entries`). It files the selected ones one at a time, and each row says
+  `Filing…`, `Not filed: <why>`, or filed with what it became.
+  `Receipts.tsx` reads and writes the queue's entry, so "Back to the queue"
+  keeps the edits.
+- **Changing who paid moves each item's choice with it** (`repick`). An item
+  the old payer kept is charged to them, and one charged to the new payer
+  becomes theirs to keep. To and from the joint card it does what lg-91's two
+  buttons did. The item select's first option is "Mine" when the payer is the
+  person who took the photo, and the payer's name otherwise.
+- **`paidBy` is sent only when it differs from the uploader.** A receipt filed
+  as before sends the request it always sent.
+- **Joint card from the list.** The list looks up the rows. With one match it
+  attaches. With none or several the row says "Not filed: Open it to choose the
+  row." Opened, **File it** lists the rows.
+
+What the brief had wrong or left open:
+
+- **A receipt typed in had no way to be filed.** Build 5 removes the view's
+  line button and Done when 6 forbids one, but a receipt typed in from a photo
+  that was not read (or whose read failed) had no row in the list. Such a
+  receipt is now a row in the list like a read one, from the moment it is
+  opened. If it is left blank it is dropped on the way back, so an accidental
+  "Type it in" does not block **Read all** for that photo. lg-92's "1 receipt
+  typed in from this photo, filed." line is gone, because the row now says it.
+- **The view's "said" line after filing moved onto the row.** It used to be an
+  `<output>` above the list. With several receipts filed at once, one line could
+  not say which receipt it meant. Every lg-8 to lg-94 web test that read it
+  now reads the row.
+- **The existing web tests filed from the form's "File as …'s line".** About 40
+  of them now file from the list through one helper (`fileFromQueue`). They
+  assert what they did before. A refusal they read as the form's alert is now
+  the row's `Not filed:` line (`rowRefusal`). `generated-ids.test.tsx`'s receipt
+  anchor is now the Whose option `Sam's — owes all of it`.
+- `tools/ledger/CLAUDE.md` still says a line is "paid by **whoever uploaded the
+  photo**". It is not edited here, since the Build does not name it. The report
+  proposes the line. `docs/00-ANALYSIS.md` §6 says the same and is corrected.

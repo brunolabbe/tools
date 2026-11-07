@@ -484,7 +484,8 @@ is what feeds them:
 - **Purchases on a personal card** are receipts. A photo is taken on a phone, a
   model reads the merchant, date, total and taxes, and the person confirms. It
   becomes a line in the open period for **whoever took the photo**, identified
-  by Access (§7).
+  by Access (§7), unless the person says another member paid it (lg-102: one
+  member photographs receipts the other paid for).
 - **A purchase on the joint account's card** is matched to its pasted row by
   amount within a date window, and the person confirms. It documents the row and
   is not a period line, since the money already left the buffer.
