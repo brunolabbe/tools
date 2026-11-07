@@ -446,3 +446,24 @@ the work they change.
   change, saying that on a row there is one charge per person per category (lg-100). It
   is the only contract edit approved. The builder had not folded it in because the
   contract is an owner stop.
+
+Both applied in the same round:
+
+- **The fallback is tested directly.** `api/test/receipts.test.ts`, "a charge
+  splitByCategory cannot divide is filed as one line under no category, named by every
+  item of the person", mocks `@ledger/books` so `splitByCategory` answers `[]` while a
+  flag is set, files sam's beer and soap on the joint row, and asserts one pot line of
+  2 127 with `spending_category_id` `null`, one charge on the filing, and both `theirs`
+  items naming that line. Red with the branch planted out
+  (`const parts = slices;` in place of the fallback): `1 failed | 95 passed (96)`,
+  `AssertionError: expected [] to deeply equal [ ObjectContaining{…} ]`. Green with it
+  restored. The earlier statement stands as the reason a mock is needed: the search over
+  1 452 two-category charges (prices -5,00 $ to 5,00 $, taxable or not, with and without
+  a deposit, taxes printed to match) found 0 that `splitByCategory` could not divide, so
+  the branch is not reachable through the API.
+- **The contract comment** on `ReceiptFiling.charges` now adds that on a row it is one
+  per person per category their items fall in (lg-100), so a person can appear twice.
+  Comment only; `git diff` on `contract/src/receipts.ts` is the one hunk.
+- `npx vitest run` on `tools/ledger/api/test/receipts.test.ts` and
+  `tools/ledger/web/test/receipts.test.tsx` → exit 0, `195 passed (195)`;
+  `npm run check` → exit 0.

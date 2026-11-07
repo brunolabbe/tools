@@ -23,6 +23,7 @@ import type {
   SpendingStatsResponse,
   StoredRow,
 } from "@ledger/contract";
+import type * as Books from "@ledger/books";
 import { createModelReader } from "@ledger/receipts";
 import type { ReceiptReader } from "@ledger/receipts";
 import { loadApiConfig } from "../src/config.ts";
@@ -51,7 +52,7 @@ import { renderPaste, withBalances } from "./helpers/paste.ts";
 // a test sets this to make it answer none and drive the branch that files for it.
 const forced = vi.hoisted(() => ({ undivided: false }));
 vi.mock("@ledger/books", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@ledger/books")>();
+  const actual = await importOriginal<typeof Books>();
   return {
     ...actual,
     splitByCategory: (...args: Parameters<typeof actual.splitByCategory>) =>
