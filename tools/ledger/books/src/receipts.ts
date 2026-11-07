@@ -215,8 +215,10 @@ export function itemsAddUp(proposal: ReceiptProposal): boolean {
  * search is exponential: n rebated items are 2ⁿ − 1 readings to sum, 255 at 8
  * and over a million at 20, and a receipt can hold `MAX_RECEIPT_ITEMS`. The
  * more subsets there are, the likelier two of them make the same total by
- * chance, which the search would then call ambiguous anyway; a receipt with
- * more rebates than this is left to the person.
+ * chance, which the search would then call ambiguous anyway. The bound limits
+ * the subset search only: the repair that takes every rebate out still runs
+ * above it, so a receipt with more rebates than this is repaired when that one
+ * repair makes the items add up, and is left to the person otherwise.
  */
 export const MAX_REBATES_SEARCHED = 8;
 

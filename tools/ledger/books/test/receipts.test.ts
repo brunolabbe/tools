@@ -1517,4 +1517,14 @@ describe("a rebate already in the printed price (lg-101)", () => {
     expect(rebates(repaired)).toEqual([null]);
     expect(checkReceipt(repaired)).toEqual(["taxable-differs"]);
   });
+
+  test("a reading whose mixed-sign rebates already add up is returned as read", () => {
+    // A purchase's -1,00 $ and a return's +1,00 $ cancel: the items make 0 as
+    // read, and with both rebates taken out they would still make 0. Only the
+    // early return says so; the repair searches would take both out.
+    const reading = noTaxLines(0, [printed("A", 1_000, -100), printed("B", -1_000, 100)]);
+    expect(itemsAddUp(reading)).toBe(true);
+
+    expect(dropPrintedRebates(reading)).toBe(reading);
+  });
 });
