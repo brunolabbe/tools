@@ -335,3 +335,18 @@ Checks for round 1:
 - `npx vitest run tools/ledger/web/test` read 1 failed of 387 once, while the
   e2e suite ran beside it. The run named no test, and two runs after it read
   387 of 387. The failure is unidentified, recorded here so that it is not lost.
+
+### 2026-11-07 — the owner's answers to gate 2 (`00c80458`), recorded before the landing's fixes
+
+Gate 2 found one med (N1), one open-decision low (N2) and three lows (N3, N4,
+N5), and left gate 1's live-region finding fixed in part. The owner answered on
+2026-11-07 through `AskUserQuestion`, relayed by the orchestrator.
+
+1. **N2, the bar's selects are the bar's own memory.** **Chosen: "Keep each
+   row's", applied at the landing with no re-gate.** Each of the bar's two
+   selects starts on, and returns to, a "Keep each row's" entry, so the bar never
+   shows a pick it did not apply. This was the gate's recommendation. Not chosen:
+   the same change plus a narrow gate 3; one hint line at landing; as built.
+2. **The rest. Chosen: fix N1 and N4 at landing; record N3, N5 and the live
+   region's silent repeat unfixed.** This was the orchestrator's recommendation.
+   Not chosen: fix N1 only; record all.
