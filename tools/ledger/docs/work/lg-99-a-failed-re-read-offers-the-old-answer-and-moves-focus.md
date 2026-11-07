@@ -3,7 +3,7 @@ id: lg-99
 tool: ledger
 title: A failed re-read offers the old answer again, and opening a row can move focus to another
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -191,6 +191,66 @@ so it stands as written.
 5. Any visible text or control the answer adds to History is covered by the History case of
    `tools/ledger/e2e/layout.spec.ts` at 360 px and at desktop width.
 6. `npm run check` and `npm test -- --project ledger` pass.
+
+## Review
+
+**Gate: FAIL** — 2026-11-07 · `1eafa0c6..191f8927` · Opus 5.5, depth full
+
+| Done when                                                                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Both answers recorded with their options; `status: ready` in that commit                                 | **verified** by reading `1ee7cc08`'s diff: question 1 "answered: a" (from a–d), question 2 "answered: a" (from a–c), owner and date named, `status: needs-decision` → `ready` in the same commit; matches the intake answers the dispatch carries (F2 1a, N1 2a)                                                                                                                                                                                                                           |
+| 2. F2 steps show the answer's behaviour; the test fails on `580dabbe`'s `History.tsx`, passes on the branch | `web/test/history.test.tsx` › "a stored save whose re-read fails disables that row's button, with a line, until a read replaces the list (lg-99)" ✓ — asserts disabled, the line, the control will not open, Show more leaves the mark, a filter read clears it and preselects `sam`. Red alone on the base's `History.tsx` (identical to `580dabbe`'s), green on head; red alone under three plants (filter clear removed, Show more clears, `disabled` removed)                          |
+| 3. N1 arms read the focus the answer sets; the test fails on `580dabbe`, passes on the branch               | `web/test/history.test.tsx` › "opening row B while row A's control is open does not send focus to A when the click focuses nothing (lg-99)" ✓ — red alone on base, green on head, red alone with `closedByOwn.current &&` removed. Arm 2, "… leaves focus on B when the click focuses the button (lg-99)", is green on both, as the Reproduction says it is today. The no-focus-on-click browser is jsdom's click, which is what the Reproduction's own arm 1 specifies; graded as written |
+| 4. lg-95's two named tests still pass, unchanged                                                            | **verified** — the test-file diff is one hunk appended after the last test, 0 deleted lines; both pass, 21 of 21 in the file. See F1: the focus test passes on head while the Save half of what it asserts is broken in Chromium                                                                                                                                                                                                                                                           |
+| 5. New visible text in the History case of `layout.spec.ts` at 360 px and desktop                           | `e2e/layout.spec.ts` › "History fits a phone and a desktop with a stored change whose re-read failed" ✓ — `e2e` (ledger) SUCCESS at `191f8927`; also run here on port 8303, 1 passed, both screenshots opened: the line wraps inside the row, no sideways scroll                                                                                                                                                                                                                           |
+| 6. `npm run check` and `npm test -- --project ledger` pass                                                  | `npm run check` exit 0 here; `check` (CI) and `test (ubuntu-latest)` (CI) SUCCESS at `191f8927`. The ledger project was not re-run locally                                                                                                                                                                                                                                                                                                                                                 |
+
+- **high** · F1 · no `Done when` line of lg-99 depends on it by its words; Done when 4's
+  intent does · A successful Save no longer gives focus back to the row's button in a real
+  browser. `refile` adds the row to `unread` before the re-read, so when the control closes
+  the button is already `disabled`, `Refile`'s effect calls `focus()` on a disabled button
+  (a no-op), and spends `closedByOwn`; nothing restores focus when the re-read succeeds and
+  the button is enabled again. Chromium, the layout seed, Save stubbed, re-read real: head
+  `active=BODY` at 0 ms and 400 ms re-read delay, base `active=BUTTON:Change who and what: …`
+  at both. jsdom with the re-read deferred: head `BODY` in both arms, base the button. lg-95's
+  "the button reports whether its control is open, and takes focus back when it closes"
+  passes only because its mocks resolve in one batch with the close, so a test passes while
+  the claim it asserts is broken; `Refile`'s comment ("Only when this row's own Cancel or
+  Save closed it") promises a restore the code does not make for Save. The same early mark
+  shows the "has not been read since this change … Change a filter or reload" line, and a
+  disabled button, for the length of every successful re-read. The branch's Log says focus
+  falls to the page only when the re-read fails. Direction, not a remedy (unrun): mark the
+  row only when the re-read fails, or keep the claim until the re-read settles.
+- **low** · F2 · no `Done when` line depends on it · After a Save whose re-read fails, focus
+  falls to the page (base: to the then-enabled button). Forced by option 1a's `disabled`; no
+  `Done when` line and nothing in Why rests on it, and the Log says so. Where focus should go
+  (the alert, the line, or the page) is the owner's if F1's fix does not settle it.
+- **low** · F3 · no `Done when` line depends on it · N1 survives inside a Save's latency: A
+  open, A's Save clicked without focusing it, B clicked before `classifyRow` answers → focus
+  goes to A's button (jsdom, `pending-other-nofocus active A`), because `closedByOwn` is set at
+  the Save click, not by the close. Narrow window; the save's completion closes B's control
+  anyway (pre-existing, base identical).
+- **low** · F4 · `nfr:maintainability` · `history.test.tsx`'s `beforeEach` still uses
+  `vi.clearAllMocks`, so a failing test leaves its `mockResolvedValueOnce` queue for the next:
+  on base `History.tsx` the full file fails 4 tests where 3 fail alone (arm 2 passes alone);
+  with `disabled` removed, 3 fail in the file and 1 alone.
+- **low** · F5 · Closing a row's control with its own toggle button no longer restores
+  focus in the no-focus-on-click arm (head `BODY`, base the button). What option 2a's words
+  say ("only … Cancel or Save"); recorded, not a defect against the answer.
+- **dropped** · a finished Save closes whichever control is open, another row's included
+  (`setChanging(null)`); base identical, out of the reviewed range — worth a ticket.
+- **dropped** · `refile`'s re-read uses the `key` captured at Save, so a filter change during a
+  save is overwritten by the old query's rows; pre-existing, out of range.
+- **dropped** · "a read path that replaces the list without clearing `unread`, or clears it
+  without replacing the list": none. The filter/initial read and the save's re-read both
+  replace and clear; Show more appends and keeps; a failed filter read shows no list and
+  keeps the mark until a read succeeds (probed: 1a–1e all as the answer says).
+- **findings** · the hunt returned 8; 5 carried, 3 dropped (two out of range, one refuted).
+- Shuffle: the file whole and with `--sequence.shuffle` seeds 1–5, 21 of 21 each; no
+  order-dependent result on head.
+- Invariants: contract untouched, no `console`, no `any`, no new package or route; others
+  (shell, SSRF, redaction, image closure) not reachable by the diff.
+- NFR: security n/a · performance n/a · reliability — F1, F3 · maintainability — F4.
 
 ## Log
 
