@@ -449,3 +449,85 @@ Option 1, as the owner answered it (Decision, above).
   to `contract/src/errors.ts` approved, and the import command on the same bounds. The
   Build and `Done when` 1 to 3 are reworded to them; the intake's stale point (lg-88
   has merged, base re-run at `08f78f69`) is recorded beside the answers.
+- 2026-11-07 — Built (builder, no ship authority), branch `lg-96-bound-a-sheets-extent`,
+  base `08f78f69`. What changed: `api/src/xlsx.ts` charges each sheet in `placesOf`
+  before `rowsOf` builds it, with one running total across the workbook's sheets;
+  `MAX_WORKBOOK_ROWS` and the new `MAX_WORKBOOK_SLOTS` (2 000 000) live in
+  `api/src/workbook-bounds.ts` (`workbook-describe.ts` re-exports the rows one, so its
+  importers are unchanged); `describeWorkbook` rethrows `WORKBOOK_TOO_LARGE` from its
+  `readSheets` `try`; the one approved prose edit is in `contract/src/errors.ts`. The
+  import command needs no change of its own: it calls the same `readSheets`, and its
+  catch prints the refusal's message and exits 2.
+  - **Where this departs from the ticket's words, for the gate to check.** (1) A row
+    counts for at least one place: `placesOf` adds `max(width, 1)` for each row up to
+    the last that holds a value, a gap row counting one. The owner's answer was the sum
+    of each row's width; on that alone a far cell costs 1 slot a sheet, and case 5 with
+    its far cell on the row axis (`A1` and `A19000`, listed 20 000 times) would pass the
+    cap while building 400 million empty rows. Counted this way a real workbook is
+    11 196 plus its 1 719 rows, about 12.9 thousand against 2 million. If the owner
+    wants the plain sum, the alternative is a workbook-wide row total refused as
+    `rows`; it is a one-line change in `placesOf`, and case 5's test would then move to
+    the column axis (123 entries, `A1` and `XFD1`). (2) The row refusal is "a cell that
+    holds a value in a row past 20 000", not `!data.length`: SheetJS's `!data` can end in
+    stub rows that `rowsOf` drops, and the test "a stub below the last row that holds a
+    value is no row" pins it. (3) The rows bound named in the refusal is per sheet and the
+    route's own workbook-wide rows check after the read stays as it was.
+  - **The control in case 5 is gone by design.** The Reproduction's one-entry control
+    (`A1` and `A100000`) is now refused as `rows` on the branch, as it has a cell past row
+    20 000; the control is the one-entry file at `A19000`, which the test
+    "case 5" reads.
+  - **Readings**, one script (`measure.mts`, scratch only) on both trees, the fixture
+    written by one process and read by another, `readSheets` and `describeWorkbook`
+    imported before `gc()` and the baseline, one process at a time, the machine shared. Base is
+    this branch's tree before its source change (`b3fd4660`, whose source is `08f78f69`'s);
+    branch is `8e622a7a`, the source of `52ee7fc9`. Figures are the growth of `maxRSS`
+    over the baseline, in MB.
+
+    | Case                                                          | Base `08f78f69`                              | Branch                                          |
+    | ------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------- |
+    | 1. one far cell, `readSheets`                                 | +66.9, +64.9, +67.0; 117–148 ms              | `rows`, +9.3, +10.9, +9.0; 62–70 ms             |
+    | 2. one far sheet, through the route                           | +65.9, +56.2 (`rows`, after the build)       | `rows`, +9.2, +6.6                              |
+    | 3. ten far sheets, through the route                          | +484.2, +495.4; peak 600.4, 612.6; 1.1–1.8 s | `rows` at the first sheet, +7.6, +9.3; 66–67 ms |
+    | 4. 1 000 rows at `XFD`                                        | +189.8; 1.5 s                                | `slots`, +10.1                                  |
+    | 4. 4 000 rows at `XFD`                                        | +730.6, +729.1; 7.3–7.8 s                    | `slots`, +13.3, +13.0; 147 ms                   |
+    | 4. control, 4 000 rows at `B`                                 | +3.4, +2.1; 65 ms                            | read, 4 000 rows, +2.2, +2.3                    |
+    | 5. 40 entries, far cell `A100000`                             | +173.5, +174.2; 40 sheets read               | `rows` at the first entry, +1.0, 0.0            |
+    | 5. control, one entry, `A100000`                              | +3.9; 1 sheet read                           | `rows` (past row 20 000), 0.0                   |
+    | 5 variant: 150 entries, far cell `A19000` (not in the ticket) | +131.7; 150 sheets read                      | `slots` at the 106th entry, +89.8               |
+    | 5 variant: 105 entries, `A19000` (the most the cap admits)    | not run                                      | read, 105 sheets, +90.1                         |
+    | 4. 122 rows at `XFD` (the most the cap admits)                | not run                                      | read, +32.0                                     |
+
+    The base figures agree with the ticket's table (case 1 +62 to +63, case 3 +498 to
+    +533, case 4 at 4 000 rows +719 to +729, case 5 +198), within the script-to-script
+    spread the Reproduction warns of; case 5 reads about 25 MB lower than gate 3's
+    (taken before lg-88 merged); the reason is not measured.
+    **What the cap admits** is the bound on the memory: 122 rows at `XFD` is +32 MB, and
+    105 entries of 19 000 gap rows is +90 MB. A gap row costs about 45 MB a million
+    places, and a width place about 16 MB a million (2 million of them, +32 MB), against
+    the 11 MB a million that the owner's "about 22 MB" took from case 4's readings. The
+    cap's worst case measured is about 90 MB, under the 512 MB container by a wide margin.
+
+  - **Skipped, and why**: 40 far sheets (the 1.9 to 2.1 GB extrapolation), a 20 000-row
+    far-column sheet (3.6 GB), and 20 000 far entries (100 GB) were never run, as the
+    dispatch said; five far sheets in case 3 was not re-run (it was not asked and case 3's
+    ten are the figure). The base was run on `08f78f69` only for the cases the ticket had
+    measured.
+  - **Red/green** by two mutations, each committed and restored from a sha (`e528e146` and
+    the restore `8e622a7a`): with `placesOf` not called, 8 of the 117 tests in
+    `xlsx.test.ts`, `workbook-describe.test.ts` and `workbook-import.test.ts` fail (cases 1,
+    4 and 5, the running total, the two command tests, and the `slots` route tests); with
+    the charge on and the `WORKBOOK_TOO_LARGE` rethrow in `describeWorkbook` removed, the 4
+    route tests (Describe and Confirm, `rows` and `slots`) fail as `WORKBOOK_NOT_XLSX`.
+  - **Tests**: `xlsx.test.ts` gains 8 (case 1; the last admitted row; a stub row; case 4 at
+    122 and 123 rows; the control; the total across two sheets; case 5, 105 entries read
+    and 106 refused; a wide row costs its own width), `workbook-describe.test.ts` 4
+    (Describe and Confirm, `rows` and `slots`, through the real reader) and
+    `workbook-import.test.ts` 2 (the command, `rows` and `slots`; no books directory is
+    created). Build 5's "unbounded" test does not apply and is replaced by those two.
+    A sheet-written fixture whose `!ref` spans XFD costs the writer far more than the read
+    (a 3 000-row version with the wide cell at `XFD1` took 32 s to write), so the "wide
+    row" test uses `ZZ1`.
+  - **Fold-in, not done**: none found.
+  - **Not proven here**: the Windows leg and CI; they are the draft pull request's.
+  - **Suites**: `npm test -- tools/ledger/api` at `8e622a7a`: 53 files, 1 354 of 1 354
+    tests pass, so `xlsx.test.ts` as a whole holds (`Done when` 4); `npm run check` exit 0.
