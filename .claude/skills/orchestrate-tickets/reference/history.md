@@ -6857,3 +6857,53 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - Fixed-at-landing for fully stated lows, on owner choice, closed four tickets with no extra gate.
 - Holding #734 as a draft for merge order, then a maintenance merge from main (twice), kept both layout tests and no rebase.
 - `node scripts/next-id.mjs <prefix> --rev origin/main` re-run just before the push caught nothing the second time, but is the check that would have prevented the lg-98 collision.
+
+### Batch 2026-11-07 (tools-a5, lg-101 lg-102 lg-99, lg-103 filed, lg-100 answered) — base 1eafa0c6
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | ac0aed141055024e3 | seam-mapper, lg-98 lg-101 lg-102 (+ lg-96 lg-99 lg-100 for decisions), from a detached snapshot of origin/main | 2m56s / 2m40s | 0 | $0.4505 |
+| #752 | open, ready, 11/11 green at 32b0b281 (CodeQL, codeql, Windows) | Opus 5.5 / high | ada7967379b2fe030 | builder-hard, lg-101 | 10m01s / 9m42s | 0 | $3.4967 |
+| #752 | as above | Sonnet 5.5 / xhigh | aab6dd11c12d91d41 | ticket-reviewer-sonnet, lg-101 gate 1 | 14m31s / 13m03s | 0 | $2.2341 |
+| #752 | as above | Sonnet 5.5 / high | aac99045f1c0ffdab | fixer, lg-101 two lows at landing + `awaiting` + landing (resumed once past a sibling exit 16) | 5m24s / 5m03s | 0 | $0.8015 |
+| #753 | open, draft (held for merge order: merges main after #752 and #751), 11/11 green at 37d470da | Opus 5.5 / high | a9ca416d5483199bb | builder-hard, lg-102, then round 1 (resumed) | 38m29s / 1h04m48s | 0 | $20.1601 |
+| #753 | as above | Sonnet 5.5 / xhigh | a8c64faa85908001e | ticket-reviewer-sonnet, lg-102 gate 1 | 21m17s / 19m57s | 0 | $5.0841 |
+| #753 | as above | Sonnet 5.5 / xhigh | ad26f8e4d99e1f173 | ticket-reviewer-sonnet, lg-102 gate 2 | 19m22s / 18m17s | 0 | $4.1771 |
+| #753 | as above | Sonnet 5.5 / high | a7f61c830a5ad00de | fixer, lg-102 one owner choice + one med + one low at landing + landing, held as draft | 8m16s / 8m09s | 0 | $1.5163 |
+| #751 | open, ready, 11/11 green at bf152330 (CodeQL, codeql, Windows) | Sonnet 5.5 / high | a7c7da7149d8a7915 | builder-standard, lg-99, then round 1 (resumed) | 12m11s / 31m37s | 0 | $2.1879 |
+| #751 | as above | Opus 5.5 / high | a1e933d83f33d2642 | ticket-reviewer-opus, lg-99 gate 1 (FAIL) | 10m18s / 9m20s | 0 | $2.7367 |
+| #751 | as above | Opus 5.5 / high | a08cc3b5afe25cc6e | ticket-reviewer-opus, lg-99 gate 2 (FAIL) | 11m03s / 11m01s | 0 | $3.1271 |
+| #751 | as above | Sonnet 5.5 / high | a3c7471b9faa5897c | fixer, lg-99 round 2 (gate 2's high + one low) | 9m18s / 8m46s | 0 | $1.1026 |
+| #751 | as above | Opus 5.5 / high | ad681cf4fe39ec044 | ticket-reviewer-opus, lg-99 gate 3, narrow | 7m31s / 7m27s | 0 | $2.6065 |
+| #751 | as above | Sonnet 5.5 / high | a2e2cb8fdce9324e0 | fixer, lg-99 gate 3's med at landing + landing | 6m05s / 5m53s | 0 | $1.1693 |
+| #754 | open, ready, checks pending at f82bc902 at close (docs-only) | Haiku 5.5 / high | ac1ed5f0196174ef9 | builder-mechanical, lg-100 answer + lg-103 filing (maintenance), then round 1 (resumed) | 11m24s / 49m31s | 0 | $0.8458 |
+| #754 | as above | Sonnet 5.5 / xhigh | a9e5221948abd0c84 | ticket-reviewer-sonnet, lg-103 gate 1, narrow (FAIL) | 8m25s / 8m22s | 0 | $1.4748 |
+| #754 | as above | Sonnet 5.5 / xhigh | a75397097b6c48e12 | ticket-reviewer-sonnet, lg-103 gate 2, narrow | 6m58s / 6m57s | 0 | $1.3739 |
+| #754 | as above | Sonnet 5.5 / high | ad4bc1727c9ac95f6 | fixer, two lows at landing + lg-103 owner answer + ready | 3m09s / 2m46s | 0 | $0.5517 |
+| — | — | Opus 5.5 / high | orchestrator ff1249d8 | orchestrator (floor) | 2h09m27s / 5h43m43s | 1 | $9.3948 |
+| | | | | **total** (rates read 2026-10-10) | 5h36m05s | 1 | **$64.4915** |
+
+**Tickets:**
+
+- lg-101 → #752: gate 1 PASS (Sonnet), three lows: F1 recorded (owner), F2 + F3 fixed at landing; Done when 6 `awaiting` the owner's paid read. Total $6.53.
+- lg-102 → #753: gate 1 CONCERNS (Sonnet; two meds, no Done when), round 1 on four owner answers (Remove control, bar sets only the changed pick, plant-killing tests, live region); gate 2 CONCERNS (Sonnet; one med, no Done when); owner's "Keep each row's" + N1 + N4 at landing, no re-gate. Builder retired at $20.16. Total $30.94.
+- lg-99 → #751: gate 1 FAIL (Opus; high F1, the branch's early unread mark lost the focus restore), round 1 by the builder; gate 2 FAIL (Opus; high N1, round 1's fix let a reopened control save a stale answer); round 2 by a fixer; gate 3 narrow CONCERNS (Opus; N1 fixed in part, the success path graded med, pre-existing on main) → fixed at landing on the owner's say. Total $12.93.
+- lg-100 (answer A) + lg-103 (filing) → #754: gate 1 narrow FAIL (high: the reproduction could pass under no fix; high: Q2 described an impossible state), round 1; gate 2 narrow PASS, two lows at landing; owner answered lg-103 Q1 (A) at landing, so both tickets are `ready`. Total $4.25.
+
+**Defects in the skill:**
+
+1. `reference/dispatching.md`, _Routing a round_ — the conditional ship authority it gives ("if preflight exits 0 and the diff's scope is unchanged, land it yourself") carries no exception for a sibling's mergeTree exit 16, which the same page says blocks only the branch that merges second; lg-101's lander stopped on it with the owner's merge order already set. Reproduction: `grep -n 'exits 0' reference/dispatching.md` → `:180`; `grep -n 'Preflight exit 16 against a sibling' reference/dispatching.md` → `:155`; the lander's `--land` printed `preflight failed: mergeTree (exit 16)` against #753 only (relayed).
+2. `roles/common.md`, opening paragraph ("51 KB against 50 KB") — repeat of 2026-11-01's item 4: two gates (lg-101 gate 1, lg-103 gate 2) were cut printing two pages. Reproduction: `git show origin/main:…/roles/common.md origin/main:…/roles/reviewer.md | wc -c` → `37699` (re-run); the cut at 36.8 KB is relayed from both gates.
+3. `roles/reviewer.md`, _When you are dispatched as gate 2, or later_, and `gate.md`, _The section_ — repeat of 2026-11-01's item 5: no rule for the severity of a `fixed in part` remainder; lg-99's gate 3 graded the remainder `med` from a `high` and said a reading keeping `high` would make it FAIL. Reproduction: `grep -n 'fixed in part' roles/reviewer.md review-ticket/gate.md` → `reviewer.md:232`, `gate.md:337`, `:340`, none naming a severity.
+4. `roles/reviewer.md`, _When you are dispatched as gate 2, or later_ — the per-gate letters (`F`, `N`, `P`) collide with a ticket's own ids, and `gate.md`'s example section carries no ids, so gate 1 numbers nothing and gate 2 numbers gate 1's findings itself. Reproduction: `grep -n 'for gate 2' roles/reviewer.md` → `:199`; `git show 42446ded:tools/ledger/docs/work/lg-99-…md | grep -c 'N1'` → `15`, all lg-95's (relayed); `grep -c '\*\*F[0-9]' lg-102/gate-1/gate-1@4f2a8572.md` → `0` (relayed).
+5. `gate.md`, step 4 and the severity table's `med` row ("a new branch in a file with no test file of its own") — silent on a new file tested only through its consumer's spec; lg-102's gates 1 and 2 graded surviving plants in `filing.ts` `med` by their own reading. Reproduction: `grep -n 'test file of its own' review-ticket/gate.md` → `:133`, `:188`; `ls tools/ledger/web/test | grep -ci filing` → `0` at 37d470da.
+6. `reference/records.md`, _Fixed at landing_ ("in the fix's own commit, before `--land`") — a mutation proof needs the committed tree, so its numbers exist only after the commit; lg-101's lander split the mark into a second commit, lg-102's amended its unpushed fix commit. Reproduction: `grep -n "fix's own commit" reference/records.md` → `:114`; both landers' reports (relayed).
+7. `reference/dispatching.md`, _Re-gating_ ("they take the tree, the output directory and the sha to restore to as arguments") — repeat of 2026-11-01's item 3: gate 1 scripts still hard-code a worktree or read files another script writes into the output directory. Reproduction: `grep -n 'agent-a8c64faa85908001e' <scratch>/lg-102/gate-1/run-parity.sh` → `6:HEAD=/workspaces/tools/.claude/worktrees/agent-a8c64faa85908001e`; `grep -n History.base.tsx <scratch>/lg-99/gate-1/e2e.sh <scratch>/lg-99/gate-1/runs.sh` → `e2e.sh:18` reads it, only `runs.sh:8` writes it (both re-run).
+8. `roles/fixer.md`, _The work_ — a fix applied at landing with no re-gate (lg-102's N2, a visible bar change) has its screenshots read by the lander alone, and the page names no other reader. Reproduction (relayed, not re-run): lg-102 lander's report, "its screenshots are my reading alone".
+9. `roles/common.md`, _Preflight runs longer_ — repeat of 2026-11-01's item 8: a background `until grep -q done <exit file>; do sleep 10; done` with `run_in_background: true`, and a foreground `timeout 280 tail --pid=<pid> -f /dev/null`, both worked; the page names neither. Reproduction (relayed, not re-run): lg-99 round-2 fixer's report.
+
+**Worked, and worth keeping:**
+
+- A seam map read from a detached snapshot of `origin/main` while the shared checkout sat one commit behind and a peer was live (`git worktree add --detach <scratch>/main-<sha> <sha>`), so no reset of the shared tree.
+- Reading the base's code before asking the owner about a gate 3 remainder settled "introduced or pre-existing" in one command, and the lander then confirmed it red on main's `History.tsx`.
+- A narrow gate on a filing caught a reproduction that no fix could turn green (lg-103 F1); the plant-the-obvious-fix attack is what found it.
