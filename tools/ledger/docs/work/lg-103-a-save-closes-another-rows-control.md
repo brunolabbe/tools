@@ -30,9 +30,11 @@ that branch's range: the base is identical. The owner chose to file it.
 
 Reproduced on `origin/main` at `1eafa0c6` (the tip when this was filed). The
 reproduction is a test that asserts the reading the ticket expects: the other row's
-control stays open. On `main` it fails, which is the reproduction. It is not in the
-repo; to run it, copy the file below to `tools/ledger/web/test/`, run it, and delete
-the copy.
+control stays open. It waits for the Save's own notice (`<output>`, role `status`)
+to show that the Save is stored. It cannot wait for "no button named Save": B's open
+control renders one, so that wait never ends while B stays open. The test is not in
+the repo; to run it, copy the file below to `tools/ledger/web/test/`, run it, and
+delete the copy.
 
 ```tsx
 // @vitest-environment jsdom
@@ -149,7 +151,8 @@ for (const arm of ["nofocus", "focus"] as const) {
     );
     save.resolve(SAVED);
     await waitFor(() => {
-      if (screen.queryByRole("button", { name: "Save" }) !== null) throw new Error("open");
+      // The Save's own notice: B's open control also renders a Save button.
+      if (screen.queryByRole("status") === null) throw new Error("open");
     });
     await wait(30);
     const readings = buttons().map((x) => x.getAttribute("aria-expanded"));
@@ -165,11 +168,16 @@ Steps:
 
 1. `cp` the file above to `tools/ledger/web/test/zz-lg103-repro.test.tsx`, from the
    worktree root.
-2. `npm run build`, then `npx vitest run tools/ledger/web/test/zz-lg103-repro.test.tsx`.
-3. `rm tools/ledger/web/test/zz-lg103-repro.test.tsx`. A copy left in `test/` fails
+2. `npm run build`, then `PROBE_OUT=<a scratch file> npx vitest run
+   tools/ledger/web/test/zz-lg103-repro.test.tsx --reporter=verbose`.
+3. Planted fix, to see the test pass: in `tools/ledger/web/src/history/History.tsx`,
+   replace line 289 `setChanging(null);` with
+   `setChanging((open) => (open === row.id ? null : open));`, run step 2 again, then
+   restore the file (`git checkout <sha> -- <path>`; the file is not otherwise edited).
+4. `rm tools/ledger/web/test/zz-lg103-repro.test.tsx`. A copy left in `test/` fails
    the next `npm run check` on `oxfmt --check`.
 
-Output on `main` at `1eafa0c6` (`exit 1`; `PROBE_OUT` pointed at a scratch file):
+Output on `main` at `1eafa0c6` (`exit 1`, the red reading):
 
 ```
  × |ledger| tools/ledger/web/test/zz-lg103-repro.test.tsx > another row opens while A's Save is pending, nofocus
@@ -187,54 +195,64 @@ pending-other-focus after-save expanded ["false","false"]
 pending-other-focus after-save active "BUTTON:Change who and what: B, 2026-10-10"
 ```
 
+Output with the planted fix at step 3 (`exit 0`, the green reading):
+
+```
+ ✓ |ledger| tools/ledger/web/test/zz-lg103-repro.test.tsx > another row opens while A's Save is pending, nofocus 298ms
+ ✓ |ledger| tools/ledger/web/test/zz-lg103-repro.test.tsx > another row opens while A's Save is pending, focus 139ms
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+
+pending-other-nofocus expanded ["false","true"]
+pending-other-nofocus after-save expanded ["false","true"]
+pending-other-nofocus after-save active "BUTTON:Change who and what: A, 2026-10-10"
+pending-other-focus expanded ["false","true"]
+pending-other-focus after-save expanded ["false","true"]
+pending-other-focus after-save active "BUTTON:Change who and what: B, 2026-10-10"
+```
+
 The first line of each pair is A and B's `aria-expanded` while A's Save is pending;
 the second is the same after the Save is stored. The `active` lines are where focus is
-after the Save: A's button in the no-focus arm, B's in the focus arm.
+after the Save. They are the same with the planted fix as on `main`: A's button in the
+no-focus arm, B's in the focus arm.
 
 ## Decision — open
 
-**Who decides:** the owner. Two questions. The second arises only if the first is
-answered A. The options are listed without a recommendation.
+**Who decides:** the owner. One question is open. The options are listed without a
+recommendation.
 
 **1. What happens to another row's open control when a Save completes?**
 
 1. **A. The completed Save closes only its own row's control.** `refile` clears the
    open control only when it is the saved row's; today `setChanging(null)` clears
-   whatever is open. Costs: one change in `History.tsx`; lg-99's `closedByOwn` ref and
-   focus effect then need the case of a close by Save while another row's control is
-   open, which is question 2. The stored answer is the same.
+   whatever is open. Costs: one line in `History.tsx`, the planted change in the
+   Reproduction (green there). Focus has no consequence: the `active` lines are the
+   same as on `main` in both arms (the green output above), and gate 1 on `5629dcab`
+   read the same on `main` and on #751's `History.tsx`. The stored answer is the same.
 2. **B. Hold every row's Change control while a Save is in flight.** No other control
    can open until the Save answers, so the completion cannot reach one. Costs: a slow
    Save holds every other row's control for its round trip, and lg-99's `disabled` on
-   the unread row becomes one on the whole list while a Save is saving. No focus
-   question arises.
+   the unread row becomes one on the whole list while a Save is saving. Focus under B
+   is **not measured**. Gate 1 on `5629dcab` reasoned that it is a cost: `refile` calls
+   `setChanging(null)` before the re-read and `setSaving(false)` after it, so a Change
+   button disabled by `saving` is disabled while the control closes. #751's own comment
+   says a button must be enabled while its control closes, or the focus handed back to
+   it goes nowhere. A one-row run of B did not show that, because its mocked re-read
+   resolved at once; a slow re-read is the measurement, and it was not run here.
 3. **C. Leave it, and record it.** Costs nothing now. The window is a Save's round
    trip: a control opened inside it closes when the Save answers, and the person opens
    it again. Recorded in the Log; no test is added.
 
-**2. Only if question 1 is A: where focus goes when a completed Save closes its own
-control while another row's control stays open.** On `main` the two arms differ (see
-Reproduction): focus goes to A's button in the no-focus arm and stays on B's button in
-the focus arm.
-
-1. **a. Focus goes to the saved row's own button, in both arms.** Costs: in the focus
-   arm, a person who had focus on B's control is moved out of it to A's button, which
-   changes `main`'s reading.
-2. **b. Focus stays in B's control if it is there; otherwise it goes to A's button, as
-   now.** Costs: a new condition in the focus-restore effect of `Refile`, which lg-99's
-   PR #751 also changes, so the two must agree.
-
 ## Build
 
-Pending the decision above; no remedy is chosen here. Once question 1 is answered (and
-question 2, if it applies):
+Pending the decision above; no remedy is chosen here. Once question 1 is answered:
 
 1. `web/src/history/History.tsx`, `refile`: the close follows the answer. Under A,
-   `setChanging` clears only the saved row's id. Under B, `Refile`'s change control is
-   disabled on every row while `saving`. Under C, nothing changes.
-2. Under A, `Refile`'s focus effect (`closedByOwn`, `wasOpen`) follows question 2.
-3. `web/test/history.test.tsx`: the reproduction's two arms, as tests in that file.
-   Under C, no test is added.
+   `setChanging` clears only the saved row's id (the planted line in the
+   Reproduction). Under B, `Refile`'s change control is disabled on every row while
+   `saving`. Under C, nothing changes.
+2. `web/test/history.test.tsx`: the reproduction's two arms, as tests in that file,
+   with the Save's notice as the wait. Under C, no test is added.
 
 ## Done when
 
@@ -242,10 +260,11 @@ Written before the decision; reworded with the owner's answer.
 
 1. A test in `tools/ledger/web/test/history.test.tsx` runs the reproduction's two arms
    and proves that when A's Save completes, B's open control stays open
-   (`aria-expanded` `["false","true"]`). It fails on `main` at `1eafa0c6`.
-2. Under question 2, the focus outcome the owner chose is asserted in the same two arms.
-3. Under question 1 C, no test is added, and the Log records the choice.
-4. `npm run check` and `npm test -- --project ledger` pass.
+   (`aria-expanded` `["false","true"]`, the wait being the Save's notice). It fails on
+   `main` at `1eafa0c6` (the red output above) and passes with the answer's change
+   (the green output above, under A).
+2. Under question 1 C, no test is added, and the Log records the choice.
+3. `npm run check` and `npm test -- --project ledger` pass.
 
 ## Log
 
@@ -257,8 +276,8 @@ Filed from lg-99's gate 1 (Opus 5.5, at lg-99's `191f8927`). The gate's words: "
 Its open decision 3 recommended filing it, with the reproduction it had: `pending-other-*
 after-save expanded ["false","false"]` on base and head. The owner chose to file it.
 
-- **Reproduced on `main`** at `1eafa0c6`, with the test in the Reproduction above. The
-  output is there. `git status --short` was empty after the copy was removed.
+- **Reproduced on `main`** at `1eafa0c6`, with the test in the Reproduction above; the
+  red output is there, and the planted fix's green output too.
 - **lg-99's branch.** lg-99 (PR #751, branch `lg-99-reread-and-focus`, head
   `42446ded`) changes `History.tsx`'s focus handling, and it leaves this behaviour as it
   is: `gh pr diff 751` has no changed line that names `setChanging`, only context lines
@@ -269,8 +288,39 @@ after-save expanded ["false","false"]` on base and head. The owner chose to file
   where the Build's lines land. Neither depends on the other, since the defect is on
   `main`; the merge order only matters for the text.
 - **Not measured:** that the stored answer goes to A's row (the probe mocks
-  `classifyRow` and asserts only the controls), and whether a closed control keeps
-  what the person chose in it.
+  `classifyRow` and asserts only the controls), whether a closed control keeps what the
+  person chose in it, and focus under Q1 B (see the Decision).
 - **Readings.** The probe's readings match the gate's on base (its probe-base output,
   `pending-other-nofocus` and `pending-other-focus`, `after-save expanded`
   `["false","false"]`).
+
+### 2026-11-07, round 1 (gate 1 on `5629dcab`: FAIL)
+
+Gate 1 (Sonnet 5.5, narrow) failed the filing on five findings. Each is answered here.
+
+- **F1, high: the reproduction could not pass under any fix.** Its wait was "no button
+  named Save", and B's open control renders one. Under the planted fix it timed out
+  (`Error: open`) and logged no `after-save` line. The wait is now the Save's own notice
+  (`<output>`, role `status`). Red on `main` with the stated message; green with the
+  planted fix in both arms (the outputs above). The earlier output, with the old wait, was
+  the same assertion failure on `main` and is superseded.
+- **F2, high: question 2 described a state that cannot occur.** `changing` holds one row
+  id, so opening B closes A's control before A's Save completes. The focus on A's button
+  in the no-focus arm comes from B's opening, which lg-95's N1 names, not from the Save.
+  With the one-line fix, both arms already give what Q2's option b describes. So Q2's
+  costs for option b, and Q1 A's "closedByOwn needs the case of a close by Save", priced a
+  change nothing needs. **The owner chose on 2026-11-07, through AskUserQuestion: drop
+  Q2, and say that Q1 A has no focus consequence, citing the gate's readings** (the
+  gate's recommendation). Not chosen: keep Q2 as a recorded non-question. Q2 was
+  removed from the Decision and its options are recorded here as they stood:
+  - a. Focus goes to the saved row's own button, in both arms. Costs: in the focus arm,
+    a person who had focus on B's control is moved out of it.
+  - b. Focus stays in B's control if it is there; otherwise it goes to A's button, as
+    now. Costs: a new condition in `Refile`'s focus effect, which #751 also changes.
+- **F3, med: Q1 B's "no focus question arises" was not run.** It is marked not measured
+  in the Decision, with the gate's reasoning. It is not measured here; the builder of
+  lg-103 judges it.
+- **F4, low:** the ticket carries no recommendation, and the pull request body says so
+  too. No change; the dispatch's recommendation is in the report, not the file.
+- **F5, low:** lg-100's stale sentences were reworded in a separate commit on this branch,
+  recorded in lg-100's Log.
