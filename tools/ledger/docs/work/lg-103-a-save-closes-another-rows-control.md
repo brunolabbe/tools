@@ -3,7 +3,7 @@ id: lg-103
 tool: ledger
 title: A finished Save closes whichever row's control is open, another row's included
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -216,7 +216,15 @@ the second is the same after the Save is stored. The `active` lines are where fo
 after the Save. They are the same with the planted fix as on `main`: A's button in the
 no-focus arm, B's in the focus arm.
 
-## Decision — open
+## Decision — answered 2026-11-07 by the owner
+
+**Chosen: A, the completed Save closes only its own row's control.** Asked through
+AskUserQuestion, with the three options below and a fourth, "not now"; the ticket
+carried no recommendation. Not chosen: B, hold every row's Change control while a
+Save is in flight; C, leave it and record it; and "not now". The Build and `Done when`
+below are written for A.
+
+The question as it was asked, and its options as written then:
 
 **Who decides:** the owner. One question is open. The options are listed without a
 recommendation.
@@ -245,25 +253,23 @@ recommendation.
 
 ## Build
 
-Pending the decision above; no remedy is chosen here. Once question 1 is answered:
+**Chosen by the owner on 2026-11-07: option A.** The steps are:
 
-1. `web/src/history/History.tsx`, `refile`: the close follows the answer. Under A,
-   `setChanging` clears only the saved row's id (the planted line in the
-   Reproduction). Under B, `Refile`'s change control is disabled on every row while
-   `saving`. Under C, nothing changes.
+1. `web/src/history/History.tsx`, `refile`: `setChanging` clears only the saved row's
+   id (the planted line in the Reproduction), not whatever row's control is open.
 2. `web/test/history.test.tsx`: the reproduction's two arms, as tests in that file,
    with the Save's notice as the wait. Under C, no test is added.
 
 ## Done when
 
-Written before the decision; reworded with the owner's answer.
+Written for A, the option the owner chose on 2026-11-07.
 
 1. A test in `tools/ledger/web/test/history.test.tsx` runs the reproduction's two arms
    and proves that when A's Save completes, B's open control stays open
    (`aria-expanded` `["false","true"]`, the wait being the Save's notice). It fails on
    `main` at `1eafa0c6` (the red output above) and passes with the answer's change
    (the green output above, under A).
-2. Under question 1 C, no test is added, and the Log records the choice.
+2. The owner chose A, so the branch of question 1 that adds no test (C) does not apply.
 3. `npm run check` and `npm test -- --project ledger` pass.
 
 ## Log
@@ -324,3 +330,17 @@ Gate 1 (Sonnet 5.5, narrow) failed the filing on five findings. Each is answered
   too. No change; the dispatch's recommendation is in the report, not the file.
 - **F5, low:** lg-100's stale sentences were reworded in a separate commit on this branch,
   recorded in lg-100's Log.
+
+### 2026-11-07, decision
+
+- 2026-11-07 — The owner answered the `## Decision` question through AskUserQuestion:
+  **A, the completed Save closes only its own row's control.** The ticket carried no
+  recommendation. Not chosen: B (hold every row's Change control while a Save is in
+  flight), C (leave it and record it), and "not now". The question and its options are
+  kept under the heading, unedited.
+- Status moved `needs-decision` to `ready` in the commit that records the answer, as
+  `roles/builder.md` says. `difficulty` stays `standard`: A is one line in `History.tsx`
+  and a test.
+- The Build's opening and its step 1, and `Done when`'s preamble and item 2, are
+  reworded for A. The Build's step 2 and `Done when` item 1 are not touched by this
+  commit.
