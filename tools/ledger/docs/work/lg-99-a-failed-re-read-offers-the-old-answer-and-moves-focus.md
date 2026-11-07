@@ -307,6 +307,53 @@ New findings, in the lines this round touched:
 - **Invariants:** no `any`, no `console`, contract untouched. Shell, SSRF, redaction and image closure cannot be reached by the round.
 - **NFR:** security n/a · performance n/a · reliability — N1, N2 · maintainability — N3.
 
+### Gate 3
+
+**Gate: CONCERNS** — 2026-11-07 · `42446ded..06adad74` · Opus 5.5, depth narrow (N1's fix only)
+
+Gate 3 raises no new findings, so none of its ids is used. In its full report, P1 to P6 are probe cases, not findings.
+
+| Done when                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Answers recorded with their options; `status: ready`                         | **verified**: this round's ticket diff adds 57 lines and deletes none, and `status: ready` is unchanged at the head                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 2. F2 steps show the answer's behaviour; red on `580dabbe`, green on the branch | `web/test/history.test.tsx` › "a stored save whose re-read fails disables that row's button, with a line, until a read replaces the list (lg-99)" ✓. It passes alone (`1 passed \| 24 skipped (25)`) and in the full file (`25 passed (25)`). The click made during the re-read, which gate 2 raised as N1, is now proven by "a re-read that fails closes the control that was reopened while it ran (lg-99)" ✓. That test is red alone and in the file on `42446ded`'s `History.tsx`, at `expected 'true' to be 'false'` |
+| 3. N1 arms read the focus the answer sets                                       | `web/test/history.test.tsx` › "opening row B while row A's control is open does not send focus to A when the click focuses nothing (lg-99)" ✓, in the full file (`25 passed (25)`). The round only adds 4 lines inside `refile`'s `catch`, so gate 2's red readings on the base still apply. I did not re-run them                                                                                                                                                                                                        |
+| 4. lg-95's two named tests still pass, unchanged                                | **verified**: "… takes focus back when it closes (lg-95)" and "a save whose re-read fails closes the control … (lg-95)" each pass alone (`1 passed \| 24 skipped (25)`) and in the full file (`25 passed (25)`). The round's test diff deletes 0 lines                                                                                                                                                                                                                                                                    |
+| 5. New visible text covered in the History layout case                          | `e2e/layout.spec.ts` › "History fits a phone and a desktop with a stored change whose re-read failed" ✓, because `e2e (ledger)` is SUCCESS at `06adad74`. The round adds no text and no control                                                                                                                                                                                                                                                                                                                           |
+| 6. `npm run check` and `npm test -- --project ledger` pass                      | `check` (CI) and `test (ubuntu-latest)` (CI) are SUCCESS at `06adad74`, along with all 10 checks on the head                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+Gate 2's findings:
+
+- **N1 (high): fixed in part.**
+  - **The failed re-read is fixed.** I re-ran gate 2's `zz-gate2-lg99.test.tsx` on the head. G1 reads: `after-fail expanded "false"`, `save null`, `select null`, `disabled true`, `line true`. No second Save is sent. G3 reads: B's control stays open (`bExpanded "true"`, `bSave true`).
+  - **The new tests catch the regressions.** The first new test is red on `42446ded`'s `History.tsx`. The second is red, alone and in the file, under an unconditional `setChanging(null)` plant.
+  - **Chromium, a control reopened during a held re-read that then fails:** the control closes, there is no Save, and focus is on `BODY`. That holds with focus on the button and with focus on the "Belongs to" select. It is the same as gate 2's `BODY` reading for a failed re-read that was not reopened, so it is not a finding.
+  - **What remains: the successful re-read**, the same mechanism (the control can be reopened during the re-read, and it preselects the old answer).
+    - When the re-read succeeds, the reopened control stays open with `alex` selected, while the row now reads `sam · Current`. Save is enabled again.
+    - A Save sends `{"rowId":1,"personId":"alex","bucket":"current-expenses"}`, and the notice reads "R is now alex · Current expenses." (probe P4).
+    - The same happens on `42446ded`. On `191f8927` it could not happen, because the button was disabled during the re-read.
+  - **Grading of what remains: `med`.** No `Done when` line depends on it. Answer 1a covers the failed read, and here the read succeeded. No shipped text is false here: the row is not marked, and the notice states what was stored. That is why this clause is not graded `high` as N1 was. A person still has to act within the re-read's window to reach it. Whether to fix it is put to the owner below.
+- **N2 (low): not fixed, recorded unfixed as the owner chose.** The fix adds one more consequence through the same cause (probe P5). The sequence:
+  1. A filter read replaces the list during A's re-read.
+  2. A's control is reopened on the fresh list, where it correctly preselects `sam`.
+  3. A's stale re-read then fails.
+
+  The stale `catch` then closes that control as well as marking the row. This errs on the safe side: Save in that control was disabled while `saving`, so nothing could be sent from it.
+
+- **N3 (low): not fixed, recorded as the owner chose.**
+- **N4 (low): fixed.** The Log quotes the sentence from round 1's entry that begins "Round 1, gate 1's probe", and that sentence is there as quoted. The Log says gate 1's F2 was measured in jsdom and that gate 2's Chromium reading agrees with it. N2 and N3 are recorded unfixed, with the owner's answer.
+
+Findings:
+
+- **dropped** · A sequence of reopen, close, reopen (by the row's button, or by Cancel), then a failed re-read: the control closes and `classifyRow` is called once (P1, P2). Not a defect.
+- **dropped** · A selection changed in the reopened control is discarded when the control closes (P3). Save was disabled while `saving`, so nothing could be sent from that control, and the owner's answer 1a closes it. This follows from the owner's decision; it is not a defect.
+- **dropped** · Two of A's re-reads cannot overlap. Save is disabled in every row while `saving`. A click on the reopened Save sends nothing (P6: `classifyRow` 1, `fetchRows` 2).
+- **dropped** · `closedByOwn` is not left set after a Cancel during the re-read. The `Refile` effect clears it whenever `open` is false, and a reopen while `saving` does not set it. The jsdom reading meant to show this (P2's B toggle) proves nothing: focus never left the disabled button. This conclusion rests on reading the code. Chromium was not measured for the Cancel path.
+- **findings** · the hunt returned 6. 1 was carried, as N1 `fixed in part`. 1 was folded into N2. 4 were dropped.
+- **Test runs:** the file passes 25 of 25. With `--sequence.shuffle`, seeds 1 to 3 each pass 25 of 25. Gate 2's probe passes 6 of 6. My probe passes 8 of 8 on the head and on `42446ded`.
+- **Invariants:** no `any`, no `console`, contract untouched. Shell, SSRF, redaction and image closure cannot be reached by 4 lines in a React `catch`.
+- **NFR:** security n/a · performance n/a · reliability: N1's success-path clause, N2 · maintainability ✓
+
 ## Log
 
 - 2026-11-01 — Filed at the owner's choice, from lg-95's gate 2 (PASS at `f6e06db1`), which
