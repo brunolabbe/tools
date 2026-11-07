@@ -2164,3 +2164,137 @@ describe("an item on a joint-account row charged to a person (lg-91)", () => {
     expect(count(target, "period_lines")).toBe(0);
   });
 });
+
+// --- lg-102: who paid, named in the filing ---
+
+describe("a line paid by someone other than whoever uploaded the photo (lg-102)", () => {
+  function linesOf(target: App): unknown[] {
+    return homeBooks(target)
+      .prepare(
+        "SELECT person_id, amount_cents, charged_to FROM period_lines WHERE retired = 0 ORDER BY id",
+      )
+      .all();
+  }
+
+  test("paidBy names the other member: the line is theirs, a not-shared item stays with them, and a theirs item is the uploader's charge", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      // The bread shared, the six-pack the other's (alex, who did not pay), the soap not shared.
+      proposal: marked("shared", "theirs", "not-shared"),
+      destination: asLine(2_476, { paidBy: "sam" }),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const filing = response.json<ReceiptFiling>();
+    // sam paid: the shared line is sam's, less the soap sam keeps (5,74 $) and the six-pack
+    // alex owes sam (15,54 $); the charge is sam's line, charged to alex.
+    expect(linesOf(target)).toEqual([
+      { person_id: "sam", amount_cents: 348, charged_to: null },
+      { person_id: "sam", amount_cents: 1_554, charged_to: "alex" },
+    ]);
+    expect(filing.charges).toEqual([
+      { chargedTo: "alex", lineId: filing.chargeLineId, owedToPot: false },
+    ]);
+    expect(filing.filedBy).toBe("alex");
+    expect(storedItems(target)).toEqual([
+      { share: "shared", charged_to: null, charge_line_id: null },
+      { share: "theirs", charged_to: "alex", charge_line_id: filing.chargeLineId },
+      { share: "not-shared", charged_to: null, charge_line_id: null },
+    ]);
+  });
+
+  test("the whole receipt charged to whoever uploaded it, paid by the other", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+
+    const response = await file(target, receipt.id, {
+      proposal: READ,
+      destination: asLine(2_650, { paidBy: "sam", chargedTo: "alex" }),
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(linesOf(target)).toEqual([{ person_id: "sam", amount_cents: 2_650, charged_to: "alex" }]);
+  });
+
+  test("a request with no paidBy files exactly as before: paid by whoever uploaded the photo", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+    const destination = asLine(2_476);
+    expect(destination).not.toHaveProperty("paidBy");
+
+    const response = await file(target, receipt.id, {
+      proposal: marked("shared", "theirs", "not-shared"),
+      destination,
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(linesOf(target)).toEqual([
+      { person_id: "alex", amount_cents: 348, charged_to: null },
+      { person_id: "alex", amount_cents: 1_554, charged_to: "sam" },
+    ]);
+    // `null` is the same request spelled out.
+    const second = await uploaded(target, ALEX);
+    const spelled = await file(target, second.id, {
+      proposal: marked("shared", "theirs", "not-shared"),
+      destination: asLine(2_476, { paidBy: null }),
+    });
+    expect(spelled.statusCode, spelled.body).toBe(200);
+    expect(linesOf(target).slice(2)).toEqual(linesOf(target).slice(0, 2));
+  });
+
+  test.each([
+    ["a name the books never held", "robin", "That person is not one of the household."],
+    ["a member who has left", "casey", "Whoever paid is a current member of the household."],
+  ])("refuses %s as the payer, and files nothing", async (_case, paidBy, message) => {
+    const directory = memberDirectory(THREE);
+    const target = await start({ directory });
+    // The books enrolled casey when they opened; the directory no longer holds them.
+    directory.removeMember({
+      address: "casey@example.test",
+      by: "operator",
+      at: new Date("2026-10-02T00:00:00Z"),
+    });
+    const receipt = await uploaded(target, ALEX);
+
+    const refused = await file(target, receipt.id, {
+      proposal: READ,
+      destination: asLine(2_650, { paidBy }),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error).toMatchObject({ code: "BAD_REQUEST", message });
+    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+  });
+
+  test("the whole receipt charged to whoever paid is refused as today", async () => {
+    const target = await start();
+    const receipt = await uploaded(target, ALEX);
+
+    const refused = await file(target, receipt.id, {
+      proposal: READ,
+      destination: asLine(2_650, { paidBy: "sam", chargedTo: "sam" }),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(refused.json<ErrorResponse>().error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A charge is owed by the other person, not by whoever paid.",
+    });
+    expect([count(target, "period_lines"), count(target, "receipt_filings")]).toEqual([0, 0]);
+  });
+
+  test("among three, a theirs item that names nobody is still refused whoever paid", async () => {
+    const target = await start({ members: THREE });
+    const receipt = await uploaded(target, ALEX);
+
+    const refused = await file(target, receipt.id, {
+      proposal: named(BASKET, "shared", "theirs"),
+      destination: asLine(2_476, { paidBy: "sam" }),
+    });
+
+    expect(refused.statusCode, refused.body).toBe(400);
+    expect(count(target, "receipt_filings")).toBe(0);
+  });
+});
