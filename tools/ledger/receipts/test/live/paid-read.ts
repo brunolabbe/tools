@@ -25,7 +25,7 @@ export function assertPaidReadConsent(args: readonly string[], env: NodeJS.Proce
   if (flag !== "--paid" || keyFile === undefined || out === undefined) {
     throw new Error(
       "usage: read-rebate-fixtures.ts --paid <key-file> <out.json>\n" +
-        "Three paid reads: --paid is the consent, and nothing is sent without it.",
+        "One paid read per rebate receipt: --paid is the consent, and nothing is sent without it.",
     );
   }
   if ((env["ANTHROPIC_CUSTOM_HEADERS"]?.trim() ?? "") !== "") {

@@ -570,3 +570,34 @@ describe("the model reader's malformed rebates (lg-89)", () => {
     expect(proposal?.items.map((item) => item.discount)).toEqual([200]);
   });
 });
+
+// --- lg-101: a rebate the printed price already holds ---
+
+describe("the model reader's rebates already in the printed price (lg-101)", () => {
+  test("asks for such an item at its printed price with no discount, and not to fold the rebate in", () => {
+    expect(RECEIPT_PROMPT).toContain(
+      "Some receipts print an item's price with its rebate already taken off",
+    );
+    expect(RECEIPT_PROMPT).toContain(
+      "Give such an item its printed price and a null discount, and do not fold that rebate in",
+    );
+  });
+
+  test("returns the two items of the fourth fixture whose prices hold their rebates at those prices, with no discount", async () => {
+    // What the prompt asks of `rebate-in-the-printed-price`: each item at its
+    // price as printed, its rebate line left unfolded and not an item either.
+    const reply = rebateReading(1_827, [
+      { text: "0412 FROMAGE CHEDDAR", price: 649, taxable: false, deposit: null, discount: null },
+      { text: "0631 LAIT 2% 2L", price: 479, taxable: false, deposit: null, discount: null },
+      { text: "0907 PAIN BLANC", price: 349, taxable: false, deposit: null, discount: null },
+      { text: "0218 POMMES GALA", price: 350, taxable: false, deposit: null, discount: null },
+    ]);
+
+    expect(await rebatesOf(reply)).toEqual([
+      { text: "0412 FROMAGE CHEDDAR", price: 649, discount: null },
+      { text: "0631 LAIT 2% 2L", price: 479, discount: null },
+      { text: "0907 PAIN BLANC", price: 349, discount: null },
+      { text: "0218 POMMES GALA", price: 350, discount: null },
+    ]);
+  });
+});

@@ -98,10 +98,12 @@ export type {
   StatRow,
 } from "./stats.ts";
 export {
+  MAX_REBATES_SEARCHED,
   RATE_SCALE,
   RECEIPT_MATCH_DAYS,
   SALES_TAX_RATES,
   checkReceipt,
+  dropPrintedRebates,
   itemsAddUp,
   matchReceipt,
   ratesOn,

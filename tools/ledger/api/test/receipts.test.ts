@@ -2164,3 +2164,71 @@ describe("an item on a joint-account row charged to a person (lg-91)", () => {
     expect(count(target, "period_lines")).toBe(0);
   });
 });
+
+// --- lg-101: a rebate already in the printed price ---
+
+/**
+ * The owner's reproduction (lg-101): a cheese printed at 4,99 $ with its 1,00 $
+ * already off, the `RABAIS -1,00` under it folded in a second time, and a
+ * total of 4,99 $ with no tax.
+ */
+const FOLDED_TWICE: ReceiptProposal = {
+  merchant: "Épicerie Exemple",
+  date: "2026-10-04",
+  subtotal: 499,
+  gst: null,
+  qst: null,
+  total: 499,
+  items: [
+    {
+      text: "FROMAGE",
+      price: 499,
+      taxable: false,
+      deposit: null,
+      discount: -100,
+      spendingCategoryId: GROCERIES,
+      share: "shared",
+      chargedTo: null,
+    },
+  ],
+};
+
+describe("a rebate the printed price already holds (lg-101)", () => {
+  test("a read takes it back out before the check, so the reading is not flagged", async () => {
+    const target = await start({ reader: itemReader(FOLDED_TWICE).reader });
+    const receipt = await uploaded(target);
+
+    const response = await read(target, receipt.id);
+
+    expect(response.statusCode, response.body).toBe(200);
+    const [answered] = response.json<ReadReceiptResponse>().proposals;
+    expect(answered?.proposal.items.map(({ price, discount }) => ({ price, discount }))).toEqual([
+      { price: 499, discount: null },
+    ]);
+    expect(answered?.flags).toEqual([]);
+  });
+
+  test("filing takes the form as the person left it: a rebate typed back in is filed as typed, and never repaired", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+
+    // The reproduction as read, filed unrepaired, is refused rather than repaired.
+    const refused = await file(target, receipt.id, {
+      proposal: FOLDED_TWICE,
+      destination: asLine(499),
+    });
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.json<ErrorResponse>().error.code).toBe("RECEIPT_DOES_NOT_ADD_UP");
+    expect(count(target, "receipt_filings")).toBe(0);
+
+    // The person types the rebate back in, and the total it then makes.
+    const typed = { ...FOLDED_TWICE, subtotal: 399, total: 399 };
+    const filed = await file(target, receipt.id, { proposal: typed, destination: asLine(399) });
+
+    expect(filed.statusCode, filed.body).toBe(200);
+    expect(filed.json<ReceiptFiling>().proposal.items.map((item) => item.discount)).toEqual([-100]);
+    expect(
+      homeBooks(target).prepare("SELECT discount_cents FROM receipt_items").all(),
+    ).toEqual([{ discount_cents: -100 }]);
+  });
+});

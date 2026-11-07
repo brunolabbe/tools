@@ -31,6 +31,7 @@
 
 import {
   checkReceipt,
+  dropPrintedRebates,
   itemsAddUp,
   matchReceipt,
   normalizeDescription,
@@ -236,6 +237,10 @@ export async function uploadReceipt(context: UploadContext, body: unknown): Prom
  * A receipt with anything filed from it is not read again (gate 1, F4): the
  * screen holds the proposals it filed from, and another read would be paid for
  * nothing. `signal` is the request's, so a caller who hangs up stops the call.
+ *
+ * A rebate the reader folded into a price that already held it is taken back
+ * out here, before the check (lg-101, `dropPrintedRebates`), and only here:
+ * filing takes the form as the person left it, a rebate typed back in included.
  */
 export async function readReceipt(
   context: { db: Database; photos: PhotoStore; household: string },
@@ -258,7 +263,8 @@ export async function readReceipt(
     model: reader.model,
     // No more than a photo can file, each as its part (gate 2, N2).
     proposals: proposals.slice(0, MAX_RECEIPTS_PER_PHOTO).map((read) => {
-      const proposal = withOfferedCategories(read, ids);
+      // Before the check, so the flags and the screen see the repaired reading.
+      const proposal = dropPrintedRebates(withOfferedCategories(read, ids));
       return {
         proposal,
         flags: checkReceipt(proposal),
