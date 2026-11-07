@@ -3,7 +3,7 @@ id: lg-99
 tool: ledger
 title: A failed re-read offers the old answer again, and opening a row can move focus to another
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -100,12 +100,16 @@ Arm 2, focus before click (Chrome and Firefox):
 1. Call `focus()` on A's button, then click it. Call `focus()` on B's button, then click it.
 2. Assert: `document.activeElement` is B's button. This holds on `origin/main` today.
 
-## Decision — open
+## Decision — answered 2026-11-07
 
-Two questions, both open. Each answer goes under this heading with the options it was chosen
-from, and `status` moves to `ready` in the commit that records the last of them.
+Two questions, both answered by the owner on 2026-11-07, through AskUserQuestion at intake
+(relayed in the build dispatch). Each answer is recorded under its question with the options it
+was chosen from; `status` is `ready` in the commit that records them.
 
-### 1. The remedy for F2 — open
+### 1. The remedy for F2 — answered: a
+
+**Owner, 2026-11-07: option a** (the recommendation), chosen from a, b, c and d below. The row's
+"Change who and what" button is disabled, with a line beside it, until a read replaces the list.
 
 After a stored save whose re-read fails, what may the row offer?
 
@@ -135,7 +139,10 @@ After a stored save whose re-read fails, what may the row offer?
   reopen and a save without looking. Gate 2 rated it low, and no `Done when` line of lg-95
   depends on it.
 
-### 2. The remedy for N1 — open
+### 2. The remedy for N1 — answered: a
+
+**Owner, 2026-11-07: option a** (the recommendation), chosen from a, b and c below. Focus is
+restored only when the row's own Cancel or Save closed its control.
 
 When row B's control opens while row A's is open, focus should not return to A's button in a
 browser that does not focus on click. What should the screen do?
@@ -156,8 +163,8 @@ browser that does not focus on click. What should the screen do?
 
 ## Build
 
-Written from the recommended options, 1a and 2a. Not to be dispatched until the owner
-answers, and the answer may change it.
+Written from the recommended options, 1a and 2a. The owner answered 1a and 2a on 2026-11-07,
+so it stands as written.
 
 1. F2, option 1a: in `web/src/history/History.tsx`, mark a row whose save is stored but unread
    (set when `classifyRow` succeeds, cleared by the next read that replaces the list), and disable
