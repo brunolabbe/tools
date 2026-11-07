@@ -338,3 +338,29 @@ so it stands as written.
   tools/ledger/playwright.config.ts layout.spec.ts -g History` → `3 passed (8.4s)`;
   `npm test -- --project ledger` exit 0, `Test Files 99 passed (99)`, `Tests 2200 passed
   (2200)`.
+- 2026-11-07 — Gate 2 (Opus 5.5) FAILed `42446ded` on one high, N1, and three lows (N2 to N4;
+  its ids are its own, not lg-95's N1; full report on the pull request thread). Owner's answers,
+  through AskUserQuestion, relayed in round 2's dispatch:
+  1. **N1** (after a stored save, the row's button is enabled while the re-read runs, so the
+     control can be reopened during it and preselects the old answer; when the re-read then
+     fails the row is marked, but the control stays open with Save enabled, and a second Save
+     sends the old answer). Chosen: **a, close that row's control in the `catch`, only if it is
+     that row's**, so another row's open control stays open (the gate's recommendation). Not
+     chosen: b, leave the control open and disable Save while the row is unread.
+  2. **The lows.** Chosen: **fix N4, record N2 and N3 unfixed** (the orchestrator's
+     recommendation). Not chosen: fix N4 and N3, record all three.
+  3. **N4**, the correction. Round 1's last-but-one entry (the one that begins "Round 1, gate
+     1's probe") ends: "the gate's F2 is a Chromium reading, which was not re-measured here."
+     Gate 1 measured F2 in jsdom, where focus stays on a button that becomes disabled; its
+     Chromium probe covered only a successful re-read. Gate 2's Chromium reading of a failed
+     re-read agrees with F2 (`after=BODY disabled=true` at 400 ms), so nothing relied on the
+     error. This entry supersedes that sentence; the earlier entry is left as written.
+  4. **Recorded unfixed, as the owner chose.** N2: a filter change replaces the list while a
+     save's re-read is still running, and that re-read then fails; the `catch` marks the row on
+     a list that was just read, so its button is disabled with the line beside it (on
+     `191f8927` and the base it is not). The line is false in the safe direction; the cause is
+     that the re-read does not check whether the list was replaced since it was sent, the
+     cause of the older overwrite gate 1 dropped. N3: the new "re-read is still running" test
+     checks the pending state at one moment, so with a plant that disables the button by an
+     effect one render after the focus restore it passes alone (2 of 2) and fails in the full
+     file (2 of 2).
