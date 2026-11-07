@@ -132,9 +132,7 @@ describe("the rebate fixtures' paid read: a rebate already in the printed price 
   test("a rebate folded in, a rebate left as an item, a price read net, or an item missing fails", () => {
     const [cheese, milk, ...rest] = asPrinted;
     if (cheese === undefined || milk === undefined) throw new Error("no items");
-    expect(wrong(inPrice, [cheese, { ...milk, discount: -80 }, ...rest])).toContain(
-      "folded twice",
-    );
+    expect(wrong(inPrice, [cheese, { ...milk, discount: -80 }, ...rest])).toContain("folded twice");
     expect(wrong(inPrice, [...asPrinted, item("RABAIS 0631", -80)])).toContain(
       "a negative item is left",
     );

@@ -2227,8 +2227,8 @@ describe("a rebate the printed price already holds (lg-101)", () => {
 
     expect(filed.statusCode, filed.body).toBe(200);
     expect(filed.json<ReceiptFiling>().proposal.items.map((item) => item.discount)).toEqual([-100]);
-    expect(
-      homeBooks(target).prepare("SELECT discount_cents FROM receipt_items").all(),
-    ).toEqual([{ discount_cents: -100 }]);
+    expect(homeBooks(target).prepare("SELECT discount_cents FROM receipt_items").all()).toEqual([
+      { discount_cents: -100 },
+    ]);
   });
 });

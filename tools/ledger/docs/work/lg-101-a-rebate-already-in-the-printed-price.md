@@ -117,3 +117,74 @@ rebate as information on the item: that needs a new field, which is a change to
 Filed from the owner's report on the receipt screen, with lg-102. lg-89 is not
 wrong for receipts that print the price before the rebate; it never asked which
 kind of receipt it had.
+
+### 2026-11-07 — built (Claude Opus 5.5, builder)
+
+Branch `lg-101-rebate-in-printed-price` from `1eafa0c6`.
+
+- **Build 1.** `dropPrintedRebates` and `MAX_REBATES_SEARCHED = 8` in
+  `books/src/receipts.ts`, exported from `books`. `npx vitest run
+  tools/ledger/books/test/receipts.test.ts`: 88 of 88, eight of them the new
+  `a rebate already in the printed price (lg-101)` block at the end of the suite.
+  Mutations, each restored from the commit: the bound raised to 9 failed the
+  `searches the subsets of 8 rebated items, and not of one more` test; `=== 1`
+  made `>= 1` with no tax test failed the ambiguity test and the subset half of
+  the tax test; the tax test dropped from the every-rebate repair failed `a
+  repair that would raise taxable-differs leaves the reading as read`.
+- **Build 2.** The read route runs `dropPrintedRebates` on each proposal
+  before `checkReceipt`; `fileReceipt` does not. `npx vitest run
+  tools/ledger/api/test/receipts.test.ts`: 82 of 82. With the call taken out of
+  the read route, `a read takes it back out before the check` failed (`expected
+  [ { price: 499, discount: -100 } ] to deeply equal [ { price: 499, discount:
+  null } ]`); with it added to `fileReceipt`, the filing test failed (`expected
+  200 to be 422`).
+- **Build 3.** `RECEIPT_PROMPT`'s rebate paragraph and the header comment;
+  two reader tests at the end of `receipts/test/reader.test.ts`.
+- **Build 4.** `receipts/test/fixtures/rebate-in-the-printed-price.html` and
+  its `.png`, rendered with `node --import tsx
+  tools/ledger/receipts/test/live/render-rebate-fixtures.ts`, which re-rendered
+  lg-89's three byte for byte (`git status` showed no change to them). The
+  expectation is a new `unfolded` field on `RebateFixture`: each named item at
+  its printed price with `discount: null`, and no negative item left. Three
+  tests of it at the end of `receipts/test/rebate-live-gate.test.ts`.
+- `npm run check`: exit 0. `npx oxlint tools/ledger/books tools/ledger/api
+  tools/ledger/receipts`: exit 0.
+
+**What the brief had wrong.**
+
+- **Build 4's two lg-89 findings were already fixed**, on `main` with lg-89
+  itself (#717, `25ef6ac7`): `receipts/test/live/paid-read.ts` has `keyFrom`
+  (the `LEDGER=` line, refusing several lines without one) and
+  `assertPaidReadConsent` (refusing `ANTHROPIC_CUSTOM_HEADERS`), which
+  `read-rebate-fixtures.ts` imports, and `receipts/test/rebate-live-gate.test.ts`
+  proves both: `refuses ANTHROPIC_CUSTOM_HEADERS, and never repeats its value`
+  and `refuses several lines with no LEDGER= line, and repeats none of them`.
+  Done when 4 is met by those; nothing was rebuilt.
+- **Done when 2's "`fileReceipt` files a typed-back rebate as typed" cannot
+  tell the two apart on its own.** `dropPrintedRebates` returns any reading that
+  adds up as it is, and `fileReceipt` refuses any that does not, so a typed-back
+  rebate that adds up files the same whether or not filing repairs. What filing
+  without the repair changes is that the reproduction, filed unrepaired, is
+  refused (`RECEIPT_DOES_NOT_ADD_UP`) rather than quietly filed without its
+  rebate. The api test proves both halves, and the mutation above is what it
+  catches.
+- **Three things the brief left open, settled in the code's comments.** A
+  rebate of `0` is no rebate to the search: counted, it would double every
+  subset and make every repair ambiguous. The subset search includes the whole
+  set, so a whole set refused for its taxes still makes a second subset that
+  adds up ambiguous. And ambiguity is counted on `itemsAddUp` alone, before the
+  tax test, as the owner's decision words it ("cannot tell which item was
+  already discounted when two repairs both add up"): the tax test then decides
+  only whether the one repair is taken.
+
+**Fold-in.** Nothing else was made free by this work.
+
+**Done when 6, for the owner.** Four paid reads at Haiku 5.5, from the root of
+a checkout of this branch, with the key file holding a `LEDGER=` line:
+
+    node --import tsx tools/ledger/receipts/test/live/read-rebate-fixtures.ts \
+      --paid .claude/.keys <out.json>
+
+It prints one verdict line per receipt and exits 0 only when all four pass;
+those lines are what this Log records. It reads the reader's own answer, before
+the read route's repair, so it measures the prompt. Not run by the build.

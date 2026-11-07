@@ -1386,8 +1386,16 @@ function printed(
 }
 
 /** A receipt with no tax lines whose total is `total`. */
-function untaxed(total: number, items: ReceiptItem[]): ReceiptProposal {
-  return { merchant: null, date: "2026-11-03", subtotal: total, gst: null, qst: null, total, items };
+function noTaxLines(total: number, items: ReceiptItem[]): ReceiptProposal {
+  return {
+    merchant: null,
+    date: "2026-11-03",
+    subtotal: total,
+    gst: null,
+    qst: null,
+    total,
+    items,
+  };
 }
 
 /** Each item's rebate, in order. */
@@ -1405,12 +1413,12 @@ function powersOfTwo(count: number): ReceiptProposal {
     printed(`ITEM ${String(n)}`, 1_000, -(2 ** n)),
   );
   // Every rebate but the first's 1 cent.
-  return untaxed(count * 1_000 - (2 ** count - 1) + 1, items);
+  return noTaxLines(count * 1_000 - (2 ** count - 1) + 1, items);
 }
 
 describe("a rebate already in the printed price (lg-101)", () => {
   test("the owner's reproduction: 4,99 $ with 1,00 $ off and a total of 4,99 $ is repaired", () => {
-    const reading = untaxed(499, [printed("FROMAGE", 499, -100)]);
+    const reading = noTaxLines(499, [printed("FROMAGE", 499, -100)]);
     expect(checkReceipt(reading)).toEqual(["items-differ"]);
 
     const repaired = dropPrintedRebates(reading);
@@ -1423,14 +1431,14 @@ describe("a rebate already in the printed price (lg-101)", () => {
   });
 
   test("every rebate is taken out when that is what makes the total", () => {
-    const reading = untaxed(799, [printed("FROMAGE", 499, -100), printed("CAFE", 300, -50)]);
+    const reading = noTaxLines(799, [printed("FROMAGE", 499, -100), printed("CAFE", 300, -50)]);
 
     expect(rebates(dropPrintedRebates(reading))).toEqual([null, null]);
   });
 
   test("the one subset whose rebates make the total is taken out", () => {
     // The cheese printed after its rebate, the coffee before: 4,99 $ + 2,50 $ + 3,49 $.
-    const reading = untaxed(1_098, [
+    const reading = noTaxLines(1_098, [
       printed("FROMAGE", 499, -100),
       printed("CAFE", 300, -50),
       printed("PAIN", 349, null),
@@ -1444,7 +1452,7 @@ describe("a rebate already in the printed price (lg-101)", () => {
 
   test("two subsets that both make the total leave the reading as read", () => {
     // Either rebate taken out makes 6,99 $: the arithmetic cannot say which.
-    const reading = untaxed(699, [printed("FROMAGE", 499, -100), printed("CAFE", 300, -100)]);
+    const reading = noTaxLines(699, [printed("FROMAGE", 499, -100), printed("CAFE", 300, -100)]);
 
     expect(dropPrintedRebates(reading)).toBe(reading);
   });
@@ -1459,9 +1467,9 @@ describe("a rebate already in the printed price (lg-101)", () => {
   });
 
   test("a reading whose items already add up, or that carries no rebate, is returned as read", () => {
-    const addsUp = untaxed(399, [printed("FROMAGE", 499, -100)]);
-    const noRebate = untaxed(500, [printed("FROMAGE", 499, null)]);
-    const zeroRebate = untaxed(500, [printed("FROMAGE", 499, 0)]);
+    const addsUp = noTaxLines(399, [printed("FROMAGE", 499, -100)]);
+    const noRebate = noTaxLines(500, [printed("FROMAGE", 499, null)]);
+    const zeroRebate = noTaxLines(500, [printed("FROMAGE", 499, 0)]);
 
     expect(dropPrintedRebates(addsUp)).toBe(addsUp);
     expect(dropPrintedRebates(noRebate)).toBe(noRebate);
@@ -1501,7 +1509,7 @@ describe("a rebate already in the printed price (lg-101)", () => {
 
   test("a reading already flagged taxable-differs is repaired when the repair keeps it so", () => {
     // A mark on a receipt with no tax lines: flagged as read, and after.
-    const reading = untaxed(499, [printed("SAVON", 499, -100, true)]);
+    const reading = noTaxLines(499, [printed("SAVON", 499, -100, true)]);
     expect(checkReceipt(reading)).toEqual(["items-differ", "taxable-differs"]);
 
     const repaired = dropPrintedRebates(reading);
