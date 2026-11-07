@@ -189,3 +189,26 @@ a checkout of this branch, with the key file holding a `LEDGER=` line:
 It prints one verdict line per receipt and exits 0 only when all four pass;
 those lines are what this Log records. It reads the reader's own answer, before
 the read route's repair, so it measures the prompt. Not run by the build.
+
+### 2026-11-07 — owner's answers at gate 1's checkpoint (Claude Sonnet 5.5, fixer)
+
+The owner answered three questions through `AskUserQuestion` on 2026-11-07,
+after gate 1 passed at `b88c551e` with three lows (F1, F2, F3).
+
+- **F1, the every-rebate repair is taken without asking whether another subset
+  also adds up.** Chosen: record it and leave the code (the gate's
+  recommendation). Not chosen: check uniqueness on the every-rebate path too,
+  applied at landing. It shows only with rebates of both signs: on items A
+  `(1000, -50)`, B `(1000, -100)` and C `(-1000, +100)` with total 1000, the head
+  returns `[null, null, null]` where dropping only A also adds up (231 of 2,000
+  tie-heavy mixed-sign cases, 0 of 10,000 same-sign cases, per the gate). Left
+  as it is.
+- **F2 and F3.** Chosen: fix both at landing with no re-gate (the lander's
+  recommendation). Not chosen: fix F2 only and record both.
+- **Done when 6, the owner's paid read.** Chosen: land with it awaiting (the
+  lander's recommendation). Not chosen: hold #752 until the owner runs it. The
+  ticket's `awaiting:` line names it, and the Log records the four verdict lines
+  once the owner has run the command above.
+
+- 2026-11-07 — Fixed at landing by owner choice: gate 1, F2 — "the comment on MAX_REBATES_SEARCHED says a receipt with more rebates than the bound is left to the person". The comment now says the bound limits the subset search only and that the every-rebate repair still runs above it. `git diff b88c551e HEAD -- tools/ledger/books/src/receipts.ts | grep -c '^-.* more rebates than this is left to the person'` → `1`.
+- 2026-11-07 — Fixed at landing by owner choice: gate 1, F3 — "deleting the early itemsAddUp return leaves books/test at 88 of 88". Added `a reading whose mixed-sign rebates already add up is returned as read` at the end of the lg-101 block in `books/test/receipts.test.ts`: items `A 1000 -100` and `B -1000 +100`, total 0. Red with the early `if (itemsAddUp(proposal)) return proposal;` removed from `dropPrintedRebates` (committed tree, `npx vitest run tools/ledger/books/test/receipts.test.ts`): `1 failed | 88 passed (89)`, `expected { merchant: null, …(6) } to be { merchant: null, …(6) } // Object.is equality`. Green with it restored from the commit: `89 passed (89)`.
