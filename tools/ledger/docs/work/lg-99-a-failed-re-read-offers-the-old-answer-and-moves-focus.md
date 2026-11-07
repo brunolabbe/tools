@@ -364,3 +364,34 @@ so it stands as written.
      checks the pending state at one moment, so with a plant that disables the button by an
      effect one render after the focus restore it passes alone (2 of 2) and fails in the full
      file (2 of 2).
+- 2026-11-07 — Round 2, N1 fixed by answer 1a: the `catch` of `refile`'s re-read now also runs
+  `setChanging((current) => (current === row.id ? null : current))`, so a control reopened on
+  the old answer while the re-read ran closes with the mark, and another row's open control is
+  left alone. Tests, appended to `web/test/history.test.tsx`: "a re-read that fails closes the
+  control that was reopened while it ran (lg-99)" holds the re-read, reopens the row's control
+  (`aria-expanded` "true", "Belongs to" reads `alex`, Save disabled because `saving` is true
+  until the re-read settles), rejects the re-read, and asserts the button disabled, the control
+  closed, no Save, and one `classifyRow` call; "a re-read that fails leaves another row's control
+  open (lg-99)" opens row B during row A's re-read and asserts B still open and enabled, with
+  Save, after the rejection. On `42446ded`'s `History.tsx`, the first is red alone and in the
+  full file (`Tests 1 failed | 24 skipped (25)`; `1 failed | 24 passed (25)`) at
+  `expect(button.getAttribute("aria-expanded")).toBe("false")`: `expected 'true' to be 'false'`.
+  The second passes there, as it must: it guards against closing too much, and goes red
+  (`expected 'false' to be 'true'`, alone) under a plant that makes the `catch` call
+  `setChanging(null)` unconditionally, restored from the fix commit. On the fix: both pass alone
+  and `Tests 25 passed (25)` for the file. Focus after that close was measured, not changed:
+  nothing restores it, because `closedByOwn` is false for a close the re-read causes. In jsdom
+  `document.activeElement` stays where it was, the row's own button, now disabled (a temporary
+  assertion, removed); gate 2's `zz-gate2-lg99.test.tsx` agrees (`G4 ... after-fail active
+  BUTTON:..., disabled true`). Chromium drops focus from a disabled button to the page (gate 2's
+  reading for the failed re-read without a reopen); not measured here for the reopened case.
+- 2026-11-07 — Round 2, gate 2's probe `zz-gate2-lg99.test.tsx`, copied unchanged into
+  `web/test/`, run on the fix, removed: `Tests 6 passed (6)`, exit 0. Its N1 reading
+  (`G1`) reads `pending reopen expanded "true"`, `pending reopen select "alex"`, then after the
+  failure `disabled true`, `expanded "false"`, `line true`, `save null`, `select null`: the
+  control is closed and Save is gone, where gate 2 read Save enabled with `alex` selected. `G3`
+  reads B's control still open after A's failure (`bExpanded "true"`, `bSave true`).
+- 2026-11-07 — Round 2 checks on the fix: `npm run check` exit 0; `npm test -- --project
+  ledger` exit 0, `Test Files 99 passed (99)`, `Tests 2202 passed (2202)`. The layout case was
+  not re-run: the round adds no visible text or control. N2 and N3 stay unfixed, as recorded
+  above.
