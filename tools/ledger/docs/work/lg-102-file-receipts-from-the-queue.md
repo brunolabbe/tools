@@ -219,3 +219,36 @@ Checks, at this branch's head:
   hides the camera tile. The picks are styled through `.picks` now. Both
   screenshots of `Receipt queue (to file)` were opened: the selects, the boxes
   and four refusals fit 360 px and 1280 px.
+
+### 2026-11-07 — the owner's answers to gate 1 (`4f2a8572`), recorded before round 1
+
+Gate 1 graded CONCERNS: no high, two meds, six lows. The owner answered on
+2026-11-07 through `AskUserQuestion`, relayed by the orchestrator.
+
+1. **A typed row pins its photo** (gate 1's second med). **Chosen: add a remove
+   control.** Each row gets a way to remove it, and removing it hands the photo
+   back to the reader. It also covers a receipt row the model made up. This was
+   the gate's recommendation. Not chosen: drop blank typed rows on every Back
+   only; keep as built and say so in lg-92's notice.
+2. **The bar's two selects** (open-decision low). **Chosen: apply only the
+   field the person changed.** This was the gate's recommendation. Not chosen:
+   as built; add a "keep each row's" entry to the bar's Paid by.
+3. **The other findings. Chosen: all three go into this round.** This was the
+   orchestrator's recommendation. Not chosen: tests only; record all.
+   - (a) Tests that kill the four surviving plants M13, M15, M17 and M19, each
+     shown red under its plant and green without it.
+   - (b) Restore the two weakened assertions, or their nearest equivalent under
+     the new flow.
+   - (c) Make each row's status line (Filing… / Not filed: … / filed) a live
+     region, so a refusal is announced again.
+4. **`tools/ledger/CLAUDE.md`'s "paid by whoever uploaded the photo"**.
+   **Chosen: the owner edits it themself after #753 merges**, with the wording
+   proposed in the build report: "a line paid by **whoever uploaded the
+   photo**, unless the filing names another current member as payer (`paidBy`,
+   lg-102)". The edit is the owner's to make, and this branch does not touch the
+   file. Not chosen: file a docs ticket; record only.
+
+Recorded unfixed, on the owner's word: `repick`'s path dependence through the
+joint card, and the layout low (the checkbox's size, `.picks > span` matching
+the joint hint, the dead `.part` class). The low's "no filed-row case at 360 px"
+was to be folded in if the remove control made it free.
