@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: hard
+awaiting: Done when 6 — the owner's paid read of the four fixtures (read-rebate-fixtures.ts, four reads at Haiku 5.5, after the merge), the reading its four verdict lines all pass with exit 0, the Log recording them
 ---
 
 # lg-101 — A rebate already taken off the printed price is taken off a second time
