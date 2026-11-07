@@ -1350,3 +1350,44 @@ test("History fits a phone and a desktop with a filed row's change open", async 
   await expect(row.getByRole("button", { name: "Save" })).toBeVisible();
   await fitsBothWidths(page, testInfo, "History (change open)");
 });
+
+/**
+ * lg-99: a save the API stored whose re-read failed leaves the row's button
+ * disabled, with a line beside it. Neither request reaches the books: the save is
+ * answered here, so the shared seed keeps its answers, and the re-read is aborted.
+ */
+test("History fits a phone and a desktop with a stored change whose re-read failed", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/api/classifications", async (route) => {
+    await route.fulfill({
+      json: {
+        id: 9,
+        rowId: 1,
+        bucket: "mortgage",
+        personId: null,
+        ruleId: null,
+        source: "manual",
+        classifiedAt: "2026-11-01T00:00:00.000Z",
+        classifiedBy: "alex",
+      },
+    });
+  });
+  await openTab(page, "History");
+  const row = page
+    .getByRole("list", { name: "Bank rows" })
+    .getByRole("listitem")
+    .filter({ hasText: "Hypothèque /Prêteur Exemple" })
+    .filter({ hasText: "2026-09-12" });
+  const name = "Change who and what: Hypothèque /Prêteur Exemple, 2026-09-12";
+  await row.getByRole("button", { name }).click();
+  // The list was read; every read from here on fails.
+  await page.route("**/api/rows**", async (route) => {
+    await route.abort();
+  });
+  await row.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("alert")).toContainText(/could not be read again/u);
+  await expect(row.getByRole("button", { name })).toBeDisabled();
+  await expect(row.getByText(/The list has not been read since this change/u)).toBeVisible();
+  await fitsBothWidths(page, testInfo, "History (stored change unread)");
+});
