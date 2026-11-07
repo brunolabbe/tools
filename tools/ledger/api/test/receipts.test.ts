@@ -46,6 +46,19 @@ import {
 } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 
+// `splitByCategory` answers none for a charge shaped like a refund, which no
+// receipt filed through the API reaches (lg-100: 0 of 1 452 charges searched), so
+// a test sets this to make it answer none and drive the branch that files for it.
+const forced = vi.hoisted(() => ({ undivided: false }));
+vi.mock("@ledger/books", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@ledger/books")>();
+  return {
+    ...actual,
+    splitByCategory: (...args: Parameters<typeof actual.splitByCategory>) =>
+      forced.undivided ? [] : actual.splitByCategory(...args),
+  };
+});
+
 const KEY = testKey("key-1");
 const NOW = new Date("2026-10-05T12:00:00Z");
 
@@ -2544,6 +2557,31 @@ describe("a person's items in two categories on a joint-account row (lg-100)", (
       { share: "theirs", charged_to: "sam", charge_line_id: filing.charges[0]?.lineId },
       { share: "theirs", charged_to: "sam", charge_line_id: filing.charges[0]?.lineId },
     ]);
+  });
+
+  test("a charge splitByCategory cannot divide is filed as one line under no category, named by every item of the person", async () => {
+    forced.undivided = true;
+    try {
+      const { target, filing } = await fileOnJointRow(SAMS_BEER_AND_SOAP);
+
+      // The person's whole charge, 21,27 $, as lg-91 filed it for items in two categories.
+      expect(potLines(target)).toEqual([
+        expect.objectContaining({
+          person_id: "sam",
+          amount_cents: 2_127,
+          owed_to_pot: 1,
+          spending_category_id: null,
+        }),
+      ]);
+      expect(filing.charges).toHaveLength(1);
+      expect(storedItems(target)).toEqual([
+        { share: "shared", charged_to: null, charge_line_id: null },
+        { share: "theirs", charged_to: "sam", charge_line_id: filing.charges[0]?.lineId },
+        { share: "theirs", charged_to: "sam", charge_line_id: filing.charges[0]?.lineId },
+      ]);
+    } finally {
+      forced.undivided = false;
+    }
   });
 
   test("two people each with items in a category get a line apiece", async () => {
