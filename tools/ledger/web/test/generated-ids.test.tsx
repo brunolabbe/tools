@@ -412,7 +412,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     await showsNamesOnly("by shares: Alex 25.0000 % · Sam 75.0000 %");
   });
 
-  // receipts/Receipts.tsx — Receipts: who files the line, and whose an item was.
+  // receipts/Receipts.tsx — Receipts: who paid, and whose the receipt is (lg-102).
   test("receipts/Receipts.tsx: Receipts", async () => {
     const receipt: UploadedReceipt = {
       id: 3,
@@ -444,7 +444,7 @@ describe("no generated id reaches a screen (lg-76)", () => {
     fireEvent.change(camera, { target: { files: [photo] } });
     fireEvent.click(await screen.findByRole("button", { name: "Type it in" }));
 
-    await showsNamesOnly("File as Alex’s line");
+    await showsNamesOnly("Sam's — owes all of it");
   });
 
   // stats/Cards.tsx — MortgageOwnCard, ContributionCards, SalaryCards, SettlementsCard.

@@ -3,7 +3,7 @@ id: lg-102
 tool: ledger
 title: Say who paid and whose each receipt is from the queue, and file several at once
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -129,6 +129,83 @@ receipts are refused.
 7. `e2e/layout.spec.ts` covers the queue's new controls at 360 px and 1280 px.
 8. `npm run check`, `npm test -- --project ledger` and `npm run e2e:ledger` pass.
 
+## Review
+
+**Gate: CONCERNS** — 2026-11-07 · `1eafa0c6..4f2a8572` · Sonnet 5.5, depth full
+
+| Done when                                                                                                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `api` test: `paidBy` the other member makes their line, a `not-shared` item stays with them; a departed or unknown `paidBy` refused; no `paidBy` files as before | `api/test/receipts.test.ts` › "paidBy names the other member: the line is theirs, a not-shared item stays with them, and a theirs item is the uploader's charge" ✓ (sam's lines 348 and 1,554, the soap outside the shared line); › "refuses %s as the payer, and files nothing" ✓ for "a name the books never held" and "a member who has left"; › "a request with no paidBy files exactly as before: paid by whoever uploaded the photo" ✓. Re-probed at the API: 15 of 15 cases landed as described in the full report |
+| 2. Paid by and Whose on three selected rows, File selected sends three filings with those destinations, one at a time, each row marked filed                        | `web/test/receipts.test.tsx` › "Paid by and Whose set on three selected rows file three receipts, one at a time, each marked filed (lg-102)" ✓: the destination of all three (`paidBy: "sam"`, `chargedTo: "alex"`), call order, at most one in flight, three rows "filed". Plants of `paidBy`, of `chargedTo` and of sequencing each turn it red                                                                                                                                                                         |
+| 3. A row whose items do not add up is not filed and says why, the others file; the same for Taxable marks held                                                      | › "a selected row whose items do not add up is not filed and says why, and the others file (lg-102)" ✓ and › "a selected row whose Taxable marks are held is not filed and says why, and the others file (lg-102)" ✓. Plants of each check turn its tests red. Refusal parity against the base's opened form: 20 of 20 scenarios agree                                                                                                                                                                                    |
+| 4. Joint card attaches on exactly one match; two leaves the row unfiled with "Open it to choose the row"                                                            | › "paid with the joint card, a row is attached on exactly one match, and left for the person on none or two (lg-102)" ✓ (one match attached, two and none each "Not filed: Open it to choose the row."). Planting "any match attaches" turns it red                                                                                                                                                                                                                                                                       |
+| 5. An edit in the receipt view is still there after "Back to the queue" and is what the batch files                                                                 | › "an edit made in the receipt view is still there after Back to the queue, and is what the batch files (lg-102)" ✓ (row relabelled, picks kept, reopened form as left, the request carries the edit). Planting "open rebuilds the entry" turns 58 of 81 red                                                                                                                                                                                                                                                              |
+| 6. The receipt view has no line-filing button and no "This was …'s" checkbox                                                                                        | › "on a household of %s the receipt view has no line-filing button and no This was …'s box (lg-102)" ✓ for two and three, with positive companions (the Paid by and Whose options, File it after the joint card). Planting a "File as" button, and a "This was" box, each turn both cases red                                                                                                                                                                                                                             |
+| 7. `e2e/layout.spec.ts` covers the queue's new controls at 360 px and 1280 px                                                                                       | `e2e/layout.spec.ts` › "the receipt queue fits a phone and a desktop with who paid, whose and a box on each receipt" ✓ — 36 of 36 on `E2E_PORT=8302` at this head; both `Receipt queue (to file)` screenshots opened; CI `e2e` (ledger workflow) SUCCESS at `4f2a8572`                                                                                                                                                                                                                                                    |
+| 8. `npm run check`, `npm test -- --project ledger`, `npm run e2e:ledger` pass                                                                                       | **verified** — `npm run check` exit 0; ledger project 99 files, 2,210 of 2,210; e2e 36 of 36; CI `check`, `test (ubuntu-latest)` and `e2e` (ledger) SUCCESS at `4f2a8572`                                                                                                                                                                                                                                                                                                                                                 |
+
+- **med** · no `Done when` line depends on it · `web/src/receipts/filing.ts` is new and has no test file of its own (`web/test/` holds none); it is tested through `receipts.test.tsx`, and four of its branches survive a planted change with all 81 receipt tests green: the "amount charged and date needed" refusal that Build 4 names (the server's answer to an amount of 0 is the vague "The filing is not valid: check destination."), `repick`'s "a read charge naming nobody is the old payer's one other" default, `settledPicks`'s "never wholly its payer's" clause, and the clearing of a row's refusal when a pick changes. Probed at the head, the first three behave correctly; the fourth is unprobed in the browser.
+- **med** · no `Done when` line depends on it · a receipt typed in and left half done pins its photo. After "Type it in", one character typed and "Back to the queue", the photo loses "Read it" and, after a failed read, "Try again"; the row cannot be removed, and reopening it and blanking it does not drop it (only the first open does). At the base the same steps left "Read it" and "Try again" on the photo. "Start over" discards the whole queue. Reproduction: the full report's `typed-head.jsonl` against `typed-base.jsonl`. Direction, not a tested remedy: a way to remove a typed row, which hands the photo back to the reader.
+- **low** · open decision · the bar's two selects set both picks on every selected row, so changing only Whose resets the payer of every selected row to the bar's payer (probe: a row set to sam is paid by alex after the bar's Whose alone is touched). The brief says the bar "sets Paid by and Whose", so the build meets it. Options: as built; apply only the field the person changed (recommended); add a "keep each row's" choice to the bar.
+- **low** · `nfr:usability` · a row's `Filing…`, `Not filed: …` and filed lines are plain spans. The base's "what the last filing said" was an `<output>` and a refusal was `role="alert"`, so a refusal on a row is no longer announced.
+- **low** · `repick` is path dependent through the joint card: an item alex kept, with the payer moved to sam, is charged to alex (`alex's 15.54 $`); moved to the joint card and then to sam it becomes sam's to keep (`Not shared 15.54 $ · alex's 0.00 $`). The brief is silent; the information is lost on the joint card by lg-91's design.
+- **low** · false in the safe direction · `tools/ledger/CLAUDE.md` still says a receipt line is "paid by **whoever uploaded the photo**". The builder named it and left it, the Build not naming the file.
+- **low** · "files each receipt in a photo of two, and goes back to the one not filed yet" no longer asserts its second half (filing from the form returned to the list with the other receipt still to pick); and "an item left as Mine names nobody once paid jointly, and is Mine again on my own card" asserts that `File it` is absent where it asserted that a line could be filed. Two assertions weakened of the rewritten set; every other removal is moved or stronger.
+- **low** · `nfr:usability` · layout, from the screenshots only: a row's box is a bare checkbox about 19 px square (not measured in a browser); no e2e case shows a filed row with its "Filed as …" line at 360 px; `.picks > span` also matches the joint hint span, harmless in both screenshots; `className="part"` has no rule.
+- **dropped** · `BAD_REQUEST` against `PERSON_NOT_FOUND` for `paidBy`: not a defect. `PERSON_NOT_FOUND` is the directory's rename and retire code (404); every body-named person in the filing, the line routes and the rules routes, and a departed member on a row, already answers `BAD_REQUEST`.
+- **dropped** · a departed `paidBy` refused while a departed `chargedTo` is accepted: the ticket's Build 2 asks for a current member as payer. A decision already made.
+- **dropped** · a joint row attached silently on one amount match, and "Select all" filing readings unreviewed: Build 3 and the Decision.
+- **dropped** · a lost response after the server filed reads "Not filed" and a retry meets `RECEIPT_ALREADY_FILED`: the opened form did the same; no new path.
+- **dropped** · plants that survive and are equivalent: `repick`'s to-the-joint-card branch (a `not-shared` item on the joint card is held by `NOBODY_CHOSEN` converted or not), and the two "filed rows leave Select all / pickSelected" guards (a filed row is already deselected).
+- **findings** · the hunt returned 15; 8 carried (2 med, 6 low), 7 dropped (five bullets: the two Build 3 decisions share one, the two equivalent plants share one).
+- Invariants walked: contract edited in the approved shape (`paidBy: string | null`, `.nullable().default(null)`, `min(1).max(100)` added to match `chargedTo`); `AppError` codes from the taxonomy; no cross-tool import; no `any`, `console`, or new shell; no new spec file or workspace dependency. Skipped: redaction, SSRF, image closure, no-faked-progress beyond the rows (probed: a row says `Filing…` only while its request is out).
+- NFR: security ✓ (`paidBy` is checked server side against the current members; a member naming another as payer has the reach `POST /api/period-lines` already gives) · performance n/a (one filing at a time by design; a joint row costs two requests) · reliability — the typed-row finding · maintainability — the `filing.ts` finding.
+
+### Gate 2
+
+**Gate: CONCERNS** — 2026-11-07 · `4f2a8572..00c80458` · Sonnet 5.5, depth medium
+
+The round is the four first-parent commits: the owner's answers in the Log; the tests for gate 1's four surviving plants and the two restored assertions; the Remove control, the bar's one pick and the live region, with the layout case; the Log. Gate 1's range is not reviewed again. No `high`.
+
+| Done when                                                                                            | Proof at this head                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `api` `paidBy` tests                                                                              | `api/test/receipts.test.ts`, gate 1's three tests, **proven**. The round touches no `api/` or `contract/` path (its diffstat is the ticket, `layout.spec.ts`, `Queue.tsx`, `styles.css`, `receipts.test.tsx`), so gate 1's API probe was not re-run                                                                                                       |
+| 2. Paid by and Whose on three selected rows, filed one at a time                                     | `web/test/receipts.test.tsx` › "Paid by and Whose set on three selected rows file three receipts, one at a time, each marked filed (lg-102)" ✓ green at the head with the rewritten bar (two changes, both picks sent); planting M7, M9 and M10 each turn it red                                                                                          |
+| 3. A row that does not add up, and one whose Taxable marks are held, are refused and the others file | › "a selected row whose items do not add up is not filed and says why, and the others file (lg-102)" and › "a selected row whose Taxable marks are held is not filed and says why, and the others file (lg-102)" ✓; M2 and M1 turn each red                                                                                                               |
+| 4. Joint card attaches on exactly one match                                                          | › "paid with the joint card, a row is attached on exactly one match, and left for the person on none or two (lg-102)" ✓; M12 turns it red                                                                                                                                                                                                                 |
+| 5. An edit in the receipt view survives Back and is what the batch files                             | › "an edit made in the receipt view is still there after Back to the queue, and is what the batch files (lg-102)" ✓; M11 turns 61 of 91 red                                                                                                                                                                                                               |
+| 6. No line-filing button, no "This was …'s" box in the view                                          | › "on a household of %s the receipt view has no line-filing button and no This was …'s box (lg-102)" ✓ both households; M22 and M23 each turn both red                                                                                                                                                                                                    |
+| 7. `layout.spec.ts` covers the queue's new controls at 360 and 1280 px                               | `e2e/layout.spec.ts` › "the receipt queue fits a phone and a desktop with who paid, whose and a box on each receipt" ✓ 36 of 36 on `E2E_PORT=8302` at this head; both `Receipt queue (to file)` screenshots opened; CI `e2e` (ledger) SUCCESS at `00c80458`                                                                                               |
+| 8. `check`, the ledger tests, `e2e:ledger` pass                                                      | **verified**: `npm run check` exit 0 in a clean tree at this head; `npx vitest run tools/ledger/web/test` 387 of 387, three runs on their own (17, 11 and 15 s); e2e 36 of 36; CI `check`, `test (ubuntu-latest)`, `test (windows-latest, informational)`, `e2e` and `docker` SUCCESS at `00c80458`. The whole ledger project and `api` were not run here |
+
+Gate 1's findings, numbered here in the order the dispatch lists them (gate 1's section carries no ids):
+
+1. **med, `filing.ts` survivors: fixed.** M13, M15, M17 and M19 each turn exactly one test red, 1 of 91, and it is the new one written for it (the amount-and-date refusal; "with two members, a read charge to nobody was the other's"; "a receipt is never wholly its payer's"; "a row's refusal goes when one of its picks changes in the list"). `filing.ts` still has no spec named for it; gate 1 graded by the plants, and none of the four survives.
+2. **med, a typed row pins its photo: fixed.** Gate 1's `typed.append.tsx` on the head reads as gate 1's head did while a typed row stands (`readIt` false: the photo stays pinned until Remove is tapped, as the owner chose), and after Remove reads as the base: `readIt` true, `readAll` false, `keptNotRead` true, `typeIt` true, `rowBox` false, `notice` true; after a failed read, `tryAgain` true, `readFailed` true, and Try again reads again. The reopened-and-blanked `Unnamed` row is removable too. The four new tests pass; plants of the hand-back (N1), of its phase test (N4) and of the removal itself (N5) turn them red.
+3. **low, the bar sets both picks: fixed** as the owner chose. Gate 1's sequencing probe's last line read payers `alex, alex, alex` after Whose alone; it now reads `alex, sam, alex`, and Paid by alone still applies `repick` per row (alex's kept item becomes alex's charge, a joint-card row's becomes Mine again). The new test goes red under plants that set both (N8, N9). Its display consequence is N2.
+4. **low, row status not a live region: fixed in part.** One `<output>` per row, the same element through `Filing…`, `Not filed: …` and filed, across a refusal, a Remove and a filing; three rows hold four `role=status` (three rows and "Reading progress"), and each message is in the page once. The clause that remains: a second File selected with the same row still refused changes nothing in the region (0 changes in 50 ms), so the repeat is silent. A span or a replaced element turn the new test red (N11, N12).
+5. **low, `repick` path dependence: recorded unfixed** on the owner's word; the Log says so. `repick.append.tsx` on the head is byte-identical to gate 1's output.
+6. **low, `tools/ledger/CLAUDE.md`: left to the owner**, as answered; the branch's diffstat holds no line of the file and the Log records it.
+7. **low, two weakened assertions: fixed** in their nearest equivalents (the list is what remains after one of two is filed, the other unselected and openable; the receipt back on the member's card files as a line with `paidBy: null`, the six-pack `not-shared`). Both go red under plants (the filed label, N16; `paidBy` always sent, M18).
+8. **low, layout: fixed for the filed row and `.part`.** The case now files one receipt, and both screenshots show "Filed as alex's line in the period."; no `.part` class remains. The checkbox size and `.picks > span` are recorded unfixed on the owner's word, in the Log.
+
+New findings in the round's lines:
+
+- **med** · no `Done when` line depends on it · **N1** three guards in the round's lines survive deletion with 91 of 91 green, and what each stops was measured: (a) Remove's `disabled` while a filing is out: planted off, a tap on the row whose filing is out removes it, `Read it` is offered for a moment, the server then files all three (`filedOnServer` `[11, 12, 13]`) and the photo ends with no row and no sign its receipt was filed; at the head the same tap does nothing. (b) The bar's "selected" clause in `pickSelected`: planted off, the bar rewrites a row that is not selected (paid `alex` to `sam`); at the head it stays `alex`. The guard predates the round (gate 1 did not plant it); the round rewrote the line around it. (c) Remove's "a sibling still stands, the photo stays read": planted off, the photo is handed back while a receipt from it is on the list, and "1 of 1 read" disappears; no worse effect found. Direction, not a tested remedy: one test each: Remove tapped mid-batch (the probe `GATE5-INFLIGHT`), a bar change with one row unselected, the progress line after one of two is removed.
+- **low** · open decision · `nfr:usability` · **N2** the bar's selects are the bar's own memory, not the selected rows': with rows `alex`, `sam` and Joint card the bar reads `alex` / Shared; after its Whose alone is set to casey it reads `alex` / casey's while one row is paid by sam and one is on the joint card. A bar Whose naming a row's payer leaves that row Shared, with no word (a receipt is never wholly its payer's). Before the round the bar always showed what it had applied to every selected row. Options: as built; each select starts on, and returns to, a "Keep each row's" entry, so the bar never shows a pick it did not apply (recommended); as built plus one hint line saying only the changed pick is set.
+- **low** · `nfr:usability` · **N3** what Remove hands back, by the owner's answer: a photo handed back is unread, so the progress line falls from "3 of 3 read" to "2 of 3 read" in a live region, and Read all will read it again (a paid, outbound read) though the person called it not a receipt; a photo the model read to nothing, then typed into and removed, reads "Kept, not read yet" where it read "Nothing in the photo was read as a receipt"; Remove is one tap with no undo, and focus goes to the page after it. Recorded, nothing to fix unless the owner wants a mark on a removed photo.
+- **low** · false in the safe direction · **N4** the module comment of `Queue.tsx` says a bar "sets both picks on every selected row", and the `.batch` comment in `styles.css` the same; neither names Remove. The code sets only the changed pick.
+- **low** · `nfr:usability` · **N5** layout, from the 360 px screenshot: a long receipt name puts its checkbox alone on a line above the name, and Remove on its own line below it; nothing overflows. The cause is the `flex-wrap` the round added to `.opener`.
+- **dropped** · the first row's output is not the same element after the receipt view is opened and closed: the queue view unmounts, so nothing is lost there. Not a defect.
+- **dropped** · plants that survive and are equivalent: the "a filed receipt is in the photo" clause of Remove's hand-back (a filed receipt's entry stays in the photo, so the parts test already holds it), the filed-row guard of `pickSelected` (filed rows are already deselected; gate 1's M21 anchored on a line the round replaced, re-cut as N14), and the bar's keeping of a joint row's hidden payer (every move off the card sets the payer).
+- **dropped** · a reading removed from a photo with a filed sibling cannot come back without a read: the owner's answer.
+- **dropped** · a joint-card row leaves the card as Mine again for the new payer (bar test B6): gate 1's recorded path dependence.
+- **dropped** · the 1-of-387 run the Log names: not reproduced, in three runs on their own; the run under load was not tried (sweep budget spent). Unidentified, as the Log says.
+- **findings** · the hunt returned 11; 5 carried (1 med, 4 low), 1 folded into gate 1's finding 4 as `fixed in part`, 5 dropped (the equivalent plants share one bullet).
+- The Log's claims I re-ran reproduced: four plants 1 of 91 each; the six new tests 6 of 91 red against round 1's source before the Remove change and 85 passing; 91 of 91 and 36 of 36 at the head. The layout case's red against that source was not re-run.
+- Invariants walked: no `any`, `console`, shell, cross-tool import, new spec file or workspace dependency in the round (`npm run check` exit 0). Skipped: contract, `AppError`, redaction, SSRF, image closure; the round holds no server or contract path.
+- NFR: security ✓ (client state only; the `paidBy` path is unchanged) · performance n/a · reliability: N1 (the in-flight guard unpinned) · maintainability: N1, N4.
+
 ## Log
 
 ### 2026-11-03 — filed (Claude Opus 5.5)
@@ -141,3 +218,261 @@ decide on its own.
 - 2026-11-03 — Build 4 and Done when 3 now name the Taxable hold that PR #748
   added to the receipt screen after this ticket was filed. Its gate found a batch
   built from the brief as written would file what the opened form refuses.
+
+### 2026-11-07 — built (Claude Opus 5.5, builder)
+
+Built on `1eafa0c6`. Every step of the Build is in; the gate is pending.
+
+- **Contract and API (Build 1, 2).** The `line` destination has
+  `paidBy: string | null`, `.nullable().default(null)`. `fileReceipt` resolves
+  the payer once (`payerOf`) and hands it to `chargedToOf` and `fileLines`.
+- **The code for an unknown or departed `paidBy` is `BAD_REQUEST`.** The
+  dispatch named `PERSON_NOT_FOUND` as a candidate. It is not the code this path
+  uses: `fileReceipt` already refuses a person it cannot take with
+  `BAD_REQUEST`, through `requireKnownPerson` ("That person is not one of the
+  household.") and `requireRowItems` for a departed member on a row. Its message
+  is also wrong for a departed member, who was added: "That person is not one
+  this household's members have been added as." A name the books never held
+  gets `requireKnownPerson`'s message. A member who has left gets "Whoever paid
+  is a current member of the household." No code was added and the taxonomy is
+  unchanged.
+- **The web.** `web/src/receipts/filing.ts` is new. It holds the draft, the two
+  picks and `receiptState`, which the form and the batch both read, so a row in
+  the list is held for exactly what its opened form holds (`refusal`). The queue
+  (`Queue.tsx`) keeps each receipt's draft and picks by photo and part
+  (`entries`). It files the selected ones one at a time, and each row says
+  `Filing…`, `Not filed: <why>`, or filed with what it became.
+  `Receipts.tsx` reads and writes the queue's entry, so "Back to the queue"
+  keeps the edits.
+- **Changing who paid moves each item's choice with it** (`repick`). An item
+  the old payer kept is charged to them, and one charged to the new payer
+  becomes theirs to keep. To and from the joint card it does what lg-91's two
+  buttons did. The item select's first option is "Mine" when the payer is the
+  person who took the photo, and the payer's name otherwise.
+- **`paidBy` is sent only when it differs from the uploader.** A receipt filed
+  as before sends the request it always sent.
+- **Joint card from the list.** The list looks up the rows. With one match it
+  attaches. With none or several the row says "Not filed: Open it to choose the
+  row." Opened, **File it** lists the rows.
+
+What the brief had wrong or left open:
+
+- **A receipt typed in had no way to be filed.** Build 5 removes the view's
+  line button and Done when 6 forbids one, but a receipt typed in from a photo
+  that was not read (or whose read failed) had no row in the list. Such a
+  receipt is now a row in the list like a read one, from the moment it is
+  opened. If it is left blank it is dropped on the way back, so an accidental
+  "Type it in" does not block **Read all** for that photo. lg-92's "1 receipt
+  typed in from this photo, filed." line is gone, because the row now says it.
+- **The view's "said" line after filing moved onto the row.** It used to be an
+  `<output>` above the list. With several receipts filed at once, one line could
+  not say which receipt it meant. Every lg-8 to lg-94 web test that read it
+  now reads the row.
+- **The existing web tests filed from the form's "File as …'s line".** About 40
+  of them now file from the list through one helper (`fileFromQueue`). They
+  assert what they did before. A refusal they read as the form's alert is now
+  the row's `Not filed:` line (`rowRefusal`). `generated-ids.test.tsx`'s receipt
+  anchor is now the Whose option `Sam's — owes all of it`.
+- `tools/ledger/CLAUDE.md` still says a line is "paid by **whoever uploaded the
+  photo**". It is not edited here, since the Build does not name it. The report
+  proposes the line. `docs/00-ANALYSIS.md` §6 says the same and is corrected.
+
+Checks, at this branch's head:
+
+- `npx vitest run tools/ledger/api/test/receipts.test.ts -t "lg-102"`: 7 of 7
+  pass. Against the base's `api/src/receipts.ts` and `contract/src/receipts.ts`,
+  with the contract rebuilt, 6 of 7 fail. The one that passes is "among three,
+  a theirs item that names nobody is still refused whoever paid", which asserts
+  only a 400. The base's strict schema gives that 400 for `paidBy` alone.
+- `npx vitest run tools/ledger/web/test/receipts.test.tsx`: 81 of 81. Each of
+  three mutations turns its own tests red: dropping the batch's `refusal`
+  check (Done when 3, 2 tests), accepting two rows on the joint card (Done when
+  4), and rebuilding the entry from the read on open (Done when 5).
+- `npm test -- --project ledger`: 2,210 of 2,210. `npm run check`: exit 0.
+- `npm run e2e:ledger` on `E2E_PORT=8202`: 36 of 36. The first run failed
+  "on a desktop › the receipt screen shows no camera tile". That case passes at
+  the base `1eafa0c6`, run in a second tree: the new `.pick` rule had taken the
+  photo pickers' class name, and its `display: grid` beat the media query that
+  hides the camera tile. The picks are styled through `.picks` now. Both
+  screenshots of `Receipt queue (to file)` were opened: the selects, the boxes
+  and four refusals fit 360 px and 1280 px.
+
+### 2026-11-07 — the owner's answers to gate 1 (`4f2a8572`), recorded before round 1
+
+Gate 1 graded CONCERNS: no high, two meds, six lows. The owner answered on
+2026-11-07 through `AskUserQuestion`, relayed by the orchestrator.
+
+1. **A typed row pins its photo** (gate 1's second med). **Chosen: add a remove
+   control.** Each row gets a way to remove it, and removing it hands the photo
+   back to the reader. It also covers a receipt row the model made up. This was
+   the gate's recommendation. Not chosen: drop blank typed rows on every Back
+   only; keep as built and say so in lg-92's notice.
+2. **The bar's two selects** (open-decision low). **Chosen: apply only the
+   field the person changed.** This was the gate's recommendation. Not chosen:
+   as built; add a "keep each row's" entry to the bar's Paid by.
+3. **The other findings. Chosen: all three go into this round.** This was the
+   orchestrator's recommendation. Not chosen: tests only; record all.
+   - (a) Tests that kill the four surviving plants M13, M15, M17 and M19, each
+     shown red under its plant and green without it.
+   - (b) Restore the two weakened assertions, or their nearest equivalent under
+     the new flow.
+   - (c) Make each row's status line (Filing… / Not filed: … / filed) a live
+     region, so a refusal is announced again.
+4. **`tools/ledger/CLAUDE.md`'s "paid by whoever uploaded the photo"**.
+   **Chosen: the owner edits it themself after #753 merges**, with the wording
+   proposed in the build report: "a line paid by **whoever uploaded the
+   photo**, unless the filing names another current member as payer (`paidBy`,
+   lg-102)". The edit is the owner's to make, and this branch does not touch the
+   file. Not chosen: file a docs ticket; record only.
+
+Recorded unfixed, on the owner's word: `repick`'s path dependence through the
+joint card, and the layout low (the checkbox's size, `.picks > span` matching
+the joint hint, the dead `.part` class). The low's "no filed-row case at 360 px"
+was to be folded in if the remove control made it free.
+
+### 2026-11-07 — round 1, after gate 1 (Claude Opus 5.5, builder)
+
+Each answer above is built. Every test named below was red before its change
+and is green after it.
+
+- **(a) The four surviving plants.** Four tests, appended to
+  `receipts.test.tsx`. Each one alone turns red under its plant
+  (`build/plants.mjs`, the gate's plant text re-cut for the formatted source),
+  and 85 of 85 pass without the plants:
+  - "a receipt with no amount charged, or no date, is held in the list and says
+    why, as its form would (lg-102 gate 1, M13)"
+  - "with two members, a read charge to nobody was the other's: paid by that
+    other, it is theirs to keep (lg-102 gate 1, M15)"
+  - "a receipt is never wholly its payer's: Whose goes back to Shared when its
+    person pays, and stays there (lg-102 gate 1, M17)"
+  - "a row's refusal goes when one of its picks changes in the list (lg-102
+    gate 1, M19)"
+- **(b) The two weakened assertions are restored as their nearest equivalents
+  under the new flow.**
+  - "files each receipt in a photo of two, and goes back to the one not filed
+    yet": the second receipt is opened, then filed alone from the list. The test
+    now proves the list is what remains, with no form open and the first
+    receipt still unselected and openable. The first receipt is filed after it,
+    in the old order (part 2, then part 1).
+  - "an item left as Mine names nobody once paid jointly, and is Mine again on
+    my own card": once back on alex's card, the receipt files as a line with
+    `paidBy: null`, the six-pack `not-shared`.
+- **(c) Each row's status line is an `<output>`**, which is a polite live
+  region. It is on the page before the row says anything, and it stays the same
+  element from `Filing…` to `Not filed: …` or filed, so what it says is
+  announced. Test: "each row says Filing…, why not and what it was filed as in
+  a live region that was there before it spoke (lg-102 gate 1)". Before the
+  change it failed: no element with the role `status`. A first try kept the
+  filed row as a separate branch, and React then replaced the element; the
+  test's `document.body.contains` check caught it (`[false, true]`).
+- **The remove control (answer 1).** Every row not filed has a **Remove**
+  button. A photo left with no receipt, and none filed, is handed back:
+  - a typed-in photo gets "Read it" back, or "Try again" after a failed read;
+  - a read photo goes back to "Kept, not read yet", with **Read it** and
+    **Type it in**.
+
+  Tests:
+  - "a receipt typed in and left half done can be removed, which hands its
+    photo back to the reader";
+  - "a receipt typed in from a photo whose read failed can be removed, and the
+    retry is back";
+  - "a receipt the model made up is removed from its photo, the other stays,
+    and the last removed hands the photo back";
+  - "removing every receipt read from a photo, none filed, hands it back to the
+    reader".
+
+- **The bar (answer 2)** changes only the pick the person changed:
+  `PickSelects` now tells its caller which of its two selects moved. Test: "the
+  bar sets only the pick the person changed on the selected rows (lg-102 gate
+  1)", with three members. Before the change, the row paid by sam was paid by
+  alex after the bar's Whose alone was changed.
+- **`e2e/layout.spec.ts`.** The lg-102 case now covers the remove control, the
+  bar's Whose alone keeping a joint-card row's payer, and **a filed row with its
+  "Filed as" line at 360 px and 1280 px**. That last part is the layout low's,
+  folded in because routing the filing in the browser made it free. The upload,
+  the read, the rows a joint-card receipt may match and the filing are all
+  answered by the spec, so the case writes nothing to the shared books.
+- **Recorded unfixed, on the owner's word:** `repick`'s path dependence through
+  the joint card, the checkbox's size, `.picks > span` matching the joint hint,
+  and the dead `.part` class. The last is now gone, since the row lost its class
+  in the change for (c).
+- **`tools/ledger/CLAUDE.md`** is the owner's to edit after #753 merges (answer
+  4). This branch does not touch it.
+
+Checks for round 1:
+
+- The six tests for the remove control, the bar and the live region were run
+  against `e6f8ede2`, before the change: 6 of 6 fail. At `59946ece`, 91 of 91
+  receipt tests pass. At the same commit, each of the four plants still turns
+  exactly its own test red, 1 of 91.
+- The lg-102 e2e case failed against `e6f8ede2`'s `Queue.tsx` and
+  `styles.css`: `locator.click: Test timeout of 60000ms exceeded`, waiting for
+  the Remove button. At `59946ece` it passes, 36 of 36 on `E2E_PORT=8202`, and
+  both `Receipt queue (to file)` screenshots were opened.
+- `npx vitest run tools/ledger/web/test` read 1 failed of 387 once, while the
+  e2e suite ran beside it. The run named no test, and two runs after it read
+  387 of 387. The failure is unidentified, recorded here so that it is not lost.
+
+### 2026-11-07 — the owner's answers to gate 2 (`00c80458`), recorded before the landing's fixes
+
+Gate 2 found one med (N1), one open-decision low (N2) and three lows (N3, N4,
+N5), and left gate 1's live-region finding fixed in part. The owner answered on
+2026-11-07 through `AskUserQuestion`, relayed by the orchestrator.
+
+1. **N2, the bar's selects are the bar's own memory.** **Chosen: "Keep each
+   row's", applied at the landing with no re-gate.** Each of the bar's two
+   selects starts on, and returns to, a "Keep each row's" entry, so the bar never
+   shows a pick it did not apply. This was the gate's recommendation. Not chosen:
+   the same change plus a narrow gate 3; one hint line at landing; as built.
+2. **The rest. Chosen: fix N1 and N4 at landing; record N3, N5 and the live
+   region's silent repeat unfixed.** This was the orchestrator's recommendation.
+   Not chosen: fix N1 only; record all.
+
+### 2026-11-07 — fixed at the landing, on the owner's answers to gate 2 (`00c80458`)
+
+- 2026-11-07 — Fixed at landing by owner choice: gate 2, N2 — "the bar's selects
+  are the bar's own memory, not the selected rows'". Each of the bar's two
+  selects now has a first entry, "Keep each row's", is on it when the bar
+  appears, and returns to it after it applies a pick. The bar keeps no picks of
+  its own, so `useState` for them is gone from `ReceiptQueueView`. Whose offers
+  every current member there, since no payer is held to leave out. Proof: the
+  four N2 tests at the end of `tools/ledger/web/test/receipts.test.tsx`, red at
+  `00c80458` (4 of 98 failed) and green after (98 of 98 in the file): "the bar
+  never shows a pick that some selected row does not have", "the bar's Whose
+  alone keeps each row's payer", "the bar's Paid by alone keeps each row's
+  Whose, through the items' repick", and "Whose set to casey from the bar, over
+  rows paid by alex, by sam and on the joint card". The gate-1 and lg-102 tests
+  that set both picks from the bar were changed for the new entry: "Paid by and
+  Whose set on three selected rows file three receipts" now expects the Whose
+  options `Keep each row's`, `Shared`, `alex's`, `sam's`, and
+  `e2e/layout.spec.ts` picks the bar's Whose by `index: 3` where it picked
+  `index: 1`.
+- 2026-11-07 — Fixed at landing by owner choice: gate 2, N1 — "three guards in
+  the round's lines survive deletion with 91 of 91 green". One test each, at
+  the end of `receipts.test.tsx`, each green at the head and red under gate 2's
+  own plant (`mutate4n.mjs`, run on the committed tree, 98 tests, 1 failed each):
+  N10, Remove enabled while a filing is out, fails "Remove cannot be tapped while
+  a filing is out: the three are all filed, none lost from the list (lg-102 gate
+  2, N1a)"; N15, `pickSelected` also changing unselected rows, fails "the bar
+  changes a selected row and leaves an unselected one as it was (lg-102 gate 2,
+  N1b)"; N3, Remove handing the photo back with a sibling still standing, fails
+  "removing one of two receipts read from a photo leaves the photo read: 1 of 1
+  read stays and no read is offered (lg-102 gate 2, N1c)".
+- 2026-11-07 — Fixed at landing by owner choice: gate 2, N4 — "the module
+  comment of `Queue.tsx` says a bar \"sets both picks on every selected row\",
+  and the `.batch` comment in `styles.css` says the same". The module comment
+  said "a bar sets both picks on every selected row and files them, one receipt
+  at a time"; it now says the bar sets only the pick changed, that its selects
+  start on and return to "Keep each row's", and names Remove. The `.batch`
+  comment said "The bar that sets both picks on every selected receipt and files
+  them."; it now says "sets only the pick changed" and names Remove. The bar's
+  hint line said "What is picked here is set on every selected receipt." and now
+  says only the pick changed is set. Proof, run after
+  the commit that carries this entry, each → `1`:
+  - `git diff 00c80458 HEAD -- <Queue.tsx> | grep -c '^-.*sets both picks on'`
+  - `git diff 00c80458 HEAD -- <styles.css> | grep -c '^-.*sets both picks on'`
+- Recorded unfixed, on the owner's word: gate 2's N3 (what Remove hands back,
+  and that Remove is one tap with no undo), N5 (a long name puts its checkbox
+  and Remove on lines of their own at 360 px; nothing overflows), and gate 1's
+  live-region finding in part (a second File selected with the same row still
+  refused changes nothing in the region).

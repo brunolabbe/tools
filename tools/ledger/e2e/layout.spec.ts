@@ -1391,3 +1391,132 @@ test("History fits a phone and a desktop with a stored change whose re-read fail
   await expect(row.getByText(/The list has not been read since this change/u)).toBeVisible();
   await fitsBothWidths(page, testInfo, "History (stored change unread)");
 });
+
+/**
+ * lg-102: the receipt queue as a list to file from — on every receipt a box to
+ * select it, a Remove, who paid and whose it is, and the bar that sets the pick
+ * changed on the selected and files them. The upload, the read, the rows a
+ * joint-card receipt may be and the filing are all answered here, so nothing
+ * reaches the books every other case shares; the receipts are from whoever the
+ * e2e server signs in as, so the selects offer the household's own members. One
+ * receipt read is removed (gate 1); of the rest one has no total and is refused,
+ * one is on the joint card with no row to attach to, whose Whose is held with
+ * its hint, and one is filed, its "Filed as" line on the screen measured.
+ */
+test("the receipt queue fits a phone and a desktop with who paid, whose and a box on each receipt", async ({
+  page,
+}, testInfo) => {
+  const me = (await (await page.request.get("/api/me")).json()) as { person: { id: string } };
+  let uploaded = 0;
+  await page.route("**/api/receipts", (route) => {
+    uploaded += 1;
+    return route.fulfill({
+      status: 201,
+      json: {
+        id: 950 + uploaded,
+        mediaType: "image/png",
+        bytes: PHOTO.length,
+        uploadedAt: "2026-10-05T15:00:00.000Z",
+        uploadedBy: me.person.id,
+        reader: "claude-haiku-5-5",
+      },
+    });
+  });
+  const proposal = (merchant: string, total: number | null) => ({
+    proposal: {
+      merchant,
+      date: "2026-10-04",
+      subtotal: total,
+      gst: null,
+      qst: null,
+      total,
+      items: [],
+    },
+    flags: total === null ? ["total-missing"] : ["tax-missing"],
+    merchantCategoryId: null,
+  });
+  await page.route("**/api/receipts/*/read", (route) =>
+    route.fulfill({
+      json: {
+        receiptId: 951,
+        model: "claude-haiku-5-5",
+        proposals: [
+          proposal("Épicerie du Marché Central, rue Sainte-Catherine Est", null),
+          proposal("Pharmacie Exemple", 2_650),
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/receipts/*/matches**", (route) =>
+    route.fulfill({ json: { matches: [] } }),
+  );
+  await page.route("**/api/receipts/*/file", (route) => {
+    const request = route.request().postDataJSON() as { part: number; proposal: unknown };
+    return route.fulfill({
+      json: {
+        id: 1,
+        receiptId: 952,
+        part: request.part,
+        proposal: request.proposal,
+        periodLineId: 1,
+        chargeLineId: null,
+        charges: [],
+        rowId: null,
+        filedAt: "2026-10-05T15:00:00.000Z",
+        filedBy: me.person.id,
+      },
+    });
+  });
+
+  await openTab(page, "Receipt");
+  const photos = [1, 2].map((n) => ({
+    name: `IMG_20261005_153012_receipt_of_the_week_number_${String(n)}_of_the_big_shop.png`,
+    mimeType: "image/png",
+    buffer: PHOTO,
+  }));
+  await page.getByLabel("Choose photos of receipts").setInputFiles(photos);
+  await page.getByRole("button", { name: "Read all" }).click();
+  await expect(page.getByText("2 of 2 read")).toBeVisible();
+
+  // The second photo's long receipt is not one: it is removed, and the other three stay.
+  await page
+    .getByRole("button", { name: "Remove Épicerie du Marché Central, rue Sainte-Catherine Est" })
+    .nth(1)
+    .click();
+  await expect(page.getByRole("button", { name: /^Remove /u })).toHaveCount(3);
+  const joint = page.getByLabel("Paid by, Pharmacie Exemple, 26.50 $").first();
+  await joint.selectOption({ label: "Joint card" });
+  await page.getByRole("checkbox", { name: "Select all" }).check();
+  // Whose alone from the bar: the last member owes all of it, the longest choice the
+  // select has, and the joint-card row keeps its payer (the owner's answer to gate 1).
+  await page.getByLabel("Whose, for the selected").selectOption({ index: 3 });
+  await expect(joint).toHaveValue("");
+  await expect(page.getByText(/whose each item is, is chosen item by item/u)).toBeVisible();
+  await page.getByRole("button", { name: "File selected" }).click();
+  await expect(page.getByText(/^Not filed: /u)).toHaveCount(2);
+  await expect(page.getByText("Not filed: Open it to choose the row.")).toBeVisible();
+  await expect(page.getByText("Pharmacie Exemple, 26.50 $, filed")).toBeVisible();
+  await expect(page.getByText(/^Filed as .+'s line in the period\.$/u)).toBeVisible();
+  // Refused, each receipt is still in the list, with its box: Select all is the third.
+  await expect(page.getByRole("checkbox", { name: /^Select /u })).toHaveCount(3);
+  await fitsBothWidths(page, testInfo, "Receipt queue (to file)", async (_page, width) => {
+    const at = `Receipt queue at ${String(width)} px`;
+    // Every select and Remove on a row can be reached without scrolling the page sideways.
+    const controls = [
+      ...(await page.getByRole("combobox").all()),
+      ...(await page.getByRole("button", { name: /^Remove /u }).all()),
+    ];
+    for (const control of controls) {
+      const edge = await control.evaluate((element) => {
+        const { left, right } = element.getBoundingClientRect();
+        return { left, right, inner: window.innerWidth };
+      });
+      expect
+        .soft(edge.left, `${at}: a control starts at ${String(edge.left)}`)
+        .toBeGreaterThanOrEqual(0);
+      expect
+        .soft(edge.right, `${at}: a control ends at ${String(edge.right)} in ${String(edge.inner)}`)
+        .toBeLessThanOrEqual(edge.inner);
+    }
+  });
+});

@@ -2,7 +2,8 @@
  * Receipts (lg-8): a photo is uploaded, read by a model when the person asks,
  * checked, edited, and filed on the person's confirmation — as a line in the
  * open period for whoever uploaded it, or attached to a joint-account row it
- * documents (`docs/00-ANALYSIS.md` §6).
+ * documents (`docs/00-ANALYSIS.md` §6). Since lg-102 the filing may name
+ * another current member as the one who paid.
  *
  * A file of its own rather than more of `api.ts`, because it is one seam that
  * `receipts` (the reader), `books` (the check and the match), `api` and `web` all
@@ -262,14 +263,15 @@ export interface ReceiptCharge {
   /**
    * Owed to the pot (lg-91): a filing on a joint-account row, where the joint
    * account paid. `false` on a filing that became a line, where it is owed to
-   * whoever uploaded the photo.
+   * whoever paid (`paidBy`, or whoever uploaded the photo, lg-102).
    */
   owedToPot: boolean;
 }
 
 /**
  * `POST /api/receipts`: a photo stored, read by nothing yet. `uploadedBy` is the
- * person a line filed from it is paid by.
+ * person a line filed from it is paid by, unless the filing names another
+ * (`paidBy`, lg-102).
  */
 export interface Receipt {
   id: number;
@@ -332,8 +334,10 @@ export interface ReceiptMatchesResponse {
 }
 
 /**
- * What a confirmed receipt becomes. A line is paid by whoever uploaded the
- * photo, never by whoever names it here, so the line takes no `personId`.
+ * What a confirmed receipt becomes. A line is paid by `paidBy`, a current
+ * member of the household, or by whoever uploaded the photo when it is `null`
+ * (lg-102): the owner photographs receipts the other member paid. A request
+ * that omits it parses as `null`, so one sent before lg-102 files as it did.
  * `amountCents` is what the card was charged, which a tip printed under the
  * total makes differ from it.
  *
@@ -350,7 +354,8 @@ export interface ReceiptMatchesResponse {
  * pot: one charge line per person, dated the row's date, `owedToPot`.
  *
  * `chargedTo` on a line marks the whole receipt as one person's, as lg-8 filed
- * it: it names anyone the books hold who is not the payer.
+ * it: it names anyone the books hold who is not the payer, who is
+ * `paidBy ?? uploadedBy` (lg-102).
  */
 export type ReceiptDestination =
   | {
@@ -360,6 +365,8 @@ export type ReceiptDestination =
       spendingCategoryId: number | null;
       note: string | null;
       chargedTo: string | null;
+      /** Who paid it (lg-102): a current member, or `null` for whoever uploaded the photo. */
+      paidBy: string | null;
     }
   | { to: "row"; rowId: number };
 
@@ -382,6 +389,8 @@ export const fileReceiptRequestSchema = z.strictObject({
       spendingCategoryId: z.number().int().positive().nullable(),
       note: z.string().trim().min(1).max(500).nullable(),
       chargedTo: z.string().min(1).max(100).nullable(),
+      // Omitted, as every request before lg-102 omits it, it is whoever uploaded the photo.
+      paidBy: z.string().min(1).max(100).nullable().default(null),
     }),
     z.strictObject({ to: z.literal("row"), rowId: z.number().int().positive() }),
   ]),

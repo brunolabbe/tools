@@ -10,8 +10,9 @@
  *    what the arithmetic check flagged on it. It stores nothing: a proposal is
  *    the person's to edit. A receipt typed by hand never takes this step.
  * 3. **File** is the confirmation, and the only step that writes to the books:
- *    the receipt becomes a line in the period for **whoever uploaded it**, paid
- *    by them whoever confirms, or is attached to the joint-account row it
+ *    the receipt becomes a line in the period paid by **whoever uploaded it**,
+ *    or by the current member the filing names (`paidBy`, lg-102), whoever
+ *    confirms, or is attached to the joint-account row it
  *    documents, which is not a line since the money already left the buffer
  *    (`docs/00-ANALYSIS.md` §6).
  *
@@ -389,7 +390,8 @@ export function receiptMatches(
 /**
  * Files one receipt in the photo as the person confirmed it — its `part`, once;
  * a photo of two receipts files twice (gate 1, F2). A line is paid by
- * whoever uploaded the photo, and entered by whoever confirms; a row is only
+ * `paidBy`, or whoever uploaded the photo (lg-102), and entered by whoever
+ * confirms; a row is only
  * documented, and gains no line. Either way the filing records the proposal as
  * confirmed, its items with it (lg-10).
  *
@@ -403,7 +405,8 @@ export function receiptMatches(
  *
  * `members` is the household's current members, from the directory (lg-30): a
  * `theirs` item that names nobody is the one of them who is not the payer, and
- * is refused when there are several (`chargedToOf`).
+ * is refused when there are several (`chargedToOf`); and a `paidBy` must be one
+ * of them (`payerOf`, lg-102).
  */
 export function fileReceipt(
   context: PeriodContext,
@@ -431,16 +434,18 @@ export function fileReceipt(
       let chargeLines = new Map<string, number>();
       let rowId: number | null = null;
       if (destination.to === "line") {
+        // Who paid, once, before anything else reads it (lg-102).
+        const payer = payerOf(context, receipt, destination.paidBy, members);
         // Every `theirs` item named before anything is written (lg-30).
         proposal = {
           ...proposal,
           items: proposal.items.map((item) =>
             item.share === "theirs"
-              ? { ...item, chargedTo: chargedToOf(context, receipt.uploaded_by, item, members) }
+              ? { ...item, chargedTo: chargedToOf(context, payer, item, members) }
               : item,
           ),
         };
-        const lines = fileLines(context, receipt.uploaded_by, destination, proposal);
+        const lines = fileLines(context, payer, destination, proposal);
         ({ periodLineId, chargeLineId, chargeLines } = lines);
       } else {
         requireRowItems(context, proposal, members);
@@ -505,6 +510,28 @@ export function fileReceipt(
       );
     })
     .immediate();
+}
+
+/**
+ * Who paid a receipt filed as a line (lg-102): `paidBy`, or whoever uploaded
+ * the photo when it names nobody, as every filing before lg-102 was paid. A
+ * name given must be a **current** member: a payer is someone the household
+ * settles with now, so a member who has left is refused as one the books never
+ * held is, with `BAD_REQUEST`, the code this filing already gives a person it
+ * cannot take (`requireKnownPerson`, and a row's items, `requireRowItems`).
+ */
+function payerOf(
+  context: PeriodContext,
+  receipt: ReceiptColumns,
+  paidBy: string | null,
+  members: readonly string[],
+): string {
+  if (paidBy === null) return receipt.uploaded_by;
+  requireKnownPerson(context.people, paidBy);
+  if (!members.includes(paidBy)) {
+    throw new AppError("BAD_REQUEST", "Whoever paid is a current member of the household.");
+  }
+  return paidBy;
 }
 
 /**
@@ -660,7 +687,7 @@ interface FiledLines {
  *   receipt the person marked as one person's whole (`chargedTo`) is still one
  *   line, charged to them, as lg-8 filed it.
  * - **a charge per person**: each person's `theirs` items, owed in full by them
- *   to whoever uploaded the photo, under their category when they share one, in
+ *   to whoever paid (lg-102), under their category when they share one, in
  *   the order each person's first item is printed. Every item is named by now
  *   (`chargedToOf`).
  *

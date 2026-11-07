@@ -131,6 +131,43 @@ function field(label: string): HTMLInputElement {
   return screen.getByLabelText(label) as HTMLInputElement;
 }
 
+/**
+ * The receipt open in the form, filed from the list (lg-102): back to the queue,
+ * every receipt not filed selected, and File selected.
+ */
+async function fileFromQueue(): Promise<void> {
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+  const all = screen.getByRole("checkbox", { name: "Select all" }) as HTMLInputElement;
+  if (!all.checked) fireEvent.click(all);
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+  // The bar's button says Filing… until every selected receipt has its answer.
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Filing…" })).toBeNull());
+}
+
+/** Why the list did not file a receipt, as its row says it. */
+async function rowRefusal(): Promise<string> {
+  const said = (await screen.findByText(/^Not filed: /u)).textContent ?? "";
+  return said.replace(/^Not filed: /u, "");
+}
+
+/** The one receipt not filed in the list, opened again. */
+function reopen(): void {
+  const parts = screen.getByRole("list", { name: /^Receipts in /u });
+  // The row's first button opens it; the other takes it out of the list.
+  fireEvent.click(within(parts).getAllByRole("button")[0] as HTMLElement);
+}
+
+/** Paid with the joint card (lg-91), and the rows it may be looked for with File it (lg-102). */
+function payJointly(): void {
+  fireEvent.change(screen.getByLabelText("Paid by"), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "File it" }));
+}
+
+/** Paid by a member again, from the joint card or another member (lg-102). */
+function payBy(person: string): void {
+  fireEvent.change(screen.getByLabelText("Paid by"), { target: { value: person } });
+}
+
 async function takePhoto(size = 1_234): Promise<void> {
   render(<Receipts />);
   const camera = field("Take a photo of a receipt");
@@ -156,7 +193,7 @@ test("typing it in never sends the photo, and starts the date at the upload's", 
   fireEvent.change(field("Merchant"), { target: { value: "Dépanneur" } });
   fireEvent.change(field("Total"), { target: { value: "12.50" } });
   fireEvent.change(field("Subtotal"), { target: { value: "12.50" } });
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(readReceipt).not.toHaveBeenCalled();
@@ -180,6 +217,7 @@ test("typing it in never sends the photo, and starts the date at the upload's", 
         spendingCategoryId: null,
         note: "Dépanneur",
         chargedTo: null,
+        paidBy: null,
       },
     },
   ]);
@@ -207,8 +245,8 @@ test("files the charge with its tip, which differs from the total", async () => 
   await waitFor(() => expect(field("Total").value).toBe("26.50"));
 
   fireEvent.change(field("Charged to the card (with any tip)"), { target: { value: "30" } });
-  fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  fireEvent.change(screen.getByLabelText("Whose"), { target: { value: "sam" } });
+  await fileFromQueue();
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(vi.mocked(fileReceipt).mock.calls[0]?.[1]).toEqual({
@@ -221,6 +259,7 @@ test("files the charge with its tip, which differs from the total", async () => 
       spendingCategoryId: null,
       note: "Marché Exemple",
       chargedTo: "sam",
+      paidBy: null,
     },
   });
 });
@@ -239,7 +278,7 @@ test("offers the joint-account rows for the charge, and attaches the receipt to 
   await readOne();
   await waitFor(() => expect(field("Total").value).toBe("26.50"));
 
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
 
   expect(fetchReceiptMatches).toHaveBeenCalledWith(3, 2_650, "2026-10-04");
@@ -302,10 +341,22 @@ test("files each receipt in a photo of two, and goes back to the one not filed y
   await takePhoto();
   fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
 
+  // The second receipt opened, back to the list, and filed alone (lg-102: filing is the list's).
   fireEvent.click(await screen.findByRole("button", { name: "Quincaillerie, 9.99 $" }));
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Marché Exemple, 26.50 $" }));
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select Quincaillerie, 9.99 $" }));
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+
+  // The list is where it comes back to, with the one not filed yet still to pick.
+  await screen.findByText("Quincaillerie, 9.99 $, filed");
+  expect(screen.queryByRole("form", { name: "The receipt" })).toBeNull();
+  const first = screen.getByRole("checkbox", {
+    name: "Select Marché Exemple, 26.50 $",
+  }) as HTMLInputElement;
+  expect(first.checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Marché Exemple, 26.50 $" }));
+  expect(field("Merchant").value).toBe("Marché Exemple");
+  await fileFromQueue();
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(2));
   const calls = vi.mocked(fileReceipt).mock.calls;
@@ -313,7 +364,7 @@ test("files each receipt in a photo of two, and goes back to the one not filed y
     [2, "Quincaillerie"],
     [1, "Marché Exemple"],
   ]);
-  expect(await screen.findByText("Filed as alex's line in the period.")).toBeTruthy();
+  expect(await screen.findAllByText("Filed as alex's line in the period.")).toHaveLength(2);
   // Both filed: nothing more to pick, and no second read.
   expect(screen.queryByRole("button", { name: /Quincaillerie|Marché/u })).toBeNull();
   expect(readReceipt).toHaveBeenCalledTimes(1);
@@ -449,7 +500,7 @@ test("files the items as marked, on what the card was charged", async () => {
   leaveOut("BIERE 6X355");
   fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "sam" } });
 
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   const request = vi.mocked(fileReceipt).mock.calls[0]?.[1];
@@ -475,7 +526,7 @@ test("each item's category is editable, and the merchant's last category is prop
   // The model proposed none for the soap; the person picks one.
   expect(picker.value).toBe("");
   fireEvent.change(picker, { target: { value: "1" } });
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(
@@ -494,12 +545,15 @@ test("items that do not add up to the total are shown for correction and not fil
     ),
   ).toBeTruthy();
   expect(screen.queryByLabelText("What is shared")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
-  expect(await screen.findByRole("alert")).toBeTruthy();
+  await fileFromQueue();
+  expect(await rowRefusal()).toBe(
+    "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
+  );
   expect(fileReceipt).not.toHaveBeenCalled();
 
+  reopen();
   fireEvent.change(field("Price of PAIN"), { target: { value: "3.49" } });
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
 });
 
@@ -518,7 +572,7 @@ test("keeps an item left out that names nobody off a joint-account row, before a
   await readBasket();
   leaveOut("BIERE 6X355");
 
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
 
   const said = (await screen.findByRole("alert")).textContent ?? "";
@@ -544,7 +598,7 @@ test("shows the Taxable check when a mark does not give the printed taxes, and s
   expect(screen.queryByText("It adds up.")).toBeNull();
   // Not blocked: the items still make the total, and the person files.
   expect(screen.queryByRole("alert")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(
     vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items.map((each) => each.taxable),
@@ -587,7 +641,7 @@ test("among three people, an unchecked item names whose it is from one select (l
 
   // Apart 15,54 $ and 5,74 $; the shared amount takes the cent.
   expect(shared()).toBe("Not shared 0.00 $ · sam's 15.54 $ · casey's 5.74 $ · Shared 3.48 $");
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(
@@ -627,8 +681,8 @@ test("counts the household's current members from its record, not every name the
   expect(fetchMe).toHaveBeenCalledTimes(1);
   expect(vi.mocked(fetchHousehold).mock.calls[0]?.[0]).toBe("maison");
   expect(fetchPeople).not.toHaveBeenCalled();
-  // alex and sam, so the two-person screen.
-  expect(screen.getByRole("checkbox", { name: "This was sam's" })).toBeTruthy();
+  // alex and sam, so the two-person screen: the whole receipt can be sam's (lg-102).
+  expect(optionsOf(screen.getByLabelText("Whose"))).toEqual(["Shared", "sam's — owes all of it"]);
 });
 
 test("two current members and one who has left: the screen is the two-person one", async () => {
@@ -640,9 +694,9 @@ test("two current members and one who has left: the screen is the two-person one
   // Mine and the one other current member; casey has left and is not offered.
   expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Mine", "sam"]);
   fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "sam" } });
-  expect(screen.queryByText("This was someone else's")).toBeNull();
-  expect(screen.queryByLabelText("Whose it was")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  // The whole receipt is the one other current member's, or shared; casey is not offered.
+  expect(optionsOf(screen.getByLabelText("Whose"))).toEqual(["Shared", "sam's — owes all of it"]);
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items[1]).toMatchObject({
     share: "theirs",
@@ -657,12 +711,11 @@ test("among three people, the whole receipt can be someone else's, picked by nam
   await waitFor(() => expect(field("Total").value).toBe("26.50"));
 
   expect(screen.queryByText(/as a line charged to them/u)).toBeNull();
-  expect(screen.queryByLabelText("Whose it was")).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "This was someone else's" }));
-  const whose = screen.getByLabelText("Whose it was") as HTMLSelectElement;
-  expect([...whose.options].map((option) => option.value)).toEqual(["casey", "sam"]);
+  const whose = screen.getByLabelText("Whose") as HTMLSelectElement;
+  expect([...whose.options].map((option) => option.value)).toEqual(["", "casey", "sam"]);
+  expect(whose.value).toBe("");
   fireEvent.change(whose, { target: { value: "sam" } });
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toMatchObject({
@@ -725,7 +778,7 @@ test("the household's record failing holds the form, says so where the person is
   // The categories the other request returned were kept.
   const category = screen.getByLabelText("Category of BIERE 6X355") as HTMLSelectElement;
   expect([...category.options].map((option) => option.text)).toContain("Alcohol");
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
 });
 
@@ -754,7 +807,7 @@ test("categories failing to load do not hold the form, and can be asked for agai
 
   await waitFor(() => expect(field("Total").value).toBe("24.76"));
   // The household loaded, so the form is the household's own, with the failure beside it.
-  expect(screen.getByRole("checkbox", { name: "This was sam's" })).toBeTruthy();
+  expect(optionsOf(screen.getByLabelText("Whose"))).toEqual(["Shared", "sam's — owes all of it"]);
   const alert = await screen.findByRole("alert");
   expect(alert.textContent).toContain("The spending categories did not load");
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -776,7 +829,7 @@ test.each([
     await waitFor(() => expect(field("Total").value).toBe("24.76"));
 
     // The whole receipt cannot be someone else's.
-    expect(screen.queryByRole("checkbox", { name: /^This was/u })).toBeNull();
+    expect(optionsOf(screen.getByLabelText("Whose"))).toEqual(["Shared"]);
     // Unchecking offers Mine alone: nobody else is there to be picked.
     leaveOut("PAIN");
     expect(optionsOf(whoseSelect("PAIN"))).toEqual(["Mine"]);
@@ -784,16 +837,15 @@ test.each([
     expect(sharedBox("PAIN").checked).toBe(true);
 
     // The six-pack was read as someone else's: it is said, and nothing is filed.
-    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "There is nobody else in the household to charge an item to.",
-    );
+    await fileFromQueue();
+    expect(await rowRefusal()).toBe("There is nobody else in the household to charge an item to.");
     expect(fileReceipt).not.toHaveBeenCalled();
 
     // The read item is someone else's, which the select says; Mine moves it off, and then it files, charging nobody.
+    reopen();
     expect(whoseSelect("BIERE 6X355").value).toBe("");
     fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+    await fileFromQueue();
     await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
     const filed = vi.mocked(fileReceipt).mock.calls[0]?.[1];
     expect(filed?.proposal.items.map((item) => item.share)).not.toContain("theirs");
@@ -827,7 +879,7 @@ test("entering a rebate on an item updates the add-up check and the split live, 
   // The six-pack takes its rebate and the taxes on it off with it.
   expect(shared()).toBe("Not shared 13.24 $ · sam's 0.00 $ · Shared 9.22 $");
 
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   const request = vi.mocked(fileReceipt).mock.calls[0]?.[1];
   expect(request?.proposal.items.map((item) => item.discount)).toEqual([null, -200, null]);
@@ -1010,8 +1062,8 @@ test("a photo of two receipts gives two entries, and filing one marks only that 
 
   chooseSeveral([jpeg("two.jpg")]);
   fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Café Un, 10.00 $" }));
-  fireEvent.click(await screen.findByRole("button", { name: "File as alex’s line" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: "Select Café Un, 10.00 $" }));
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
 
   await screen.findByText("Café Un, 10.00 $, filed");
   expect(vi.mocked(fileReceipt).mock.calls[0]?.[0]).toBe(11);
@@ -1044,12 +1096,18 @@ test("a photo over the size limit is listed as left out and the rest go on (lg-9
 
 // --- lg-92 round 1: gate 1's findings ---
 
-/** The first "Type it in" in the queue, a total typed, and filed as the person's line. */
+/**
+ * The first photo's next receipt typed in — "Type another receipt from this
+ * photo" once one is filed, "Type it in" before — a total typed, and filed from
+ * the list (lg-102).
+ */
 async function typeInFirstAndFile(total: string): Promise<void> {
-  fireEvent.click(screen.getAllByRole("button", { name: "Type it in" })[0] as HTMLElement);
+  const another = screen.queryAllByRole("button", { name: "Type another receipt from this photo" });
+  const typing = another[0] ?? screen.getAllByRole("button", { name: "Type it in" })[0];
+  fireEvent.click(typing as HTMLElement);
   fireEvent.change(await screen.findByLabelText("Total"), { target: { value: total } });
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
-  await waitFor(() => expect(screen.queryByRole("form", { name: "The receipt" })).toBeNull());
+  await fileFromQueue();
+  await screen.findByText(`Unnamed, ${total} $, filed`);
 }
 
 test("a receipt typed in from a kept photo shows it filed, files the next one as part 2, and Read all spends no read on it (lg-92 F2)", async () => {
@@ -1058,7 +1116,7 @@ test("a receipt typed in from a kept photo shows it filed, files the next one as
   await screen.findByRole("button", { name: "Read all" });
 
   await typeInFirstAndFile("10.00");
-  expect(screen.getByText("1 receipt typed in from this photo, filed.")).toBeTruthy();
+  expect(screen.getByText("Filed as alex's line in the period.")).toBeTruthy();
 
   // Another from the same photo is the photo's part 2, not part 1 again.
   await typeInFirstAndFile("20.00");
@@ -1081,7 +1139,7 @@ test("a receipt typed in from a photo whose read failed shows it filed and drops
 
   await typeInFirstAndFile("10.00");
 
-  expect(screen.getByText("1 receipt typed in from this photo, filed.")).toBeTruthy();
+  expect(screen.getByText("Filed as alex's line in the period.")).toBeTruthy();
   expect(screen.queryByText(/The read failed/u)).toBeNull();
   expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
 });
@@ -1223,7 +1281,7 @@ test("among three people, checking a charged item again files it shared with nob
   fireEvent.click(sharedBox("BIERE 6X355"));
   expect(shared()).toBe("Not shared 0.00 $ · casey's 5.74 $ · Shared 19.02 $");
 
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(
@@ -1289,7 +1347,7 @@ test("a member whose person id is mine is charged as theirs, not kept as Mine (l
   await readBasket();
   leaveOut("BIERE 6X355");
   fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "mine" } });
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   const filed = vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items[1];
   expect([filed?.share, filed?.chargedTo]).toEqual(["theirs", "mine"]);
@@ -1313,7 +1371,8 @@ test("the camera and the gallery feed one queue, and its words follow the count"
 test("a photo of one receipt is summed up in the queue, opens from it, files back, and offers another", async () => {
   await takePhoto();
   await readOne();
-  fireEvent.click(await screen.findByRole("button", { name: "File as alex’s line" }));
+  await screen.findByLabelText("Total");
+  await fileFromQueue();
 
   await screen.findByText("Marché Exemple, 26.50 $, filed");
   fireEvent.click(screen.getByRole("button", { name: "Type another receipt from this photo" }));
@@ -1344,7 +1403,7 @@ const NOBODY_CHOSEN =
 test("paid with the joint card, an item left out offers every member and no Mine, and nothing is chosen until one is picked (lg-91)", async () => {
   basketRow();
   await readBasket();
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   await screen.findByRole("button", { name: "Attach to this row" });
 
   leaveOut("BIERE 6X355");
@@ -1355,7 +1414,7 @@ test("paid with the joint card, an item left out offers every member and no Mine
   expect(shared()).toBe("Whose not chosen yet 15.54 $ · Shared 9.22 $");
   expect(screen.getByText(NOBODY_CHOSEN)).toBeTruthy();
   // No line to file: the joint account paid.
-  expect(screen.queryByRole("button", { name: "File as alex’s line" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^File as/u })).toBeNull();
 
   fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "sam" } });
 
@@ -1383,7 +1442,7 @@ test.each(["sam", "alex"])(
       filedBy: "alex",
     });
     await readBasket();
-    fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+    payJointly();
     await screen.findByRole("button", { name: "Attach to this row" });
     leaveOut("BIERE 6X355");
     fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: person } });
@@ -1414,7 +1473,7 @@ test("an item left as Mine names nobody once paid jointly, and is Mine again on 
   leaveOut("BIERE 6X355");
   expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Mine", "casey", "sam"]);
 
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   await screen.findByRole("button", { name: "Attach to this row" });
 
   expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Whose?", "alex", "casey", "sam"]);
@@ -1424,13 +1483,24 @@ test("an item left as Mine names nobody once paid jointly, and is Mine again on 
   expect(fileReceipt).not.toHaveBeenCalled();
 
   fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "alex" } });
-  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+  payBy("alex");
 
   // Charged to whoever took the photo is theirs to keep, on their own card.
   expect(optionsOf(whoseSelect("BIERE 6X355"))).toEqual(["Mine", "casey", "sam"]);
   expect(whoseSelect("BIERE 6X355").value).toBe("");
   expect(screen.queryByRole("button", { name: "Attach to this row" })).toBeNull();
-  expect(screen.getByRole("button", { name: "File as alex’s line" })).toBeTruthy();
+  // A line is filed from the list (lg-102): the receipt has no File it off the joint card.
+  expect(screen.queryByRole("button", { name: "File it" })).toBeNull();
+  // And it files as alex's line, the six-pack alex's to keep.
+  await fileFromQueue();
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  const request = vi.mocked(fileReceipt).mock.calls[0]?.[1];
+  expect(request?.destination).toMatchObject({ to: "line", paidBy: null, chargedTo: null });
+  expect(request?.proposal.items.map((item) => [item.share, item.chargedTo])).toEqual([
+    ["shared", null],
+    ["not-shared", null],
+    ["shared", null],
+  ]);
 });
 
 const UNPICKED_CHARGE =
@@ -1483,16 +1553,17 @@ test.each([
     // The live line does not charge the first other either.
     expect(shared()).toBe("Not shared 0.00 $ · Whose not chosen yet 15.54 $ · Shared 9.22 $");
 
-    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
-    expect((await screen.findByRole("alert")).textContent).toBe(UNPICKED_CHARGE);
+    await fileFromQueue();
+    expect(await rowRefusal()).toBe(UNPICKED_CHARGE);
     expect(fileReceipt).not.toHaveBeenCalled();
 
     // Picking a current member is the choice, and the form files it.
-    fireEvent.change(select, { target: { value: members[1] } });
+    reopen();
+    fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: members[1] } });
     expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe(members[1]);
-    // The refusal's hint is gone; the alert from the tap stays until the next filing.
+    // The refusal's hint is gone.
     expect(document.querySelector("p.hint.bad")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+    await fileFromQueue();
     await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
     expect(filedItems()).toEqual([
       ["PAIN", "shared", null],
@@ -1510,7 +1581,7 @@ test("an unpicked read charge can be answered Mine, which files it not shared (l
 
   expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Mine");
   expect(screen.queryByText(UNPICKED_CHARGE)).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(filedItems()).toEqual([
     ["PAIN", "shared", null],
@@ -1525,7 +1596,7 @@ test("a read charge to a member who is still here keeps its person, and nothing 
 
   expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("sam");
   expect(screen.queryByText(UNPICKED_CHARGE)).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(filedItems()).toEqual([
     ["PAIN", "shared", null],
@@ -1538,11 +1609,9 @@ test("with nobody else, a read charge to someone who has left is refused as befo
   vi.mocked(fetchHousehold).mockResolvedValue(household(["alex"], ["dana"]));
   await readBasketCharged("dana");
 
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
 
-  expect((await screen.findByRole("alert")).textContent).toBe(
-    "There is nobody else in the household to charge an item to.",
-  );
+  expect(await rowRefusal()).toBe("There is nobody else in the household to charge an item to.");
   expect(fileReceipt).not.toHaveBeenCalled();
 });
 
@@ -1558,14 +1627,14 @@ test.each([
     await readBasketCharged(chargedTo);
     expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Whose?");
 
-    fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+    payJointly();
     await screen.findByRole("button", { name: "Attach to this row" });
-    fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+    payBy("alex");
 
     // Not turned into Mine on the way back: nobody chose that.
     expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Whose?");
-    fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
-    expect((await screen.findByRole("alert")).textContent).toBe(UNPICKED_CHARGE);
+    await fileFromQueue();
+    expect(await rowRefusal()).toBe(UNPICKED_CHARGE);
     expect(fileReceipt).not.toHaveBeenCalled();
   },
 );
@@ -1576,10 +1645,10 @@ test("an item the person picked on the joint card is Mine again on my own card, 
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
   await readBasketCharged(null);
 
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   await screen.findByRole("button", { name: "Attach to this row" });
   fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "alex" } });
-  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+  payBy("alex");
 
   expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Mine");
 });
@@ -1609,15 +1678,15 @@ test("an item unchecked while paid jointly is Mine again on my own card, though 
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "casey", "sam"]);
   await readBasketCharged(null);
 
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   await screen.findByRole("button", { name: "Attach to this row" });
   // The person's own taps on the Shared box clear what the read proposed.
   fireEvent.click(sharedBox("BIERE 6X355"));
   fireEvent.click(sharedBox("BIERE 6X355"));
-  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+  payBy("alex");
 
   expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("Mine");
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(filedItems()).toEqual([
     ["PAIN", "shared", null],
@@ -1633,13 +1702,13 @@ test("with one other member, a read charge to nobody stays theirs through the jo
   await readBasketCharged(null);
   expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("sam");
 
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   await screen.findByRole("button", { name: "Attach to this row" });
-  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+  payBy("alex");
 
   // Not Mine: nobody chose that, and the one other member is still the item's.
   expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("sam");
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(filedItems()).toEqual([
     ["PAIN", "shared", null],
@@ -1654,14 +1723,12 @@ test("with nobody else, a read charge to nobody is still refused after the joint
   vi.mocked(fetchPeople).mockResolvedValue(["alex"]);
   await readBasketCharged(null);
 
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   await screen.findByRole("button", { name: "Attach to this row" });
-  fireEvent.click(screen.getByRole("button", { name: "Paid with my own card" }));
+  payBy("alex");
 
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
-  expect((await screen.findByRole("alert")).textContent).toBe(
-    "There is nobody else in the household to charge an item to.",
-  );
+  await fileFromQueue();
+  expect(await rowRefusal()).toBe("There is nobody else in the household to charge an item to.");
   expect(fileReceipt).not.toHaveBeenCalled();
 });
 
@@ -1677,7 +1744,8 @@ const TAXABLE_MATTERS =
 async function readOne(): Promise<void> {
   fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
   const parts = await screen.findByRole("list", { name: /^Receipts in /u });
-  fireEvent.click(within(parts).getByRole("button"));
+  // The row's first button opens it; the other takes it out of the list.
+  fireEvent.click(within(parts).getAllByRole("button")[0] as HTMLElement);
 }
 
 test("reading one photo of one receipt stays on the queue, with the receipt summed up there", async () => {
@@ -1701,7 +1769,7 @@ test("a rebate typed positive comes off a purchase, and a typed minus is the sam
   fireEvent.change(field("Rebate on BIERE 6X355"), { target: { value: "-2.00" } });
   expect(screen.getByText("It adds up.")).toBeTruthy();
 
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(
     vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items.map((item) => item.discount),
@@ -1722,7 +1790,7 @@ test("a rebate typed positive on a refunded item is filed against the refund", a
     ),
   ).toBeNull();
 
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(
     vi.mocked(fileReceipt).mock.calls[0]?.[1].proposal.items.map((item) => item.discount),
@@ -1754,12 +1822,13 @@ test("a wrong Taxable mark refuses filing once an item is left out, and not on a
 
   leaveOut("BIERE 6X355");
   expect(screen.getByText(TAXABLE_MATTERS)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
-  expect((await screen.findByRole("alert")).textContent).toBe(TAXABLE_MATTERS);
+  await fileFromQueue();
+  expect(await rowRefusal()).toBe(TAXABLE_MATTERS);
   expect(fileReceipt).not.toHaveBeenCalled();
 
+  reopen();
   fireEvent.click(sharedBox("BIERE 6X355"));
-  fireEvent.click(screen.getByRole("button", { name: "File as alex’s line" }));
+  await fileFromQueue();
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
 });
 
@@ -1796,14 +1865,14 @@ test("paid with the joint card, a wrong Taxable mark refuses attaching items in 
   expect(screen.queryByText(TAXABLE_MATTERS)).toBeNull();
 
   // On the row they do: the chart splits it by its items' categories (`splitByCategory`).
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   expect(screen.getByText(TAXABLE_MATTERS)).toBeTruthy();
   fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
   expect((await screen.findByRole("alert")).textContent).toBe(TAXABLE_MATTERS);
   expect(fileReceipt).not.toHaveBeenCalled();
 
   fireEvent.click(screen.getAllByLabelText("Taxable")[1] as HTMLElement);
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  fireEvent.click(screen.getByRole("button", { name: "File it" }));
   fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toEqual({ to: "row", rowId: 41 });
@@ -1839,9 +1908,814 @@ test("paid with the joint card, a wrong Taxable mark still attaches a shared rec
   fireEvent.click(screen.getAllByLabelText("Taxable")[1] as HTMLElement);
 
   // One category on the row: the split gives it the whole amount whatever the marks.
-  fireEvent.click(screen.getByRole("button", { name: "Paid with the joint card?" }));
+  payJointly();
   expect(screen.queryByText(TAXABLE_MATTERS)).toBeNull();
   fireEvent.click(await screen.findByRole("button", { name: "Attach to this row" }));
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
   expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toEqual({ to: "row", rowId: 41 });
+});
+
+// --- lg-102: who paid and whose, picked in the list, and several receipts filed at once ---
+
+/** Three photos read, one shop each (Shop 11, 12 and 13), every receipt selected. */
+async function threeReadAndSelected(): Promise<void> {
+  uploadsNumbered();
+  vi.mocked(readReceipt).mockImplementation(async (id) => oneShopEach(id));
+  chooseSeveral(THREE.map((name) => jpeg(name)));
+  fireEvent.click(await screen.findByRole("button", { name: "Read all" }));
+  await screen.findByText("3 of 3 read");
+  fireEvent.click(await screen.findByRole("checkbox", { name: "Select all" }));
+}
+
+/** Each filing's receipt id, as the list sent them. */
+function filedIds(): number[] {
+  return vi.mocked(fileReceipt).mock.calls.map(([id]) => id);
+}
+
+test("Paid by and Whose set on three selected rows file three receipts, one at a time, each marked filed (lg-102)", async () => {
+  let inFlight = 0;
+  let widest = 0;
+  vi.mocked(fileReceipt).mockImplementation(async (id, request) => {
+    inFlight += 1;
+    widest = Math.max(widest, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    inFlight -= 1;
+    return {
+      id,
+      receiptId: id,
+      part: request.part,
+      proposal: request.proposal,
+      periodLineId: id * 10,
+      chargeLineId: null,
+      charges: [],
+      rowId: null,
+      filedAt: "x",
+      filedBy: "alex",
+    };
+  });
+  await threeReadAndSelected();
+
+  // Each row carries both picks: whoever took the photo paid, and it is shared.
+  const row = screen.getByLabelText("Paid by, Shop 12, 10.00 $") as HTMLSelectElement;
+  expect(optionsOf(row)).toEqual(["alex", "sam", "Joint card"]);
+  expect(row.value).toBe("alex");
+  expect(optionsOf(screen.getByLabelText("Whose, Shop 12, 10.00 $"))).toEqual([
+    "Shared",
+    "sam's — owes all of it",
+  ]);
+
+  // The bar sets one pick at a time on every selected row.
+  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), {
+    target: { value: "sam" },
+  });
+  const whose = screen.getByLabelText("Whose, for the selected") as HTMLSelectElement;
+  expect(optionsOf(whose)).toEqual([
+    "Keep each row's",
+    "Shared",
+    "alex's — owes all of it",
+    "sam's — owes all of it",
+  ]);
+  fireEvent.change(whose, { target: { value: "alex" } });
+  for (const shop of ["Shop 11", "Shop 12", "Shop 13"]) {
+    expect((screen.getByLabelText(`Paid by, ${shop}, 10.00 $`) as HTMLSelectElement).value).toBe(
+      "sam",
+    );
+    expect((screen.getByLabelText(`Whose, ${shop}, 10.00 $`) as HTMLSelectElement).value).toBe(
+      "alex",
+    );
+  }
+
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+
+  await screen.findByText("Shop 13, 10.00 $, filed");
+  expect(filedIds()).toEqual([11, 12, 13]);
+  expect(widest).toBe(1);
+  for (const [, request] of vi.mocked(fileReceipt).mock.calls) {
+    expect(request.destination).toEqual({
+      to: "line",
+      date: "2026-10-04",
+      amountCents: 1_000,
+      spendingCategoryId: null,
+      note: request.proposal.merchant,
+      chargedTo: "alex",
+      paidBy: "sam",
+    });
+  }
+  expect(screen.getByText("Shop 11, 10.00 $, filed")).toBeTruthy();
+  expect(screen.getByText("Shop 12, 10.00 $, filed")).toBeTruthy();
+  expect(screen.getAllByText("Filed as sam's line in the period.")).toHaveLength(3);
+  // Nothing is left to select, so the bar is gone.
+  expect(screen.queryByRole("button", { name: "File selected" })).toBeNull();
+});
+
+test("each row shows Filing… while its own filing is out, and not before (lg-102)", async () => {
+  const answers: (() => void)[] = [];
+  vi.mocked(fileReceipt).mockImplementation(
+    (id, request) =>
+      new Promise((resolve) => {
+        answers.push(() =>
+          resolve({
+            id,
+            receiptId: id,
+            part: request.part,
+            proposal: request.proposal,
+            periodLineId: id * 10,
+            chargeLineId: null,
+            charges: [],
+            rowId: null,
+            filedAt: "x",
+            filedBy: "alex",
+          }),
+        );
+      }),
+  );
+  await threeReadAndSelected();
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+
+  await waitFor(() => expect(answers).toHaveLength(1));
+  const rows = within(screen.getByRole("list", { name: "The photos" })).getAllByRole("list");
+  expect(rows.map((list) => within(list).queryByText("Filing…") !== null)).toEqual([
+    true,
+    false,
+    false,
+  ]);
+
+  await act(async () => {
+    answers[0]?.();
+  });
+  await waitFor(() => expect(answers).toHaveLength(2));
+  expect(screen.getByText("Shop 11, 10.00 $, filed")).toBeTruthy();
+  expect(rows.map((list) => within(list).queryByText("Filing…") !== null)).toEqual([
+    false,
+    true,
+    false,
+  ]);
+  await act(async () => {
+    answers[1]?.();
+  });
+  await waitFor(() => expect(answers).toHaveLength(3));
+  await act(async () => {
+    answers[2]?.();
+  });
+  await screen.findByText("Shop 13, 10.00 $, filed");
+});
+
+/** Three photos, the second read as `second`; every receipt selected and filed from the bar. */
+async function fileThreeWithSecond(second: ReceiptProposal): Promise<void> {
+  uploadsNumbered();
+  vi.mocked(readReceipt).mockImplementation(async (id) =>
+    id === 12
+      ? {
+          receiptId: id,
+          model: "claude-haiku-5-5",
+          proposals: [{ proposal: second, flags: [], merchantCategoryId: null }],
+        }
+      : oneShopEach(id),
+  );
+  chooseSeveral(THREE.map((name) => jpeg(name)));
+  fireEvent.click(await screen.findByRole("button", { name: "Read all" }));
+  await screen.findByText("3 of 3 read");
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+  await screen.findByText("Shop 13, 10.00 $, filed");
+}
+
+test("a selected row whose items do not add up is not filed and says why, and the others file (lg-102)", async () => {
+  await fileThreeWithSecond({
+    ...BASKET,
+    items: BASKET.items.map((item) => (item.text === "PAIN" ? { ...item, price: 348 } : item)),
+  });
+
+  expect(filedIds()).toEqual([11, 13]);
+  expect(screen.getByText("Shop 11, 10.00 $, filed")).toBeTruthy();
+  expect(await rowRefusal()).toBe(
+    "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
+  );
+  // Still in the list, selected, to be opened and corrected.
+  const basket = screen.getByRole("checkbox", {
+    name: "Select Marché Exemple, 24.76 $",
+  }) as HTMLInputElement;
+  expect(basket.checked).toBe(true);
+  expect(screen.getByRole("button", { name: "Marché Exemple, 24.76 $" })).toBeTruthy();
+});
+
+test("a selected row whose Taxable marks are held is not filed and says why, and the others file (lg-102)", async () => {
+  // The six-pack's mark misread, and the six-pack left out: the mark moves money (#748).
+  await fileThreeWithSecond({
+    ...BASKET,
+    items: BASKET.items.map((item) =>
+      item.text === "BIERE 6X355"
+        ? { ...item, taxable: false, share: "not-shared" as const, spendingCategoryId: 1 }
+        : { ...item, spendingCategoryId: 1 },
+    ),
+  });
+
+  expect(filedIds()).toEqual([11, 13]);
+  expect(await rowRefusal()).toBe(TAXABLE_MATTERS);
+});
+
+test("paid with the joint card, a row is attached on exactly one match, and left for the person on none or two (lg-102)", async () => {
+  const row = (rowId: number) => ({
+    rowId,
+    date: "2026-10-04",
+    description: `Achat /Shop ${String(rowId)}`,
+    amountCents: -1_000,
+    daysApart: 0,
+  });
+  vi.mocked(fetchReceiptMatches).mockImplementation(async (id) =>
+    id === 11 ? [row(41)] : id === 12 ? [row(42), row(43)] : [],
+  );
+  vi.mocked(fileReceipt).mockResolvedValue({
+    id: 1,
+    receiptId: 11,
+    part: 1,
+    proposal: READ,
+    periodLineId: null,
+    chargeLineId: null,
+    charges: [],
+    rowId: 41,
+    filedAt: "x",
+    filedBy: "alex",
+  });
+  await threeReadAndSelected();
+
+  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), { target: { value: "" } });
+  // Whose each item is goes item by item on the joint card (lg-91): the whole receipt's is held.
+  expect((screen.getByLabelText("Whose, Shop 11, 10.00 $") as HTMLSelectElement).disabled).toBe(
+    true,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+
+  await screen.findByText("Shop 11, 10.00 $, filed");
+  expect(screen.getByText("Attached to the joint-account row.")).toBeTruthy();
+  await waitFor(() => expect(fetchReceiptMatches).toHaveBeenCalledTimes(3));
+  expect(vi.mocked(fetchReceiptMatches).mock.calls).toEqual([
+    [11, 1_000, "2026-10-04"],
+    [12, 1_000, "2026-10-04"],
+    [13, 1_000, "2026-10-04"],
+  ]);
+  expect(vi.mocked(fileReceipt).mock.calls).toEqual([
+    [11, { part: 1, proposal: readAs("Shop 11"), destination: { to: "row", rowId: 41 } }],
+  ]);
+  // Two rows, and none: both are left for the person to choose, opened.
+  await waitFor(() =>
+    expect(screen.getAllByText("Not filed: Open it to choose the row.")).toHaveLength(2),
+  );
+  expect(screen.getByRole("button", { name: "Shop 12, 10.00 $" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Shop 13, 10.00 $" })).toBeTruthy();
+
+  // Opened, the receipt is on the joint card, and File it lists both rows to choose from.
+  fireEvent.click(screen.getByRole("button", { name: "Shop 12, 10.00 $" }));
+  expect((screen.getByLabelText("Paid by") as HTMLSelectElement).value).toBe("");
+  fireEvent.click(screen.getByRole("button", { name: "File it" }));
+  expect(await screen.findAllByRole("button", { name: "Attach to this row" })).toHaveLength(2);
+});
+
+/** `READ` as the list files it, under another merchant: one shop per photo. */
+function readAs(merchant: string): ReceiptProposal {
+  return { ...READ, merchant, total: 1_000 };
+}
+
+test("an edit made in the receipt view is still there after Back to the queue, and is what the batch files (lg-102)", async () => {
+  await threeReadAndSelected();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Shop 12, 10.00 $" }));
+  fireEvent.change(field("Merchant"), { target: { value: "Boulangerie" } });
+  fireEvent.change(field("Total"), { target: { value: "12.00" } });
+  fireEvent.change(screen.getByLabelText("Paid by"), { target: { value: "sam" } });
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+
+  // The row reads as edited, with its picks.
+  expect(screen.getByRole("button", { name: "Boulangerie, 12.00 $" })).toBeTruthy();
+  expect((screen.getByLabelText("Paid by, Boulangerie, 12.00 $") as HTMLSelectElement).value).toBe(
+    "sam",
+  );
+  // Opened again, the form is as it was left.
+  fireEvent.click(screen.getByRole("button", { name: "Boulangerie, 12.00 $" }));
+  expect(field("Merchant").value).toBe("Boulangerie");
+  expect(field("Charged to the card (with any tip)").value).toBe("12.00");
+  expect((screen.getByLabelText("Paid by") as HTMLSelectElement).value).toBe("sam");
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select Boulangerie, 12.00 $" }));
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(fileReceipt).mock.calls[0]).toEqual([
+    12,
+    {
+      part: 1,
+      proposal: { ...READ, merchant: "Boulangerie", total: 1_200 },
+      destination: {
+        to: "line",
+        date: "2026-10-04",
+        amountCents: 1_200,
+        spendingCategoryId: null,
+        note: "Boulangerie",
+        chargedTo: null,
+        paidBy: "sam",
+      },
+    },
+  ]);
+});
+
+test.each([
+  ["two", ["alex", "sam"]],
+  ["three", ["alex", "casey", "sam"]],
+])(
+  "on a household of %s the receipt view has no line-filing button and no This was …'s box (lg-102)",
+  async (_name, members) => {
+    vi.mocked(fetchHousehold).mockResolvedValue(household(members));
+    await readBasket();
+
+    expect(screen.queryByRole("button", { name: /^File as/u })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /^This was/u })).toBeNull();
+    expect(screen.queryByText(/^This was/u)).toBeNull();
+    expect(screen.queryByLabelText("Whose it was")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Paid with/u })).toBeNull();
+    // Off the joint card there is nothing to file here: File it is the joint card's.
+    expect(screen.queryByRole("button", { name: "File it" })).toBeNull();
+    // Their meaning is the two selects at the top, which the row in the list shares.
+    expect(optionsOf(screen.getByLabelText("Paid by"))).toEqual([...members, "Joint card"]);
+    expect(optionsOf(screen.getByLabelText("Whose"))).toEqual([
+      "Shared",
+      ...members.slice(1).map((person) => `${person}'s — owes all of it`),
+    ]);
+    payJointly();
+    expect(screen.getByRole("button", { name: "File it" })).toBeTruthy();
+    expect((screen.getByLabelText("Whose") as HTMLSelectElement).disabled).toBe(true);
+  },
+);
+
+test("who paid carries each item's choice with it: the old payer's item is charged to them, and the new payer's is theirs to keep (lg-102)", async () => {
+  await readBasket();
+  leaveOut("PAIN");
+  leaveOut("SAVON");
+  fireEvent.change(whoseSelect("SAVON"), { target: { value: "sam" } });
+  expect(shared()).toBe("Not shared 3.49 $ · sam's 5.74 $ · Shared 15.53 $");
+
+  payBy("sam");
+
+  // The bread stayed with alex, who did not pay; the soap is sam's, who did.
+  expect(optionsOf(whoseSelect("PAIN"))).toEqual(["sam", "alex"]);
+  expect(whoseSelect("PAIN").value).toBe("alex");
+  expect(whoseSelect("SAVON").value).toBe("");
+  expect(shared()).toBe("Not shared 5.74 $ · alex's 3.49 $ · Shared 15.53 $");
+  await fileFromQueue();
+
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(filedItems()).toEqual([
+    ["PAIN", "theirs", null],
+    ["BIERE 6X355", "shared", null],
+    ["SAVON", "not-shared", null],
+  ]);
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toMatchObject({
+    to: "line",
+    paidBy: "sam",
+    chargedTo: null,
+  });
+});
+
+test("a receipt typed in and left blank leaves no row, and one typed is listed to be filed (lg-102)", async () => {
+  uploadsNumbered();
+  chooseSeveral([jpeg("a.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Type it in" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+
+  expect(screen.getByText("Kept, not read yet.")).toBeTruthy();
+  expect(screen.queryByRole("list", { name: "Receipts in a.jpg" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Type it in" }));
+  fireEvent.change(field("Merchant"), { target: { value: "Dépanneur" } });
+  fireEvent.change(field("Total"), { target: { value: "4.00" } });
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+
+  const parts = screen.getByRole("list", { name: "Receipts in a.jpg" });
+  expect(within(parts).getByRole("button", { name: "Dépanneur, 4.00 $" })).toBeTruthy();
+  // Typed in, it is handled: Read it no longer spends a read on the photo.
+  expect(screen.queryByRole("button", { name: "Read it" })).toBeNull();
+});
+
+// --- lg-102 round 1: gate 1's surviving plants ---
+
+test("a receipt with no amount charged, or no date, is held in the list and says why, as its form would (lg-102 gate 1, M13)", async () => {
+  uploadsNumbered();
+  chooseSeveral([jpeg("a.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Type it in" }));
+  fireEvent.change(field("Merchant"), { target: { value: "Kiosque" } });
+  await fileFromQueue();
+
+  expect(await rowRefusal()).toBe("The amount charged and the date are needed to file it.");
+  expect(fileReceipt).not.toHaveBeenCalled();
+
+  // A charge, and the date cleared: still held, for the date.
+  reopen();
+  fireEvent.change(field("Total"), { target: { value: "5.00" } });
+  fireEvent.change(field("Date"), { target: { value: "" } });
+  await fileFromQueue();
+  expect(await rowRefusal()).toBe("The amount charged and the date are needed to file it.");
+  expect(fileReceipt).not.toHaveBeenCalled();
+
+  reopen();
+  fireEvent.change(field("Date"), { target: { value: "2026-10-05" } });
+  await fileFromQueue();
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toMatchObject({
+    to: "line",
+    amountCents: 500,
+    date: "2026-10-05",
+  });
+});
+
+test("with two members, a read charge to nobody was the other's: paid by that other, it is theirs to keep (lg-102 gate 1, M15)", async () => {
+  await readBasketCharged(null);
+  // Read as someone else's, naming nobody: with two members, sam's.
+  expect(shared()).toBe("Not shared 0.00 $ · sam's 15.54 $ · Shared 9.22 $");
+
+  payBy("sam");
+
+  expect(whoseSelect("BIERE 6X355").value).toBe("");
+  expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("sam");
+  expect(shared()).toBe("Not shared 15.54 $ · alex's 0.00 $ · Shared 9.22 $");
+  await fileFromQueue();
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(filedItems()).toEqual([
+    ["PAIN", "shared", null],
+    ["BIERE 6X355", "not-shared", null],
+    ["SAVON", "shared", null],
+  ]);
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toMatchObject({ paidBy: "sam" });
+});
+
+test("a receipt is never wholly its payer's: Whose goes back to Shared when its person pays, and stays there (lg-102 gate 1, M17)", async () => {
+  await takePhoto();
+  await readOne();
+  await waitFor(() => expect(field("Total").value).toBe("26.50"));
+  const whose = (): HTMLSelectElement => screen.getByLabelText("Whose");
+
+  fireEvent.change(whose(), { target: { value: "sam" } });
+  expect(whose().value).toBe("sam");
+  payBy("sam");
+  expect(whose().value).toBe("");
+  expect(optionsOf(whose())).toEqual(["Shared", "alex's — owes all of it"]);
+  // Back to alex paying, sam is offered again and not chosen: nobody picked sam since.
+  payBy("alex");
+  expect(whose().value).toBe("");
+
+  await fileFromQueue();
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toMatchObject({
+    to: "line",
+    chargedTo: null,
+    paidBy: null,
+  });
+});
+
+test("a row's refusal goes when one of its picks changes in the list (lg-102 gate 1, M19)", async () => {
+  await fileThreeWithSecond({
+    ...BASKET,
+    items: BASKET.items.map((item) => (item.text === "PAIN" ? { ...item, price: 348 } : item)),
+  });
+  expect(await rowRefusal()).toBe(
+    "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
+  );
+
+  fireEvent.change(screen.getByLabelText("Paid by, Marché Exemple, 24.76 $"), {
+    target: { value: "sam" },
+  });
+
+  expect(screen.queryByText(/^Not filed: /u)).toBeNull();
+  // Filed again, it is held again for the same reason, which it says.
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+  expect(await rowRefusal()).toBe(
+    "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
+  );
+});
+
+// --- lg-102 round 1: the owner's answers to gate 1 ---
+
+/** The row in the list a receipt's box is on. */
+function rowOf(label: string): HTMLElement {
+  const box = screen.getByRole("checkbox", { name: `Select ${label}` });
+  const row = box.closest("li");
+  if (row === null) throw new Error(`no row for ${label}`);
+  return row;
+}
+
+test("a receipt typed in and left half done can be removed, which hands its photo back to the reader (lg-102 gate 1)", async () => {
+  uploadsNumbered();
+  chooseSeveral([jpeg("a.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Type it in" }));
+  fireEvent.change(field("Merchant"), { target: { value: "D" } });
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+  // Typed in, the photo is handled: no read is offered while the row stands.
+  expect(screen.queryByRole("button", { name: "Read it" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove D" }));
+
+  expect(screen.queryByRole("list", { name: "Receipts in a.jpg" })).toBeNull();
+  expect(screen.getByText("Kept, not read yet.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Read it" }));
+  await screen.findByText("1 of 1 read");
+  expect(vi.mocked(readReceipt).mock.calls.map(([id]) => id)).toEqual([11]);
+});
+
+test("a receipt typed in from a photo whose read failed can be removed, and the retry is back (lg-102 gate 1)", async () => {
+  uploadsNumbered();
+  vi.mocked(readReceipt).mockRejectedValueOnce(new AppError("INTERNAL", "The reader broke."));
+  chooseSeveral([jpeg("a.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await screen.findByText("The read failed: The reader broke.");
+  fireEvent.click(screen.getByRole("button", { name: "Type it in" }));
+  fireEvent.change(field("Merchant"), { target: { value: "x" } });
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+  expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove x" }));
+
+  expect(screen.getByText("The read failed: The reader broke.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findByText("1 of 1 read");
+});
+
+test("a receipt the model made up is removed from its photo, the other stays, and the last removed hands the photo back (lg-102 gate 1)", async () => {
+  uploadsNumbered();
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 11,
+    model: "claude-haiku-5-5",
+    proposals: [readOf("Café Un", 1_000), readOf("Café Deux", 2_000)],
+  });
+  chooseSeveral([jpeg("two.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Remove Café Deux, 20.00 $" }));
+
+  expect(screen.queryByRole("button", { name: "Café Deux, 20.00 $" })).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+  await screen.findByText("Café Un, 10.00 $, filed");
+  expect(vi.mocked(fileReceipt).mock.calls.map(([id, request]) => [id, request.part])).toEqual([
+    [11, 1],
+  ]);
+  // A filed receipt has nothing to remove.
+  expect(screen.queryByRole("button", { name: /^Remove /u })).toBeNull();
+});
+
+test("removing every receipt read from a photo, none filed, hands it back to the reader (lg-102 gate 1)", async () => {
+  uploadsNumbered();
+  chooseSeveral([jpeg("a.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Remove Marché Exemple, 26.50 $" }));
+
+  expect(screen.getByText("Kept, not read yet.")).toBeTruthy();
+  expect(screen.queryByText(/Nothing in the photo was read/u)).toBeNull();
+  expect(screen.getByRole("button", { name: "Read it" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Type it in" })).toBeTruthy();
+});
+
+test("the bar sets only the pick the person changed on the selected rows (lg-102 gate 1)", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  await threeReadAndSelected();
+  fireEvent.change(screen.getByLabelText("Paid by, Shop 12, 10.00 $"), {
+    target: { value: "sam" },
+  });
+  const paid = (shop: string) =>
+    (screen.getByLabelText(`Paid by, ${shop}, 10.00 $`) as HTMLSelectElement).value;
+  const whose = (shop: string) =>
+    (screen.getByLabelText(`Whose, ${shop}, 10.00 $`) as HTMLSelectElement).value;
+
+  // Whose alone: each row keeps who paid it.
+  fireEvent.change(screen.getByLabelText("Whose, for the selected"), {
+    target: { value: "casey" },
+  });
+  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
+    ["alex", "casey"],
+    ["sam", "casey"],
+    ["alex", "casey"],
+  ]);
+
+  // Row 13 shared again, then Paid by alone: each row keeps whose it is.
+  fireEvent.change(screen.getByLabelText("Whose, Shop 13, 10.00 $"), { target: { value: "" } });
+  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), {
+    target: { value: "sam" },
+  });
+  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
+    ["sam", "casey"],
+    ["sam", "casey"],
+    ["sam", ""],
+  ]);
+});
+
+test("each row says Filing…, why not and what it was filed as in a live region that was there before it spoke (lg-102 gate 1)", async () => {
+  vi.mocked(fileReceipt).mockImplementation(async (id, request) => {
+    if (id === 12) throw new AppError("RECEIPT_ALREADY_FILED", "That receipt is filed already.");
+    return {
+      id,
+      receiptId: id,
+      part: request.part,
+      proposal: request.proposal,
+      periodLineId: id * 10,
+      chargeLineId: null,
+      charges: [],
+      rowId: null,
+      filedAt: "x",
+      filedBy: "alex",
+    };
+  });
+  await threeReadAndSelected();
+  const said = ["Shop 11", "Shop 12"].map((shop) =>
+    within(rowOf(`${shop}, 10.00 $`)).getByRole("status"),
+  );
+  expect(said.map((region) => region.textContent)).toEqual(["", ""]);
+
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+
+  await screen.findByText("Shop 13, 10.00 $, filed");
+  // The same regions, still on the page, now say what happened.
+  expect(said.map((region) => document.body.contains(region))).toEqual([true, true]);
+  expect(said.map((region) => region.textContent)).toEqual([
+    "Filed as alex's line in the period.",
+    "Not filed: That receipt is filed already.",
+  ]);
+});
+
+/** What a select shows, as the person reads it. */
+function shownIn(select: HTMLElement): string {
+  return (select as HTMLSelectElement).selectedOptions[0]?.text ?? "";
+}
+
+test("the bar never shows a pick that some selected row does not have: each select starts on, and returns to, Keep each row's (lg-102 gate 2, N2)", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  await threeReadAndSelected();
+  fireEvent.change(screen.getByLabelText("Paid by, Shop 12, 10.00 $"), {
+    target: { value: "sam" },
+  });
+  const barPaid = screen.getByLabelText("Paid by, for the selected");
+  const barWhose = screen.getByLabelText("Whose, for the selected");
+
+  // Rows differ, so the bar shows no one's pick.
+  expect([shownIn(barPaid), shownIn(barWhose)]).toEqual(["Keep each row's", "Keep each row's"]);
+  expect(optionsOf(barPaid as HTMLSelectElement)).toEqual([
+    "Keep each row's",
+    "alex",
+    "casey",
+    "sam",
+    "Joint card",
+  ]);
+  expect(optionsOf(barWhose as HTMLSelectElement).slice(0, 2)).toEqual([
+    "Keep each row's",
+    "Shared",
+  ]);
+
+  // Each change is applied, and the select that applied it goes back.
+  fireEvent.change(barWhose, { target: { value: "casey" } });
+  expect([shownIn(barPaid), shownIn(barWhose)]).toEqual(["Keep each row's", "Keep each row's"]);
+  fireEvent.change(barPaid, { target: { value: "casey" } });
+  expect([shownIn(barPaid), shownIn(barWhose)]).toEqual(["Keep each row's", "Keep each row's"]);
+});
+
+test("the bar's Whose alone keeps each row's payer, a row on the joint card included (lg-102 gate 2, N2)", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  await threeReadAndSelected();
+  fireEvent.change(screen.getByLabelText("Paid by, Shop 12, 10.00 $"), {
+    target: { value: "sam" },
+  });
+  fireEvent.change(screen.getByLabelText("Paid by, Shop 13, 10.00 $"), { target: { value: "" } });
+
+  fireEvent.change(screen.getByLabelText("Whose, for the selected"), {
+    target: { value: "casey" },
+  });
+
+  const paid = (shop: string) => shownIn(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`));
+  const whose = (shop: string) => shownIn(screen.getByLabelText(`Whose, ${shop}, 10.00 $`));
+  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
+    ["alex", "casey's — owes all of it"],
+    ["sam", "casey's — owes all of it"],
+    ["Joint card", "Shared"],
+  ]);
+  // The bar says only that nothing is held for the rows to share.
+  expect(shownIn(screen.getByLabelText("Whose, for the selected"))).toBe("Keep each row's");
+  expect(shownIn(screen.getByLabelText("Paid by, for the selected"))).toBe("Keep each row's");
+});
+
+test("the bar's Paid by alone keeps each row's Whose, through the items' repick (lg-102 gate 2, N2)", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  await threeReadAndSelected();
+  fireEvent.change(screen.getByLabelText("Whose, Shop 11, 10.00 $"), {
+    target: { value: "casey" },
+  });
+
+  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), {
+    target: { value: "sam" },
+  });
+
+  const paid = (shop: string) => shownIn(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`));
+  const whose = (shop: string) => shownIn(screen.getByLabelText(`Whose, ${shop}, 10.00 $`));
+  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
+    ["sam", "casey's — owes all of it"],
+    ["sam", "Shared"],
+    ["sam", "Shared"],
+  ]);
+  expect(shownIn(screen.getByLabelText("Paid by, for the selected"))).toBe("Keep each row's");
+});
+
+test("Whose set to casey from the bar, over rows paid by alex, by sam and on the joint card, leaves the bar on Keep each row's (lg-102 gate 2, N2)", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  await threeReadAndSelected();
+  fireEvent.change(screen.getByLabelText("Paid by, Shop 12, 10.00 $"), {
+    target: { value: "sam" },
+  });
+  fireEvent.change(screen.getByLabelText("Paid by, Shop 13, 10.00 $"), { target: { value: "" } });
+  fireEvent.change(screen.getByLabelText("Whose, for the selected"), {
+    target: { value: "casey" },
+  });
+
+  // Before this, the bar read alex / casey's while one row was sam's and one joint.
+  expect(shownIn(screen.getByLabelText("Paid by, for the selected"))).toBe("Keep each row's");
+  expect(shownIn(screen.getByLabelText("Whose, for the selected"))).toBe("Keep each row's");
+  expect(
+    ["Shop 11", "Shop 12", "Shop 13"].map((shop) =>
+      shownIn(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`)),
+    ),
+  ).toEqual(["alex", "sam", "Joint card"]);
+});
+
+test("Remove cannot be tapped while a filing is out: the three are all filed, none lost from the list (lg-102 gate 2, N1a)", async () => {
+  const held: Record<number, () => void> = {};
+  vi.mocked(fileReceipt).mockImplementation(
+    (id, request) =>
+      new Promise((resolve) => {
+        held[id] = () =>
+          resolve({
+            id,
+            receiptId: id,
+            part: request.part,
+            proposal: request.proposal,
+            periodLineId: id * 10,
+            chargeLineId: null,
+            charges: [],
+            rowId: null,
+            filedAt: "x",
+            filedBy: "alex",
+          });
+      }),
+  );
+  await threeReadAndSelected();
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+  });
+  await waitFor(() => expect(Object.keys(held)).toEqual(["11"]));
+
+  const remove = screen.getByRole("button", { name: "Remove Shop 11, 10.00 $" });
+  expect((remove as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(remove);
+  expect(screen.getByRole("button", { name: "Remove Shop 11, 10.00 $" })).toBeTruthy();
+
+  await act(async () => held[11]?.());
+  await waitFor(() => expect(Object.keys(held)).toEqual(["11", "12"]));
+  await act(async () => held[12]?.());
+  await waitFor(() => expect(Object.keys(held)).toEqual(["11", "12", "13"]));
+  await act(async () => held[13]?.());
+  await screen.findByText("Shop 13, 10.00 $, filed");
+  expect(filedIds()).toEqual([11, 12, 13]);
+  for (const shop of ["Shop 11", "Shop 12", "Shop 13"]) {
+    expect(screen.getByText(`${shop}, 10.00 $, filed`)).toBeTruthy();
+  }
+});
+
+test("the bar changes a selected row and leaves an unselected one as it was (lg-102 gate 2, N1b)", async () => {
+  await threeReadAndSelected();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select Shop 12, 10.00 $" }));
+
+  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), {
+    target: { value: "sam" },
+  });
+
+  expect(
+    ["Shop 11", "Shop 12", "Shop 13"].map((shop) =>
+      shownIn(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`)),
+    ),
+  ).toEqual(["sam", "alex", "sam"]);
+});
+
+test("removing one of two receipts read from a photo leaves the photo read: 1 of 1 read stays and no read is offered (lg-102 gate 2, N1c)", async () => {
+  uploadsNumbered();
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 11,
+    model: "claude-haiku-5-5",
+    proposals: [readOf("Café Un", 1_000), readOf("Café Deux", 2_000)],
+  });
+  chooseSeveral([jpeg("two.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await screen.findByRole("button", { name: "Remove Café Un, 10.00 $" });
+  expect(screen.getByText("1 of 1 read")).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove Café Un, 10.00 $" }));
+
+  expect(screen.getByText("1 of 1 read")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Remove Café Deux, 20.00 $" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Read it" })).toBeNull();
+  expect(screen.queryByText("Kept, not read yet.")).toBeNull();
 });
