@@ -369,3 +369,21 @@ Gate 1 (Sonnet 5.5, narrow) failed the filing on five findings. Each is answered
   the ticket is `ready` from the owner's answer above. Filed by builder-mechanical
   (Haiku 5.5, high), gated twice by ticket-reviewer-sonnet (Sonnet 5.5, xhigh, narrow),
   landed by the fixer (Sonnet 5.5, high).
+
+### 2026-11-07, build
+
+- **Brief points that were stale.** The ticket's reproduction sha (`1eafa0c6`) predates lg-99:
+  the `setChanging(null)` it cites at line 289 is at line 293 on `origin/main` `08f78f69`, and
+  `refile`'s two re-read paths already carry `setChanging((current) => (current === row.id ?
+  null : current))` (lines 314 and 323). Neither changes the fix: the stored-Save line was the
+  one left unguarded. Planted fix as the ticket gave it, in the same shape as lg-99's guards.
+- **Red on the real base.** The ticket's reproduction, copied to `web/test/` and run at
+  `08f78f69`: both arms `expected [ 'false', 'false' ] to deeply equal [ 'false', 'true' ]`,
+  `after-save expanded ["false","false"]`, as on `1eafa0c6`. The in-repo test (Build step 2)
+  also failed there, on `expect(b.getAttribute("aria-expanded")).toBe("true")` after the
+  Save's notice, 2 of 29.
+- **Green.** `History.tsx` line 293 is now `setChanging((current) => (current === row.id ?
+  null : current))`. `npx vitest run tools/ledger/web/test/history.test.tsx` → 29 of 29; the
+  ticket's reproduction with the fix → both arms `after-save expanded ["false","true"]`.
+- **Focus** is as the Decision said: the `active` lines are the same as on `main` in both arms.
+- **Not folded in.** Nothing else in the file was free; lg-100 and lg-98 touch other files.
