@@ -426,3 +426,23 @@ confirmed here.
   → `4 failed | 190 passed (194)`: the one-line-per-category test, the chart, the
   removal, and the web message. The settlement test and the line-path test pass at the
   base by design (same total; unchanged path).
+
+### 2026-11-07, owner's answers to the build's two open items
+
+Given to the orchestrator and relayed in the dispatch of the round; recorded here before
+the work they change.
+
+- **The `splitByCategory` → `[]` fallback.** Question: "what should happen to it?"
+  Options: keep it and test it directly (the orchestrator's recommendation); keep it
+  untested, with the Log saying why (the builder's recommendation); drop the fallback.
+  **Chosen by the owner: keep it, test it directly**, which overrides the builder's
+  recommendation. The test drives the branch with `splitByCategory` forced to answer
+  `[]`, since 0 of 1 452 charges reach it through the API (the 2026-11-07 build entry),
+  and shows red with the branch planted out and green with it in.
+- **The contract's doc comment on `ReceiptFiling.charges`**
+  (`tools/ledger/contract/src/receipts.ts`), which says "one per person". Question:
+  "fix it in this PR?" Options: fix it in #757 (the orchestrator's recommendation);
+  leave it. **Chosen by the owner: fix it in #757**, as one doc-comment edit with no type
+  change, saying that on a row there is one charge per person per category (lg-100). It
+  is the only contract edit approved. The builder had not folded it in because the
+  contract is an owner stop.
