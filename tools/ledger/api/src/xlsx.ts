@@ -218,7 +218,7 @@ export async function readSheets(data: Buffer): Promise<Sheet[]> {
     if (sheet === undefined || (sheet["!type"] !== undefined && sheet["!type"] !== "sheet")) {
       continue;
     }
-    places = placesOf(sheet, places);
+    // places = placesOf(sheet, places);
     sheets.push({ name, rows: rowsOf(sheet, date1904) });
   }
   return sheets;
