@@ -283,3 +283,26 @@ so it stands as written.
 - 2026-11-07 — Fold-in: considered none. The lg-95 test gap this ticket's Why names (no test
   reopens the control) is closed by the new F2 test, which reopens the control after the
   filter-change read.
+- 2026-11-07 — Gate 1 (Opus 5.5) FAILed `191f8927` on one high, F1, and four lows (F2 to F5;
+  full report on the pull request thread). Owner's answers, through AskUserQuestion, relayed in
+  round 1's dispatch:
+  1. **F1's fix.** Chosen: **a, mark the row only after its re-read fails**, so lg-95's restore
+     works unchanged and a successful re-read shows no disabled button or line (the gate's
+     recommendation). Not chosen: b, keep the early mark and hold the focus restore until the
+     re-read settles.
+  2. **F2** (after a failed re-read, focus falls to the page; on the base it went to the
+     then-enabled button). Chosen: **a, leave focus on the page and record it** (the gate's
+     recommendation). Not chosen: b, move focus to the new line or the alert with
+     `tabindex="-1"`.
+  3. **F3, F4 and F5: record all three, unfixed** (the orchestrator's recommendation). Not
+     chosen: also fix F3 in this round; fix F3 and F4 in this round.
+  4. **The defect outside the range** (a finished Save closes whichever control is open,
+     another row's included, `setChanging(null)`; identical on the base): the owner chose to
+     file it as a ticket, filed separately by the orchestrator. Not fixed or filed here.
+     Recorded unfixed, as the owner chose: F3, `closedByOwn` is set at the Save click, so with A's
+     Save clicked without focus and B opened before `classifyRow` answers, focus goes to A's
+     button; F4, `beforeEach` uses `vi.clearAllMocks`, which leaves a failing test's
+     `mockResolvedValueOnce` queue for the next test, so the full file fails more tests than each
+     does alone; F5, in a browser that does not focus on click, closing a row with its own toggle
+     button no longer restores focus, which is option 2a's own wording ("only ... Cancel or
+     Save").
