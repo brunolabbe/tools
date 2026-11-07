@@ -36,6 +36,7 @@ import {
   itemsAddUp,
   matchReceipt,
   normalizeDescription,
+  splitByCategory,
   splitReceipt,
 } from "@ledger/books";
 import type { MatchableRow } from "@ledger/books";
@@ -400,8 +401,9 @@ export function receiptMatches(
  * account, so there is no payer for an item to stay with: none is `not-shared`.
  * One that is a person's is owed by them to the pot (lg-91, the owner's answer
  * of 2026-11-01, superseding "shared whole" of 2026-10-17): each `theirs` item
- * names a current member, and each person's items become one charge to the pot
- * (`filePotCharges`). The row itself is unchanged.
+ * names a current member, and each person's items become a charge to the pot
+ * per category they fall in (`filePotCharges`, lg-100). The row itself is
+ * unchanged.
  *
  * `members` is the household's current members, from the directory (lg-30): a
  * `theirs` item that names nobody is the one of them who is not the payer, and
@@ -431,7 +433,10 @@ export function fileReceipt(
       }
       let periodLineId: number | null = null;
       let chargeLineId: number | null = null;
-      let chargeLines = new Map<string, number>();
+      // The line an item's charge was filed on, by the item: a line holds one per
+      // person (`fileLines`), a joint-account row one per person and category
+      // (`filePotCharges`, lg-100).
+      let chargeLineOf: (item: ReceiptItem) => number | null = () => null;
       let rowId: number | null = null;
       if (destination.to === "line") {
         // Who paid, once, before anything else reads it (lg-102).
@@ -446,7 +451,9 @@ export function fileReceipt(
           ),
         };
         const lines = fileLines(context, payer, destination, proposal);
-        ({ periodLineId, chargeLineId, chargeLines } = lines);
+        ({ periodLineId, chargeLineId } = lines);
+        chargeLineOf = (item) =>
+          item.chargedTo === null ? null : (lines.chargeLines.get(item.chargedTo) ?? null);
       } else {
         requireRowItems(context, proposal, members);
         const row = context.db
@@ -458,7 +465,7 @@ export function fileReceipt(
           .get(destination.rowId);
         if (documented !== undefined) throw new AppError("ROW_ALREADY_DOCUMENTED");
         rowId = destination.rowId;
-        chargeLines = filePotCharges(context, row, proposal);
+        chargeLineOf = filePotCharges(context, row, proposal);
       }
 
       const result = context.db
@@ -498,8 +505,8 @@ export function fileReceipt(
           item.spendingCategoryId,
           item.share,
           item.chargedTo,
-          // A `theirs` item whose person's charge came to nothing has no line.
-          item.chargedTo === null ? null : (chargeLines.get(item.chargedTo) ?? null),
+          // A `theirs` item whose charge came to nothing has no line.
+          chargeLineOf(item),
         );
       }
       return toFiling(
@@ -621,23 +628,24 @@ function requireRowItems(
 }
 
 /**
- * The charges to the pot a receipt on a joint-account row files (lg-91): one
- * per person, for what that person's `theirs` items cost (`splitReceipt`, as a
- * line's charges are computed), dated the row's date, so the period holding it
- * counts it. What the joint card was charged is the row's amount, so a tip
- * stays shared, as on a line. Under the person's items' category when they
- * share one, and none otherwise, since a row's destination names no category;
- * the merchant is its note. A part that comes to nothing files no line.
+ * The charges to the pot a receipt on a joint-account row files (lg-91, lg-100):
+ * one per person and category, for what that person's `theirs` items cost
+ * (`splitReceipt`, as a line's charges are computed), dated the row's date, so
+ * the period holding it counts it. What the joint card was charged is the row's
+ * amount, so a tip stays shared, as on a line. A row's destination names no
+ * category, so each charge takes its items' own: the person's total is divided
+ * among their categories by what each costs (`splitByCategory`, the remainder to
+ * the largest), which keeps the row's chart as the items drew it. The merchant
+ * is the note. A part that comes to nothing files no line.
  *
- * Answers each person's line, by name, for their items to record.
+ * Answers which line an item's charge is on, for the item to record.
  */
 function filePotCharges(
   context: PeriodContext,
   row: RowOfFiling,
   proposal: ReceiptProposal,
-): Map<string, number> {
-  const chargeLines = new Map<string, number>();
-  if (!proposal.items.some((item) => item.share === "theirs")) return chargeLines;
+): (item: ReceiptItem) => number | null {
+  if (!proposal.items.some((item) => item.share === "theirs")) return () => null;
   const paid = -row.amount_cents;
   const split = splitReceipt(proposal, undefined, paid);
   if (split.sharedCents !== 0 && Math.sign(split.sharedCents) !== Math.sign(paid)) {
@@ -646,6 +654,9 @@ function filePotCharges(
       "More comes off this receipt than the joint account was charged. Check the row and the items.",
     );
   }
+  const byCategory = new Map<string, Map<number | null, number>>();
+  // The one line of a person whose charge could not be divided, for all their items.
+  const undivided = new Map<string, number>();
   for (const charge of split.charges) {
     if (charge.cents === 0) continue;
     const { personId } = charge;
@@ -653,20 +664,30 @@ function filePotCharges(
     const theirs = proposal.items.filter(
       (item) => item.share === "theirs" && item.chargedTo === personId,
     );
-    const [first] = theirs;
-    const alike =
-      first !== undefined &&
-      theirs.every((item) => item.spendingCategoryId === first.spendingCategoryId);
-    const line = addPotCharge(context, {
-      personId,
-      date: row.date,
-      amountCents: charge.cents,
-      spendingCategoryId: alike ? first.spendingCategoryId : null,
-      note: proposal.merchant,
-    });
-    chargeLines.set(personId, line.id);
+    const slices = splitByCategory(charge.cents, { date: proposal.date, items: theirs });
+    // `splitByCategory` answers none for a charge shaped like a refund (its sign
+    // guard): one line under no category, as the person's whole.
+    const parts = slices.length === 0 ? [{ categoryId: null, cents: charge.cents }] : slices;
+    const filed = new Map<number | null, number>();
+    for (const { categoryId, cents } of parts) {
+      const line = addPotCharge(context, {
+        personId,
+        date: row.date,
+        amountCents: cents,
+        spendingCategoryId: categoryId,
+        note: proposal.merchant,
+      });
+      filed.set(categoryId, line.id);
+      if (slices.length === 0) undivided.set(personId, line.id);
+    }
+    byCategory.set(personId, filed);
   }
-  return chargeLines;
+  return (item) =>
+    item.chargedTo === null
+      ? null
+      : (byCategory.get(item.chargedTo)?.get(item.spendingCategoryId) ??
+        undivided.get(item.chargedTo) ??
+        null);
 }
 
 /** What a receipt filed as a line became: its lines, and each person's charge. */

@@ -2719,3 +2719,40 @@ test("removing one of two receipts read from a photo leaves the photo read: 1 of
   expect(screen.queryByRole("button", { name: "Read it" })).toBeNull();
   expect(screen.queryByText("Kept, not read yet.")).toBeNull();
 });
+
+// --- lg-100: a person's items in two categories, one charge to the pot each ---
+
+test("attached to a joint-account row, a person with two charges to the pot is named once (lg-100)", async () => {
+  basketRow();
+  vi.mocked(fileReceipt).mockResolvedValue({
+    id: 1,
+    receiptId: 3,
+    part: 1,
+    proposal: BASKET,
+    periodLineId: null,
+    chargeLineId: null,
+    // The beer's and the soap's categories differ: one charge each, both sam's.
+    charges: [
+      { chargedTo: "sam", lineId: 10, owedToPot: true },
+      { chargedTo: "sam", lineId: 11, owedToPot: true },
+    ],
+    rowId: 41,
+    filedAt: "x",
+    filedBy: "alex",
+  });
+  await readBasket();
+  payJointly();
+  await screen.findByRole("button", { name: "Attach to this row" });
+  leaveOut("BIERE 6X355");
+  leaveOut("SAVON");
+  fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: "sam" } });
+  fireEvent.change(whoseSelect("SAVON"), { target: { value: "sam" } });
+
+  fireEvent.click(screen.getByRole("button", { name: "Attach to this row" }));
+
+  expect(
+    await screen.findByText(
+      "Attached to the joint-account row, and sam's items as charges to the pot.",
+    ),
+  ).toBeTruthy();
+});
