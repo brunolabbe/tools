@@ -587,3 +587,132 @@ test("the button reports whether its control is open, and takes focus back when 
   await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
   expect(document.activeElement).toBe(button);
 });
+
+// lg-99: a stored save whose re-read failed, and which row focus goes back to.
+
+function filedTo(id: number, description: string, personId = "alex"): StoredRow {
+  return row(id, description, -100, {
+    classification: { bucket: "current-expenses", personId, source: "manual" },
+  });
+}
+
+test("a stored save whose re-read fails disables that row's button, with a line, until a read replaces the list (lg-99)", async () => {
+  vi.mocked(fetchRows)
+    .mockResolvedValueOnce({ rows: [filedTo(1, "R")], total: 2 })
+    .mockRejectedValueOnce(new AppError("UNREACHABLE", "Down."))
+    // Show more appends: it is not a read that replaces the list.
+    .mockResolvedValueOnce({ rows: [filedTo(2, "S")], total: 2 })
+    // A filter change starts again, and the row now stands at what the save stored.
+    .mockResolvedValueOnce({ rows: [filedTo(1, "R", "sam")], total: 1 });
+  vi.mocked(classifyRow).mockResolvedValue(SAVED);
+  render(<History />);
+
+  const list = await screen.findByRole("list", { name: "Bank rows" });
+  const [first] = within(list).getAllByRole("listitem");
+  if (first === undefined) throw new Error("a row expected");
+  const button = within(first).getByRole("button", { name: /^Change who and what/u });
+  expect(button.hasAttribute("disabled")).toBe(false);
+
+  fireEvent.click(button);
+  fireEvent.change(within(first).getByLabelText("Belongs to"), { target: { value: "sam" } });
+  fireEvent.click(within(first).getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("could not be read"));
+
+  // The row still shows the old answer, so it offers no change to it.
+  expect(first.textContent).toContain("alex · Current expenses");
+  expect(button.hasAttribute("disabled")).toBe(true);
+  expect(button.getAttribute("aria-expanded")).toBe("false");
+  expect(first.textContent).toContain("The list has not been read since this change");
+  fireEvent.click(button);
+  expect(button.getAttribute("aria-expanded")).toBe("false");
+  expect(within(first).queryByLabelText("Belongs to")).toBeNull();
+
+  // Show more adds a row and leaves the mark.
+  fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+  await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(2));
+  expect(
+    within(list)
+      .getAllByRole("button", { name: /^Change who and what/u })
+      .map((one) => one.hasAttribute("disabled")),
+  ).toEqual([true, false]);
+
+  // A read that replaces the list clears it.
+  fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "date-asc" } });
+  const again = await screen.findByRole("list", { name: "Bank rows" });
+  const refreshed = within(again).getByRole("button", { name: /^Change who and what/u });
+  expect(refreshed.hasAttribute("disabled")).toBe(false);
+  expect(again.textContent).not.toContain("The list has not been read since this change");
+  fireEvent.click(refreshed);
+  expect((within(again).getByLabelText("Belongs to") as HTMLSelectElement).value).toBe("sam");
+});
+
+test("a save whose re-read succeeds leaves the row's button enabled (lg-99)", async () => {
+  vi.mocked(fetchRows)
+    .mockResolvedValueOnce({ rows: [filedTo(1, "R")], total: 1 })
+    .mockResolvedValueOnce({ rows: [filedTo(1, "R", "sam")], total: 1 });
+  vi.mocked(classifyRow).mockResolvedValue(SAVED);
+  render(<History />);
+
+  fireEvent.click(await screen.findByRole("button", { name: /^Change who and what/u }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(screen.getByRole("list").textContent).toContain("sam · Current"));
+  const button = screen.getByRole("button", { name: /^Change who and what/u });
+  expect(button.hasAttribute("disabled")).toBe(false);
+  expect(screen.queryByText(/has not been read since/u)).toBeNull();
+});
+
+/** Two rows, A and B, each with its own button. */
+async function twoRows(): Promise<{ a: HTMLElement; b: HTMLElement }> {
+  vi.mocked(fetchRows).mockResolvedValue({
+    rows: [filedTo(1, "A"), filedTo(2, "B")],
+    total: 2,
+  });
+  vi.mocked(classifyRow).mockResolvedValue(SAVED);
+  render(<History />);
+  const list = await screen.findByRole("list", { name: "Bank rows" });
+  const [a, b] = within(list)
+    .getAllByRole("listitem")
+    .map((item) => within(item).getByRole("button", { name: /^Change who and what/u }));
+  if (a === undefined || b === undefined) throw new Error("two rows expected");
+  return { a, b };
+}
+
+test("opening row B while row A's control is open does not send focus to A when the click focuses nothing (lg-99)", async () => {
+  const { a, b } = await twoRows();
+
+  // jsdom, like Safari per MDN, does not focus a button on click.
+  fireEvent.click(a);
+  fireEvent.click(b);
+
+  expect(a.getAttribute("aria-expanded")).toBe("false");
+  expect(b.getAttribute("aria-expanded")).toBe("true");
+  expect(document.activeElement).not.toBe(a);
+  expect(document.activeElement).toBe(document.body);
+});
+
+test("opening row B while row A's control is open leaves focus on B when the click focuses the button (lg-99)", async () => {
+  const { a, b } = await twoRows();
+
+  a.focus();
+  fireEvent.click(a);
+  b.focus();
+  fireEvent.click(b);
+
+  expect(a.getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(b);
+});
+
+test("a refused Save leaves no claim on focus for a later close by another row (lg-99)", async () => {
+  const { a, b } = await twoRows();
+  vi.mocked(classifyRow).mockRejectedValue(new AppError("UNREACHABLE", "Down."));
+
+  fireEvent.click(a);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Down."));
+  expect(a.getAttribute("aria-expanded")).toBe("true");
+
+  // B opens, which closes A's control; A's own Cancel and Save did not close it.
+  fireEvent.click(b);
+  expect(a.getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).not.toBe(a);
+});

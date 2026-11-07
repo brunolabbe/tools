@@ -234,3 +234,52 @@ so it stands as written.
 - 2026-11-01 — Fixed at landing by owner choice: gate 1, F5 — "asserts only that Save has gone". Why now lists the alert's three phrases, Save gone and one `classifyRow` call, and the filing entry now quotes lg-95's option C as "fix F2 now, with a third gate". Proof: same diff, `grep -c '^-.*asserts only that Save has gone'` → 1.
 - 2026-11-01 — Fixed at landing by owner choice: gate 1, F6 — "zz-repro-lg98.test.tsx". The Reproduction's scratch file is now `zz-repro-lg99.test.tsx`. Proof: same diff, `grep -c '^-.*zz-repro-lg98'` → 1.
 - 2026-11-01 — Gate 1's full report is on the pull request thread, #742; status unchanged.
+- 2026-11-07 — Owner's answers recorded under Decision, F2 option a and N1 option a, chosen from
+  the options listed there (commit `1ee7cc08`); status `ready`. Built from the base
+  `1eafa0c6`, not `580dabbe`.
+- 2026-11-07 — Reproduction re-run on `1eafa0c6`'s `History.tsx`, before the source changed. The
+  five new tests in `web/test/history.test.tsx` were run one at a time with
+  `npx vitest run tools/ledger/web/test/history.test.tsx -t "<name>"` (run together, a failing
+  F2 test leaves its `mockResolvedValueOnce` queue behind, and `vi.clearAllMocks` does not drop
+  it, so the next tests fail on the leftover and not on the defect): F2 ("a stored save whose
+  re-read fails disables ...") failed at `expect(button.hasAttribute("disabled")).toBe(true)`,
+  the row's button enabled; N1 arm 1 ("does not send focus to A when the click focuses
+  nothing") failed at `expect(document.activeElement).not.toBe(a)`; N1 arm 2 ("leaves focus on B
+  when the click focuses the button") passed, as the ticket says it does today; "a refused Save
+  leaves no claim on focus ..." failed at `not.toBe(a)`. Both defects reproduce on the base.
+- 2026-11-07 — Built, option 1a: `History` keeps `unread`, the row ids whose change `classifyRow`
+  stored and whose list has not been read since. A row in it gets `disabled` on its "Change who
+  and what" button and a `muted hint` line, tied to the button with `aria-describedby`: "The
+  list has not been read since this change, so this row shows the old answer. Change a filter
+  or reload the page, and it can be changed again." The set empties when a read replaces the
+  list (the filter-change read and the save's own re-read); `showMore`'s append leaves it, and
+  the test asserts that with a second row whose button is enabled. Option 2a: `Refile` sets a
+  `closedByOwn` ref in its own Cancel and in its Save's `onAnswer`, and its focus effect now
+  needs that ref and focus on the body. The ref is spent when the control is closed and cleared
+  on opening and when a Save was refused (`!open || !saving`), so a later close by another row
+  does not read as this row's own. Tests, `web/test/history.test.tsx`, 21 of 21 together once the
+  source was built; "a refused Save leaves no claim ..." is the one that pins the clearing.
+- 2026-11-07 — What the brief had wrong. Build step 2 says arm 1 leaves "focus on B's button":
+  in jsdom, and in a browser that does not focus on click, nothing focuses B's button, so arm 1
+  reads `document.body` and arm 2 (focus before click) reads B's button; the test asserts those.
+  Done when 3 reads "the focus the answer sets", and what stands in for a Safari reading is
+  jsdom's click, which does not focus a button: a model of the behaviour MDN's "Clicking and
+  focus" section gives for Safari, not a run in Safari. Whether the page also scrolls was not
+  measured. Also not changed: when a Save closes a control and the row goes `unread`, focus is
+  handed to a button that is now disabled, which a browser does not honour, so focus falls to
+  the page; the notice (`output`) is the thing a person reads next. Not measured in a screen
+  reader.
+- 2026-11-07 — The layout case. `e2e/layout.spec.ts` ends with "History fits a phone and a
+  desktop with a stored change whose re-read failed": the save is answered by a `page.route`
+  stub, so the seed keeps its answers, and every read after the control opens is aborted. It
+  asserts the alert, the disabled button and the line, then `fitsBothWidths`; screenshots at
+  360 and 1280 px opened, the line wraps inside the row in four lines at 360 px.
+  `E2E_PORT=8203 npx playwright test -c tools/ledger/playwright.config.ts layout.spec.ts -g
+  History` → `3 passed (11.4s)`.
+- 2026-11-07 — `npm run check` exit 0; `npm test -- --project ledger` exit 0, `Test Files 99
+  passed (99)`, `Tests 2198 passed (2198)`. lg-95's two named tests are unchanged:
+  `git diff -U0 tools/ledger/web/test/history.test.tsx | grep -c '^-[^-]'` → 0, the new tests
+  are appended.
+- 2026-11-07 — Fold-in: considered none. The lg-95 test gap this ticket's Why names (no test
+  reopens the control) is closed by the new F2 test, which reopens the control after the
+  filter-change read.
