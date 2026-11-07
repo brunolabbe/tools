@@ -340,14 +340,28 @@ test("files each receipt in a photo of two, and goes back to the one not filed y
   await takePhoto();
   fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
 
+  // The second receipt opened, back to the list, and filed alone (lg-102: filing is the list's).
   fireEvent.click(await screen.findByRole("button", { name: "Quincaillerie, 9.99 $" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select Quincaillerie, 9.99 $" }));
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+
+  // The list is where it comes back to, with the one not filed yet still to pick.
+  await screen.findByText("Quincaillerie, 9.99 $, filed");
+  expect(screen.queryByRole("form", { name: "The receipt" })).toBeNull();
+  const first = screen.getByRole("checkbox", {
+    name: "Select Marché Exemple, 26.50 $",
+  }) as HTMLInputElement;
+  expect(first.checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Marché Exemple, 26.50 $" }));
+  expect(field("Merchant").value).toBe("Marché Exemple");
   await fileFromQueue();
 
   await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(2));
   const calls = vi.mocked(fileReceipt).mock.calls;
   expect(calls.map(([, request]) => [request.part, request.proposal.merchant])).toEqual([
-    [1, "Marché Exemple"],
     [2, "Quincaillerie"],
+    [1, "Marché Exemple"],
   ]);
   expect(await screen.findAllByText("Filed as alex's line in the period.")).toHaveLength(2);
   // Both filed: nothing more to pick, and no second read.
@@ -1476,6 +1490,16 @@ test("an item left as Mine names nobody once paid jointly, and is Mine again on 
   expect(screen.queryByRole("button", { name: "Attach to this row" })).toBeNull();
   // A line is filed from the list (lg-102): the receipt has no File it off the joint card.
   expect(screen.queryByRole("button", { name: "File it" })).toBeNull();
+  // And it files as alex's line, the six-pack alex's to keep.
+  await fileFromQueue();
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  const request = vi.mocked(fileReceipt).mock.calls[0]?.[1];
+  expect(request?.destination).toMatchObject({ to: "line", paidBy: null, chargedTo: null });
+  expect(request?.proposal.items.map((item) => [item.share, item.chargedTo])).toEqual([
+    ["shared", null],
+    ["not-shared", null],
+    ["shared", null],
+  ]);
 });
 
 const UNPICKED_CHARGE =
@@ -2264,4 +2288,100 @@ test("a receipt typed in and left blank leaves no row, and one typed is listed t
   expect(within(parts).getByRole("button", { name: "Dépanneur, 4.00 $" })).toBeTruthy();
   // Typed in, it is handled: Read it no longer spends a read on the photo.
   expect(screen.queryByRole("button", { name: "Read it" })).toBeNull();
+});
+
+// --- lg-102 round 1: gate 1's surviving plants ---
+
+test("a receipt with no amount charged, or no date, is held in the list and says why, as its form would (lg-102 gate 1, M13)", async () => {
+  uploadsNumbered();
+  chooseSeveral([jpeg("a.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Type it in" }));
+  fireEvent.change(field("Merchant"), { target: { value: "Kiosque" } });
+  await fileFromQueue();
+
+  expect(await rowRefusal()).toBe("The amount charged and the date are needed to file it.");
+  expect(fileReceipt).not.toHaveBeenCalled();
+
+  // A charge, and the date cleared: still held, for the date.
+  reopen();
+  fireEvent.change(field("Total"), { target: { value: "5.00" } });
+  fireEvent.change(field("Date"), { target: { value: "" } });
+  await fileFromQueue();
+  expect(await rowRefusal()).toBe("The amount charged and the date are needed to file it.");
+  expect(fileReceipt).not.toHaveBeenCalled();
+
+  reopen();
+  fireEvent.change(field("Date"), { target: { value: "2026-10-05" } });
+  await fileFromQueue();
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toMatchObject({
+    to: "line",
+    amountCents: 500,
+    date: "2026-10-05",
+  });
+});
+
+test("with two members, a read charge to nobody was the other's: paid by that other, it is theirs to keep (lg-102 gate 1, M15)", async () => {
+  await readBasketCharged(null);
+  // Read as someone else's, naming nobody: with two members, sam's.
+  expect(shared()).toBe("Not shared 0.00 $ · sam's 15.54 $ · Shared 9.22 $");
+
+  payBy("sam");
+
+  expect(whoseSelect("BIERE 6X355").value).toBe("");
+  expect(whoseSelect("BIERE 6X355").selectedOptions[0]?.text).toBe("sam");
+  expect(shared()).toBe("Not shared 15.54 $ · alex's 0.00 $ · Shared 9.22 $");
+  await fileFromQueue();
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(filedItems()).toEqual([
+    ["PAIN", "shared", null],
+    ["BIERE 6X355", "not-shared", null],
+    ["SAVON", "shared", null],
+  ]);
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toMatchObject({ paidBy: "sam" });
+});
+
+test("a receipt is never wholly its payer's: Whose goes back to Shared when its person pays, and stays there (lg-102 gate 1, M17)", async () => {
+  await takePhoto();
+  await readOne();
+  await waitFor(() => expect(field("Total").value).toBe("26.50"));
+  const whose = (): HTMLSelectElement => screen.getByLabelText("Whose");
+
+  fireEvent.change(whose(), { target: { value: "sam" } });
+  expect(whose().value).toBe("sam");
+  payBy("sam");
+  expect(whose().value).toBe("");
+  expect(optionsOf(whose())).toEqual(["Shared", "alex's — owes all of it"]);
+  // Back to alex paying, sam is offered again and not chosen: nobody picked sam since.
+  payBy("alex");
+  expect(whose().value).toBe("");
+
+  await fileFromQueue();
+  await waitFor(() => expect(fileReceipt).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(fileReceipt).mock.calls[0]?.[1].destination).toMatchObject({
+    to: "line",
+    chargedTo: null,
+    paidBy: null,
+  });
+});
+
+test("a row's refusal goes when one of its picks changes in the list (lg-102 gate 1, M19)", async () => {
+  await fileThreeWithSecond({
+    ...BASKET,
+    items: BASKET.items.map((item) => (item.text === "PAIN" ? { ...item, price: 348 } : item)),
+  });
+  expect(await rowRefusal()).toBe(
+    "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
+  );
+
+  fireEvent.change(screen.getByLabelText("Paid by, Marché Exemple, 24.76 $"), {
+    target: { value: "sam" },
+  });
+
+  expect(screen.queryByText(/^Not filed: /u)).toBeNull();
+  // Filed again, it is held again for the same reason, which it says.
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+  expect(await rowRefusal()).toBe(
+    "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
+  );
 });
