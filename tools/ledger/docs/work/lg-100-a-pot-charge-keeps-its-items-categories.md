@@ -385,3 +385,44 @@ not by filing under A.
   the `Done when` preamble now say the owner chose A on 2026-11-07. The fourth bullet
   above, "left as written", and the third, "left as it stands", are superseded by this
   one.
+
+### 2026-11-07, build
+
+Built on `origin/main` at `08f78f69`, branch `lg-100-pot-charge-per-category`. Option A,
+as the Build says; the brief had three things to correct, found by an intake read and
+confirmed here.
+
+- **`filePotCharges`** (`api/src/receipts.ts`) divides each person's charge among the
+  categories of their `theirs` items with `splitByCategory(charge.cents, { date, items })`
+  and files one pot charge per slice (the merchant as note, the row's date, source
+  `receipt`). It now answers a function from an item to its line, not a person-keyed
+  map. A person whose charge `splitByCategory` cannot divide (its sign guard) gets one
+  line under no category, which every one of their items names (`undivided`).
+- **The line path is unchanged.** `fileLines` still fills a person-keyed
+  `Map<string, number>`, and `fileReceipt` wraps it as
+  `(item) => lines.chargeLines.get(item.chargedTo)` beside the new function; `insertItem`
+  calls the one `chargeLineOf` for both. Answer A concerns pot charges, and a line has
+  its one category (the destination's), so a person's items in two categories stay one
+  charge there. The test that shows it: `api/test/receipts.test.ts`, "filed as a line, a
+  person's items in two categories are still one charge, as lg-30 filed it", which
+  passes at the base too.
+- **Build step 3 was in the wrong file.** The message is `filedAs` in
+  `web/src/receipts/filing.ts`, called from `Receipts.tsx` and `Queue.tsx`; it now names
+  each person once (a `Set` over `charge.chargedTo`) and says "charges" when the filing
+  holds more than one, so one person's two lines read "sam's items as charges to the
+  pot". Both callers are covered by the one change.
+- **The reproduction's third test** ("sam's items in two categories: the charge has
+  none") is rewritten as "the chart keeps the categories the items carry, none
+  uncategorised, making the row's amount": Groceries 523, Alcohol 1 553, Household 574,
+  sum 2 650.
+- **Not covered: the sign-guard fallback.** A scratch search over 1 452 two-category
+  charges (prices from -5,00 $ to 5,00 $, taxable or not, with and without a deposit,
+  taxes printed to match) found 0 where `splitByCategory` answered none for a charge
+  `splitReceipt` had computed, so the branch is not reachable through the API as far as
+  measured and has no test. It is kept because the guard exists in `splitByCategory`,
+  and one uncategorised line is what lg-91 filed.
+- Red at the base: `git checkout 08f78f69 -- tools/ledger/api/src/receipts.ts tools/ledger/web/src/receipts/filing.ts`
+  then `npx vitest run tools/ledger/api/test/receipts.test.ts tools/ledger/web/test/receipts.test.tsx`
+  → `4 failed | 190 passed (194)`: the one-line-per-category test, the chart, the
+  removal, and the web message. The settlement test and the line-path test pass at the
+  base by design (same total; unchanged path).
