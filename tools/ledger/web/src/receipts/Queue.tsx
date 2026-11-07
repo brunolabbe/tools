@@ -15,8 +15,11 @@
  *
  * **Each receipt is filed from its row** (lg-102). A row carries who paid and
  * whose the receipt is, a box to select it, and opens the receipt to correct
- * it; a bar sets both picks on every selected row and files them, one receipt
- * at a time, each row saying filed or why not as its answer comes back. A row
+ * it; a bar sets only the pick the person changes on every selected row (each
+ * keeps the other; the bar's selects start on, and return to, "Keep each row's")
+ * and files them, one receipt at a time, each row saying filed or why not as its
+ * answer comes back. A row's Remove takes a receipt out of the list, typed by
+ * mistake or not a receipt, and hands a photo with nothing left back to the reader. A row
  * is held for exactly what its opened form holds (`receiptState`'s `refusal`),
  * and a joint-card receipt is attached only when exactly one row matches it.
  *
@@ -100,6 +103,10 @@ const WAIT_MAX_SEC = 120;
 const WAIT_DEFAULT_SEC = 15;
 /** In a row, for one photo: past this the read is reported as failed, with a retry. */
 const MAX_WAITS = 5;
+
+/** The bar's first entry: no change to that pick. Not a name a member can have, and not "" (the joint card, Shared). */
+const KEEP = "(keep each row's)";
+const KEEP_ENTRY = "Keep each row's";
 
 /** What a joint-card row says when the batch cannot pick its row alone (lg-102). */
 export const CHOOSE_THE_ROW = "Open it to choose the row.";
@@ -496,6 +503,12 @@ export interface PickSelectsProps {
   whoseLabel: string;
   labelled: boolean;
   disabled: boolean;
+  /**
+   * The bar (lg-102): each select starts on, and returns to, "Keep each row's",
+   * so it never shows a pick the rows do not all have; `picks` is then only the
+   * base the person's one change is made on.
+   */
+  keep?: boolean;
   /** The picks as changed, and which of the two the person changed. */
   onChange: (picks: Picks, changed: "paid" | "whose") => void;
 }
@@ -509,8 +522,9 @@ export interface PickSelectsProps {
  */
 export function PickSelects(props: PickSelectsProps): React.ReactElement {
   const { picks, people, shown, paidByLabel, whoseLabel, labelled, disabled, onChange } = props;
+  const keep = props.keep === true;
   const id = useId();
-  const others = people.filter((person) => person !== picks.payer);
+  const others = keep ? people : people.filter((person) => person !== picks.payer);
   // Whoever took the photo is offered even when the household's record lacks them.
   const payers = people.includes(picks.payer) ? people : [picks.payer, ...people];
   const naming = (field: string, label: string) =>
@@ -522,16 +536,18 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
         <select
           {...naming("paid", paidByLabel)}
           disabled={disabled}
-          value={picks.joint ? JOINT_CARD : picks.payer}
-          onChange={(event) =>
+          value={keep ? KEEP : picks.joint ? JOINT_CARD : picks.payer}
+          onChange={(event) => {
+            if (event.target.value === KEEP) return;
             onChange(
               event.target.value === JOINT_CARD
                 ? { ...picks, joint: true }
                 : { ...picks, joint: false, payer: event.target.value },
               "paid",
-            )
-          }
+            );
+          }}
         >
+          {keep && <option value={KEEP}>{KEEP_ENTRY}</option>}
           {payers.map((person) => (
             <option key={person} value={person}>
               {shownName(shown, person)}
@@ -544,15 +560,17 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
         {labelled && <label htmlFor={`${id}-whose`}>{whoseLabel}</label>}
         <select
           {...naming("whose", whoseLabel)}
-          disabled={disabled || picks.joint}
-          value={picks.joint ? SHARED : (picks.whose ?? SHARED)}
-          onChange={(event) =>
+          disabled={disabled || (picks.joint && !keep)}
+          value={keep ? KEEP : picks.joint ? SHARED : (picks.whose ?? SHARED)}
+          onChange={(event) => {
+            if (event.target.value === KEEP) return;
             onChange(
               { ...picks, whose: event.target.value === SHARED ? null : event.target.value },
               "whose",
-            )
-          }
+            );
+          }}
         >
+          {keep && <option value={KEEP}>{KEEP_ENTRY}</option>}
           <option value={SHARED}>Shared</option>
           {others.map((person) => (
             <option key={person} value={person}>
@@ -561,7 +579,7 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
           ))}
         </select>
       </span>
-      {picks.joint && (
+      {picks.joint && !keep && (
         <span className="muted hint">
           Paid with the joint card: whose each item is, is chosen item by item.
         </span>
@@ -607,8 +625,8 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
   const chosen = open.filter((entry) => entry?.selected === true).length;
   // Whoever took the photos: one person's screen, so the first names them.
   const taker = photos.find((photo) => photo.receipt !== null)?.receipt?.uploadedBy ?? "";
-  const [barPicks, setBarPicks] = useState<Picks | null>(null);
-  const bar = barPicks ?? { joint: false, payer: taker, whose: null };
+  // The base for the bar's one change; the bar shows none of it (`keep`).
+  const bar: Picks = { joint: false, payer: taker, whose: null };
 
   const row = (photo: QueuedPhoto, part: number): React.ReactElement | null => {
     const entry = photo.entries[part];
@@ -785,7 +803,9 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
             />
             Select all
           </label>
-          <p className="muted hint">What is picked here is set on every selected receipt.</p>
+          <p className="muted hint">
+            Only the pick you change here is set on every selected receipt; each keeps the other.
+          </p>
           <PickSelects
             picks={bar}
             people={people}
@@ -793,9 +813,9 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
             paidByLabel="Paid by, for the selected"
             whoseLabel="Whose, for the selected"
             labelled={false}
+            keep
             disabled={busy || chosen === 0}
             onChange={(picks, changed) => {
-              setBarPicks(settledPicks(picks));
               // Only the pick the person changed; each row keeps the other (the owner, 2026-11-07).
               queue.pickSelected(
                 (before) =>

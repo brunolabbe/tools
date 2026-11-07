@@ -813,7 +813,7 @@ svg.chart .selected-band {
   min-width: 0;
 }
 
-/* The bar that sets both picks on every selected receipt and files them. */
+/* The bar that sets only the pick changed on every selected receipt, and files them; Remove, on a row, takes a receipt out of the list. */
 .batch {
   margin: 0;
   min-width: 0;

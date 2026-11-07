@@ -350,3 +350,52 @@ N5), and left gate 1's live-region finding fixed in part. The owner answered on
 2. **The rest. Chosen: fix N1 and N4 at landing; record N3, N5 and the live
    region's silent repeat unfixed.** This was the orchestrator's recommendation.
    Not chosen: fix N1 only; record all.
+
+### 2026-11-07 — fixed at the landing, on the owner's answers to gate 2 (`00c80458`)
+
+- 2026-11-07 — Fixed at landing by owner choice: gate 2, N2 — "the bar's selects
+  are the bar's own memory, not the selected rows'". Each of the bar's two
+  selects now has a first entry, "Keep each row's", is on it when the bar
+  appears, and returns to it after it applies a pick. The bar keeps no picks of
+  its own, so `useState` for them is gone from `ReceiptQueueView`. Whose offers
+  every current member there, since no payer is held to leave out. Proof: the
+  four N2 tests at the end of `tools/ledger/web/test/receipts.test.tsx`, red at
+  `00c80458` (4 of 98 failed) and green after (98 of 98 in the file): "the bar
+  never shows a pick that some selected row does not have", "the bar's Whose
+  alone keeps each row's payer", "the bar's Paid by alone keeps each row's
+  Whose, through the items' repick", and "Whose set to casey from the bar, over
+  rows paid by alex, by sam and on the joint card". The gate-1 and lg-102 tests
+  that set both picks from the bar were changed for the new entry: "Paid by and
+  Whose set on three selected rows file three receipts" now expects the Whose
+  options `Keep each row's`, `Shared`, `alex's`, `sam's`, and
+  `e2e/layout.spec.ts` picks the bar's Whose by `index: 3` where it picked
+  `index: 1`.
+- 2026-11-07 — Fixed at landing by owner choice: gate 2, N1 — "three guards in
+  the round's lines survive deletion with 91 of 91 green". One test each, at
+  the end of `receipts.test.tsx`, each green at the head and red under gate 2's
+  own plant (`mutate4n.mjs`, run on the committed tree, 98 tests, 1 failed each):
+  N10, Remove enabled while a filing is out, fails "Remove cannot be tapped while
+  a filing is out: the three are all filed, none lost from the list (lg-102 gate
+  2, N1a)"; N15, `pickSelected` also changing unselected rows, fails "the bar
+  changes a selected row and leaves an unselected one as it was (lg-102 gate 2,
+  N1b)"; N3, Remove handing the photo back with a sibling still standing, fails
+  "removing one of two receipts read from a photo leaves the photo read: 1 of 1
+  read stays and no read is offered (lg-102 gate 2, N1c)".
+- 2026-11-07 — Fixed at landing by owner choice: gate 2, N4 — "the module
+  comment of `Queue.tsx` says a bar \"sets both picks on every selected row\",
+  and the `.batch` comment in `styles.css` says the same". The module comment
+  said "a bar sets both picks on every selected row and files them, one receipt
+  at a time"; it now says the bar sets only the pick changed, that its selects
+  start on and return to "Keep each row's", and names Remove. The `.batch`
+  comment said "The bar that sets both picks on every selected receipt and files
+  them."; it now says "sets only the pick changed" and names Remove. The bar's
+  hint line said "What is picked here is set on every selected receipt." and now
+  says only the pick changed is set. Proof, run after
+  the commit that carries this entry, each → `1`:
+  - `git diff 00c80458 HEAD -- <Queue.tsx> | grep -c '^-.*sets both picks on'`
+  - `git diff 00c80458 HEAD -- <styles.css> | grep -c '^-.*sets both picks on'`
+- Recorded unfixed, on the owner's word: gate 2's N3 (what Remove hands back,
+  and that Remove is one tap with no undo), N5 (a long name puts its checkbox
+  and Remove on lines of their own at 360 px; nothing overflows), and gate 1's
+  live-region finding in part (a second File selected with the same row still
+  refused changes nothing in the region).
