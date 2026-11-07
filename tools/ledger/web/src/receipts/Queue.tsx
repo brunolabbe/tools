@@ -147,9 +147,18 @@ export interface ReceiptQueue {
   edit: (key: number, part: number, change: (draft: Draft) => Draft) => void;
   /** Sets a receipt's picks, its items following who paid (`repick`). */
   pick: (key: number, part: number, picks: Picks, people: readonly string[]) => void;
-  /** Sets the picks on every selected receipt not filed yet. */
-  pickSelected: (picks: Picks, people: readonly string[]) => void;
+  /**
+   * Changes the picks on every selected receipt not filed yet, by `change`: the
+   * bar changes only the pick the person changed (the owner, 2026-11-07).
+   */
+  pickSelected: (change: (picks: Picks) => Picks, people: readonly string[]) => void;
   drop: (key: number, part: number) => void;
+  /**
+   * Takes a receipt not filed out of the list (the owner, 2026-11-07): one
+   * typed in by mistake, or one the model made up. A photo left with none, and
+   * none filed, is handed back to the reader, as it was before it was read.
+   */
+  remove: (key: number, part: number) => void;
   select: (key: number, part: number, selected: boolean) => void;
   selectAll: (selected: boolean) => void;
   markFiled: (key: number, part: number, said: string) => void;
@@ -423,11 +432,20 @@ export function useReceiptQueue(): ReceiptQueue {
       })),
     pick: (key, part, picks, people) =>
       revise(key, part, (entry) => repicked(entry, picks, people)),
-    pickSelected: (picks, people) =>
+    pickSelected: (change, people) =>
       reviseAll((photo, part, entry) =>
-        entry.selected && !photo.filed.includes(part) ? repicked(entry, picks, people) : entry,
+        entry.selected && !photo.filed.includes(part)
+          ? repicked(entry, change(entry.picks), people)
+          : entry,
       ),
     drop: (key, part) => revise(key, part, () => null),
+    remove: (key, part) => {
+      revise(key, part, () => null);
+      const photo = photoOf(key);
+      if (photo === undefined || photo.filed.length > 0 || partsOf(photo).length > 0) return;
+      // Nothing left from its read: the photo is the reader's again, read or typed in anew.
+      if (photo.phase === "read") patch(key, { phase: "kept", read: null });
+    },
     select: (key, part, selected) => revise(key, part, (entry) => ({ ...entry, selected })),
     selectAll: (selected) =>
       reviseAll((photo, part, entry) =>
@@ -478,7 +496,8 @@ export interface PickSelectsProps {
   whoseLabel: string;
   labelled: boolean;
   disabled: boolean;
-  onChange: (picks: Picks) => void;
+  /** The picks as changed, and which of the two the person changed. */
+  onChange: (picks: Picks, changed: "paid" | "whose") => void;
 }
 
 /**
@@ -509,6 +528,7 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
               event.target.value === JOINT_CARD
                 ? { ...picks, joint: true }
                 : { ...picks, joint: false, payer: event.target.value },
+              "paid",
             )
           }
         >
@@ -527,7 +547,10 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
           disabled={disabled || picks.joint}
           value={picks.joint ? SHARED : (picks.whose ?? SHARED)}
           onChange={(event) =>
-            onChange({ ...picks, whose: event.target.value === SHARED ? null : event.target.value })
+            onChange(
+              { ...picks, whose: event.target.value === SHARED ? null : event.target.value },
+              "whose",
+            )
           }
         >
           <option value={SHARED}>Shared</option>
@@ -591,31 +614,52 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
     const entry = photo.entries[part];
     if (entry === undefined) return null;
     const label = draftLabel(entry.draft);
-    if (photo.filed.includes(part)) {
-      return (
-        <li key={part}>
-          <span className="muted">{label}, filed</span>
-          {entry.outcome?.state === "filed" && (
-            <span className="muted hint">{entry.outcome.said}</span>
-          )}
-        </li>
-      );
-    }
+    const filed = photo.filed.includes(part);
+    const { outcome } = entry;
+    // One status line per row, on the page before it says anything, so what it
+    // says is announced (gate 1): an `<output>` is a polite live region.
+    const status = (
+      <output className={outcome?.state === "refused" ? "bad hint" : "muted hint"}>
+        {outcome === null
+          ? ""
+          : outcome.state === "filing"
+            ? "Filing…"
+            : outcome.state === "refused"
+              ? `Not filed: ${outcome.message}`
+              : outcome.said}
+      </output>
+    );
+    // One shape filed or not, the status line in the same place, so React keeps
+    // that element and the region that said "Filing…" is the one that says filed.
     return (
-      <li key={part} className="part">
-        <span className="opener">
-          <input
-            type="checkbox"
-            aria-label={`Select ${label}`}
-            checked={entry.selected}
-            disabled={busy}
-            onChange={(event) => queue.select(photo.key, part, event.target.checked)}
-          />
-          <button type="button" disabled={busy} onClick={() => onOpen(photo, part)}>
-            {label}
-          </button>
-        </span>
-        {people !== null && (
+      <li key={part}>
+        {filed ? (
+          <span className="muted">{label}, filed</span>
+        ) : (
+          <span className="opener">
+            <input
+              type="checkbox"
+              aria-label={`Select ${label}`}
+              checked={entry.selected}
+              disabled={busy}
+              onChange={(event) => queue.select(photo.key, part, event.target.checked)}
+            />
+            <button type="button" disabled={busy} onClick={() => onOpen(photo, part)}>
+              {label}
+            </button>
+            <button
+              type="button"
+              className="remove"
+              aria-label={`Remove ${label}`}
+              title="Take it out of the list: typed by mistake, or not a receipt"
+              disabled={busy}
+              onClick={() => queue.remove(photo.key, part)}
+            >
+              Remove
+            </button>
+          </span>
+        )}
+        {!filed && people !== null && (
           <PickSelects
             picks={entry.picks}
             people={people}
@@ -627,10 +671,7 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
             onChange={(picks) => queue.pick(photo.key, part, picks, people)}
           />
         )}
-        {entry.outcome?.state === "filing" && <span className="muted hint">Filing…</span>}
-        {entry.outcome?.state === "refused" && (
-          <span className="bad hint">Not filed: {entry.outcome.message}</span>
-        )}
+        {status}
       </li>
     );
   };
@@ -753,9 +794,20 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
             whoseLabel="Whose, for the selected"
             labelled={false}
             disabled={busy || chosen === 0}
-            onChange={(picks) => {
+            onChange={(picks, changed) => {
               setBarPicks(settledPicks(picks));
-              queue.pickSelected(picks, people);
+              // Only the pick the person changed; each row keeps the other (the owner, 2026-11-07).
+              queue.pickSelected(
+                (before) =>
+                  changed === "paid"
+                    ? {
+                        ...before,
+                        joint: picks.joint,
+                        payer: picks.joint ? before.payer : picks.payer,
+                      }
+                    : { ...before, whose: picks.whose },
+                people,
+              );
             }}
           />
           <div className="actions">

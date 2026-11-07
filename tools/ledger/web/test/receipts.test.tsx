@@ -153,7 +153,8 @@ async function rowRefusal(): Promise<string> {
 /** The one receipt not filed in the list, opened again. */
 function reopen(): void {
   const parts = screen.getByRole("list", { name: /^Receipts in /u });
-  fireEvent.click(within(parts).getByRole("button"));
+  // The row's first button opens it; the other takes it out of the list.
+  fireEvent.click(within(parts).getAllByRole("button")[0] as HTMLElement);
 }
 
 /** Paid with the joint card (lg-91), and the rows it may be looked for with File it (lg-102). */
@@ -1743,7 +1744,8 @@ const TAXABLE_MATTERS =
 async function readOne(): Promise<void> {
   fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
   const parts = await screen.findByRole("list", { name: /^Receipts in /u });
-  fireEvent.click(within(parts).getByRole("button"));
+  // The row's first button opens it; the other takes it out of the list.
+  fireEvent.click(within(parts).getAllByRole("button")[0] as HTMLElement);
 }
 
 test("reading one photo of one receipt stays on the queue, with the receipt summed up there", async () => {
@@ -2384,4 +2386,152 @@ test("a row's refusal goes when one of its picks changes in the list (lg-102 gat
   expect(await rowRefusal()).toBe(
     "The items, deposits, rebates and taxes do not add up to the total. Correct them to file.",
   );
+});
+
+// --- lg-102 round 1: the owner's answers to gate 1 ---
+
+/** The row in the list a receipt's box is on. */
+function rowOf(label: string): HTMLElement {
+  const box = screen.getByRole("checkbox", { name: `Select ${label}` });
+  const row = box.closest("li");
+  if (row === null) throw new Error(`no row for ${label}`);
+  return row;
+}
+
+test("a receipt typed in and left half done can be removed, which hands its photo back to the reader (lg-102 gate 1)", async () => {
+  uploadsNumbered();
+  chooseSeveral([jpeg("a.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Type it in" }));
+  fireEvent.change(field("Merchant"), { target: { value: "D" } });
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+  // Typed in, the photo is handled: no read is offered while the row stands.
+  expect(screen.queryByRole("button", { name: "Read it" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove D" }));
+
+  expect(screen.queryByRole("list", { name: "Receipts in a.jpg" })).toBeNull();
+  expect(screen.getByText("Kept, not read yet.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Read it" }));
+  await screen.findByText("1 of 1 read");
+  expect(vi.mocked(readReceipt).mock.calls.map(([id]) => id)).toEqual([11]);
+});
+
+test("a receipt typed in from a photo whose read failed can be removed, and the retry is back (lg-102 gate 1)", async () => {
+  uploadsNumbered();
+  vi.mocked(readReceipt).mockRejectedValueOnce(new AppError("INTERNAL", "The reader broke."));
+  chooseSeveral([jpeg("a.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+  await screen.findByText("The read failed: The reader broke.");
+  fireEvent.click(screen.getByRole("button", { name: "Type it in" }));
+  fireEvent.change(field("Merchant"), { target: { value: "x" } });
+  fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+  expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove x" }));
+
+  expect(screen.getByText("The read failed: The reader broke.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findByText("1 of 1 read");
+});
+
+test("a receipt the model made up is removed from its photo, the other stays, and the last removed hands the photo back (lg-102 gate 1)", async () => {
+  uploadsNumbered();
+  vi.mocked(readReceipt).mockResolvedValue({
+    receiptId: 11,
+    model: "claude-haiku-5-5",
+    proposals: [readOf("Café Un", 1_000), readOf("Café Deux", 2_000)],
+  });
+  chooseSeveral([jpeg("two.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Remove Café Deux, 20.00 $" }));
+
+  expect(screen.queryByRole("button", { name: "Café Deux, 20.00 $" })).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+  await screen.findByText("Café Un, 10.00 $, filed");
+  expect(vi.mocked(fileReceipt).mock.calls.map(([id, request]) => [id, request.part])).toEqual([
+    [11, 1],
+  ]);
+  // A filed receipt has nothing to remove.
+  expect(screen.queryByRole("button", { name: /^Remove /u })).toBeNull();
+});
+
+test("removing every receipt read from a photo, none filed, hands it back to the reader (lg-102 gate 1)", async () => {
+  uploadsNumbered();
+  chooseSeveral([jpeg("a.jpg")]);
+  fireEvent.click(await screen.findByRole("button", { name: "Read it" }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Remove Marché Exemple, 26.50 $" }));
+
+  expect(screen.getByText("Kept, not read yet.")).toBeTruthy();
+  expect(screen.queryByText(/Nothing in the photo was read/u)).toBeNull();
+  expect(screen.getByRole("button", { name: "Read it" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Type it in" })).toBeTruthy();
+});
+
+test("the bar sets only the pick the person changed on the selected rows (lg-102 gate 1)", async () => {
+  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
+  await threeReadAndSelected();
+  fireEvent.change(screen.getByLabelText("Paid by, Shop 12, 10.00 $"), {
+    target: { value: "sam" },
+  });
+  const paid = (shop: string) =>
+    (screen.getByLabelText(`Paid by, ${shop}, 10.00 $`) as HTMLSelectElement).value;
+  const whose = (shop: string) =>
+    (screen.getByLabelText(`Whose, ${shop}, 10.00 $`) as HTMLSelectElement).value;
+
+  // Whose alone: each row keeps who paid it.
+  fireEvent.change(screen.getByLabelText("Whose, for the selected"), {
+    target: { value: "casey" },
+  });
+  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
+    ["alex", "casey"],
+    ["sam", "casey"],
+    ["alex", "casey"],
+  ]);
+
+  // Row 13 shared again, then Paid by alone: each row keeps whose it is.
+  fireEvent.change(screen.getByLabelText("Whose, Shop 13, 10.00 $"), { target: { value: "" } });
+  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), {
+    target: { value: "sam" },
+  });
+  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
+    ["sam", "casey"],
+    ["sam", "casey"],
+    ["sam", ""],
+  ]);
+});
+
+test("each row says Filing…, why not and what it was filed as in a live region that was there before it spoke (lg-102 gate 1)", async () => {
+  vi.mocked(fileReceipt).mockImplementation(async (id, request) => {
+    if (id === 12) throw new AppError("RECEIPT_ALREADY_FILED", "That receipt is filed already.");
+    return {
+      id,
+      receiptId: id,
+      part: request.part,
+      proposal: request.proposal,
+      periodLineId: id * 10,
+      chargeLineId: null,
+      charges: [],
+      rowId: null,
+      filedAt: "x",
+      filedBy: "alex",
+    };
+  });
+  await threeReadAndSelected();
+  const said = ["Shop 11", "Shop 12"].map((shop) =>
+    within(rowOf(`${shop}, 10.00 $`)).getByRole("status"),
+  );
+  expect(said.map((region) => region.textContent)).toEqual(["", ""]);
+
+  fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+
+  await screen.findByText("Shop 13, 10.00 $, filed");
+  // The same regions, still on the page, now say what happened.
+  expect(said.map((region) => document.body.contains(region))).toEqual([true, true]);
+  expect(said.map((region) => region.textContent)).toEqual([
+    "Filed as alex's line in the period.",
+    "Not filed: That receipt is filed already.",
+  ]);
 });

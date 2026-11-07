@@ -781,9 +781,16 @@ svg.chart .selected-band {
 
 .opener {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
+}
+
+/* A row's status line is on the page before it says anything, so that what it says
+   is announced (lg-102 gate 1); empty, it takes back the gap the row gives it. */
+.parts > li > output:empty {
+  margin-top: -0.5rem;
 }
 
 .picks {
