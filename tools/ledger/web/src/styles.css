@@ -827,6 +827,20 @@ svg.chart .selected-band {
   color: var(--text-muted);
 }
 
+/* A line the reader made up is deleted from the row's end, as a small mark that
+   does not read as a way of leaving an item out; still a full touch target. */
+.items .item .delete-line {
+  margin-left: auto;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+
 .items .item.not-shared > input {
   color: var(--text-muted);
 }

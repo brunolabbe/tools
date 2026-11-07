@@ -299,3 +299,10 @@ nobody charged, and nothing flags it.
 
   The null-tax low (a receipt whose tax lines are printed but read as `null`) is
   not fixed, and stays as the round 1 entry records it.
+
+- 2026-11-03 — Done when 4 is narrowed by PR #748, on the owner's choice: the
+  screen now holds filing on `taxable-differs` where the marks move money, an
+  item left out or a joint-account row whose items span several categories
+  (`splitByCategory`). Filed as a line with every item shared, as this ticket's
+  basket is, the flag still only warns, and the test above still proves it. The
+  API refuses nothing new.

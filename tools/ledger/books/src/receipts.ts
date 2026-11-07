@@ -136,8 +136,8 @@ function taxableFits(
  * - **A receipt with no tax lines** — both taxes `null`, the measured case for
  *   zero-rated groceries — passes when its subtotal is its total.
  * - **Items, with their deposits and the taxes, make the total** (lg-10), when
- *   there are items, each at its net (lg-89). A tax not printed counts as none. This is the one flag that
- *   blocks filing (`itemsAddUp`).
+ *   there are items, each at its net (lg-89). A tax not printed counts as none. This is the one flag the
+ *   API refuses to file on (`itemsAddUp`).
  * - **The Taxable marks give the printed taxes** (lg-26), when there are items:
  *   the nets of the items marked taxable are a taxable part that gives both
  *   taxes. Both taxes `null` count as printed zero here, so a mark on a receipt

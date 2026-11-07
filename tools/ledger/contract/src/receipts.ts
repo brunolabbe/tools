@@ -166,14 +166,16 @@ export const receiptProposalSchema = z.strictObject({
  * - `signs-differ`: some parts are a purchase and some a refund.
  * - `taxable-differs` (lg-26): the nets of the items marked taxable (lg-89),
  *   taken as the taxable part, do not give both printed taxes; a receipt with items and no
- *   tax lines counts both as zero. It points at the Taxable boxes, and does not
- *   block filing. Where it is **not** raised: a receipt with no items; one tax
+ *   tax lines counts both as zero. It points at the Taxable boxes. The API does
+ *   not refuse it; the screen holds filing on it only where the marks move money,
+ *   an item left out or a joint-account row's items in several categories.
+ *   Where it is **not** raised: a receipt with no items; one tax
  *   read and the other not (`tax-missing`); mixed signs (`signs-differ`). Beside
  *   `tax-differs`, where no marks can give both taxes, it is raised only when the
  *   marks give neither tax on its own, so a misread tax is not blamed on the
  *   marks. A store that rounds tax per line can raise it on marks that are right.
  * - `items-differ` (lg-10): the items' nets, their deposits and the two taxes do
- *   not make the total, to the cent. Unlike the others it **blocks filing**: the
+ *   not make the total, to the cent. It **blocks filing**, in the API too: the
  *   shared amount is computed from the items, so items that do not add up would
  *   file an amount nobody paid (`RECEIPT_DOES_NOT_ADD_UP`).
  *
