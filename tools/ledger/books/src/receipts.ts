@@ -10,6 +10,12 @@
  * filed — except that items which do not make the total are never filed
  * (lg-10), since the shared amount is computed from them.
  *
+ * **One repair, before the check, on a read only** (lg-101, `dropPrintedRebates`):
+ * a rebate the printed price already holds, folded in a second time by the
+ * reader, is taken back out when the arithmetic says so without doubt. It
+ * returns a new proposal and changes nothing it is given; the check that
+ * follows still only flags.
+ *
  * **What comes off the shared amount is computed here, never by the model**
  * (lg-10, `splitReceipt`): from the items the person marked, at the rates in
  * effect on the receipt's date (`SALES_TAX_RATES`).
@@ -202,6 +208,84 @@ export function itemsAddUp(proposal: ReceiptProposal): boolean {
   if (proposal.total === null) return false;
   const items = proposal.items.reduce((sum, item) => sum + netPrice(item) + (item.deposit ?? 0), 0);
   return items + (proposal.gst ?? 0) + (proposal.qst ?? 0) === proposal.total;
+}
+
+/**
+ * The most rebated items `dropPrintedRebates` searches the subsets of. The
+ * search is exponential: n rebated items are 2ⁿ − 1 readings to sum, 255 at 8
+ * and over a million at 20, and a receipt can hold `MAX_RECEIPT_ITEMS`. The
+ * more subsets there are, the likelier two of them make the same total by
+ * chance, which the search would then call ambiguous anyway. The bound limits
+ * the subset search only: the repair that takes every rebate out still runs
+ * above it, so a receipt with more rebates than this is repaired when that one
+ * repair makes the items add up, and is left to the person otherwise.
+ */
+export const MAX_REBATES_SEARCHED = 8;
+
+/** The proposal with the rebates of the items at `places` taken back out. */
+function withoutRebates(proposal: ReceiptProposal, places: ReadonlySet<number>): ReceiptProposal {
+  return {
+    ...proposal,
+    items: proposal.items.map((item, index) =>
+      places.has(index) ? { ...item, discount: null } : item,
+    ),
+  };
+}
+
+/**
+ * A reading with the rebates its printed prices already hold taken back out
+ * (lg-101). Some receipts print an item's price with its rebate already off, and
+ * the rebate line (`RABAIS`, `ÉCONOMIE`) only shows what was saved; a reader that
+ * folds that line in takes the rebate off twice, and the items fall short of the
+ * total by it. Such an item is its printed price and no discount, so `price`
+ * keeps meaning "as printed" and `netPrice` is unchanged; the photo still shows
+ * the rebate line.
+ *
+ * Returned as read when the items already add up or none carries a rebate.
+ * Otherwise the first repair that makes the items add up:
+ *
+ * 1. every rebate taken out;
+ * 2. with at most `MAX_REBATES_SEARCHED` rebated items, the rebates of one
+ *    subset of them taken out, when **exactly one** subset makes the items add
+ *    up. Two that both do are a choice the arithmetic cannot make — which item
+ *    was printed after its rebate — so the reading is returned as read.
+ *
+ * **A repair that raises `taxable-differs` is no repair**: two wrongs can make a
+ * total, and the reading as read, flagged, is the safer thing to show. With no
+ * repair the reading is returned as read and the screen flags it as before.
+ *
+ * Applied to a read, never to a filing: what is filed is the form as the person
+ * left it, and a rebate they typed back in is theirs.
+ */
+export function dropPrintedRebates(
+  proposal: ReceiptProposal,
+  table: readonly SalesTaxRates[] = SALES_TAX_RATES,
+): ReceiptProposal {
+  if (itemsAddUp(proposal)) return proposal;
+  // A rebate of 0 moves no sum: counted, it would make every repair two subsets.
+  const rebated = proposal.items.flatMap((item, index) =>
+    (item.discount ?? 0) === 0 ? [] : [index],
+  );
+  if (rebated.length === 0) return proposal;
+  const taxableDiffers = (reading: ReceiptProposal): boolean =>
+    checkReceipt(reading, table).includes("taxable-differs");
+  const before = taxableDiffers(proposal);
+  const noWorse = (repair: ReceiptProposal): boolean => before || !taxableDiffers(repair);
+
+  const all = withoutRebates(proposal, new Set(rebated));
+  if (itemsAddUp(all) && noWorse(all)) return all;
+  if (rebated.length > MAX_REBATES_SEARCHED) return proposal;
+
+  // Every non-empty subset, the whole set included: a whole set that adds up but
+  // was refused for its taxes still makes a second subset that adds up ambiguous.
+  const adding: ReceiptProposal[] = [];
+  for (let mask = 1; mask < 2 ** rebated.length; mask += 1) {
+    const places = new Set(rebated.filter((_place, bit) => (mask & (1 << bit)) !== 0));
+    const repair = withoutRebates(proposal, places);
+    if (itemsAddUp(repair)) adding.push(repair);
+  }
+  const [only] = adding;
+  return adding.length === 1 && only !== undefined && noWorse(only) ? only : proposal;
 }
 
 /**

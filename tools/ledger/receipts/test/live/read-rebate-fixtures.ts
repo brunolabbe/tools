@@ -1,7 +1,8 @@
 /**
- * lg-89's Done when 7: the owner's paid read of the three synthetic receipts,
- * through the reader the API uses, at its default model. **It spends money**
- * (three reads), so it is a script and never a suite, and it refuses to run
+ * lg-89's Done when 7 and lg-101's Done when 6: the owner's paid read of the
+ * four synthetic rebate receipts, through the reader the API uses, at its
+ * default model. **It spends money** (four reads, one per receipt in
+ * `REBATE_FIXTURES`), so it is a script and never a suite, and it refuses to run
  * without `--paid`. It reads its key from a file, never the environment: the
  * file holds the key alone, or a `LEDGER=<key>` line among others. It refuses
  * to run with `ANTHROPIC_CUSTOM_HEADERS` set, which the SDK applies to every
@@ -11,8 +12,10 @@
  *       --paid .claude/.keys <out.json>
  *
  * It prints one verdict line per receipt and writes every item read to
- * `<out.json>`; the exit code is 0 only when all three read as lg-89 expects
- * (`rebate-fixtures.ts`). The verdict lines are what lg-89's Log records. A
+ * `<out.json>`; the exit code is 0 only when every receipt reads as
+ * `rebate-fixtures.ts` expects. The verdict lines are what lg-89's and lg-101's
+ * Logs record. It reads what the reader answers, before the read route's
+ * `dropPrintedRebates`: what it measures is the prompt. A
  * read that fails prints its error's code and nothing else: the SDK's own
  * messages can hold the key.
  *
