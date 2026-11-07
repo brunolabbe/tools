@@ -258,7 +258,8 @@ recommendation.
 1. `web/src/history/History.tsx`, `refile`: `setChanging` clears only the saved row's
    id (the planted line in the Reproduction), not whatever row's control is open.
 2. `web/test/history.test.tsx`: the reproduction's two arms, as tests in that file,
-   with the Save's notice as the wait. Under C, no test is added.
+   with the Save's notice as the wait. The owner chose A, so the reproduction is the
+   test: it fails on `main` and passes with step 1's change.
 
 ## Done when
 
@@ -268,7 +269,7 @@ Written for A, the option the owner chose on 2026-11-07.
    and proves that when A's Save completes, B's open control stays open
    (`aria-expanded` `["false","true"]`, the wait being the Save's notice). It fails on
    `main` at `1eafa0c6` (the red output above) and passes with the answer's change
-   (the green output above, under A).
+   (the green output above). The owner chose A, so the reproduction is the test.
 2. The owner chose A, so the branch of question 1 that adds no test (C) does not apply.
 3. `npm run check` and `npm test -- --project ledger` pass.
 
@@ -344,3 +345,27 @@ Gate 1 (Sonnet 5.5, narrow) failed the filing on five findings. Each is answered
 - The Build's opening and its step 1, and `Done when`'s preamble and item 2, are
   reworded for A. The Build's step 2 and `Done when` item 1 are not touched by this
   commit.
+
+### 2026-11-07, landing
+
+- 2026-11-07 — Fixed at landing by owner choice: gate 2, N1 — "lg-100's new Log bullet
+  says 'The first bullet above, left as written, is superseded.' Those words are in the
+  fourth bullet, and the third bullet is superseded too and is not named." The sentence
+  in lg-100's Log now names the fourth bullet and the third. Proof:
+  `git diff b6c724b9 HEAD -- tools/ledger/docs/work/lg-100-a-pot-charge-keeps-its-items-categories.md | grep -c '^-.*2026-11-07. The first bullet'`
+  → `1`.
+- 2026-11-07 — Fixed at landing by owner choice: gate 2, N2 — "lg-103's Build step 2 and
+  Done when 1 read as the reproduction being the test under any answer but C." Both now
+  say the owner chose A, so the reproduction is the test. Proof:
+  `git diff b6c724b9 HEAD -- tools/ledger/docs/work/lg-103-a-save-closes-another-rows-control.md | grep -c '^-.*Under C, no test is added'`
+  → `1`, and the same with `'^-.*green output above, under A'` → `1`.
+- 2026-11-07 — #751 at its later head. The filing entry above says `gh pr diff 751` has
+  no changed line naming `setChanging`; that was true at `42446ded`. At `bf152330`
+  (`git ls-remote --heads origin lg-99-reread-and-focus`, read 2026-11-07) #751 adds
+  `setChanging((current) => (current === row.id ? null : current))` guards in `refile`'s
+  re-read paths. The `setChanging(null)` after a stored Save (line 293 there) is not
+  touched, so "leaves this behaviour as it is" still holds.
+- 2026-11-07 — Gate 1's full report and gate 2's are on the pull request thread, #754;
+  the ticket is `ready` from the owner's answer above. Filed by builder-mechanical
+  (Haiku 5.5, high), gated twice by ticket-reviewer-sonnet (Sonnet 5.5, xhigh, narrow),
+  landed by the fixer (Sonnet 5.5, high).

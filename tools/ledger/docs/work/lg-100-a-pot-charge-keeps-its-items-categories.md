@@ -382,5 +382,6 @@ not by filing under A.
   that the answer made false are reworded, and nothing else in the ticket changed. The
   Build's opening, "Pending the decision below. The recommended option (A) is:", now
   reads "Chosen by the owner on 2026-11-07: option A". The Build's closing sentence and
-  the `Done when` preamble now say the owner chose A on 2026-11-07. The first bullet
-  above, "left as written", is superseded by this one.
+  the `Done when` preamble now say the owner chose A on 2026-11-07. The fourth bullet
+  above, "left as written", and the third, "left as it stands", are superseded by this
+  one.
