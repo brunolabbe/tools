@@ -387,3 +387,12 @@ Gate 1 (Sonnet 5.5, narrow) failed the filing on five findings. Each is answered
   ticket's reproduction with the fix → both arms `after-save expanded ["false","true"]`.
 - **Focus** is as the Decision said: the `active` lines are the same as on `main` in both arms.
 - **Not folded in.** Nothing else in the file was free; lg-100 and lg-98 touch other files.
+
+### 2026-11-07, landing
+
+- 2026-11-07 — The owner answered the orchestrator's question on gate 1's two lows
+  through AskUserQuestion: gate 1 PASSed, so what to do with the two lows (the Done when
+  line's stale base sha, the Log's stale line number)? Options: "Fix both at landing"
+  (the orchestrator's recommendation), "fix low 2 only", "record both, change nothing".
+  Chosen: "Fix both at landing", with no re-gate. The owner also approved the change to the
+  Done when line, and nothing else on that line.
