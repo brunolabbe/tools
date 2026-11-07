@@ -199,3 +199,23 @@ What the brief had wrong or left open:
 - `tools/ledger/CLAUDE.md` still says a line is "paid by **whoever uploaded the
   photo**". It is not edited here, since the Build does not name it. The report
   proposes the line. `docs/00-ANALYSIS.md` §6 says the same and is corrected.
+
+Checks, at this branch's head:
+
+- `npx vitest run tools/ledger/api/test/receipts.test.ts -t "lg-102"`: 7 of 7
+  pass. Against the base's `api/src/receipts.ts` and `contract/src/receipts.ts`,
+  with the contract rebuilt, 6 of 7 fail. The one that passes is "among three,
+  a theirs item that names nobody is still refused whoever paid", which asserts
+  only a 400. The base's strict schema gives that 400 for `paidBy` alone.
+- `npx vitest run tools/ledger/web/test/receipts.test.tsx`: 81 of 81. Each of
+  three mutations turns its own tests red: dropping the batch's `refusal`
+  check (Done when 3, 2 tests), accepting two rows on the joint card (Done when
+  4), and rebuilding the entry from the read on open (Done when 5).
+- `npm test -- --project ledger`: 2,210 of 2,210. `npm run check`: exit 0.
+- `npm run e2e:ledger` on `E2E_PORT=8202`: 36 of 36. The first run failed
+  "on a desktop › the receipt screen shows no camera tile". That case passes at
+  the base `1eafa0c6`, run in a second tree: the new `.pick` rule had taken the
+  photo pickers' class name, and its `display: grid` beat the media query that
+  hides the camera tile. The picks are styled through `.picks` now. Both
+  screenshots of `Receipt queue (to file)` were opened: the selects, the boxes
+  and four refusals fit 360 px and 1280 px.
