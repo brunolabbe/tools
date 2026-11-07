@@ -268,7 +268,7 @@ Written for A, the option the owner chose on 2026-11-07.
 1. A test in `tools/ledger/web/test/history.test.tsx` runs the reproduction's two arms
    and proves that when A's Save completes, B's open control stays open
    (`aria-expanded` `["false","true"]`, the wait being the Save's notice). It fails on
-   `main` at `1eafa0c6` (the red output above) and passes with the answer's change
+   `main` at `08f78f69` (the red output above) and passes with the answer's change
    (the green output above). The owner chose A, so the reproduction is the test.
 2. The owner chose A, so the branch of question 1 that adds no test (C) does not apply.
 3. `npm run check` and `npm test -- --project ledger` pass.
@@ -382,7 +382,7 @@ Gate 1 (Sonnet 5.5, narrow) failed the filing on five findings. Each is answered
   `after-save expanded ["false","false"]`, as on `1eafa0c6`. The in-repo test (Build step 2)
   also failed there, on `expect(b.getAttribute("aria-expanded")).toBe("true")` after the
   Save's notice, 2 of 29.
-- **Green.** `History.tsx` line 293 is now `setChanging((current) => (current === row.id ?
+- **Green.** `History.tsx` line 294 is now `setChanging((current) => (current === row.id ?
   null : current))`. `npx vitest run tools/ledger/web/test/history.test.tsx` → 29 of 29; the
   ticket's reproduction with the fix → both arms `after-save expanded ["false","true"]`.
 - **Focus** is as the Decision said: the `active` lines are the same as on `main` in both arms.
@@ -396,3 +396,11 @@ Gate 1 (Sonnet 5.5, narrow) failed the filing on five findings. Each is answered
   (the orchestrator's recommendation), "fix low 2 only", "record both, change nothing".
   Chosen: "Fix both at landing", with no re-gate. The owner also approved the change to the
   Done when line, and nothing else on that line.
+- 2026-11-07 — Fixed at landing by owner choice: gate 1, the first low — "Done when 1
+  says the test fails on main at 1eafa0c6, which predates lg-99". Done when 1 now names
+  `08f78f69`, the real base. Proof: the removed-line count of the `git diff 5bdda591 HEAD`
+  on this file, grepping `'^-.*red output above'` → `1`.
+- 2026-11-07 — Fixed at landing by owner choice: gate 1, the second low — "the build Log
+  says History.tsx line 293 is now setChanging(...), at 5bdda591 that call is on line 294".
+  The build Log now says line 294, checked against the head. Proof: the removed-line
+  count of the same diff, grepping `'^-.*line 293 is now'` → `1`.
