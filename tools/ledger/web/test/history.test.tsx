@@ -716,3 +716,45 @@ test("a refused Save leaves no claim on focus for a later close by another row (
   expect(a.getAttribute("aria-expanded")).toBe("false");
   expect(document.activeElement).not.toBe(a);
 });
+
+// The first lg-99 build marked the row when the save was stored, so the button was already
+// disabled when the control closed and the restore did nothing. The re-read is held back past
+// the close here, so the test cannot pass by the close and the re-read landing in one render.
+for (const arm of ["focused", "unfocused"] as const) {
+  test(`after a stored save whose re-read is still running, focus is on the row's button and nothing says it is unread, ${arm} (lg-99)`, async () => {
+    let finish: (answer: { rows: StoredRow[]; total: number }) => void = () => undefined;
+    vi.mocked(fetchRows)
+      .mockResolvedValueOnce({ rows: [filedTo(1, "R")], total: 1 })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+      );
+    vi.mocked(classifyRow).mockResolvedValue(SAVED);
+    render(<History />);
+
+    const button = await screen.findByRole("button", { name: /^Change who and what/u });
+    if (arm === "focused") button.focus();
+    fireEvent.click(button);
+    const save = screen.getByRole("button", { name: "Save" });
+    if (arm === "focused") save.focus();
+    fireEvent.click(save);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
+    // The close has happened and the re-read has not answered (the second call is pending).
+    expect(fetchRows).toHaveBeenCalledTimes(2);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+
+    expect(document.activeElement).toBe(button);
+    expect(button.hasAttribute("disabled")).toBe(false);
+    expect(screen.queryByText(/has not been read since/u)).toBeNull();
+
+    await act(async () => {
+      finish({ rows: [filedTo(1, "R", "sam")], total: 1 });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByRole("list").textContent).toContain("sam · Current"));
+    expect(document.activeElement).toBe(button);
+    expect(button.hasAttribute("disabled")).toBe(false);
+    expect(screen.queryByText(/has not been read since/u)).toBeNull();
+  });
+}

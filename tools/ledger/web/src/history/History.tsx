@@ -168,8 +168,8 @@ export function History(): React.ReactElement {
   const [changing, setChanging] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  // Rows whose change the API stored and whose list was not read again since (lg-99): the
-  // row still shows the answer it had, so it offers no change until a read replaces the list.
+  // Rows whose change the API stored and whose re-read failed (lg-99): the row still shows
+  // the answer it had, so it offers no change until a read replaces the list.
   const [unread, setUnread] = useState<ReadonlySet<number>>(new Set());
   // The request for a further page, so a filter change can drop it with the rest.
   const moreRequest = useRef<AbortController | null>(null);
@@ -291,7 +291,6 @@ export function History(): React.ReactElement {
     // Stored. The control closes whatever the re-read does, so a second Save cannot
     // send the same answer again under a message that says the first one failed.
     setChanging(null);
-    setUnread((current) => new Set(current).add(row.id));
     const closed = periods === null ? null : closedPeriodOf(row.date, periods);
     const carried =
       periods === null
@@ -309,6 +308,10 @@ export function History(): React.ReactElement {
       setLoad({ state: "ready", rows: answer.rows, total: answer.total });
       setUnread(new Set());
     } catch (error: unknown) {
+      // Marked only now, not when the save was stored: the button must be enabled while the
+      // control closes, or the focus it is handed back goes nowhere, and a re-read that is
+      // about to succeed must not flash the line.
+      setUnread((current) => new Set(current).add(row.id));
       setProblem(
         `The change was saved, but the list could not be read again. ${AppError.from(error).message}`,
       );
@@ -549,7 +552,7 @@ interface RefileProps {
   members: readonly string[];
   open: boolean;
   saving: boolean;
-  /** The row's change was stored and the list not read since: it still shows the old answer. */
+  /** The row's change was stored and the re-read failed: it still shows the old answer. */
   unread: boolean;
   onOpen: (open: boolean) => void;
   onAnswer: (personId: string | null, bucket: Bucket) => void;

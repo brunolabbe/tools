@@ -306,3 +306,35 @@ so it stands as written.
      does alone; F5, in a browser that does not focus on click, closing a row with its own toggle
      button no longer restores focus, which is option 2a's own wording ("only ... Cancel or
      Save").
+- 2026-11-07 — Round 1, F1 fixed by answer 1a: `refile` marks the row `unread` in the `catch`
+  of its re-read, no longer when `classifyRow` returns. The earlier entries above that say the
+  mark is set when the save is stored, and that focus is handed to a disabled button after a
+  save, describe `191f8927` and are superseded: now the button is enabled while the control
+  closes, so the restore works, and a successful re-read shows no disabled button and no line.
+  Test, appended to `web/test/history.test.tsx`, in two arms: "after a stored save whose
+  re-read is still running, focus is on the row's button and nothing says it is unread,
+  focused (lg-99)" and the same "... unfocused (lg-99)". The re-read is a pending promise
+  released after the close, so the test cannot pass by the close and the re-read landing in
+  one render; it asserts, with `fetchRows` called twice and the control closed, that
+  `document.activeElement` is the button, the button is not disabled and no "has not been
+  read since" text shows, then releases the re-read and asserts the same again with the new
+  answer on the row. Red on `191f8927`'s `History.tsx`, both arms (`npx vitest run
+  tools/ledger/web/test/history.test.tsx -t "re-read is still running"` → `Tests 2 failed | 21
+  skipped (23)`), at the focus line: `expected <body> ... to be <button ...>`. Green on the
+  fix: `Tests 23 passed (23)` for the file.
+- 2026-11-07 — Round 1, gate 1's probe `zz-gate1-lg99.test.tsx`, copied unchanged into
+  `web/test/`, run, removed (`git status --short` showed only the two edited files after):
+  `Tests 22 passed (22)`, exit 0; it logs and asserts nothing. The readings that moved: a save
+  whose re-read succeeds after a delay, `reread-ok-nofocus` and `reread-ok-focus`, read
+  `disabled false` and `active BUTTON:Change who and what: R, 2026-10-10` both while the
+  re-read is pending and after it (gate 1 on `191f8927`: `BODY`); a re-read that fails reads
+  `disabled false` while pending, `disabled true` after. The unchanged ones: `other-nofocus
+  active BODY`, `refused-other-nofocus active BODY`, `pending-other-nofocus active` row A's
+  button (F3), `toggle-nofocus active BODY` (F5). In jsdom, `document.activeElement` stays on
+  a button that becomes disabled (`reread-fail-* after active` the button); the gate's F2 is a
+  Chromium reading, which was not re-measured here.
+- 2026-11-07 — Round 1 checks on the fix: `npx oxlint tools/ledger/web tools/ledger/e2e` exit
+  0; `npm run check` exit 0; `E2E_PORT=8203 npx playwright test -c
+  tools/ledger/playwright.config.ts layout.spec.ts -g History` → `3 passed (8.4s)`;
+  `npm test -- --project ledger` exit 0, `Test Files 99 passed (99)`, `Tests 2200 passed
+  (2200)`.
