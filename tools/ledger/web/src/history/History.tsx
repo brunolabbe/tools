@@ -312,6 +312,10 @@ export function History(): React.ReactElement {
       // control closes, or the focus it is handed back goes nowhere, and a re-read that is
       // about to succeed must not flash the line.
       setUnread((current) => new Set(current).add(row.id));
+      // The button was enabled while the re-read ran, so this row's control may have been
+      // reopened, on the answer the row still shows. It closes with the mark, or a second Save
+      // would send the old answer again; another row's open control is not this row's to close.
+      setChanging((current) => (current === row.id ? null : current));
       setProblem(
         `The change was saved, but the list could not be read again. ${AppError.from(error).message}`,
       );
