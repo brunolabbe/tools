@@ -1,0 +1,47 @@
+<!doctype html>
+<!--
+  lg-101, fixture 4: two items printed with their rebates already taken off,
+  each rebate line showing only what was saved. One rebate is printed directly
+  under its item; the other three lines below it, naming its item's product
+  code. The lines make the total without the rebates. Synthetic: the store, the
+  numbers and every amount are invented. Rendered to the .png beside it by
+  test/live/render-rebate-fixtures.ts.
+
+  Expected read: 0412 FROMAGE CHEDDAR, price 649, discount null; 0631 LAIT 2%
+  2L, price 479, discount null; no item with a negative price. No tax lines.
+-->
+<html lang="fr-CA">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { margin: 0; background: #fff; }
+      .receipt { width: 340px; padding: 24px 20px; font: 15px/1.45 "DejaVu Sans Mono", monospace; color: #111; }
+      .center { text-align: center; }
+      .row { display: flex; justify-content: space-between; gap: 12px; }
+      .rule { border-top: 1px dashed #333; margin: 8px 0; }
+      .big { font-size: 18px; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="receipt">
+      <div class="center big">FRUITERIE INVENTÉE</div>
+      <div class="center">789, av. Imaginaire</div>
+      <div class="center">Laval QC</div>
+      <div class="center">2026-11-02 16:05</div>
+      <div class="rule"></div>
+      <div class="row"><span>0412 FROMAGE CHEDDAR</span><span>6,49</span></div>
+      <div class="row"><span>&nbsp;&nbsp;RABAIS</span><span>-1,50</span></div>
+      <div class="row"><span>0631 LAIT 2% 2L</span><span>4,79</span></div>
+      <div class="row"><span>0907 PAIN BLANC</span><span>3,49</span></div>
+      <div class="row"><span>0218 POMMES GALA</span><span>3,50</span></div>
+      <div class="row"><span>RABAIS 0631</span><span>-0,80</span></div>
+      <div class="rule"></div>
+      <div class="row"><span>SOUS-TOTAL</span><span>18,27</span></div>
+      <div class="row big"><span>TOTAL</span><span>18,27</span></div>
+      <div class="rule"></div>
+      <div class="row"><span>DÉBIT</span><span>18,27</span></div>
+      <div class="center">VOUS AVEZ ÉCONOMISÉ 2,30</div>
+      <div class="center">MERCI DE VOTRE VISITE</div>
+    </div>
+  </body>
+</html>

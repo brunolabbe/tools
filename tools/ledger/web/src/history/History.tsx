@@ -168,6 +168,9 @@ export function History(): React.ReactElement {
   const [changing, setChanging] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Rows whose change the API stored and whose re-read failed (lg-99): the row still shows
+  // the answer it had, so it offers no change until a read replaces the list.
+  const [unread, setUnread] = useState<ReadonlySet<number>>(new Set());
   // The request for a further page, so a filter change can drop it with the rest.
   const moreRequest = useRef<AbortController | null>(null);
 
@@ -235,6 +238,7 @@ export function History(): React.ReactElement {
         // A request that was dropped may still answer; its list is not the one asked for now.
         if (controller.signal.aborted) return;
         setLoad({ state: "ready", rows: answer.rows, total: answer.total });
+        setUnread(new Set());
       } catch (error: unknown) {
         if (!controller.signal.aborted) {
           setLoad({ state: "failed", message: AppError.from(error).message });
@@ -302,7 +306,21 @@ export function History(): React.ReactElement {
         limit: Math.max(PAGE, load.rows.length),
       });
       setLoad({ state: "ready", rows: answer.rows, total: answer.total });
+      setUnread(new Set());
+      // The button was enabled while the re-read ran, so this row's control may have been
+      // reopened on the answer the list has just replaced (it keeps the answer it opened with).
+      // It closes, or a second Save would file the old answer again; another row's open
+      // control is not this row's to close.
+      setChanging((current) => (current === row.id ? null : current));
     } catch (error: unknown) {
+      // Marked only now, not when the save was stored: the button must be enabled while the
+      // control closes, or the focus it is handed back goes nowhere, and a re-read that is
+      // about to succeed must not flash the line.
+      setUnread((current) => new Set(current).add(row.id));
+      // The button was enabled while the re-read ran, so this row's control may have been
+      // reopened, on the answer the row still shows. It closes with the mark, or a second Save
+      // would send the old answer again; another row's open control is not this row's to close.
+      setChanging((current) => (current === row.id ? null : current));
       setProblem(
         `The change was saved, but the list could not be read again. ${AppError.from(error).message}`,
       );
@@ -510,6 +528,7 @@ export function History(): React.ReactElement {
                     members={members}
                     open={changing === row.id}
                     saving={saving}
+                    unread={unread.has(row.id)}
                     onOpen={(next) => setChanging(next ? row.id : null)}
                     onAnswer={(personId, bucket) => void refile(row, personId, bucket)}
                   />
@@ -542,6 +561,8 @@ interface RefileProps {
   members: readonly string[];
   open: boolean;
   saving: boolean;
+  /** The row's change was stored and the re-read failed: it still shows the old answer. */
+  unread: boolean;
   onOpen: (open: boolean) => void;
   onAnswer: (personId: string | null, bucket: Bucket) => void;
 }
@@ -559,6 +580,7 @@ function Refile({
   members,
   open,
   saving,
+  unread,
   onOpen,
   onAnswer,
 }: RefileProps): React.ReactElement {
@@ -566,16 +588,29 @@ function Refile({
   const id = useId();
   const button = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
+  // Set by this row's own Cancel and Save (lg-99). A browser that does not focus a button
+  // on click leaves focus on the page when another row's button opens its control and
+  // closes this one, so "focus fell to the page" alone would send it back here.
+  const closedByOwn = useRef(false);
 
   // A control that closes hands focus back to the button that opened it: the Save or
-  // Cancel that had it is gone, and focus would fall to the page. Only when it did
-  // fall: opening another row's control moved focus there on purpose.
+  // Cancel that had it is gone, and focus would fall to the page. Only when this row's
+  // own Cancel or Save closed it, and only when focus did fall: a person who moved it
+  // elsewhere while the save ran keeps it there.
   useEffect(() => {
-    if (wasOpen.current && !open && document.activeElement === document.body) {
+    if (
+      wasOpen.current &&
+      !open &&
+      closedByOwn.current &&
+      document.activeElement === document.body
+    ) {
       button.current?.focus();
     }
+    // Spent once closed; cleared on opening, and when a Save was refused and the control
+    // stayed open, so a later close by another row does not read as this row's own.
+    if (!open || !saving) closedByOwn.current = false;
     wasOpen.current = open;
-  }, [open]);
+  }, [open, saving]);
 
   // Who a change may file the row to: the members now, and the row's own person even
   // if they have left, so the control opens on the answer the row stands at.
@@ -595,10 +630,18 @@ function Refile({
         // The visible words come first in the name (label in name), then the row, so the
         // identical buttons down the list are told apart by a screen reader.
         aria-label={`Change who and what: ${row.description}, ${row.date}`}
+        disabled={unread}
+        aria-describedby={unread ? `${id}-unread` : undefined}
         onClick={() => onOpen(!open)}
       >
         Change who and what
       </button>
+      {unread && (
+        <span id={`${id}-unread`} className="muted hint">
+          The list has not been read since this change, so this row shows the old answer. Change a
+          filter or reload the page, and it can be changed again.
+        </span>
+      )}
       {open && (
         <fieldset
           id={id}
@@ -623,9 +666,18 @@ function Refile({
             initial={{ personId: classification.personId, bucket: classification.bucket }}
             submitLabel="Save"
             disabled={saving}
-            onAnswer={onAnswer}
+            onAnswer={(personId, bucket) => {
+              closedByOwn.current = true;
+              onAnswer(personId, bucket);
+            }}
           />
-          <button type="button" onClick={() => onOpen(false)}>
+          <button
+            type="button"
+            onClick={() => {
+              closedByOwn.current = true;
+              onOpen(false);
+            }}
+          >
             Cancel
           </button>
         </fieldset>

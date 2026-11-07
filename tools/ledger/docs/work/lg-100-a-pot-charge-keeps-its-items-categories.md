@@ -3,7 +3,7 @@ id: lg-100
 tool: ledger
 title: A person's charge to the pot keeps no category when their items span two
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: [lg-91]
 difficulty: standard
@@ -167,7 +167,8 @@ largest remaining category, now land on the bread.
 
 ## Build
 
-**Pending the decision below.** The recommended option (A) is:
+**Chosen by the owner on 2026-11-07: option A**, one pot charge per person per
+category. The steps are:
 
 1. **`api/src/receipts.ts`, `filePotCharges`.** For each person with a charge, group
    their `theirs` items by `spendingCategoryId` and divide the person's charge
@@ -191,10 +192,18 @@ largest remaining category, now land on the bread.
    from one line of 2 127, and the chart; one removed; the sign-guard fallback.
    `web/test/receipts.test.tsx` for the message.
 
-No contract change, no migration. `Done when` below is written for A and is
-reworded with whichever option the owner chooses.
+No contract change, no migration. `Done when` below is written for A, the option the
+owner chose on 2026-11-07.
 
-## Decision — open
+## Decision — answered 2026-11-07 by the owner
+
+**Chosen: A, one pot charge per person per category**, the option this ticket
+recommends. Asked through AskUserQuestion, with the four options below; not
+chosen: B, a slice list on the charge's own line (a migration and a `PeriodLine`
+contract change); C, read the items at chart time; D, leave it and say so. The
+Build and `Done when` below are written for A.
+
+The question as it was asked, and its options as written then:
 
 **Who decides:** the owner. Where a person's charge takes its category on a
 joint-account row is a design choice that changes what the period screen lists
@@ -266,7 +275,7 @@ rather than hidden.
 
 ## Done when
 
-Written for A; reworded with the owner's answer.
+Written for A, the option the owner chose on 2026-11-07; it needed no rewording.
 
 1. An `api` test files a receipt on a joint row with one member's items in two
    categories and proves: two pot charge lines, each carrying its category, the
@@ -353,3 +362,26 @@ not by filing under A.
 - 2026-11-01 — Gate 1's full report is on the pull request thread, #743; status
   unchanged (`needs-decision`). Filed by builder-standard (Sonnet 5.5, high), gated
   by ticket-reviewer-opus (Opus 5.5, high), landed by the fixer (Sonnet 5.5, high).
+
+### 2026-11-07, decision
+
+- 2026-11-07 — The owner answered the `## Decision` question through AskUserQuestion:
+  **A, one pot charge per person per category**, this ticket's recommendation. Not
+  chosen: B (a slice list on the charge's own line, a migration and a `PeriodLine`
+  contract change), C (read the items at chart time), D (leave it and say so). The
+  question and its options are kept under the heading, unedited.
+- Status moved `needs-decision` → `ready` in the commit that records the answer, as
+  `roles/builder.md` says; that is the only frontmatter change.
+- `Done when` is written for A already, so it needs no rewording; its line "Written
+  for A; reworded with the owner's answer" is left as it stands.
+- The Build's first line, "Pending the decision below", is left as written, since this
+  commit changes nothing else. It is stale now: the Build is option A's, as written.
+- The 2026-11-01 landing entry's "stays open" refers to the question open on that day,
+  and stands as history.
+- Round 1 (gate 1 on lg-103's filing, PR #754, `5629dcab`, F5): the three sentences
+  that the answer made false are reworded, and nothing else in the ticket changed. The
+  Build's opening, "Pending the decision below. The recommended option (A) is:", now
+  reads "Chosen by the owner on 2026-11-07: option A". The Build's closing sentence and
+  the `Done when` preamble now say the owner chose A on 2026-11-07. The fourth bullet
+  above, "left as written", and the third, "left as it stands", are superseded by this
+  one.

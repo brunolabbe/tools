@@ -114,3 +114,38 @@ describe("the rebate fixtures' paid read: what a pass is", () => {
     );
   });
 });
+
+describe("the rebate fixtures' paid read: a rebate already in the printed price (lg-101)", () => {
+  const inPrice = fixture("rebate-in-the-printed-price");
+  const asPrinted = [
+    item("0412 FROMAGE CHEDDAR", 649),
+    item("0631 LAIT 2% 2L", 479),
+    item("0907 PAIN BLANC", 349),
+    item("0218 POMMES GALA", 350),
+  ];
+
+  test("both items at their printed prices with no discount pass, by code or by name", () => {
+    expect(wrong(inPrice, asPrinted)).toBeNull();
+    expect(wrong(inPrice, [item("Fromage", 649), item("Lait", 479)])).toBeNull();
+  });
+
+  test("a rebate folded in, a rebate left as an item, a price read net, or an item missing fails", () => {
+    const [cheese, milk, ...rest] = asPrinted;
+    if (cheese === undefined || milk === undefined) throw new Error("no items");
+    expect(wrong(inPrice, [cheese, { ...milk, discount: -80 }, ...rest])).toContain("folded twice");
+    expect(wrong(inPrice, [...asPrinted, item("RABAIS 0631", -80)])).toContain(
+      "a negative item is left",
+    );
+    expect(wrong(inPrice, [{ ...cheese, price: 499 }, milk, ...rest])).toContain("not 649");
+    expect(wrong(inPrice, [cheese, ...rest])).toContain("no item naming 0631");
+  });
+
+  test("is one of the receipts the paid read and the render take", () => {
+    expect(REBATE_FIXTURES.map((each) => each.name)).toEqual([
+      "rebate-under-its-item",
+      "rebate-away-from-its-item",
+      "coupon-on-the-whole-receipt",
+      "rebate-in-the-printed-price",
+    ]);
+  });
+});

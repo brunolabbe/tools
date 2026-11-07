@@ -7,8 +7,10 @@ import { describe, expect, test } from "vitest";
 import type { ReceiptItem, ReceiptProposal } from "@ledger/contract";
 import {
   RECEIPT_MATCH_DAYS,
+  MAX_REBATES_SEARCHED,
   SALES_TAX_RATES,
   checkReceipt,
+  dropPrintedRebates,
   itemsAddUp,
   matchReceipt,
   ratesOn,
@@ -1361,3 +1363,168 @@ function markedAs(receipt: ReceiptProposal, ...shares: ReceiptItem["share"][]): 
     items: receipt.items.map((each, index) => ({ ...each, share: shares[index] ?? "shared" })),
   };
 }
+
+// lg-101: a rebate the printed price already holds, folded in a second time.
+
+/** An item printed at `price`, read with `discount` folded into it. */
+function printed(
+  text: string,
+  price: number,
+  discount: number | null,
+  taxable = false,
+): ReceiptItem {
+  return {
+    text,
+    price,
+    taxable,
+    deposit: null,
+    discount,
+    spendingCategoryId: null,
+    share: "shared",
+    chargedTo: null,
+  };
+}
+
+/** A receipt with no tax lines whose total is `total`. */
+function noTaxLines(total: number, items: ReceiptItem[]): ReceiptProposal {
+  return {
+    merchant: null,
+    date: "2026-11-03",
+    subtotal: total,
+    gst: null,
+    qst: null,
+    total,
+    items,
+  };
+}
+
+/** Each item's rebate, in order. */
+function rebates(proposal: ReceiptProposal): (number | null)[] {
+  return proposal.items.map((each) => each.discount);
+}
+
+/**
+ * `count` items at 10,00 $, the n-th read with 2ⁿ cents off and the first's
+ * already in its price: every subset's rebates make a different sum, so exactly
+ * one subset makes the total.
+ */
+function powersOfTwo(count: number): ReceiptProposal {
+  const items = Array.from({ length: count }, (_unused, n) =>
+    printed(`ITEM ${String(n)}`, 1_000, -(2 ** n)),
+  );
+  // Every rebate but the first's 1 cent.
+  return noTaxLines(count * 1_000 - (2 ** count - 1) + 1, items);
+}
+
+describe("a rebate already in the printed price (lg-101)", () => {
+  test("the owner's reproduction: 4,99 $ with 1,00 $ off and a total of 4,99 $ is repaired", () => {
+    const reading = noTaxLines(499, [printed("FROMAGE", 499, -100)]);
+    expect(checkReceipt(reading)).toEqual(["items-differ"]);
+
+    const repaired = dropPrintedRebates(reading);
+
+    expect(rebates(repaired)).toEqual([null]);
+    expect(repaired.items[0]?.price).toBe(499);
+    expect(checkReceipt(repaired)).toEqual([]);
+    // A new proposal: the one it was given is as it was.
+    expect(rebates(reading)).toEqual([-100]);
+  });
+
+  test("every rebate is taken out when that is what makes the total", () => {
+    const reading = noTaxLines(799, [printed("FROMAGE", 499, -100), printed("CAFE", 300, -50)]);
+
+    expect(rebates(dropPrintedRebates(reading))).toEqual([null, null]);
+  });
+
+  test("the one subset whose rebates make the total is taken out", () => {
+    // The cheese printed after its rebate, the coffee before: 4,99 $ + 2,50 $ + 3,49 $.
+    const reading = noTaxLines(1_098, [
+      printed("FROMAGE", 499, -100),
+      printed("CAFE", 300, -50),
+      printed("PAIN", 349, null),
+    ]);
+
+    const repaired = dropPrintedRebates(reading);
+
+    expect(rebates(repaired)).toEqual([null, -50, null]);
+    expect(checkReceipt(repaired)).toEqual([]);
+  });
+
+  test("two subsets that both make the total leave the reading as read", () => {
+    // Either rebate taken out makes 6,99 $: the arithmetic cannot say which.
+    const reading = noTaxLines(699, [printed("FROMAGE", 499, -100), printed("CAFE", 300, -100)]);
+
+    expect(dropPrintedRebates(reading)).toBe(reading);
+  });
+
+  test(`searches the subsets of ${String(MAX_REBATES_SEARCHED)} rebated items, and not of one more`, () => {
+    const eight = powersOfTwo(MAX_REBATES_SEARCHED);
+    expect(rebates(dropPrintedRebates(eight))).toEqual([null, -2, -4, -8, -16, -32, -64, -128]);
+
+    const nine = powersOfTwo(MAX_REBATES_SEARCHED + 1);
+    expect(itemsAddUp(nine)).toBe(false);
+    expect(dropPrintedRebates(nine)).toBe(nine);
+  });
+
+  test("a reading whose items already add up, or that carries no rebate, is returned as read", () => {
+    const addsUp = noTaxLines(399, [printed("FROMAGE", 499, -100)]);
+    const noRebate = noTaxLines(500, [printed("FROMAGE", 499, null)]);
+    const zeroRebate = noTaxLines(500, [printed("FROMAGE", 499, 0)]);
+
+    expect(dropPrintedRebates(addsUp)).toBe(addsUp);
+    expect(dropPrintedRebates(noRebate)).toBe(noRebate);
+    expect(dropPrintedRebates(zeroRebate)).toBe(zeroRebate);
+  });
+
+  test("a repair that would raise taxable-differs leaves the reading as read", () => {
+    // Taxes on 8,00 $ (GST 0,40 $, QST 0,80 $): the soap's mark fits at its net
+    // only. With its rebate out the items make 11,20 $, but the mark is then on
+    // 10,00 $, which those taxes are not of.
+    const reading: ReceiptProposal = {
+      merchant: null,
+      date: "2026-11-03",
+      subtotal: 1_000,
+      gst: 40,
+      qst: 80,
+      total: 1_120,
+      items: [printed("SAVON", 1_000, -200, true)],
+    };
+    expect(checkReceipt(reading)).toEqual(["items-differ"]);
+    expect(checkReceipt({ ...reading, items: [printed("SAVON", 1_000, null, true)] })).toEqual([
+      "taxable-differs",
+    ]);
+
+    expect(dropPrintedRebates(reading)).toBe(reading);
+
+    // The same through the subset search: only the soap's rebate makes the total.
+    const two: ReceiptProposal = {
+      ...reading,
+      subtotal: 1_400,
+      total: 1_520,
+      items: [printed("SAVON", 1_000, -200, true), printed("PAIN", 500, -100)],
+    };
+    expect(checkReceipt(two)).toEqual(["items-differ"]);
+    expect(dropPrintedRebates(two)).toBe(two);
+  });
+
+  test("a reading already flagged taxable-differs is repaired when the repair keeps it so", () => {
+    // A mark on a receipt with no tax lines: flagged as read, and after.
+    const reading = noTaxLines(499, [printed("SAVON", 499, -100, true)]);
+    expect(checkReceipt(reading)).toEqual(["items-differ", "taxable-differs"]);
+
+    const repaired = dropPrintedRebates(reading);
+
+    expect(rebates(repaired)).toEqual([null]);
+    expect(checkReceipt(repaired)).toEqual(["taxable-differs"]);
+  });
+
+  test("a reading whose mixed-sign rebates already add up is returned as read", () => {
+    // A purchase's -1,00 $ and a return's +1,00 $ cancel: the items make 0 as
+    // read, and with both rebates taken out they would still make 0. Only the
+    // early return says so; the repair searches would take both out.
+    const reading = noTaxLines(0, [printed("A", 1_000, -100), printed("B", -1_000, 100)]);
+    expect(itemsAddUp(reading)).toBe(true);
+
+    expect(dropPrintedRebates(reading)).toBe(reading);
+  });
+});

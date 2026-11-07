@@ -1,5 +1,6 @@
 /**
- * Renders lg-89's three synthetic receipts, `test/fixtures/<name>.html`, to the
+ * Renders the synthetic rebate receipts (lg-89's three, lg-101's fourth),
+ * `test/fixtures/<name>.html`, to the
  * `.png` beside each, through the Chromium Playwright already installs for the
  * e2e suites. Costs nothing and reaches no network: run it after editing a
  * receipt's HTML, from the repository root:
