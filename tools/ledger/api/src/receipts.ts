@@ -665,8 +665,11 @@ function filePotCharges(
       (item) => item.share === "theirs" && item.chargedTo === personId,
     );
     const slices = splitByCategory(charge.cents, { date: proposal.date, items: theirs });
-    // `splitByCategory` answers none for a charge shaped like a refund (its sign
-    // guard): one line under no category, as the person's whole.
+    // `splitByCategory` answers none when its sign guard trips: a charge shaped like a
+    // refund, or a purchase whose categories each cost about a cent, so that their
+    // per-category roundings outweigh the largest category and the difference takes it
+    // to 0 or turns it over (a taxable 4-cent item and a -4-cent coupon in each of
+    // two categories, on a 10,01 $ row). One line under no category, as the person's whole.
     const parts = slices.length === 0 ? [{ categoryId: null, cents: charge.cents }] : slices;
     const filed = new Map<number | null, number>();
     for (const { categoryId, cents } of parts) {

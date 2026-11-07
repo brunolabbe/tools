@@ -47,9 +47,12 @@ import {
 } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 
-// `splitByCategory` answers none for a charge shaped like a refund, which no
-// receipt filed through the API reaches (lg-100: 0 of 1 452 charges searched), so
-// a test sets this to make it answer none and drive the branch that files for it.
+// `splitByCategory` answers none when its sign guard trips: for a charge shaped like
+// a refund, or for a purchase whose categories each cost about a cent, so that their
+// per-category roundings outweigh the largest category (a taxable 4-cent item and a
+// -4-cent coupon in each of two categories, on a 10,01 $ row, reaches it through the
+// API). A scratch search of 1 452 ordinary charges did not find one (lg-100), so a
+// test sets this to make it answer none and drive the branch that files for it.
 const forced = vi.hoisted(() => ({ undivided: false }));
 vi.mock("@ledger/books", async (importOriginal) => {
   const actual = await importOriginal<typeof Books>();

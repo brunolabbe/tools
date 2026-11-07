@@ -421,6 +421,9 @@ confirmed here.
   `splitReceipt` had computed, so the branch is not reachable through the API as far as
   measured and has no test. It is kept because the guard exists in `splitByCategory`,
   and one uncategorised line is what lg-91 filed.
+  WITHDRAWN — do not cite the clause "so the branch is not reachable through the API as
+  far as measured": a purchase reaches the branch (gate 1, the first low; see the
+  2026-11-07 landing entry). The builder's search was true of its 1 452 charges only.
 - Red at the base: `git checkout 08f78f69 -- tools/ledger/api/src/receipts.ts tools/ledger/web/src/receipts/filing.ts`
   then `npx vitest run tools/ledger/api/test/receipts.test.ts tools/ledger/web/test/receipts.test.tsx`
   → `4 failed | 190 passed (194)`: the one-line-per-category test, the chart, the
@@ -461,9 +464,41 @@ Both applied in the same round:
   1 452 two-category charges (prices -5,00 $ to 5,00 $, taxable or not, with and without
   a deposit, taxes printed to match) found 0 that `splitByCategory` could not divide, so
   the branch is not reachable through the API.
+  WITHDRAWN — do not cite the clause "so the branch is not reachable through the API":
+  a purchase reaches it. A person's categories can each cost about a cent, so that their
+  per-category roundings outweigh the largest category and the guard answers none (gate 1,
+  the first low). The mock is still needed to force it in a test, and the search stands as
+  a count of those 1 452 charges only.
 - **The contract comment** on `ReceiptFiling.charges` now adds that on a row it is one
   per person per category their items fall in (lg-100), so a person can appear twice.
   Comment only; `git diff` on `contract/src/receipts.ts` is the one hunk.
 - `npx vitest run` on `tools/ledger/api/test/receipts.test.ts` and
   `tools/ledger/web/test/receipts.test.tsx` → exit 0, `195 passed (195)`;
   `npm run check` → exit 0.
+
+### 2026-11-07, landing
+
+- 2026-11-07 — Owner's answer on gate 1's first low (the sign-guard fallback is
+  reachable through the API by a purchase, so three texts that say it is not are false).
+  Question: "what should be done about the three texts?" Options: reword the three texts
+  (the gate's and the orchestrator's recommendation); reword and replace the mock with a
+  real-receipt test; record only. **Chosen by the owner: reword the three texts**, to name
+  the real trigger (a person's categories each cost about a cent, and their per-category
+  roundings outweigh the largest category, which a purchase can do and not only a refund),
+  with no code and no assertion changed. No re-gate.
+- 2026-11-07 — Owner's answer on gate 1's second low (a category only coupons fill is
+  filed as a negative charge to the pot, beside the person's positive charge: 182 of the
+  1 434 row receipts of the seeded sweep, k = 2). Question: "what should be done about
+  it?" Options: accept and record (the orchestrator's recommendation); file a ticket; fix
+  in #757. **Chosen by the owner: accept and record.** No change. The amounts match the
+  items and the settlement does not change; the period screen's "Owed to the pot" list now
+  shows a negative charge, and the rendered screen was not read.
+- 2026-11-07 — Fixed at landing by owner choice: gate 1, the first low — "the fallback
+  is reachable through the API". Three texts reworded, none of code: the mock's header in
+  the api receipts test, the comment in `filePotCharges`, and the two Log clauses saying
+  the branch is not reachable, each withdrawn in place beneath its paragraph rather than
+  deleted. Proof, each run after the commit that carries this entry, `G` being the gated
+  sha `0ec01ef7` and `T` this ticket's path:
+  - `git diff G HEAD -- tools/ledger/api/src/receipts.ts | grep -c '^-.*refund (its sign'` → 1
+  - `git diff G HEAD -- tools/ledger/api/test/receipts.test.ts | grep -c '^-.*which no$'` → 1
+  - `git diff G HEAD -- T | grep -c '^+  WITHDRAWN'` → 2
