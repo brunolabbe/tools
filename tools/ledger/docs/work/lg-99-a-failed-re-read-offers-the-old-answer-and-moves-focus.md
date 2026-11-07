@@ -395,3 +395,14 @@ so it stands as written.
   ledger` exit 0, `Test Files 99 passed (99)`, `Tests 2202 passed (2202)`. The layout case was
   not re-run: the round adds no visible text or control. N2 and N3 stay unfixed, as recorded
   above.
+- 2026-11-07 — Owner's answer on gate 3's N1 (the successful re-read), through the
+  orchestrator's AskUserQuestion at landing. Gate 3 (CONCERNS at `06adad74`) found the failed
+  re-read fixed and one case left: during a re-read that succeeds the row's button is enabled,
+  so the control can be reopened on the old answer (`AnswerControls` keeps the person and
+  bucket it opened with, and the row is `<li key={row.id}>`), and it stays open with `alex`
+  selected while the row reads `sam · Current`; a Save then files `alex` again. Graded `med`,
+  below the severity floor: no `Done when` line depends on it. The options were: fix it at
+  landing by gate 3's option (a), with no re-gate (chosen, the orchestrator's recommendation);
+  fix it, then run a narrow gate 4; record it and add it to lg-103's brief; record it only.
+  Option (a): in `refile`'s success path, after the re-read replaces the list, run
+  `setChanging((current) => (current === row.id ? null : current))`.
