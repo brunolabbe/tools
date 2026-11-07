@@ -252,6 +252,61 @@ so it stands as written.
   (shell, SSRF, redaction, image closure) not reachable by the diff.
 - NFR: security n/a · performance n/a · reliability — F1, F3 · maintainability — F4.
 
+### Gate 2
+
+**Gate: FAIL** — 2026-11-07 · `191f8927..42446ded` · Opus 5.5, depth medium
+
+This gate's ids are `N1` to `N4`. They are not the ticket's N1, which is lg-95's gate 2 finding about focus.
+
+| Done when                                                                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Both answers recorded with their options; `status: ready` in that commit                                 | **verified**: the round's ticket diff only adds Log lines (55 added, 0 deleted), so gate 1's reading of the Decision still holds                                                                                                                                                                                                                                                                                   |
+| 2. F2 steps show the answer's behaviour; the test fails on `580dabbe`'s `History.tsx`, passes on the branch | `web/test/history.test.tsx` › "a stored save whose re-read fails disables that row's button, with a line, until a read replaces the list (lg-99)" ✓. It is red alone on the base's `History.tsx` and under the plants `f2clear`, `f2more` and `f2disabled`, and green on the head. The F2 steps wait for the re-read to reject before they click again. See N1 for a click made while the re-read is still running |
+| 3. N1 arms read the focus the answer sets; the test fails on `580dabbe`, passes on the branch               | `web/test/history.test.tsx` › "opening row B while row A's control is open does not send focus to A when the click focuses nothing (lg-99)" ✓. It is red alone on the base and under the `n1` plant. Arm 2 is green, as the Reproduction says it should be                                                                                                                                                         |
+| 4. lg-95's two named tests still pass, unchanged                                                            | **verified**: in this round the test file only gains lines (42 added, 0 deleted), and 23 of 23 tests pass. "… takes focus back when it closes (lg-95)" now fails in the full file when the focus restore is planted out. Gate 1's F1 note on this line is resolved                                                                                                                                                 |
+| 5. New visible text in the History case of `layout.spec.ts` at 360 px and desktop                           | `e2e/layout.spec.ts` › "History fits a phone and a desktop with a stored change whose re-read failed" ✓. `e2e` (ledger) is SUCCESS at `42446ded`. It also passed here on port 8303, and I opened the 360 px screenshot: the line wraps inside the row                                                                                                                                                              |
+| 6. `npm run check` and `npm test -- --project ledger` pass                                                  | `check` (CI) and `test (ubuntu-latest)` (CI) are SUCCESS at `42446ded`, and so are all 10 checks on the head                                                                                                                                                                                                                                                                                                       |
+
+Gate 1's findings:
+
+- **F1 (high): fixed.** Gate 1's Chromium probe now reads the button on the head, at 0 ms and 400 ms (`head delay=0 active=BUTTON:Change who and what: …`), where it read `BODY` at `191f8927`. Gate 1's jsdom probe reads `reread-ok-*`: the button is not disabled and has focus, both while the re-read is pending and after it. The new test goes red, alone and in the full file, under each plant the dispatch named:
+  - early mark restored: 2 of 2 fail at the focus assertion;
+  - focus restore removed: 2 of 2 fail at the focus assertion, and lg-95's focus test fails too;
+  - line always shown: 2 of 2 fail at the line assertion.
+
+  The disabled assertion is live only depending on timing (N3).
+
+- **F2 (low): recorded, and the reading holds in Chromium.** After a failed re-read on the head, Chromium reads `pending=BUTTON … after=BODY disabled=true` at 400 ms, and `after=BODY` at 0 ms. jsdom keeps focus on the disabled button. See N4.
+- **F3 (low): not fixed, recorded as the owner chose.** `pending-other-nofocus active` still reads A's button.
+- **F4 (low): not fixed, recorded.** On the base's `History.tsx`, the full file fails 4 tests while 3 fail alone.
+- **F5 (low): not fixed, recorded.** `toggle-nofocus active "BODY"`.
+- The Log records all five answers and the separate filing. I did not verify the filing, which is not on this branch.
+
+New findings, in the lines this round touched:
+
+- **high** · N1 · Done when 2's answer (1a, "Offer no change on that row until a read succeeds") depends on it; its literal F2 steps do not.
+  - **What happens:** the row's button is now enabled while the re-read runs, so the control can be reopened during the re-read, and it preselects the old answer. When that re-read then fails, the row is marked: the button is disabled and the line shows. But the control stays open, Save is enabled and `alex` is still selected.
+  - **Result:** a second Save sends `{"rowId":1,"personId":"alex","bucket":"current-expenses"}`, and the notice reads "R is now alex · Current expenses.". That is the ticket's own F2 defect, now reached through a click made during the re-read.
+  - **On `191f8927`** the button was disabled during the re-read, so the control could not reopen.
+  - **Why it is high:** the `unread` comment says the row "offers no change until a read replaces the list". The shipped line says it "can be changed again" only after a filter change or reload. Beside an open control with Save enabled, both are false in the unsafe direction.
+  - Gate 1's direction (a) included closing that row's control if it was reopened during the re-read. The round left that clause out.
+  - **Direction, run once:** in the `catch`, `setChanging((current) => (current === row.id ? null : current))`. It closes the reopened control, so Save is gone. It leaves another row's open control open. The file passes 23 of 23. Focus after that close was not measured. A test needs to reopen the control while the re-read is held, then reject it.
+- **low** · N2 · no `Done when` line depends on it.
+  - **What happens:** a filter change replaces the list while a save's re-read is still running, and then that re-read fails. The `catch` marks the row on a list that has just been read. The button is disabled and the line shows beside `sam · Current`.
+  - **On `191f8927` and the base:** not disabled, no line.
+  - **Why it is low:** the line is false in the safe direction. The row offers less, and the way out the line names works.
+  - **Same cause:** the re-read has no check that the list was replaced since it was sent. The pre-existing overwrite gate 1 dropped (a successful re-read replaces a newer query's list) has the same cause.
+- **low** · N3 · `nfr:maintainability` · The new test checks the pending state in a single moment.
+  - **Plant:** the button disabled by an effect one render after the focus restore.
+  - **Result:** the test passes alone (2 of 2) and fails in the full file (2 of 2), failing at the disabled assertion. So "nothing says it is unread while the re-read runs" is held by timing.
+- **low** · N4 · The Log says "the gate's F2 is a Chromium reading". Gate 1 measured F2 in jsdom. Its Chromium probe covered only a successful re-read. This gate's Chromium reading agrees with F2, so nothing relies on the error.
+- **dropped** · Another row's control (B) opened during A's re-read, after which A's re-read fails. B stays open and enabled, and A is marked. This is correct.
+- **dropped** · In jsdom, focus stays on a button after it becomes disabled. That is jsdom behaviour; Chromium gives `BODY`. It is recorded under F2.
+- **findings** · the hunt returned 6; 4 carried, 2 dropped.
+- **Test runs:** the whole file passes 23 of 23. With `--sequence.shuffle`, seeds 1 to 5 each pass 23 of 23. The F2, N1-arm and refused-Save tests behave the same alone and in the file, as gate 1 recorded.
+- **Invariants:** no `any`, no `console`, contract untouched. Shell, SSRF, redaction and image closure cannot be reached by the round.
+- **NFR:** security n/a · performance n/a · reliability — N1, N2 · maintainability — N3.
+
 ## Log
 
 - 2026-11-01 — Filed at the owner's choice, from lg-95's gate 2 (PASS at `f6e06db1`), which
