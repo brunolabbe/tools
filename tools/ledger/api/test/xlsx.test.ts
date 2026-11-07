@@ -5,6 +5,8 @@
 
 import * as XLSX from "xlsx";
 import { describe, expect, test } from "vitest";
+import { AppError } from "@ledger/contract";
+import { MAX_WORKBOOK_ROWS } from "../src/workbook-bounds.ts";
 import { readSheets } from "../src/xlsx.ts";
 import { SheetWriter, entriesOf, workbookOf, zipOf } from "./helpers/xlsx-file.ts";
 
@@ -328,5 +330,160 @@ describe("a merged range costs no memory of its own (lg-88)", () => {
 
     expect(sheet?.rows[1]?.[1]?.value).toEqual({ kind: "text", text: "Alex" });
     expect(sheet?.rows[2]?.[1]?.value).toEqual({ kind: "text", text: "Dépôt" });
+  });
+});
+
+// lg-96: what a stored address costs.
+describe("a sheet's extent is bounded before its grid is built (lg-96)", () => {
+  /** The refusal `readSheets` raises, or `undefined` for a file it reads. */
+  async function refusal(data: Buffer): Promise<AppError | undefined> {
+    try {
+      await readSheets(data);
+    } catch (error: unknown) {
+      if (error instanceof AppError) return error;
+      throw error;
+    }
+    return undefined;
+  }
+
+  /** `rows` rows of a sheet, the first holding `A1`, each holding a cell in `letters`. */
+  function column(name: string, letters: string, rows: number): SheetWriter {
+    const sheet = new SheetWriter(name);
+    sheet.set("A1", "Alex");
+    for (let r = 1; r <= rows; r += 1) sheet.set(`${letters}${String(r)}`, "far");
+    return sheet;
+  }
+
+  /**
+   * One worksheet part that `workbook.xml` lists `entries` times, each with a
+   * relationship of its own to it: the file stays 10 parts, and `readSheets` builds the
+   * part once for every entry (the Reproduction's case 5).
+   */
+  function listedTimes(entries: number, address: string): Buffer {
+    const base = file((sheet) => {
+      sheet.set("A1", "Alex");
+      sheet.set(address, "far");
+    });
+    const each = Array.from({ length: entries }, (_, i) => String(i + 1));
+    const sheets = each.map((n) => `<sheet name="S${n}" sheetId="${n}" r:id="dup${n}"/>`).join("");
+    const relationships = each
+      .map(
+        (n) =>
+          `<Relationship Id="dup${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>`,
+      )
+      .join("");
+    return zipOf(
+      entriesOf(base).map((entry) => {
+        if (entry.data === undefined) return entry;
+        const xml = entry.data.toString("utf8");
+        if (entry.name === "xl/workbook.xml") {
+          return {
+            name: entry.name,
+            data: Buffer.from(xml.replace(/<sheets>.*<\/sheets>/su, `<sheets>${sheets}</sheets>`)),
+          };
+        }
+        if (entry.name === "xl/_rels/workbook.xml.rels") {
+          return {
+            name: entry.name,
+            data: Buffer.from(xml.replace(/<Relationship [^>]*worksheet[^>]*\/>/u, relationships)),
+          };
+        }
+        return entry;
+      }),
+    );
+  }
+
+  test("case 1: a cell below the last row the import reads is refused as rows, whatever the file's size", async () => {
+    // The Reproduction's A1048576 was +62 MB from a 15 909-byte file; the first row
+    // over the bound is the same refusal, and a cheaper file to write here.
+    const over = file((sheet) => {
+      sheet.set("A1", "Alex");
+      sheet.set(`A${String(MAX_WORKBOOK_ROWS + 1)}`, "far");
+    });
+
+    const error = await refusal(over);
+
+    expect(error?.code).toBe("WORKBOOK_TOO_LARGE");
+    expect(error?.details).toEqual({ bound: "rows" });
+  });
+
+  test("the last row the bound admits is read", async () => {
+    const [sheet] = await readSheets(
+      file((each) => {
+        each.set("A1", "Alex");
+        each.set(`A${String(MAX_WORKBOOK_ROWS)}`, "far");
+      }),
+    );
+
+    expect(sheet?.rows).toHaveLength(MAX_WORKBOOK_ROWS);
+    expect(sheet?.rows[MAX_WORKBOOK_ROWS - 1]?.[0]?.value).toEqual({ kind: "text", text: "far" });
+  });
+
+  test("a stub below the last row that holds a value is no row", async () => {
+    const address = `A${String(MAX_WORKBOOK_ROWS + 1)}`;
+    const data = file((sheet) => {
+      sheet.set("A1", "Alex");
+      sheet.set(address, "far");
+    });
+    // The far cell rewritten as a stub, which `holds` is false for.
+    const stubbed = edited(data, (xml) => cellXml(xml, address, `<c r="${address}"/>`));
+
+    const [sheet] = await readSheets(stubbed);
+
+    expect(sheet?.rows).toHaveLength(1);
+  });
+
+  test("case 4: a far column in every row is refused as slots, at the first row past the cap", async () => {
+    // 122 rows of 16 384 places are 1 998 848 slots, 123 are 2 015 232.
+    expect(await refusal(workbookOf([column("2022", "XFD", 122)]))).toBeUndefined();
+
+    const error = await refusal(workbookOf([column("2022", "XFD", 123)]));
+
+    expect(error?.code).toBe("WORKBOOK_TOO_LARGE");
+    expect(error?.details).toEqual({ bound: "slots" });
+  });
+
+  test("case 4's control: 4 000 rows at column B read unchanged", async () => {
+    const [sheet] = await readSheets(workbookOf([column("2022", "B", 4_000)]));
+
+    const far = { value: { kind: "text", text: "far" }, formula: null };
+    expect(sheet?.rows).toHaveLength(4_000);
+    expect(sheet?.rows[0]).toEqual([{ value: { kind: "text", text: "Alex" }, formula: null }, far]);
+    expect(sheet?.rows[3_999]).toEqual([null, far]);
+  });
+
+  test("the slots are one running total across the workbook's sheets, not one per sheet", async () => {
+    // 70 rows at XFD is 1 146 880 slots: under the cap alone, over it twice.
+    expect(await refusal(workbookOf([column("2022", "XFD", 70)]))).toBeUndefined();
+
+    const error = await refusal(workbookOf([column("2022", "XFD", 70), column("2023", "XFD", 70)]));
+
+    expect(error?.code).toBe("WORKBOOK_TOO_LARGE");
+    expect(error?.details).toEqual({ bound: "slots" });
+  });
+
+  test("case 5: one far sheet listed many times is refused as slots by the total, though each entry passes the row bound", async () => {
+    // A1 and A19000 make 19 000 slots an entry, a gap row a slot of its own: 105
+    // entries are 1 995 000 and 106 are 2 014 000. Every entry is under
+    // `MAX_WORKBOOK_ROWS`, so the row refusal passes each, and only the total stops it.
+    expect(await refusal(listedTimes(1, "A19000"))).toBeUndefined();
+    expect(await refusal(listedTimes(105, "A19000"))).toBeUndefined();
+
+    const error = await refusal(listedTimes(106, "A19000"));
+
+    expect(error?.code).toBe("WORKBOOK_TOO_LARGE");
+    expect(error?.details).toEqual({ bound: "slots" });
+  });
+
+  test("a row wide on its own costs its own width, not the product of rows and the widest", async () => {
+    // Rows times the widest column would be 3 000 x 702, 2.1 million: over the cap.
+    const data = file((sheet) => {
+      sheet.set("ZZ1", "far");
+      for (let r = 2; r <= 3_000; r += 1) sheet.set(`A${String(r)}`, "x");
+    });
+
+    const [sheet] = await readSheets(data);
+
+    expect(sheet?.rows).toHaveLength(3_000);
   });
 });

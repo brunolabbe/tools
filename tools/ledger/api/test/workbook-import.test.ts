@@ -43,6 +43,7 @@ import {
   writeUnseenMembers,
 } from "./helpers/unseen.ts";
 import { history, render } from "./helpers/workbook.ts";
+import { SheetWriter, workbookOf } from "./helpers/xlsx-file.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
 import { importWorkbook } from "../src/workbook-import.ts";
 import { NO_CORRECTIONS } from "@ledger/books";
@@ -1365,5 +1366,37 @@ describe("a stored name holding a control or a zero-width character (lg-82)", ()
       }
     }
     db.close();
+  });
+});
+
+// lg-96: the command keeps the route's bounds, since both read the file through
+// `readSheets`; it was unbounded before, and a far cell cost memory by its address.
+describe("a workbook past the reader's bounds, through the command (lg-96)", () => {
+  async function refused(sheet: SheetWriter): Promise<Ran> {
+    writeFileSync(path.join(dir, "classeur.xlsx"), workbookOf([sheet]));
+    return await run("classeur.xlsx", "--as", "alex", "--write");
+  }
+
+  test("a cell below the last row the import reads is refused as the route refuses it, and nothing is created", async () => {
+    const sheet = new SheetWriter("2022");
+    sheet.set("A1", "Alex");
+    sheet.set("A20001", "far");
+
+    const ran = await refused(sheet);
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain("this import reads 20000 rows at most");
+    expect(existsSync(dataDir)).toBe(false);
+  });
+
+  test("a far column in each row, past the slot cap, is refused as the route refuses it", async () => {
+    const sheet = new SheetWriter("2022");
+    for (let r = 1; r <= 123; r += 1) sheet.set(`XFD${String(r)}`, "far");
+
+    const ran = await refused(sheet);
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain("this import reads 2000000 at most");
+    expect(existsSync(dataDir)).toBe(false);
   });
 });

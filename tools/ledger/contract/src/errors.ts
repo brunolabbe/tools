@@ -247,8 +247,9 @@ export const LEDGER_ERROR_CODES = [
   "WORKBOOK_NO_SHEETS",
   /**
    * The workbook is over one of the import's bounds — the entries its zip
-   * holds, what it inflates to, its sheets, its rows or cells, or the request
-   * it would make — named in `details.bound`. Nothing was sent.
+   * holds, what it inflates to, its sheets, its rows or cells, the places its
+   * sheets would build (`slots`), or the request it would make — named in
+   * `details.bound`. Nothing was sent.
    */
   "WORKBOOK_TOO_LARGE",
   /**

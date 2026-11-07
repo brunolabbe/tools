@@ -27,7 +27,8 @@
  * entries (`workbook-zip.ts`); the inflated size, declared and then counted,
  * before the reader (`xlsx.ts`) sees the file;
  * the sheets, then the rows and cells, once parsed; and the request's size, an
- * estimate, before the call. A cell's text is never refused: the view cuts it
+ * estimate, before the call. The reader (`xlsx.ts`) bounds a sheet's rows and the
+ * places the sheets lay out as it reads them, before a grid is built (lg-96). A cell's text is never refused: the view cuts it
  * at `MAX_CELL_TEXT`, and the file is still read in full.
  *
  * **A bank CSV comes through the same two requests** (lg-67). Bytes that are
@@ -83,6 +84,7 @@ import { byShownName, distinctNames, shownName } from "./directory.ts";
 import { estimateTokens, layoutRequest } from "./layout-view.ts";
 import { knownPeople } from "./people.ts";
 import type { RowToStore } from "./statements.ts";
+import { MAX_WORKBOOK_ROWS } from "./workbook-bounds.ts";
 import { importWorkbook } from "./workbook-import.ts";
 import {
   MAX_WORKBOOK_INFLATED_BYTES,
@@ -95,8 +97,8 @@ import type { InflateSpy, ZipEntry } from "./workbook-zip.ts";
 /** Sheets a workbook may hold. The measured workbooks hold 2 to 9. */
 export const MAX_WORKBOOK_SHEETS = 40;
 
-/** Rows over every sheet, as `xlsx.ts` reads them: `lg37`, the largest measured, holds 320. */
-export const MAX_WORKBOOK_ROWS = 20_000;
+// Defined in `workbook-bounds.ts`, where `xlsx.ts` enforces it too (lg-96).
+export { MAX_WORKBOOK_ROWS };
 
 /** Cells holding a value or a formula, over every sheet. */
 export const MAX_WORKBOOK_CELLS = 200_000;
@@ -271,6 +273,8 @@ async function workbookSheetsOf(
   try {
     sheets = await deps.readSheets(bytes);
   } catch (cause: unknown) {
+    // The reader's own bounds (lg-96) are a refusal of their own, not a file it could not open.
+    if (cause instanceof AppError && cause.code === "WORKBOOK_TOO_LARGE") throw cause;
     // The parser's reason is not the person's to read: the one plain message.
     throw new AppError("WORKBOOK_NOT_XLSX", undefined, { cause });
   }

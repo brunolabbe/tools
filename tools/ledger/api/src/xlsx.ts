@@ -13,6 +13,7 @@
 import * as XLSX from "xlsx";
 import type { Cell, CellValue, Sheet } from "@ledger/books";
 import { AppError } from "@ledger/contract";
+import { MAX_WORKBOOK_ROWS, MAX_WORKBOOK_SLOTS } from "./workbook-bounds.ts";
 
 /** The one `SSF` call this file makes; SheetJS types the whole namespace `any`. */
 const SSF = XLSX.SSF as { is_date: (format: string) => boolean };
@@ -98,6 +99,63 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
 }
 
 /**
+ * How wide a stored row is: up to its last cell that holds a value. The one
+ * measure `rowsOf` builds a row to and `placesOf` charges it by, so the two cannot
+ * disagree about what a row costs.
+ */
+function widthOf(source: readonly (XLSX.CellObject | undefined)[] | undefined): number {
+  let width = 0;
+  for (const [c, cell] of (source ?? []).entries()) if (holds(cell)) width = c + 1;
+  return width;
+}
+
+function tooLarge(bound: "rows" | "slots", message: string): AppError {
+  return new AppError("WORKBOOK_TOO_LARGE", message, { details: { bound } });
+}
+
+/**
+ * What a sheet's grid will hold, found from the stored cells before `rowsOf`
+ * builds it, and added to `spent`, the places the workbook's earlier sheets took
+ * (lg-96). `rowsOf` makes a row for every row up to the last stored one and each
+ * row as wide as its own last cell, so a sheet with one cell at `A1048576` pays for
+ * 1 048 576 rows and one with a cell at `XFD` in each row pays 16 384 a row, from a
+ * file of a few kilobytes: neither follows the file's size, which `workbook-zip.ts`
+ * bounds, but the address.
+ *
+ * A row is a place of its own, so a gap row counts one, and a stored row counts
+ * its width. The total runs across the sheets because a workbook may list one
+ * worksheet part many times and every entry is built; the sheets are not charged
+ * one by one against the same cap. Refused past `MAX_WORKBOOK_ROWS` rows in one
+ * sheet and `MAX_WORKBOOK_SLOTS` places in the workbook, each as
+ * `WORKBOOK_TOO_LARGE` with the bound named, and the refusal is thrown as soon as
+ * it is known, with the rest of the sheet unread.
+ */
+function placesOf(sheet: XLSX.DenseSheet, spent: number): number {
+  let places = spent;
+  // The last row that holds anything: rows past it are not part of the sheet.
+  let last = -1;
+  for (const [r, source] of (sheet["!data"] ?? []).entries()) {
+    const width = widthOf(source);
+    if (width === 0) continue;
+    if (r + 1 > MAX_WORKBOOK_ROWS) {
+      throw tooLarge(
+        "rows",
+        `A sheet of that workbook has a cell in row ${String(r + 1)}; this import reads ${String(MAX_WORKBOOK_ROWS)} rows at most.`,
+      );
+    }
+    places += r - last - 1 + width;
+    last = r;
+    if (places > MAX_WORKBOOK_SLOTS) {
+      throw tooLarge(
+        "slots",
+        `That workbook's sheets lay out more than ${String(MAX_WORKBOOK_SLOTS)} places, a row and each cell along it counted; this import reads ${String(MAX_WORKBOOK_SLOTS)} at most.`,
+      );
+    }
+  }
+  return places;
+}
+
+/**
  * One sheet's rows, each a row of cells with gaps kept as `null`.
  *
  * A merged range's other parts that store nothing are given no place: a reader
@@ -107,13 +165,14 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
  * own `null`, as `exceljs` did, cost memory in
  * proportion to the merge's area (+76 MB at A1:XFD100, +227 MB at A1:XFD400)
  * past every size bound, a 2.5 KB file (lg-88).
+ *
+ * Called only on a sheet `placesOf` has charged, which is what bounds the grid.
  */
 function rowsOf(sheet: XLSX.DenseSheet, date1904: boolean): (Cell | null)[][] {
   const data = sheet["!data"] ?? [];
   const rows: (Cell | null)[][] = [];
   for (const source of data) {
-    let width = 0;
-    for (const [c, cell] of (source ?? []).entries()) if (holds(cell)) width = c + 1;
+    const width = widthOf(source);
     const cells: (Cell | null)[] = [];
     for (let c = 0; c < width; c += 1) cells.push(cellOf(source?.[c], date1904));
     // A row with nothing stored in it is a gap, as an absent row is.
@@ -152,12 +211,14 @@ export async function readSheets(data: Buffer): Promise<Sheet[]> {
   }
   const date1904 = workbook.Workbook?.WBProps?.date1904 === true;
   const sheets: Sheet[] = [];
+  let places = 0;
   for (const name of workbook.SheetNames) {
     const sheet = workbook.Sheets[name] as XLSX.DenseSheet | undefined;
     // A chartsheet or a dialog sheet holds no cells.
     if (sheet === undefined || (sheet["!type"] !== undefined && sheet["!type"] !== "sheet")) {
       continue;
     }
+    places = placesOf(sheet, places);
     sheets.push({ name, rows: rowsOf(sheet, date1904) });
   }
   return sheets;
