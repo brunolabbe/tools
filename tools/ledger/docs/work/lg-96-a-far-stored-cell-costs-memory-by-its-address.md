@@ -225,7 +225,13 @@ builder in the first commit of the round that follows).**
     listings of one part, later ones spelled `sheet_x0031_`, were let through and read +375.1
     MB. The cap is kept as answered; the figure is now the worst for a workbook whose sheets
     are each a part of its own, which round 2's check enforces (Log, round 2: +132.8 MB the
-    worst built at that head).
+    worst built at that head). **Basis corrected again at the landing (gate 3's F2):** round
+    2's check does not enforce it. The +129 MB and +132.8 MB are the worst measured for
+    sheets that are each a part of their own, not the worst that gets through. Gate 3 read
+    +367.5 MB (peak 448.9 MB) through a zip entry whose local-header name differs from its
+    central-directory name, and +352.5 MB (peak 435.4 MB) through a comments part that 14
+    sheets' `.rels` all name. The cap is kept as answered; those two are lg-104's (answer
+    14).
 
 **Answers after round 1 and after gate 2 (`c2e36eb7`), 2026-11-08 (relayed by the
 orchestrator, recorded here by the builder in the first commit of round 2).**
@@ -254,6 +260,26 @@ orchestrator, recorded here by the builder in the first commit of round 2).**
     (walk `!data` by what it defines in `placesOf`; re-run `stubd.sh`, and push back with a
     measurement if that is wrong), N2 (105 admitted beside 106 refused) and N1 (show it moot or
     leave it), and corrects every text the round falsifies, in place.
+
+**Answers after round 2 and after gate 3 (`3b8e95d4`), 2026-11-08 (relayed by the
+orchestrator, recorded here by the lander).**
+
+13. **The import command's message for a non-zip or `.ods` file** (answered after round 2).
+    The command now refuses such a file as `WORKBOOK_NOT_XLSX` with the route's message,
+    which names a comma-separated CSV although the command reads none. Offered: leave the
+    route's `WORKBOOK_NOT_XLSX` message, CSV wording included (the builder's and the
+    orchestrator's recommendation) / command-specific wording / reword the contract string.
+    **Chosen: leave it.**
+14. **What to do after gate 3's high** (gate 3 FAIL at `3b8e95d4`; gate 2's F2 still high,
+    "fixed in part"; by the orchestrate-tickets rule a third gate with a high open goes to
+    the owner). Offered: land and file the rest (the orchestrator's recommendation, and gate
+    3's option 3) / round 3, patching the copy again (gate 3's recommendation) / round 3,
+    one sheet per read / measure option 2 first. **Chosen: land and file the rest.** The
+    remaining multipliers go to a new ticket, lg-104, filed in its own pull request. This
+    ticket lands with F2 open at high; `main` has no bound at all, so the branch is not a
+    regression. The landing rewords the shipped text that promised the unsafe direction
+    (`xlsx.ts`, `workbook-bounds.ts`) and answer 10's basis, and changes no code and no
+    assertion.
 
 **Superseded (2026-11-08, answer 9):** ~~5. The import command. Offered: the same bounds
 (recommended) / the import stays unbounded. Chosen: the same bounds. The command refuses
@@ -733,7 +759,9 @@ Option 1, as the owner answered it (Decision, above).
   any source. Code `48ec0f7d`, mutations `f3cc50fe` and the restore `99cc3a57` (tree equal to
   `48ec0f7d`); this entry is the commit after. Measured one case at a time, two processes
   (one builds, one reads), `--max-old-space-size=900`, nothing near +1 GB.
-  - **F2 (high), fixed as the owner answered (12).** `readSheets` runs `refuseUnlessEachSheetIsItsOwn`
+  - **F2 (high), fixed as the owner answered (12).** **WITHDRAWN — do not cite "fixed"
+    (gate 3's F2, at the landing); the retraction is at the end of this bullet.**
+    `readSheets` runs `refuseUnlessEachSheetIsItsOwn`
     before `XLSX.read`: `workbookEntries` first (whatever it refuses, the command meets as the
     route does, as `WORKBOOK_NOT_XLSX`/`WORKBOOK_TOO_LARGE` with its own message), then SheetJS's
     own sheet list (`bookSheets: true`), then `sheetPartsOf` (`workbook-parts.ts`), and it refuses
@@ -751,7 +779,22 @@ Option 1, as the owner answered it (Decision, above).
     its seven (`numeric_ref`, `hex_ref`, `x_code`, `gt_in_name`, `empty_rid_strrelid`,
     `id_undefined`, `tab_sheet_decoy`) and the two files `workbookEntries` refuses
     (`upper_workbook`, `gt_in_override`), which the command now refuses as the route does.
-  - **The copy was also made exact where a difference lets two sheets look distinct to it and
+    _Retraction (lander, on gate 3's F2, FAIL at `3b8e95d4`; the claim was the round 2
+    builder's):_ F2 is not fixed; it is fixed in part and still high. The 21 shapes above
+    are refused, but the check is fail-closed only on the sheet count. Whether parts are
+    distinct is judged by a copy of SheetJS's rules, and gate 3 found two ways past it, each
+    read through `readSheets`. A zip entry whose local-header name differs from its
+    central-directory name (`workbookEntries` and `compressedOf` never compare the two) sends
+    SheetJS's CFB to another entry, so 14 targets read one 1,400 by 100 part 14 times:
+    1,960,000 cells, +367.5 MB, peak 448.9 MB, 6.1 s (the honest control, local equal to
+    central, reads 140,013 cells at +63.1 MB). A part that each sheet's `.rels` names, such
+    as comments, is parsed once per sheet: 14 sheets over one 50,000-comment part, +352.5 MB,
+    peak 435.4 MB (14 distinct parts of the same total, +54.6 MB). Owner's answer 14 lands the
+    branch with this open and files it as lg-104.
+  - **WITHDRAWN — do not cite the clause "the check no longer rests on it, the count and the
+    existence do" in this paragraph (gate 3's F2, at the landing).** The count and the
+    existence are fail-closed; the distinctness of the parts is still judged by the copy (see
+    the retraction above). **The copy was also made exact where a difference lets two sheets look distinct to it and
     the same to SheetJS** (this is not option 2, which patches seven rules and stops there; the
     check no longer rests on it, the count and the existence do): the tag split is SheetJS's
     `tagregex1` and `parsexmltag` ported, so the `>` in a name, the tab after a tag name, the
@@ -820,3 +863,11 @@ Option 1, as the owner answered it (Decision, above).
   - **Fold-in, not done**: the command's CSV wording above, which is a contract message and the
     owner's; nothing else found.
   - **Not proven here**: CI and the Windows leg (the draft's); a SheetJS upgrade.
+- 2026-11-08 — Landing (lander, Sonnet 5.5, owner answers 13 and 14 recorded under the Decision
+  heading). Gate 3 (FAIL at `3b8e95d4`) left gate 2's F2 open at high; the owner chose to land and
+  file the rest as lg-104. The three gates' full reports are on the pull request thread, #758.
+- 2026-11-08 — Fixed at landing by owner choice: gate 3, F2 (the shipped text only, no code and no
+  assertion changed) — "The shipped text promises the unsafe direction". Both comments reworded and
+  answer 10's basis corrected in place. Proof, run after the commit that carries this entry:
+  `git diff 3b8e95d4 HEAD -- tools/ledger/api/src/xlsx.ts | grep -c '^-.*never a way in'` → 1;
+  `git diff 3b8e95d4 HEAD -- tools/ledger/api/src/workbook-bounds.ts | grep -c '^-.*what gets here is a workbook'` → 1.

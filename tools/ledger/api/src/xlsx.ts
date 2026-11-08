@@ -230,7 +230,16 @@ export function rowsOf(
  * (gate 2). Then the sheets are counted by SheetJS itself, with `bookSheets`, which
  * reads the workbook part and parses no sheet, and the workbook is refused unless
  * `workbook-parts.ts` finds the same number, each in a part that exists, no two in
- * one. A difference between that copy and SheetJS is then a refusal, never a way in.
+ * one.
+ *
+ * **The count is fail-closed; the distinctness of the parts is not.** A difference
+ * between the copy and SheetJS in the sheet count or in whether a part exists is a
+ * refusal. Whether two sheets share a part is judged by a copy of SheetJS's rules, and
+ * gate 3 (lg-96) found two ways past it, both read through `readSheets` (lg-104 owns
+ * them): a zip entry whose local-header name differs from its central-directory name
+ * (`workbookEntries` and `compressedOf` read the central one, SheetJS's CFB the local
+ * one), which read one 1 400 by 100 part 14 times, +367.5 MB (peak 448.9 MB); and a part,
+ * such as comments, that several sheets' `.rels` name, parsed once per sheet, +352.5 MB.
  */
 function refuseUnlessEachSheetIsItsOwn(data: Buffer): void {
   const entries = workbookEntries(data);
