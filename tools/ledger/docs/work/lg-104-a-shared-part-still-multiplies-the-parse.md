@@ -32,25 +32,414 @@ The landing head's `workbook-parts.ts` header (line 13 at `1aabcb4a`) says "Dist
 parts cannot multiply the parse: `MAX_WORKBOOK_INFLATED_BYTES` is a total over every
 entry of the file … so the parts together never inflate to more than the bound."
 `git grep -n "cannot multiply"` on `1aabcb4a` finds it. Both shapes below contradict
-it, and Build step 4 rewords it.
+it. The owner chose on 2026-11-08 that lg-96's PR #758 rewords it before merge, and a
+fixer is doing that now. If it still reads that way when lg-104 is built, lg-104 rewords
+it (Build step 4).
 
 ## Reproduction
 
-Both shapes were run at `3b8e95d4` on a detached worktree
-(`/workspaces/tools/.claude/worktrees/builder-lg-104-1`), farmed (`worktree-farm.sh`,
-exit 0) and built (`npm run build`, exit 0). Each probe ran once, one process at a
+Both shapes were run at `3b8e95d4` on a detached worktree, which is `<tree>` in the
+commands (the filer's was `/workspaces/tools/.claude/worktrees/builder-lg-104-1`, removed
+after the runs). It was farmed (`worktree-farm.sh`, exit 0) and built (`npm run build`,
+exit 0). Each probe ran once, one process at a
 time; every measured process ran under `node --max-old-space-size=900`. The generators
 (`localname.mts`, `comments.mts`) are small and ran uncapped.
 
-The probes are not in the repo. They are the gate's scratch files under
-`/tmp/claude-1000/-workspaces-tools/5216e6bd-cee7-4d2a-9586-dbefdd171526/scratchpad/lg-96/gate-3/`
-(`localname.mts`, `localname.sh`, `inspect.mts`, `comments.mts`, `comments.sh`), and
-they call gate 2's `multiplier.mts` in `…/lg-96/gate-2/`. The `.sh` scripts export a
-`TMPDIR` under `/tmp/claude-1000/lg96g3`. A builder who takes the answer needs these
-files committed or re-written; that is not decided here.
+The probes are pasted in full under "Probe files" below, so the Reproduction runs from
+this ticket alone (the owner's answer on how the ticket carries them, Decision, question
+2). The gate ran them from its scratch directories, `…/lg-96/gate-3/` and
+`…/lg-96/gate-2/`. The pasted copies were run from `…/lg-104/build/paste/`, and that
+directory is `<probes>` in the commands below. The probes are not committed to the repo,
+and nothing here adds them to it.
 
 Every reading is in MB of RSS growth over the process baseline, and "peak" is the
 process peak. The "gate 3" column is gate 3's own figure for the same file.
+
+### Probe files
+
+Pasted whole so that the Reproduction runs from this ticket alone. The owner chose to paste them
+on 2026-11-08 (Decision, question 2). Copy each block to a file of the same name in one directory,
+and that directory is `<probes>` in the commands above. The gate ran them from its own scratch
+directories, `…/lg-96/gate-3/` and `…/lg-96/gate-2/`. The copies below are those files, with one
+change: the `G2` line in each `.sh` names the directory holding `multiplier.mts`, where the gate
+named its scratch directory. Nothing else is changed. The `.sh` scripts export a `TMPDIR` under
+`/tmp/claude-1000/lg96g3`, as the gate ran them, and must be invoked by absolute path, since they
+`cd` into the tree before reading `$S`.
+
+The six files, copied from the paste directory `…/lg-104/build/paste/`, ran from there against a
+detached `3b8e95d4` with exit 0 for every probe (Log, 2026-11-08, verification run).
+
+#### `localname.sh`: the local-name driver; `G2` names the paste directory
+
+```bash
+#!/bin/bash
+# usage: localname.sh <tree> <outdir> <n...>  -- builds, inspects, measures readSheets and the route, one at a time
+T="$1"; O="$2"; shift 2
+S=$(dirname "$0")
+G2="$S"  # multiplier.mts sits beside this script (gate 2 ran it from its own scratch directory)
+cd "$T" || exit 9
+export TMPDIR=/tmp/claude-1000/lg96g3 TEMP=/tmp/claude-1000/lg96g3 TMP=/tmp/claude-1000/lg96g3
+mkdir -p "$O/files"
+for N in "$@"; do
+  for K in decoy control; do
+    if [ "$K" = control ]; then node --import tsx "$S/localname.mts" "$T" "$N" "$O/files" control; else node --import tsx "$S/localname.mts" "$T" "$N" "$O/files"; fi
+    timeout 120 node --max-old-space-size=900 --import tsx "$S/inspect.mts" "$T" "$O/files/localname-$K-$N.xlsx"
+    timeout 120 node --max-old-space-size=900 --expose-gc --import tsx "$G2/multiplier.mts" "$T" run "$O/files/localname-$K-$N.xlsx" "$O" reader
+    echo "exit $?"
+  done
+  timeout 120 node --max-old-space-size=900 --expose-gc --import tsx "$G2/multiplier.mts" "$T" run "$O/files/localname-decoy-$N.xlsx" "$O" route
+  echo "exit $?"
+done
+```
+
+#### `localname.mts`: the local-name generator: writes the decoy and the control
+
+```text
+// usage: node --import tsx localname.mts <tree> <n> <outdir> [control]
+// The copy (`workbook-parts.ts`) matches a target against the zip's CENTRAL directory
+// names (`workbookEntries`); SheetJS's CFB names each file by its LOCAL header. This
+// builds a zip whose decoy entries have a central name the copy resolves a sheet's
+// first lookup to, and a local name SheetJS never asks for, so SheetJS falls through
+// to the target itself, which names the one big part. <n> sheets, <n> distinct indices
+// in the copy, one part in SheetJS. The big part is gate 1's densex14 part
+// (1 400 rows by 100 numbers). "control": every decoy's local name equals its central
+// name (an honest zip): SheetJS then reads each decoy, and nothing is shared.
+import { writeFileSync } from "node:fs";
+import { crc32, deflateRawSync } from "node:zlib";
+import path from "node:path";
+
+const [tree, nArg, outdir, control] = process.argv.slice(2);
+const n = Number(nArg);
+const honest = control === "control";
+void tree;
+
+const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const WS = `${R}/worksheet`;
+const PKG = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+function colName(i: number): string {
+  let s = "";
+  let x = i + 1;
+  while (x > 0) {
+    s = String.fromCharCode(65 + ((x - 1) % 26)) + s;
+    x = Math.floor((x - 1) / 26);
+  }
+  return s;
+}
+
+interface In {
+  central: string;
+  local: string;
+  data: Buffer;
+}
+function zip(entries: readonly In[]): Buffer {
+  const locals: Buffer[] = [];
+  const centrals: Buffer[] = [];
+  let offset = 0;
+  for (const e of entries) {
+    const cname = Buffer.from(e.central, "utf8");
+    const lname = Buffer.from(e.local, "utf8");
+    const bytes = deflateRawSync(e.data);
+    const crc = crc32(e.data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(8, 8);
+    local.writeUInt32LE(crc >>> 0, 14);
+    local.writeUInt32LE(bytes.length, 18);
+    local.writeUInt32LE(e.data.length, 22);
+    local.writeUInt16LE(lname.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(8, 10);
+    central.writeUInt32LE(crc >>> 0, 16);
+    central.writeUInt32LE(bytes.length, 20);
+    central.writeUInt32LE(e.data.length, 24);
+    central.writeUInt16LE(cname.length, 28);
+    central.writeUInt32LE(offset, 42);
+    locals.push(local, lname, bytes);
+    centrals.push(central, cname);
+    offset += 30 + lname.length + bytes.length;
+  }
+  const dir = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(dir.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, dir, end]);
+}
+
+// The big part's name: m segments "xl/" then "b.xml", m = n - 1.
+const m = n - 1;
+const seg = Array.from({ length: m }, () => "xl");
+const big = `${seg.join("/")}/b.xml`;
+// Target j (0 <= j < m): segment j lower case, the rest "XL"; target m: all "XL".
+const targets: string[] = [];
+for (let j = 0; j <= m; j += 1) targets.push(`${seg.map((_, i) => (i === j ? "xl" : "XL")).join("/")}/b.xml`);
+// SheetJS's first lookup of each target, as `parse_zip` builds it.
+const first = targets.map((t) => `xl/${t.replace(/[/]?xl\//u, "")}`);
+
+const rows: string[] = [];
+for (let r = 1; r <= 1400; r += 1) {
+  let row = `<row r="${String(r)}">`;
+  for (let k = 0; k < 100; k += 1) row += `<c r="${colName(k)}${String(r)}"><v>${String(r)}</v></c>`;
+  rows.push(row + "</row>");
+}
+const part = Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="${MAIN}"><sheetData>${rows.join("")}</sheetData></worksheet>`);
+const tiny = Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="${MAIN}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>decoy</t></is></c></row></sheetData></worksheet>`);
+
+const entries: In[] = [];
+const add = (name: string, data: Buffer, local = name): void => {
+  entries.push({ central: name, local, data });
+};
+add("[Content_Types].xml", Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>`));
+add("_rels/.rels", Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${PKG}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="xl/workbook.xml"/></Relationships>`));
+add("xl/workbook.xml", Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="${MAIN}" xmlns:r="${R}"><sheets>${targets.map((_, i) => `<sheet name="S${String(i + 1)}" sheetId="${String(i + 1)}" r:id="rId${String(i + 1)}"/>`).join("")}</sheets></workbook>`));
+add("xl/_rels/workbook.xml.rels", Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${PKG}">${targets.map((t, i) => `<Relationship Id="rId${String(i + 1)}" Type="${WS}" Target="${t}"/>`).join("")}</Relationships>`));
+add(big, part);
+const bigKey = big.toLowerCase();
+for (const [i, name] of first.entries()) {
+  if (name.toLowerCase() === bigKey) continue;
+  add(name, tiny, honest ? name : `xl/junk${String(i)}.xml`);
+}
+const out = zip(entries);
+const inflated = entries.reduce((s, e) => s + e.data.length, 0);
+const file = path.join(outdir, `localname-${honest ? "control" : "decoy"}-${String(n)}.xlsx`);
+writeFileSync(file, out);
+console.log(`${path.basename(file)}: ${String(out.length)} B, ${String(inflated)} B inflated (bound 4194304), ${String(entries.length)} entries`);
+console.log(`targets: ${targets.join(" | ")}`);
+console.log(`first lookups: ${first.join(" | ")}`);
+```
+
+#### `inspect.mts`: reads the file's `bookSheets`, `sheetPartsOf` and full SheetJS read
+
+```text
+// usage: node --import tsx inspect.mts <tree> <file>
+// What SheetJS reads (sheets, and how many hold more than 1000 rows), what
+// `sheetPartsOf` says, and what `bookSheets` lists. No readSheets call.
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
+
+const [tree, file] = process.argv.slice(2);
+const api = path.join(tree, "tools/ledger/api");
+const XLSX = createRequire(path.join(api, "package.json"))("xlsx");
+const { sheetPartsOf } = await import(path.join(api, "src/workbook-parts.ts"));
+const { workbookEntries } = await import(path.join(api, "src/workbook-zip.ts"));
+const bytes = readFileSync(file);
+const listed = XLSX.read(bytes, { type: "buffer", bookSheets: true }).SheetNames as string[];
+let parts = "";
+try {
+  parts = JSON.stringify(sheetPartsOf(bytes, workbookEntries(bytes)));
+} catch (e) {
+  parts = `threw ${(e as { code?: string }).code ?? String(e)}`;
+}
+const wb = XLSX.read(bytes, { type: "buffer", dense: true, sheetStubs: true });
+const big = wb.SheetNames.filter((n: string) => (wb.Sheets[n]?.["!data"]?.length ?? 0) > 1000).length;
+console.log(`${path.basename(file)}: bookSheets ${String(listed.length)}; sheetPartsOf ${parts}; full read ${String(wb.SheetNames.length)} sheets, ${String(big)} of them the big part`);
+```
+
+#### `comments.sh`: the comments driver; `G2` names the paste directory
+
+```bash
+#!/bin/bash
+# usage: comments.sh <tree> <outdir> <k> <n...>  -- builds then measures one process at a time, heap 900 MB
+T="$1"; O="$2"; K="$3"; shift 3
+S=$(dirname "$0")
+G2="$S"  # multiplier.mts sits beside this script (gate 2 ran it from its own scratch directory)
+cd "$T" || exit 9
+export TMPDIR=/tmp/claude-1000/lg96g3 TEMP=/tmp/claude-1000/lg96g3 TMP=/tmp/claude-1000/lg96g3
+mkdir -p "$O/files"
+for N in "$@"; do
+  for SH in comments distinct; do
+    [ "$SH" = distinct ] && [ "$N" = 1 ] && continue
+    node --import tsx "$S/comments.mts" "$T" "$SH" "$N" "$K" "$O/files"
+    timeout 120 node --max-old-space-size=900 --expose-gc --import tsx "$G2/multiplier.mts" "$T" run "$O/files/comments-$SH-$N-$K.xlsx" "$O" reader
+    echo "exit $?"
+  done
+done
+```
+
+#### `comments.mts`: the comments generator: writes the shared and the distinct files
+
+```text
+// usage: node --import tsx comments.mts <tree> <shape> <n> <k> <outdir>
+// Builds an .xlsx of <n> sheets, each its own small worksheet part, each with its own
+// .rels pointing at ONE shared part of <k> comments (shape "comments"), or at ONE
+// shared VML+comments pair (shape "vml"), or at <n> distinct comments parts of k/n
+// comments each (shape "distinct", the control: same inflated bytes, no sharing).
+// Measure the result with gate-2's multiplier.mts run mode.
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+
+const [tree, shape, nArg, kArg, outdir] = process.argv.slice(2);
+const n = Number(nArg);
+const k = Number(kArg);
+const api = path.join(tree, "tools/ledger/api");
+const h = await import(path.join(api, "test/helpers/xlsx-file.ts"));
+
+const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const WS = `${R}/worksheet`;
+const CM = `${R}/comments`;
+const PKG = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+function colName(i: number): string {
+  let s = "";
+  let x = i + 1;
+  while (x > 0) {
+    s = String.fromCharCode(65 + ((x - 1) % 26)) + s;
+    x = Math.floor((x - 1) / 26);
+  }
+  return s;
+}
+
+function commentsXml(count: number): string {
+  const list: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    // 100 columns wide, so rows stay under the row bound; text short.
+    list.push(`<comment ref="${colName(i % 100)}${String(Math.floor(i / 100) + 1)}" authorId="0"><text><t>c</t></text></comment>`);
+  }
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<comments xmlns="${MAIN}"><authors><author>a</author></authors><commentList>${list.join("")}</commentList></comments>`;
+}
+
+const ids = Array.from({ length: n }, (_, i) => i + 1);
+const entries: { name: string; data: Buffer }[] = [];
+const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>`;
+entries.push({ name: "[Content_Types].xml", data: Buffer.from(ct) });
+entries.push({
+  name: "_rels/.rels",
+  data: Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${PKG}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="xl/workbook.xml"/></Relationships>`),
+});
+entries.push({
+  name: "xl/workbook.xml",
+  data: Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="${MAIN}" xmlns:r="${R}"><sheets>${ids.map((i) => `<sheet name="S${String(i)}" sheetId="${String(i)}" r:id="rId${String(i)}"/>`).join("")}</sheets></workbook>`),
+});
+entries.push({
+  name: "xl/_rels/workbook.xml.rels",
+  data: Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${PKG}">${ids.map((i) => `<Relationship Id="rId${String(i)}" Type="${WS}" Target="worksheets/sheet${String(i)}.xml"/>`).join("")}</Relationships>`),
+});
+for (const i of ids) {
+  entries.push({
+    name: `xl/worksheets/sheet${String(i)}.xml`,
+    data: Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="${MAIN}" xmlns:r="${R}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>P1</t></is></c></row></sheetData></worksheet>`),
+  });
+  const target = shape === "distinct" ? `../comments${String(i)}.xml` : "../comments1.xml";
+  entries.push({
+    name: `xl/worksheets/_rels/sheet${String(i)}.xml.rels`,
+    data: Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${PKG}"><Relationship Id="c1" Type="${CM}" Target="${target}"/></Relationships>`),
+  });
+}
+if (shape === "distinct") {
+  for (const i of ids) entries.push({ name: `xl/comments${String(i)}.xml`, data: Buffer.from(commentsXml(Math.floor(k / n))) });
+} else {
+  entries.push({ name: "xl/comments1.xml", data: Buffer.from(commentsXml(k)) });
+}
+const inflated = entries.reduce((s, e) => s + e.data.length, 0);
+const out: Buffer = h.zipOf(entries);
+const file = path.join(outdir, `comments-${shape}-${String(n)}-${String(k)}.xlsx`);
+writeFileSync(file, out);
+console.log(`${path.basename(file)}: ${String(out.length)} B, ${String(inflated)} B inflated (bound 4194304), ${String(entries.length)} entries`);
+```
+
+#### `multiplier.mts`: gate 2's measurement script, pasted whole; these probes use its `run` mode
+
+```text
+// usage: node --import tsx multiplier.mts <tree> build <shape> <n> <outdir>
+//        node --expose-gc --max-old-space-size=900 --import tsx multiplier.mts <tree> run <file> <outdir>
+// shape: x_code (targets after the first spelled sheet_x0031_), plain (all the same spelling, the control)
+// The part is gate 1's densex14 part: 1 400 rows by 100 numeric cells.
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+const [tree, mode, a, b, c] = process.argv.slice(2);
+const api = path.join(tree, "tools/ledger/api");
+const WS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+const NS =
+  'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+
+function colName(i: number): string {
+  let s = "";
+  let n = i + 1;
+  while (n > 0) {
+    s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+if (mode === "build") {
+  const shape = a;
+  const n = Number(b);
+  const outdir = c;
+  const h = await import(path.join(api, "test/helpers/xlsx-file.ts"));
+  const rows: string[] = [];
+  for (let r = 1; r <= 1400; r += 1) {
+    let row = `<row r="${r}">`;
+    for (let k = 0; k < 100; k += 1) row += `<c r="${colName(k)}${r}"><v>${r}</v></c>`;
+    rows.push(row + "</row>");
+  }
+  const part = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet ${NS}><sheetData>${rows.join("")}</sheetData></worksheet>`;
+  const each = Array.from({ length: n }, (_, i) => String(i + 1));
+  const sheets = each.map((k) => `<sheet name="S${k}" sheetId="${k}" r:id="dup${k}"/>`).join("");
+  const target = (k: string): string =>
+    shape === "x_code" && k !== "1" ? "worksheets/sheet_x0031_.xml" : "worksheets/sheet1.xml";
+  const rels = each
+    .map((k) => `<Relationship Id="dup${k}" Type="${WS}" Target="${target(k)}"/>`)
+    .join("");
+  const sheet = new h.SheetWriter("S");
+  sheet.set("A1", "Alex");
+  let inflated = 0;
+  const entries = h.entriesOf(h.workbookOf([sheet])).map((entry: { name: string; data?: Buffer }) => {
+    if (entry.data === undefined) return entry;
+    const xml = entry.data.toString("utf8");
+    let data = entry.data;
+    if (entry.name === "xl/workbook.xml") data = Buffer.from(xml.replace(/<sheets>.*<\/sheets>/su, `<sheets>${sheets}</sheets>`));
+    else if (entry.name === "xl/_rels/workbook.xml.rels") data = Buffer.from(xml.replace(/<Relationship [^>]*worksheet[^>]*\/>/u, rels));
+    else if (entry.name === "xl/worksheets/sheet1.xml") data = Buffer.from(part);
+    inflated += data.length;
+    return { name: entry.name, data };
+  });
+  const out: Buffer = h.zipOf(entries);
+  const file = path.join(outdir, `dense-${shape}-${n}.xlsx`);
+  writeFileSync(file, out);
+  console.log(`${path.basename(file)}: ${out.length} B, ${inflated} B inflated (bound 4194304), ${n} entries`);
+} else {
+  const file = a;
+  const outdir = b;
+  const data = readFileSync(file);
+  const which = c ?? "reader";
+  const { readSheets } = await import(path.join(api, "src/xlsx.ts"));
+  const describe = which === "route" ? (await import(path.join(api, "src/workbook-describe.ts"))).describeWorkbook : undefined;
+  (globalThis as { gc?: () => void }).gc?.();
+  const before = process.resourceUsage().maxRSS;
+  const t0 = performance.now();
+  let outcome = "read";
+  try {
+    if (describe === undefined) {
+      const sheets = await readSheets(data);
+      let cells = 0;
+      for (const s of sheets) for (const row of s.rows) for (const x of row) if (x !== null) cells += 1;
+      outcome = `read ${sheets.length} sheets, ${cells} cells`;
+    } else {
+      await describe({ db: undefined, personId: "p" }, { file: data.toString("base64"), consent: true }, { ask: async () => ({ text: null, stopReason: "refusal" }), readSheets });
+    }
+  } catch (e: unknown) {
+    const err = e as { code?: string; details?: unknown };
+    outcome = `${err.code ?? String(e)} ${JSON.stringify(err.details ?? null)}`;
+  }
+  const ms = performance.now() - t0;
+  const after = process.resourceUsage().maxRSS;
+  const line = `${path.basename(file)} [${which}]: ${outcome}; +${((after - before) / 1024).toFixed(1)} MB (baseline ${(before / 1024).toFixed(1)}, peak ${(after / 1024).toFixed(1)}); ${ms.toFixed(0)} ms`;
+  console.log(line);
+  appendFileSync(path.join(outdir, "multiplier.results"), line + "\n");
+}
+```
 
 ### Shape 1: a zip entry whose local-header name differs from its central name
 
@@ -65,9 +454,9 @@ The control is the same file with every local name equal to its central name.
 Commands, from the worktree root, outputs under `build/probe-localname/`:
 
 ```
-bash <gate-3>/localname.sh /workspaces/tools/.claude/worktrees/builder-lg-104-1 <out> 2 14
-node --max-old-space-size=900 --import tsx <gate-3>/inspect.mts <tree> <out>/files/localname-decoy-14.xlsx
-node --max-old-space-size=900 --import tsx <gate-3>/inspect.mts <tree> <out>/files/localname-control-14.xlsx
+bash <probes>/localname.sh <tree> <out> 2 14
+node --max-old-space-size=900 --import tsx <probes>/inspect.mts <tree> <out>/files/localname-decoy-14.xlsx
+node --max-old-space-size=900 --import tsx <probes>/inspect.mts <tree> <out>/files/localname-control-14.xlsx
 ```
 
 `localname.sh` exit 0; both `inspect.mts` runs exit 0. The 14-sheet decoy is 294,618 B,
@@ -99,8 +488,8 @@ comments each, the same total inflated size, so nothing is shared.
 Commands, outputs under `build/probe-comments/`:
 
 ```
-bash <gate-3>/comments.sh /workspaces/tools/.claude/worktrees/builder-lg-104-1 <out> 50000 1 14
-node --max-old-space-size=900 --expose-gc --import tsx <gate-2>/multiplier.mts <tree> run <out>/files/comments-comments-14-50000.xlsx <out> route
+bash <probes>/comments.sh <tree> <out> 50000 1 14
+node --max-old-space-size=900 --expose-gc --import tsx <probes>/multiplier.mts <tree> run <out>/files/comments-comments-14-50000.xlsx <out> route
 ```
 
 `comments.sh` exit 0; the route run exit 0. The 14-sheet comments file is 120,025 B,
@@ -138,11 +527,17 @@ Each further rule added to the copy has so far been followed by a new difference
 
 ## Decision — open
 
-**Who decides:** the owner. One question is open. Gate 3 (Opus 5.5) recommended option
-1; that recommendation is gate 3's, recorded here as gate 3's. This ticket does not add
-one.
+**Who decides:** the owner. Two questions. Question 1 is open. Question 2 is answered.
+Gate 3 (Opus 5.5) recommended option 1 of question 1; that recommendation is gate 3's,
+recorded here as gate 3's. This ticket does not add one.
 
-**What do the two shapes do under the shared-part check?**
+**Question 2 — how the ticket carries the probes of its Reproduction.** answered 2026-11-08
+by the owner: **(a), paste.** The options were (a) paste the generators into the ticket,
+which the filer recommended, (b) commit them as test fixtures, and (c) leave them in
+scratch. The pasted files are under "Probe files" in the Reproduction. The full question,
+options and choice are in the Log.
+
+**Question 1 — open. What do the two shapes do under the shared-part check?**
 
 1. **Refuse both shapes before the parse (gate 3's recommendation).** Refuse a zip
    whose local-header name differs from the central name of an entry the copy reads
@@ -185,11 +580,12 @@ above first (who, the date, the options it was chosen from), and `status` moves 
    shapes.
 3. **If 3:** reword the three texts named under option 3 to the measured figure and to
    the two shapes, and record in lg-96's answer 10 that its premise is corrected.
-4. **Under any answer:** reword the header sentence in
-   `tools/ledger/api/src/workbook-parts.ts` that begins "Distinct parts cannot multiply
-   the parse" (line 13 at `1aabcb4a`). Both shapes contradict it. The new sentence states
-   what the chosen answer covers, and under option 3 it names the shapes and the
-   measured figure.
+4. **Under any answer, whichever merges first:** lg-96's PR #758 rewords the header
+   sentence in `tools/ledger/api/src/workbook-parts.ts` that begins "Distinct parts cannot
+   multiply the parse" before it merges, as the owner chose on 2026-11-08. If the header
+   still reads that way when lg-104 is built, lg-104 rewords it in its own change, to
+   what the chosen answer covers (under option 3, naming the two shapes and the measured
+   figure). If it already reads otherwise, this step is met and nothing is changed.
 
 ## Done when
 
@@ -213,8 +609,10 @@ builder.
    and the reworded texts name the two shapes and the re-run figure
    (`localname-decoy-14` +379.0 MB; `comments-comments-14` +327.1 MB, or their re-measured
    values at the time).
-4. **Under any answer:** `git grep -n "cannot multiply the parse"` on the branch matches
-   nothing, and the reworded header names what the chosen answer covers.
+4. **Under any answer, whichever merges first:** on lg-104's head,
+   `git grep -n "cannot multiply" -- tools/ledger/api/src/workbook-parts.ts` matches
+   nothing. If lg-96's PR #758 merges first with its rewording, this line is met by it;
+   otherwise by lg-104's own change under Build step 4.
 5. **Under any answer:** the Reproduction's probes re-run at the head, with their output in
    the Log, and the honest controls read the same as above.
 6. **Under any answer:** `npm run check` and `npm test -- --project ledger` pass.
@@ -247,3 +645,37 @@ builder.
 - `depends_on: [lg-96]` resolves on `main`, where lg-96's ticket file already exists.
 - Not measured: the VML, threaded-comment, drawing and chart variants of shape 2, and the
   built-grid growth under option 2.
+
+### 2026-11-08, the owner's answers
+
+- **Question 2: how the ticket carries the probes of its Reproduction.** Asked by the
+  builder; answered 2026-11-08 by the owner, through the coordinator. Options: (a) paste
+  the generators into the ticket, as lg-103 did, the filer's recommendation; (b) commit
+  them as test fixtures; (c) leave them in the gate's scratch directories. **Chosen: (a),
+  paste.**
+  - Pasted whole under "Probe files": `localname.sh`, `localname.mts`, `inspect.mts`,
+    `comments.sh`, `comments.mts`, and gate 2's `multiplier.mts`, whole, because the probes
+    call its `run` mode. The only change is the `G2` line in the two `.sh` scripts, which
+    names the directory holding `multiplier.mts`. The commands now take `<probes>` and
+    `<tree>`. The pull request stays docs-only.
+  - Verified from the ticket's own files. The six copies were placed in
+    `…/scratchpad/lg-104/build/paste/` and run from there, by absolute path, against a
+    detached `3b8e95d4` (farm exit 0, build exit 0). Output in
+    `…/scratchpad/lg-104/build/verify/`. `localname.sh 2 14` exit 0; `comments.sh 50000 1 14`
+    exit 0. Readings: local-name decoy-14 +380.9 MB (peak 467.4), control-14 +57.9 MB
+    (140,013 cells), decoy-14 route `WORKBOOK_TOO_LARGE` `cells` +353.5 MB; comments-14
+    +333.6 MB (peak 416.2), distinct-14 +52.5 MB. The same shapes as the first run, within
+    the spread between runs; the tables keep the first run's readings.
+  - The pasted blocks are byte-identical to the six files (checked by comparing each block
+    with its file). The fences are `text`, not `ts`, because the formatter reflows
+    TypeScript inside a `ts` fence, and an earlier paste had been reflowed that way before
+    the check caught it.
+- **Build step 4 and Done when 4 reworded.** Owner, 2026-11-08: lg-96's PR #758 rewords the
+  header sentence "Distinct parts cannot multiply the parse" before it merges, and a fixer
+  is doing that now. Both lines now hold whichever merges first: if the header still reads
+  so when lg-104 is built, lg-104 rewords it; if not, the line is met by
+  `git grep -n "cannot multiply" -- tools/ledger/api/src/workbook-parts.ts` matching
+  nothing. The earlier wording, "under any answer, reword it in this change", is superseded.
+- **Decision heading.** It stays `Decision — open`, and `status` stays `needs-decision`,
+  because question 1 (the shape options) is still open. Question 2 is marked answered on its
+  own line, as `docs/01-TICKETS.md` says for a ticket with several questions.
