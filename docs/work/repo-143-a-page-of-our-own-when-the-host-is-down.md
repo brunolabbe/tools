@@ -450,3 +450,4 @@ checked):
     of 72 in the down-page file, `22 change(s)` in the dry run, 704 passed and 1
     skipped of 705 in the repo project. The pull request body is the lander's.
   - _F4_ (no committed test reads the page's width) stays recorded, untouched.
+- 2026-11-08 — Owner answered the landing question (which of gate 2's lows to fix at landing, no re-gate), relayed by the orchestrator. Options: (a) F2 and N2 at landing, N1 and F4 recorded; (b) F2, N2 and N1 at landing; (c) land as gated. Chosen: (b), over the recommended (a). F4 stays recorded.
