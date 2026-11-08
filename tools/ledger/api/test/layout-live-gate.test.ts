@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { assertLiveRunConsent, measure, parseCli } from "./live/layout-run.ts";
 import type { Answer, Ask, MeasureOptions } from "./live/layout-run.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
-import { layoutView } from "../src/layout-view.ts";
+import { layoutRequest, layoutView } from "../src/layout-view.ts";
 
 let dir: string;
 
@@ -187,6 +187,63 @@ describe("the layout measurement's harness, round 1", () => {
   test("refuses a --fixtures name that is no fixture, naming it", () => {
     expect(() => parseCli([...need, "--out", dir, "--fixtures", "lg7,lg-37"])).toThrow(
       "--fixtures names lg-37, which is no fixture",
+    );
+  });
+});
+
+// lg-67, Done when 13: the 70 runs repeated under the name the product sends.
+describe("the layout measurement's harness, --csv-name", () => {
+  test("sent measures a CSV as statement.csv and scores the description that selects it; a workbook is as it was", async () => {
+    const fixtures = await layoutFixtures();
+    const csv = fixtures.find((fixture) => fixture.name === "csv-balance");
+    const workbook = fixtures.find((fixture) => fixture.name === "lg7");
+    if (csv === undefined || workbook === undefined) throw new Error("no such fixture");
+    const sent = {
+      ...csv.layout,
+      account: { ...csv.layout.account, sheets: { by: "name", names: ["statement.csv"] } },
+    };
+    const requests: string[] = [];
+    const answer = (layout: unknown): Ask => {
+      return (request) => {
+        requests.push(request);
+        const isCsv = request.includes('## Sheet "statement.csv":');
+        return Promise.resolve({
+          text: JSON.stringify(isCsv ? layout : workbook.layout),
+          stopReason: "end_turn",
+          inputTokens: 10,
+          outputTokens: 10,
+        });
+      };
+    };
+    const chosen = { runs: 1, fixtures: ["csv-balance", "lg7"], csvName: "sent" } as const;
+
+    const records = await measure(options(chosen), answer(sent));
+    expect(records.map((record) => [record.fixture, record.score.outcome, record.csvName])).toEqual(
+      [
+        ["lg7", "matched", "sent"],
+        ["csv-balance", "matched", "sent"],
+      ],
+    );
+    expect(requests[0]).toBe(layoutRequest(workbook.sheets));
+    expect(requests[1]).toContain('## Sheet "statement.csv":');
+    expect(requests[1]).not.toContain("releve-2024.csv");
+    // The fixture's own name is no longer the sheet the CSV has.
+    const own = await measure(options(chosen), answer(csv.layout));
+    expect(own[1]?.score.outcome).not.toBe("matched");
+    // The default is lg-56's measurement, unchanged.
+    const measured = await measure(options({ runs: 1, fixtures: ["csv-balance"] }), answer(sent));
+    expect(measured[0]?.csvName).toBe("fixture");
+    expect(requests.at(-1)).toBe(layoutRequest(csv.sheets));
+  });
+
+  test("parses fixture and sent, and refuses anything else", () => {
+    const need = ["--model", "m", "--price-in", "1", "--price-out", "5", "--out", dir];
+    // Absent is lg-56's measurement, the fixture's own name.
+    expect(parseCli(need).csvName).toBeUndefined();
+    expect(parseCli([...need, "--csv-name", "fixture"]).csvName).toBe("fixture");
+    expect(parseCli([...need, "--csv-name", "sent"]).csvName).toBe("sent");
+    expect(() => parseCli([...need, "--csv-name", "statement.csv"])).toThrow(
+      "--csv-name is fixture or sent",
     );
   });
 });
