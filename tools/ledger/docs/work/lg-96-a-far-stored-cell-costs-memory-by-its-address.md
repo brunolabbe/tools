@@ -222,6 +222,34 @@ builder in the first commit of the round that follows).**
     The "about 22 MB" text and the Log's "+90 MB" are corrected to what is measured after
     F1 and F2 (Log, round 1: +129 MB the worst built).
 
+**Answers after round 1 and after gate 2 (`c2e36eb7`), 2026-11-08 (relayed by the
+orchestrator, recorded here by the builder in the first commit of round 2).**
+
+11. **Which code a shared part gets** (answered after round 1, before gate 2; not recorded
+    until now). Offered: `WORKBOOK_NOT_XLSX` (the builder's recommendation, as built) /
+    `WORKBOOK_TOO_LARGE` with `sheets` / `WORKBOOK_TOO_LARGE` with a new bound name.
+    **Chosen: `WORKBOOK_NOT_XLSX`.**
+12. **F2 after gate 2: the seven spellings of one part that the copy of SheetJS's rules does
+    not know.** Gate 2 (FAIL at `c2e36eb7`) found `sharedSheetPart` answers `undefined` for
+    entities in a target (`sheet&#49;.xml`, `&#x77;orksheets/`, `sheet_x0031_.xml`), a `>` inside
+    a quoted `name`, an empty `r:id` beside `strRelID`, sheets with no id beside a
+    relationship `Id="undefined"` and a `<sheet` followed by a tab, each of which SheetJS reads
+    as two sheets over one part; `densex14`'s part listed 14 times with later entries spelled
+    `sheet_x0031_` read unrefused through `readSheets` (1,960,000 cells, +375.1 MB, peak
+    457.4 MB, 6.2 s), and a file `workbookEntries` refuses skipped the check altogether.
+    Offered: fail closed on SheetJS's own sheet list (gate 2's and the orchestrator's
+    recommendation) / patch the copy's seven rules / land as is and file a ticket.
+    **Chosen: fail closed.** Before the parse: read the sheet list with SheetJS's
+    `bookSheets: true` (or whatever call lists the sheets without parsing them; measure that
+    it parses none); refuse unless every sheet that list names resolves, by
+    `workbook-parts.ts`, to a distinct worksheet part that exists, and the counts match;
+    refuse in `readSheets` whatever `workbookEntries` refuses, so the import command gets the
+    same pre-parse refusal as the route. The owner accepts that the command now refuses those
+    files. The code stays `WORKBOOK_NOT_XLSX` (answer 11). Round 2 also does gate 2's F3
+    (walk `!data` by what it defines in `placesOf`; re-run `stubd.sh`, and push back with a
+    measurement if that is wrong), N2 (105 admitted beside 106 refused) and N1 (show it moot or
+    leave it), and corrects every text the round falsifies, in place.
+
 **Superseded (2026-11-08, answer 9):** ~~5. The import command. Offered: the same bounds
 (recommended) / the import stays unbounded. Chosen: the same bounds. The command refuses
 what the route refuses, so the unbounded test the Build had is replaced by one that the
