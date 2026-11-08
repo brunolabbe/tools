@@ -3,7 +3,7 @@ id: repo-137
 tool: repo
 title: The farm's freshness remedy names an install the pages forbid, and has no case for a stacked branch
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -63,8 +63,9 @@ re-run): farming on a branch cut from `origin/repo-121-vite-8-vitest-5` →
 
 ## Decision — answered 2026-11-01 by the owner
 
-**Answer: (a)**, no install in a farmed worktree, chosen from (a), (b) and (c)
-below with (a) recommended; `roles/common.md`'s dependency bullet stands as the
+**Answer: (a)**, no install in a farmed worktree, chosen from (a) and (b)
+below with (a) recommended (corrected 2026-11-08: this sentence said "(a), (b)
+and (c)" when only (a) and (b) were ever listed); `roles/common.md`'s dependency bullet stands as the
 review wrote it. Rated `mechanical` as filed. The options stay as they were put.
 
 Which rule the remedy follows. `roles/common.md` was written under (a) by the
@@ -111,6 +112,54 @@ Which rule the remedy follows. `roles/common.md` was written under (a) by the
 3. The text agrees with `roles/common.md`'s dependency bullet word for word on
    what is allowed.
 
+## Review
+
+**Gate: FAIL** — 2026-11-08 · `4a9b8af4..483f9adb` · Sonnet 5.5, depth narrow
+
+Range read as `git diff 4a9b8af4...483f9adb`, ticket file excluded: `.claude/scripts/check-farm-freshness.mjs` and `scripts/test/check-farm-freshness.test.ts`. Build skipped: the diff imports only `node:` builtins and `vitest`. Pull request #765 at this head: `check`, `pr-title`, `codeql`, `changes`, `dependency-review`, `test (ubuntu-latest)` and `CodeQL` all SUCCESS; `test (windows-latest, informational)` was IN_PROGRESS when read.
+
+| Done when                                                                                                                                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The remedy printed for a worktree whose lockfile declares a package the shared checkout lacks names no `npm install`, and names what to do for the branch's own relock and for a parent branch's | **proven** for "no `npm install`" and the parent's stop: `scripts/test/check-farm-freshness.test.ts` › "worktree-farm.sh names a package the worktree's lockfile declares and a healthy shared checkout lacks, without telling the reader to install in the worktree" (`not.toContain("npm install")`, beside `toContain` assertions that fail on empty stderr, and `toContain("stop and report it to the orchestrator")`). The own-relock action ("say so in your report and go on") is **verified** by running the script on a scratch tree and reading the line; no test asserts it (F1) |
+| 2. The spec asserts 1, and `npm test -- --project repo` passes                                                                                                                                      | **unproven** — clause "asserts 1": the own-relock action and the direction of the discriminator are asserted by nothing (F1). The other clause is met: `npx vitest run scripts/test/check-farm-freshness.test.ts` 29 of 29; `npm test -- --project repo` 15 of 15 files, 630 passed, 1 skipped (631), exit 0                                                                                                                                                                                                                                                                                |
+| 3. The text agrees with `roles/common.md`'s dependency bullet word for word on what is allowed                                                                                                      | **verified** by reading, and by running the dispatch's four cases (own relock, parent's package, own relock on a stacked branch, main's package) through the remedy's test. All seven allowances on the page are in the text and the text adds none. One edge where the outcome rests on the agent naming the right `<base>` is F2                                                                                                                                                                                                                                                          |
+
+- **med** · a `Done when` line depends on it (2) · the new spec does not assert what the remedy tells the agent to do for the own-relock case, nor which way its test points. Deleting `say so in your report and go on, and `, `naming the packages`, `copy no other agent's node_modules into this worktree`, the orchestrator-owns-the-install sentence, the one-lockfile-write sentence or `the draft pull request's CI is the reading` from the printed remedy each leaves `check-farm-freshness.test.ts` at 29 of 29. So does swapping the two conditions (`does not declare it, this branch's own relock added it` becomes `declares it, ...`, and `If the base declares it, it came from main or a parent branch: stop` becomes `If the base does not declare it, ...`): 29 of 29, exit 0. The new test's title says it "tells a branch's own relock from a base's package", and it asserts that five substrings are present somewhere. Fix, fully stated: in both tests that read the remedy (the farm end-to-end one and the direct `--worktree-packages` one) add `toContain("does not declare it, this branch's own relock added it, which is expected: say so in your report and go on")` and `toContain("If the base declares it, it came from main or a parent branch: stop and report it to the orchestrator, naming the packages")`. Run against the printed remedy, the two pass on the head and catch the first deletion, `naming the packages` and the inversion; the other four deletions (no copy of another agent's `node_modules`, the orchestrator's install, the one lockfile write, the CI reading) stay unasserted, which `Done when` 1 does not ask for.
+- **low** · no `Done when` line depends on it · the remedy's test is only as good as the `<base>` the agent picks. The text says "origin/main, or the parent branch on a stacked branch": with the parent it classifies correctly (cases b and c in the full report); with `origin/main` on a stacked branch it prints "own relock, expected, go on" for the parent's package (case b2), where `common.md` says stop and report. `roles/builder.md` names `origin/main` as a stacked branch's `--base` while `reference/concurrency.md` opens the stacked draft against its parent. The script cannot know the parent, so this is a direction, not a script fix.
+- **dropped** · case c (a stacked branch whose own relock adds `c` while the parent added `b`) prints "go on" for `c` and "stop" for `b` in one text, which could read as permission to go on. Dropped: the stop clause says "naming the packages", `common.md` has the same shape, and the outcome the page prescribes (stop, name `b`) is what the text leads to.
+- **findings** · the attacks returned 3; 2 carried (the med and the low), 1 dropped.
+- NFR: security n/a (text and a test; no URL, header or subprocess path touched) · performance n/a · reliability ✓ (the warning stays advisory, `worktree-farm.sh` still discards its exit code) · maintainability — F1 above.
+
+FAIL on one row alone: `Done when` 2 is `unproven` from the one `med`. Nothing found is a `high`. The `--packages` remedy and its test are unchanged.
+
+### Gate 2
+
+**Gate: PASS** — 2026-11-08 · `483f9adb..c320f134` · Sonnet 5.5, depth narrow
+
+Round read as `git log --first-parent --no-merges 483f9adb..c320f134`: two commits, a test (`scripts/test/check-farm-freshness.test.ts`, +14 lines) and the ticket's Log (+25). `.claude/scripts/check-farm-freshness.mjs` is untouched by the round (`git diff --name-only` lists the two files only). Build skipped: the round's only code is a `scripts/` spec importing `node:` builtins, `vitest` and the `.mjs` under test. Pull request #765 at this head: `check`, `pr-title`, `codeql`, `changes`, `dependency-review`, `CodeQL` and `test (ubuntu-latest)` SUCCESS (the last on the fourth read; which projects it ran I did not open); `test (windows-latest, informational)` was IN_PROGRESS when last read.
+
+| Done when                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The remedy names no `npm install`, and names what to do for the branch's own relock and for a parent branch's | **proven**, now for every clause: `scripts/test/check-farm-freshness.test.ts` › "worktree-farm.sh names a package the worktree's lockfile declares and a healthy shared checkout lacks, without telling the reader to install in the worktree" and › "check-farm-freshness.mjs --worktree-packages tells a branch's own relock from a base's package, and installs nothing, for a lockfile that differs from the shared checkout's". Each now asserts the own-relock condition beside its action (`does not declare it, this branch's own relock added it, which is expected: say so in your report and go on`) and the base's condition beside its (`If the base declares it, it came from main or a parent branch: stop and report it to the orchestrator, naming the packages`), beside `not.toContain("npm install")` |
+| 2. The spec asserts 1, and `npm test -- --project repo` passes                                                   | **verified**: `npx vitest run scripts/test/check-farm-freshness.test.ts` 29 of 29, exit 0; `npm test -- --project repo` 15 of 15 files, 630 passed, 1 skipped (631), exit 0, the head checked as `c320f134` before and the tree clean after. The clause "asserts 1" is met by the row above                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 3. The text agrees with `roles/common.md`'s dependency bullet on what is allowed                                 | **verified**, unchanged since gate 1: the round does not touch the script, so gate 1's reading of the seven allowances stands                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+**Gate 1's findings**
+
+- **F1 (med, `Done when` 2) — fixed.** Gate 1's probes, re-run on this head with this gate's scratch directory as their output: the inversion (`mutate-invert.mjs`) now leaves `2 failed | 27 passed (29)`, exit 1, and the two red tests are the two the round edited, each failing on the new own-relock assertion; the `say so in your report and go on, and ` deletion and the `naming the packages` deletion each leave `2 failed | 27 passed (29)`, exit 1. The other four deletions (no copy of another agent's `node_modules`, the orchestrator's install, the one lockfile write, the CI reading) stay at `29 passed (29)`, exit 0, which is the owner's answer of 2026-11-08 (gate 1's option 1) and not a finding. None of the seven plants printed `PLANT MISSED`, so each red result is the assertions and not a plant that missed, and gate 1's record of 29 of 29 for the same seven plants at the gated sha (not re-run here) is the control that the spec was blind before the round. The spec at head, restored after the plants: 29 of 29, `git status --short` empty.
+- **F2 (low) — not fixed; outside the round** by the dispatch's record (the remedy is only as good as the `<base>` the agent picks; the script cannot know the parent). Keeps its number and severity.
+
+**New**
+
+- **low** · no `Done when` line depends on it · **N1** · the Log's second owner answer is not checkable, and its option list is short of what it describes. The entry lists three options for whether `roles/common.md`'s dependency bullet should name the base-lockfile test (the review list, leave the page, file a `repo-` ticket) and then says "the builder had recommended adding the clause", so the builder's own recommended option, editing the page, is named in the entry and is not among the options it lists. The dispatch pastes the first answer only; this question and its answer appear in the ticket nowhere before the round's entry (`git show 483f9adb:<ticket> | grep -c "base-lockfile test"` prints `0`). The first answer's two options match gate 1's open decision. The falsehood, if there is one, runs the safe way: the answer chosen was "no page edit and no ticket". A direction, not a remedy: whoever put the question to the owner checks the listed options against what was put, and the Log lists the page edit if it was offered.
+- **findings** · the three attacks returned 1 new finding, carried (N1); 0 dropped; gate 1's F1 fixed, F2 not fixed and outside the round.
+- The Log's one measurement claim reproduces: the inversion prints `2 failed | 27 passed (29)`, exit 1, and the restore `29 passed (29)`. It claims nothing the round did not run.
+- NFR: security n/a (two string assertions on stderr) · performance n/a · reliability ✓ (exact substrings of stderr, no timing, no network) · maintainability ✓ (the remedy's two conditions are now tied to their actions; the four other allowances stay unasserted by the owner's choice).
+
+No finding is a `high`. A third gate is not called for.
+
+Unverified: `test (windows-latest, informational)` had no conclusion when last read; it is informational and the round reaches only a spec and a ticket. `npm run check` was not run; only `oxfmt --check` on the two changed files (clean) and the PR's `check` job (SUCCESS). The second owner answer's options (N1) are unverified against what the owner was shown.
+
 ## Log
 
 - 2026-11-01 — Filed by the review of the orchestration log (tools-5e's items
@@ -120,3 +169,69 @@ Which rule the remedy follows. `roles/common.md` was written under (a) by the
 - 2026-11-01 — Owner chose (a) at the review session's checkpoint (asked beside
   repo-135's question); `status` moved to `ready` in the same commit. Build 3
   does not apply.
+- 2026-11-08 — Built on `4a9b8af4` (branch `repo-137-farm-remedy`) under answer
+  (a). Build 3 does not apply: `roles/common.md`'s dependency bullet already reads
+  as (a) and is unchanged.
+  - Reproduction, re-run: the ticket's `8ad4e91d` is no longer `main`, so the
+    grep ran on `4a9b8af4`:
+    `git show 4a9b8af4:.claude/scripts/check-farm-freshness.mjs | grep -n "npm install --ignore-scripts"`
+    printed line 140, the worktree remedy's `"If this branch's own diff adds the
+    package, the one npm install --ignore-scripts"` string. On the branch that
+    grep finds nothing. `grep -n "npm install" .claude/scripts/check-farm-freshness.mjs`
+    finds three lines, all allowed: the header comment (line 7), the `--packages`
+    remedy for the shared checkout (line 154, the orchestrator's install), and a
+    comment above the workspaces pass (line 170).
+  - Build 1: the worktree remedy names no `npm install`. It says no install runs
+    in a worktree; a package the dispatch's base lockfile does not declare is this
+    branch's own relock (expected, say so, go on); one it declares came from main
+    or a parent branch (stop and report, naming the packages). The base is the
+    one the dispatch names, which the script cannot know, so the check is text the
+    agent runs (`git show <base>:package-lock.json`), not a comparison in the
+    script. Output on a fixture tree declaring `@anthropic-ai/sdk` and holding no
+    `node_modules` entry for it: `exit 1`, with the remedy line.
+  - Build 2: the existing `worktree-farm.sh names a package the worktree's lockfile
+    declares and a healthy shared checkout lacks` case already is the
+    "lockfile differs from the shared checkout's by a package the branch declares"
+    shape; its assertions moved to the new text. The added case is the direct
+    `--worktree-packages` one, `…tells a branch's own relock from a base's package…`.
+    Against the base script both cases fail (`2 failed | 27 passed`, the two named
+    above); on the branch `29 passed`.
+  - Done when 1: the remedy names no `npm install` (test asserts
+    `not.toContain("npm install")`), and names both cases (own relock; main's or a
+    parent branch's). Verdict: met.
+  - Done when 2: `npx vitest run scripts/test/check-farm-freshness.test.ts`,
+    `29 of 29`; `npm test -- --project repo`, `Tests 630 passed | 1 skipped (631)`,
+    `Test Files 15 passed (15)`, exit 0. `npm run check` exit 0.
+  - Done when 3: the remedy's allowances match `roles/common.md`'s dependency
+    bullet: no install in a worktree; the relock is the one lockfile write; own
+    relock expected; main's or a parent's stop and report; the install is the
+    orchestrator's. Verdict: met on reading; `roles/common.md` was not edited.
+  - Correction: the Decision's "chosen from (a), (b) and (c)" listed two options.
+  - Fold-in: none. `worktree-farm.sh` prints no install remedy (grep above).
+  - Not measured: the stacked-branch case itself (relayed, not re-run); CI on the
+    draft pull request (not read).
+- 2026-11-08 — Round 1, after gate 1 (`483f9adb`): fixer, `c838d031`. Gate 1's
+  medium: the spec asserted five substrings present somewhere, so swapping the two
+  conditions left it at `29 of 29`. Fixed: both tests that read the remedy (the
+  farm end-to-end one and the direct `--worktree-packages` one) now assert
+  `does not declare it, this branch's own relock added it, which is expected: say
+  so in your report and go on` and `If the base declares it, it came from main or
+  a parent branch: stop and report it to the orchestrator, naming the packages`.
+  - Proof: with the gate's `mutate-invert.mjs` run on the committed tree (the
+    discriminator inverted in the script), `npx vitest run
+    scripts/test/check-farm-freshness.test.ts` printed `2 failed | 27 passed (29)`,
+    exit 1; restored with `git checkout c838d031 -- <path>`, `29 passed (29)`.
+  - Owner answers (2026-11-08, the owner, via the orchestrator):
+    1. Gate 1's open decision, whether to assert the other four allowances (no copy
+       of another agent's `node_modules`, the orchestrator's install, the one
+       lockfile write, the CI reading) too. Options: (1, recommended) the two
+       assertions above only, since `Done when` 1 and 2 ask for nothing else; (2)
+       also assert the four. The owner chose option 1; the four stay unasserted.
+    2. The builder's open decision, whether `roles/common.md`'s dependency bullet
+       should name the base-lockfile test (`git show <base>:package-lock.json`).
+       Options: put it on the next review session's list (the orchestrator's
+       recommendation), leave the page as is, or file a `repo-` ticket now. The
+       builder had recommended adding the clause. The owner chose to put it on the
+       review list: no page edit and no ticket.
+  - Not part of this round: gate 1's low (the remedy is only as good as the
+    `<base>` the agent picks), which stays recorded.

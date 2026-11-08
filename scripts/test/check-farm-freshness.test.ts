@@ -672,12 +672,24 @@ farmTest(
       expect(result.stdout).toContain("farm built:");
       expect(result.stderr).toContain("@anthropic-ai/sdk");
       expect(result.stderr).toContain(path.join(tree.dir, "package-lock.json"));
-      // common.md forbids an install in a worktree except for a dependency this
-      // branch adds, which the lockfile alone cannot tell from a stale shared
-      // checkout: the remedy names both cases (gate 2, the med).
-      expect(result.stderr).toContain("If this branch's own diff adds the package");
-      expect(result.stderr).toContain("npm install --ignore-scripts");
-      expect(result.stderr).toContain("otherwise, stop and report");
+      // common.md forbids any install in a worktree (repo-137: the old remedy
+      // named `npm install --ignore-scripts`, which rewrites the shared .bin and
+      // lockfile links). The remedy names the two sources a missing package can
+      // have, and what to do for each.
+      expect(result.stderr).not.toContain("npm install");
+      expect(result.stderr).toContain("No install runs in a worktree");
+      expect(result.stderr).toContain("git show <base>:package-lock.json");
+      expect(result.stderr).toContain("this branch's own relock added it, which is expected");
+      expect(result.stderr).toContain("the parent branch on a stacked branch");
+      expect(result.stderr).toContain("stop and report it to the orchestrator");
+      // Each condition beside its action, so swapping the two (own relock stops,
+      // base's package goes on) fails here.
+      expect(result.stderr).toContain(
+        "does not declare it, this branch's own relock added it, which is expected: say so in your report and go on",
+      );
+      expect(result.stderr).toContain(
+        "If the base declares it, it came from main or a parent branch: stop and report it to the orchestrator, naming the packages",
+      );
       expect(result.stderr).not.toContain("npm install` in the shared checkout");
       expect(result.stderr).not.toContain("npm install` in " + tree.dir);
     } finally {
@@ -717,5 +729,33 @@ test("check-farm-freshness.mjs --packages keeps the shared-checkout remedy", () 
     );
   } finally {
     shared.cleanup();
+  }
+});
+
+test("check-farm-freshness.mjs --worktree-packages tells a branch's own relock from a base's package, and installs nothing, for a lockfile that differs from the shared checkout's", () => {
+  // The branch's lockfile declares a package the shared checkout's node_modules
+  // lacks: the case a relock on this branch produces. The remedy must give the
+  // check that separates it from a package main or a parent branch declares.
+  const tree = makeFarmedTree([]);
+  fs.writeFileSync(
+    path.join(tree.dir, "package-lock.json"),
+    JSON.stringify({ packages: { "": {}, "node_modules/@anthropic-ai/sdk": {} } }),
+  );
+  try {
+    const result = runCheck(["--worktree-packages", tree.dir]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("@anthropic-ai/sdk");
+    expect(result.stderr).toContain("git show <base>:package-lock.json");
+    expect(result.stderr).toContain("this branch's own relock added it");
+    expect(result.stderr).toContain(
+      "does not declare it, this branch's own relock added it, which is expected: say so in your report and go on",
+    );
+    expect(result.stderr).toContain(
+      "If the base declares it, it came from main or a parent branch: stop and report it to the orchestrator, naming the packages",
+    );
+    expect(result.stderr).not.toContain("npm install");
+  } finally {
+    tree.cleanup();
   }
 });
