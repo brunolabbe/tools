@@ -114,3 +114,12 @@ description. `npm audit` reports them on every run with no reason attached.
     checkout's copies (`@fastify/static 10.1.6`, glob 13), so a run in this
     worktree would test the old tree. CI reads the new lockfile on the draft
     pull request, and `npm test` is `unproven (gate)` until that run reads.
+- 2026-11-08 — The owner's answer (via the orchestrator) to the builder's open
+  decision on `minimatch 11.0.4` (published 2026-11-02T04:50Z, six days old at
+  the time). Options: keep 11.0.4 and land only once it is seven days old (the
+  orchestrator's recommendation); keep 11.0.4 as advisory-exempt now (the
+  builder's recommendation); pin 11.0.3 with an override. The owner chose the
+  first. 11.0.4 is not exempt: the rule's exemption covers a fix with no older
+  fixed release, and 11.0.3 (2026-10-28) carries the fix. The merge waits until
+  2026-11-09T04:51:00Z, and only `@fastify/static 10.1.9` is named as the
+  advisory-exempt young release.
