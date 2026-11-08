@@ -107,3 +107,11 @@ prints before the verdict is read.
   detail, which is the line `landMain` prints after `FAIL  `. A template change
   in `landMain` would not be caught by them. Done when 1 holds by the same
   assertion; Done when 3 by the run above.
+- 2026-11-08 — The owner, via the orchestrator, answered the builder's open
+  decision on Build 2. The brief asks for a test that drives `--land` with a
+  stubbed preflight, but the CLI has no injection point and only `land()`
+  accepts a `runPreflight` stub. The options were (a) accept tests that stub
+  preflight at `land()` and assert the stage's FAIL line text, (b) add an
+  env-var or flag injection seam to the CLI, (c) export a stage-line formatter
+  that `landMain` uses and test it. The owner chose (a), the builder's
+  recommendation.
