@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.0](https://github.com/brunolabbe/tools/compare/ledger-v0.7.0...ledger-v0.8.0) (2026-11-08)
+
+
+### Features
+
+* **ledger:** pick who paid and whose in the receipt queue, and file several at once (lg-102) ([#753](https://github.com/brunolabbe/tools/issues/753)) ([74043db](https://github.com/brunolabbe/tools/commit/74043db623592ff1537a046327f4926276bd0d08))
+* **ledger:** sum up a lone read receipt, type rebates positive, hold Taxable marks that move money ([#748](https://github.com/brunolabbe/tools/issues/748)) ([1eafa0c](https://github.com/brunolabbe/tools/commit/1eafa0c62016e36a2b47c006f12e82d42a7da597))
+
+
+### Fixes
+
+* **ledger:** a stored Save closes only its own row's control (lg-103) ([#756](https://github.com/brunolabbe/tools/issues/756)) ([2204cd6](https://github.com/brunolabbe/tools/commit/2204cd61e5da25c4f5dc6840d957ce3585a80703))
+* **ledger:** bound a sheet's rows and slots before readSheets builds its grid (lg-96) ([#758](https://github.com/brunolabbe/tools/issues/758)) ([050ce1a](https://github.com/brunolabbe/tools/commit/050ce1a44df71980f27ee0627916d7509bf87d12))
+* **ledger:** disable a row's change after a failed re-read, and narrow its focus restore (lg-99) ([#751](https://github.com/brunolabbe/tools/issues/751)) ([cf925ea](https://github.com/brunolabbe/tools/commit/cf925ea93bbd4bf6ac82096903647b00de13117f))
+* **ledger:** file a pot charge per person and category so the chart keeps the split (lg-100) ([#757](https://github.com/brunolabbe/tools/issues/757)) ([a32568e](https://github.com/brunolabbe/tools/commit/a32568ec64012322bf3af86badc60cf0936265ed))
+* **ledger:** take back out a rebate the printed price already holds (lg-101) ([#752](https://github.com/brunolabbe/tools/issues/752)) ([a3e197b](https://github.com/brunolabbe/tools/commit/a3e197b57cae0f74edf5b736f65a36f360604da0))
+
 ## [0.7.0](https://github.com/brunolabbe/tools/compare/ledger-v0.6.0...ledger-v0.7.0) (2026-11-01)
 
 
