@@ -3,7 +3,7 @@ id: repo-136
 tool: repo
 title: review-record --land prints FAIL with no reason when the merge-tree probe halts preflight
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -72,6 +72,24 @@ prints before the verdict is read.
    stage line whose text names the failing check and the checks not run.
 2. The test in Build 2 fails on `main` at `8ad4e91d` and passes on the branch.
 3. `npm test -- --project repo` passes.
+
+## Review
+
+**Gate: PASS** — 2026-11-08 · `4a9b8af4..6ea85cb4` · Sonnet 5.5, depth narrow (the four named attacks and the acceptance table; build skipped, the diff is `scripts/` files importing `node:` builtins and their `scripts/` siblings)
+
+| Done when                                                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A `--land` whose preflight halts on the merge-tree probe prints a `FAIL` stage line whose text names the failing check and the checks not run | `scripts/test/review-record.test.ts` › "land() puts preflight's reason on the stage's own FAIL line when the merge-tree probe halts (repo-136)" ✓. The assertion is the first line of the stage's `detail` with `FAIL  ` put in front by the test, not `landMain`'s own print; that is the owner's choice (a) of 2026-11-08, graded against. Second method: the real `--land` CLI against a scratch repo with a conflicting open PR printed `FAIL  preflight failed: mergeTree (exit 16); not run: check, ciCommands, review, title` at head and `FAIL  ` with nothing after the two spaces at base. |
+| 2. The test in Build 2 fails on `main` at `8ad4e91d` and passes on the branch                                                                    | **verified** — with the base's `review-record.mjs` put back under the branch's tests, both new tests fail (`expected 'FAIL  ' to be 'FAIL  preflight failed: mergeTree (ex…'`; `expected 'FAIL  ' to match /^FAIL  \S/`); at head both pass. The three script files are identical at `8ad4e91d` and at the base (empty `git diff --stat`); `8ad4e91d` itself was not checked out. "Drives `--land`" is read as `land()` with a stubbed `runPreflight`, per the owner's choice (a).                                                                                                                   |
+| 3. `npm test -- --project repo` passes                                                                                                           | **verified** — `npm test -- --project repo` exit 0: Test Files 15 passed (15), Tests 631 passed \| 1 skipped (632); `npx vitest run scripts/test/review-record.test.ts` 64 of 64. CI at the head: check, test (ubuntu-latest), test (windows-latest, informational), codeql, CodeQL, pr-title and changes pass; the dependency-review run is completed/success.                                                                                                                                                                                                                                      |
+
+- **low** · no `Done when` line depends on it · `landMain`'s own print (`FAIL  ${detail}`) is pinned by no test, which the owner accepted in choosing (a). A pin cheaper than (b) or (c) was not on the list: the existing real-CLI case "the --land CLI lands the commit and the push for real, then fails naming "preflight"…" asserts `/== preflight ==\nFAIL/`, and `/== preflight ==\nFAIL  \S/` matches the real CLI's stdout at head (2 of 2 scenarios) and at base (0 of 2). That regex was checked against the four saved stdouts, not as an edited test.
+- **low** · no `Done when` line depends on it · `preflightStageDetail`'s fallbacks have no test of their own. Empty output returns `preflight printed no output` (reachable by a child killed before it writes, not observed). Output with no verdict returns its first non-empty line, which after a mid-run crash is a block header (`FAIL  == check ==`), and the second new test asserts only `/^FAIL  \S/`, which a header satisfies. Across 13 shapes none returned an empty reason; the CRLF branch is correct by hand and unpinned.
+- **dropped** · a verdict-like line at column 0 inside a nested block would win over the real one, since the first match is taken. `preflight.mjs` prints foreign text in a block (command output, error messages) indented six spaces, and `preflightVerdict` takes the first match too, so the stage line and the rerun hint agree. No live call site.
+- **dropped** · the docblock says the output follows "unchanged" while its leading whitespace is trimmed. False in the safe direction, nothing relies on it.
+- **dropped** · the brief's "mechanism to confirm" (stage line printed before the child's output is forwarded) is wrong, as the Log says. The brief predates the branch and the Log corrects it; the mechanism is the output's leading newline (attack 4 in the report).
+- **findings** · the hunt returned 5; 2 carried, 3 dropped.
+- NFR: security ✓ (text formatting, no new input path) · performance n/a · reliability ✓ (total over any string, with an empty-output fallback) · maintainability — above.
 
 ## Log
 
