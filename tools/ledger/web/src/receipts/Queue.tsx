@@ -388,7 +388,13 @@ export function useReceiptQueue(): ReceiptQueue {
         request = lineRequest(state, entry.draft, receipt, part);
       }
       const filed = await fileReceipt(receipt.id, request);
-      markFiled(key, part, filedAs(filed, entry.picks.joint ? null : state.payer, shown));
+      markFiled(
+        key,
+        part,
+        entry.picks.joint
+          ? filedAs(filed, null, shown)
+          : filedAs(filed, state.payer, shown, state.split),
+      );
     } catch (error: unknown) {
       outcome(key, part, { state: "refused", message: AppError.from(error).message });
     }

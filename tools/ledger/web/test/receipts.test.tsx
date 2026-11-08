@@ -508,7 +508,9 @@ test("files the items as marked, on what the card was charged", async () => {
   // The API takes the parts off: the form sends what the card was charged.
   expect(request?.destination).toMatchObject({ to: "line", amountCents: 2_476 });
   expect(
-    await screen.findByText("Filed as alex's line in the period, and sam's items as a charge."),
+    await screen.findByText(
+      "Filed 9.22 $ as alex's line in the period, and sam's 15.54 $ as a charge.",
+    ),
   ).toBeTruthy();
 });
 
@@ -655,7 +657,7 @@ test("among three people, an unchecked item names whose it is from one select (l
   ]);
   expect(
     await screen.findByText(
-      "Filed as alex's line in the period, and sam's and casey's items as charges.",
+      "Filed 3.48 $ as alex's line in the period, and sam's 15.54 $ and casey's 5.74 $ as charges.",
     ),
   ).toBeTruthy();
 });
@@ -2756,3 +2758,43 @@ test("attached to a joint-account row, a person with two charges to the pot is n
     ),
   ).toBeTruthy();
 });
+
+test.each([
+  [
+    "kept by the payer",
+    "alex",
+    "Filed 9.22 $ as alex's line in the period; 15.54 $ kept as alex's own.",
+  ],
+  [
+    "charged to sam",
+    "sam",
+    "Filed 9.22 $ as alex's line in the period, and sam's 15.54 $ as a charge.",
+  ],
+])(
+  "an item unchecked and %s, filed from the list, says the amounts, not only the printed total (the owner, 2026-11-08)",
+  async (_name, whose, said) => {
+    vi.mocked(fileReceipt).mockImplementation(async (id, request) => ({
+      id: 1,
+      receiptId: id,
+      part: request.part,
+      proposal: request.proposal,
+      periodLineId: 1,
+      chargeLineId: null,
+      charges: whose === "alex" ? [] : [{ lineId: 2, chargedTo: whose, owedToPot: false }],
+      rowId: null,
+      filedAt: "x",
+      filedBy: "alex",
+    }));
+    await readBasket();
+    fireEvent.click(sharedBox("BIERE 6X355"));
+    fireEvent.change(whoseSelect("BIERE 6X355"), { target: { value: whose } });
+    fireEvent.click(screen.getByRole("button", { name: "Back to the queue" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    fireEvent.click(screen.getByRole("button", { name: "File selected" }));
+
+    expect(await screen.findByText(said)).toBeTruthy();
+    // The request is the one the server splits the same way: the whole charge, the item not shared.
+    const request = vi.mocked(fileReceipt).mock.calls[0]?.[1];
+    expect(request?.destination).toMatchObject({ to: "line", amountCents: 2_476 });
+  },
+);
