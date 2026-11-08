@@ -306,10 +306,12 @@ Anything else passes through untouched.
   `down-page` that it did not upload is a **conflict**, as is a route on one of
   these patterns that points at a different Worker (or at none, where a Worker
   is wanted). Neither is replaced, and nothing is changed until you resolve it.
-- **Nothing here is measured against a live account yet.** Which of Access and
-  the Worker answers first for the planner and the ledger, whether the visitor's
-  address still reaches the origin on a pass-through, and the Free plan's current
-  limits are recorded as unverified in the ticket's Log.
+- **Nothing here is measured against a live account yet.** The order (Access
+  first), the visitor's address on a pass-through and the Free plan's limits were
+  read from Cloudflare's documentation on 2026-11-08, and what Cloudflare's
+  documentation leaves open is recorded in the ticket's Log: whether the route
+  call accepts `request_limit_fail_open`, which makes the fail-open line above
+  unproven, and whether the Worker is also reachable on `workers.dev`.
 
 **The same run creates the downloader's Turnstile widget.** The downloader's
 human check ([dl-50](../tools/downloader/docs/work/dl-50-a-human-check-without-an-account.md))
@@ -682,9 +684,9 @@ expect the tool's own "is unavailable" page with status 503 (the network tab, or
 `cloudflared` and load it again: the same page. `curl -sS
 https://planner.example.com/api/health` under the same outage still answers
 Cloudflare's own error, not the page. Start everything again before moving on.
-For the planner and the ledger, a visitor who is not logged in may see Access's
-login instead of the page, depending on which runs first; whichever it is,
-note it here.
+For the planner and the ledger, a visitor who is not logged in sees Access's
+login instead of the page: Access runs before a Worker, per Cloudflare's
+documentation, so expect the login.
 
 Then use each tool once, end to end, because a health check proves less than it
 looks:

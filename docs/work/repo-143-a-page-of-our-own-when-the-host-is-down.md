@@ -196,49 +196,122 @@ checked):
   - _`TOOLS[].staticPaths`_ lists `/theme.js` for the downloader and the ledger
     only; a test reads each `vite.config.ts` and fails if a config mentions
     `theme.js` the table lacks (or the reverse), or sets `assetsDir`.
-- 2026-11-08 — **Unverified — needs web check.** Each is an assumption the code
-  makes; each names what would settle it.
-  1. **Access versus Workers order** (brief's _Facts to verify_). Believed:
-     Access runs first, so a logged-out planner or ledger visitor sees the login,
-     not the page. _Settles it:_ Cloudflare's "Workers and Access" / order of
-     operations page, or on the live host `curl -sSI -H 'Accept: text/html'
-     https://planner.<domain>/` with the container stopped, logged out.
-     _Where it shows:_ the _Verifying_ paragraph already tells the owner to note
-     it.
-  2. **`CF-Connecting-IP` on a pass-through subrequest.** The Worker calls
-     `fetch(request)` with the incoming request unchanged and `/api/*` is
-     excluded, so the downloader's per-client limits never go through it; the
-     page-load path is the only one that does. _Settles it:_ the Workers docs'
-     `fetch` / `CF-Connecting-IP` notes, or an `/api/`-less route logging the
-     header at the origin.
-  3. **Free-plan quota and CPU limit** (brief: about 100,000 requests/day, 10 ms
-     CPU). _Settles it:_ `developers.cloudflare.com/workers/platform/limits/`.
-     The Worker does no work beyond a `fetch` and a static string, which is far
-     inside either figure as the brief states them.
-  4. **A route with no `script` is how the API expresses an exclusion** (Build
-     3). The code POSTs `{ pattern }` with no `script` key and reads an existing
-     route as an exclusion when `script` is absent, null or empty. _Settles it:_
-     `POST /zones/{id}/workers/routes` and its list shape in the API reference.
-  5. **`request_limit_fail_open: true` on the Worker routes** is the field name
-     the builder remembers for "fail open"; whether the route body accepts it,
-     or whether failure mode is set elsewhere, is unchecked. If the API rejects
-     the unknown field the first `--apply` fails at the first Worker route, with
-     the exclusions already made. _Settles it:_ the same API reference.
-  6. **Script download and upload shapes.** Upload: `PUT
-     /accounts/{id}/workers/scripts/down-page`, multipart with a `metadata` part
-     (`main_module`, `compatibility_date`) and the module part
-     `application/javascript+module`. Download: `GET` the same path, answers the
-     module as text (or multipart), 404 when absent. The marker has to survive
-     the round trip for a second run to say `nothing to do`. _Settles it:_ the
-     API reference, then the owner's second `--apply` (Done when 4).
-  7. **What a Worker's own `fetch` does with no tunnel connector.** The Worker
-     handles both a throw and a 530, because which one a Worker sees is not
-     known. _Settles it:_ the live outage test (Done when 1).
-  8. **A new script's `workers.dev` route.** Not enabled by the script; whether
-     a freshly uploaded script is reachable on `*.workers.dev` by default is
-     unchecked. The Worker only forwards to the hostname in the request, so it
-     would answer a self-fetch error, but the owner may want it off. _Settles
-     it:_ the dashboard's Worker settings after the first `--apply`.
+- 2026-11-08 — **Web check of the eight assumptions** (second dispatch, on head
+  `467bf2a0`, against Cloudflare's current documentation). `developers.cloudflare.com`
+  and `api.cloudflare.com` answered `curl` this time (200 on both), so the API
+  reference pages were read as markdown with `curl` (`<page>/index.md`, verbatim) and the published
+  OpenAPI schema (`cloudflare/api-schemas`, `openapi.json`, 27.8 MB) was searched
+  for field names, not a search snippet. Nothing was measured against an account.
+  Eight verdicts; **no code changed**, because no fact contradicts a field name or
+  a request shape the code is sure of. Two need an owner decision (5 and 8).
+  1. **Access versus Workers: verified, as believed.** Access runs first.
+     Read: Cloudflare blog, _Secure all your internal vibe-coded applications_
+     (`blog.cloudflare.com/workers-protected-by-access`), which says Access
+     "traditionally ran before all Workers logic in the request pipeline" and that
+     routing had to be moved ahead of Access to let it target one Worker; and
+     `developers.cloudflare.com/workers/configuration/cloudflare-access/`, which
+     says a hostname or path Access application controls the URL it matches over
+     a Worker-level one. A logged-out planner or ledger visitor therefore sees
+     the Access login, never the down page. That is the right order for a page
+     that must not be shown to someone Access would refuse. Both through WebFetch, which returns
+     its model's summary of a page, so the phrases are quoted as that summary gave them; the first source is a blog post, not a reference page.
+  2. **`CF-Connecting-IP` through `fetch(request)`: verified.**
+     `developers.cloudflare.com/fundamentals/reference/http-headers/` (read):
+     "In same-zone Worker subrequests, the value of `CF-Connecting-IP` reflects the
+     value of `x-real-ip`" (the client's address), and `x-real-ip` is only changed
+     if the Worker script changes it, which this one does not. The origin is a
+     hostname in the same zone, so it receives the visitor's address. Also read,
+     `workers/configuration/routing/`: "Custom Domains can also be invoked within
+     the same zone via `fetch()`, unlike Routes", consistent with `fetch(request)` in a
+     Route Worker going to the origin and not back into the Worker (the page does not say so in terms).
+  3. **Free-plan limits: verified.** `developers.cloudflare.com/workers/platform/limits/`
+     (read): 100,000 requests per day, resetting at midnight UTC, Error 1027 past
+     it; 10 ms CPU per HTTP request (time awaiting `fetch()` not counted), Error
+     1102 past it; 50 subrequests per invocation. The brief's figures stand.
+  4. **A route with no `script` as an exclusion: verified for create, partly for
+     list.** `workers/configuration/routing/routes/` (read): "A route can be
+     specified without being associated with a Worker. This will act to negate any
+     less specific patterns", with `*example.com/images/cat.png -> <no script>`
+     as its example. API reference, _Create Worker Route_ (`api/resources/workers/
+     subresources/routes/methods/create/index.md`, read) and the OpenAPI
+     `workers_route` schema: `pattern` is required, `script` is _optional_ string,
+     and the body is that and nothing else. _List Worker Routes_ documents
+     `result: array of {id, pattern, script}` with `script: optional string` and no
+     example of a route without one, so whether it comes back absent, `null` or
+     empty is **not settled**; `routeScript` already reads all three as "no
+     Worker". Stays as built.
+  5. **`request_limit_fail_open`: the field exists, whether POST takes it is not
+     settled, and the OpenAPI schema does not document it. Open decision, below.**
+     The name is right. Cloudflare's changelog, _Fixed and documented Workers
+     Routes and Secrets API_ (2025-04-15, read as markdown), shows it in the route
+     object the API returns, `"request_limit_fail_open": false`; `cloudflare/
+     cloudflare-go` issue 828 shows `GET /zones/$ZONE_ID/workers/routes` listing it
+     and `PUT /zones/$ZONE_ID/workers/routes/$ROUTE_ID` setting it to `true`,
+     "not documented explicitly in api docs" (GitHub issue, read). But
+     `request_limit_fail_open` has **zero hits in the published OpenAPI schema**,
+     and the _Create Worker Route_ body documents `pattern` and `script` only; the
+     `workers_route` schema is the same for POST and PUT, so a request that sets
+     the flag on POST rests on a field the schema does not list. The default is
+     `false`, which `workers/writing-workers/resource-limits/` (read) calls _fail
+     closed_: "Returns a Cloudflare `1027` error page", and it says the mode is
+     configured "by toggling the corresponding route" without naming a field. The
+     code sends the flag on POST. **If POST ignores it, the routes fail closed and
+     past 100,000 requests a day every page load of the three tools answers 1027
+     (`docs/02-DEPLOYMENT.md` says the opposite). If POST rejects it, the first
+     `--apply` stops at the first Worker route with the exclusions already made.**
+  6. **Upload and download shapes: upload verified, download verified for what the
+     marker needs, 404 not documented.** Upload, _Upload Worker_ (`PUT /accounts/
+     {account_id}/workers/scripts/{script_name}`, read in full, and the OpenAPI
+     operation): `multipart/form-data`, "a JSON `metadata` part whose
+     `main_module` field names the entrypoint file", "JavaScript ES module parts
+     use the `application/javascript+module` content type", and (`workers/
+     configuration/multipart-upload-metadata/`, read) `main_module` is "the part
+     name that contains the module entry point", which is `worker.mjs` here, the
+     metadata part name _and_ the form field of the module. `compatibility_date`
+     is an optional metadata string. Download, _Download Worker Script_ and the
+     OpenAPI operation: "Fetch raw content for a Worker script. Note this is the
+     original script content, not JSON encoded", and the 200 is described as
+     "Returns script content as a multipart form, with no metadata part and no JSON
+     encoding applied", with content types `application/javascript` and
+     `multipart/form-data`. So the response may be bare or multipart; the marker is
+     found in the raw text either way (`deployedHash` anchors on a line start and
+     tolerates a trailing `\r`), which is the reason the code reads text. **404 is
+     not in the reference:** the schema says only `4XX`, `application/json`. Third
+     parties report 404 with error 10007, "Worker not found", for an absent
+     script (search snippets of a connector site, not Cloudflare); `callScript`
+     takes 404 as absent and anything else not-ok as a failure. Not settled by
+     reading; the owner's first `--apply` settles it.
+  7. **A Worker's `fetch` with no tunnel connector: not settled by the docs.**
+     `support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1033/`
+     (read) says 1033 is the tunnel with no healthy `cloudflared`, and says nothing
+     of Workers. The closest statement is `workers/platform/known-issues/` (read):
+     a Worker `fetch()` to a hostname Cloudflare cannot resolve "will lead to 530
+     status code" and "will fail with status code 530 (1016)", which describes a
+     status, not a throw, for the neighbouring case. Likely a 530 response, but
+     this is inference, not the 1033 case. The Worker handles both, so nothing
+     changes; the live outage test (Done when 1) is the proof.
+  8. **`workers.dev` by default: documented for created Workers, not for an
+     upload; an open decision, below.** `workers/configuration/routing/workers-dev/`
+     (read): "All Workers are assigned a `workers.dev` route when they are created
+     or renamed", "when enabled, your `workers.dev` URL is available publicly".
+     The reference has `POST /accounts/{id}/workers/scripts/{name}/subdomain` with
+     `{ "enabled": boolean, "previews_enabled"?: boolean }` ("Enable or disable a
+     Worker script on the workers.dev subdomain", no default stated) and a `GET`
+     on the same path. The first `--apply` creates the script, so unless the
+     account has no `workers.dev` subdomain registered it is likely reachable at
+     `down-page.<subdomain>.workers.dev`; the script does not turn it off.
+     **Open decisions (the dispatch could not settle them, so nothing was changed).**
+     _Fail open (5):_ (a) keep the flag on POST and have the first live `--apply` be
+     the test, the cost being a possible rejection or a silent fail-closed;
+     (b) POST `{ pattern, script }` as documented, then `PUT .../routes/{id}` with
+     the flag, the one shape a source shows working, at one more call per Worker
+     route and a second write that can fail between the two; (c) drop the flag and
+     say in `docs/02-DEPLOYMENT.md` that past the quota the pages answer 1027 (the
+     default). Recommended: (b). _`workers.dev` (8):_ (a) leave it, the Worker only
+     forwards to the hostname in the request; (b) after the upload `POST` the
+     `/subdomain` endpoint with `enabled: false`, one more call, whose permission
+     requirement this check did not read. Recommended: (b), since a public URL for a script
+     nobody asked to publish is an exposure with no use.
 - 2026-11-08 — **Done when, as built.**
   1. _Owner's, on the live host — owed._ Needs `--apply` against the real
      account, then a container stop and a `cloudflared` stop.
