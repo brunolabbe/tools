@@ -486,8 +486,18 @@ function listed(names: readonly string[]): string {
  * when `payer` is `null`, and each person charged, by the filing's own record of whose (lg-30).
  * A person is named once however many charges they hold: a joint-account row
  * files one per category their items fall in (lg-100).
+ *
+ * A line filed from items says its amounts (the owner, 2026-11-08): the row's
+ * label is the receipt's printed total, so without them a receipt with an item
+ * unchecked read as filed whole. `split` is the one the request was built from,
+ * which the server computes the same way (`splitReceipt`).
  */
-export function filedAs(filing: ReceiptFiling, payer: string | null, shown: ShownNames): string {
+export function filedAs(
+  filing: ReceiptFiling,
+  payer: string | null,
+  shown: ShownNames,
+  split: ReceiptSplit | null = null,
+): string {
   const chargedPeople = [...new Set(filing.charges.map((charge) => charge.chargedTo))].map(
     (person) => `${shownName(shown, person)}'s`,
   );
@@ -497,7 +507,41 @@ export function filedAs(filing: ReceiptFiling, payer: string | null, shown: Show
       ? "Attached to the joint-account row."
       : `Attached to the joint-account row, and ${listed(chargedPeople)} items as ${charges} to the pot.`;
   }
+  const payerName = shownName(shown, payer);
+  if (split !== null) {
+    // With one other member a charge names nobody and is theirs (`chargedToOf`): the filing says who.
+    const [sole = null, ...more] = new Set(filing.charges.map((charge) => charge.chargedTo));
+    return filedSplit(split, payerName, shown, more.length === 0 ? sole : null);
+  }
   return chargedPeople.length === 0
-    ? `Filed as ${shownName(shown, payer)}'s line in the period.`
-    : `Filed as ${shownName(shown, payer)}'s line in the period, and ${listed(chargedPeople)} items as ${charges}.`;
+    ? `Filed as ${payerName}'s line in the period.`
+    : `Filed as ${payerName}'s line in the period, and ${listed(chargedPeople)} items as ${charges}.`;
+}
+
+/** A line's filing by its amounts: shared, charged to each person, and kept by the payer. */
+function filedSplit(
+  split: ReceiptSplit,
+  payerName: string,
+  shown: ShownNames,
+  sole: string | null,
+): string {
+  // A charge that came to nothing files no line (`fileLines`), so it is not named.
+  const charged = split.charges.flatMap((charge) => {
+    const person = charge.personId ?? sole;
+    return charge.cents === 0 || person === null
+      ? []
+      : [`${shownName(shown, person)}'s ${formatCents(charge.cents)}`];
+  });
+  const asCharges = charged.length === 1 ? "as a charge" : "as charges";
+  const filed =
+    split.sharedCents !== 0
+      ? `Filed ${formatCents(split.sharedCents)} as ${payerName}'s line in the period${
+          charged.length === 0 ? "" : `, and ${listed(charged)} ${asCharges}`
+        }`
+      : `Filed ${listed(charged)} ${asCharges}`;
+  const kept =
+    split.notSharedCents === 0
+      ? ""
+      : `; ${formatCents(split.notSharedCents)} kept as ${payerName}'s own`;
+  return `${filed}${kept}.`;
 }
