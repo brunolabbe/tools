@@ -7,8 +7,14 @@ import * as XLSX from "xlsx";
 import { describe, expect, test } from "vitest";
 import { AppError } from "@ledger/contract";
 import { MAX_WORKBOOK_ROWS } from "../src/workbook-bounds.ts";
-import { readSheets } from "../src/xlsx.ts";
-import { SheetWriter, entriesOf, workbookOf, zipOf } from "./helpers/xlsx-file.ts";
+import { placesOf, readSheets, rowsOf } from "../src/xlsx.ts";
+import {
+  SheetWriter,
+  entriesOf,
+  sharedPartWorkbook,
+  workbookOf,
+  zipOf,
+} from "./helpers/xlsx-file.ts";
 
 function file(build: (sheet: SheetWriter) => void): Buffer {
   const sheet = new SheetWriter("2022");
@@ -354,45 +360,6 @@ describe("a sheet's extent is bounded before its grid is built (lg-96)", () => {
     return sheet;
   }
 
-  /**
-   * One worksheet part that `workbook.xml` lists `entries` times, each with a
-   * relationship of its own to it: the file stays 10 parts, and `readSheets` builds the
-   * part once for every entry (the Reproduction's case 5).
-   */
-  function listedTimes(entries: number, address: string): Buffer {
-    const base = file((sheet) => {
-      sheet.set("A1", "Alex");
-      sheet.set(address, "far");
-    });
-    const each = Array.from({ length: entries }, (_, i) => String(i + 1));
-    const sheets = each.map((n) => `<sheet name="S${n}" sheetId="${n}" r:id="dup${n}"/>`).join("");
-    const relationships = each
-      .map(
-        (n) =>
-          `<Relationship Id="dup${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>`,
-      )
-      .join("");
-    return zipOf(
-      entriesOf(base).map((entry) => {
-        if (entry.data === undefined) return entry;
-        const xml = entry.data.toString("utf8");
-        if (entry.name === "xl/workbook.xml") {
-          return {
-            name: entry.name,
-            data: Buffer.from(xml.replace(/<sheets>.*<\/sheets>/su, `<sheets>${sheets}</sheets>`)),
-          };
-        }
-        if (entry.name === "xl/_rels/workbook.xml.rels") {
-          return {
-            name: entry.name,
-            data: Buffer.from(xml.replace(/<Relationship [^>]*worksheet[^>]*\/>/u, relationships)),
-          };
-        }
-        return entry;
-      }),
-    );
-  }
-
   test("case 1: a cell below the last row the import reads is refused as rows, whatever the file's size", async () => {
     // The Reproduction's A1048576 was +62 MB from a 15 909-byte file; the first row
     // over the bound is the same refusal, and a cheaper file to write here.
@@ -433,6 +400,32 @@ describe("a sheet's extent is bounded before its grid is built (lg-96)", () => {
     expect(sheet?.rows).toHaveLength(1);
   });
 
+  test("the stub tail is never built, not only absent from the rows (gate 1's F1)", () => {
+    // `!data` as SheetJS leaves it with `sheetStubs`: a stub at the last row makes it as
+    // long as the address says (here 1 000 rows; the measured file said 1 048 576, +77.8
+    // MB through `readSheets` and +633.9 MB over 40 entries). The array is watched for
+    // the rows the build reads: it must read the stored one and no other.
+    const rows: XLSX.CellObject[][] = Array.from({ length: 1_000 }, () => []);
+    rows[0] = [{ t: "s", v: "Alex" }];
+    rows[999] = [{ t: "z" }];
+    const read: string[] = [];
+    const watched = new Proxy(rows, {
+      get(target, key, receiver) {
+        if (typeof key === "string" && /^\d+$/u.test(key)) read.push(key);
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    const sheet = { "!data": watched } as unknown as XLSX.DenseSheet;
+
+    const extent = placesOf(sheet, 0);
+    read.length = 0;
+    const built = rowsOf(sheet, extent.widths, false);
+
+    expect(extent.widths).toEqual([1]);
+    expect(built).toHaveLength(1);
+    expect(read).toEqual(["0"]);
+  });
+
   test("case 4: a far column in every row is refused as slots, at the first row past the cap", async () => {
     // 122 rows of 16 384 places are 1 998 848 slots, 123 are 2 015 232.
     expect(await refusal(workbookOf([column("2022", "XFD", 122)]))).toBeUndefined();
@@ -462,14 +455,61 @@ describe("a sheet's extent is bounded before its grid is built (lg-96)", () => {
     expect(error?.details).toEqual({ bound: "slots" });
   });
 
-  test("case 5: one far sheet listed many times is refused as slots by the total, though each entry passes the row bound", async () => {
-    // A1 and A19000 make 19 000 slots an entry, a gap row a slot of its own: 105
-    // entries are 1 995 000 and 106 are 2 014 000. Every entry is under
-    // `MAX_WORKBOOK_ROWS`, so the row refusal passes each, and only the total stops it.
-    expect(await refusal(listedTimes(1, "A19000"))).toBeUndefined();
-    expect(await refusal(listedTimes(105, "A19000"))).toBeUndefined();
+  test("case 5: one part listed under many sheets is refused before it is parsed, whatever the far cell", async () => {
+    // Two entries at A1 and A19000 are 38 000 slots, far under the cap and every
+    // row bound: it is the sharing that is refused, so before any sheet is charged.
+    expect(await refusal(sharedPartWorkbook(1, "A19000"))).toBeUndefined();
 
-    const error = await refusal(listedTimes(106, "A19000"));
+    const error = await refusal(sharedPartWorkbook(2, "A19000"));
+
+    expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
+    expect(error?.message).toContain("the same sheet under more than one name");
+    expect((await refusal(sharedPartWorkbook(40, "A100000")))?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test.each([
+    [
+      "an absolute target",
+      (n: string) => (Number(n) % 2 === 0 ? "/xl/worksheets/sheet1.xml" : "worksheets/sheet1.xml"),
+    ],
+    [
+      "a target in another case",
+      (n: string) => (Number(n) % 2 === 0 ? "Worksheets/SHEET1.xml" : "worksheets/sheet1.xml"),
+    ],
+    [
+      "a target with an xl/ prefix",
+      (n: string) => (Number(n) % 2 === 0 ? "xl/worksheets/sheet1.xml" : "worksheets/sheet1.xml"),
+    ],
+  ])("a shared part under %s is still shared", async (_what, target) => {
+    const shared = sharedPartWorkbook(2, "A2", target);
+    // SheetJS itself reads the one part under both sheets, so the refusal is not of a
+    // spelling it would have told apart.
+    const parsed = XLSX.read(shared, { type: "buffer" });
+    expect(parsed.SheetNames).toEqual(["S1", "S2"]);
+    expect(Object.keys(parsed.Sheets["S2"] ?? {})).toContain("A2");
+
+    const error = await refusal(shared);
+
+    expect(error?.code).toBe("WORKBOOK_NOT_XLSX");
+  });
+
+  test("sheets that each have a part of their own are not shared, however many", async () => {
+    const sheets = Array.from({ length: 12 }, (_, i) => column(`S${String(i)}`, "B", 3));
+
+    expect(await refusal(workbookOf(sheets))).toBeUndefined();
+  });
+
+  test("the slots run across distinct parts too: 106 sheets of A1 and A19000 are refused as slots", async () => {
+    // 19 000 slots a sheet, a gap row a slot of its own: 105 sheets are 1 995 000 and 106
+    // are 2 014 000. Every sheet is under `MAX_WORKBOOK_ROWS`, so only the total stops it.
+    const sheets = Array.from({ length: 106 }, (_, i) => {
+      const sheet = new SheetWriter(`S${String(i)}`);
+      sheet.set("A1", "Alex");
+      sheet.set("A19000", "far");
+      return sheet;
+    });
+
+    const error = await refusal(workbookOf(sheets));
 
     expect(error?.code).toBe("WORKBOOK_TOO_LARGE");
     expect(error?.details).toEqual({ bound: "slots" });

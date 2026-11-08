@@ -43,7 +43,7 @@ import {
   writeUnseenMembers,
 } from "./helpers/unseen.ts";
 import { history, render } from "./helpers/workbook.ts";
-import { SheetWriter, workbookOf } from "./helpers/xlsx-file.ts";
+import { SheetWriter, sharedPartWorkbook, workbookOf } from "./helpers/xlsx-file.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
 import { importWorkbook } from "../src/workbook-import.ts";
 import { NO_CORRECTIONS } from "@ledger/books";
@@ -1369,8 +1369,9 @@ describe("a stored name holding a control or a zero-width character (lg-82)", ()
   });
 });
 
-// lg-96: the command keeps the route's bounds, since both read the file through
-// `readSheets`; it was unbounded before, and a far cell cost memory by its address.
+// lg-96: the command has the reader's bounds, the rows and the slots, since both read the file
+// through `readSheets`; it was unbounded before, and a far cell cost memory by its address.
+// It has none of the route's others (the sheets, the workbook-wide rows, the cells).
 describe("a workbook past the reader's bounds, through the command (lg-96)", () => {
   async function refused(sheet: SheetWriter): Promise<Ran> {
     writeFileSync(path.join(dir, "classeur.xlsx"), workbookOf([sheet]));
@@ -1397,6 +1398,16 @@ describe("a workbook past the reader's bounds, through the command (lg-96)", () 
 
     expect(ran.code, ran.err).toBe(2);
     expect(ran.err).toContain("this import reads 2000000 at most");
+    expect(existsSync(dataDir)).toBe(false);
+  });
+
+  test("a part listed under two sheets is refused before it is parsed", async () => {
+    writeFileSync(path.join(dir, "classeur.xlsx"), sharedPartWorkbook(2, "A19000"));
+
+    const ran = await run("classeur.xlsx", "--as", "alex", "--write");
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain("the same sheet under more than one name");
     expect(existsSync(dataDir)).toBe(false);
   });
 });

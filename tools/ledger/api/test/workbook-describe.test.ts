@@ -59,6 +59,7 @@ import {
   paddedDeflate,
   rawZip,
   reEnded,
+  sharedPartWorkbook,
   workbookOf,
   xlsxOf,
   zipOf,
@@ -1135,5 +1136,20 @@ describe("a sheet past the reader's bounds, through the real reader (lg-96)", ()
     expect(response.statusCode).toBe(413);
     expect(errorOf(response)).toMatchObject({ code: "WORKBOOK_TOO_LARGE", details: { bound } });
     expect(counts(started)).toEqual(before);
+  });
+
+  test("a part listed under two sheets is WORKBOOK_NOT_XLSX before it is parsed, by Describe and by Confirm", async () => {
+    const model = fake(answering(fixture("lg7").layout));
+    const started = await start({ ask: model.ask });
+    const shared = sharedPartWorkbook(2, "A19000");
+
+    const described = await describeFile(started, shared);
+    const confirmed = await confirmFile(started, shared, validLayout());
+
+    for (const response of [described, confirmed]) {
+      expect(response.statusCode).toBe(415);
+      expect(errorOf(response).code).toBe("WORKBOOK_NOT_XLSX");
+    }
+    expect(model.requests).toHaveLength(0);
   });
 });

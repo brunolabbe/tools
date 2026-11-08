@@ -253,7 +253,7 @@ export function declaredInflatedSize(entries: readonly ZipEntry[]): number {
  * bound (lg-87). The sizes may be 0 only where bit 3 says a data descriptor
  * carries them; the stream inflated is then the one counted here.
  */
-function compressedOf(bytes: Buffer, entry: ZipEntry): Buffer {
+export function compressedOf(bytes: Buffer, entry: ZipEntry): Buffer {
   const at = entry.localHeaderOffset;
   if (at + 30 > bytes.length || bytes.readUInt32LE(at) !== LOCAL_HEADER) throw notXlsx();
   const flags = bytes.readUInt16LE(at + 6);

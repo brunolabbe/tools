@@ -338,3 +338,46 @@ export function reEnded(
   record.writeUInt32LE(record.readUInt32LE(12) + (change.extra ?? 0), 12);
   return Buffer.concat([zip.subarray(0, end), change.insert ?? Buffer.alloc(0), record]);
 }
+
+/**
+ * One worksheet part, holding `A1` and a cell at `address`, that `workbook.xml`
+ * lists `entries` times, each with a relationship of its own to it, spelled as
+ * `target` gives (lg-96): the file stays 10 parts and SheetJS parses the part once for
+ * every entry. Nothing a household saves does this.
+ */
+export function sharedPartWorkbook(
+  entries: number,
+  address: string,
+  target: (n: string) => string = () => "worksheets/sheet1.xml",
+): Buffer {
+  const sheet = new SheetWriter("S");
+  sheet.set("A1", "Alex");
+  sheet.set(address, "far");
+  const each = Array.from({ length: entries }, (_, i) => String(i + 1));
+  const sheets = each.map((n) => `<sheet name="S${n}" sheetId="${n}" r:id="dup${n}"/>`).join("");
+  const relationships = each
+    .map(
+      (n) =>
+        `<Relationship Id="dup${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="${target(n)}"/>`,
+    )
+    .join("");
+  return zipOf(
+    entriesOf(workbookOf([sheet])).map((entry) => {
+      if (entry.data === undefined) return entry;
+      const xml = entry.data.toString("utf8");
+      if (entry.name === "xl/workbook.xml") {
+        return {
+          name: entry.name,
+          data: Buffer.from(xml.replace(/<sheets>.*<\/sheets>/su, `<sheets>${sheets}</sheets>`)),
+        };
+      }
+      if (entry.name === "xl/_rels/workbook.xml.rels") {
+        return {
+          name: entry.name,
+          data: Buffer.from(xml.replace(/<Relationship [^>]*worksheet[^>]*\/>/u, relationships)),
+        };
+      }
+      return entry;
+    }),
+  );
+}

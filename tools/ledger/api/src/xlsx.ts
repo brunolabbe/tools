@@ -14,6 +14,9 @@ import * as XLSX from "xlsx";
 import type { Cell, CellValue, Sheet } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import { MAX_WORKBOOK_ROWS, MAX_WORKBOOK_SLOTS } from "./workbook-bounds.ts";
+import { sharedSheetPart } from "./workbook-parts.ts";
+import { workbookEntries } from "./workbook-zip.ts";
+import type { ZipEntry } from "./workbook-zip.ts";
 
 /** The one `SSF` call this file makes; SheetJS types the whole namespace `any`. */
 const SSF = XLSX.SSF as { is_date: (format: string) => boolean };
@@ -99,18 +102,34 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
 }
 
 /**
- * How wide a stored row is: up to its last cell that holds a value. The one
- * measure `rowsOf` builds a row to and `placesOf` charges it by, so the two cannot
- * disagree about what a row costs.
+ * How wide a stored row is: up to its last cell that holds a value. Only the
+ * indices the row defines are visited, so a row whose one stored cell is a
+ * formatting stub at `XFD` is not walked across 16 384 places (lg-96, gate 1's
+ * F3: 5 000 such rows took 6.4 s, the walk made twice).
  */
 function widthOf(source: readonly (XLSX.CellObject | undefined)[] | undefined): number {
   let width = 0;
-  for (const [c, cell] of (source ?? []).entries()) if (holds(cell)) width = c + 1;
+  source?.forEach((cell, c) => {
+    if (holds(cell)) width = c + 1;
+  });
   return width;
 }
 
 function tooLarge(bound: "rows" | "slots", message: string): AppError {
   return new AppError("WORKBOOK_TOO_LARGE", message, { details: { bound } });
+}
+
+/** What `placesOf` found out about a sheet: the places it spent and the width of each row to build. */
+export interface Extent {
+  /** The workbook's places so far, this sheet's included. */
+  places: number;
+  /**
+   * The width of each row up to the last that holds a value, a gap row 0. **This is
+   * the whole of what `rowsOf` builds**: rows past the last stored one, which a
+   * formatting stub can make `!data` hold by the million (lg-96, gate 1's F1), are
+   * not in it, and so are never built.
+   */
+  widths: number[];
 }
 
 /**
@@ -123,17 +142,18 @@ function tooLarge(bound: "rows" | "slots", message: string): AppError {
  * bounds, but the address.
  *
  * A row is a place of its own, so a gap row counts one, and a stored row counts
- * its width. The total runs across the sheets because a workbook may list one
- * worksheet part many times and every entry is built; the sheets are not charged
- * one by one against the same cap. Refused past `MAX_WORKBOOK_ROWS` rows in one
+ * its width. The total runs across the sheets, so that a workbook of many sheets is
+ * bounded as one; the sheets are not charged one by one against the same cap. What it
+ * does not bound is SheetJS's own parse of each sheet, which happens before this runs
+ * (gate 1's F2): a part listed under many sheets is refused before that, by
+ * `sharedSheetPart` (`workbook-parts.ts`). Refused past `MAX_WORKBOOK_ROWS` rows in one
  * sheet and `MAX_WORKBOOK_SLOTS` places in the workbook, each as
  * `WORKBOOK_TOO_LARGE` with the bound named, and the refusal is thrown as soon as
  * it is known, with the rest of the sheet unread.
  */
-function placesOf(sheet: XLSX.DenseSheet, spent: number): number {
+export function placesOf(sheet: XLSX.DenseSheet, spent: number): Extent {
   let places = spent;
-  // The last row that holds anything: rows past it are not part of the sheet.
-  let last = -1;
+  const widths: number[] = [];
   for (const [r, source] of (sheet["!data"] ?? []).entries()) {
     const width = widthOf(source);
     if (width === 0) continue;
@@ -143,8 +163,10 @@ function placesOf(sheet: XLSX.DenseSheet, spent: number): number {
         `A sheet of that workbook has a cell in row ${String(r + 1)}; this import reads ${String(MAX_WORKBOOK_ROWS)} rows at most.`,
       );
     }
-    places += r - last - 1 + width;
-    last = r;
+    // The gap rows since the last stored one, each a place, then this row's width.
+    places += r - widths.length + width;
+    while (widths.length < r) widths.push(0);
+    widths.push(width);
     if (places > MAX_WORKBOOK_SLOTS) {
       throw tooLarge(
         "slots",
@@ -152,7 +174,7 @@ function placesOf(sheet: XLSX.DenseSheet, spent: number): number {
       );
     }
   }
-  return places;
+  return { places, widths };
 }
 
 /**
@@ -166,25 +188,49 @@ function placesOf(sheet: XLSX.DenseSheet, spent: number): number {
  * proportion to the merge's area (+76 MB at A1:XFD100, +227 MB at A1:XFD400)
  * past every size bound, a 2.5 KB file (lg-88).
  *
- * Called only on a sheet `placesOf` has charged, which is what bounds the grid.
+ * Builds `widths.length` rows of those widths and looks at no row of `!data` past the
+ * last, so what it costs is what `placesOf` charged. Rows past the last stored one are
+ * not part of the sheet.
  */
-function rowsOf(sheet: XLSX.DenseSheet, date1904: boolean): (Cell | null)[][] {
+export function rowsOf(
+  sheet: XLSX.DenseSheet,
+  widths: readonly number[],
+  date1904: boolean,
+): (Cell | null)[][] {
   const data = sheet["!data"] ?? [];
-  const rows: (Cell | null)[][] = [];
-  for (const source of data) {
-    const width = widthOf(source);
+  return widths.map((width, r) => {
+    const source = data[r];
     const cells: (Cell | null)[] = [];
     for (let c = 0; c < width; c += 1) cells.push(cellOf(source?.[c], date1904));
     // A row with nothing stored in it is a gap, as an absent row is.
-    rows.push(cells);
+    return cells;
+  });
+}
+
+/**
+ * Refuses a workbook in which two sheets are read from one part, before SheetJS
+ * parses any (lg-96, gate 1's F2). A file `workbookEntries` does not accept is left to
+ * the reader below, which says what is wrong with it as it always did.
+ */
+function refuseSharedParts(data: Buffer): void {
+  let entries: ZipEntry[];
+  try {
+    entries = workbookEntries(data);
+  } catch (error: unknown) {
+    if (error instanceof AppError) return;
+    throw error;
   }
-  // Rows past the last stored one are not part of the sheet.
-  while (rows.length > 0 && rows.at(-1)?.length === 0) rows.pop();
-  return rows;
+  if (sharedSheetPart(data, entries) !== undefined) {
+    throw new AppError(
+      "WORKBOOK_NOT_XLSX",
+      "That workbook lists the same sheet under more than one name; this import reads a workbook whose sheets are each their own.",
+    );
+  }
 }
 
 /** Every sheet of the workbook in `data`, in the workbook's order. */
 export async function readSheets(data: Buffer): Promise<Sheet[]> {
+  refuseSharedParts(data);
   let workbook: XLSX.WorkBook;
   try {
     // `sheetStubs`, or a formula saved with no value is dropped, formula and all:
@@ -218,8 +264,9 @@ export async function readSheets(data: Buffer): Promise<Sheet[]> {
     if (sheet === undefined || (sheet["!type"] !== undefined && sheet["!type"] !== "sheet")) {
       continue;
     }
-    places = placesOf(sheet, places);
-    sheets.push({ name, rows: rowsOf(sheet, date1904) });
+    const extent = placesOf(sheet, places);
+    places = extent.places;
+    sheets.push({ name, rows: rowsOf(sheet, extent.widths, date1904) });
   }
   return sheets;
 }
