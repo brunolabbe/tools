@@ -27,6 +27,7 @@ import {
   planTurnstile,
   TOOLS,
 } from "../cloudflare-setup.mjs";
+import { createWorkersFake } from "./fixtures/cloudflare-workers-fake.mjs";
 
 // --- dl-71: the downloader's Turnstile widget ---------------------------------
 //
@@ -138,13 +139,14 @@ function fakeAccount(
   const apps: Record<string, unknown>[] = [...(initial.apps ?? [])];
   const records: Record<string, unknown>[] = [];
   const writes: string[] = [];
+  const workersFake = createWorkersFake();
   const base = "https://api.cloudflare.com/client/v4/accounts/A";
   let ingress: unknown[] = [{ service: "http_status:404" }];
 
   const fetchFake = (input: string | URL | Request, init: RequestInit = {}) => {
     const url = String(input);
     const method = init.method ?? "GET";
-    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
     if (method !== "GET") writes.push(`${method} ${url.replace(base, "").split("?")[0]}`);
 
     if (url.endsWith("/tokens/verify")) return answer({ status: "active" });
@@ -169,7 +171,7 @@ function fakeAccount(
       }
       return answer(widgets);
     }
-    return answer(null, 404);
+    return workersFake.handle(url, method, init) ?? answer(null, 404);
   };
 
   return { fetchFake, writes };

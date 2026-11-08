@@ -26,6 +26,8 @@
     "../markdown.mjs",
     "../next-id.mjs",
     "../cloudflare-setup.mjs",
+    "../cloudflare-down-page.mjs",
+    "fixtures/cloudflare-workers-fake.mjs",
     "../agent-cost.mjs",
     "../review-record.mjs",
     "../preflight.mjs",
