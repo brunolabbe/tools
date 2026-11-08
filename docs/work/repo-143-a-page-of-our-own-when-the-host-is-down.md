@@ -7,7 +7,6 @@ status: done
 milestone: null
 depends_on: []
 difficulty: standard
-awaiting: Done when 1, 2 and 4 (live half) — the owner's first live `--apply`, then `docker compose stop <tool>` and later stopping `cloudflared`, with `curl -sSI -H 'Accept: text/html' https://<tool>.<domain>/` reading 503 with `Retry-After: 60`, `Cache-Control: no-store` and a body naming the tool, and `curl -sS https://<tool>.<domain>/api/health` reading Cloudflare's error and not the page; the same `--apply` run a second time reading `nothing to do.`, no `REPAIR` and no `FAILED` line, exit 0
 ---
 
 # repo-143 — A page of our own when the host is down
@@ -133,15 +132,26 @@ checked):
 
 ## Done when
 
-1. With the Worker deployed, loading a tool's hostname while its container is
+1. ~~With the Worker deployed, loading a tool's hostname while its container is
    stopped shows the down page with status 503. Loading it while `cloudflared` is
-   stopped also shows the down page. The owner runs this on the live host.
-2. Under the same outage, `/api/health` on any tool still returns Cloudflare's
-   own response, not the page.
+   stopped also shows the down page. The owner runs this on the live host.~~
+   _Observed 2026-11-08 by the owner, in a browser logged in through Access: the
+   down page with the container stopped and with `cloudflared` stopped. The
+   status and headers were not read live (the Network tab was not open; the unit
+   tests pin them). The reading is in the Log._
+2. ~~Under the same outage, `/api/health` on any tool still returns Cloudflare's
+   own response, not the page.~~ _Observed 2026-11-08 by the owner, in the same
+   browser: `/api/health` showed Cloudflare's "Bad gateway, Error code 502" with
+   the container stopped and "Error 1033, Cloudflare Tunnel error" with
+   `cloudflared` stopped, not the page. The reading is in the Log._
 3. Unit tests prove the Worker's decision table, the route plan (additions,
    exclusions, the conflict on a foreign Worker) and the idempotent upload.
-4. `node scripts/cloudflare-setup.mjs` with no `--apply` prints the Worker and
-   its routes in the plan. A second `--apply` run reports `nothing to do`.
+4. ~~`node scripts/cloudflare-setup.mjs` with no `--apply` prints the Worker and
+   its routes in the plan. A second `--apply` run reports `nothing to do`.~~
+   _Observed 2026-11-08 on the live account: the second `--apply` ended
+   `nothing to do.` with no `REPAIR` and no `FAILED` line. Its fake-account half
+   (the plan, and the second run against the fake) was already proven by the
+   gates; the live half is now observed. The reading is in the Log._
 5. The page fits a 360 px viewport with no horizontal scroll and reads in both
    colour schemes. A screenshot of each goes in the pull request.
 6. 02-DEPLOYMENT.md names the two new token permissions and the verification
@@ -509,3 +519,51 @@ checked):
 - 2026-11-08 — Fixed at landing by owner choice: gate 2, F2 — "name both causes and let the dashboard reading tell them apart". `docs/02-DEPLOYMENT.md` now names the route list not returning the field and a PUT accepted but not applied, and drops "the routes are as wanted". `git diff 2a7b08ce HEAD -- docs/02-DEPLOYMENT.md | grep -c '^-.*so the routes are as wanted'` → `1`.
 - 2026-11-08 — Fixed at landing by owner choice: gate 2, N1 — "two new branches in `main` of `scripts/cloudflare-setup.mjs` are asserted by no test". Two tests at the end of `scripts/test/cloudflare-down-page.test.ts`, in `the workers.dev call's two failure shapes (gate 2's N1)`. Gate 2's `mutate2.mjs` run on the committed tree (74 of 74 green before and after). Mutant `nohint`: 1 failed, 73 passed of 74, "a refused credential on the switch is told which permission, and the other statuses are not". Mutant `nostatusguard`: 1 failed, 73 passed of 74, "a refused connection on the switch read is the run's error, not a FAILED line".
 - 2026-11-08 — Fixed at landing by owner choice: gate 2, N2 — "the remedies for an account with no `workers.dev` subdomain are given for every status". The `finish()` message and the doc now say run again for 429 or 5xx, and give the dashboard and register-a-subdomain remedy for a missing subdomain; the "every later run" claim is dropped. `git diff 2a7b08ce HEAD -- docs/02-DEPLOYMENT.md | grep -c '^-.*and so does every later run until the'` → `1`, and `git diff 2a7b08ce HEAD -- scripts/cloudflare-setup.mjs | grep -c '^-.*after the account registers a workers.dev subdomain'` → `1`.
+- 2026-11-08 — **The owner's live readings, recorded as the owner's.** The owner
+  ran these on the live host and the orchestrator relayed them; the builder did
+  not run them and cannot re-run them. They close the `awaiting` line this
+  commit deletes, and they strike Done when 1, 2 and 4 above.
+  1. _Second live `--apply`_ (owner's paste, 2026-11-08 ~22:10 UTC,
+     `scripts/cloudflare-setup.mjs --domain oludoi.com --email … --tunnel Tools
+     --account … --apply` on the host checkout). Every line `ok`, including
+     `ok worker down-page (sha256 2dfb2786b825)` and `ok worker down-page is off
+     workers.dev`; eleven `ok route` lines (`/api/*` and `/assets/*` for each
+     tool; `/theme.js` for downloader and ledger, with no Worker; `<host>/* ->
+     down-page` for downloader, planner and ledger). Last line `nothing to do.`;
+     no `REPAIR` line and no `FAILED` line. The exit code was not in the paste.
+  2. _Outage, from a browser logged in through Access_ (owner's screenshots,
+     2026-11-08 22:06–22:07 UTC). With `docker compose stop downloader`,
+     `https://downloader.oludoi.com/` showed the down page ("Downloader is
+     unavailable … Status 503. Reload this page"), and `/api/health` showed
+     Cloudflare's own "Bad gateway, Error code 502". With `cloudflared` also
+     stopped, `/` showed the same down page and `/api/health` showed Cloudflare's
+     "Error 1033, Cloudflare Tunnel error". The "Status 503" is the page's own
+     text. The Network tab was not open, so the HTTP status and headers were not
+     read live; the unit tests pin them.
+  3. _Unauthenticated `curl`_ (`curl -sSI -H 'Accept: text/html'
+     https://downloader.oludoi.com/`, under the same outage): Access's `302` to
+     the login page, both times. On this host the downloader is behind an Access
+     application too, so Access answers before the Worker, as the Log already
+     records for planner and ledger.
+  4. _Against the earlier unverified items._ These readings settle:
+     - the route list does return `request_limit_fail_open` for a Worker route,
+       and it reads true (no `REPAIR` line on the second run). This is item (1)
+       of "Two things that are still unproven" in the entry "Built the two
+       answers";
+     - the `/subdomain` call works on this account (the Worker is off
+       `workers.dev`), which is item (2) of the same paragraph. What it answers
+       on an account with no registered `workers.dev` subdomain is still not
+       known;
+     - the uploaded script's content-hash marker survives the live download, so
+       the second run uploads nothing;
+     - a Worker on a tunnel with no connector still serves the page (the web
+       check's item 7). Whether `fetch` threw or got a 530 is not distinguished:
+       the readings show the page, not which of the two happened.
+  5. _Still not reached by these readings:_ the behaviour past the Free plan's
+     daily request quota (the fail-open flag's effect), and the exit code of the
+     second run.
+  6. _Owner's answer to the Done when 1 strike_ (2026-11-08, relayed by the
+     coordinator). Question: is striking Done when 1 with the caveat that the 503
+     status and headers were not read live enough? Options: accept with the
+     caveat (recommended); or the owner takes a Network-tab reading. **Chosen:
+     accept with the caveat.**
