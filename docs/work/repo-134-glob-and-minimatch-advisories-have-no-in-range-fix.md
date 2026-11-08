@@ -1,13 +1,12 @@
 ---
 id: repo-134
 tool: repo
-title: glob and minimatch carry moderate advisories fixed only in majors no dependent accepts, in code nothing here runs
+title: glob and minimatch advisories reach the tree only through @fastify/static; no code here runs them
 kind: chore
 status: ready
 milestone: null
 depends_on: []
 difficulty: mechanical
-note: not startable until @fastify/static depends on glob ^14 — check npm view @fastify/static dependencies first
 ---
 
 # repo-134 — glob and minimatch advisories have no in-range fix
@@ -72,3 +71,46 @@ description. `npm audit` reports them on every run with no reason attached.
   reports 3 moderate, down from 9: `@fastify/static`, glob and minimatch, the
   first half above and nothing else. Build 3's "nothing should remain" holds once
   this ticket's `@fastify/static` release lands too.
+- 2026-11-08: the `note:` line ("not startable until @fastify/static depends on
+  glob ^14") is stale and is removed. `npm view @fastify/static@10.1.9
+  dependencies.glob` prints `^14.0.0`, and 10.1.9 was published 2026-11-04T09:47Z.
+  From that release the title's "fixed only in majors no dependent accepts" and
+  the Why's "no package here that depends on them accepts one" are false, so the
+  title is reworded; the Why is left as the 2026-10-31 record. Build 2's
+  exemption applies. exceljs is already gone at the base `4a9b8af4`:
+  `grep -c exceljs package-lock.json` prints `0`. Base audit, `npm audit
+  --package-lock-only`: `3 moderate` (`@fastify/static 7.0.0 - 10.1.8`, `glob
+  9.0.0 - 14.0.1`, `minimatch 7.0.0 - 11.0.0`).
+- 2026-11-08, the relock. Two `npx -y npm@11.21.1 update … --package-lock-only
+  --ignore-scripts` commands, then npm 10.9.9's `npm install --package-lock-only
+  --ignore-scripts`, the rule's npm 10 step run only for the lockfile. Three
+  points the rule does not give:
+  - `update @fastify/send --before=2026-11-01T00:00Z` first: `4.1.2 → 4.2.0`
+    (2026-10-20). 10.1.9 requires `@fastify/send ^4.2.0`, and a later cutoff
+    would fetch 4.2.1 (2026-11-02T22:38Z), which is inside seven days and fixes
+    no audited advisory.
+  - `update @fastify/static glob minimatch --before=2026-11-04T09:48Z`, the
+    release's own publish instant. It takes `@fastify/static 10.1.6 → 10.1.9`
+    (named as the exemption), `glob 13.0.6 → 14.0.3` (2026-10-28), `minimatch
+    10.2.6 → 11.0.4` (2026-11-02), `path-scurry 2.0.2 → 3.0.0` (2026-10-27), and
+    the new `@isaacs/nonrecursive-glob-match 1.0.3` (2026-10-28).
+  - Two entries are inside seven days. `@fastify/static 10.1.9` is the named
+    advisory exemption. `minimatch 11.0.4` is read as exempt too, because 11.0.4
+    is a release at or past the GHSA-g3hv fix (11.0.1). That is this builder's
+    reading of the rule, and the gate should judge it. The cutoff could not give
+    minimatch 11.0.3 (2026-10-28): `npm update` does not move a lock entry
+    already at a satisfying version down, and the cutoff that admits 10.1.9 is
+    later than 11.0.4.
+  - Not used: a bare `update @fastify/static` picks 10.1.10 (2026-11-04T17:11Z,
+    not named), glob 14.0.4 (2026-11-06) and minimatch 11.0.5 (2026-11-05). A
+    single cutoff of 2026-11-04T09:48Z also pulls `@fastify/send 4.2.1`, as above.
+  - npm 11's output fails `scripts/check-lockfile-sync.mjs` with `"peer": true`
+    on platform packages. The npm 10 pass removes those lines and changes no
+    version: 408 of 408 entries compared, zero differences.
+  - Results: `npm audit --package-lock-only` prints `found 0 vulnerabilities`
+    (base: 3 moderate). `node scripts/check-lockfile-sync.mjs` exits 0.
+    `package.json` is unchanged: the three `api` ranges `^10.1.3` admit 10.1.9.
+  - Not measured here: `npm test`. The farm links `node_modules` to the shared
+    checkout's copies (`@fastify/static 10.1.6`, glob 13), so a run in this
+    worktree would test the old tree. CI reads the new lockfile on the draft
+    pull request, and `npm test` is `unproven (gate)` until that run reads.
