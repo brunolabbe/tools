@@ -325,7 +325,11 @@ Anything else passes through untouched.
   `down-page` that it did not upload is a **conflict**, as is a route on one of
   these patterns that points at a different Worker (or at none, where a Worker
   is wanted). Neither is replaced, and nothing is changed until you resolve it.
-- **Nothing here is measured against a live account yet.** The order (Access
+- **Measured against one live account on 2026-11-08.** A second `--apply` there
+  printed every line `ok` and ended `nothing to do.`, with no `REPAIR` and no
+  `FAILED` line, and the Worker off `workers.dev`; with a container or
+  `cloudflared` stopped, a browser logged in through Access saw the down page,
+  and `/api/health` saw Cloudflare's own error. The order (Access
   first), the visitor's address on a pass-through and the Free plan's limits were
   read from Cloudflare's documentation on 2026-11-08, and what Cloudflare's
   documentation leaves open is recorded in the ticket's Log, among it that the
@@ -704,7 +708,7 @@ means the human check is on, `null` means it is not.
 **The down page.** On a host that has run the setup script, stop one tool's
 container (`docker compose stop planner`), load its hostname in a browser, and
 expect the tool's own "is unavailable" page with status 503 (the network tab, or
-`curl -sSI -H 'Accept: text/html' https://planner.example.com/`). Then stop
+`curl -sSI -H 'Accept: text/html' https://planner.example.com/`; on a host where the downloader is behind Access too, an unauthenticated `curl` sees the login, so read it from a logged-in browser). Then stop
 `cloudflared` and load it again: the same page. `curl -sS
 https://planner.example.com/api/health` under the same outage still answers
 Cloudflare's own error, not the page. Start everything again before moving on.
