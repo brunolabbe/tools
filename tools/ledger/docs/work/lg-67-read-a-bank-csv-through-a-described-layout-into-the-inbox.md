@@ -7,7 +7,6 @@ status: done
 milestone: P6
 depends_on: [lg-66, lg-68]
 difficulty: hard
-awaiting: Done when 13 — the owner's paid live read of a synthetic CSV through the web Import screen with the owner's key, and the repeat of the 70 Haiku shown runs on the 7 CSV fixtures under statement.csv, read after the merge, the Log recording the input tokens, the cost and the table beside lg-56's
 ---
 
 # lg-67 — Read a bank CSV through a layout a model describes, into the inbox
@@ -1120,3 +1119,79 @@ The owner's answers of 2026-10-31, on the build's open points and gate 1's F1 an
 4. **The builder's proposed line for `tools/ledger/CLAUDE.md`.** The owner declined it here; it goes to the next review session.
 5. **Gate 1, F1: the CSV candidate test takes any line, and the brief says the first.** Options: (a) keep any line and reword Build 2 and Done when 1 (iv) to "no line holds one"; (b) first line, and drop `bank-preamble` from the served set; (c) tighten the candidate test. **The owner chose (a)**, the gate's recommendation. Build 2's candidate sentence and Done when 1 (iv) are reworded above. `git diff 46f4fd86 HEAD -- tools/ledger/docs/work | grep -c '^-.*file whose first line holds no comma'` → `1`, and `grep -c '^-.*its first line holds a comma, a'` → `1`.
 6. **Gate 1, F6: the responses became unions told by `kind`, and `CSV_SHEET_NAME` and `CsvPlacement` entered `@ledger/contract`.** **The owner accepted it**, the gate's recommendation.
+
+### 2026-11-08 — Done when 13, the owner's paid reads (Claude Opus 5.5)
+
+Run on the owner's instruction of 2026-11-08, from a worktree at `main` 050ce1a4
+with the owner's key (`.claude/.keys`) and `ANTHROPIC_CUSTOM_HEADERS` unset.
+
+**The live read through the web screen.** The API served the built bundle on
+127.0.0.1:8109 over an empty household made by `household:ledger add
+alex@example.test alex` (scratch `DATABASE_PATH`, `DEV_IDENTITY` alex, the key in
+`ANTHROPIC_API_KEY`). A Playwright script outside the repository opened Import,
+chose `csv-balance`'s text as a file, and pressed "Send the samples and
+describe". Haiku 5.5's description selects `{"by":"name","names":["statement.csv"]}`
+and columns A date, B detail, C withdrawal, D deposit, E balance, oldest first;
+the dry run read 40 movements, every verification held, and the screen named the
+rows `statement.csv, row 2` to `row 41`. "Confirm and import" answered 200,
+`rowsAdded` 40, `rowsInInbox` 40, `tailBalanceCents` 409710, and the server
+logged `a described CSV was stored`. No server line holds the CSV's text, the
+file's name or the key (grep of the log: 0).
+
+The first script cut the describe response short of its `usage`, so the same
+file was described a second time to read it, and not confirmed: **4,960 input
+tokens and 496 output**, about **$0.00074** at lg-38's rates ($0.10 and $0.50 a
+million), against the measured mean of about a tenth of a cent. That second
+describe answered `ok` false, naming the stored tail (2024-05-28, 4097.10 $), as
+placement (iii) says it should once the rows are stored.
+
+**The 70 Haiku shown runs under `statement.csv`.** `layout-run.ts` had no way to
+send a CSV fixture under the product's name, since the fixtures keep the file
+names lg-56 measured. This branch adds `--csv-name sent`, which reads each CSV
+fixture's text as one sheet named `CSV_SHEET_NAME` and scores the description
+that selects it; absent, the harness is lg-56's
+(`api/test/layout-live-gate.test.ts` › "the layout measurement's harness,
+--csv-name", red with `asSent` skipped and with the expected names left as the
+fixture's). The command, at 1deae141:
+
+    env -u ANTHROPIC_CUSTOM_HEADERS LEDGER_LIVE_RUN=1 ANTHROPIC_API_KEY=<key> \
+      node --import tsx tools/ledger/api/test/live/layout-run.ts \
+      --model claude-haiku-5-5 --price-in 0.10 --price-out 0.50 \
+      --runs 10 --max-usd 5 --figures shown --csv-name sent \
+      --fixtures csv-balance,csv-no-balance,empty-columns-csv,bank-preamble,bank-two-dates,bank-footer,bank-wide \
+      --out ~/ledger-layout-lg67-sent
+
+Exit 0, 70 records, $0.0520 in all (lg-56's 70: $0.0532). All 70 answers select
+the sheet by name, `statement.csv` (lg-56: 69 of 70 by name, 1 by prefix). Its
+`summary.md`, verbatim:
+
+| Model            | Fixture           | Runs | Passed | Matched | Same import | Caught | Let through | Invalid | Input tokens (mean) | Output tokens (mean) | Cost per run (mean) |
+| ---------------- | ----------------- | ---- | ------ | ------- | ----------- | ------ | ----------- | ------- | ------------------- | -------------------- | ------------------- |
+| claude-haiku-5-5 | csv-balance       | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4960                | 480                  | $0.0007             |
+| claude-haiku-5-5 | csv-no-balance    | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4821                | 383                  | $0.0007             |
+| claude-haiku-5-5 | empty-columns-csv | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4960                | 428                  | $0.0007             |
+| claude-haiku-5-5 | bank-preamble     | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4854                | 469                  | $0.0007             |
+| claude-haiku-5-5 | bank-two-dates    | 10   | 10     | 2       | 0           | 0      | 8           | 0       | 5354                | 507                  | $0.0008             |
+| claude-haiku-5-5 | bank-footer       | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 4894                | 469                  | $0.0007             |
+| claude-haiku-5-5 | bank-wide         | 10   | 10     | 10      | 0           | 0      | 0           | 0       | 6047                | 479                  | $0.0008             |
+| claude-haiku-5-5 | **all**           | 70   | 70     | 62      | 0           | 0      | 8           | 0       | 5127                | 459                  | $0.0007             |
+
+Beside lg-56's same seven rows (its Haiku shown table):
+
+| Fixture           | Matched, lg-56 → now | Let through, lg-56 → now | Input tokens (mean), lg-56 → now |
+| ----------------- | -------------------- | ------------------------ | -------------------------------- |
+| csv-balance       | 10 → 10              | 0 → 0                    | 4928 → 4960                      |
+| csv-no-balance    | 10 → 10              | 0 → 0                    | 4787 → 4821                      |
+| empty-columns-csv | 10 → 10              | 0 → 0                    | 4929 → 4960                      |
+| bank-preamble     | 10 → 10              | 0 → 0                    | 4822 → 4854                      |
+| bank-two-dates    | 1 → 2                | 9 → 8                    | 5319 → 5354                      |
+| bank-footer       | 10 → 10              | 0 → 0                    | 4860 → 4894                      |
+| bank-wide         | 10 → 10              | 0 → 0                    | 6013 → 6047                      |
+| **all seven**     | 61 → 62              | 9 → 8                    | 5094 → 5127                      |
+
+The fixed name costs about 33 input tokens a request and changes nothing else
+measurable: the one fixture that fails, fails as it did. Each of the 8
+`bank-two-dates` let-throughs takes column B, `Date of transaction`, for the
+date, where `Date posted` (A) belongs, which is the shape lg-56 found and the
+reason the screen shows the date column (Decision 4). The `awaiting:` line is
+removed.

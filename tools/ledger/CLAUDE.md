@@ -250,7 +250,8 @@ API made — never one a request gave — and reads nothing; only
 `POST /api/receipts/:id/read` hands it to the reader, and the screen names the
 model beside that button; a receipt with anything filed from it is not read
 again. Filing is a third request and the only one that writes the books: a line
-paid by **whoever uploaded the photo**, or the receipt attached to the row it
+paid by **whoever uploaded the photo**, unless the filing names another current
+member as payer (`paidBy`, lg-102), or the receipt attached to the row it
 documents. A photo of several receipts files each as its own `part`, once; a row
 is documented by one receipt (`ROW_ALREADY_DOCUMENTED`). **A receipt's items
 must make its total or it is not filed** (`RECEIPT_DOES_NOT_ADD_UP`, lg-10): the

@@ -7,7 +7,6 @@ status: done
 milestone: null
 depends_on: []
 difficulty: hard
-awaiting: Done when 6 — the owner's paid read of the four fixtures (read-rebate-fixtures.ts, four reads at Haiku 5.5, after the merge), the reading its four verdict lines all pass with exit 0, the Log recording them
 ---
 
 # lg-101 — A rebate already taken off the printed price is taken off a second time
@@ -235,3 +234,24 @@ after gate 1 passed at `b88c551e` with three lows (F1, F2, F3).
 
 - 2026-11-07 — Fixed at landing by owner choice: gate 1, F2 — "the comment on MAX_REBATES_SEARCHED says a receipt with more rebates than the bound is left to the person". The comment now says the bound limits the subset search only and that the every-rebate repair still runs above it. `git diff b88c551e HEAD -- tools/ledger/books/src/receipts.ts | grep -c '^-.* more rebates than this is left to the person'` → `1`.
 - 2026-11-07 — Fixed at landing by owner choice: gate 1, F3 — "deleting the early itemsAddUp return leaves books/test at 88 of 88". Added `a reading whose mixed-sign rebates already add up is returned as read` at the end of the lg-101 block in `books/test/receipts.test.ts`: items `A 1000 -100` and `B -1000 +100`, total 0. Red with the early `if (itemsAddUp(proposal)) return proposal;` removed from `dropPrintedRebates` (committed tree, `npx vitest run tools/ledger/books/test/receipts.test.ts`): `1 failed | 88 passed (89)`, `expected { merchant: null, …(6) } to be { merchant: null, …(6) } // Object.is equality`. Green with it restored from the commit: `89 passed (89)`.
+
+### 2026-11-08 — Done when 6, the paid read (Claude Opus 5.5)
+
+Run on the owner's instruction of 2026-11-08, from a worktree at `main` 050ce1a4,
+with the key file `.claude/.keys` and `ANTHROPIC_CUSTOM_HEADERS` unset:
+
+    node --import tsx tools/ledger/receipts/test/live/read-rebate-fixtures.ts \
+      --paid .claude/.keys <out.json>
+
+The four verdict lines, and exit 0:
+
+    rebate-under-its-item: pass (claude-haiku-5-5)
+    rebate-away-from-its-item: pass (claude-haiku-5-5)
+    coupon-on-the-whole-receipt: pass (claude-haiku-5-5)
+    rebate-in-the-printed-price: pass (claude-haiku-5-5)
+
+The fourth receipt's items read as `(price, discount)` `(649, null)`, `(479,
+null)`, `(349, null)`, `(350, null)`: both rebates printed under their items are
+left unfolded, as Build 4 expects. lg-89's three read as before: the two rebates
+fold into their items (`799, -150` and `1099, -200`) and the whole-receipt coupon
+stays a line of its own (`-200, null`). The `awaiting:` line is removed.
