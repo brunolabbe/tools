@@ -6999,3 +6999,40 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - Gate 1's inversion mutation on repo-137 caught a spec that passed 29/29 with its two conditions swapped; the builder's green run could not have shown it.
 - A seam-mapper `npm view` found repo-134 startable though its `note:` said not; the orchestrator re-ran it before offering the batch.
 - An owner hold expressed as "land now, keep the draft, comment the merge-not-before instant" closed a batch whose merge had to wait eleven hours.
+
+### Batch 2026-11-08 (tools-ca, repo-135 repo-143, repo-126 not started) — base 64185876
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a7e7e95d337d94922 | seam-mapper, six candidates (repo-122 126 129 135 139 143) | 2m11s / 2m11s | 0 | $0.2938 |
+| #768 | open, ready, 9/9 green at 31319b57 | Sonnet 5.5 / high | ab708976b3fdf348d | builder-standard, repo-135 | 4m36s / 4m36s | 0 | $0.7241 |
+| #768 | as above | Sonnet 5.5 / xhigh | a15dd5725ad66b749 | ticket-reviewer-sonnet, repo-135 gate 1, medium (repo-139's measurement) | 7m47s / 7m43s | 0 | $1.2729 |
+| #768 | as above | Sonnet 5.5 / high | a404374aacf827439 | fixer, repo-135 owner answers + one low at landing + landing | 4m48s / 4m16s | 0 | $0.6648 |
+| #769 | open, ready, 9/9 green at 1293de53 | Sonnet 5.5 / high | a1e0e48d7d9d192d9 | builder-standard, repo-143 build, resumed for one owner stop and round 1 | 27m49s / 1h05m40s | 0 | $4.6893 |
+| #769 | as above | Sonnet 5.5 / high | aec486f34d650430c | builder-web, repo-143 eight facts against Cloudflare's docs | 9m58s / 9m39s | 0 | $1.2757 |
+| #769 | as above | Sonnet 5.5 / xhigh | aec8a87b632a0757d | ticket-reviewer-sonnet, repo-143 gate 1, medium (repo-139's measurement) | 8m42s / 8m30s | 0 | $1.5398 |
+| #769 | as above | Opus 5.5 / high | a00afc8ed2491174a | ticket-reviewer-opus, repo-143 gate 2, narrow | 7m52s / 7m45s | 0 | $2.6604 |
+| #769 | as above | Sonnet 5.5 / high | a417fe9048a6b4476 | fixer, repo-143 owner answer + three lows at landing + landing | 6m32s / 6m30s | 0 | $0.8255 |
+| — | — | Opus 5.5 / high | orchestrator c6a97833 | orchestrator (floor) | 1h03m18s / 2h50m12s | 0 | $4.4599 |
+| | | | | **total** (rates read 2026-10-10), before the log fixer | 2h23m34s | 0 | **$18.4063** |
+
+**Tickets:**
+- repo-135 → #768: gate 1 PASS (Sonnet xhigh, 2 lows; F2 fixed at landing by owner choice, F1 recorded). Done when 4 awaiting the merge.
+- repo-143 → #769: builder-web facts step before any gate; one owner stop (fail open by POST then PUT; workers.dev disabled); gate 1 CONCERNS (Sonnet xhigh, 1 med F1, 3 lows), round 1 by the resumed builder; gate 2 PASS (Opus narrow; F2 and F3 fixed in part, N1 and N2 new lows); F2, N2 and N1 fixed at landing by owner choice (N1 over the orchestrator's recommendation), F4 recorded. Done when 1, 2 and the live half of 4 awaiting the owner's live `--apply`.
+- repo-126: not started. Node 26 is not in the devcontainer and nodejs.org was firewalled at dispatch; the owner is moving the devcontainer to `NODE_MAJOR 26` locally and rebuilding, and 126 runs in the next session.
+- repo-139 (rides along, not dispatched): two of its three Sonnet gate-1 rows so far — repo-135 $1.2729, PASS, 0 high / 0 med / 2 low, 0 refuted; repo-143 $1.5398, CONCERNS, 0 high / 1 med / 3 low, 0 refuted. The third is repo-126's gate 1, which must also be dispatched on `ticket-reviewer-sonnet` and say it is 139's measurement.
+
+**Defects in the skill:**
+
+1. `SKILL.md` step 2 ("Each option is a ready-made batch of one tool's tickets, no more than the cap") against repo-139's Build 1 ("Pick the next batch of three or more `standard` tickets … use `ticket-reviewer-sonnet` … for gate 1 of each") — a measurement ticket that rides along with three tickets makes a batch of four, and no page says whether a rider counts against the cap or when it is dispatched. Re-run by the orchestrator: `grep -n 'three or more' docs/work/repo-139-*.md` → line 50; `grep -n 'no more than' .claude/skills/orchestrate-tickets/SKILL.md` → step 2's bullet.
+2. `.claude/agents/seam-mapper.md` / `SKILL.md` step 2 — the seam map rated repo-126 "Start now? yes" in the same paragraph that said "There is no Node 26 on the box, and no nvm or fnm" and "nodejs.org's `dist/index.json` returned empty from this sandbox"; nothing asks the map (or the orchestrator, before offering a batch) to treat a missing runtime or a firewalled host a Build step needs as a blocker in fact. The ticket was offered, chosen, and never dispatched. Reproduction: `curl -sS -m 15 -o /dev/null -w '%{http_code}' https://nodejs.org/dist/index.json` → `curl: (28) Connection timed out` at intake; `/usr/bin/node --version` → `v22.23.4` (re-run at close). An environment reading: the firewall was open later the same day.
+3. `reference/dispatching.md`, _Before any dispatch_ ("A Build step that fetches an external host: `curl` it once first … A builder cannot ask for it to be opened") — silent on a Build step that needs to *run* a downloaded runtime. The orchestrator's `npm pack node-linux-x64@26` then running its `bin/node` was refused by the auto-mode classifier ("[Code from External]"), so a builder would have been refused too; the page offers no route but the owner. Reproduction: that call's refusal text in the transcript; `npm view node-linux-x64@26 version` → `26.13.0` (metadata only).
+4. `roles/common.md`, opening paragraph ("51 KB against 50 KB") — repeated: repo-135's gate 1 read `Output too large (36.8KB)` on the common.md + reviewer.md command (the sixth report across two batches). Relayed from repo-135 gate 1, not re-run here; last entry's item 1 has the byte count.
+5. `roles/common.md`, _Your worktree_, the build-skip bullet — repeated from last entry's item 6: repo-143's gate 2 skipped a build on `scripts/` files importing relative fixtures and read the bullet as allowing it. Relayed from repo-143 gate 2, not re-run.
+6. `roles/reviewer.md` / `reference/dispatching.md`, _Re-gating_ (probe scripts "take the tree, the output directory and the sha … as arguments") — gate 1's scripts on repo-143 did take them, but `f2.sh` and `attack3.sh` load `fake-account.mjs` and `seed.mjs` from the *output* directory, `attack3.sh` runs `rm -f "$S"/st-*.json` (deleting `f2.sh`'s state when both share it), and `f2.sh`'s route count is `grep -c` on a one-line JSON file (printed `1` for 11 routes). Gate 2 had to copy siblings into `gate-2/`. Relayed from repo-143 gate 2, not re-run.
+7. `roles/common.md`, background runs ("the exit file is the signal") — the exit file appears per command, not at the script's end, so for a multi-command script it reads as done while the second command is still running. Relayed from repo-143's builder (`cat <build>/repo-test.exit` → `No such file`, then present after the first command), not re-run.
+8. `docs/01-TICKETS.md`, `awaiting` ("one sentence of a fixed shape") — names no rule for several `Done when` rows awaiting one event; repo-143's lander wrote one long line covering Done when 1, 2 and 4, which `status --show` parses. Relayed from repo-143's lander: `npm run -s status -- --show repo-143` shows the single row.
+
+**Worked, and worth keeping:**
+- Dispatching the `builder-web` facts step before gate 1 turned two remembered API shapes (fail open on the create body; workers.dev on by default) into owner decisions before a gate was spent on code that would change.
+- repo-143's Sonnet gate 1 ran the real setup CLI 18 times against a persistent fake account it wrote, which is how it found the F1 wedge the unit tests could not show.
