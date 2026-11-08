@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: standard
+awaiting: Done when 1, 2 and 4 (live half) — the owner's first live `--apply`, then `docker compose stop <tool>` and later stopping `cloudflared`, with `curl -sSI -H 'Accept: text/html' https://<tool>.<domain>/` reading 503 with `Retry-After: 60`, `Cache-Control: no-store` and a body naming the tool, and `curl -sS https://<tool>.<domain>/api/health` reading Cloudflare's error and not the page; the same `--apply` run a second time reading `nothing to do.`, no `REPAIR` and no `FAILED` line, exit 0
 ---
 
 # repo-143 — A page of our own when the host is down
