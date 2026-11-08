@@ -78,6 +78,8 @@ Under the chosen option:
    form, and that it is a reminder, not a gate — nothing stops a human
    dispatching a held ticket on purpose.
 4. Convert repo-122's and repo-134's notes to the chosen form.
+   repo-134's `note:` is deleted by its own branch (PR #766), so convert only
+   repo-122's.
 
 ## Done when
 
