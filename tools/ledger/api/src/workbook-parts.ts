@@ -9,10 +9,14 @@
  * biggest part many times over: 14 entries over a part of 1 400 rows by 100 numeric
  * cells (3.84 MB inflated, under the 4 MiB bound) read +384.7 MB, SheetJS's parse
  * alone +223.8 MB of it, all before `xlsx.ts` could charge a place. A running total
- * over the sheets cannot close that; refusing the shared part can. Distinct parts
- * cannot multiply the parse: `MAX_WORKBOOK_INFLATED_BYTES` is a total over every
- * entry of the file, declared and then counted, so the parts together never inflate
- * to more than the bound.
+ * over the sheets cannot close that; refusing the shared part can. What this file
+ * judges is distinctness by a copy of SheetJS's rules, and two ways past it were read
+ * through `readSheets` (gate 3, lg-96; lg-104 owns them): a zip entry whose
+ * local-header name differs from its central-directory name, which `workbookEntries`
+ * and `compressedOf` read by the central one and SheetJS's CFB by the local one, so
+ * one 1 400 by 100 part is parsed 14 times, +367.5 MB (peak 448.9 MB); and a part,
+ * such as comments, that 14 sheets' `.rels` all name, parsed once per sheet, +352.5 MB.
+ * `MAX_WORKBOOK_INFLATED_BYTES` counts each entry once, so it does not bound either.
  *
  * **No workbook Excel saves does this**: each sheet is a part of its own, so a
  * shared one is a file that is not a workbook a household saves, which is what

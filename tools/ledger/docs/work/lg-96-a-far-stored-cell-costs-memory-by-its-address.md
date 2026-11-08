@@ -280,6 +280,11 @@ orchestrator, recorded here by the lander).**
     regression. The landing rewords the shipped text that promised the unsafe direction
     (`xlsx.ts`, `workbook-bounds.ts`) and answer 10's basis, and changes no code and no
     assertion.
+15. **The header of `workbook-parts.ts`, which the first reword missed** (answered
+    2026-11-08, after the landing's reword; the orchestrator had left it out of the
+    dispatch). Its header says distinct parts cannot multiply the parse, which gate 3's two
+    measured shapes contradict. Offered: fix it in #758 now, comment only, no re-gate (the
+    orchestrator's recommendation) / leave it to lg-104. **Chosen: fix it in #758 now.**
 
 **Superseded (2026-11-08, answer 9):** ~~5. The import command. Offered: the same bounds
 (recommended) / the import stays unbounded. Chosen: the same bounds. The command refuses
@@ -963,3 +968,8 @@ New in the round:
   answer 10's basis corrected in place. Proof, run after the commit that carries this entry:
   `git diff 3b8e95d4 HEAD -- tools/ledger/api/src/xlsx.ts | grep -c '^-.*never a way in'` → 1;
   `git diff 3b8e95d4 HEAD -- tools/ledger/api/src/workbook-bounds.ts | grep -c '^-.*what gets here is a workbook'` → 1.
+- 2026-11-08 — Fixed at landing by owner choice: gate 3, F2 (the header of `workbook-parts.ts`
+  only, a comment; no code and no assertion changed; answer 15) — "Distinct parts cannot multiply
+  the parse". The header now says what the copy judges, gives the two measured ways in and names
+  lg-104. Proof, run after the commit that carries this entry:
+  `git diff 1aabcb4a HEAD -- tools/ledger/api/src/workbook-parts.ts | grep -c '^-.*cannot multiply'` → 1.
