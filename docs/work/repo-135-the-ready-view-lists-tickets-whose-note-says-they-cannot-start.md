@@ -116,3 +116,12 @@ Under the chosen option:
   pl-26's "Deferred until the existence slice is filed" also reads as a hold and
   is another tool's ticket (a `docs(planner)` change). Both are for whoever
   clears them to convert or delete.
+- 2026-11-08 — Owner answered two questions at gate 1's checkpoint. (1) Gate 1's
+  two lows, which should the lander apply — options (a) F2 at landing and F1
+  recorded, (b) both recorded, (c) F2 at landing and F1 filed as a ticket:
+  chose (a). (2) The stale `held`-shaped notes the builder did not convert —
+  options: repo-126's own builder deletes its `note: not startable before
+  2026-10-28 …` in its branch and pl-26's note is left for whoever next touches
+  the planner (recommended), or also convert pl-26 now in a `docs(planner)`
+  pull request, or leave both: chose the first. Neither note is edited on this
+  branch.
