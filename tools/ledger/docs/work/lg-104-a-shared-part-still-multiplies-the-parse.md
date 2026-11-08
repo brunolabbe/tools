@@ -26,9 +26,11 @@ gets (`compose.ledger.prod.yaml`, `memory: 512m`). Gate 3 measured +310.3 to +36
 the re-run for this ticket measured +313.3 to +379.0 MB (table below).
 
 The owner chose on 2026-11-08 to land lg-96 and file these two as this ticket. lg-96's
-own text names lg-104 at its landing head `1aabcb4a`, not at the gated `3b8e95d4`.
+own text names lg-104 at `1aabcb4a`, the head where `--land` ran, not at the gated
+`3b8e95d4`. PR #758 is open at `a4a2feb2` now, one docs commit after `1aabcb4a` that
+rewords the header below.
 
-The landing head's `workbook-parts.ts` header (line 13 at `1aabcb4a`) says "Distinct
+The `workbook-parts.ts` header (line 13 at `1aabcb4a`) says "Distinct
 parts cannot multiply the parse: `MAX_WORKBOOK_INFLATED_BYTES` is a total over every
 entry of the file … so the parts together never inflate to more than the bound."
 `git grep -n "cannot multiply"` on `1aabcb4a` finds it. Both shapes below contradict
@@ -550,7 +552,7 @@ options and choice are in the Log.
    part shared by two sheets ("each sheet is a part of its own"), and nothing in the repo
    says it of a local-header name that differs from the central one, or of a comments, VML,
    drawing or chart part named by several sheets. The cost not priced is a false refusal of
-   a real workbook; the repo's one real workbook (named in `workbook-bounds.ts`) has not
+   a real workbook; the repo's one real workbook (described in `workbook-bounds.ts`) has not
    been run against the proposed refusal, and the real-workbook row of Done when 1 is the
    measurement.
 2. **Parse one sheet per `XLSX.read` (`sheets: i`).** Each shared part is parsed and
@@ -559,11 +561,14 @@ options and choice are in the Log.
    bound). Built grids still accumulate across sheets, so memory for the built result is
    not closed by this.
 3. **Accept and document.** No code. Correct whichever text still reads otherwise at
-   build time, as Build 4 does for the header. At `a4a2feb2` (lg-96's landing head)
+   build time, as Build 4 does for the header. At `a4a2feb2` (PR #758's open head: `1aabcb4a`,
+   where `--land` ran, plus one docs commit that rewords the header)
    `workbook-bounds.ts`, `xlsx.ts`'s comment and lg-96's answer 10 already name the two
    shapes and gate 3's figures; `workbook-parts.ts`'s header is the one Build 4 covers.
    Costs: a crafted upload under 4 MiB takes about 327 to 385 MB of the 512 MB
-   container, and the cap is not the bound on it.
+   container in `readSheets` (the envelope of every `readSheets` reading on record), and
+   +310 to +354 MB through the describe route, which is what an upload reaches; the cap is
+   not the bound on either.
 
 ## Build
 
@@ -610,9 +615,12 @@ builder.
    14-sheet files, and reads the honest controls unchanged (`localname-control-14`
    140,013 cells; `comments-distinct-14` 14 cells). Removing the new check fails the
    tests. A real workbook saved by Excel, which the repo does not hold (the one
-   `workbook-bounds.ts` names is outside it), is read at the head with both refusals in
+   `workbook-bounds.ts` describes is outside it), is read at the head with both refusals in
    place and still reads, with its sheet and cell counts the same as at `origin/main`. The
-   owner or the builder supplies it, and the Log says which file; if none is available the
+   owner or the builder supplies it, and the Log says which file, which application saved
+   it (`docProps/app.xml` names it) and how many comments, VML, drawing and chart parts it
+   holds. A workbook with none of those parts gives the second refusal nothing to decide,
+   so a count of 0 for all four leaves that clause `unproven`; if no file is available the
    line is `unproven` and the false-refusal cost stays unpriced.
 2. **If 2:** the Log holds the before and after table for both shapes, at 14 sheets and
    at the largest sheet count, with time and peak under `--max-old-space-size=900`. Each
@@ -644,7 +652,9 @@ builder.
   reader (+327.1 against +352.5), which is recorded as measured.
 - `lg-96` at `3b8e95d4` does not name lg-104. At its landing head `1aabcb4a` it does, in
   its Log, in `workbook-bounds.ts` and in `xlsx.ts`. The reference is in place for the
-  landing; no change is made here.
+  landing; no change is made here. Clarified at landing (gate 2, N1): `1aabcb4a` is where
+  `--land` ran, and "its landing head" did not mean `a4a2feb2`, PR #758's head with the
+  header reworded.
 - The dispatch's observation said each of lg-96's three gates found a new disagreement
   between the copy and SheetJS. Gate 1's F2, read from the lg-96 Log, is the parse that
   runs before the charge (a cost finding). Gates 2 and 3 each found an identity
@@ -716,3 +726,32 @@ builder.
     option 3.
 - Not changed, as dispatched: Done when 2 and 5. Gate 1's F5, the unpinned count, stays as
   the gate wrote it; its fix needs a choice.
+
+### 2026-11-08, gate 2 PASS, the owner's answer and the landing
+
+- Gate 2 (Sonnet, narrow, at `46d9d330`) returned PASS with four lows. Its full report and
+  gate 1's are on the pull request thread, #759; status unchanged. No `--land`: this pull
+  request only files the ticket, and the sections do not go into it.
+- **Question: which of gate 2's four lows to fix at the landing.** Asked by the
+  orchestrator; answered 2026-11-08 by the owner. Options: fix all four with no re-gate (the
+  orchestrator's recommendation), fix N1 and N2 only, record all four and change nothing.
+  **Chosen: fix all four at landing, no re-gate.** The question was not recorded in the ticket
+  before this entry.
+- 2026-11-08 — Fixed at landing by owner choice: gate 2, N1 — "Two shas are called lg-96's
+  landing head". Option 3, the Why and the filing Log now say that `1aabcb4a` is where
+  `--land` ran and `a4a2feb2` is PR #758's head with the header reworded. The filing Log's
+  claim is clarified in place, not deleted. Proof, on one line:
+  `git diff 46d9d330 HEAD -- <ticket> | grep -c '^-.*landing head)'` → 1.
+- 2026-11-08 — Fixed at landing by owner choice: gate 2, N2 — "a description, not a name".
+  Option 1 and Done when 1 now say "described in" and "describes", since
+  `workbook-bounds.ts` gives counts and no filename. Proof, on one line:
+  `git diff 46d9d330 HEAD -- <ticket> | grep -c '^-.*one real workbook (named in'` → 1.
+- 2026-11-08 — Fixed at landing by owner choice: gate 2, F4 residual — "option 3 drops the
+  scope". Option 3's range is now scoped to `readSheets`, with the route's +310 to +354 MB
+  beside it, from gate 2's account. Proof, on one line:
+  `git diff 46d9d330 HEAD -- <ticket> | grep -c '^-.*the cap is not the bound on it'` → 1.
+- 2026-11-08 — Fixed at landing by owner choice: gate 2, F3 residual — "the row is met and
+  the false-refusal cost is still unpriced". Done when 1's real-workbook row now requires
+  the Log to name the file's application and its count of comments, VML, drawing and chart
+  parts, and a count of 0 for all four leaves the second refusal `unproven`. Proof, on one line:
+  `git diff 46d9d330 HEAD -- <ticket> | grep -c '^-.*the Log says which file; if none'` → 1.
