@@ -34,6 +34,31 @@ library would later replace. No web app in this repo has a fetching library yet.
 That is why the choice is recorded here, and why it stays inside the ledger: under
 the repo's rule, `packages/ui` gets shared code only when a second tool needs it.
 
+## Decision — answered 2026-11-07 by the owner
+
+**Question.** The Done when line "Every write's invalidations are tested: after the
+write, the affected screen shows the new data without a reload" names no list, so a
+gate has nothing to grade it against. Counted at `08f78f69` by the orchestrator, and
+re-counted on 2026-11-08 at `origin/main` (`08f78f69`, the same tree), the write call
+sites in `web/src/api` are 34 lines, from
+`grep -rnE '"(POST|PUT|PATCH|DELETE)"' tools/ledger/web/src/api | grep -v client.ts | wc -l`,
+and 11 files, from the same grep with `-l`.
+
+**Options**
+
+1. **The 34 sites, listed.** The builder rewords the line in its first commit to the
+   write call sites in `web/src/api` at the branch base, lists them in the ticket,
+   and writes one invalidation test for each.
+2. One test per `api/` module (11).
+3. Leave the line as written.
+
+**Chosen: option 1, the 34 sites, listed.** This was the orchestrator's
+recommendation. The owner chose it at an intake checkpoint on 2026-11-07, while
+lg-98 was not in a batch.
+
+The Done when line quoted above is superseded by that choice. It stays as written
+until lg-98's builder rewords it in that builder's first commit. Status stays `ready`.
+
 ## Build
 
 1. **Add the dependency** to `tools/ledger/web/package.json` `dependencies`. Use a
@@ -105,3 +130,9 @@ Traps worth knowing:
 - `npm run e2e:ledger`'s layout spec passes, with its screenshots opened.
 
 ## Log
+
+- 2026-11-08: maintenance dispatch. Recorded the owner's answer on the write
+  invalidations (the Decision above, answered 2026-11-07). Re-ran the two greps at
+  `origin/main` `08f78f69`: 34 lines, and 11 files with `-l`, both as the
+  orchestrator counted. No Build or Done when line changed; status left `ready`.
+  lg-98's builder rewords the Done when line in its first commit.
