@@ -7,7 +7,6 @@ status: done
 milestone: null
 depends_on: []
 difficulty: standard
-awaiting: Done when 4 — after the merge, `npm run -s status -- --ready` on `main` lists neither repo-122 nor repo-134
 ---
 
 # repo-135 — The ready view lists tickets whose own note says they cannot start
@@ -89,7 +88,7 @@ Under the chosen option:
 2. `npm run -s status -- --show <id>` prints the hold's text.
 3. `scripts/test/status.test.ts` asserts 1 and 2, and `npm test -- --project repo`
    passes.
-4. repo-122 and repo-134 are absent from `--ready` on `main` after the merge.
+4. ~~repo-122 and repo-134 are absent from `--ready` on `main` after the merge.~~ _Observed 2026-11-08 at `d7137816`, the `main` it was cut from; the reading is in the Log._
 
 ## Review
 
@@ -152,3 +151,13 @@ Under the chosen option:
   test "repo-135: --show on an in-flight ticket whose note opens `held:` still
   ends on `unblocked`" in `scripts/test/status.test.ts` failed on `4fa7ea17`
   and passes with the guard. F1 stays recorded, unfixed.
+- 2026-11-08 — Done when 4 read, and the `awaiting` line deleted, in the commit
+  that records the reading. `main` at `d7137816` (its history holds #768 as
+  `4df7082a`, the merge this line waited on). Command:
+  `npm run -s status -- --ready`, exit 0, run in the worktree at `d7137816`.
+  Stdout lists `repo-126` and neither `repo-122` nor `repo-134`:
+  `grep -c -E '^(repo-122|repo-134)\b'` on the output prints `0`. Stderr:
+  `docs/work/repo-122-better-sqlite3-13.md: withheld from --ready — held: at 12
+  until a lockfile install can skip the compile`. Done when 4 is struck in the
+  `~~…~~` form the acceptance lines use elsewhere (repo-130, repo-26), with the
+  reading beside it. `status` stays `done`.
