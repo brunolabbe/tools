@@ -78,3 +78,32 @@ prints before the verdict is read.
 - 2026-11-01 — Filed by the review of the orchestration log (tools-54 second's
   item 4). The reproduction is the lander's output as kept; not re-run, since
   the sibling conflict it needs is gone.
+- 2026-11-08 — Built on `repo-136-land-fail-reason` (base `4a9b8af4`).
+  Mechanism, checked: `landMain` prints a stage as `FAIL  ${detail}`, and the
+  preflight detail was preflight's whole output. `preflight.mjs` opens its
+  output with a blank line (`--only title --title "bad title"` writes `\n== title
+  ==` first, `od -c` confirmed), so the FAIL line ended at two spaces. The
+  brief's account, that the stage line prints "before the child's output is
+  forwarded", is not what happens: `runPreflightDefault` captures the child with
+  `spawnSync` and the stage is printed after it returns. The fix is
+  `preflightStageDetail` in `scripts/review-record.mjs`: the detail leads with
+  the verdict line (`preflight failed: …; not run: …`), or the output's first
+  non-empty line when there is no verdict, then the output unchanged.
+  Red before the fix, at base `4a9b8af4`, with the test commit alone
+  (`83b8343b`): `npx vitest run scripts/test/review-record.test.ts` →
+  `× land() puts preflight's reason on the stage's own FAIL line … (repo-136)`
+  `AssertionError: expected 'FAIL  ' to be 'FAIL  preflight failed: mergeTree (ex…'`
+  and `× land() gives a preflight failure with no verdict line … (repo-136)`,
+  `Tests  2 failed | 62 passed (64)`. Green after the fix (`0783137e`):
+  `Tests  64 passed (64)`. `scripts/review-record.mjs` and
+  `scripts/test/review-record.test.ts` are byte-identical at `8ad4e91d` and
+  `4a9b8af4`, so the red stands for the sha Done when names.
+  `npm run check` exit 0; `npm test -- --project repo`: `Test Files 15 passed
+  (15)`, `Tests 631 passed | 1 skipped (632)`.
+  Build 2 as written does not hold: `--land` runs the real `preflight.mjs`
+  through `runPreflightDefault`, which resolves the CLI next to the script with
+  no injection point, so the CLI cannot be driven with a stub. The new tests
+  drive `land()` with a stubbed `runPreflight` and assert the first line of the
+  detail, which is the line `landMain` prints after `FAIL  `. A template change
+  in `landMain` would not be caught by them. Done when 1 holds by the same
+  assertion; Done when 3 by the run above.
