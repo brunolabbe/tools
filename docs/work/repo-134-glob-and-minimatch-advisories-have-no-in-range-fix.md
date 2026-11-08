@@ -95,9 +95,9 @@ description. `npm audit` reports them on every run with no reason attached.
     10.2.6 → 11.0.4` (2026-11-02), `path-scurry 2.0.2 → 3.0.0` (2026-10-27), and
     the new `@isaacs/nonrecursive-glob-match 1.0.3` (2026-10-28).
   - Two entries are inside seven days. `@fastify/static 10.1.9` is the named
-    advisory exemption. `minimatch 11.0.4` is read as exempt too, because 11.0.4
-    is a release at or past the GHSA-g3hv fix (11.0.1). That is this builder's
-    reading of the rule, and the gate should judge it. The cutoff could not give
+    advisory exemption. `minimatch 11.0.4` is not exempt. The owner answered on
+    2026-11-08 (the entry at the end of this Log): the landing is held to
+    2026-11-09T04:51Z, when 11.0.4 is 7.0002 days old. The cutoff could not give
     minimatch 11.0.3 (2026-10-28): `npm update` does not move a lock entry
     already at a satisfying version down, and the cutoff that admits 10.1.9 is
     later than 11.0.4.
@@ -123,3 +123,9 @@ description. `npm audit` reports them on every run with no reason attached.
   fixed release, and 11.0.3 (2026-10-28) carries the fix. The merge waits until
   2026-11-09T04:51:00Z, and only `@fastify/static 10.1.9` is named as the
   advisory-exempt young release.
+- 2026-11-08 — Fixed at landing by owner choice: gate 1, the first low — "the
+  Log says minimatch 11.0.4 is read as exempt, for the gate to judge". The
+  relock entry's third bullet now carries the owner's answer instead; the pull
+  request body names only `@fastify/static 10.1.9` as exempt. Proof, run on
+  this file after the commit:
+  `git diff 8b6dc238 HEAD -- <file> | grep -c '^-.*is read as exempt too'` → `1`.
