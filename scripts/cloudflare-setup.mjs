@@ -180,17 +180,27 @@ const routeScript = (r) => r.script || null;
  * A route on the same pattern with a **different** script is a conflict, never
  * replaced; so is an exclusion where a Worker is routed, and a Worker where
  * somebody put an exclusion. Both are somebody's decision about that pattern.
+ *
+ * **A Worker route is only `ok` when it is also fail open** (owner, 2026-11-08):
+ * the create call documents `pattern` and `script` and nothing else, so the flag
+ * is a second write (`failOpenBody`), and a route that exists with the flag off is
+ * a `repair`, which is how a run that stopped between the two writes is finished.
+ * An exclusion has no Worker to fail, so it carries no flag.
  */
 export function planRoutes(existing, desired) {
   const create = [];
   const ok = [];
+  const repair = [];
   const conflicts = [];
 
   for (const want of desired) {
     const found = existing.find((r) => r.pattern === want.pattern);
     if (!found) create.push(want);
-    else if (routeScript(found) === want.script) ok.push(want);
-    else {
+    else if (routeScript(found) === want.script) {
+      if (want.script && found.request_limit_fail_open !== true) {
+        repair.push({ ...want, id: found.id });
+      } else ok.push(want);
+    } else {
       conflicts.push({
         pattern: want.pattern,
         want: want.script ?? "(no Worker)",
@@ -199,7 +209,28 @@ export function planRoutes(existing, desired) {
     }
   }
 
-  return { create, ok, conflicts };
+  return { create, ok, repair, conflicts };
+}
+
+/**
+ * The route body that makes a Worker route fail open: past the Free plan's daily
+ * quota the Worker is skipped and the site is served, where the default (fail
+ * closed) answers every page load with Cloudflare's 1027. It is a PUT, which
+ * replaces the route, so it restates `pattern` and `script`.
+ */
+export const failOpenBody = (r) =>
+  JSON.stringify({ pattern: r.pattern, script: r.script, request_limit_fail_open: true });
+
+/**
+ * Whether the Worker's `workers.dev` address needs switching off (owner,
+ * 2026-11-08). Every Worker gets a public `workers.dev` route when it is created,
+ * and nobody asked to publish this one. `state` is `null` for a script that does
+ * not exist yet, which will be created enabled, else `{ enabled }` as read.
+ * Already disabled is `ok`, so a re-run changes nothing.
+ */
+export function planWorkersDev(state, name) {
+  if (state === null || state.enabled) return { disable: [name], ok: [] };
+  return { disable: [], ok: [name] };
 }
 
 /** A rule with no `hostname` is the tunnel's catch-all, and it must stay last. */
@@ -463,7 +494,11 @@ export function applyOrder(plan) {
       kind: "worker",
       item: w,
     })),
+    // Right after the upload: the script is public on workers.dev from the moment
+    // it exists, so the window is the length of the next call.
+    ...(plan.workersDev?.disable ?? []).map((n) => ({ kind: "workersdev", item: n })),
     ...(plan.routes?.create ?? []).map((r) => ({ kind: "route", item: r })),
+    ...(plan.routes?.repair ?? []).map((r) => ({ kind: "route-repair", item: r })),
     ...(plan.turnstile?.create ?? []).map((w) => ({ kind: "turnstile", item: w })),
   ];
 }
@@ -681,6 +716,21 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     scriptText === null ? null : { hash: deployedHash(scriptText) },
     wantWorker,
   );
+  // The workers.dev switch is read only for a script this tool uploaded: an absent
+  // one will be created enabled, and a foreign one is a conflict that stops the run.
+  const subdomain = await (
+    deployedHash(scriptText ?? "") === null
+      ? Promise.resolve(null)
+      : call(token, `${SCRIPT}/subdomain`)
+  ).catch((err) => {
+    if (err.status !== 401 && err.status !== 403) throw err;
+    fail(
+      `${err.message}\n\n` +
+        "  The down page's workers.dev switch needs Account · Workers Scripts · Edit on the token.\n" +
+        "  Add that permission to the token and run again.",
+    );
+  });
+  const workersDev = planWorkersDev(subdomain, WORKER_NAME);
   const routeList = await call(token, ROUTES).catch((err) => {
     if (err.status !== 401 && err.status !== 403) throw err;
     fail(
@@ -734,6 +784,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   for (const a of access.ok) out(`ok       access  ${a.domain} (${a.decision})`);
   for (const w of turnstile.ok) out(`ok       turnstile ${w.name} (${w.domains.join(", ")})`);
   for (const w of worker.ok) out(`ok       worker  ${w.name} (sha256 ${w.hash.slice(0, 12)})`);
+  for (const n of workersDev.ok) out(`ok       worker  ${n} is off workers.dev`);
   for (const r of routes.ok) out(`ok       route   ${r.pattern} ${routeTarget(r)}`);
   for (const a of ingress.added) out(`ADD      ingress ${a.hostname} -> ${a.service}`);
   for (const d of dns.create) out(`ADD      dns     ${d.name} -> ${d.content} (proxied)`);
@@ -745,7 +796,11 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   for (const w of worker.update) {
     out(`UPDATE   worker  ${w.name} (content changed, sha256 ${w.hash.slice(0, 12)})`);
   }
+  for (const n of workersDev.disable) out(`DISABLE  worker  ${n} on workers.dev`);
   for (const r of routes.create) out(`ADD      route   ${r.pattern} ${routeTarget(r)}`);
+  for (const r of routes.repair) {
+    out(`REPAIR   route   ${r.pattern} ${routeTarget(r)} is not fail open`);
+  }
   for (const a of unadmitted)
     out(`MISSING  access  ${a.domain} admits a second person: ${a.missing}`);
 
@@ -756,7 +811,9 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     turnstile.create.length +
     worker.create.length +
     worker.update.length +
-    routes.create.length;
+    workersDev.disable.length +
+    routes.create.length +
+    routes.repair.length;
   out();
 
   if (changes === 0) {
@@ -778,7 +835,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     fail(unadmitted.map((a) => `${a.missing} is required with --apply`).join("\n"));
   }
 
-  for (const op of applyOrder({ access, ingress, dns, turnstile, worker, routes })) {
+  for (const op of applyOrder({ access, ingress, dns, turnstile, worker, workersDev, routes })) {
     if (op.kind === "access") {
       const a = op.item;
       await call(token, `/accounts/${accountId}/access/apps`, {
@@ -810,20 +867,31 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     } else if (op.kind === "worker") {
       await call(token, SCRIPT, { method: "PUT", body: workerForm(op.item) });
       out(`applied  worker  ${op.item.name}`);
+    } else if (op.kind === "workersdev") {
+      await call(token, `${SCRIPT}/subdomain`, {
+        method: "POST",
+        body: JSON.stringify({ enabled: false }),
+      });
+      out(`applied  worker  ${op.item} off workers.dev`);
     } else if (op.kind === "route") {
       const r = op.item;
-      await call(token, ROUTES, {
+      // As documented: `pattern` and `script`, nothing else.
+      const created = await call(token, ROUTES, {
         method: "POST",
-        // Fail open: past the free plan's daily quota the Worker is skipped and
-        // the site is served, instead of every page answering with an error.
-        // An exclusion has no Worker, so there is nothing to fail.
         body: JSON.stringify(
-          r.script
-            ? { pattern: r.pattern, script: r.script, request_limit_fail_open: true }
-            : { pattern: r.pattern },
+          r.script ? { pattern: r.pattern, script: r.script } : { pattern: r.pattern },
         ),
       });
       out(`applied  route   ${r.pattern} ${routeTarget(r)}`);
+      // Then the flag, as the second write. A failure between the two leaves a
+      // fail-closed route, which the next run reports as REPAIR and finishes.
+      if (r.script) {
+        await call(token, `${ROUTES}/${created.id}`, { method: "PUT", body: failOpenBody(r) });
+        out(`applied  route   ${r.pattern} fail open`);
+      }
+    } else if (op.kind === "route-repair") {
+      await call(token, `${ROUTES}/${op.item.id}`, { method: "PUT", body: failOpenBody(op.item) });
+      out(`applied  route   ${op.item.pattern} fail open`);
     } else {
       const w = op.item;
       const created = await call(token, WIDGETS, {

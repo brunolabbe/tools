@@ -24,6 +24,7 @@ import {
   main,
   planRoutes,
   planWorker,
+  planWorkersDev,
   workerFromSource,
 } from "../cloudflare-setup.mjs";
 import worker, {
@@ -301,13 +302,51 @@ describe("the route plan", () => {
     const live = wanted.map((r, i) => ({
       id: String(i),
       pattern: r.pattern,
-      ...(r.script ? { script: r.script } : [{}, { script: null }, { script: "" }][i % 3]),
+      ...(r.script
+        ? { script: r.script, request_limit_fail_open: true }
+        : [{}, { script: null }, { script: "" }][i % 3]),
     }));
     const plan = planRoutes(live, wanted);
 
     expect(plan.create).toEqual([]);
     expect(plan.ok).toHaveLength(wanted.length);
+    expect(plan.repair).toEqual([]);
     expect(plan.conflicts).toEqual([]);
+  });
+
+  test("a Worker route that exists fail closed is a repair, not 'nothing to do'", () => {
+    const live = wanted.map((r, i) => ({
+      id: String(i),
+      pattern: r.pattern,
+      ...(r.script ? { script: r.script } : {}),
+      // absent, false: the API's default is fail closed
+      ...(r.script && i % 2 ? { request_limit_fail_open: false } : {}),
+    }));
+    const plan = planRoutes(live, wanted);
+    const workerRoutes = wanted.filter((r) => r.script);
+
+    expect(plan.repair.map((r: { pattern: string }) => r.pattern)).toEqual(
+      workerRoutes.map((r) => r.pattern),
+    );
+    // carries the id the repair PUT goes to, and no repair is an exclusion
+    expect(plan.repair.every((r: { id?: string }) => r.id !== undefined)).toBe(true);
+    expect(plan.ok.map((r: { script: string | null }) => r.script)).not.toContain(WORKER_NAME);
+    expect(plan.create).toEqual([]);
+  });
+
+  test("a Worker route already fail open is nothing to do", () => {
+    const live = [
+      {
+        id: "1",
+        pattern: "planner.example.com/*",
+        script: WORKER_NAME,
+        request_limit_fail_open: true,
+      },
+    ];
+    const plan = planRoutes(live, wanted);
+
+    expect(plan.repair).toEqual([]);
+    expect(plan.ok).toContainEqual({ pattern: "planner.example.com/*", script: WORKER_NAME });
   });
 
   test("a pattern pointing at a different Worker is a conflict, never replaced", () => {
@@ -397,6 +436,7 @@ function fakeAccount(workers: Init = {}) {
   const w = createWorkersFake(workers);
   const writes: string[] = [];
   const forms: FormData[] = [];
+  const bodies: { write: string; body: Record<string, unknown> }[] = [];
   const apps: { id: string; domain: string }[] = [];
   const records: unknown[] = [];
   const widgets: unknown[] = [];
@@ -413,6 +453,7 @@ function fakeAccount(workers: Init = {}) {
       writes.push(`${method} ${url.replace(/^.*\/client\/v4/, "").split("?")[0]}`);
     if (init.body instanceof FormData) forms.push(init.body);
     const json = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+    if (json) bodies.push({ write: writes.at(-1) ?? "", body: json });
 
     const workersAnswer = w.handle(url, method, init);
     if (workersAnswer) return workersAnswer;
@@ -440,7 +481,7 @@ function fakeAccount(workers: Init = {}) {
     return ok(null, 404);
   };
 
-  return { fetchFake, writes, forms, workers: w };
+  return { fetchFake, writes, forms, bodies, workers: w };
 }
 
 async function run(account: ReturnType<typeof fakeAccount>, ...extra: string[]) {
@@ -501,6 +542,11 @@ describe("cloudflare-setup with the down page", () => {
       wanted.length,
     );
 
+    // and each Worker route gets its second write, the fail-open PUT
+    expect(account.writes.filter((w) => w.startsWith("PUT /zones/Z/workers/routes/"))).toHaveLength(
+      TOOLS.length,
+    );
+
     const written = account.writes.length;
     const second = await run(account, "--apply");
     expect(second.error).toBeUndefined();
@@ -528,7 +574,12 @@ describe("cloudflare-setup with the down page", () => {
     const stale = `export default {};\n// repo-143-content-sha256: ${"a".repeat(64)}\n`;
     const account = fakeAccount({
       scripts: { [WORKER_NAME]: stale },
-      routes: wanted.map((r, i) => ({ id: String(i), ...r })),
+      workersDev: { [WORKER_NAME]: false },
+      routes: wanted.map((r, i) => ({
+        id: String(i),
+        ...r,
+        ...(r.script ? { request_limit_fail_open: true } : {}),
+      })),
     });
     const { out, error } = await run(account, "--apply");
 
@@ -603,5 +654,175 @@ describe("cloudflare-setup with the down page", () => {
       script: WORKER_NAME,
       request_limit_fail_open: true,
     });
+  });
+
+  // --- fail open: POST as documented, then a PUT (owner, 2026-11-08) ----------
+
+  test("a plan names no fail-open step of its own and writes nothing", async () => {
+    const account = fakeAccount();
+    const { out } = await run(account);
+
+    expect(out).toContain("DISABLE  worker  down-page on workers.dev");
+    expect(out).not.toContain("REPAIR");
+    expect(account.writes).toEqual([]);
+  });
+
+  test("a Worker route is POSTed as documented, then PUT with the flag", async () => {
+    const account = fakeAccount();
+    await run(account, "--apply");
+
+    const post = account.bodies.find(
+      (b) =>
+        b.write === "POST /zones/Z/workers/routes" && b.body.pattern === "planner.example.com/*",
+    );
+    // the create call takes `pattern` and `script`; the flag is not on it
+    expect(post?.body).toEqual({ pattern: "planner.example.com/*", script: WORKER_NAME });
+
+    const put = account.bodies.filter((b) => b.write.startsWith("PUT /zones/Z/workers/routes/"));
+    expect(put).toHaveLength(TOOLS.length);
+    expect(put.map((p) => p.body)).toContainEqual({
+      pattern: "planner.example.com/*",
+      script: WORKER_NAME,
+      request_limit_fail_open: true,
+    });
+    // the PUT follows its POST, and exclusions never get one
+    const order = account.writes.filter((w) => w.includes("/workers/routes"));
+    order.forEach((w, i) => {
+      if (w.startsWith("PUT /zones/")) expect(order[i - 1]).toBe("POST /zones/Z/workers/routes");
+    });
+    expect(put.every((p) => p.body.script === WORKER_NAME)).toBe(true);
+  });
+
+  test("a run that fails between the POST and the PUT is finished by the next run", async () => {
+    const account = fakeAccount();
+    const real = account.fetchFake;
+    let failed = 0;
+    const flaky: typeof real = (input, init) => {
+      if (init?.method === "PUT" && String(input).includes("/workers/routes/") && failed++ === 0) {
+        return Promise.resolve(new Response("{}", { status: 500 }));
+      }
+      return real(input, init);
+    };
+
+    const first = await run({ ...account, fetchFake: flaky }, "--apply");
+    expect(first.error).toBeInstanceOf(Error);
+    // the route exists and is fail closed, as the documented POST leaves it
+    const closed = account.workers.routes.filter((r) => r.script && !r.request_limit_fail_open);
+    expect(closed.length).toBeGreaterThan(0);
+
+    const second = await run(account, "--apply");
+    expect(second.error).toBeUndefined();
+    expect(second.out).toMatch(/REPAIR {3}route {3}\S+\/\* -> down-page is not fail open/);
+    expect(second.out).toMatch(/applied {2}route {3}\S+ fail open/);
+    expect(account.workers.routes.filter((r) => r.script && !r.request_limit_fail_open)).toEqual(
+      [],
+    );
+    // only repairs were written: no second POST of an existing route
+    const before = account.writes.length;
+    const third = await run(account, "--apply");
+    expect(third.out).toContain("nothing to do.");
+    expect(account.writes).toHaveLength(before);
+  });
+
+  // --- workers.dev: off, once (owner, 2026-11-08) ------------------------------
+
+  test("a new Worker is switched off workers.dev right after its upload, once", async () => {
+    const account = fakeAccount();
+    await run(account, "--apply");
+
+    const sub = "POST /accounts/A/workers/scripts/down-page/subdomain";
+    expect(account.writes.filter((w) => w === sub)).toHaveLength(1);
+    expect(account.bodies.find((b) => b.write === sub)?.body).toEqual({ enabled: false });
+    expect(account.workers.workersDev[WORKER_NAME]).toBe(false);
+    const order = account.writes.filter((w) => w.includes("/workers/"));
+    expect(order.indexOf(sub)).toBe(order.indexOf("PUT /accounts/A/workers/scripts/down-page") + 1);
+  });
+
+  test("a Worker already off workers.dev is nothing to do; one that is on is switched off", async () => {
+    const wantRoutes = wanted.map((r, i) => ({
+      id: String(i),
+      ...r,
+      ...(r.script ? { request_limit_fail_open: true } : {}),
+    }));
+    const { body } = workerFromSource(
+      readFileSync(path.join(root, "scripts/cloudflare-down-page.mjs"), "utf8"),
+    );
+
+    const off = fakeAccount({
+      scripts: { [WORKER_NAME]: body },
+      workersDev: { [WORKER_NAME]: false },
+      routes: wantRoutes,
+    });
+    const quiet = await run(off, "--apply");
+    expect(quiet.out).toContain("ok       worker  down-page is off workers.dev");
+    expect(quiet.out).not.toContain("DISABLE");
+    expect(off.writes.filter((w) => w.includes("/workers/"))).toEqual([]);
+
+    const on = fakeAccount({
+      scripts: { [WORKER_NAME]: body },
+      workersDev: { [WORKER_NAME]: true },
+      routes: wantRoutes,
+    });
+    const loud = await run(on, "--apply");
+    expect(loud.out).toContain("DISABLE  worker  down-page on workers.dev");
+    expect(on.writes.filter((w) => w.includes("/workers/"))).toEqual([
+      "POST /accounts/A/workers/scripts/down-page/subdomain",
+    ]);
+    expect(on.workers.workersDev[WORKER_NAME]).toBe(false);
+  });
+
+  test("a token that cannot read the workers.dev switch is told which permission", async () => {
+    const { body } = workerFromSource(
+      readFileSync(path.join(root, "scripts/cloudflare-down-page.mjs"), "utf8"),
+    );
+    const account = fakeAccount({
+      scripts: { [WORKER_NAME]: body },
+      subdomainReadStatus: 403,
+    });
+    const { error } = await run(account, "--apply");
+
+    expect(error).toBeInstanceOf(CliError);
+    expect(String(error)).toContain("Account · Workers Scripts · Edit");
+    expect(account.writes).toEqual([]);
+  });
+});
+
+describe("the workers.dev plan and the apply order", () => {
+  test("planWorkersDev: absent or on is a disable, off is ok", () => {
+    expect(planWorkersDev(null, WORKER_NAME)).toEqual({ disable: [WORKER_NAME], ok: [] });
+    expect(planWorkersDev({ enabled: true }, WORKER_NAME)).toEqual({
+      disable: [WORKER_NAME],
+      ok: [],
+    });
+    expect(planWorkersDev({ enabled: false }, WORKER_NAME)).toEqual({
+      disable: [],
+      ok: [WORKER_NAME],
+    });
+  });
+
+  test("order: upload, then workers.dev off, then routes, then repairs", () => {
+    const want = workerFromSource("x");
+    const live = [
+      {
+        id: "9",
+        pattern: "ledger.example.com/*",
+        script: WORKER_NAME,
+        request_limit_fail_open: false,
+      },
+    ];
+    const kinds = (
+      applyOrder({
+        access: { create: [] },
+        ingress: { added: [] },
+        dns: { create: [] },
+        worker: planWorker(null, want),
+        workersDev: planWorkersDev(null, WORKER_NAME),
+        routes: planRoutes(live, wanted),
+      }) as { kind: string }[]
+    ).map((o) => o.kind);
+
+    expect(kinds.slice(0, 2)).toEqual(["worker", "workersdev"]);
+    expect(kinds.at(-1)).toBe("route-repair");
+    expect(kinds.indexOf("route-repair")).toBeGreaterThan(kinds.lastIndexOf("route"));
   });
 });

@@ -363,3 +363,41 @@ checked):
     like the upload (already disabled is nothing to do), and if the endpoint needs
     a permission outside the header's six the builder stops and reports instead
     of adding a seventh.
+- 2026-11-08 — **Built the two answers** (`scripts/cloudflare-setup.mjs`,
+  `scripts/test/fixtures/cloudflare-workers-fake.mjs`,
+  `scripts/test/cloudflare-down-page.test.ts`, `docs/02-DEPLOYMENT.md`).
+  - _Fail open._ The route is POSTed with `pattern` and `script` only, then
+    `PUT /zones/{zone}/workers/routes/{id}` with `{ pattern, script,
+    request_limit_fail_open: true }` (the PUT replaces the route, so it restates
+    the two). `planRoutes` returns a `repair` list for a Worker route whose
+    `request_limit_fail_open` is not `true`; the plan prints `REPAIR route …`
+    and counts it as a change. Exclusions carry no flag and are never repaired.
+    Read from the reference (curl, 2026-11-08): _Update Worker Route_ takes
+    `pattern` and `script`, permission `Workers Routes Write`, one of the six.
+  - _workers.dev._ After the upload (and before the routes) the script `POST`s
+    `{ enabled: false }` to `/accounts/{id}/workers/scripts/down-page/subdomain`;
+    for a script it uploaded earlier it first `GET`s the same path and plans a
+    `DISABLE` only if `enabled` is true. **Permission: `Workers Scripts Write`
+    for both the GET and the POST** (the reference's "Accepted Permissions" for
+    _Get_ lists it among several and for _Update Worker Script Subdomain_ lists it
+    first), which is the header's `Account · Workers Scripts · Edit`. No seventh
+    permission; no stop. A 401/403 on the GET names that permission.
+  - _Two things that are still unproven, and the first live `--apply` shows both._
+    (1) The route list must return `request_limit_fail_open` for a Worker route:
+    the changelog (2025-04-15) says it does, but the schema omits it, and if the
+    list left it out every re-run would print `REPAIR` and never reach `nothing
+    to do`. (2) The `/subdomain` call on an account that has registered no
+    `workers.dev` subdomain: the reference does not say whether it answers or
+    errors, and an error would stop the apply after the upload.
+  - _Tests that fail without each change_ (`cloudflare-down-page.test.ts`): _a
+    Worker route is POSTed as documented, then PUT with the flag_; _a Worker route
+    that exists fail closed is a repair, not 'nothing to do'_; _a Worker route
+    already fail open is nothing to do_; _a run that fails between the POST and
+    the PUT is finished by the next run_ (a 500 on the first PUT, then a re-run
+    that prints `REPAIR` and a third that reports `nothing to do.`); _a new Worker
+    is switched off workers.dev right after its upload, once_; _a Worker already
+    off workers.dev is nothing to do; one that is on is switched off_;
+    `planWorkersDev` and the apply order. The fake now drops everything but
+    `pattern` and `script` on POST, as the create call documents, so a build that
+    still sent the flag there would leave the routes fail closed and fail the
+    repair assertions.

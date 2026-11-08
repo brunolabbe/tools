@@ -297,8 +297,20 @@ Anything else passes through untouched.
   rate limit on `/api/` are exactly what they were, and Cloudflare's own response
   is what an API call gets during an outage. They also cost no Worker requests
   against the Free plan's daily quota.
-- **The routes fail open** (`request_limit_fail_open`): past the quota the Worker
-  is skipped and the sites keep working, with Cloudflare's page in an outage.
+- **The Worker routes fail open.** Past the Free plan's 100,000 requests a day
+  the default is to answer every page load with Cloudflare's error 1027; fail open
+  skips the Worker instead, and the sites keep working (with Cloudflare's own
+  page in an outage). The create call documents only `pattern` and `script`, so
+  the script creates each Worker route and then sets `request_limit_fail_open` on
+  it with a second call. A run that stops between the two leaves a route fail
+  closed, and the next run prints `REPAIR route …` and finishes it; a route that
+  is already fail open is `nothing to do`.
+- **The Worker is switched off `workers.dev`.** Cloudflare gives every new Worker
+  a public `workers.dev` address, and nobody asked to publish this one, so the
+  script turns it off (`POST …/workers/scripts/down-page/subdomain` with
+  `enabled: false`) right after the upload, prints `DISABLE worker … on
+  workers.dev`, and reports `nothing to do` once it is off. The call needs
+  `Account · Workers Scripts · Edit`, which the token already has.
 - **It is the same plan-by-default as the rest.** The plan prints `ADD worker` and
   an `ADD route` per pattern; a second `--apply` reports `nothing to do`. A new
   version of the page is `UPDATE worker`. The script knows the deployed Worker
@@ -309,9 +321,9 @@ Anything else passes through untouched.
 - **Nothing here is measured against a live account yet.** The order (Access
   first), the visitor's address on a pass-through and the Free plan's limits were
   read from Cloudflare's documentation on 2026-11-08, and what Cloudflare's
-  documentation leaves open is recorded in the ticket's Log: whether the route
-  call accepts `request_limit_fail_open`, which makes the fail-open line above
-  unproven, and whether the Worker is also reachable on `workers.dev`.
+  documentation leaves open is recorded in the ticket's Log, among it that the
+  published schema does not list `request_limit_fail_open`, so the fail-open
+  call is the one the first live `--apply` proves.
 
 **The same run creates the downloader's Turnstile widget.** The downloader's
 human check ([dl-50](../tools/downloader/docs/work/dl-50-a-human-check-without-an-account.md))
