@@ -185,6 +185,52 @@ first in each).**
    refuses, so the unbounded test the Build had is replaced by one that the command
    refuses past the slot cap.
 
+**Answers after the build, 2026-11-07 (relayed by the orchestrator, recorded here by the
+builder in the first commit of the round that follows).**
+
+6. **Gap rows.** The builder's reading: the owner's sum of each row's width gives a far
+   cell on the row axis one slot a sheet, so a part listed many times at `A1` and
+   `A19000` would pass the cap while building hundreds of millions of empty rows.
+   Offered: A, a row counts `max(width, 1)` slots, a gap row one (the builder's
+   recommendation, as built) / B, the plain sum plus a workbook-wide row total refused as
+   `rows`. **Chosen: A.**
+7. **The cap, re-asked with the builder's measurement** (the premise moved from about
+   22 MB to a worst case of +90 MB). Offered: keep 2,000,000 (the orchestrator's
+   recommendation) / lower to 1,000,000. **Chosen: keep.**
+
+**Answers after gate 1 (`e2e6a6cb`), 2026-11-08 (relayed by the orchestrator).**
+
+8. **F2, the parse that no running total bounds.** Offered: refuse `<sheet>` entries that
+   share a worksheet part, before the parse (the gate's and the orchestrator's
+   recommendation) / the early `<sheet>` count the owner declined at answer 2 / count
+   value cells in `placesOf` against `MAX_WORKBOOK_CELLS` / record it and file a ticket.
+   **Chosen: refuse shared parts.** Before the parse, a workbook in which two or more
+   `<sheet>` entries of `workbook.xml` resolve to the same worksheet part is refused,
+   under an existing code and `details.bound` name; where none fits, the builder stops.
+   The orchestrator's unverified reading, that `MAX_WORKBOOK_INFLATED_BYTES` is a
+   whole-file total so that distinct parts cannot multiply the parse, was checked:
+   `declaredInflatedSize` sums `declaredSize` over every entry and `countInflated` adds
+   the bytes of every entry into one `total` that it compares to the bound, so it holds
+   (`workbook-zip.ts`, and the comment of `workbook-parts.ts`). The code is
+   `WORKBOOK_NOT_XLSX`, which has no `details.bound`: see the Log, round 1, for why it
+   fits and what `WORKBOOK_TOO_LARGE` with `sheets` would have misdescribed.
+9. **F4, what the command refuses.** Offered: reword to "the reader's bounds" (the gate's
+   and the orchestrator's recommendation) / give the command all the route's bounds.
+   **Chosen: reword.** Answer 5 is superseded below; no code changes.
+10. **The cap, re-asked after F2.** Offered: keep 2,000,000 and have gate 2 re-measure
+    (the orchestrator's recommendation) / lower to 1,000,000. **Chosen: keep 2,000,000.**
+    The "about 22 MB" text and the Log's "+90 MB" are corrected to what is measured after
+    F1 and F2 (Log, round 1: +129 MB the worst built).
+
+**Superseded (2026-11-08, answer 9):** ~~5. The import command. Offered: the same bounds
+(recommended) / the import stays unbounded. Chosen: the same bounds. The command refuses
+what the route refuses, so the unbounded test the Build had is replaced by one that the
+command refuses past the slot cap.~~ **Now:** the command takes the reader's bounds, the
+per-sheet rows (`MAX_WORKBOOK_ROWS`), the slots (`MAX_WORKBOOK_SLOTS`) and the shared-part
+refusal, all of which are in `readSheets`. It has none of the route's other bounds: no
+40-sheet bound, no workbook-wide rows sum, no cells bound (those are `describeWorkbook`'s,
+after the read). The test that the command refuses past the slot cap stays.
+
 Intake read at `08f78f69`: lg-88 (#733, `13a2602b`) has merged, so `rowsOf` no longer
 extends a row to a merge-covered place and the cost bullet that names "on `main`
 before lg-88 merges" no longer applies. The base figures above were taken at
@@ -310,14 +356,24 @@ Option 1, as the owner answered it (Decision, above).
    axis (case 1 and case 4), each asserting the code and `details.bound`, plus case 4's
    control at column `B` reading unchanged. One more for the multiplier: case 5 with
    its far cell moved under the per-sheet row bound, so that every entry passes the
-   row refusal and only the running total refuses.
+   row refusal and only the running total refuses. **Superseded
+   2026-11-08 (answer 8):** a part listed under several sheets is refused before it is
+   parsed, so case 5 no longer reaches the running total; the multiplier test is that
+   refusal, and the running total across sheets is tested over distinct parts.
 5. Re-run the Reproduction's cases that the base figures were taken for, on the branch
    with the same script (or one that loads the same modules before its baseline), and on
    the base at `08f78f69` with it, one at a time, and put each figure in the Log
    beside the base figures above. The extrapolated cases that were never run (20,000 far
    sheets, a 20,000-row far-column sheet) are not run.
-6. The import command keeps the same bounds: a test that `import:ledger` refuses a
+6. The import command has the reader's bounds: a test that `import:ledger` refuses a
    workbook past the slot cap, with `WORKBOOK_TOO_LARGE`'s message and exit 2.
+7. (Round 1, gate 1's F1 and F3.) `rowsOf` builds exactly the rows `placesOf` charged and
+   reads no row of `!data` past the last that holds a value; a row is walked by the cells
+   it defines. A test that the build never touches the stub tail.
+8. (Round 1, answer 8.) Before SheetJS parses any sheet, `readSheets` refuses a workbook
+   in which two `<sheet>` entries resolve to one worksheet part, as `WORKBOOK_NOT_XLSX`
+   (`workbook-parts.ts`), with tests through the reader, both route requests and the
+   command.
 
 ## Done when
 
@@ -328,13 +384,19 @@ Option 1, as the owner answered it (Decision, above).
    `A1048576`) is refused as `rows`; case 3 through the route (ten such sheets) is
    refused as `rows` at its first sheet; case 4 at 4 000 rows (a cell at `XFD` in each
    row) is refused as `slots`, at the 123rd row (123 times 16 384 passes 2,000,000);
-   case 5 with its far cell under the per-sheet row bound is refused as `slots` by the
-   running total across its entries, which no per-sheet check refuses. The readings
+   case 5 (a part listed under many sheets) is refused as `WORKBOOK_NOT_XLSX` before it
+   is parsed, and the running total across distinct sheets is refused as `slots` (106
+   sheets of `A1` and `A19000`). **Superseded 2026-11-08 (answer 8):** ~~case 5 with its
+   far cell under the per-sheet row bound is refused as `slots` by the running total
+   across its entries, which no per-sheet check refuses~~. The readings
    are in the Log beside the base figures, the base re-run at `08f78f69`. The cases
    that were never run are named in the Log with why they were skipped.
-3. Each refusal is `WORKBOOK_TOO_LARGE` with `details.bound` `rows` or `slots`, in
+3. Each size refusal is `WORKBOOK_TOO_LARGE` with `details.bound` `rows` or `slots`, in
    `readSheets` itself, through `describeWorkbook` (never `WORKBOOK_NOT_XLSX`) and
-   through the import command (exit 2, the message on stderr). A test in `api/test/`
+   through the import command (exit 2, the message on stderr); the shared-part refusal is
+   `WORKBOOK_NOT_XLSX` by the same three. **Superseded 2026-11-08 (answer 8):** ~~each
+   refusal is `WORKBOOK_TOO_LARGE` ... never `WORKBOOK_NOT_XLSX`~~ for the shared part
+   only. A test in `api/test/`
    asserts the code and the bound for each axis and for each caller.
 4. The control (4 000 rows at column `B`) and the full `api/test/xlsx.test.ts` suite
    hold: no value a reader sees changes for a sheet inside the bound.
@@ -469,7 +531,8 @@ Option 1, as the owner answered it (Decision, above).
     `rows`; it is a one-line change in `placesOf`, and case 5's test would then move to
     the column axis (123 entries, `A1` and `XFD1`). (2) The row refusal is "a cell that
     holds a value in a row past 20 000", not `!data.length`: SheetJS's `!data` can end in
-    stub rows that `rowsOf` drops, and the test "a stub below the last row that holds a
+    stub rows that `rowsOf` dropped **after building them (gate 1's F1; corrected in round 1,
+    where `rowsOf` builds none of them)**, and the test "a stub below the last row that holds a
     value is no row" pins it. (3) The rows bound named in the refusal is per sheet and the
     route's own workbook-wide rows check after the read stays as it was.
   - **The control in case 5 is gone by design.** The Reproduction's one-entry control
@@ -506,6 +569,8 @@ Option 1, as the owner answered it (Decision, above).
     places, and a width place about 16 MB a million (2 million of them, +32 MB), against
     the 11 MB a million that the owner's "about 22 MB" took from case 4's readings. The
     cap's worst case measured is about 90 MB, under the 512 MB container by a wide margin.
+    **Superseded in round 1 (gate 1's F2): the worst built after F1 and F2 is +129 MB, and
+    the 90 MB was a shared part, now refused.**
 
   - **Skipped, and why**: 40 far sheets (the 1.9 to 2.1 GB extrapolation), a 20 000-row
     far-column sheet (3.6 GB), and 20 000 far entries (100 GB) were never run, as the
@@ -531,3 +596,76 @@ Option 1, as the owner answered it (Decision, above).
   - **Not proven here**: the Windows leg and CI; they are the draft pull request's.
   - **Suites**: `npm test -- tools/ledger/api` at `8e622a7a`: 53 files, 1 354 of 1 354
     tests pass, so `xlsx.test.ts` as a whole holds (`Done when` 4); `npm run check` exit 0.
+- 2026-11-08 — Round 1, after gate 1 (FAIL at `e2e6a6cb`, F1 to F5), builder, no ship
+  authority. Answers 6 to 10 are recorded under the Decision heading, in this commit.
+  Head `2a53dc5e` for the code; this entry is the commit after it.
+  - **F1 (high), fixed.** `rowsOf` looped over the whole `!data` and popped the empty tail
+    afterwards, so a stub at `A1048576` built a million rows that `placesOf` had not
+    charged. `placesOf` now returns the width of each row up to the last that holds a
+    value and `rowsOf(sheet, widths, date1904)` builds exactly those and reads no other
+    row. Gate 1's `stub1x40` (40 entries over one stub part, 5 952 bytes): `+633.9 MB`
+    (peak 718.4 MB, 7.3 s) at `e2e6a6cb`; with F1 alone, in my tree before F2 was written,
+    **+9.8 MB**, 1.96 s, 40 sheets read; at `2a53dc5e` the same file is refused by F2 (below).
+    The distinct-part form, which F2 does not refuse (`stubd40`: 40 sheets of their own,
+    each `A1` and a stub at `A1048576`, 22 263 bytes), at `2a53dc5e`: read, 40 sheets,
+    **+10.3 MB**, 2.3 s. `stub1`: +9.2 MB (gate: +77.8). Test: `xlsx.test.ts` ›
+    "the stub tail is never built, not only absent from the rows (gate 1's F1)" watches
+    the `!data` array, and after `placesOf` the build reads index `0` and no other of
+    1 000; with `placesOf` padding `widths` to the array's length (a mutation, restored from
+    the sha) it fails, and so do the three F8 tests and "a stub below the last row", which read
+    the output.
+  - **F2 (high), fixed as the owner answered (8).** `sharedSheetPart`
+    (`api/src/workbook-parts.ts`) resolves each `<sheet>` entry to the part SheetJS reads
+    it from, by SheetJS's own rules copied (the workbook part by content type, the
+    relationship by `r:id`, the target tried as `xl/<target>`, the target, and beside the
+    relationships, names matched without case, a whole workbook read by position when a
+    sheet has no relationship) and `readSheets` refuses two entries on one part as
+    `WORKBOOK_NOT_XLSX`, before `XLSX.read`. Gate 1's `densex14` (14 entries over a
+    1 400 by 100 part, 3.84 MB inflated): `+384.7 MB` (peak 469.2 MB, 7.4 s) at `e2e6a6cb`,
+    refused at `2a53dc5e` in 2 ms (`+0.0 MB`); `stub1x40` and `far1x10` the same.
+    **The inflate bound is a whole-file total** (verified, not assumed): see answer 8.
+  - **Why `WORKBOOK_NOT_XLSX`, the choice made inside the owner's stop.** The stop was
+    for a code or a `details.bound` name that does not fit. No new code or name was made.
+    `WORKBOOK_TOO_LARGE` with `sheets` would misdescribe it (two sheets on one part is not
+    "over 40 sheets"), and with `entries` too (the zip's parts). `WORKBOOK_NOT_XLSX` is
+    what `workbook-zip.ts` already says of every shape that is "none a workbook a
+    household saves" (zip64, a local header that disagrees with the directory, an end
+    record only SheetJS would read): Excel writes a part per sheet. It has no
+    `details.bound`. The route wraps whatever `readSheets` throws as `WORKBOOK_NOT_XLSX`
+    in any case, so a shared part is the same code on screen from either reader. **If the
+    owner wants a `WORKBOOK_TOO_LARGE` or a new bound, it is a one-line change in
+    `refuseSharedParts` (`xlsx.ts`).** The route (415) and the command (exit 2, the message
+    on stderr) were tested.
+  - **A cost the brief did not name: the resolution is a copy of SheetJS's.** What is
+    refused has to be what SheetJS reads twice, and it picks the part by rules of its own,
+    not the format's (`workbook-parts.ts`' header lists them). The test reads each spelling
+    it refuses through SheetJS itself (an absolute target, another case, an `xl/` prefix:
+    each parsed as two sheets over one part). Where the copy and SheetJS differ, a shared
+    part gets through and nothing is worse than before the round (the cells and inflate
+    bounds). A SheetJS upgrade should re-read it. **Left open**: a workbook that
+    `workbookEntries` refuses is not checked for a shared part, and the command, which
+    never ran the inflate bound, is then read as it was.
+  - **F3 (med), fixed.** `widthOf` visits the cells a row defines (`forEach` skips the holes
+    of a sparse row), and `placesOf` hands its widths to `rowsOf`, so a row is walked once.
+    Gate 1's `stubwide` (5 000 rows whose one cell is a stub at `XFD`, 30 866 bytes): 6.4 s
+    at `e2e6a6cb`, **2.57 s** at `2a53dc5e` (+10.0 MB), the rest SheetJS's own parse.
+    Not pinned by a test: a clock measures the machine, and a count of the cells a
+    `forEach` visits cannot be told from a count through a `Proxy`.
+  - **F4 (med), reworded.** Answer 9. The Decision's answer 5, Build 6, Done when 3 and the
+    comment in `workbook-import.test.ts` now say "the reader's bounds". No code.
+  - **F5 (low), reworded.** `workbook-bounds.ts` says `MAX_WORKBOOK_ROWS` bounds each sheet
+    in the reader and that the route also sums it, which the command does not.
+  - **The cap, measured after F1 and F2 (answer 10).** One process builds, another reads,
+    `--max-old-space-size=900`, one case at a time, growth of the peak over the baseline:
+    122 rows with a cell at `XFD` (1 998 848 places, 22 311 bytes) **+39.6, +39.6 MB**;
+    105 sheets of `A1` and `A19000` (1 995 000 places, 119 881 bytes) **+109.3, +109.9 MB**
+    (peak 194 MB); one sheet of 1 400 rows by 100 numbers (140 000 cells, 3.84 MB, `dense1`
+    +56.5 MB alone) beside 97 sheets of `A1` and `A19000`, the worst built (1 983 000
+    places, 3.94 MB, under the 4 MiB inflate bound) **+127.1, +129.0 MB** (peak 217 MB).
+    The 512 MB container holds it, and the figures replace "about 22 MB" and "+90 MB". It
+    is the worst I built, not a proof of a worst.
+  - **Tests**: `xlsx.test.ts` 35 of 35 (case 5 as a refusal; three spellings of one part;
+    12 sheets of their own read; 106 distinct sheets refused as `slots`; the stub tail),
+    `workbook-describe.test.ts` and `workbook-import.test.ts` one each for a shared part.
+    Mutations, restored from the sha: with `refuseSharedParts` off and the widths padded,
+    11 of 125 tests in the three files fail.
