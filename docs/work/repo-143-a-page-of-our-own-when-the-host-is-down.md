@@ -346,3 +346,20 @@ checked):
   whose header argues for three". It is a dated owner decision (dl-52,
   2026-09-28) and was true when written; rewording another ticket's recorded
   decision is not this change's to make.
+- 2026-11-08 — **Owner answers to the two open decisions above (5 and 8)**,
+  relayed by the coordinator, recorded before the code that follows them.
+  - _Fail open (5)._ Question: what should the setup script do about fail open?
+    Options: (a) POST `{ pattern, script }` as documented, then PUT the route with
+    `request_limit_fail_open: true`; (b) keep the flag on POST and let the first
+    live `--apply` test it; (c) drop the flag and document 1027 in
+    `docs/02-DEPLOYMENT.md`. Recommended: (a) (builder-web and the coordinator).
+    **Chosen: (a)** (owner, 2026-11-08). A re-run must repair a route left fail
+    closed by a failure between the two writes: a kept route whose flag is false is
+    a change, not "nothing to do"; a route already fail open is nothing to do.
+    Supersedes the build entry's "the code sends the flag on POST".
+  - _workers.dev (8)._ Question and options: (a) disable it after upload through the
+    `/subdomain` endpoint with `enabled: false`; (b) leave it and document it.
+    Recommended: (a). **Chosen: (a)** (owner, 2026-11-08). It must be idempotent
+    like the upload (already disabled is nothing to do), and if the endpoint needs
+    a permission outside the header's six the builder stops and reports instead
+    of adding a seventh.
