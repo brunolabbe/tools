@@ -20,8 +20,10 @@ import type {
   ReceiptFiling,
   ReceiptMatchesResponse,
   ReceiptProposal,
+  SpendingStatsResponse,
   StoredRow,
 } from "@ledger/contract";
+import type * as Books from "@ledger/books";
 import { createModelReader } from "@ledger/receipts";
 import type { ReceiptReader } from "@ledger/receipts";
 import { loadApiConfig } from "../src/config.ts";
@@ -44,6 +46,22 @@ import {
   testKey,
 } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
+
+// `splitByCategory` answers none when its sign guard trips: for a charge shaped like
+// a refund, or for a purchase whose categories each cost about a cent, so that their
+// per-category roundings outweigh the largest category (a taxable 4-cent item and a
+// -4-cent coupon in each of two categories, on a 10,01 $ row, reaches it through the
+// API). A scratch search of 1 452 ordinary charges did not find one (lg-100), so a
+// test sets this to make it answer none and drive the branch that files for it.
+const forced = vi.hoisted(() => ({ undivided: false }));
+vi.mock("@ledger/books", async (importOriginal) => {
+  const actual = await importOriginal<typeof Books>();
+  return {
+    ...actual,
+    splitByCategory: (...args: Parameters<typeof actual.splitByCategory>) =>
+      forced.undivided ? [] : actual.splitByCategory(...args),
+  };
+});
 
 const KEY = testKey("key-1");
 const NOW = new Date("2026-10-05T12:00:00Z");
@@ -2366,5 +2384,229 @@ describe("a line paid by someone other than whoever uploaded the photo (lg-102)"
 
     expect(refused.statusCode, refused.body).toBe(400);
     expect(count(target, "receipt_filings")).toBe(0);
+  });
+});
+
+// --- lg-100: a person's items in two categories, on a joint-account row ---
+
+/** The open period's spending by category name, as `GET /api/stats/spending` answers it. */
+async function chartedByName(target: App): Promise<[string, number][]> {
+  const response = await send(target, "GET", ROUTES.statsSpending);
+  expect(response.statusCode, response.body).toBe(200);
+  const stats = response.json<SpendingStatsResponse>();
+  const names = new Map(stats.categories.map((category) => [category.id, category.name]));
+  const open = stats.periods.find((period) => period.open);
+  return (open?.categories ?? []).map((entry) => [
+    entry.categoryId === null ? "(uncategorised)" : (names.get(entry.categoryId) ?? "?"),
+    entry.cents,
+  ]);
+}
+
+/** Sam's beer (Alcohol) and soap (Household), left out of the 26,50 $ joint row. */
+const SAMS_BEER_AND_SOAP = named(BASKET, "shared", ["theirs", "sam"], ["theirs", "sam"]);
+
+/**
+ * Files `proposal` on the 26,50 $ joint row, counted as joint spending, with a
+ * 0.6 / 0.4 ratio so the settlement has something in it.
+ */
+async function fileOnJointRow(proposal: ReceiptProposal) {
+  const target = await start();
+  await pasteRows(target);
+  await confirmRatio(target, { alex: 6_000_000, sam: 4_000_000 });
+  const rowId = chargeRow(target);
+  const classified = await send(target, "POST", ROUTES.classifications, {
+    rowId,
+    personId: null,
+    bucket: "current-expenses",
+  });
+  expect(classified.statusCode, classified.body).toBe(200);
+  const receipt = await uploaded(target);
+  const filed = await file(target, receipt.id, { proposal, destination: { to: "row", rowId } });
+  expect(filed.statusCode, filed.body).toBe(200);
+  return { target, rowId, filing: filed.json<ReceiptFiling>() };
+}
+
+describe("a person's items in two categories on a joint-account row (lg-100)", () => {
+  test("files one charge to the pot per category, making the person's charge to the cent, each item on its own line", async () => {
+    const { target, filing } = await fileOnJointRow(SAMS_BEER_AND_SOAP);
+
+    // The beer, 15,54 $, and the soap, 5,74 $: 21,27 $ between them, so the
+    // remainder of the rounding goes to the larger (1 553 and 574, not 1 554).
+    expect(potLines(target)).toEqual([
+      expect.objectContaining({
+        person_id: "sam",
+        date: "2026-10-03",
+        amount_cents: 1_553,
+        owed_to_pot: 1,
+        spending_category_id: ALCOHOL,
+        note: "Marché Exemple",
+        source: "receipt",
+      }),
+      expect.objectContaining({
+        person_id: "sam",
+        date: "2026-10-03",
+        amount_cents: 574,
+        owed_to_pot: 1,
+        spending_category_id: HOUSEHOLD,
+        note: "Marché Exemple",
+        source: "receipt",
+      }),
+    ]);
+    const [beer, soap] = filing.charges;
+    expect(filing.charges).toEqual([
+      { chargedTo: "sam", lineId: beer?.lineId, owedToPot: true },
+      { chargedTo: "sam", lineId: soap?.lineId, owedToPot: true },
+    ]);
+    expect(beer?.lineId).not.toBe(soap?.lineId);
+    // Each item names the line of its own category.
+    expect(storedItems(target)).toEqual([
+      { share: "shared", charged_to: null, charge_line_id: null },
+      { share: "theirs", charged_to: "sam", charge_line_id: beer?.lineId },
+      { share: "theirs", charged_to: "sam", charge_line_id: soap?.lineId },
+    ]);
+  });
+
+  test("the settlement is the one line of the same total's", async () => {
+    const divided = await fileOnJointRow(SAMS_BEER_AND_SOAP);
+    // The same two items in one category: one line of 21,27 $, as lg-91 filed.
+    const undivided = await fileOnJointRow(
+      named(
+        {
+          ...BASKET,
+          items: BASKET.items.map((item) => ({ ...item, spendingCategoryId: ALCOHOL })),
+        },
+        "shared",
+        ["theirs", "sam"],
+        ["theirs", "sam"],
+      ),
+    );
+
+    expect(potLines(undivided.target)).toEqual([expect.objectContaining({ amount_cents: 2_127 })]);
+    const settlement = (await openPeriod(divided.target)).settlement;
+    expect(settlement).toEqual((await openPeriod(undivided.target)).settlement);
+    // sam owes alex (1 − 0.4) × 21,27 $ = 12,762 $.
+    expect(settlement).toMatchObject({
+      transfers: [{ fromId: "sam", toId: "alex", cents: 1_276 }],
+    });
+  });
+
+  test("the chart keeps the categories the items carry, none uncategorised, making the row's amount", async () => {
+    const { target } = await fileOnJointRow(SAMS_BEER_AND_SOAP);
+
+    const chart = await chartedByName(target);
+
+    expect(chart).toEqual([
+      ["Groceries", 523],
+      ["Alcohol", 1_553],
+      ["Household", 574],
+    ]);
+    expect(chart.reduce((sum, [, cents]) => sum + cents, 0)).toBe(2_650);
+  });
+
+  test("removing one of the two lines gives only its items back to the row's chart", async () => {
+    const { target, filing } = await fileOnJointRow(SAMS_BEER_AND_SOAP);
+    const soapLine = filing.charges[1]?.lineId ?? 0;
+
+    const retired = await send(
+      target,
+      "POST",
+      ROUTES.periodLineRetire.replace(":id", String(soapLine)),
+    );
+    expect(retired.statusCode, retired.body).toBe(200);
+
+    // The beer's charge stands; the soap is the row's again, as a shared item:
+    // 26,50 $ less 15,53 $ is 10,97 $, the soap 5,74 $ and the rest to the larger.
+    const chart = await chartedByName(target);
+    expect(chart).toEqual([
+      ["Groceries", 349],
+      ["Alcohol", 1_553],
+      ["Household", 748],
+    ]);
+    expect(chart.reduce((sum, [, cents]) => sum + cents, 0)).toBe(2_650);
+    expect(
+      (await openPeriod(target)).lines.map((line) => [line.amountCents, line.spendingCategoryId]),
+    ).toEqual([[1_553, ALCOHOL]]);
+  });
+
+  test("filed as a line, a person's items in two categories are still one charge, as lg-30 filed it", async () => {
+    const target = await start();
+    const receipt = await uploaded(target);
+
+    const filed = await file(target, receipt.id, {
+      proposal: SAMS_BEER_AND_SOAP,
+      destination: asLine(2_476, { spendingCategoryId: GROCERIES }),
+    });
+
+    expect(filed.statusCode, filed.body).toBe(200);
+    const filing = filed.json<ReceiptFiling>();
+    // The shared bread, and one charge of the beer and soap together, under the
+    // destination's category since the person's items share none.
+    const lines = homeBooks(target)
+      .prepare(
+        "SELECT person_id, amount_cents, charged_to, spending_category_id FROM period_lines ORDER BY id",
+      )
+      .all();
+    expect(lines).toEqual([
+      { person_id: "alex", amount_cents: 349, charged_to: null, spending_category_id: GROCERIES },
+      {
+        person_id: "alex",
+        amount_cents: 2_127,
+        charged_to: "sam",
+        spending_category_id: GROCERIES,
+      },
+    ]);
+    expect(filing.charges).toHaveLength(1);
+    expect(storedItems(target)).toEqual([
+      { share: "shared", charged_to: null, charge_line_id: null },
+      { share: "theirs", charged_to: "sam", charge_line_id: filing.charges[0]?.lineId },
+      { share: "theirs", charged_to: "sam", charge_line_id: filing.charges[0]?.lineId },
+    ]);
+  });
+
+  test("a charge splitByCategory cannot divide is filed as one line under no category, named by every item of the person", async () => {
+    forced.undivided = true;
+    try {
+      const { target, filing } = await fileOnJointRow(SAMS_BEER_AND_SOAP);
+
+      // The person's whole charge, 21,27 $, as lg-91 filed it for items in two categories.
+      expect(potLines(target)).toEqual([
+        expect.objectContaining({
+          person_id: "sam",
+          amount_cents: 2_127,
+          owed_to_pot: 1,
+          spending_category_id: null,
+        }),
+      ]);
+      expect(filing.charges).toHaveLength(1);
+      expect(storedItems(target)).toEqual([
+        { share: "shared", charged_to: null, charge_line_id: null },
+        { share: "theirs", charged_to: "sam", charge_line_id: filing.charges[0]?.lineId },
+        { share: "theirs", charged_to: "sam", charge_line_id: filing.charges[0]?.lineId },
+      ]);
+    } finally {
+      forced.undivided = false;
+    }
+  });
+
+  test("two people each with items in a category get a line apiece", async () => {
+    const target = await start({ members: THREE });
+    await pasteRows(target);
+    const receipt = await uploaded(target);
+
+    const filed = await file(target, receipt.id, {
+      proposal: named(BASKET, "shared", ["theirs", "sam"], ["theirs", "casey"]),
+      destination: { to: "row", rowId: chargeRow(target) },
+    });
+
+    expect(filed.statusCode, filed.body).toBe(200);
+    expect(
+      potLines(target).map((line) => [
+        (line as { person_id: string }).person_id,
+        (line as { spending_category_id: number }).spending_category_id,
+      ]),
+    ).toEqual([
+      ["sam", ALCOHOL],
+      ["casey", HOUSEHOLD],
+    ]);
   });
 });

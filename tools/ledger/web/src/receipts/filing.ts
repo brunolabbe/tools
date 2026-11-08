@@ -484,10 +484,14 @@ function listed(names: readonly string[]): string {
 /**
  * What a filing became, in words: the payer's line, or the joint-account row
  * when `payer` is `null`, and each person charged, by the filing's own record of whose (lg-30).
+ * A person is named once however many charges they hold: a joint-account row
+ * files one per category their items fall in (lg-100).
  */
 export function filedAs(filing: ReceiptFiling, payer: string | null, shown: ShownNames): string {
-  const chargedPeople = filing.charges.map((charge) => `${shownName(shown, charge.chargedTo)}'s`);
-  const charges = chargedPeople.length === 1 ? "a charge" : "charges";
+  const chargedPeople = [...new Set(filing.charges.map((charge) => charge.chargedTo))].map(
+    (person) => `${shownName(shown, person)}'s`,
+  );
+  const charges = filing.charges.length === 1 ? "a charge" : "charges";
   if (payer === null) {
     return chargedPeople.length === 0
       ? "Attached to the joint-account row."

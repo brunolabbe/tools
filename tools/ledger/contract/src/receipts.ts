@@ -247,7 +247,8 @@ export interface ReceiptFiling {
    * person's first `theirs` item is printed (lg-30), including a charge that is
    * also `periodLineId`. A `theirs` item that came to nothing files no line and
    * is not here. On a row every one is a charge to the pot (lg-91), and
-   * `periodLineId` and `chargeLineId` stay `null`.
+   * `periodLineId` and `chargeLineId` stay `null`; there it is one per person
+   * per category their items fall in (lg-100), so a person can appear twice.
    */
   charges: ReceiptCharge[];
   /** The stored row it documents, or `null` when it became a line. */

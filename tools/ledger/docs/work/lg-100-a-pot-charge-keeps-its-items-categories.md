@@ -3,7 +3,7 @@ id: lg-100
 tool: ledger
 title: A person's charge to the pot keeps no category when their items span two
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [lg-91]
 difficulty: standard
@@ -290,6 +290,32 @@ Written for A, the option the owner chose on 2026-11-07; it needed no rewording.
 5. A web test proves the message after filing names the person once.
 6. `npm run check` and `npm test -- --project ledger` pass.
 
+## Review
+
+**Gate: PASS** — 2026-11-07 · `08f78f69..0ec01ef7` · Opus 5.5, depth full
+
+| Done when                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Two pot lines, each with its category, making the person's charge to the cent; settlement equal to the one line's | `api/test/receipts.test.ts` › "files one charge to the pot per category, making the person's charge to the cent, each item on its own line" ✓ (`potLines` toEqual 1 553 `ALCOHOL` and 574 `HOUSEHOLD`, sum 2 127; `storedItems` names each line) and › "the settlement is the one line of the same total's" ✓ (`settlement` toEqual the all-Alcohol filing's single 2 127 line's) |
+| 2. `GET /api/stats/spending` charts Groceries 523, Alcohol 1 553, Household 574, none uncategorised                  | `api/test/receipts.test.ts` › "the chart keeps the categories the items carry, none uncategorised, making the row's amount" ✓ (exact `toEqual` with no `null` entry, sum 2 650)                                                                                                                                                                                                   |
+| 3. Removing one line gives only its items back, the other stands                                                     | `api/test/receipts.test.ts` › "removing one of the two lines gives only its items back to the row's chart" ✓ (chart 349 / 1 553 / 748, open period's lines `[[1553, ALCOHOL]]`)                                                                                                                                                                                                   |
+| 4. The reproduction's third test rewritten, not deleted                                                              | **verified** by reading: the reproduction was a scratch copy never committed; its third test's chart assertion now reads the new figures as Done when 2's test                                                                                                                                                                                                                    |
+| 5. The message after filing names the person once                                                                    | `web/test/receipts.test.tsx` › "attached to a joint-account row, a person with two charges to the pot is named once (lg-100)" ✓ — red against base's `filedAs`                                                                                                                                                                                                                    |
+| 6. `npm run check` and `npm test -- --project ledger` pass                                                           | **verified**: check exit 0; ledger 99 of 99 files, 2 262 of 2 262 tests; PR #757's CI all green at `0ec01ef7`                                                                                                                                                                                                                                                                     |
+
+Positive control: `filePotCharges`'s lookup keyed by person only (last line filed wins, as base's `Map.set`) fails Done when 1, 2 and 3's tests (3 failed, 4 passed of the 7 lg-100 tests) and is caught by the gate's sweep (179 items on another category's line, 93 charts off the row's amount, in 200 receipts).
+
+- **low** · no `Done when` line depends on it · false text, safe direction: the fallback is reachable through the API. The mock's header in `api/test/receipts.test.ts` says `splitByCategory` answers none "for a charge shaped like a refund, which no receipt filed through the API reaches", `filePotCharges`'s comment says "a charge shaped like a refund (its sign guard)", and the Log says "the branch is not reachable through the API". A **purchase** reaches it. Sam has two categories that each cost about 0,6 cent: a taxable 4-cent item and a non-taxable −4-cent coupon in Alcohol, and the same pair in Household. Each category rounds to 1 cent, but the charge rounds once, to 1 cent, so adjusting the largest category gives 0 and the guard answers `[]`. Filed through the API on a 10,01 $ joint row, this gives status 200, one pot line of 1 cent with `spending_category_id` `null`, and all four of sam's items on that line. The claim comes from the brief's Build 1 ("its sign guard, a refund-shaped charge"). The text is safe-direction because the forced test still holds the branch: deleting it turns that test red. Open decision below.
+- **low** · no `Done when` line depends on it · `nfr:maintainability` · a category of a person's items that only coupons fill is filed as a **negative** charge to the pot, beside the person's positive charge. Seeded sweep, k = 2: sam 30,71 $ uncategorised and −3,25 $ Groceries, where base filed one line of 27,46 $. This happened in 182 of the 1 434 row receipts the generator got accepted, with coupons at 12 % of items in random categories. The amounts match the items and the settlement does not change. The brief's option A costs do not mention it, and the period screen's "Owed to the pot" list now shows a negative charge. The rendered screen was not read.
+- **dropped** · 113 `theirs` items whose own category came to 0 cents (free items, item plus coupon) get `charge_line_id` `null` while their person has lines; base gave them the person's line. Not a defect: `receiptsOnRows` costs a lineless `theirs` item nothing, and the category nets 0. Chart sums and the retire check held on every receipt.
+- **dropped** · 24 receipts where uncategorised spending grew from base to head. This is a coupon moving from the person's uncategorised whole into its own category, which is what option A does.
+- **dropped** · the `@ledger/books` mock leaking. Vitest isolates modules per file, and the ledger project does not override `isolate`. The flag is reset in `finally`, and the next test ("two people each with items in a category get a line apiece") would fail if it leaked. The test pins the owner's choice: removing `undivided.set` turns it red (`expected [] to have a length of 1`).
+- **dropped** · the contract comment's "so a person can appear twice": 190 people got 3 or more lines. "Can" does not mean "at most", and nothing relies on the count.
+- **findings** · the hunt returned 6; 2 carried, 4 dropped.
+- NFR: security n/a (no route, input or log change) · performance n/a (per-person item filter as at base) · reliability ✓ (settlement and person totals unchanged on every receipt in the sweep) · maintainability — above. Layout n/a (no new control, one message string).
+
+**Open decision** (the first low): (a) keep the mocked test and reword the three texts to name the real trigger, where a person's categories each cost a cent or so and their roundings outweigh the largest. This is recommended: three comment edits and no test change. (b) Also replace the mock with the real 10,01 $ receipt above. That removes a file-wide mock of `@ledger/books`, but rewrites a test the owner has just approved.
+
 ## Log
 
 ### 2026-11-01, filing
@@ -385,3 +411,120 @@ not by filing under A.
   the `Done when` preamble now say the owner chose A on 2026-11-07. The fourth bullet
   above, "left as written", and the third, "left as it stands", are superseded by this
   one.
+
+### 2026-11-07, build
+
+Built on `origin/main` at `08f78f69`, branch `lg-100-pot-charge-per-category`. Option A,
+as the Build says; the brief had three things to correct, found by an intake read and
+confirmed here.
+
+- **`filePotCharges`** (`api/src/receipts.ts`) divides each person's charge among the
+  categories of their `theirs` items with `splitByCategory(charge.cents, { date, items })`
+  and files one pot charge per slice (the merchant as note, the row's date, source
+  `receipt`). It now answers a function from an item to its line, not a person-keyed
+  map. A person whose charge `splitByCategory` cannot divide (its sign guard) gets one
+  line under no category, which every one of their items names (`undivided`).
+- **The line path is unchanged.** `fileLines` still fills a person-keyed
+  `Map<string, number>`, and `fileReceipt` wraps it as
+  `(item) => lines.chargeLines.get(item.chargedTo)` beside the new function; `insertItem`
+  calls the one `chargeLineOf` for both. Answer A concerns pot charges, and a line has
+  its one category (the destination's), so a person's items in two categories stay one
+  charge there. The test that shows it: `api/test/receipts.test.ts`, "filed as a line, a
+  person's items in two categories are still one charge, as lg-30 filed it", which
+  passes at the base too.
+- **Build step 3 was in the wrong file.** The message is `filedAs` in
+  `web/src/receipts/filing.ts`, called from `Receipts.tsx` and `Queue.tsx`; it now names
+  each person once (a `Set` over `charge.chargedTo`) and says "charges" when the filing
+  holds more than one, so one person's two lines read "sam's items as charges to the
+  pot". Both callers are covered by the one change.
+- **The reproduction's third test** ("sam's items in two categories: the charge has
+  none") is rewritten as "the chart keeps the categories the items carry, none
+  uncategorised, making the row's amount": Groceries 523, Alcohol 1 553, Household 574,
+  sum 2 650.
+- **Not covered: the sign-guard fallback.** A scratch search over 1 452 two-category
+  charges (prices from -5,00 $ to 5,00 $, taxable or not, with and without a deposit,
+  taxes printed to match) found 0 where `splitByCategory` answered none for a charge
+  `splitReceipt` had computed, so the branch is not reachable through the API as far as
+  measured and has no test. It is kept because the guard exists in `splitByCategory`,
+  and one uncategorised line is what lg-91 filed.
+  WITHDRAWN — do not cite the clause "so the branch is not reachable through the API as
+  far as measured": a purchase reaches the branch (gate 1, the first low; see the
+  2026-11-07 landing entry). The builder's search was true of its 1 452 charges only.
+- Red at the base: `git checkout 08f78f69 -- tools/ledger/api/src/receipts.ts tools/ledger/web/src/receipts/filing.ts`
+  then `npx vitest run tools/ledger/api/test/receipts.test.ts tools/ledger/web/test/receipts.test.tsx`
+  → `4 failed | 190 passed (194)`: the one-line-per-category test, the chart, the
+  removal, and the web message. The settlement test and the line-path test pass at the
+  base by design (same total; unchanged path).
+
+### 2026-11-07, owner's answers to the build's two open items
+
+Given to the orchestrator and relayed in the dispatch of the round; recorded here before
+the work they change.
+
+- **The `splitByCategory` → `[]` fallback.** Question: "what should happen to it?"
+  Options: keep it and test it directly (the orchestrator's recommendation); keep it
+  untested, with the Log saying why (the builder's recommendation); drop the fallback.
+  **Chosen by the owner: keep it, test it directly**, which overrides the builder's
+  recommendation. The test drives the branch with `splitByCategory` forced to answer
+  `[]`, since 0 of 1 452 charges reach it through the API (the 2026-11-07 build entry),
+  and shows red with the branch planted out and green with it in.
+- **The contract's doc comment on `ReceiptFiling.charges`**
+  (`tools/ledger/contract/src/receipts.ts`), which says "one per person". Question:
+  "fix it in this PR?" Options: fix it in #757 (the orchestrator's recommendation);
+  leave it. **Chosen by the owner: fix it in #757**, as one doc-comment edit with no type
+  change, saying that on a row there is one charge per person per category (lg-100). It
+  is the only contract edit approved. The builder had not folded it in because the
+  contract is an owner stop.
+
+Both applied in the same round:
+
+- **The fallback is tested directly.** `api/test/receipts.test.ts`, "a charge
+  splitByCategory cannot divide is filed as one line under no category, named by every
+  item of the person", mocks `@ledger/books` so `splitByCategory` answers `[]` while a
+  flag is set, files sam's beer and soap on the joint row, and asserts one pot line of
+  2 127 with `spending_category_id` `null`, one charge on the filing, and both `theirs`
+  items naming that line. Red with the branch planted out
+  (`const parts = slices;` in place of the fallback): `1 failed | 95 passed (96)`,
+  `AssertionError: expected [] to deeply equal [ ObjectContaining{…} ]`. Green with it
+  restored. The earlier statement stands as the reason a mock is needed: the search over
+  1 452 two-category charges (prices -5,00 $ to 5,00 $, taxable or not, with and without
+  a deposit, taxes printed to match) found 0 that `splitByCategory` could not divide, so
+  the branch is not reachable through the API.
+  WITHDRAWN — do not cite the clause "so the branch is not reachable through the API":
+  a purchase reaches it. A person's categories can each cost about a cent, so that their
+  per-category roundings outweigh the largest category and the guard answers none (gate 1,
+  the first low). The mock is still needed to force it in a test, and the search stands as
+  a count of those 1 452 charges only.
+- **The contract comment** on `ReceiptFiling.charges` now adds that on a row it is one
+  per person per category their items fall in (lg-100), so a person can appear twice.
+  Comment only; `git diff` on `contract/src/receipts.ts` is the one hunk.
+- `npx vitest run` on `tools/ledger/api/test/receipts.test.ts` and
+  `tools/ledger/web/test/receipts.test.tsx` → exit 0, `195 passed (195)`;
+  `npm run check` → exit 0.
+
+### 2026-11-07, landing
+
+- 2026-11-07 — Owner's answer on gate 1's first low (the sign-guard fallback is
+  reachable through the API by a purchase, so three texts that say it is not are false).
+  Question: "what should be done about the three texts?" Options: reword the three texts
+  (the gate's and the orchestrator's recommendation); reword and replace the mock with a
+  real-receipt test; record only. **Chosen by the owner: reword the three texts**, to name
+  the real trigger (a person's categories each cost about a cent, and their per-category
+  roundings outweigh the largest category, which a purchase can do and not only a refund),
+  with no code and no assertion changed. No re-gate.
+- 2026-11-07 — Owner's answer on gate 1's second low (a category only coupons fill is
+  filed as a negative charge to the pot, beside the person's positive charge: 182 of the
+  1 434 row receipts of the seeded sweep, k = 2). Question: "what should be done about
+  it?" Options: accept and record (the orchestrator's recommendation); file a ticket; fix
+  in #757. **Chosen by the owner: accept and record.** No change. The amounts match the
+  items and the settlement does not change; the period screen's "Owed to the pot" list now
+  shows a negative charge, and the rendered screen was not read.
+- 2026-11-07 — Fixed at landing by owner choice: gate 1, the first low — "the fallback
+  is reachable through the API". Three texts reworded, none of code: the mock's header in
+  the api receipts test, the comment in `filePotCharges`, and the two Log clauses saying
+  the branch is not reachable, each withdrawn in place beneath its paragraph rather than
+  deleted. Proof, each run after the commit that carries this entry, `G` being the gated
+  sha `0ec01ef7` and `T` this ticket's path:
+  - `git diff G HEAD -- tools/ledger/api/src/receipts.ts | grep -c '^-.*refund (its sign'` → 1
+  - `git diff G HEAD -- tools/ledger/api/test/receipts.test.ts | grep -c '^-.*which no$'` → 1
+  - `git diff G HEAD -- T | grep -c '^+  WITHDRAWN'` → 2
