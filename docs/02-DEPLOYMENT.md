@@ -311,13 +311,13 @@ Anything else passes through untouched.
   `enabled: false`) after the routes are made, prints `DISABLE worker … on
   workers.dev`, and reports `nothing to do` once it is off. The call needs
   `Account · Workers Scripts · Edit`, which the token already has. It runs last
-  on purpose: if Cloudflare answers that call with an error (what it says for an
-  account that has never registered a `workers.dev` subdomain is not known), the
-  run prints a `FAILED worker down-page workers.dev: …` line, still makes the
-  routes, and exits non-zero at the end, and so does every later run until the
-  address is off. Set it by hand on the dashboard (Workers, `down-page`,
-  Settings, Domains & Routes) or register the account's `workers.dev` subdomain,
-  and run again.
+  on purpose: if Cloudflare answers that call with an error, the run prints a
+  `FAILED worker down-page workers.dev: …` line, still makes the routes, and
+  exits non-zero at the end. What it says for an account that has never
+  registered a `workers.dev` subdomain is not known. If the status on the line
+  is 429 or 5xx, run again. If the account has no `workers.dev` subdomain, set
+  the switch by hand on the dashboard (Workers, `down-page`, Settings, Domains &
+  Routes) or register a subdomain, and run again.
 - **It is the same plan-by-default as the rest.** The plan prints `ADD worker` and
   an `ADD route` per pattern; a second `--apply` reports `nothing to do`. A new
   version of the page is `UPDATE worker`. The script knows the deployed Worker
@@ -331,10 +331,11 @@ Anything else passes through untouched.
   documentation leaves open is recorded in the ticket's Log, among it that the
   published schema does not list `request_limit_fail_open`, so the fail-open
   call is the one the first live `--apply` proves. **If every run prints `REPAIR
-  route …` for each Worker route and never reaches `nothing to do`**, the route
-  list is not returning that field, so the script cannot see that the flag is
-  set. The repeated PUTs change nothing, so the routes are as wanted; check a
-  route's failure mode on the dashboard, and file it against the script.
+  route …` for each Worker route and never reaches `nothing to do`**, there are
+  two causes the output cannot tell apart: the route list is not returning that
+  field, or it returns `false` because the PUT was accepted and not applied, in
+  which case the routes fail closed. Check a route's failure mode on the
+  dashboard, which tells them apart, and file it against the script.
 
 **The same run creates the downloader's Turnstile widget.** The downloader's
 human check ([dl-50](../tools/downloader/docs/work/dl-50-a-human-check-without-an-account.md))

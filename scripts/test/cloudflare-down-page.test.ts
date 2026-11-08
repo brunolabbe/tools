@@ -881,3 +881,38 @@ describe("the workers.dev plan and the apply order", () => {
     expect(kinds.indexOf("workersdev")).toBeGreaterThan(kinds.indexOf("route-repair"));
   });
 });
+
+describe("the workers.dev call's two failure shapes (gate 2's N1)", () => {
+  test("a refused credential on the switch is told which permission, and the other statuses are not", async () => {
+    const refused = await run(fakeAccount({ subdomainStatus: 403 }), "--apply");
+    expect(refused.out).toMatch(
+      /FAILED {3}worker {2}down-page workers\.dev: POST \S+\/subdomain -> 403 .*\(the token needs Account · Workers Scripts · Edit\)/,
+    );
+
+    const missing = await run(fakeAccount({ subdomainStatus: 404 }), "--apply");
+    expect(missing.out).toContain("FAILED   worker  down-page workers.dev");
+    expect(missing.out).not.toContain("the token needs");
+  });
+
+  test("a refused connection on the switch read is the run's error, not a FAILED line", async () => {
+    const { body } = workerFromSource(
+      readFileSync(path.join(root, "scripts/cloudflare-down-page.mjs"), "utf8"),
+    );
+    const account = fakeAccount({
+      scripts: { [WORKER_NAME]: body },
+      workersDev: { [WORKER_NAME]: true },
+    });
+    const refusing = {
+      ...account,
+      fetchFake: (input: string | URL | Request, init: RequestInit = {}) =>
+        String(input).endsWith("/subdomain") && (init.method ?? "GET") === "GET"
+          ? Promise.reject(new TypeError("fetch failed"))
+          : account.fetchFake(input, init),
+    };
+    const { out, error } = await run(refusing);
+
+    expect(error).toBeInstanceOf(TypeError);
+    expect(String(error)).toContain("fetch failed");
+    expect(out).not.toContain("FAILED");
+  });
+});

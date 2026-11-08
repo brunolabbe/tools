@@ -445,9 +445,15 @@ checked):
   - _F2._ `docs/02-DEPLOYMENT.md` now says what a `REPAIR` on every run means (the
     route list is not returning `request_limit_fail_open`, so the script cannot
     see the flag; the repeated PUTs change nothing). No code change: it has no live
-    call site until the first apply.
+    call site until the first apply. WITHDRAWN in part — do not cite "the repeated
+    PUTs change nothing": gate 2 showed a PUT accepted but not applied gives the
+    same output with the routes failing closed; the landing's fix below names both
+    causes (builder's claim, withdrawn by the lander).
   - _F3._ The "Done when, as built" figures above are refreshed at `08c44f0b`: 72
     of 72 in the down-page file, `22 change(s)` in the dry run, 704 passed and 1
     skipped of 705 in the repo project. The pull request body is the lander's.
   - _F4_ (no committed test reads the page's width) stays recorded, untouched.
 - 2026-11-08 — Owner answered the landing question (which of gate 2's lows to fix at landing, no re-gate), relayed by the orchestrator. Options: (a) F2 and N2 at landing, N1 and F4 recorded; (b) F2, N2 and N1 at landing; (c) land as gated. Chosen: (b), over the recommended (a). F4 stays recorded.
+- 2026-11-08 — Fixed at landing by owner choice: gate 2, F2 — "name both causes and let the dashboard reading tell them apart". `docs/02-DEPLOYMENT.md` now names the route list not returning the field and a PUT accepted but not applied, and drops "the routes are as wanted". `git diff 2a7b08ce HEAD -- docs/02-DEPLOYMENT.md | grep -c '^-.*so the routes are as wanted'` → `1`.
+- 2026-11-08 — Fixed at landing by owner choice: gate 2, N1 — "two new branches in `main` of `scripts/cloudflare-setup.mjs` are asserted by no test". Two tests at the end of `scripts/test/cloudflare-down-page.test.ts`, in `the workers.dev call's two failure shapes (gate 2's N1)`. Gate 2's `mutate2.mjs` run on the committed tree (74 of 74 green before and after). Mutant `nohint`: 1 failed, 73 passed of 74, "a refused credential on the switch is told which permission, and the other statuses are not". Mutant `nostatusguard`: 1 failed, 73 passed of 74, "a refused connection on the switch read is the run's error, not a FAILED line".
+- 2026-11-08 — Fixed at landing by owner choice: gate 2, N2 — "the remedies for an account with no `workers.dev` subdomain are given for every status". The `finish()` message and the doc now say run again for 429 or 5xx, and give the dashboard and register-a-subdomain remedy for a missing subdomain; the "every later run" claim is dropped. `git diff 2a7b08ce HEAD -- docs/02-DEPLOYMENT.md | grep -c '^-.*and so does every later run until the'` → `1`, and `git diff 2a7b08ce HEAD -- scripts/cloudflare-setup.mjs | grep -c '^-.*after the account registers a workers.dev subdomain'` → `1`.

@@ -837,8 +837,9 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       fail(
         `${failures.length} step(s) FAILED, listed above; every other change was ${
           args.apply ? "made" : "planned"
-        }. The workers.dev switch can be set by hand on the dashboard (Workers, ${WORKER_NAME}, ` +
-          "Settings, Domains & Routes), or after the account registers a workers.dev subdomain; run again after.",
+        }. If the status on a FAILED line is 429 or 5xx, run again. If the account has no ` +
+          `workers.dev subdomain, set the switch by hand on the dashboard (Workers, ${WORKER_NAME}, ` +
+          "Settings, Domains & Routes), or register a subdomain, and run again.",
       );
     }
   };
