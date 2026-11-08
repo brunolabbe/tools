@@ -6955,3 +6955,47 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - Re-asking a cap on the measurement that moved its premise (lg-96: "about 22 MB" → +90 MB → +385 MB): the owner re-chose with numbers each time.
 - Comparing each gate's section with its full report caught lg-104's gate 1 rewriting its section; one message fixed it.
 - Gate dispatches naming one-at-a-time memory runs under `--max-old-space-size=900`: three gates and two builders measured up to +634 MB on the shared machine with no kill.
+
+### Batch 2026-11-08 (tools-12, repo-134 repo-136 repo-137) — base 4a9b8af4
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | aaa83c1fee51c6801 | seam-mapper, nine candidates (repo-122 126 129 134 135 136 137 139 143) | 3m21s / 3m21s | 0 | $0.4174 |
+| #766 | open, draft held to 2026-11-09T04:51Z (owner), 15/15 green at 24c375d3 | Haiku 5.5 / high | ae0e6e398a134b206 | builder-mechanical, repo-134 | 8m20s / 8m20s | 0 | $0.2501 |
+| #766 | as above | Sonnet 5.5 / xhigh | a9f7e62757b4a0c4f | ticket-reviewer-sonnet, repo-134 gate 1, narrow | 10m55s / 10m55s | 0 | $1.6671 |
+| #766 | as above | Sonnet 5.5 / high | aa310e8514ef8276d | fixer, repo-134 owner answer + two lows at landing + landing, held as draft | 6m44s / 6m30s | 0 | $0.6816 |
+| #764 | open, ready, 9/9 green at 14f93655 | Haiku 5.5 / high | a02b72e172e6d7b48 | builder-mechanical, repo-136 | 6m23s / 6m23s | 0 | $0.0629 |
+| #764 | as above | Sonnet 5.5 / xhigh | ae6c792e3c5bfa1c8 | ticket-reviewer-sonnet, repo-136 gate 1, narrow | 10m10s / 9m37s | 0 | $1.4196 |
+| #764 | as above | Sonnet 5.5 / high | ace00a2a6c389a4ef | fixer, repo-136 owner answer + one low at landing + landing | 3m43s / 3m43s | 0 | $0.4056 |
+| #765 | open, ready, CodeQL and check green at 1333ddc9, unit legs in progress at close | Haiku 5.5 / high | a4efee487968d5f09 | builder-mechanical, repo-137 | 7m15s / 6m42s | 0 | $0.1723 |
+| #765 | as above | Sonnet 5.5 / xhigh | a72020d390c65ec88 | ticket-reviewer-sonnet, repo-137 gate 1, narrow | 11m07s / 10m56s | 0 | $1.5139 |
+| #765 | as above | Sonnet 5.5 / high | af175698e90feeb2f | fixer, repo-137 round 1 (F1) + two owner answers | 2m53s / 2m51s | 0 | $0.3761 |
+| #765 | as above | Sonnet 5.5 / xhigh | ac739d1518ee0601a | ticket-reviewer-sonnet, repo-137 gate 2, narrow | 8m16s / 7m55s | 0 | $1.1012 |
+| #765 | as above | Sonnet 5.5 / high | a4abbcae68cf480ae | fixer, repo-137 landing | 3m41s / 3m41s | 0 | $0.3371 |
+| — | — | Opus 5.5 / high | orchestrator 768a92c3 | orchestrator (floor) | 57m05s / 55m45s | 0 | $3.9115 |
+| | | | | **total** (rates read 2026-10-10) | 2h19m53s | 0 | **$12.3164** |
+
+**Tickets:**
+- repo-134 → #766: gate 1 PASS (3 lows; first and third fixed at landing by owner choice). Held as a draft by the owner until minimatch 11.0.4 is seven days old.
+- repo-136 → #764: gate 1 PASS (2 lows; first fixed at landing by owner choice).
+- repo-137 → #765: gate 1 FAIL (1 med F1 on Done when 2, 1 low F2), round 1 by fixer, gate 2 PASS (1 low N1).
+
+**Defects in the skill:**
+
+1. `roles/common.md`, opening paragraph ("51 KB against 50 KB") — the two-command split it prescribes still overflows: the first command (common.md + reviewer.md) is 37,699 bytes and came back `Output too large (36.8KB)` with a 2 KB preview, so a gate reading it sees only the start of common.md. Reported by all four gates; byte count re-run by the orchestrator, the overflow relayed. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | wc -c` → `37699`; gate.md alone (22,816) printed whole.
+2. `roles/common.md`, _Your worktree_ step 1 against the bullet "A package the lockfile declares and the shared checkout lacks" — step 1 says "If the farm warns that the shared checkout is stale, stop and report it"; the bullet says the same `missing N package(s)` warning from your own relock is "the expected state: say so and go on". Re-run by the orchestrator: `grep -n 'If the farm warns that the shared checkout is stale' roles/common.md` → line 27; `grep -n 'that is the expected state' roles/common.md` → line 86.
+3. `roles/common.md`, the same bullet — it names the two cases (own relock; main's or a parent branch's) but not how to tell them apart. repo-137's remedy now carries the test (`git show <base>:package-lock.json` declares the package or not); the owner chose on 2026-11-08 to put naming it on this review's list rather than file a ticket (builder had recommended the page clause). Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/common.md | grep -c 'git show <base>:package-lock.json'` → `0`.
+4. `roles/reviewer.md` — silent on the farm's `missing N package(s)` warning, which a gate on a relock branch hits (repo-134's gate did); common.md's bullet is written for "your own relock", which a gate has none of. Re-run by the orchestrator: `grep -c -i relock .claude/skills/orchestrate-tickets/roles/reviewer.md` → `0`.
+5. `roles/builder.md` (the `--base` bullet) against `reference/concurrency.md` (stacked branches, step 2) — builder.md names `origin/main` as a stacked branch's `--base`; concurrency.md opens the stacked draft with `--base <A>`. With repo-137's remedy the two give opposite outcomes for a parent's package (gate 1's cases b and b2, recorded as its F2). Relayed from repo-137 gate 1, not re-run.
+6. `roles/common.md`, _Your worktree_, the build-skip bullet ("imports are `node:` builtins and `vitest`") — read literally it fails for `scripts/` files that import `./markdown.mjs`, `./preflight.mjs`, `./status.mjs`, which themselves import only builtins; the gate skipped correctly against the words. Reproduction (relayed from repo-136 gate 1): `grep -n "^import" scripts/review-record.mjs` → three `./*.mjs` imports.
+7. `roles/common.md`, "Reading a pull request's checks" (`until ! gh pr checks <n> | grep -q pending`) — on #764 `dependency-review` read `pending` about seven minutes after its run completed `success`, with the job's own status `in_progress`; the loop would not return and the page does not say to read the run's conclusion. Relayed from repo-136 gate 1 (`gh run view 42503352655 --json status,conclusion,jobs` → `completed success dependency-review/in_progress/success`), not re-run.
+8. `.claude/rules/dependency-updates.md`, the procedure block — (a) `npx -y npm@11.21.1 update <advisory-fixing package>` with no cutoff let in `@fastify/static 10.1.10`, `glob 14.0.4`, `minimatch 11.0.5`, all under seven days and none the named exemption; the builder needed two `--before` cutoffs to bound it. (b) Its `npm install  # npm 10 rewrites the lockfile` line contradicts `roles/common.md` "Never `npm install` in a farmed worktree"; the builder ran it as `--package-lock-only` in a scratch copy. (c) The page says npm 11 adds a `libc` field; the builder observed `"peer": true` on platform packages instead. Re-run by the orchestrator: `grep -n '^npm install ' .claude/rules/dependency-updates.md` → line 22; `grep -n libc` → line 32. (a) and (c) relayed from repo-134's builder, not re-run.
+9. `roles/common.md`, dependency bullet — the one allowed relock (`npm update … --before`) cannot pin a version and never moves an entry down; reaching minimatch 11.0.3 from 11.0.4 was impossible, which turned a rule reading into an owner question. Relayed from repo-134's builder: `npx -y npm@11.21.1 update minimatch --before=2026-11-01T00:00:00.000Z --package-lock-only --ignore-scripts` → `up to date`, 11.0.4 kept.
+10. `reference/records.md`, _Rules for what the record says_ ("withdrawn in place, never deleted") against _Fixed at landing_'s wording-fix proof, which counts a removed `^-` line — a finding that says "replace" a Log claim satisfies one and breaks the other. Re-run by the orchestrator: `grep -n 'withdrawn in place' reference/records.md` → lines 165, 178. Relayed: repo-134 lander's `git diff 8b6dc238 HEAD -- <ticket> | grep -c '^-.*is read as exempt too'` → `1`.
+11. `reference/records.md`, _Fixed at landing_, a code fix's proof, against `roles/fixer.md`'s mutation check that "runs on a committed tree" — the entry must sit in the fix's own commit, so the red/green proof cannot run on a committed tree before that commit. Relayed from repo-136's lander, not re-run.
+12. `roles/common.md`, "Preflight runs longer…" — says the harness re-invokes the agent when the script exits but names no wait that works; `sleep` is refused. `tail --pid=<pid> -f /dev/null` in the background worked. Relayed from repo-134's lander: `cat …/land/land.exit` immediately after start → `No such file or directory`.
+
+**Worked, and worth keeping:**
+- Gate 1's inversion mutation on repo-137 caught a spec that passed 29/29 with its two conditions swapped; the builder's green run could not have shown it.
+- A seam-mapper `npm view` found repo-134 startable though its `note:` said not; the orchestrator re-ran it before offering the batch.
+- An owner hold expressed as "land now, keep the draft, comment the merge-not-before instant" closed a batch whose merge had to wait eleven hours.
