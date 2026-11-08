@@ -115,3 +115,13 @@ prints before the verdict is read.
   env-var or flag injection seam to the CLI, (c) export a stage-line formatter
   that `landMain` uses and test it. The owner chose (a), the builder's
   recommendation.
+- 2026-11-08 — Fixed at landing by owner choice: gate 1, the first low —
+  "`landMain`'s own print (`FAIL  ${detail}`) is pinned by no test". In the
+  real-CLI case in `scripts/test/review-record.test.ts` ("the --land CLI lands
+  the commit and the push for real, then fails naming "preflight"…"),
+  `/== preflight ==\nFAIL/` became `/== preflight ==\nFAIL  \S/`. `npx vitest
+  run scripts/test/review-record.test.ts -t 'the --land CLI lands the commit'`
+  → `Tests  1 passed | 63 skipped (64)` at this head, and `Tests  1 failed | 63
+  skipped (64)` at line 1477 with `origin/main`'s `scripts/review-record.mjs`
+  put back (then restored). The gate's second low (`preflightStageDetail`'s
+  fallbacks untested) is not fixed.

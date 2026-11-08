@@ -1474,7 +1474,7 @@ test('the --land CLI lands the commit and the push for real, then fails naming "
     expect(result.stdout).toMatch(/== splice ==\nok/);
     expect(result.stdout).toMatch(/== push ==\nok/);
     expect(result.stdout).toMatch(/== verify ==\nok/);
-    expect(result.stdout).toMatch(/== preflight ==\nFAIL/);
+    expect(result.stdout).toMatch(/== preflight ==\nFAIL  \S/);
     expect(result.stderr).toMatch(/--land failed at "preflight"/);
 
     // The real preflight really ran against this fixture and really failed on its
