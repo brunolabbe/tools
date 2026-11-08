@@ -21,7 +21,7 @@ parses one worksheet-level part once per sheet, past that check. Both files are 
 the 4 MiB inflated bound, and both pass every bound lg-96 sets.
 
 The cost is memory. A crafted upload of under 4 MiB inflated makes `readSheets` build
-or parse about 350 to 380 MB, against the 512 MB the ledger's production container
+or parse about 327 to 385 MB, against the 512 MB the ledger's production container
 gets (`compose.ledger.prod.yaml`, `memory: 512m`). Gate 3 measured +310.3 to +367.5 MB;
 the re-run for this ticket measured +313.3 to +379.0 MB (table below).
 
@@ -545,19 +545,25 @@ options and choice are in the Log.
    `.rels` (comments, VML, drawing, chart) name one part. Costs: a second copy of
    SheetJS's rules (`parse_rels` and `resolve_path`), and the observation above says a
    copy has been followed by a new difference each time. The refusal is `WORKBOOK_NOT_XLSX`,
-   as lg-96's answer 11 has it for the shared part. Per `workbook-parts.ts`'s own header,
-   no workbook Excel saves has either shape.
+   as lg-96's answer 11 has it for the shared part. Believed, unmeasured: that no workbook
+   Excel saves has either shape. `workbook-parts.ts`'s header says it only of a worksheet
+   part shared by two sheets ("each sheet is a part of its own"), and nothing in the repo
+   says it of a local-header name that differs from the central one, or of a comments, VML,
+   drawing or chart part named by several sheets. The cost not priced is a false refusal of
+   a real workbook; the repo's one real workbook (named in `workbook-bounds.ts`) has not
+   been run against the proposed refusal, and the real-workbook row of Done when 1 is the
+   measurement.
 2. **Parse one sheet per `XLSX.read` (`sheets: i`).** Each shared part is parsed and
    released per sheet, so one part's parse is held at a time. Costs: unmeasured. Time
    grows with the sheet count, about N full inflates for N sheets (up to the sheet
    bound). Built grids still accumulate across sheets, so memory for the built result is
    not closed by this.
-3. **Accept and document.** Keep the code. Reword the texts that promise the bound
-   (`workbook-parts.ts`'s header, `xlsx.ts`'s `refuseUnlessEachSheetIsItsOwn` comment,
-   `workbook-bounds.ts`'s +129 MB figure) to the measured figure and the two shapes
-   named. Costs: lg-96's answer 10 rests on "+129 MB the worst built"; restated, a
-   crafted upload under 4 MiB takes about 350 to 380 MB of the 512 MB container, and
-   the cap is not the bound on it.
+3. **Accept and document.** No code. Correct whichever text still reads otherwise at
+   build time, as Build 4 does for the header. At `a4a2feb2` (lg-96's landing head)
+   `workbook-bounds.ts`, `xlsx.ts`'s comment and lg-96's answer 10 already name the two
+   shapes and gate 3's figures; `workbook-parts.ts`'s header is the one Build 4 covers.
+   Costs: a crafted upload under 4 MiB takes about 327 to 385 MB of the 512 MB
+   container, and the cap is not the bound on it.
 
 ## Build
 
@@ -578,8 +584,11 @@ above first (who, the date, the options it was chosen from), and `status` moves 
    table in the Log. Then change `readSheets` to `XLSX.read` once per sheet with
    `sheets: i`, keeping only that sheet's built grid, and measure again on the same
    shapes.
-3. **If 3:** reword the three texts named under option 3 to the measured figure and to
-   the two shapes, and record in lg-96's answer 10 that its premise is corrected.
+3. **If 3:** no code. Read `workbook-parts.ts`'s header, `xlsx.ts`'s
+   `refuseUnlessEachSheetIsItsOwn` comment, `workbook-bounds.ts`'s +129 MB figure and
+   lg-96's answer 10 at the build head, and correct whichever still promises the bound or
+   omits the two shapes. A text that already names both shapes and a measured figure is
+   left as it is.
 4. **Under any answer, whichever merges first:** lg-96's PR #758 rewords the header
    sentence in `tools/ledger/api/src/workbook-parts.ts` that begins "Distinct parts cannot
    multiply the parse" before it merges, as the owner chose on 2026-11-08. If the header
@@ -600,15 +609,20 @@ builder.
    Re-running `localname.sh 2 14` and `comments.sh … 50000 1 14` on the head refuses both
    14-sheet files, and reads the honest controls unchanged (`localname-control-14`
    140,013 cells; `comments-distinct-14` 14 cells). Removing the new check fails the
-   tests.
+   tests. A real workbook saved by Excel, which the repo does not hold (the one
+   `workbook-bounds.ts` names is outside it), is read at the head with both refusals in
+   place and still reads, with its sheet and cell counts the same as at `origin/main`. The
+   owner or the builder supplies it, and the Log says which file; if none is available the
+   line is `unproven` and the false-refusal cost stays unpriced.
 2. **If 2:** the Log holds the before and after table for both shapes, at 14 sheets and
    at the largest sheet count, with time and peak under `--max-old-space-size=900`. Each
    shape's peak at that count is named, and the built-grid growth is measured, not
    estimated.
-3. **If 3:** `git grep -n "Distinct parts cannot multiply"` on the branch matches nothing,
-   and the reworded texts name the two shapes and the re-run figure
-   (`localname-decoy-14` +379.0 MB; `comments-comments-14` +327.1 MB, or their re-measured
-   values at the time).
+3. **If 3:** `git grep -n "cannot multiply" -- tools/ledger/api/src` matches nothing
+   (the fragment, not the whole phrase: the comment wraps between "parts" and "cannot"),
+   and each of the four texts in Build 3 names the two shapes and a measured figure
+   (gate 3's, the re-run's, or a re-measured one), as read at the head. A text already so
+   at the build head is met, not re-edited.
 4. **Under any answer, whichever merges first:** on lg-104's head,
    `git grep -n "cannot multiply" -- tools/ledger/api/src/workbook-parts.ts` matches
    nothing. If lg-96's PR #758 merges first with its rewording, this line is met by it;
@@ -679,3 +693,26 @@ builder.
 - **Decision heading.** It stays `Decision — open`, and `status` stays `needs-decision`,
   because question 1 (the shape options) is still open. Question 2 is marked answered on its
   own line, as `docs/01-TICKETS.md` says for a ticket with several questions.
+
+### 2026-11-08, gate 1 CONCERNS
+
+- Gate 1 (Sonnet, narrow, at `cb3107c1`) returned CONCERNS. A fixer applied four findings
+  and stopped, with no ship authority:
+  - F1: Done when 3's grep could not go red, because the header wraps between "parts" and
+    "cannot". Reproduced: `git grep -n "Distinct parts cannot multiply" 1aabcb4a -- tools/ledger`
+    exits 1; `git grep -n "cannot multiply" 1aabcb4a -- tools/ledger/api/src/workbook-parts.ts`
+    finds line 13. Done when 3 now uses `cannot multiply`, scoped to `tools/ledger/api/src`
+    because this ticket itself contains the fragment.
+  - F2: option 3, Build 3 and Done when 3 described rewording that `a4a2feb2` already holds.
+    Reproduced by `git grep -n -i "worst measured\|lg-104" a4a2feb2 -- tools/ledger/api/src`.
+    Option 3 is now "no code; correct whichever text still reads otherwise at build time",
+    and Build 3 and Done when 3 match.
+  - F3: option 1 sourced "no workbook Excel saves has either shape" to a header that says
+    it only of a shared worksheet part. It now reads "believed, unmeasured", and Done when 1
+    has a row for a real workbook saved by Excel. The workbook is not in the repo, so that
+    row was not run.
+  - F4: "about 350 to 380 MB" left out the ticket's own rows (+327.1, +313.3, +350.1) and
+    the gate's (+332.6, +331.9). The range is now about 327 to 385 MB, in the Why and in
+    option 3.
+- Not changed, as dispatched: Done when 2 and 5. Gate 1's F5, the unpinned count, stays as
+  the gate wrote it; its fix needs a choice.
