@@ -162,3 +162,28 @@ Which rule the remedy follows. `roles/common.md` was written under (a) by the
   - Fold-in: none. `worktree-farm.sh` prints no install remedy (grep above).
   - Not measured: the stacked-branch case itself (relayed, not re-run); CI on the
     draft pull request (not read).
+- 2026-11-08 — Round 1, after gate 1 (`483f9adb`): fixer, `c838d031`. Gate 1's
+  medium: the spec asserted five substrings present somewhere, so swapping the two
+  conditions left it at `29 of 29`. Fixed: both tests that read the remedy (the
+  farm end-to-end one and the direct `--worktree-packages` one) now assert
+  `does not declare it, this branch's own relock added it, which is expected: say
+  so in your report and go on` and `If the base declares it, it came from main or
+  a parent branch: stop and report it to the orchestrator, naming the packages`.
+  - Proof: with the gate's `mutate-invert.mjs` run on the committed tree (the
+    discriminator inverted in the script), `npx vitest run
+    scripts/test/check-farm-freshness.test.ts` printed `2 failed | 27 passed (29)`,
+    exit 1; restored with `git checkout c838d031 -- <path>`, `29 passed (29)`.
+  - Owner answers (2026-11-08, the owner, via the orchestrator):
+    1. Gate 1's open decision, whether to assert the other four allowances (no copy
+       of another agent's `node_modules`, the orchestrator's install, the one
+       lockfile write, the CI reading) too. Options: (1, recommended) the two
+       assertions above only, since `Done when` 1 and 2 ask for nothing else; (2)
+       also assert the four. The owner chose option 1; the four stay unasserted.
+    2. The builder's open decision, whether `roles/common.md`'s dependency bullet
+       should name the base-lockfile test (`git show <base>:package-lock.json`).
+       Options: put it on the next review session's list (the orchestrator's
+       recommendation), leave the page as is, or file a `repo-` ticket now. The
+       builder had recommended adding the clause. The owner chose to put it on the
+       review list: no page edit and no ticket.
+  - Not part of this round: gate 1's low (the remedy is only as good as the
+    `<base>` the agent picks), which stays recorded.
