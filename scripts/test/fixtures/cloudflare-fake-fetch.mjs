@@ -14,6 +14,13 @@
 
 import { appendFileSync } from "node:fs";
 
+import { createWorkersFake } from "./cloudflare-workers-fake.mjs";
+
+// An account with no Worker and no routes yet (repo-143). The widget scenarios
+// above stop at the widget list, which is read first, so this only matters to a
+// run that gets past it.
+const workersFake = createWorkersFake();
+
 const scenario = process.env.FAKE_CF_SCENARIO;
 const writesFile = process.env.FAKE_CF_WRITES;
 
@@ -31,6 +38,8 @@ globalThis.fetch = async (input, init = {}) => {
     return answer({ config: { ingress: [{ service: "http_status:404" }] } });
   }
   if (url.includes("/dns_records") || url.endsWith("/access/apps")) return answer([]);
+  const workers = workersFake.handle(url, method, init);
+  if (workers) return workers;
   if (url.includes("/challenges/widgets")) {
     if (scenario === "forbidden") return answer(null, 403);
     return answer([

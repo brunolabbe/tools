@@ -30,18 +30,22 @@
  *     --ledger-email them@example.com
  *   node scripts/cloudflare-setup.mjs ... --apply
  *
- * CLOUDFLARE_API_TOKEN needs exactly four permissions, and a token with more
+ * CLOUDFLARE_API_TOKEN needs exactly six permissions, and a token with more
  * is a token doing more than this:
  *   Account · Cloudflare Tunnel  · Edit
  *   Account · Access: Apps and Policies · Edit
  *   Account · Turnstile · Edit   (the downloader's human check, dl-71)
+ *   Account · Workers Scripts · Edit   (the down page's Worker, repo-143)
  *   Zone    · DNS · Edit   (scoped to the one zone)
+ *   Zone    · Workers Routes · Edit   (the down page's routes, repo-143)
  *
  * The one thing it hands back is the Turnstile widget's secret key, once, on
  * `--apply`, as two `.env` lines to paste. It writes no file — this script never
  * has — so the secret is in the terminal's scrollback and nowhere else.
  */
 
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const API = "https://api.cloudflare.com/client/v4";
@@ -81,6 +85,10 @@ export const TOOLS = [
     subdomain: "downloader",
     service: "http://downloader:8080",
     access: [],
+    // Files the build writes outside `assets/` (the tool's vite.config.ts), which
+    // the down page's routes keep off the Worker too. A test reads the config and
+    // fails when this list and the build disagree.
+    staticPaths: ["/theme.js"],
     // The human check that replaces the login now Access is off (dl-49). Its
     // one allowed domain is this tool's own hostname, so a site key lifted from
     // the page cannot mint tokens anywhere else. Only a tool with a field here
@@ -91,17 +99,108 @@ export const TOOLS = [
     tool: "planner",
     subdomain: "planner",
     service: "http://planner:8090",
+    staticPaths: [],
     access: [{ suffix: "", name: "planner", decision: "allow" }],
   },
   {
     tool: "ledger",
     subdomain: "ledger",
     service: "http://ledger:8100",
+    staticPaths: ["/theme.js"],
     access: [{ suffix: "", name: "ledger", decision: "allow", extraEmailFlag: "ledger-email" }],
   },
 ];
 
 export const SESSION_DURATION = "168h";
+
+/** The Worker that answers with the down page (repo-143), and the file it is uploaded from. */
+export const WORKER_NAME = "down-page";
+const WORKER_FILE = new URL("./cloudflare-down-page.mjs", import.meta.url);
+const WORKER_MODULE = "worker.mjs";
+
+/**
+ * Paths no Worker sees: the API (JSON, SSE, file streams and the edge rate limit
+ * on `/api/`) and the build's hashed assets. Each gets a route with no script, the
+ * API's way to say "this pattern, and no Worker", which beats `<host>/*` by being
+ * the longer match. A page load is the only thing the Worker is for.
+ */
+export const EDGE_PATHS = ["/api/*", "/assets/*"];
+
+/**
+ * A marker line appended to the uploaded source, so a re-run can tell whether the
+ * deployed Worker is the file in the checkout without trusting Cloudflare's own
+ * etag to be a hash of anything we can reproduce.
+ */
+const MARKER = "// repo-143-content-sha256:";
+
+/** The checkout's Worker source, its hash, and the text to upload. */
+export function workerFromSource(source) {
+  const hash = createHash("sha256").update(source).digest("hex");
+  return { name: WORKER_NAME, hash, body: `${source}\n${MARKER} ${hash}\n` };
+}
+
+/**
+ * The hash a deployed script carries, or `null` if it has no marker, which means
+ * it is not one this script uploaded. Reads the raw text, so it does not depend on
+ * whether Cloudflare hands a module back bare or inside a multipart body.
+ */
+export function deployedHash(text) {
+  return new RegExp(`^${MARKER} ([0-9a-f]{64})\\s*$`, "m").exec(text)?.[1] ?? null;
+}
+
+/**
+ * Whether the Worker needs uploading. `deployed` is `null` when the account has no
+ * script of that name, else `{ hash }` with `hash` null for a script that is not
+ * ours: that is a conflict and is never overwritten, the same rule as a route
+ * pointing at somebody else's Worker. Identical content is `ok`, so a re-run
+ * uploads nothing.
+ */
+export function planWorker(deployed, want) {
+  if (deployed === null) return { create: [want], update: [], ok: [], conflicts: [] };
+  if (deployed.hash === null) {
+    return {
+      create: [],
+      update: [],
+      ok: [],
+      conflicts: [{ name: want.name, found: "a script this tool did not upload" }],
+    };
+  }
+  if (deployed.hash === want.hash) return { create: [], update: [], ok: [want], conflicts: [] };
+  return { create: [], update: [want], ok: [], conflicts: [] };
+}
+
+/** A route's script as the API reports it: absent, null or empty all mean no Worker. */
+const routeScript = (r) => r.script || null;
+
+/**
+ * Which Worker routes are missing, which are already as wanted, and which pattern
+ * is taken by something else. `desired` entries are `{ pattern, script }` with a
+ * null script for an exclusion.
+ *
+ * A route on the same pattern with a **different** script is a conflict, never
+ * replaced; so is an exclusion where a Worker is routed, and a Worker where
+ * somebody put an exclusion. Both are somebody's decision about that pattern.
+ */
+export function planRoutes(existing, desired) {
+  const create = [];
+  const ok = [];
+  const conflicts = [];
+
+  for (const want of desired) {
+    const found = existing.find((r) => r.pattern === want.pattern);
+    if (!found) create.push(want);
+    else if (routeScript(found) === want.script) ok.push(want);
+    else {
+      conflicts.push({
+        pattern: want.pattern,
+        want: want.script ?? "(no Worker)",
+        found: routeScript(found) ?? "(no Worker)",
+      });
+    }
+  }
+
+  return { create, ok, conflicts };
+}
 
 /** A rule with no `hostname` is the tunnel's catch-all, and it must stay last. */
 const isCatchAll = (rule) => !rule.hostname;
@@ -292,7 +391,20 @@ export function desiredState(domain, email, tools = TOOLS, extraEmails = {}) {
       mode: t.turnstile.mode,
     }));
 
-  return { ingress, dns, apps, widgets };
+  // Exclusions first per tool, so the apply never has a moment with the Worker
+  // routed over `/api/*`.
+  const routes = tools.flatMap((t) => {
+    const host = `${t.subdomain}.${domain}`;
+    return [
+      ...[...EDGE_PATHS, ...(t.staticPaths ?? [])].map((p) => ({
+        pattern: `${host}${p}`,
+        script: null,
+      })),
+      { pattern: `${host}/*`, script: WORKER_NAME },
+    ];
+  });
+
+  return { ingress, dns, apps, widgets, routes };
 }
 
 /**
@@ -345,6 +457,13 @@ export function applyOrder(plan) {
     ...plan.access.create.map((a) => ({ kind: "access", item: a })),
     ...(plan.ingress.added.length > 0 ? [{ kind: "ingress", item: plan.ingress.ingress }] : []),
     ...plan.dns.create.map((d) => ({ kind: "dns", item: d })),
+    // The Worker before the routes that name it, and both before the widget: the
+    // widget is last so a failure there retries only the widget.
+    ...[...(plan.worker?.create ?? []), ...(plan.worker?.update ?? [])].map((w) => ({
+      kind: "worker",
+      item: w,
+    })),
+    ...(plan.routes?.create ?? []).map((r) => ({ kind: "route", item: r })),
     ...(plan.turnstile?.create ?? []).map((w) => ({ kind: "turnstile", item: w })),
   ];
 }
@@ -352,30 +471,71 @@ export function applyOrder(plan) {
 // --- the HTTP half ----------------------------------------------------------
 
 async function call(token, path, init = {}) {
+  // A multipart body carries its boundary in its own Content-Type, which `fetch`
+  // writes only when none is set.
+  const type = init.body instanceof FormData ? {} : { "Content-Type": "application/json" };
   const res = await fetch(`${API}${path}`, {
     ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...init.headers,
-    },
+    headers: { Authorization: `Bearer ${token}`, ...type, ...init.headers },
   });
 
   const body = await res.json().catch(() => ({}));
 
   // Cloudflare answers 200 with `success: false` often enough that checking the
   // status code alone reads as a pass on a refusal.
-  if (!res.ok || body.success === false) {
-    const detail = (body.errors ?? []).map((e) => `${e.code} ${e.message}`).join("; ");
-    // The status rides on the error so a caller can tell a refused credential
-    // from an outage; the message alone is for the operator.
-    throw Object.assign(
-      new Error(`${init.method ?? "GET"} ${path} -> ${res.status} ${detail || "(no detail)"}`),
-      { status: res.status },
-    );
-  }
+  if (!res.ok || body.success === false) throw httpError(init, path, res, body);
 
   return body.result;
+}
+
+/**
+ * The status rides on the error so a caller can tell a refused credential from an
+ * outage; the message alone is for the operator.
+ */
+function httpError(init, path, res, body) {
+  const detail = (body.errors ?? []).map((e) => `${e.code} ${e.message}`).join("; ");
+  return Object.assign(
+    new Error(`${init.method ?? "GET"} ${path} -> ${res.status} ${detail || "(no detail)"}`),
+    { status: res.status },
+  );
+}
+
+/**
+ * A Worker's source is not JSON: Cloudflare returns the uploaded module as it is
+ * (or inside a multipart body), so this reads text. `null` is a script that does
+ * not exist, which is the one 404 that is an answer rather than a fault.
+ */
+async function callScript(token, path) {
+  const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 404) return null;
+  const text = await res.text();
+  if (!res.ok) throw httpError({}, path, res, safeJson(text));
+  return text;
+}
+
+function safeJson(text) {
+  try {
+    return JSON.parse(text) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/** The upload: one multipart request, the module and its metadata. */
+function workerForm(w) {
+  const form = new FormData();
+  form.append(
+    "metadata",
+    new Blob([JSON.stringify({ main_module: WORKER_MODULE, compatibility_date: "2026-10-01" })], {
+      type: "application/json",
+    }),
+  );
+  form.append(
+    WORKER_MODULE,
+    new Blob([w.body], { type: "application/javascript+module" }),
+    WORKER_MODULE,
+  );
+  return form;
 }
 
 export function parseArgs(argv) {
@@ -504,6 +664,33 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   }
   const turnstile = planTurnstile(widgetList, want.widgets);
 
+  // The down page's two reads, each behind its own permission, for the same reason
+  // as the widget list above: a bare 403 reads as a broken token.
+  const SCRIPT = `/accounts/${accountId}/workers/scripts/${WORKER_NAME}`;
+  const ROUTES = `/zones/${zoneId}/workers/routes`;
+  const wantWorker = workerFromSource(readFileSync(WORKER_FILE, "utf8"));
+  const scriptText = await callScript(token, SCRIPT).catch((err) => {
+    if (err.status !== 401 && err.status !== 403) throw err;
+    fail(
+      `${err.message}\n\n` +
+        "  The down page's Worker needs Account · Workers Scripts · Edit on the token.\n" +
+        "  Add that permission to the token and run again.",
+    );
+  });
+  const worker = planWorker(
+    scriptText === null ? null : { hash: deployedHash(scriptText) },
+    wantWorker,
+  );
+  const routeList = await call(token, ROUTES).catch((err) => {
+    if (err.status !== 401 && err.status !== 403) throw err;
+    fail(
+      `${err.message}\n\n` +
+        "  The down page's routes need Zone · Workers Routes · Edit on the token.\n" +
+        "  Add that permission to the token and run again.",
+    );
+  });
+  const routes = planRoutes(routeList, want.routes);
+
   // Checked against what would be *created*, not against the table: an
   // application that already exists is never rewritten here, so its second
   // address is whatever the dashboard says, and a run that adds nothing
@@ -526,7 +713,17 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     out(`CONFLICT turnstile ${c.name}: guards ${c.found.join(", ")}, wanted ${c.want.join(", ")}`);
   }
 
-  const conflicts = ingress.conflicts.length + dns.conflicts.length + turnstile.conflicts.length;
+  for (const c of worker.conflicts) out(`CONFLICT worker ${c.name}: exists as ${c.found}`);
+  for (const c of routes.conflicts) {
+    out(`CONFLICT route ${c.pattern}: routed to ${c.found}, wanted ${c.want}`);
+  }
+
+  const conflicts =
+    ingress.conflicts.length +
+    dns.conflicts.length +
+    turnstile.conflicts.length +
+    worker.conflicts.length +
+    routes.conflicts.length;
   if (conflicts > 0) {
     out();
     fail(`${conflicts} conflict(s) — nothing was changed. Resolve them in the dashboard.`);
@@ -536,17 +733,30 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   for (const n of dns.ok) out(`ok       dns     ${n}`);
   for (const a of access.ok) out(`ok       access  ${a.domain} (${a.decision})`);
   for (const w of turnstile.ok) out(`ok       turnstile ${w.name} (${w.domains.join(", ")})`);
+  for (const w of worker.ok) out(`ok       worker  ${w.name} (sha256 ${w.hash.slice(0, 12)})`);
+  for (const r of routes.ok) out(`ok       route   ${r.pattern} ${routeTarget(r)}`);
   for (const a of ingress.added) out(`ADD      ingress ${a.hostname} -> ${a.service}`);
   for (const d of dns.create) out(`ADD      dns     ${d.name} -> ${d.content} (proxied)`);
   for (const a of access.create) out(`ADD      access  ${a.domain} (${a.decision})`);
   for (const w of turnstile.create) {
     out(`ADD      turnstile ${w.name} (${w.mode}) for ${w.domains.join(", ")}`);
   }
+  for (const w of worker.create) out(`ADD      worker  ${w.name} (sha256 ${w.hash.slice(0, 12)})`);
+  for (const w of worker.update) {
+    out(`UPDATE   worker  ${w.name} (content changed, sha256 ${w.hash.slice(0, 12)})`);
+  }
+  for (const r of routes.create) out(`ADD      route   ${r.pattern} ${routeTarget(r)}`);
   for (const a of unadmitted)
     out(`MISSING  access  ${a.domain} admits a second person: ${a.missing}`);
 
   const changes =
-    ingress.added.length + dns.create.length + access.create.length + turnstile.create.length;
+    ingress.added.length +
+    dns.create.length +
+    access.create.length +
+    turnstile.create.length +
+    worker.create.length +
+    worker.update.length +
+    routes.create.length;
   out();
 
   if (changes === 0) {
@@ -568,7 +778,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     fail(unadmitted.map((a) => `${a.missing} is required with --apply`).join("\n"));
   }
 
-  for (const op of applyOrder({ access, ingress, dns, turnstile })) {
+  for (const op of applyOrder({ access, ingress, dns, turnstile, worker, routes })) {
     if (op.kind === "access") {
       const a = op.item;
       await call(token, `/accounts/${accountId}/access/apps`, {
@@ -597,6 +807,23 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         body: JSON.stringify({ type: "CNAME", name: d.name, content: d.content, proxied: true }),
       });
       out(`applied  dns     ${d.name}`);
+    } else if (op.kind === "worker") {
+      await call(token, SCRIPT, { method: "PUT", body: workerForm(op.item) });
+      out(`applied  worker  ${op.item.name}`);
+    } else if (op.kind === "route") {
+      const r = op.item;
+      await call(token, ROUTES, {
+        method: "POST",
+        // Fail open: past the free plan's daily quota the Worker is skipped and
+        // the site is served, instead of every page answering with an error.
+        // An exclusion has no Worker, so there is nothing to fail.
+        body: JSON.stringify(
+          r.script
+            ? { pattern: r.pattern, script: r.script, request_limit_fail_open: true }
+            : { pattern: r.pattern },
+        ),
+      });
+      out(`applied  route   ${r.pattern} ${routeTarget(r)}`);
     } else {
       const w = op.item;
       const created = await call(token, WIDGETS, {
@@ -615,6 +842,8 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     }
   }
 }
+
+const routeTarget = (r) => (r.script ? `-> ${r.script}` : "(no Worker)");
 
 /** Plans are read in a terminal, so they go to stdout as lines, not as a log. */
 function out(s = "") {
