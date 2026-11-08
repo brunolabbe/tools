@@ -108,7 +108,9 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
  * F3). A row stubbed at `XFD` is the same on the column axis.
  */
 function definedIndices(array: readonly unknown[]): number[] {
-  return Array.from(array.keys());
+  return Object.keys(array)
+    .map(Number)
+    .filter((index) => Number.isInteger(index));
 }
 
 /**
@@ -240,7 +242,10 @@ function refuseUnlessEachSheetIsItsOwn(data: Buffer): void {
   }
   const parts = sheetPartsOf(data, entries);
   if (
-    parts !== undefined && new Set(parts).size !== parts.length
+    !Array.isArray(listed) ||
+    parts === undefined ||
+    parts.length !== listed.length ||
+    new Set(parts).size !== parts.length
   ) {
     throw new AppError(
       "WORKBOOK_NOT_XLSX",
