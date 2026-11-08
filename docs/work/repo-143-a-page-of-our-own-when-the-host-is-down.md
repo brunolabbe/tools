@@ -562,3 +562,8 @@ checked):
   5. _Still not reached by these readings:_ the behaviour past the Free plan's
      daily request quota (the fail-open flag's effect), and the exit code of the
      second run.
+  6. _Owner's answer to the Done when 1 strike_ (2026-11-08, relayed by the
+     coordinator). Question: is striking Done when 1 with the caveat that the 503
+     status and headers were not read live enough? Options: accept with the
+     caveat (recommended); or the owner takes a Network-tab reading. **Chosen:
+     accept with the caveat.**

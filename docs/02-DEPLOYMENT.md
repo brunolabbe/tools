@@ -333,8 +333,8 @@ Anything else passes through untouched.
   first), the visitor's address on a pass-through and the Free plan's limits were
   read from Cloudflare's documentation on 2026-11-08, and what Cloudflare's
   documentation leaves open is recorded in the ticket's Log, among it that the
-  published schema does not list `request_limit_fail_open`, so the fail-open
-  call is the one the first live `--apply` proves. **If every run prints `REPAIR
+  published schema does not list `request_limit_fail_open`; the live run showed
+  the route list returning that flag as true (no `REPAIR`). **If every run prints `REPAIR
   route …` for each Worker route and never reaches `nothing to do`**, there are
   two causes the output cannot tell apart: the route list is not returning that
   field, or it returns `false` because the PUT was accepted and not applied, in
