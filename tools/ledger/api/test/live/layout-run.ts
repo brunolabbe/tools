@@ -23,7 +23,7 @@
  *   tools/ledger/api/test/live/layout-run.ts --model claude-haiku-5-5 \
  *   --price-in <USD per million input tokens> --price-out <USD per million output tokens> \
  *   --runs 3 --out <dir outside the repository> [--max-usd 5] [--effort medium] \
- *   [--figures shown|masked] [--fixtures lg7,csv-balance]
+ *   [--figures shown|masked] [--fixtures lg7,csv-balance] [--csv-name fixture|sent]
  * ```
  *
  * The prices have no default: a rate typed here from memory is a claim, and
@@ -41,12 +41,14 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { CSV_SHEET_NAME } from "@ledger/contract";
 import { LAYOUT_MAX_OUTPUT_TOKENS, createLayoutAsk } from "@ledger/receipts";
 import type { LayoutAnswer, LayoutAsk } from "@ledger/receipts";
 import { LAYOUT_FIXTURE_NAMES, layoutFixtures } from "../layout/fixtures.ts";
 import type { LayoutFixture } from "../layout/fixtures.ts";
 import { scoreLayout } from "../layout/score.ts";
 import type { Outcome, Score } from "../layout/score.ts";
+import { csvSheet } from "../../src/csv.ts";
 import { DEFAULT_VIEW, estimateTokens, layoutRequest } from "../../src/layout-view.ts";
 
 /**
@@ -93,6 +95,12 @@ export interface MeasureOptions {
   out: string;
   /** Every fixture when absent. */
   fixtures?: readonly string[];
+  /**
+   * What a bank CSV's one sheet is called: its fixture's file name, as lg-56
+   * measured (the default), or `statement.csv`, what the product sends since
+   * lg-67's Decision 5 (a).
+   */
+  csvName?: "fixture" | "sent";
 }
 
 export interface RunRecord {
@@ -101,6 +109,7 @@ export interface RunRecord {
   model: string;
   effort: string;
   figures: string;
+  csvName: string;
   requestChars: number;
   requestTokensEstimated: number;
   inputTokens: number;
@@ -132,13 +141,31 @@ function noAnswer(issue: string): Score {
   };
 }
 
+/**
+ * A bank CSV fixture as the product sends it: one sheet named `statement.csv`,
+ * and the correct description selecting that sheet. Any other fixture as it is.
+ */
+function asSent(fixture: LayoutFixture): LayoutFixture {
+  if (fixture.text === undefined) return fixture;
+  const { account } = fixture.layout;
+  return {
+    ...fixture,
+    sheets: [csvSheet(CSV_SHEET_NAME, fixture.text)],
+    layout: {
+      ...fixture.layout,
+      account: { ...account, sheets: { by: "name", names: [CSV_SHEET_NAME] } },
+    },
+  };
+}
+
 /** Every run, written as it finishes; the spend stop refuses a run whose ceiling would pass `maxUsd`. */
 export async function measure(options: MeasureOptions, ask: Ask): Promise<RunRecord[]> {
   const all = await layoutFixtures();
-  const chosen: LayoutFixture[] =
+  const listed =
     options.fixtures === undefined
       ? all
       : all.filter((fixture) => options.fixtures?.includes(fixture.name));
+  const chosen: LayoutFixture[] = options.csvName === "sent" ? listed.map(asSent) : listed;
   const directory = path.join(options.out, options.model);
   mkdirSync(directory, { recursive: true });
   const records: RunRecord[] = [];
@@ -175,6 +202,7 @@ export async function measure(options: MeasureOptions, ask: Ask): Promise<RunRec
         model: options.model,
         effort: options.effort,
         figures: options.figures,
+        csvName: options.csvName ?? "fixture",
         requestChars: request.length,
         requestTokensEstimated: estimateTokens(request),
         inputTokens: answer.inputTokens,
@@ -241,7 +269,7 @@ export function summary(records: readonly RunRecord[]): string {
 const REPOSITORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
 
 const USAGE =
-  "Usage: LEDGER_LIVE_RUN=1 ANTHROPIC_API_KEY=… node --import tsx tools/ledger/api/test/live/layout-run.ts --model <id> --price-in <usd/Mtok> --price-out <usd/Mtok> --out <dir> [--runs 3] [--max-usd 5] [--effort low|medium|high] [--figures shown|masked] [--fixtures a,b]";
+  "Usage: LEDGER_LIVE_RUN=1 ANTHROPIC_API_KEY=… node --import tsx tools/ledger/api/test/live/layout-run.ts --model <id> --price-in <usd/Mtok> --price-out <usd/Mtok> --out <dir> [--runs 3] [--max-usd 5] [--effort low|medium|high] [--figures shown|masked] [--fixtures a,b] [--csv-name fixture|sent]";
 
 export function parseCli(argv: readonly string[]): MeasureOptions {
   const values = new Map<string, string>();
@@ -266,6 +294,7 @@ export function parseCli(argv: readonly string[]): MeasureOptions {
     "--effort",
     "--figures",
     "--fixtures",
+    "--csv-name",
   ]);
   for (const name of values.keys()) {
     if (!known.has(name)) throw new Error(`${USAGE}\nUnknown ${name}`);
@@ -289,6 +318,10 @@ export function parseCli(argv: readonly string[]): MeasureOptions {
   }
   const figures = values.get("--figures") ?? "shown";
   if (figures !== "shown" && figures !== "masked") throw new Error("--figures is shown or masked");
+  const csvName = values.get("--csv-name");
+  if (csvName !== undefined && csvName !== "fixture" && csvName !== "sent") {
+    throw new Error("--csv-name is fixture or sent");
+  }
   const runs = positive("--runs", 3);
   if (!Number.isInteger(runs)) throw new Error("--runs is a whole number");
   const fixtures = values
@@ -318,6 +351,7 @@ export function parseCli(argv: readonly string[]): MeasureOptions {
     maxUsd: positive("--max-usd", 5),
     effort,
     figures,
+    ...(csvName === undefined ? {} : { csvName }),
     ...(fixtures === undefined ? {} : { fixtures }),
   };
 }
