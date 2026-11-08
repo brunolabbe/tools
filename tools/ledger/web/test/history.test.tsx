@@ -900,3 +900,36 @@ test("a re-read that succeeds leaves another row's control open (lg-99)", async 
   expect(b.getAttribute("aria-expanded")).toBe("true");
   expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
 });
+
+// lg-103: B's control opens while A's Save is still in flight. The Save's answer closes A's
+// control, which opening B had already closed; it must not close B's. The wait is the Save's
+// own notice, because B's open control renders a Save button of its own.
+for (const arm of ["unfocused", "focused"] as const) {
+  test(`a stored save leaves open the control of another row opened while it was in flight, ${arm} (lg-103)`, async () => {
+    const { a, b } = await twoRows();
+    let stored: (answer: typeof SAVED) => void = () => undefined;
+    vi.mocked(classifyRow).mockReturnValueOnce(
+      new Promise((resolve) => {
+        stored = resolve;
+      }),
+    );
+
+    if (arm === "focused") a.focus();
+    fireEvent.click(a);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    if (arm === "focused") b.focus();
+    fireEvent.click(b);
+    expect(a.getAttribute("aria-expanded")).toBe("false");
+    expect(b.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => {
+      stored(SAVED);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("A is now"));
+
+    expect(a.getAttribute("aria-expanded")).toBe("false");
+    expect(b.getAttribute("aria-expanded")).toBe("true");
+    expect(classifyRow).toHaveBeenCalledTimes(1);
+  });
+}

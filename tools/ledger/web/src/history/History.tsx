@@ -289,8 +289,9 @@ export function History(): React.ReactElement {
       return;
     }
     // Stored. The control closes whatever the re-read does, so a second Save cannot
-    // send the same answer again under a message that says the first one failed.
-    setChanging(null);
+    // send the same answer again under a message that says the first one failed. Only this
+    // row's: another row's control may have been opened while the Save was in flight (lg-103).
+    setChanging((current) => (current === row.id ? null : current));
     const closed = periods === null ? null : closedPeriodOf(row.date, periods);
     const carried =
       periods === null

@@ -3,7 +3,7 @@ id: lg-103
 tool: ledger
 title: A finished Save closes whichever row's control is open, another row's included
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -268,10 +268,55 @@ Written for A, the option the owner chose on 2026-11-07.
 1. A test in `tools/ledger/web/test/history.test.tsx` runs the reproduction's two arms
    and proves that when A's Save completes, B's open control stays open
    (`aria-expanded` `["false","true"]`, the wait being the Save's notice). It fails on
-   `main` at `1eafa0c6` (the red output above) and passes with the answer's change
+   `main` at `08f78f69` (the red output above) and passes with the answer's change
    (the green output above). The owner chose A, so the reproduction is the test.
 2. The owner chose A, so the branch of question 1 that adds no test (C) does not apply.
 3. `npm run check` and `npm test -- --project ledger` pass.
+
+## Review
+
+**Gate: PASS** — 2026-11-07 · `08f78f69..5bdda591` · Opus 5.5, depth full
+
+| Done when                                                                                                                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. A test runs the reproduction's two arms; B's control stays open when A's Save completes, with the Save's notice as the wait; it fails on `main` and passes with the change | `web/test/history.test.tsx` › "a stored save leaves open the control of another row opened while it was in flight, unfocused (lg-103)" and "…, focused (lg-103)" ✓. The assertion that carries the line is `b.getAttribute("aria-expanded")` → `"true"`, after `waitFor` on the `status` notice "A is now". Red: with the base's `setChanging(null)` planted back on the stored-Save path, 2 failed of 29 (`expected 'false' to be 'true'`). Green: 29 of 29 at head. The red was measured at `08f78f69`'s line, not at `1eafa0c6` (see the low) |
+| 2. C's no-test branch does not apply                                                                                                                                          | **verified** by reading: the owner chose A, and the branch adds the test and deletes none                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 3. `npm run check` and `npm test -- --project ledger` pass                                                                                                                    | `npm run check` exit 0 locally at `5bdda591`; `npm test -- --project ledger` 2256 of 2256 in 99 files, exit 0, locally; PR #756 `check` (CI) and `test (ubuntu-latest)` (CI) both SUCCESS on `5bdda591` ✓                                                                                                                                                                                                                                                                                                                                        |
+
+- **low** · no `Done when` line depends on it · wording · Done when 1 says the test
+  "fails on `main` at `1eafa0c6`". That sha predates lg-99, and the in-repo test needs
+  `twoRows`, which was not there yet. The line is met in substance at `08f78f69`, the
+  real base: its stored-Save line is the one the branch changes, and putting it back
+  turns both new tests red. The owner can reword the sha. The branch's Log already
+  says the sha is stale.
+- **low** · `nfr:maintainability` · false text, in the safe direction · the build Log
+  says "`History.tsx` line 293 is now `setChanging((current) => …)`". At `5bdda591`
+  that call is on line 294, because the new comment adds a line. Nothing relies on
+  the number.
+- **dropped** · attack 1, an unguarded close left on a Save's path. `refile` at head
+  has no `setChanging(null)` left. Its three closes are all guarded on `row.id`:
+  when the Save is stored, when the re-read succeeds and when it fails. A refusal
+  and the early return do not close anything. The only unguarded close is the
+  row's own `onOpen`, from its own button or Cancel. Rows are keyed by `row.id`, and
+  a re-read that reorders the rows leaves B open (probe P4). Not a defect.
+- **dropped** · attack 1, a re-read that drops B. B's id outlives its row, so a later
+  read that brings B back shows B's control open again (probe P6: `B:"true"` at
+  head, `"false"` at base). The control remounts on the answer the row has now, so no
+  stale answer can be sent. Any list replacement, such as a filter change, already
+  left this state at the base. Not a defect.
+- **dropped** · attack 2, A reopened while its Save is in flight. Head and base read
+  the same (probe P1, P2): when the Save is stored the reopened control closes and
+  stays closed through the re-read, with `classifyRow` called 1 time. When the Save
+  is refused, the reopened control stays open. Main's behaviour is unchanged, and
+  lg-99's "reopened control saves a stale answer" cannot happen.
+- **dropped** · attack 3, a fix that never closes A. The two new tests pass under it
+  (mutation M1: the stored-Save path closes nothing). Six lg-99 tests in the same
+  file fail under M1, so the suite catches it, and Done when 1 does not ask these
+  two tests to. Covered, not a gap.
+- **findings** · the hunt returned 6; 2 carried, 4 dropped.
+- NFR: security n/a (no input or transport touched) · performance n/a · reliability ✓
+  (probes P1–P6) · maintainability: the low above. Layout n/a: no new control or
+  screen.
 
 ## Log
 
@@ -369,3 +414,38 @@ Gate 1 (Sonnet 5.5, narrow) failed the filing on five findings. Each is answered
   the ticket is `ready` from the owner's answer above. Filed by builder-mechanical
   (Haiku 5.5, high), gated twice by ticket-reviewer-sonnet (Sonnet 5.5, xhigh, narrow),
   landed by the fixer (Sonnet 5.5, high).
+
+### 2026-11-07, build
+
+- **Brief points that were stale.** The ticket's reproduction sha (`1eafa0c6`) predates lg-99:
+  the `setChanging(null)` it cites at line 289 is at line 293 on `origin/main` `08f78f69`, and
+  `refile`'s two re-read paths already carry `setChanging((current) => (current === row.id ?
+  null : current))` (lines 314 and 323). Neither changes the fix: the stored-Save line was the
+  one left unguarded. Planted fix as the ticket gave it, in the same shape as lg-99's guards.
+- **Red on the real base.** The ticket's reproduction, copied to `web/test/` and run at
+  `08f78f69`: both arms `expected [ 'false', 'false' ] to deeply equal [ 'false', 'true' ]`,
+  `after-save expanded ["false","false"]`, as on `1eafa0c6`. The in-repo test (Build step 2)
+  also failed there, on `expect(b.getAttribute("aria-expanded")).toBe("true")` after the
+  Save's notice, 2 of 29.
+- **Green.** `History.tsx` line 294 is now `setChanging((current) => (current === row.id ?
+  null : current))`. `npx vitest run tools/ledger/web/test/history.test.tsx` → 29 of 29; the
+  ticket's reproduction with the fix → both arms `after-save expanded ["false","true"]`.
+- **Focus** is as the Decision said: the `active` lines are the same as on `main` in both arms.
+- **Not folded in.** Nothing else in the file was free; lg-100 and lg-98 touch other files.
+
+### 2026-11-07, landing
+
+- 2026-11-07 — The owner answered the orchestrator's question on gate 1's two lows
+  through AskUserQuestion: gate 1 PASSed, so what to do with the two lows (the Done when
+  line's stale base sha, the Log's stale line number)? Options: "Fix both at landing"
+  (the orchestrator's recommendation), "fix low 2 only", "record both, change nothing".
+  Chosen: "Fix both at landing", with no re-gate. The owner also approved the change to the
+  Done when line, and nothing else on that line.
+- 2026-11-07 — Fixed at landing by owner choice: gate 1, the first low — "Done when 1
+  says the test fails on main at 1eafa0c6, which predates lg-99". Done when 1 now names
+  `08f78f69`, the real base. Proof: the removed-line count of the `git diff 5bdda591 HEAD`
+  on this file, grepping `'^-.*red output above'` → `1`.
+- 2026-11-07 — Fixed at landing by owner choice: gate 1, the second low — "the build Log
+  says History.tsx line 293 is now setChanging(...), at 5bdda591 that call is on line 294".
+  The build Log now says line 294, checked against the head. Proof: the removed-line
+  count of the same diff, grepping `'^-.*line 293 is now'` → `1`.
