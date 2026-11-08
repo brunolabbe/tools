@@ -2178,3 +2178,68 @@ test("formatMarkdown spawns oxfmt once for repeated identical input, and again f
   formatMarkdown(other);
   expect(oxfmtSpawns()).toBe(before + 2);
 });
+
+// --- repo-136: the preflight stage's FAIL line carries the reason ---------------
+//
+// landMain prints each stage as `FAIL  ${detail}` (or `ok  ${detail}`), so the
+// reason has to be the detail's first line. The preflight output begins with a
+// blank line and a nested `== mergeTree ==` block, so the FAIL line was empty.
+
+test("land() puts preflight's reason on the stage's own FAIL line when the merge-tree probe halts (repo-136)", () => {
+  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
+    // The shape the real preflight prints when its merge-tree probe halts: a
+    // blank line, the probe's block, the halted block, then the verdict last.
+    const halted =
+      "\n== mergeTree ==\ncomparing HEAD against 7 other open pull request head(s)\n" +
+      "FAIL  #685 lg-78-import-resolves-names conflicts on: tools/ledger/e2e/layout.spec.ts\n" +
+      "\n== halted ==\nmergeTree failed, so check, ciCommands, review, title did not run: this run proved nothing\n" +
+      "\npreflight failed: mergeTree (exit 16); not run: check, ciCommands, review, title\n";
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base: "origin/main",
+      status: "done",
+      title: "fix(repo): a title (zz-1)",
+      runPreflight: () => ({ ok: false, output: halted }),
+    });
+
+    const failed = result.steps.at(-1);
+    expect(failed?.name).toBe("preflight");
+    // The stage line as landMain prints it: `FAIL  ` then the detail.
+    const stageLine = `FAIL  ${failed?.detail ?? ""}`.split("\n")[0];
+    expect(stageLine).toBe(
+      "FAIL  preflight failed: mergeTree (exit 16); not run: check, ciCommands, review, title",
+    );
+    // The landing is still on origin, and the nested output still follows.
+    expect(failed?.detail).toMatch(/landed and pushed to origin\/feature/);
+    expect(failed?.detail).toContain("== mergeTree ==");
+  } finally {
+    cleanup();
+  }
+});
+
+test("land() gives a preflight failure with no verdict line a non-empty reason on its FAIL line (repo-136)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "x",
+      runPreflight: () => ({
+        ok: false,
+        output: "\n== check ==\nFAIL  no package.json in the fixture\n",
+      }),
+    });
+
+    const failed = result.steps.at(-1);
+    expect(failed?.name).toBe("preflight");
+    expect(`FAIL  ${failed?.detail ?? ""}`.split("\n")[0]).toMatch(/^FAIL  \S/);
+  } finally {
+    cleanup();
+  }
+});
