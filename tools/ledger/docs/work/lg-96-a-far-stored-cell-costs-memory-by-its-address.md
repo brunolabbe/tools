@@ -220,7 +220,12 @@ builder in the first commit of the round that follows).**
 10. **The cap, re-asked after F2.** Offered: keep 2,000,000 and have gate 2 re-measure
     (the orchestrator's recommendation) / lower to 1,000,000. **Chosen: keep 2,000,000.**
     The "about 22 MB" text and the Log's "+90 MB" are corrected to what is measured after
-    F1 and F2 (Log, round 1: +129 MB the worst built).
+    F1 and F2 (Log, round 1: +129 MB the worst built). **Basis corrected in round 2 (gate 2's
+    F2):** "the worst built" held only for files the round 1 check let through, and 14
+    listings of one part, later ones spelled `sheet_x0031_`, were let through and read +375.1
+    MB. The cap is kept as answered; the figure is now the worst for a workbook whose sheets
+    are each a part of its own, which round 2's check enforces (Log, round 2: +132.8 MB the
+    worst built at that head).
 
 **Answers after round 1 and after gate 2 (`c2e36eb7`), 2026-11-08 (relayed by the
 orchestrator, recorded here by the builder in the first commit of round 2).**
@@ -401,7 +406,16 @@ Option 1, as the owner answered it (Decision, above).
 8. (Round 1, answer 8.) Before SheetJS parses any sheet, `readSheets` refuses a workbook
    in which two `<sheet>` entries resolve to one worksheet part, as `WORKBOOK_NOT_XLSX`
    (`workbook-parts.ts`), with tests through the reader, both route requests and the
-   command.
+   command. **Superseded 2026-11-08 (answer 12, round 2):** ~~refuses a workbook in which two
+   `<sheet>` entries resolve to one worksheet part~~ by `workbook-parts.ts`' copy of SheetJS's
+   rules alone; see Build 9.
+9. (Round 2, answer 12, gate 2's F2, F3, N1 and N2.) Before SheetJS parses any sheet,
+   `readSheets` refuses whatever `workbookEntries` refuses, then lists the sheets with
+   SheetJS's `bookSheets` and refuses, as `WORKBOOK_NOT_XLSX`, unless `workbook-parts.ts`
+   resolves every one of them to a part that exists, no two to the same, in the same count.
+   `placesOf` and `widthOf` walk the indices an array defines. Tests: gate 2's seven spellings
+   and the files `workbookEntries` refuses, through the reader and the command; 105 sheets
+   admitted beside 106 refused.
 
 ## Done when
 
@@ -422,7 +436,8 @@ Option 1, as the owner answered it (Decision, above).
 3. Each size refusal is `WORKBOOK_TOO_LARGE` with `details.bound` `rows` or `slots`, in
    `readSheets` itself, through `describeWorkbook` (never `WORKBOOK_NOT_XLSX`) and
    through the import command (exit 2, the message on stderr); the shared-part refusal is
-   `WORKBOOK_NOT_XLSX` by the same three. **Superseded 2026-11-08 (answer 8):** ~~each
+   `WORKBOOK_NOT_XLSX` by the same three (round 2: and so is a workbook that gives a sheet
+   no part of its own, or whatever `workbookEntries` refuses, in the command as in the route). **Superseded 2026-11-08 (answer 8):** ~~each
    refusal is `WORKBOOK_TOO_LARGE` ... never `WORKBOOK_NOT_XLSX`~~ for the shared part
    only. A test in `api/test/`
    asserts the code and the bound for each axis and for each caller.
@@ -598,7 +613,8 @@ Option 1, as the owner answered it (Decision, above).
     the 11 MB a million that the owner's "about 22 MB" took from case 4's readings. The
     cap's worst case measured is about 90 MB, under the 512 MB container by a wide margin.
     **Superseded in round 1 (gate 1's F2): the worst built after F1 and F2 is +129 MB, and
-    the 90 MB was a shared part, now refused.**
+    the 90 MB was a shared part, now refused.** (Round 2: "now refused" held for the plain
+    spellings only; see the round 2 entry.)
 
   - **Skipped, and why**: 40 far sheets (the 1.9 to 2.1 GB extrapolation), a 20 000-row
     far-column sheet (3.6 GB), and 20 000 far entries (100 GB) were never run, as the
@@ -664,7 +680,8 @@ Option 1, as the owner answered it (Decision, above).
     owner wants a `WORKBOOK_TOO_LARGE` or a new bound, it is a one-line change in
     `refuseSharedParts` (`xlsx.ts`).** The route (415) and the command (exit 2, the message
     on stderr) were tested.
-  - **A cost the brief did not name: the resolution is a copy of SheetJS's.** What is
+  - **WITHDRAWN — do not cite this paragraph** (gate 2's F2, round 2). **A cost the brief
+    did not name: the resolution is a copy of SheetJS's.** What is
     refused has to be what SheetJS reads twice, and it picks the part by rules of its own,
     not the format's (`workbook-parts.ts`' header lists them). The test reads each spelling
     it refuses through SheetJS itself (an absolute target, another case, an `xl/` prefix:
@@ -673,12 +690,26 @@ Option 1, as the owner answered it (Decision, above).
     bounds). A SheetJS upgrade should re-read it. **Left open**: a workbook that
     `workbookEntries` refuses is not checked for a shared part, and the command, which
     never ran the inflate bound, is then read as it was.
-  - **F3 (med), fixed.** `widthOf` visits the cells a row defines (`forEach` skips the holes
+    _Retraction (builder, round 2):_ "nothing is worse than before the round (the cells and
+    inflate bounds)" is false of the memory: seven spellings SheetJS reads as one part twice
+    were not refused, and `densex14`'s part listed 14 times (later entries `sheet_x0031_`)
+    read 1,960,000 cells, +375.1 MB, peak 457.4 MB, 6.2 s through `readSheets` (gate 2),
+    which no cells bound counts before the parse. "Left open" was the command and the files
+    `workbookEntries` refuses; round 2 closes both. I stated a bound I had measured only on
+    the spellings I had thought of.
+  - **WITHDRAWN — do not cite this paragraph** (gate 2's F3: fixed in part, round 2).
+    **F3 (med), fixed.** `widthOf` visits the cells a row defines (`forEach` skips the holes
     of a sparse row), and `placesOf` hands its widths to `rowsOf`, so a row is walked once.
     Gate 1's `stubwide` (5 000 rows whose one cell is a stub at `XFD`, 30 866 bytes): 6.4 s
     at `e2e6a6cb`, **2.57 s** at `2a53dc5e` (+10.0 MB), the rest SheetJS's own parse.
     Not pinned by a test: a clock measures the machine, and a count of the cells a
     `forEach` visits cannot be told from a count through a `Proxy`.
+    _Retraction (builder, round 2):_ `widthOf` was fixed and `placesOf`'s own loop, the same
+    mechanism on the row axis, was not (400 distinct stub-tail sheets took 19.6 s), and
+    `forEach` calls back only for the defined indices but still scans the length, as this
+    paragraph did not allow: 37.8 ms a walk of a million-long `!data` against `entries()`'s
+    42.6 (see round 2). The "cannot be told" claim is wrong too: a `Proxy` over a sparse array
+    counts the indices asked about, which `entries()` and `forEach` ask for every one of.
   - **F4 (med), reworded.** Answer 9. The Decision's answer 5, Build 6, Done when 3 and the
     comment in `workbook-import.test.ts` now say "the reader's bounds". No code.
   - **F5 (low), reworded.** `workbook-bounds.ts` says `MAX_WORKBOOK_ROWS` bounds each sheet
@@ -697,3 +728,95 @@ Option 1, as the owner answered it (Decision, above).
     `workbook-describe.test.ts` and `workbook-import.test.ts` one each for a shared part.
     Mutations, restored from the sha: with `refuseSharedParts` off and the widths padded,
     11 of 125 tests in the three files fail.
+- 2026-11-08 — Round 2, after gate 2 (FAIL at `c2e36eb7`, F2, F3, N1, N2), builder, no ship
+  authority. Answers 11 and 12 are recorded under the Decision heading in `3f45c1a0`, before
+  any source. Code `48ec0f7d`, mutations `f3cc50fe` and the restore `99cc3a57` (tree equal to
+  `48ec0f7d`); this entry is the commit after. Measured one case at a time, two processes
+  (one builds, one reads), `--max-old-space-size=900`, nothing near +1 GB.
+  - **F2 (high), fixed as the owner answered (12).** `readSheets` runs `refuseUnlessEachSheetIsItsOwn`
+    before `XLSX.read`: `workbookEntries` first (whatever it refuses, the command meets as the
+    route does, as `WORKBOOK_NOT_XLSX`/`WORKBOOK_TOO_LARGE` with its own message), then SheetJS's
+    own sheet list (`bookSheets: true`), then `sheetPartsOf` (`workbook-parts.ts`), and it refuses
+    as `WORKBOOK_NOT_XLSX` unless the copy finds the same number of sheets, every one in a part
+    that exists, no two in one. **`bookSheets` parses no sheet**: it returns the names and no
+    `Sheets` (pinned by a test, `listed.Sheets` undefined); it does inflate the zip's entries,
+    so `densex14`'s plain part (3.85 MB inflated) costs +4.7 MB and 45 ms through `readSheets`
+    where the parse costs +375 MB. `bookSheets` runs the workbook part's XML parse only.
+    Gate 2's `mult.sh` at `99cc3a57`: `densex14` plain (14 listings, one spelling) refused,
+    +4.7 MB, 45 ms; the `sheet_x0031_` file through `readSheets` **refused, +5.4 MB, 45 ms**
+    (gate 2 at `c2e36eb7`: read, 1,960,000 cells, +375.1 MB, peak 457.4 MB, 6.2 s); through
+    `describeWorkbook` **refused, +8.1 MB, 85 ms** (gate 2: +347.7 MB, refused as `cells` after
+    the build). Gate 2's `shapes.mts` (adapted to `sheetPartsOf`, `build/shapes-r2.mts`) at
+    `99cc3a57`: **21 of 21 shapes refused by `readSheets` as `WORKBOOK_NOT_XLSX`**, including
+    its seven (`numeric_ref`, `hex_ref`, `x_code`, `gt_in_name`, `empty_rid_strrelid`,
+    `id_undefined`, `tab_sheet_decoy`) and the two files `workbookEntries` refuses
+    (`upper_workbook`, `gt_in_override`), which the command now refuses as the route does.
+  - **The copy was also made exact where a difference lets two sheets look distinct to it and
+    the same to SheetJS** (this is not option 2, which patches seven rules and stops there; the
+    check no longer rests on it, the count and the existence do): the tag split is SheetJS's
+    `tagregex1` and `parsexmltag` ported, so the `>` in a name, the tab after a tag name, the
+    empty `r:id` beside `strRelID` and the absent id (`hash["undefined"]`) read as SheetJS reads
+    them; the zip is searched as `safegetzipfile` does and a part's identity is its entry; text is
+    read a byte to a character (`cc2str`), so two bytes SheetJS tells apart are not one character
+    here; a target `unescapexml` would change (`&`, `_x0031_`) is "cannot tell", which is refused,
+    because a part literally named `sheet&#49;.xml` beside `sheet1.xml` would otherwise look
+    distinct to the copy and be the same part to SheetJS (a test builds it, and SheetJS reads
+    `P1` into both sheets); a relationship with no `Target` (SheetJS throws in `parse_rels`), an
+    `Id` of `__proto__`, and a sheet id that is a property of every object are refused likewise.
+    **What this does not prove**: that the copy equals SheetJS for every file. A difference in a
+    rule I did not read (the zip's entry-name decoding for a non-ASCII name; `resolve_path`;
+    `get_sheet_type`) could still let two sheets look distinct to the copy and read the same
+    part. The check only ever fails closed on what it can see, so such a file is a smaller risk
+    than round 1's, not a closed one. A SheetJS upgrade re-reads `workbook-parts.ts`' header.
+  - **A behaviour change the owner accepted (12), with its edges.** The command refuses a
+    sheet with no part of its own (a `<sheet>` whose relationship points at a part not in the zip
+    was skipped by SheetJS before) and whatever `workbookEntries` refuses. A file that is not a
+    zip, or a zip with no `[Content_Types].xml` or `xl/workbook.xml` (an `.ods`), is now
+    `WORKBOOK_NOT_XLSX` with that code's message ("Only an .xlsx workbook or a comma-separated
+    CSV can be imported here...") in the command, where it was `BAD_REQUEST` with SheetJS's reason
+    (`ods, not xlsx`); two `xlsx.test.ts` tests that asserted those messages now assert the code.
+    The command's CSV wording is the route's, which is not quite right for a command that
+    reads no CSV; I did not reword the contract's message.
+  - **F3 (med), pushed back on, then fixed another way.** The direction, `forEach` in
+    `placesOf`, did not fix it. One stub-tail sheet's `!data` (length 1,048,576, 2 defined
+    rows), 10 walks each, `build/walk.mts`: `entries()` **42.59 ms** a walk, `forEach`
+    **37.83 ms**, `Object.keys` **0.01 ms**, `for-in` 0.00 ms. `stubd.sh` with `forEach`:
+    40 sheets 1,415 ms (gate: 1,986), **400 sheets 15,281 ms** (gate: 19,588), route 15,501 ms.
+    `placesOf` and `widthOf` now walk `Object.keys` (`definedIndices`), integer keys in order.
+    `stubd.sh` at `99cc3a57`: **40 sheets 36 ms, 400 sheets 184 ms, route 275 ms**
+    (`WORKBOOK_TOO_LARGE`, `sheets`); gate 1's `stubwide` 78 ms (2.57 s at `2a53dc5e`), `stub1`
+    21 ms, `dense1` 505 ms, +59.2 MB (unchanged), `far1x10` and `stub1x40` refused in 15 ms. Pinned
+    by a test: a `Proxy` over a sparse array of 1,048,576 rows, and over a row of 16,384 cells,
+    counts the indices asked about (`has` and `get`) and the test needs fewer than 10;
+    `entries()` and `forEach` ask for every one. With the walk mutated to `Array.from(array.keys())`
+    that test fails.
+  - **N1 (low), moot, shown.** Gate 2's `tab_relationship` shape: SheetJS ignores both tagged
+    relationships, reads by position (`sheet1.xml` once, `sheet2.xml` absent: 1 read), and the
+    workbook is refused all the same. The copy no longer accepts the tab (`sheetPartsOf` answers
+    `undefined` for it: the second sheet has no part), and would refuse it for the missing part
+    even if it did. A test pins both (`readsOnePartTwice` 1, refused).
+  - **N2 (low), fixed.** "the slots run across distinct parts too" reads 105 sheets of `A1` and
+    `A19000` whole and refuses 106 as `slots`.
+  - **The cap, again (answer 10), at `99cc3a57`**, round 1's files, two runs each, growth of the
+    peak over the baseline: 122 rows with a cell at `XFD` **+39.5, +40.2 MB**; 105 sheets
+    of `A1` and `A19000` **+109.6, +112.5 MB**; the worst built, one 1,400 by 100 sheet beside
+    97 gap sheets **+130.0, +132.8 MB** (peak 221.6 MB); `dense1` +61.7 MB. They run +1 to +3 MB
+    over round 1's because `bookSheets` inflates the entries once before the parse. Under the
+    512 MB container. They are the worst I built for a workbook whose sheets are each a part of
+    its own, not a proof of a worst (the first round said the same, and was wrong about what
+    got through).
+  - **Tests**: `xlsx.test.ts` 50 of 50, `workbook-describe.test.ts` and `workbook-import.test.ts`
+    141 of 141 with it (`npx vitest run` on the three). New: the seven spellings (each read as
+    two sheets over one part by SheetJS itself, then refused), the decoy part
+    `sheet&#49;.xml`, the two files `workbookEntries` refuses, N1, a sheet with no part, sheets
+    read by position from parts of their own (admitted), the `bookSheets` contract, the walk,
+    105 beside 106; and a command test for a file `workbookEntries` refuses. Mutations, restored
+    from `48ec0f7d`: with the sheet-list check cut to the distinct-parts test alone and the walk
+    over the whole length, 7 of 50 fail in `xlsx.test.ts` (the numeric and hex entities, the
+    `_x0031_` code, the decoy part, N1, the missing part, and the walk). The other four
+    spellings (`>` in a name, empty `r:id`, absent id, tab decoy) still pass under that
+    mutation, because the ported tag reading now sees them as the shared part they are; the
+    count and existence check is what the other seven exercise.
+  - **Fold-in, not done**: the command's CSV wording above, which is a contract message and the
+    owner's; nothing else found.
+  - **Not proven here**: CI and the Windows leg (the draft's); a SheetJS upgrade.
