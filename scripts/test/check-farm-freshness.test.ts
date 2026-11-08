@@ -682,6 +682,14 @@ farmTest(
       expect(result.stderr).toContain("this branch's own relock added it, which is expected");
       expect(result.stderr).toContain("the parent branch on a stacked branch");
       expect(result.stderr).toContain("stop and report it to the orchestrator");
+      // Each condition beside its action, so swapping the two (own relock stops,
+      // base's package goes on) fails here.
+      expect(result.stderr).toContain(
+        "does not declare it, this branch's own relock added it, which is expected: say so in your report and go on",
+      );
+      expect(result.stderr).toContain(
+        "If the base declares it, it came from main or a parent branch: stop and report it to the orchestrator, naming the packages",
+      );
       expect(result.stderr).not.toContain("npm install` in the shared checkout");
       expect(result.stderr).not.toContain("npm install` in " + tree.dir);
     } finally {
@@ -740,6 +748,12 @@ test("check-farm-freshness.mjs --worktree-packages tells a branch's own relock f
     expect(result.stderr).toContain("@anthropic-ai/sdk");
     expect(result.stderr).toContain("git show <base>:package-lock.json");
     expect(result.stderr).toContain("this branch's own relock added it");
+    expect(result.stderr).toContain(
+      "does not declare it, this branch's own relock added it, which is expected: say so in your report and go on",
+    );
+    expect(result.stderr).toContain(
+      "If the base declares it, it came from main or a parent branch: stop and report it to the orchestrator, naming the packages",
+    );
     expect(result.stderr).not.toContain("npm install");
   } finally {
     tree.cleanup();
