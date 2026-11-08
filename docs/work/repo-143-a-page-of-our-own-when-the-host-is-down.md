@@ -319,7 +319,7 @@ checked):
      (`planner.example.com/api/*` is a route with no Worker; test `an exclusion is
      created with no script, a Worker route with fail-open`), which is the
      part this build can show; the live answer is the owner's.
-  3. Met: `npx vitest run scripts/test/cloudflare-down-page.test.ts` → 59 of 59.
+  3. Met: `npx vitest run scripts/test/cloudflare-down-page.test.ts` → 72 of 72 at `08c44f0b` (59 at the first build; the file grew with the two owner answers and round 1).
      The decision table is `the decision over (outcome x Accept x method)`; the
      route plan `the route plan` (additions, exclusions for every tool in
      `TOOLS`, the conflict on a foreign Worker, and the two exclusion/Worker
@@ -331,7 +331,7 @@ checked):
      `ADD worker down-page (sha256 2dfb2786b825)`, then `ADD route` for
      `<host>/api/*`, `<host>/assets/*` (both with `(no Worker)`),
      `<host>/theme.js` (downloader and ledger) and `<host>/* -> down-page` for
-     each of the three tools, `21 change(s). Re-run with --apply`; against the
+     each of the three tools, `22 change(s). Re-run with --apply` (21 at the first build, plus the `DISABLE  worker  down-page on workers.dev` line the second answer added); against the
      fake, `--apply` twice printed `applied …` then `nothing to do.` **A real
      `--apply` twice on the live account is the owner's.**
   5. Met: Playwright, 360×640, each of three tools in light and dark, from
@@ -340,7 +340,7 @@ checked):
   6. Met: `docs/02-DEPLOYMENT.md` names both permissions (table, and the
      paragraph under it) and the verification step.
   7. Met: `npm run check` exit 0, and `npm test -- --project repo` exit 0
-     (16 files, 691 passed and 1 skipped of 692).
+     (16 files, 704 passed and 1 skipped of 705 at `08c44f0b`; 691 of 692 at the first build).
 - 2026-11-08 — **Not folded in:** `docs/02-DEPLOYMENT.md`'s _edge rate limit_
   paragraph still says a WAF rule "would need a fourth permission on a token
   whose header argues for three". It is a dated owner decision (dl-52,
@@ -418,3 +418,35 @@ checked):
   and the routes still go through, a dry run prints its whole plan, and the run
   exits non-zero at the end. A 401/403 on the GET keeps its permission message.
   Supersedes the earlier build entry's "right after the upload" ordering.
+- 2026-11-08 — **Round 1 (gate 1 at `49971a53`, CONCERNS): F1, F2, F3 applied,
+  F4 left recorded.**
+  - _F1, reproduced then fixed as the owner chose (b)._ Before: `f2.sh` (gate 1's
+    script, run against this tree at `49971a53`): `apply-1` exit 1 with `POST
+    …/down-page/subdomain -> 404` after `applied  worker  down-page`, `apply-2` and
+    `dry-3` exit 1 with `GET …/subdomain -> 404` and 0 stdout lines, no route
+    written. After (`08c44f0b`): `apply-1` makes the upload, all 11 routes and the 3 fail-open PUTs,
+    prints `FAILED   worker  down-page workers.dev: POST …/subdomain ->
+    404 (no detail)` and exits 1; `apply-2` prints its plan (28 lines) and exits 1;
+    `dry-3` prints the whole plan (28 lines) and exits 1. In `applyOrder` the
+    `workersdev` op now follows the routes and the repairs, a non-2xx answer other
+    than 401/403 on the GET (planning) or the POST (apply) becomes a `FAILED` line
+    counted by `finish()`, and `finish()` throws a `CliError` after the plan, the
+    apply or `nothing to do.`. A refused connection (no status) still throws, as
+    does a 401/403 on the GET before anything is written. The cost of the order,
+    stated: the Worker's `workers.dev` address is public for the length of the
+    route calls instead of one call.
+  - _Tests that fail without it_ (the five that fail on `49971a53`'s source,
+    `cloudflare-down-page.test.ts`): _a /subdomain answer that is not 2xx does not
+    keep the routes from being made_; _a re-run past that failure prints its plan,
+    keeps the routes ok, and still fails_; _a dry run past that failure still
+    prints the whole plan, then exits non-zero_; _a new Worker is switched off
+    workers.dev once, after the routes_; _order: upload, then routes, then
+    repairs, then workers.dev off_. The fake gained `subdomainStatus`.
+  - _F2._ `docs/02-DEPLOYMENT.md` now says what a `REPAIR` on every run means (the
+    route list is not returning `request_limit_fail_open`, so the script cannot
+    see the flag; the repeated PUTs change nothing). No code change: it has no live
+    call site until the first apply.
+  - _F3._ The "Done when, as built" figures above are refreshed at `08c44f0b`: 72
+    of 72 in the down-page file, `22 change(s)` in the dry run, 704 passed and 1
+    skipped of 705 in the repo project. The pull request body is the lander's.
+  - _F4_ (no committed test reads the page's width) stays recorded, untouched.
