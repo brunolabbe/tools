@@ -63,8 +63,9 @@ re-run): farming on a branch cut from `origin/repo-121-vite-8-vitest-5` →
 
 ## Decision — answered 2026-11-01 by the owner
 
-**Answer: (a)**, no install in a farmed worktree, chosen from (a), (b) and (c)
-below with (a) recommended; `roles/common.md`'s dependency bullet stands as the
+**Answer: (a)**, no install in a farmed worktree, chosen from (a) and (b)
+below with (a) recommended (corrected 2026-11-08: this sentence said "(a), (b)
+and (c)" when only (a) and (b) were ever listed); `roles/common.md`'s dependency bullet stands as the
 review wrote it. Rated `mechanical` as filed. The options stay as they were put.
 
 Which rule the remedy follows. `roles/common.md` was written under (a) by the
@@ -120,3 +121,44 @@ Which rule the remedy follows. `roles/common.md` was written under (a) by the
 - 2026-11-01 — Owner chose (a) at the review session's checkpoint (asked beside
   repo-135's question); `status` moved to `ready` in the same commit. Build 3
   does not apply.
+- 2026-11-08 — Built on `4a9b8af4` (branch `repo-137-farm-remedy`) under answer
+  (a). Build 3 does not apply: `roles/common.md`'s dependency bullet already reads
+  as (a) and is unchanged.
+  - Reproduction, re-run: the ticket's `8ad4e91d` is no longer `main`, so the
+    grep ran on `4a9b8af4`:
+    `git show 4a9b8af4:.claude/scripts/check-farm-freshness.mjs | grep -n "npm install --ignore-scripts"`
+    printed line 140, the worktree remedy's `"If this branch's own diff adds the
+    package, the one npm install --ignore-scripts"` string. On the branch that
+    grep finds nothing. `grep -n "npm install" .claude/scripts/check-farm-freshness.mjs`
+    finds three lines, all allowed: the header comment (line 7), the `--packages`
+    remedy for the shared checkout (line 154, the orchestrator's install), and a
+    comment above the workspaces pass (line 170).
+  - Build 1: the worktree remedy names no `npm install`. It says no install runs
+    in a worktree; a package the dispatch's base lockfile does not declare is this
+    branch's own relock (expected, say so, go on); one it declares came from main
+    or a parent branch (stop and report, naming the packages). The base is the
+    one the dispatch names, which the script cannot know, so the check is text the
+    agent runs (`git show <base>:package-lock.json`), not a comparison in the
+    script. Output on a fixture tree declaring `@anthropic-ai/sdk` and holding no
+    `node_modules` entry for it: `exit 1`, with the remedy line.
+  - Build 2: the existing `worktree-farm.sh names a package the worktree's lockfile
+    declares and a healthy shared checkout lacks` case already is the
+    "lockfile differs from the shared checkout's by a package the branch declares"
+    shape; its assertions moved to the new text. The added case is the direct
+    `--worktree-packages` one, `…tells a branch's own relock from a base's package…`.
+    Against the base script both cases fail (`2 failed | 27 passed`, the two named
+    above); on the branch `29 passed`.
+  - Done when 1: the remedy names no `npm install` (test asserts
+    `not.toContain("npm install")`), and names both cases (own relock; main's or a
+    parent branch's). Verdict: met.
+  - Done when 2: `npx vitest run scripts/test/check-farm-freshness.test.ts`,
+    `29 of 29`; `npm test -- --project repo`, `Tests 630 passed | 1 skipped (631)`,
+    `Test Files 15 passed (15)`, exit 0. `npm run check` exit 0.
+  - Done when 3: the remedy's allowances match `roles/common.md`'s dependency
+    bullet: no install in a worktree; the relock is the one lockfile write; own
+    relock expected; main's or a parent's stop and report; the install is the
+    orchestrator's. Verdict: met on reading; `roles/common.md` was not edited.
+  - Correction: the Decision's "chosen from (a), (b) and (c)" listed two options.
+  - Fold-in: none. `worktree-farm.sh` prints no install remedy (grep above).
+  - Not measured: the stacked-branch case itself (relayed, not re-run); CI on the
+    draft pull request (not read).

@@ -135,11 +135,22 @@ export function warnIfStale(sharedRoot, options = {}) {
     return 0;
   }
   if (missing === null || missing.length === 0) return 0;
+  // A worktree never installs (roles/common.md's dependency bullet, repo-119 and
+  // repo-131): an install here rewrites the shared checkout's .bin and lockfile
+  // links. The base is the one the dispatch names, so the check is against that
+  // base's lockfile: a stacked branch's parent is a base too, and the script
+  // cannot know which branch that is.
   const remedy = options.worktree
-    ? "remedy: the shared checkout this worktree was farmed from is behind its lockfile. " +
-      "If this branch's own diff adds the package, the one `npm install --ignore-scripts` " +
-      "from `common.md` applies; otherwise, stop and report it to the orchestrator and do not " +
-      "install in a worktree. Once the shared checkout is installed, re-run the farm."
+    ? "remedy: the shared checkout this worktree was farmed from is behind its lockfile, so " +
+      "the packages above are not linked. No install runs in a worktree. Find each package's " +
+      "source against the base your dispatch names (origin/main, or the parent branch on a " +
+      "stacked branch): if `git show <base>:package-lock.json` does not declare it, this " +
+      "branch's own relock added it, which is expected: say so in your report and go on, and " +
+      "the draft pull request's CI is the reading on the new version. If the base declares it, " +
+      "it came from main or a parent branch: stop and report it to the orchestrator, naming the " +
+      "packages, and copy no other agent's node_modules into this worktree. The shared checkout's " +
+      "install is the orchestrator's, and the farm is re-run after it. A worktree's one lockfile " +
+      "write is the relock in roles/common.md's dependency bullet."
     : `remedy: run \`npm install\` in the shared checkout (${sharedRoot}), then re-run the farm.`;
   process.stderr.write(
     [
