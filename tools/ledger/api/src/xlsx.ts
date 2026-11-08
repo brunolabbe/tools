@@ -13,6 +13,9 @@
 import * as XLSX from "xlsx";
 import type { Cell, CellValue, Sheet } from "@ledger/books";
 import { AppError } from "@ledger/contract";
+import { MAX_WORKBOOK_ROWS, MAX_WORKBOOK_SLOTS } from "./workbook-bounds.ts";
+import { sheetPartsOf } from "./workbook-parts.ts";
+import { workbookEntries } from "./workbook-zip.ts";
 
 /** The one `SSF` call this file makes; SheetJS types the whole namespace `any`. */
 const SSF = XLSX.SSF as { is_date: (format: string) => boolean };
@@ -98,6 +101,95 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
 }
 
 /**
+ * The indices `array` defines, in order, found without walking its holes. A formatting
+ * stub at `A1048576` leaves `!data` a million long with two rows in it, and every walk
+ * of the length visits the million: measured on one such sheet, `entries()` took 42.6 ms,
+ * `forEach` 37.8 ms (the holes are still visited) and the keys 0.01 ms (lg-96, gate 2's
+ * F3). A row stubbed at `XFD` is the same on the column axis.
+ */
+function definedIndices(array: readonly unknown[]): number[] {
+  return Object.keys(array)
+    .map(Number)
+    .filter((index) => Number.isInteger(index));
+}
+
+/**
+ * How wide a stored row is: up to its last cell that holds a value. Only the
+ * indices the row defines are visited, so a row whose one stored cell is a
+ * formatting stub at `XFD` is not walked across 16 384 places (lg-96, gate 1's
+ * F3: 5 000 such rows took 6.4 s, the walk made twice).
+ */
+function widthOf(source: readonly (XLSX.CellObject | undefined)[] | undefined): number {
+  let width = 0;
+  if (source === undefined) return width;
+  for (const c of definedIndices(source)) if (holds(source[c])) width = c + 1;
+  return width;
+}
+
+function tooLarge(bound: "rows" | "slots", message: string): AppError {
+  return new AppError("WORKBOOK_TOO_LARGE", message, { details: { bound } });
+}
+
+/** What `placesOf` found out about a sheet: the places it spent and the width of each row to build. */
+export interface Extent {
+  /** The workbook's places so far, this sheet's included. */
+  places: number;
+  /**
+   * The width of each row up to the last that holds a value, a gap row 0. **This is
+   * the whole of what `rowsOf` builds**: rows past the last stored one, which a
+   * formatting stub can make `!data` hold by the million (lg-96, gate 1's F1), are
+   * not in it, and so are never built.
+   */
+  widths: number[];
+}
+
+/**
+ * What a sheet's grid will hold, found from the stored cells before `rowsOf`
+ * builds it, and added to `spent`, the places the workbook's earlier sheets took
+ * (lg-96). `rowsOf` makes a row for every row up to the last stored one and each
+ * row as wide as its own last cell, so a sheet with one cell at `A1048576` pays for
+ * 1 048 576 rows and one with a cell at `XFD` in each row pays 16 384 a row, from a
+ * file of a few kilobytes: neither follows the file's size, which `workbook-zip.ts`
+ * bounds, but the address.
+ *
+ * A row is a place of its own, so a gap row counts one, and a stored row counts
+ * its width. The total runs across the sheets, so that a workbook of many sheets is
+ * bounded as one; the sheets are not charged one by one against the same cap. What it
+ * does not bound is SheetJS's own parse of each sheet, which happens before this runs
+ * (gate 1's F2): a part listed under many sheets is refused before that, by
+ * `refuseUnlessEachSheetIsItsOwn`. Refused past `MAX_WORKBOOK_ROWS` rows in one
+ * sheet and `MAX_WORKBOOK_SLOTS` places in the workbook, each as
+ * `WORKBOOK_TOO_LARGE` with the bound named, and the refusal is thrown as soon as
+ * it is known, with the rest of the sheet unread.
+ */
+export function placesOf(sheet: XLSX.DenseSheet, spent: number): Extent {
+  let places = spent;
+  const widths: number[] = [];
+  const data = sheet["!data"] ?? [];
+  for (const r of definedIndices(data)) {
+    const width = widthOf(data[r]);
+    if (width === 0) continue;
+    if (r + 1 > MAX_WORKBOOK_ROWS) {
+      throw tooLarge(
+        "rows",
+        `A sheet of that workbook has a cell in row ${String(r + 1)}; this import reads ${String(MAX_WORKBOOK_ROWS)} rows at most.`,
+      );
+    }
+    // The gap rows since the last stored one, each a place, then this row's width.
+    places += r - widths.length + width;
+    while (widths.length < r) widths.push(0);
+    widths.push(width);
+    if (places > MAX_WORKBOOK_SLOTS) {
+      throw tooLarge(
+        "slots",
+        `That workbook's sheets lay out more than ${String(MAX_WORKBOOK_SLOTS)} places, a row and each cell along it counted; this import reads ${String(MAX_WORKBOOK_SLOTS)} at most.`,
+      );
+    }
+  }
+  return { places, widths };
+}
+
+/**
  * One sheet's rows, each a row of cells with gaps kept as `null`.
  *
  * A merged range's other parts that store nothing are given no place: a reader
@@ -107,25 +199,73 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
  * own `null`, as `exceljs` did, cost memory in
  * proportion to the merge's area (+76 MB at A1:XFD100, +227 MB at A1:XFD400)
  * past every size bound, a 2.5 KB file (lg-88).
+ *
+ * Builds `widths.length` rows of those widths and looks at no row of `!data` past the
+ * last, so what it costs is what `placesOf` charged. Rows past the last stored one are
+ * not part of the sheet.
  */
-function rowsOf(sheet: XLSX.DenseSheet, date1904: boolean): (Cell | null)[][] {
+export function rowsOf(
+  sheet: XLSX.DenseSheet,
+  widths: readonly number[],
+  date1904: boolean,
+): (Cell | null)[][] {
   const data = sheet["!data"] ?? [];
-  const rows: (Cell | null)[][] = [];
-  for (const source of data) {
-    let width = 0;
-    for (const [c, cell] of (source ?? []).entries()) if (holds(cell)) width = c + 1;
+  return widths.map((width, r) => {
+    const source = data[r];
     const cells: (Cell | null)[] = [];
     for (let c = 0; c < width; c += 1) cells.push(cellOf(source?.[c], date1904));
     // A row with nothing stored in it is a gap, as an absent row is.
-    rows.push(cells);
+    return cells;
+  });
+}
+
+/**
+ * Refuses, before SheetJS parses any sheet, a workbook that does not give every sheet
+ * a part of its own (lg-96, gate 1's F2 and gate 2's F2): SheetJS parses a part once
+ * for every sheet that names it, so a file of a few kilobytes can cost its biggest
+ * part many times over.
+ *
+ * The shape of the zip comes first, whatever the caller: whatever `workbookEntries`
+ * refuses is refused here, so the import command meets the refusal the route does
+ * (gate 2). Then the sheets are counted by SheetJS itself, with `bookSheets`, which
+ * reads the workbook part and parses no sheet, and the workbook is refused unless
+ * `workbook-parts.ts` finds the same number, each in a part that exists, no two in
+ * one.
+ *
+ * **The count is fail-closed; the distinctness of the parts is not.** A difference
+ * between the copy and SheetJS in the sheet count or in whether a part exists is a
+ * refusal. Whether two sheets share a part is judged by a copy of SheetJS's rules, and
+ * gate 3 (lg-96) found two ways past it, both read through `readSheets` (lg-104 owns
+ * them): a zip entry whose local-header name differs from its central-directory name
+ * (`workbookEntries` and `compressedOf` read the central one, SheetJS's CFB the local
+ * one), which read one 1 400 by 100 part 14 times, +367.5 MB (peak 448.9 MB); and a part,
+ * such as comments, that several sheets' `.rels` name, parsed once per sheet, +352.5 MB.
+ */
+function refuseUnlessEachSheetIsItsOwn(data: Buffer): void {
+  const entries = workbookEntries(data);
+  let listed: unknown;
+  try {
+    listed = XLSX.read(data, { type: "buffer", bookSheets: true }).SheetNames;
+  } catch (error: unknown) {
+    throw unreadable(error instanceof Error ? error.message : "", error);
   }
-  // Rows past the last stored one are not part of the sheet.
-  while (rows.length > 0 && rows.at(-1)?.length === 0) rows.pop();
-  return rows;
+  const parts = sheetPartsOf(data, entries);
+  if (
+    !Array.isArray(listed) ||
+    parts === undefined ||
+    parts.length !== listed.length ||
+    new Set(parts).size !== parts.length
+  ) {
+    throw new AppError(
+      "WORKBOOK_NOT_XLSX",
+      "That workbook does not give each of its sheets a part of its own; this import reads a workbook that does.",
+    );
+  }
 }
 
 /** Every sheet of the workbook in `data`, in the workbook's order. */
 export async function readSheets(data: Buffer): Promise<Sheet[]> {
+  refuseUnlessEachSheetIsItsOwn(data);
   let workbook: XLSX.WorkBook;
   try {
     // `sheetStubs`, or a formula saved with no value is dropped, formula and all:
@@ -152,13 +292,16 @@ export async function readSheets(data: Buffer): Promise<Sheet[]> {
   }
   const date1904 = workbook.Workbook?.WBProps?.date1904 === true;
   const sheets: Sheet[] = [];
+  let places = 0;
   for (const name of workbook.SheetNames) {
     const sheet = workbook.Sheets[name] as XLSX.DenseSheet | undefined;
     // A chartsheet or a dialog sheet holds no cells.
     if (sheet === undefined || (sheet["!type"] !== undefined && sheet["!type"] !== "sheet")) {
       continue;
     }
-    sheets.push({ name, rows: rowsOf(sheet, date1904) });
+    const extent = placesOf(sheet, places);
+    places = extent.places;
+    sheets.push({ name, rows: rowsOf(sheet, extent.widths, date1904) });
   }
   return sheets;
 }

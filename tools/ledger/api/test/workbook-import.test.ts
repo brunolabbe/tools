@@ -43,6 +43,13 @@ import {
   writeUnseenMembers,
 } from "./helpers/unseen.ts";
 import { history, render } from "./helpers/workbook.ts";
+import {
+  SheetWriter,
+  rewiredWorkbook,
+  sharedPartWorkbook,
+  workbookOf,
+  worksheetRelationship,
+} from "./helpers/xlsx-file.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
 import { importWorkbook } from "../src/workbook-import.ts";
 import { NO_CORRECTIONS } from "@ledger/books";
@@ -1365,5 +1372,69 @@ describe("a stored name holding a control or a zero-width character (lg-82)", ()
       }
     }
     db.close();
+  });
+});
+
+// lg-96: the command has the reader's bounds, the rows and the slots, since both read the file
+// through `readSheets`; it was unbounded before, and a far cell cost memory by its address.
+// It has none of the route's others (the sheets, the workbook-wide rows, the cells).
+describe("a workbook past the reader's bounds, through the command (lg-96)", () => {
+  async function refused(sheet: SheetWriter): Promise<Ran> {
+    writeFileSync(path.join(dir, "classeur.xlsx"), workbookOf([sheet]));
+    return await run("classeur.xlsx", "--as", "alex", "--write");
+  }
+
+  test("a cell below the last row the import reads is refused as the route refuses it, and nothing is created", async () => {
+    const sheet = new SheetWriter("2022");
+    sheet.set("A1", "Alex");
+    sheet.set("A20001", "far");
+
+    const ran = await refused(sheet);
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain("this import reads 20000 rows at most");
+    expect(existsSync(dataDir)).toBe(false);
+  });
+
+  test("a far column in each row, past the slot cap, is refused as the route refuses it", async () => {
+    const sheet = new SheetWriter("2022");
+    for (let r = 1; r <= 123; r += 1) sheet.set(`XFD${String(r)}`, "far");
+
+    const ran = await refused(sheet);
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain("this import reads 2000000 at most");
+    expect(existsSync(dataDir)).toBe(false);
+  });
+
+  test("a part listed under two sheets is refused before it is parsed", async () => {
+    writeFileSync(path.join(dir, "classeur.xlsx"), sharedPartWorkbook(2, "A19000"));
+
+    const ran = await run("classeur.xlsx", "--as", "alex", "--write");
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain("does not give each of its sheets a part of its own");
+    expect(existsSync(dataDir)).toBe(false);
+  });
+
+  test("a workbook the zip check refuses is refused by the command as the route refuses it (gate 2)", async () => {
+    // The part is spelled XL/Workbook.xml: the route stops at `workbookEntries`, and the
+    // command, which never ran it, read this as two sheets over one part.
+    writeFileSync(
+      path.join(dir, "classeur.xlsx"),
+      rewiredWorkbook({
+        sheets: `<sheet name="S1" sheetId="1" r:id="dup1"/><sheet name="S2" sheetId="2" r:id="dup2"/>`,
+        relationships:
+          worksheetRelationship("dup1", "worksheets/sheet1.xml") +
+          worksheetRelationship("dup2", "worksheets/sheet1.xml"),
+        rename: { "xl/workbook.xml": "XL/Workbook.xml" },
+      }),
+    );
+
+    const ran = await run("classeur.xlsx", "--as", "alex", "--write");
+
+    expect(ran.code, ran.err).toBe(2);
+    expect(ran.err).toContain("Only an .xlsx workbook");
+    expect(existsSync(dataDir)).toBe(false);
   });
 });

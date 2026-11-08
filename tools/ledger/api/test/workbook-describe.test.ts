@@ -53,7 +53,17 @@ import {
   testKey,
   writeMemberDirectory,
 } from "./helpers/access.ts";
-import { entriesOf, paddedDeflate, rawZip, reEnded, xlsxOf, zipOf } from "./helpers/xlsx-file.ts";
+import {
+  SheetWriter,
+  entriesOf,
+  paddedDeflate,
+  rawZip,
+  reEnded,
+  sharedPartWorkbook,
+  workbookOf,
+  xlsxOf,
+  zipOf,
+} from "./helpers/xlsx-file.ts";
 import { layoutFixtures } from "./layout/fixtures.ts";
 import type { LayoutFixture } from "./layout/fixtures.ts";
 
@@ -1072,5 +1082,74 @@ describe("a household whose people have generated ids (lg-79)", () => {
       `Accueil!C${String(accueil?.rows.length ?? 0)}: a second salary for alex.`,
     );
     for (const id of [ALEX_ID, SAM_ID]) expect(body.problems.join("\n")).not.toContain(id);
+  });
+});
+
+// lg-96: the reader's refusal reaches the person as itself. `readSheets` sits in a
+// `try` that turns what it throws into `WORKBOOK_NOT_XLSX`, so a refusal that is not
+// let through would be reported as a file that is no workbook.
+describe("a sheet past the reader's bounds, through the real reader (lg-96)", () => {
+  /** A far cell below the last row the import reads, and a cell in `XFD` on 123 rows. */
+  const farCell = workbookOf([
+    (() => {
+      const sheet = new SheetWriter("2022");
+      sheet.set("A1", "Alex");
+      sheet.set(`A${String(MAX_WORKBOOK_ROWS + 1)}`, "far");
+      return sheet;
+    })(),
+  ]);
+  const farColumn = workbookOf([
+    (() => {
+      const sheet = new SheetWriter("2022");
+      for (let r = 1; r <= 123; r += 1) sheet.set(`XFD${String(r)}`, "far");
+      return sheet;
+    })(),
+  ]);
+
+  test.each([
+    ["rows", farCell],
+    ["slots", farColumn],
+  ])(
+    "Describe: the %s bound is WORKBOOK_TOO_LARGE, not WORKBOOK_NOT_XLSX, and the model is not asked",
+    async (bound, file) => {
+      const model = fake(answering(fixture("lg7").layout));
+      const started = await start({ ask: model.ask });
+
+      const response = await describeFile(started, file);
+
+      expect(response.statusCode).toBe(413);
+      expect(errorOf(response)).toMatchObject({ code: "WORKBOOK_TOO_LARGE", details: { bound } });
+      expect(started.reader.calls).toBe(1);
+      expect(model.requests).toHaveLength(0);
+    },
+  );
+
+  test.each([
+    ["rows", farCell],
+    ["slots", farColumn],
+  ])("Confirm: the %s bound is WORKBOOK_TOO_LARGE, and nothing is written", async (bound, file) => {
+    const started = await start();
+    const before = counts(started);
+
+    const response = await confirmFile(started, file, validLayout());
+
+    expect(response.statusCode).toBe(413);
+    expect(errorOf(response)).toMatchObject({ code: "WORKBOOK_TOO_LARGE", details: { bound } });
+    expect(counts(started)).toEqual(before);
+  });
+
+  test("a part listed under two sheets is WORKBOOK_NOT_XLSX before it is parsed, by Describe and by Confirm", async () => {
+    const model = fake(answering(fixture("lg7").layout));
+    const started = await start({ ask: model.ask });
+    const shared = sharedPartWorkbook(2, "A19000");
+
+    const described = await describeFile(started, shared);
+    const confirmed = await confirmFile(started, shared, validLayout());
+
+    for (const response of [described, confirmed]) {
+      expect(response.statusCode).toBe(415);
+      expect(errorOf(response).code).toBe("WORKBOOK_NOT_XLSX");
+    }
+    expect(model.requests).toHaveLength(0);
   });
 });
