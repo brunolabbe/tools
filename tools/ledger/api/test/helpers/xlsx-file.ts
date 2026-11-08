@@ -339,6 +339,58 @@ export function reEnded(
   return Buffer.concat([zip.subarray(0, end), change.insert ?? Buffer.alloc(0), record]);
 }
 
+const WORKSHEET_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+
+/** A `<Relationship>` to a worksheet, `separator` being what follows the tag's name. */
+export function worksheetRelationship(id: string, target: string, separator = " "): string {
+  return `<Relationship${separator}Id="${id}" Type="${WORKSHEET_TYPE}" Target="${target}"/>`;
+}
+
+/** How a workbook's sheet list and relationships are rewired by `rewiredWorkbook`. */
+export interface Rewiring {
+  /** What goes between `<sheets>` and `</sheets>` of `xl/workbook.xml`. */
+  sheets: string;
+  /** What replaces the one worksheet relationship of `xl/_rels/workbook.xml.rels`. */
+  relationships: string;
+  /** `[Content_Types].xml` rewritten. */
+  contentTypes?: (xml: string) => string;
+  /** Entries renamed, by their old name. */
+  rename?: Record<string, string>;
+  /** Entries added, after the renames. */
+  extra?: ZipInput[];
+  /** The one sheet written, when it is not a sheet holding `A1` = `P1`. */
+  sheet?: SheetWriter;
+}
+
+/**
+ * A one-sheet workbook (`A1` = `P1`) whose sheet list, relationships and, if asked, content
+ * types and part names are replaced (lg-96, gate 2's F2): what a test needs to spell the
+ * same part under two sheets in a way a plain `Target` does not.
+ */
+export function rewiredWorkbook(rewiring: Rewiring): Buffer {
+  const sheet = rewiring.sheet ?? new SheetWriter("S");
+  if (rewiring.sheet === undefined) sheet.set("A1", "P1");
+  const entries = entriesOf(workbookOf([sheet])).map((entry) => {
+    if (entry.data === undefined) return entry;
+    const xml = entry.data.toString("utf8");
+    let data = entry.data;
+    if (entry.name === "xl/workbook.xml") {
+      data = Buffer.from(
+        xml.replace(/<sheets>.*<\/sheets>/su, `<sheets>${rewiring.sheets}</sheets>`),
+      );
+    } else if (entry.name === "xl/_rels/workbook.xml.rels") {
+      data = Buffer.from(
+        xml.replace(/<Relationship [^>]*worksheet[^>]*\/>/u, rewiring.relationships),
+      );
+    } else if (entry.name === "[Content_Types].xml" && rewiring.contentTypes !== undefined) {
+      data = Buffer.from(rewiring.contentTypes(xml));
+    }
+    return { name: rewiring.rename?.[entry.name] ?? entry.name, data };
+  });
+  return zipOf([...entries, ...(rewiring.extra ?? [])]);
+}
+
 /**
  * One worksheet part, holding `A1` and a cell at `address`, that `workbook.xml`
  * lists `entries` times, each with a relationship of its own to it, spelled as
@@ -354,30 +406,9 @@ export function sharedPartWorkbook(
   sheet.set("A1", "Alex");
   sheet.set(address, "far");
   const each = Array.from({ length: entries }, (_, i) => String(i + 1));
-  const sheets = each.map((n) => `<sheet name="S${n}" sheetId="${n}" r:id="dup${n}"/>`).join("");
-  const relationships = each
-    .map(
-      (n) =>
-        `<Relationship Id="dup${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="${target(n)}"/>`,
-    )
-    .join("");
-  return zipOf(
-    entriesOf(workbookOf([sheet])).map((entry) => {
-      if (entry.data === undefined) return entry;
-      const xml = entry.data.toString("utf8");
-      if (entry.name === "xl/workbook.xml") {
-        return {
-          name: entry.name,
-          data: Buffer.from(xml.replace(/<sheets>.*<\/sheets>/su, `<sheets>${sheets}</sheets>`)),
-        };
-      }
-      if (entry.name === "xl/_rels/workbook.xml.rels") {
-        return {
-          name: entry.name,
-          data: Buffer.from(xml.replace(/<Relationship [^>]*worksheet[^>]*\/>/u, relationships)),
-        };
-      }
-      return entry;
-    }),
-  );
+  return rewiredWorkbook({
+    sheet,
+    sheets: each.map((n) => `<sheet name="S${n}" sheetId="${n}" r:id="dup${n}"/>`).join(""),
+    relationships: each.map((n) => worksheetRelationship(`dup${n}`, target(n))).join(""),
+  });
 }

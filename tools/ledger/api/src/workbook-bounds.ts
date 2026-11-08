@@ -27,8 +27,12 @@ export const MAX_WORKBOOK_ROWS = 20_000;
  * 105 sheets of a cell at `A1` and one at `A19000`, whose gap rows are a place each,
  * +109.3 and +109.9 MB (peak 194 MB); and the worst built, a sheet of 1 400 rows by 100
  * numbers (140 000 cells) beside 97 such sheets, 1 983 000 places from a 3.9 MB file,
- * +127.1 and +129.0 MB (peak 217 MB). The container holds 512 MB. A part that
- * several sheets name is refused before this runs (`workbook-parts.ts`), because the
- * parse of it is paid before anything here can charge it.
+ * +127.1 and +129.0 MB (peak 217 MB). The container holds 512 MB. **These are the
+ * worst for a workbook that gets here, and what gets here is a workbook whose sheets
+ * are each a part of their own**: SheetJS parses a part once for every sheet that names
+ * it, and that parse is paid before anything here can charge it, so `xlsx.ts` refuses
+ * the rest first, by SheetJS's own sheet list checked against `workbook-parts.ts`
+ * (round 1 refused only the spellings that file knew, and 14 listings of one part with
+ * later ones spelled `sheet_x0031_` read +375.1 MB through `readSheets`, gate 2's F2).
  */
 export const MAX_WORKBOOK_SLOTS = 2_000_000;

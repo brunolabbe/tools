@@ -14,9 +14,8 @@ import * as XLSX from "xlsx";
 import type { Cell, CellValue, Sheet } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import { MAX_WORKBOOK_ROWS, MAX_WORKBOOK_SLOTS } from "./workbook-bounds.ts";
-import { sharedSheetPart } from "./workbook-parts.ts";
+import { sheetPartsOf } from "./workbook-parts.ts";
 import { workbookEntries } from "./workbook-zip.ts";
-import type { ZipEntry } from "./workbook-zip.ts";
 
 /** The one `SSF` call this file makes; SheetJS types the whole namespace `any`. */
 const SSF = XLSX.SSF as { is_date: (format: string) => boolean };
@@ -102,6 +101,19 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
 }
 
 /**
+ * The indices `array` defines, in order, found without walking its holes. A formatting
+ * stub at `A1048576` leaves `!data` a million long with two rows in it, and every walk
+ * of the length visits the million: measured on one such sheet, `entries()` took 42.6 ms,
+ * `forEach` 37.8 ms (the holes are still visited) and the keys 0.01 ms (lg-96, gate 2's
+ * F3). A row stubbed at `XFD` is the same on the column axis.
+ */
+function definedIndices(array: readonly unknown[]): number[] {
+  return Object.keys(array)
+    .map(Number)
+    .filter((index) => Number.isInteger(index));
+}
+
+/**
  * How wide a stored row is: up to its last cell that holds a value. Only the
  * indices the row defines are visited, so a row whose one stored cell is a
  * formatting stub at `XFD` is not walked across 16 384 places (lg-96, gate 1's
@@ -109,9 +121,8 @@ function cellOf(cell: XLSX.CellObject | undefined, date1904: boolean): Cell | nu
  */
 function widthOf(source: readonly (XLSX.CellObject | undefined)[] | undefined): number {
   let width = 0;
-  source?.forEach((cell, c) => {
-    if (holds(cell)) width = c + 1;
-  });
+  if (source === undefined) return width;
+  for (const c of definedIndices(source)) if (holds(source[c])) width = c + 1;
   return width;
 }
 
@@ -146,7 +157,7 @@ export interface Extent {
  * bounded as one; the sheets are not charged one by one against the same cap. What it
  * does not bound is SheetJS's own parse of each sheet, which happens before this runs
  * (gate 1's F2): a part listed under many sheets is refused before that, by
- * `sharedSheetPart` (`workbook-parts.ts`). Refused past `MAX_WORKBOOK_ROWS` rows in one
+ * `refuseUnlessEachSheetIsItsOwn`. Refused past `MAX_WORKBOOK_ROWS` rows in one
  * sheet and `MAX_WORKBOOK_SLOTS` places in the workbook, each as
  * `WORKBOOK_TOO_LARGE` with the bound named, and the refusal is thrown as soon as
  * it is known, with the rest of the sheet unread.
@@ -154,8 +165,9 @@ export interface Extent {
 export function placesOf(sheet: XLSX.DenseSheet, spent: number): Extent {
   let places = spent;
   const widths: number[] = [];
-  for (const [r, source] of (sheet["!data"] ?? []).entries()) {
-    const width = widthOf(source);
+  const data = sheet["!data"] ?? [];
+  for (const r of definedIndices(data)) {
+    const width = widthOf(data[r]);
     if (width === 0) continue;
     if (r + 1 > MAX_WORKBOOK_ROWS) {
       throw tooLarge(
@@ -208,29 +220,43 @@ export function rowsOf(
 }
 
 /**
- * Refuses a workbook in which two sheets are read from one part, before SheetJS
- * parses any (lg-96, gate 1's F2). A file `workbookEntries` does not accept is left to
- * the reader below, which says what is wrong with it as it always did.
+ * Refuses, before SheetJS parses any sheet, a workbook that does not give every sheet
+ * a part of its own (lg-96, gate 1's F2 and gate 2's F2): SheetJS parses a part once
+ * for every sheet that names it, so a file of a few kilobytes can cost its biggest
+ * part many times over.
+ *
+ * The shape of the zip comes first, whatever the caller: whatever `workbookEntries`
+ * refuses is refused here, so the import command meets the refusal the route does
+ * (gate 2). Then the sheets are counted by SheetJS itself, with `bookSheets`, which
+ * reads the workbook part and parses no sheet, and the workbook is refused unless
+ * `workbook-parts.ts` finds the same number, each in a part that exists, no two in
+ * one. A difference between that copy and SheetJS is then a refusal, never a way in.
  */
-function refuseSharedParts(data: Buffer): void {
-  let entries: ZipEntry[];
+function refuseUnlessEachSheetIsItsOwn(data: Buffer): void {
+  const entries = workbookEntries(data);
+  let listed: unknown;
   try {
-    entries = workbookEntries(data);
+    listed = XLSX.read(data, { type: "buffer", bookSheets: true }).SheetNames;
   } catch (error: unknown) {
-    if (error instanceof AppError) return;
-    throw error;
+    throw unreadable(error instanceof Error ? error.message : "", error);
   }
-  if (sharedSheetPart(data, entries) !== undefined) {
+  const parts = sheetPartsOf(data, entries);
+  if (
+    !Array.isArray(listed) ||
+    parts === undefined ||
+    parts.length !== listed.length ||
+    new Set(parts).size !== parts.length
+  ) {
     throw new AppError(
       "WORKBOOK_NOT_XLSX",
-      "That workbook lists the same sheet under more than one name; this import reads a workbook whose sheets are each their own.",
+      "That workbook does not give each of its sheets a part of its own; this import reads a workbook that does.",
     );
   }
 }
 
 /** Every sheet of the workbook in `data`, in the workbook's order. */
 export async function readSheets(data: Buffer): Promise<Sheet[]> {
-  refuseSharedParts(data);
+  refuseUnlessEachSheetIsItsOwn(data);
   let workbook: XLSX.WorkBook;
   try {
     // `sheetStubs`, or a formula saved with no value is dropped, formula and all:
