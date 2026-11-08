@@ -1939,3 +1939,78 @@ test("repo-114: --show reads the whole graph, unblocked with the dependency done
     /^ {2}blocked by {2}repo-9 \(ready\)$/m,
   );
 });
+
+// repo-135. A `note:` opening `held:` says a ready ticket cannot start yet.
+// The fixture pairs a held ticket with a plain one, because a filter that
+// dropped every ready ticket would also leave `--ready` without the held one.
+const heldBoard = () =>
+  repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2", { note: "held: until the upstream fix publishes" }),
+  });
+
+test("repo-135: --ready omits a held ticket, lists the one beside it, and says why on stderr", () => {
+  const { stdout, stderr, status } = run(["--ready"], heldBoard());
+  expect(status).toBe(0);
+  expect(stdout.trimEnd().split("\n")).toEqual(["pl-1\tplanner\tthe pl-1 thing"]);
+  expect(stderr).toBe(
+    `${at("pl-2")}: withheld from --ready — held: until the upstream fix publishes\n`,
+  );
+});
+
+test("repo-135: the tool view still lists a held ticket, with the hold and no empty `waits on`", () => {
+  const { stdout, status } = run(["--tool", "planner"], heldBoard());
+  expect(status).toBe(0);
+  expect(stdout).toContain("• pl-1   the pl-1 thing");
+  expect(stdout).toContain("· pl-2   the pl-2 thing (held: until the upstream fix publishes)");
+  expect(stdout).not.toContain("(waits on )");
+});
+
+test("repo-135: --show prints the hold on its own row and on the closing line, not `unblocked`", () => {
+  const { stdout, status } = run(["--show", "pl-2"], heldBoard());
+  expect(status).toBe(0);
+  expect(stdout).toMatch(/^ {2}held {8}until the upstream fix publishes$/m);
+  expect(stdout).toMatch(/^ {2}held — not startable yet: until the upstream fix publishes$/m);
+  expect(stdout).not.toContain("unblocked");
+  expect(run(["--show", "pl-1"], heldBoard()).stdout).toMatch(/^ {2}unblocked$/m);
+});
+
+test("repo-135: --show keeps a real blocker beside the hold", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2", { note: "held: not before 2026-12-01", depends_on: "[pl-1]" }),
+  });
+  expect(run(["--show", "pl-2"], root).stdout).toMatch(
+    /^ {2}held — not startable yet: not before 2026-12-01; also blocked by pl-1 \(ready\)$/m,
+  );
+  const { stderr } = run(["--ready"], root);
+  expect(stderr).toContain(
+    `${at("pl-2")}: withheld from --ready — held: not before 2026-12-01; also waits on pl-1`,
+  );
+});
+
+test("repo-135: --json carries held as a boolean on every ticket, and the exit code is unchanged", () => {
+  const { stdout, status } = run(["--json"], heldBoard());
+  expect(status).toBe(0);
+  const payload = JSON.parse(stdout);
+  expect(payload.tickets.map((t: { id: string; held: boolean }) => [t.id, t.held])).toEqual([
+    ["pl-1", false],
+    ["pl-2", true],
+  ]);
+  expect(payload.problems).toEqual([]);
+});
+
+test("repo-135: only a note that opens with `held:` holds, and a plain note does not", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { note: "was held: until last week" }),
+    [at("pl-2")]: pl("pl-2", { note: "Held: capitalised is a different word" }),
+    [at("pl-3")]: pl("pl-3", { note: "held up by nothing" }),
+  });
+  expect(readTickets(root).map((t) => t.held)).toEqual([false, false, false]);
+  expect(readyTickets(readTickets(root)).map((t) => t.id)).toEqual(["pl-1", "pl-2", "pl-3"]);
+});
+
+test("repo-135: a hold is a reminder, so --markdown still lists the ticket under its note", () => {
+  const { stdout } = run(["--markdown"], heldBoard());
+  expect(stdout).toContain("held: until the upstream fix publishes");
+});

@@ -97,6 +97,19 @@ const OPEN = new Set(["needs-decision", "ready", "in-flight"]);
  */
 const UNSTARTED = new Set(["needs-decision", "ready"]);
 
+/**
+ * The prefix a `note` opens with to say the ticket cannot start yet (repo-135).
+ *
+ * `ready` says nobody has picked a ticket up, and `depends_on` names tickets;
+ * neither can say "not until a dependency publishes a fix" or "not before a
+ * date", which are events outside the repo. Authors put that in `note` anyway
+ * and `--ready` listed the ticket every batch regardless. The owner chose the
+ * prefix over a new field or a new status because it changes no parse and no
+ * reader of `status`. A reminder and never a gate: nothing here stops a human
+ * dispatching a held ticket on purpose, and nothing computes a date.
+ */
+const HELD_PREFIX = "held:";
+
 const DEFAULT_ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
 /**
@@ -269,7 +282,7 @@ function parseList(value, file, line) {
  * file twice to answer one boolean is the kind of thing that goes stale.
  *
  * @param {string} [repoRoot]
- * @returns {Array<{id: string, tool: string, title: string, kind: string, status: string, milestone: string | null, depends_on: string[], note: string | null, difficulty: string | null, awaiting: string | null, file: string, number: number, reviewed: boolean}>}
+ * @returns {Array<{id: string, tool: string, title: string, kind: string, status: string, milestone: string | null, depends_on: string[], note: string | null, difficulty: string | null, awaiting: string | null, held: boolean, file: string, number: number, reviewed: boolean}>}
  */
 export function readTickets(repoRoot = DEFAULT_ROOT) {
   const tickets = [];
@@ -512,6 +525,9 @@ function validate(fields, tool, entry, file, text) {
   // tell an absent key from a null one would be re-deriving exactly the
   // distinction this field exists to record.
   ticket.awaiting ??= null;
+  // Always a boolean, like `awaiting` is always a value: a `--json` consumer
+  // should not have to tell an absent key from false (repo-135).
+  ticket.held = ticket.note?.startsWith(HELD_PREFIX) ?? false;
   return ticket;
 }
 
@@ -572,7 +588,18 @@ function doneIds(graph) {
  */
 export function readyTickets(tickets, graph = tickets) {
   const done = doneIds(graph);
-  return tickets.filter((t) => t.status === "ready" && t.depends_on.every((id) => done.has(id)));
+  return tickets.filter(
+    (t) => t.status === "ready" && !t.held && t.depends_on.every((id) => done.has(id)),
+  );
+}
+
+/**
+ * What a held ticket's `note` says it is held for, without the prefix.
+ *
+ * @param {{note: string | null}} ticket
+ */
+export function holdText(ticket) {
+  return (ticket.note ?? "").slice(HELD_PREFIX.length).trim();
 }
 
 /**
@@ -622,10 +649,19 @@ export function withheldFromReady(tickets, graph = tickets) {
       // The decision comes first when a ticket carries both: answering the
       // dependency would still leave it unstartable, and the reverse is not
       // true, so it is the reason a reader acts on.
+      const unmet = ticket.depends_on.filter((id) => !done.has(id));
+      // A hold (repo-135) is named beside any open dependency rather than
+      // instead of it: the list is exhaustive, and clearing the hold alone
+      // would still leave the ticket withheld.
+      const held = `held: ${holdText(ticket)}`;
       const reason =
         ticket.status === "needs-decision"
           ? `status is "needs-decision", so it waits on a human answering it rather than on a builder`
-          : `waits on ${ticket.depends_on.filter((id) => !done.has(id)).join(", ")}`;
+          : ticket.held
+            ? unmet.length === 0
+              ? held
+              : `${held}; also waits on ${unmet.join(", ")}`
+            : `waits on ${unmet.join(", ")}`;
       return {
         file: ticket.file,
         id: ticket.id,
@@ -1049,11 +1085,17 @@ function renderView(all, problems, flags, values, repoRoot, io) {
       const decision = ticket.status === "needs-decision";
       const mark =
         ticket.status === "in-flight" ? "»" : decision ? "?" : unblocked.has(ticket.id) ? "•" : "·";
+      // A held ticket (repo-135) is not in `unblocked` and may have no open
+      // dependency at all, so it gets its own suffix for the same reason the
+      // decision does: `(waits on )` is an empty list after words promising one.
+      const unmet = ticket.depends_on.filter((id) => !done.has(id));
       const blocked = decision
         ? " (waits on a decision)"
         : unblocked.has(ticket.id) || ticket.status === "in-flight"
           ? ""
-          : ` (waits on ${ticket.depends_on.filter((id) => !done.has(id)).join(", ")})`;
+          : ticket.held
+            ? ` (held: ${holdText(ticket)})${unmet.length === 0 ? "" : ` (waits on ${unmet.join(", ")})`}`
+            : ` (waits on ${unmet.join(", ")})`;
       io.stdout(`  ${mark} ${ticket.id.padEnd(6)} ${ticket.title}${blocked}\n`);
     }
 
@@ -1092,6 +1134,7 @@ function printTicket({ ticket, blockers, missing }, io) {
     ["note", ticket.note ?? "—"],
     ["difficulty", ticket.difficulty ?? "—"],
     ["awaiting", ticket.awaiting ?? "—"],
+    ["held", ticket.held ? holdText(ticket) : "—"],
     ["file", ticket.file],
   ]) {
     io.stdout(`  ${key.padEnd(11)} ${value}\n`);
@@ -1136,6 +1179,14 @@ function printTicket({ ticket, blockers, missing }, io) {
   if (ticket.status === "needs-decision") {
     const also = holding.length === 0 ? "" : `; also blocked by ${holding.join(", ")}`;
     io.stdout(`\n  waiting on a decision — not startable until someone answers it${also}\n\n`);
+    return;
+  }
+  // repo-135: before the pair, for the reason the decision is. `unblocked` is
+  // true of a held ticket's `depends_on` and false as advice. The blockers stay
+  // on the line, and the hold is a reminder: a human may dispatch it on purpose.
+  if (ticket.held) {
+    const also = holding.length === 0 ? "" : `; also blocked by ${holding.join(", ")}`;
+    io.stdout(`\n  held — not startable yet: ${holdText(ticket)}${also}\n\n`);
     return;
   }
   io.stdout(

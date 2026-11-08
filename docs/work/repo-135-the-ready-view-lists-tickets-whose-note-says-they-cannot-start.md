@@ -96,3 +96,22 @@ Under the chosen option:
   tools-e6's item 7). Reproduction above run on `main` at `8ad4e91d`.
 - 2026-11-01 — Owner chose (a) at the review session's checkpoint (asked beside
   repo-137's question); `status` moved to `ready` in the same commit.
+- 2026-11-08 — Built option (a) on `repo-135-ready-honours-held`, base `64185876`.
+  `scripts/status.mjs`: `held` is a boolean on every ticket (`note` starts
+  `held:`, exact and lower case); `readyTickets` skips it; `withheldFromReady`
+  names it on stderr, beside any open dependency; the tool view prints
+  `(held: …)` instead of an empty `(waits on )`; `--show` has a `held` row and a
+  closing line `held — not startable yet: …` in place of `unblocked`, keeping
+  blockers. `docs/01-TICKETS.md` has the field-table cell and a paragraph (a
+  reminder, not a gate; nothing computes a date). repo-122's `note` is now
+  `held: at 12 …`; repo-134 had nothing to convert (its `note` went with #766).
+  `npx vitest run scripts/test/status.test.ts`: 154 of 154, 7 of them new
+  (`repo-135: …`). `npm run -s status -- --ready` on this branch no longer lists
+  repo-122 or repo-134 (Done when 4 is a claim about `main` after the merge).
+  What the brief had wrong: nothing material; it did not say a held ticket with
+  a dependency should name both reasons on stderr, so it does.
+  Not folded in: repo-126's `note: not startable before 2026-10-28 …` is the
+  same shape, but its date has passed and a concurrent builder owns that ticket;
+  pl-26's "Deferred until the existence slice is filed" also reads as a hold and
+  is another tool's ticket (a `docs(planner)` change). Both are for whoever
+  clears them to convert or delete.

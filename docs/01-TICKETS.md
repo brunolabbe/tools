@@ -120,7 +120,7 @@ wrong in the brief. This is what a future reader actually needs.
 | `status`     | `needs-decision` · `ready` · `in-flight` · `done` · `dropped`                               |
 | `milestone`  | A milestone from that tool's roadmap, or `null`                                             |
 | `depends_on` | Ticket ids that must land first                                                             |
-| `note`       | Optional. What the status view shows instead of the title                                   |
+| `note`       | Optional. What the status view shows instead of the title; `held: …` holds the ticket       |
 | `difficulty` | `mechanical` · `standard` · `hard` — how much judgement it needs. Required until `done`     |
 | `awaiting`   | Optional. What this ticket still owes, and what would close it                              |
 
@@ -190,6 +190,20 @@ fields are orthogonal, and collapsing them destroys both.
 
 `note` is the one editorial field, and it should stay rare: a title that reads
 badly in a table column is usually a title worth fixing.
+
+**A `note` that begins `held:` says a `ready` ticket cannot start yet** — until a
+dependency publishes a fix, or not before a date: an event outside the repo, which
+neither `depends_on` (it names tickets) nor `needs-decision` (it poses a question
+a human must answer) can say. Write it `note: held: until @fastify/static depends
+on glob ^14`. `--ready` leaves a held ticket out and names it on stderr with the
+other tickets it withheld; the per-tool view still lists it with the text, `--show`
+prints it on its own row and on the closing line in place of `unblocked`, and
+`--json` carries a `held` boolean on every ticket. The prefix is exactly `held:`,
+lower case, at the start of the line. **It is a reminder and never a gate**: nothing
+stops a human dispatching a held ticket on purpose, it is not a `problem`, and it
+does not move `--json`'s exit code. Nothing computes a date either — `held: not
+before 2026-10-28` is cleared by whoever reads it after the 28th, by deleting the
+`note`.
 
 **`difficulty` is the one field written for a dispatcher rather than a reader.**
 `orchestrate-tickets` maps it to the model it runs a builder on, and it is on the
