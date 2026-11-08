@@ -3,7 +3,7 @@ id: repo-134
 tool: repo
 title: glob and minimatch advisories reach the tree only through @fastify/static; no code here runs them
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -60,6 +60,27 @@ description. `npm audit` reports them on every run with no reason attached.
 
 - `npm audit` reports no glob or minimatch advisory through `@fastify/static`,
   and `npm test` passes.
+
+## Review
+
+**Gate: PASS** — 2026-11-08 · `4a9b8af4..8b6dc238` · Sonnet 5.5 (claude-sonnet-5-5), depth narrow
+
+Narrow depth: the named attacks and the acceptance table, no hunt of my own and no invariant walk. No build was run: the diff is `package-lock.json` and the ticket only, and the farm links `main`'s `node_modules`, so `npm test` is read from CI, not run here. Landing condition, not an acceptance line: the owner's answer of 2026-11-08 holds the landing until 2026-11-09 04:51Z, when `minimatch` 11.0.4 (published 2026-11-02T04:50:40Z) is 7.0002 days old.
+
+| Done when                                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm audit` reports no glob or minimatch advisory through `@fastify/static` | **verified** — `npm audit --package-lock-only` on the head lockfile prints `found 0 vulnerabilities`; the same command on the base lockfile (a second detached tree) prints the 3 moderate advisories (`@fastify/static 7.0.0 - 10.1.8`, `glob 9.0.0 - 14.0.1`, `minimatch 7.0.0 - 11.0.0`), so the harness can produce the failure. No test asserts it; I re-ran it. `node scripts/check-lockfile-sync.mjs` exits 0 (`up to date`), and CI's `check` job ran it green on the head.                                                                                                 |
+| …and `npm test` passes                                                      | **proven** — CI `test (ubuntu-latest)` ran `npm test -- --project core --project repo --project downloader --project ledger --project planner --exclude scripts/test/status.test.ts` at `8b6dc238` and passed: 340 of 341 files passed, 1 skipped, none failed. `status.test.ts` is excluded from that leg and ran green in CI's `check` job. The same head passed `e2e` (downloader direct and sniffer, ledger, planner), `docker` x3, `codeql`, `CodeQL`, `dependency-review`. The informational `test (windows-latest, informational)` leg is red and is read below, not graded. |
+
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · the ticket's Log (third bullet of the 2026-11-08 relock entry), the pull request body and the commit body all say `minimatch` 11.0.4 is "inside seven days" and "taken as exempt" or "read as exempt", for the gate to judge. The owner has judged: it is not exempt; the landing waits until 2026-11-09 04:51Z and the pull request names only `@fastify/static` 10.1.9 as the advisory-exempt young release. The text is false in the unsafe direction (it claims a looser reading of the seven-day rule than the owner allowed), but it is self-flagged as the builder's reading, it is one ticket's Log, and no call site relies on it. Fully stated fix, for the landing with no re-gate: in the Log's relock entry replace the sentences "`minimatch 11.0.4` is read as exempt too … the gate should judge it" with the owner's answer (dated 2026-11-08, naming the owner: not exempt, landing held to 2026-11-09 04:51Z, 11.0.4 then 7.0002 days old), and make the pull request body's last paragraph name only `@fastify/static` 10.1.9.
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · the ticket's H1 still reads "glob and minimatch advisories have no in-range fix", and the reworded frontmatter title ("reach the tree only through @fastify/static; no code here runs them") is in the present tense; both stop being true when this merges, because the advisories no longer reach the tree. False in the safe direction: they describe the problem as filed.
+- **low** · `nfr:maintainability` · no `Done when` line of this ticket depends on it · outside the named attacks, seen in passing: `docs/work/repo-135-…md` Build 4 ("Convert repo-122's and repo-134's notes") names a `note:` this branch deletes, so repo-135's builder finds nothing to convert for repo-134. Its Done when 4 (repo-134 absent from `--ready` on `main`) still holds once this ticket is `done`. One sentence in repo-135's Build 4 at the landing.
+- **dropped** · `test (windows-latest, informational)` red at the head: 2 of 7,489 tests (`tools/ledger/web/test/history.test.tsx` › "after a stored save whose re-read is still running, focus is on the row's button …(lg-99)"; `tools/downloader/resolvers/test/browser/consent-scope.test.ts` › c12, `page.goto: net::ERR_NO_BUFFER_SPACE`). Neither imports `@fastify/static`, `glob`, `minimatch`, `path-scurry` or `@fastify/send`, and the latter is the Windows socket-buffer failure `repo-99` and lg-71's gate already record. Latest `push` run on `main` whose matrix ran: `4a34361d` (run 42440985233), `test (windows-latest, informational)` success. Informational; not a finding against this diff.
+- **dropped** · `@fastify/static` 10.1.10 (2026-11-04T17:11Z, the `latest` tag) is not taken. A choice the dispatch and the rule leave to the cutoff; 10.1.10 is younger and fixes no audited advisory.
+- **dropped** · the 10.1.6 to 10.1.9 and `@fastify/send` 4.1.2 to 4.2.0 code changes (an `onFile` hook, `#` and `?` in file names, error propagation from `reply.sendFile`, encoding fallback order) touch no option the three APIs set (`root`, `prefix`, `index`, `dotfiles`, `setHeaders` only). No live call site.
+- **dropped** · glob 14's `glob()` call in `@fastify/static` runs only under `wildcard: false`, which no `routes/web.ts` sets; unexercised here and in CI. No live call site.
+- **findings** · the hunt returned 7; 3 carried, 4 dropped.
+- NFR: security ✓ (the three advisories clear; the one young release is the named exemption; tarball integrity of all four moved registry tarballs equals the lockfile's) · performance n/a · reliability ✓ (one copy of each moved package, every range satisfied, CI green on the leg that gates) · maintainability — above.
 
 ## Log
 
