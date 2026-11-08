@@ -129,3 +129,8 @@ description. `npm audit` reports them on every run with no reason attached.
   request body names only `@fastify/static 10.1.9` as exempt. Proof, run on
   this file after the commit:
   `git diff 8b6dc238 HEAD -- <file> | grep -c '^-.*is read as exempt too'` → `1`.
+- 2026-11-08 — Fixed at landing by owner choice: gate 1, the third low — "repo-135
+  Build 4 names a note: this branch deletes". One sentence is added to repo-135's
+  Build 4: its `note:` is deleted by repo-134's own branch, so convert only
+  repo-122's. Proof, run after the commit:
+  `git diff 8b6dc238 HEAD -- <repo-135 file> | grep -c '^+.*convert only'` → `1`.
