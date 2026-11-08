@@ -6907,3 +6907,51 @@ not a page, got wrong names the script and is filed or recorded, not fixed here.
 - A seam map read from a detached snapshot of `origin/main` while the shared checkout sat one commit behind and a peer was live (`git worktree add --detach <scratch>/main-<sha> <sha>`), so no reset of the shared tree.
 - Reading the base's code before asking the owner about a gate 3 remainder settled "introduced or pre-existing" in one command, and the lander then confirmed it red on main's `History.tsx`.
 - A narrow gate on a filing caught a reproduction that no fix could turn green (lg-103 F1); the plant-the-obvious-fix attack is what found it.
+
+### Batch 2026-11-07 (tools-a5 second, lg-103 lg-100 lg-96, lg-104 filed) — base 08f78f69
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / high | a2a24edd353cd3a8e | seam-mapper, lg-98 lg-100 lg-103 (+ lg-96 for its decision), from a `git archive` snapshot of origin/main | 1m42s / 1m42s | 0 | $0.3799 |
+| #756 | open, ready, 10/10 green at e76eedbe | Sonnet 5.5 / high | aadd85a8a7ac501fe | builder-standard, lg-103 | 2m37s / 2m37s | 0 | $0.4245 |
+| #756 | as above | Opus 5.5 / high | aafd5f2f2b593bee8 | ticket-reviewer-opus, lg-103 gate 1 | 6m12s / 5m22s | 0 | $2.1742 |
+| #756 | as above | Sonnet 5.5 / high | a5c350344ca77e4de | fixer, two lows at landing + landing | 4m26s / 3m33s | 0 | $0.4096 |
+| #757 | open, ready, 11/11 green at 6f18679a | Sonnet 5.5 / high | a4dbda8e219272267 | builder-standard, lg-100, then one owner stop (resumed) | 10m15s / 9m57s | 0 | $1.7174 |
+| #757 | as above | Opus 5.5 / high | a08a1368944178c68 | ticket-reviewer-opus, lg-100 gate 1 | 11m53s / 11m08s | 0 | $3.8442 |
+| #757 | as above | Sonnet 5.5 / high | a233e15b9e2fd2501 | fixer, one low at landing + one recorded + landing | 5m04s / 4m42s | 0 | $0.7102 |
+| #758 | open, ready, 10/10 green at a4a2feb2 | Sonnet 5.5 / high | aa8480c826436a080 | builder-standard, lg-96 (needs-decision, five answers), then round 1 (resumed) | 30m37s / 47m40s | 0 | $4.4871 |
+| #758 | as above | Opus 5.5 / high | a0817737e96532cee | ticket-reviewer-opus, lg-96 gate 1 (FAIL) | 12m31s / 12m03s | 0 | $3.1685 |
+| #758 | as above | Opus 5.5 / high | a8d008d8629ec9b28 | ticket-reviewer-opus, lg-96 gate 2 (FAIL) | 14m06s / 13m16s | 0 | $4.4669 |
+| #758 | as above | Sonnet 5.5 / high | a67314a658fc390f0 | builder-standard, lg-96 round 2 (fresh, continuing the branch) | 16m58s / 15m58s | 0 | $3.2996 |
+| #758 | as above | Opus 5.5 / high | a26c00de47e98c4d5 | ticket-reviewer-opus, lg-96 gate 3, narrow (FAIL) | 12m26s / 11m35s | 0 | $3.8020 |
+| #758 | as above | Sonnet 5.5 / high | a687e6eaac6dfc4b4 | fixer, two comments + answers at landing + landing with F2 open | 5m08s / 4m47s | 0 | $0.9626 |
+| #758 | as above | Sonnet 5.5 / high | a92e5477dd7b3534d | fixer, a third comment after `--land` (owner's answer) | 2m28s / 2m26s | 0 | $0.3751 |
+| #759 | open, ready, checks pending at ff06527c at close (docs-only) | Haiku 5.5 / high | a50ca978f2c5ee10a | builder-mechanical, lg-104 filing (maintenance), then one owner stop (resumed) | 14m48s / 14m41s | 0 | $0.9584 |
+| #759 | as above | Sonnet 5.5 / xhigh | a97b650a5b55f0f97 | ticket-reviewer-sonnet, lg-104 gate 1, narrow (CONCERNS), resumed once to paste its section into its full report | 12m14s / 11m26s | 0 | $2.0766 |
+| #759 | as above | Sonnet 5.5 / high | aff5f3333be2c4ec8 | fixer, lg-104 round 1 (three meds, one low) | 2m08s / 2m03s | 0 | $0.3700 |
+| #759 | as above | Sonnet 5.5 / xhigh | af211e440c3da6430 | ticket-reviewer-sonnet, lg-104 gate 2, narrow | 7m00s / 7m00s | 0 | $1.2911 |
+| #759 | as above | Sonnet 5.5 / high | a512dddf4063d8b38 | fixer, four lows at landing + ready | 4m30s / 4m05s | 0 | $0.6292 |
+| — | — | Opus 5.5 / high | orchestrator 5216e6bd | orchestrator (floor) | 1h29m31s / 2h44m53s | 0 | $9.8934 |
+| | | | | **total** (rates read 2026-10-10) | 4h26m35s | 0 | **$45.44** |
+
+**Tickets:**
+
+- lg-103 → #756: gate 1 PASS (Opus), two lows fixed at landing on the owner's say (Done when 1's sha reworded). Total $3.01.
+- lg-100 → #757: owner stop before the gate (keep the `[]` fallback and test it directly, overriding the builder; contract doc comment approved); gate 1 PASS (Opus), low 1 (fallback reachable by a purchase, text false) fixed at landing as Log withdrawals, low 2 (a coupon-only category files a negative pot charge, branch-introduced) accepted and recorded. Total $6.27.
+- lg-96 → #758: needs-decision, answered at two intake checkpoints (option 1, running sum, 2M slots, `slots`, same bounds); builder departed (gap row counts one slot) and the owner approved it and kept 2M on a re-ask with the measurement; gate 1 FAIL (Opus; two highs, F1 stub tail built, F2 parse escapes the total), round 1; gate 2 FAIL (Opus; F2 fixed in part, seven spellings past the copy of SheetJS), round 2 by a fresh builder (fail closed on SheetJS's sheet list); gate 3 narrow FAIL (Opus; F2 still high, a zip local-name decoy and a shared comments part); stopped at the third high, owner chose to land and file the rest as lg-104; three false comments reworded at landing. Total $20.56.
+- lg-104 → #759 (filing): gate 1 narrow CONCERNS (Sonnet; three meds), round 1; gate 2 narrow PASS, four lows fixed at landing; stays needs-decision. Total $5.33.
+
+**Defects in the skill:**
+
+1. `roles/common.md`, _Waiting is the harness's_ — names only a background run's notification as the way to wait; four agents in this batch (lg-96's two landers, its round-2 builder, lg-100's lander) waited in the foreground with `timeout <n> tail -f --pid=<pid> /dev/null`, and lg-103's gate, which cannot end its turn without delivering its report, read an exit file about six times. Reproduction: `grep -n 'Waiting is the harness' roles/common.md` → `:194`; the four waits and the six reads are relayed from the agents' reports, not re-run.
+2. `reference/records.md`, _Rules for what the record says_ — a withdrawal in place adds a paragraph and removes nothing, so the removed-line proof form of _Fixed at landing_ cannot prove it; lg-100's lander used `grep -c '^+  WITHDRAWN'` because `'^+.*WITHDRAWN'` also counts the entry's own proof line (3). Reproduction: `grep -n 'WITHDRAWN' reference/records.md` → `:179`; the counts are relayed.
+3. `roles/builder.md`, _Set up_ step 2 — "both print nothing" has no case for a continuation whose same-named local branch the previous builder's worktree left behind; second batch running. Reproduction: at lg-96's round-2 dispatch, `git rev-parse lg-96-bound-a-sheets-extent` → `c2e36eb7…`, equal to `git ls-remote --heads origin lg-96-bound-a-sheets-extent` (run by the orchestrator); carried from the previous tools-a5 entry, `git rev-parse lg-102-file-receipts-from-the-queue` → `00c80458` against `37d470da` on origin (relayed).
+4. `roles/builder.md` — no rule for a filing whose Reproduction's probes exist only in a gate's scratch directory; lg-104's filer left them out until the owner chose to paste them. Reproduction: `grep -c scratch roles/builder.md` → `0`.
+5. `roles/reviewer.md`, _When you are dispatched as gate 2, or later_ — does not say that a gate-1 `high` returned "fixed in part" makes the verdict FAIL with every `Done when` line met (lg-96's gates 2 and 3), nor whether a gap inside a fix is a new `N` finding or the old id (lg-104's gate 2 asked). Reproduction: `grep -n 'fixed in part' roles/reviewer.md` → `:232` only; both questions relayed from the gates.
+6. `review-ticket/gate.md`, step 4 — the commit-pin rule exempts a sha naming a CI check's head and is silent on a sha naming the tree a probe ran on, which a filing's gate must cite. Reproduction: `grep -n 'pin' review-ticket/gate.md` → `:63`, `:105`; relayed from lg-104's gate 1.
+
+**Worked, and worth keeping:**
+
+- Re-asking a cap on the measurement that moved its premise (lg-96: "about 22 MB" → +90 MB → +385 MB): the owner re-chose with numbers each time.
+- Comparing each gate's section with its full report caught lg-104's gate 1 rewriting its section; one message fixed it.
+- Gate dispatches naming one-at-a-time memory runs under `--max-old-space-size=900`: three gates and two builders measured up to +634 MB on the shared machine with no kill.
