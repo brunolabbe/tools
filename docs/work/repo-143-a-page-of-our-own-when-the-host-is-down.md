@@ -401,3 +401,20 @@ checked):
     `pattern` and `script` on POST, as the create call documents, so a build that
     still sent the flag there would leave the routes fail closed and fail the
     repair assertions.
+- 2026-11-08 — **Owner answer to gate 1's F1** (round 1), relayed by the
+  coordinator, recorded before the code that follows it. Finding: a `/subdomain`
+  answer that is not 2xx and not 401/403 stops the first `--apply` right after the
+  upload and wedges every later run, dry runs included, before a plan prints, so
+  the routes are never made (reproduced on `49971a53` with the gate's `f2.sh`:
+  `apply-1` exit 1 after `applied  worker  down-page`; `apply-2` and a dry run
+  exit 1 with 0 stdout lines; routes in the account 0, script uploaded 1).
+  Question: what should happen with F1? Options: (a) keep the order and print the
+  manual recovery in the error; (b) run the workers.dev step after the routes and
+  make its failure a printed `FAILED` line with a non-zero exit at the end; (c)
+  land as recorded. Recommended: (b) (gate and coordinator). **Chosen: (b)**
+  (owner, 2026-11-08). The workers.dev step runs after the routes and repairs; a
+  non-2xx, non-401/403 answer from `/subdomain`, on the GET while planning or the
+  POST while applying, prints a `FAILED` line naming the call and status; the plan
+  and the routes still go through, a dry run prints its whole plan, and the run
+  exits non-zero at the end. A 401/403 on the GET keeps its permission message.
+  Supersedes the earlier build entry's "right after the upload" ordering.
