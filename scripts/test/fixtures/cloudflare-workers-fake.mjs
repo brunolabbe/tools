@@ -26,6 +26,7 @@ const answer = (result, status = 200) =>
  *   scriptReadStatus?: number,
  *   routeReadStatus?: number,
  *   subdomainReadStatus?: number,
+ *   subdomainStatus?: number,
  * }} WorkersInit
  */
 
@@ -75,6 +76,9 @@ export function createWorkersFake(init = {}) {
   /** @param {string} name @param {string} method @param {RequestInit} req */
   const subdomainCall = async (name, method, req) => {
     if (scripts[name] === undefined) return answer(null, 404);
+    // The no-registered-subdomain case is unmeasured, so a test sets whatever
+    // status it wants this endpoint to answer with, on both calls.
+    if (init.subdomainStatus) return answer(null, init.subdomainStatus);
     if (method === "POST") {
       workersDev[name] = JSON.parse(String(req.body)).enabled === true;
       return answer({ enabled: workersDev[name], previews_enabled: false });

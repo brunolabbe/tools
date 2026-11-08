@@ -494,11 +494,14 @@ export function applyOrder(plan) {
       kind: "worker",
       item: w,
     })),
-    // Right after the upload: the script is public on workers.dev from the moment
-    // it exists, so the window is the length of the next call.
-    ...(plan.workersDev?.disable ?? []).map((n) => ({ kind: "workersdev", item: n })),
     ...(plan.routes?.create ?? []).map((r) => ({ kind: "route", item: r })),
     ...(plan.routes?.repair ?? []).map((r) => ({ kind: "route-repair", item: r })),
+    // After the routes (owner, 2026-11-08): the switch's endpoint is the one call
+    // here whose answer is unmeasured for a first-ever Worker, and its failure must
+    // not keep the page from being made. The cost is a public workers.dev address
+    // for the length of the route calls, and the failure is a FAILED line and a
+    // non-zero exit rather than an abort.
+    ...(plan.workersDev?.disable ?? []).map((n) => ({ kind: "workersdev", item: n })),
     ...(plan.turnstile?.create ?? []).map((w) => ({ kind: "turnstile", item: w })),
   ];
 }
@@ -718,19 +721,29 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   );
   // The workers.dev switch is read only for a script this tool uploaded: an absent
   // one will be created enabled, and a foreign one is a conflict that stops the run.
-  const subdomain = await (
-    deployedHash(scriptText ?? "") === null
-      ? Promise.resolve(null)
-      : call(token, `${SCRIPT}/subdomain`)
-  ).catch((err) => {
-    if (err.status !== 401 && err.status !== 403) throw err;
-    fail(
-      `${err.message}\n\n` +
-        "  The down page's workers.dev switch needs Account · Workers Scripts · Edit on the token.\n" +
-        "  Add that permission to the token and run again.",
-    );
-  });
-  const workersDev = planWorkersDev(subdomain, WORKER_NAME);
+  //
+  // A refused credential stops the run before anything is written, like every
+  // other permission here. Any other answer that is not 2xx is a FAILED line, not
+  // an abort: before this it wedged every later run, dry runs included, before a
+  // plan printed (gate 1's F1), so the routes were never made.
+  const failures = [];
+  let workersDev = { disable: [], ok: [] };
+  try {
+    const subdomain =
+      deployedHash(scriptText ?? "") === null ? null : await call(token, `${SCRIPT}/subdomain`);
+    workersDev = planWorkersDev(subdomain, WORKER_NAME);
+  } catch (err) {
+    if (err.status === 401 || err.status === 403) {
+      fail(
+        `${err.message}\n\n` +
+          "  The down page's workers.dev switch needs Account · Workers Scripts · Edit on the token.\n" +
+          "  Add that permission to the token and run again.",
+      );
+    }
+    // No status is not an answer from Cloudflare (a refused connection): not ours.
+    if (typeof err.status !== "number") throw err;
+    failures.push(err.message);
+  }
   const routeList = await call(token, ROUTES).catch((err) => {
     if (err.status !== 401 && err.status !== 403) throw err;
     fail(
@@ -785,6 +798,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   for (const w of turnstile.ok) out(`ok       turnstile ${w.name} (${w.domains.join(", ")})`);
   for (const w of worker.ok) out(`ok       worker  ${w.name} (sha256 ${w.hash.slice(0, 12)})`);
   for (const n of workersDev.ok) out(`ok       worker  ${n} is off workers.dev`);
+  for (const message of failures) out(`FAILED   worker  ${WORKER_NAME} workers.dev: ${message}`);
   for (const r of routes.ok) out(`ok       route   ${r.pattern} ${routeTarget(r)}`);
   for (const a of ingress.added) out(`ADD      ingress ${a.hostname} -> ${a.service}`);
   for (const d of dns.create) out(`ADD      dns     ${d.name} -> ${d.content} (proxied)`);
@@ -816,8 +830,22 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     routes.repair.length;
   out();
 
+  // Everything else has been planned or made by the time a failure is reported:
+  // the exit is non-zero, and the output above says what was and was not done.
+  const finish = () => {
+    if (failures.length > 0) {
+      fail(
+        `${failures.length} step(s) FAILED, listed above; every other change was ${
+          args.apply ? "made" : "planned"
+        }. The workers.dev switch can be set by hand on the dashboard (Workers, ${WORKER_NAME}, ` +
+          "Settings, Domains & Routes), or after the account registers a workers.dev subdomain; run again after.",
+      );
+    }
+  };
+
   if (changes === 0) {
     out("nothing to do.");
+    finish();
     return;
   }
 
@@ -826,6 +854,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       out("The widget's site key and secret are printed once, on --apply, and written nowhere.");
     }
     out(`${changes} change(s). Re-run with --apply to make them.`);
+    finish();
     return;
   }
 
@@ -868,11 +897,21 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       await call(token, SCRIPT, { method: "PUT", body: workerForm(op.item) });
       out(`applied  worker  ${op.item.name}`);
     } else if (op.kind === "workersdev") {
-      await call(token, `${SCRIPT}/subdomain`, {
-        method: "POST",
-        body: JSON.stringify({ enabled: false }),
-      });
-      out(`applied  worker  ${op.item} off workers.dev`);
+      try {
+        await call(token, `${SCRIPT}/subdomain`, {
+          method: "POST",
+          body: JSON.stringify({ enabled: false }),
+        });
+        out(`applied  worker  ${op.item} off workers.dev`);
+      } catch (err) {
+        if (typeof err.status !== "number") throw err;
+        const hint =
+          err.status === 401 || err.status === 403
+            ? " (the token needs Account · Workers Scripts · Edit)"
+            : "";
+        out(`FAILED   worker  ${op.item} workers.dev: ${err.message}${hint}`);
+        failures.push(err.message);
+      }
     } else if (op.kind === "route") {
       const r = op.item;
       // As documented: `pattern` and `script`, nothing else.
@@ -909,6 +948,8 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       for (const line of lines) out(line);
     }
   }
+
+  finish();
 }
 
 const routeTarget = (r) => (r.script ? `-> ${r.script}` : "(no Worker)");

@@ -726,7 +726,7 @@ describe("cloudflare-setup with the down page", () => {
 
   // --- workers.dev: off, once (owner, 2026-11-08) ------------------------------
 
-  test("a new Worker is switched off workers.dev right after its upload, once", async () => {
+  test("a new Worker is switched off workers.dev once, after the routes", async () => {
     const account = fakeAccount();
     await run(account, "--apply");
 
@@ -735,7 +735,9 @@ describe("cloudflare-setup with the down page", () => {
     expect(account.bodies.find((b) => b.write === sub)?.body).toEqual({ enabled: false });
     expect(account.workers.workersDev[WORKER_NAME]).toBe(false);
     const order = account.writes.filter((w) => w.includes("/workers/"));
-    expect(order.indexOf(sub)).toBe(order.indexOf("PUT /accounts/A/workers/scripts/down-page") + 1);
+    // the owner's order (2026-11-08): the upload, every route write, then the switch
+    expect(order.indexOf("PUT /accounts/A/workers/scripts/down-page")).toBe(0);
+    expect(order.indexOf(sub)).toBe(order.length - 1);
   });
 
   test("a Worker already off workers.dev is nothing to do; one that is on is switched off", async () => {
@@ -771,6 +773,58 @@ describe("cloudflare-setup with the down page", () => {
     expect(on.workers.workersDev[WORKER_NAME]).toBe(false);
   });
 
+  // --- the workers.dev endpoint answering something else (gate 1's F1) --------
+  //
+  // Unmeasured: what `/subdomain` says for an account with no workers.dev
+  // subdomain registered. Whatever it says, the page must still be made.
+
+  test("a /subdomain answer that is not 2xx does not keep the routes from being made", async () => {
+    const account = fakeAccount({ subdomainStatus: 404 });
+    const { out, error } = await run(account, "--apply");
+
+    expect(account.writes.filter((w) => w === "POST /zones/Z/workers/routes")).toHaveLength(
+      wanted.length,
+    );
+    expect(out).toContain("applied  route   planner.example.com/* fail open");
+    expect(out).toMatch(/FAILED {3}worker {2}down-page workers\.dev: POST \S+\/subdomain -> 404/);
+    // non-zero at the end, not an abort in the middle
+    expect(error).toBeInstanceOf(CliError);
+    expect(String(error)).toContain("FAILED");
+    expect(out.indexOf("FAILED")).toBeGreaterThan(out.lastIndexOf("applied  route"));
+  });
+
+  test("a re-run past that failure prints its plan, keeps the routes ok, and still fails", async () => {
+    const account = fakeAccount({ subdomainStatus: 404 });
+    await run(account, "--apply");
+    const written = account.writes.length;
+
+    const { out, error } = await run(account, "--apply");
+
+    expect(out).toContain("ok       route   planner.example.com/* -> down-page");
+    expect(out).toMatch(/FAILED {3}worker {2}down-page workers\.dev: GET \S+\/subdomain -> 404/);
+    expect(error).toBeInstanceOf(CliError);
+    expect(account.writes).toHaveLength(written);
+  });
+
+  test("a dry run past that failure still prints the whole plan, then exits non-zero", async () => {
+    const { body } = workerFromSource(
+      readFileSync(path.join(root, "scripts/cloudflare-down-page.mjs"), "utf8"),
+    );
+    const account = fakeAccount({
+      scripts: { [WORKER_NAME]: body },
+      workersDev: { [WORKER_NAME]: true },
+      subdomainStatus: 404,
+    });
+    const { out, error } = await run(account);
+
+    expect(out).toContain("ADD      route   planner.example.com/* -> down-page");
+    expect(out).toContain("ADD      ingress planner.example.com");
+    expect(out).toMatch(/FAILED {3}worker {2}down-page workers\.dev: GET/);
+    expect(out).toMatch(/change\(s\)\. Re-run with --apply/);
+    expect(error).toBeInstanceOf(CliError);
+    expect(account.writes).toEqual([]);
+  });
+
   test("a token that cannot read the workers.dev switch is told which permission", async () => {
     const { body } = workerFromSource(
       readFileSync(path.join(root, "scripts/cloudflare-down-page.mjs"), "utf8"),
@@ -800,7 +854,7 @@ describe("the workers.dev plan and the apply order", () => {
     });
   });
 
-  test("order: upload, then workers.dev off, then routes, then repairs", () => {
+  test("order: upload, then routes, then repairs, then workers.dev off", () => {
     const want = workerFromSource("x");
     const live = [
       {
@@ -821,8 +875,9 @@ describe("the workers.dev plan and the apply order", () => {
       }) as { kind: string }[]
     ).map((o) => o.kind);
 
-    expect(kinds.slice(0, 2)).toEqual(["worker", "workersdev"]);
-    expect(kinds.at(-1)).toBe("route-repair");
+    expect(kinds[0]).toBe("worker");
+    expect(kinds.at(-1)).toBe("workersdev");
     expect(kinds.indexOf("route-repair")).toBeGreaterThan(kinds.lastIndexOf("route"));
+    expect(kinds.indexOf("workersdev")).toBeGreaterThan(kinds.indexOf("route-repair"));
   });
 });
