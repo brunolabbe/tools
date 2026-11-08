@@ -172,7 +172,7 @@ a{color:var(--accent)}
 <div class="bar" aria-hidden="true"></div>
 <h1>${title}</h1>
 <p>The home server this runs on is not answering right now. That is usually short: a restart, or the machine being switched off for a while.</p>
-<p>Try again in a few minutes. Nothing you had open here is lost by waiting.</p>
+<p>Try again in a few minutes.</p>
 <p class="muted">Status 503. <a href="">Reload this page</a></p>
 </main>
 </body>

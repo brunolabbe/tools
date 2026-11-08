@@ -263,18 +263,53 @@ by hand in the dashboard. The script is additive and never deletes, so a host se
 up before dl-49 still has both until its operator removes them there; a run
 neither reports them nor touches them.
 
-The token wants exactly four permissions, and one of them is per-zone:
+The token wants exactly six permissions, and two of them are per-zone:
 
 | Scope   | Permission                | Access |
 | ------- | ------------------------- | ------ |
 | Account | Cloudflare Tunnel         | Edit   |
 | Account | Access: Apps and Policies | Edit   |
 | Account | Turnstile                 | Edit   |
+| Account | Workers Scripts           | Edit   |
 | Zone    | DNS                       | Edit   |
+| Zone    | Workers Routes            | Edit   |
 
-**A token made before the fourth was added stops at the Turnstile read**, with a
-message naming it, before anything is written. Add `Account · Turnstile · Edit`
-to the token and run again.
+**A token made before a permission was added stops at the read that needs it**,
+with a message naming it, before anything is written: `Account · Turnstile ·
+Edit` for the widget, `Account · Workers Scripts · Edit` and `Zone · Workers
+Routes · Edit` for the down page below. Add it to the token and run again.
+
+**The same run deploys the down page.** When the host is off, `cloudflared` is
+stopped or a tool's container is down, Cloudflare answers with its own error page
+(1033 or 502), which does not say which tool it is or what to do. The Free plan
+has no Custom Errors, so the script uploads a small Worker,
+[`scripts/cloudflare-down-page.mjs`](../scripts/cloudflare-down-page.mjs), named
+`down-page`, and routes each tool's hostname through it
+([repo-143](./work/repo-143-a-page-of-our-own-when-the-host-is-down.md)). It
+asks the origin as usual; when the request is a page load (`GET` or `HEAD`
+accepting `text/html`) and the origin throws or answers 502, 504 or 530, it
+answers with a page that names the tool, in the tool's colours and both colour
+schemes, with status **503**, `Retry-After: 60` and `Cache-Control: no-store`.
+Anything else passes through untouched.
+
+- **`/api/*`, `/assets/*` and `theme.js` never reach the Worker.** The script adds
+  a route with no Worker for each, so API calls, file streams, SSE and the edge
+  rate limit on `/api/` are exactly what they were, and Cloudflare's own response
+  is what an API call gets during an outage. They also cost no Worker requests
+  against the Free plan's daily quota.
+- **The routes fail open** (`request_limit_fail_open`): past the quota the Worker
+  is skipped and the sites keep working, with Cloudflare's page in an outage.
+- **It is the same plan-by-default as the rest.** The plan prints `ADD worker` and
+  an `ADD route` per pattern; a second `--apply` reports `nothing to do`. A new
+  version of the page is `UPDATE worker`. The script knows the deployed Worker
+  is its own by a hash line it appends to the source, so a script named
+  `down-page` that it did not upload is a **conflict**, as is a route on one of
+  these patterns that points at a different Worker (or at none, where a Worker
+  is wanted). Neither is replaced, and nothing is changed until you resolve it.
+- **Nothing here is measured against a live account yet.** Which of Access and
+  the Worker answers first for the planner and the ledger, whether the visitor's
+  address still reaches the origin on a pass-through, and the Free plan's current
+  limits are recorded as unverified in the ticket's Log.
 
 **The same run creates the downloader's Turnstile widget.** The downloader's
 human check ([dl-50](../tools/downloader/docs/work/dl-50-a-human-check-without-an-account.md))
@@ -639,6 +674,17 @@ is the good outcome — it means Access is enforcing. From a browser you get the
 login, then the UI. The downloader without a login answers JSON, and what to look
 at instead is `curl -sS https://downloader.example.com/api/config`: a `siteKey`
 means the human check is on, `null` means it is not.
+
+**The down page.** On a host that has run the setup script, stop one tool's
+container (`docker compose stop planner`), load its hostname in a browser, and
+expect the tool's own "is unavailable" page with status 503 (the network tab, or
+`curl -sSI -H 'Accept: text/html' https://planner.example.com/`). Then stop
+`cloudflared` and load it again: the same page. `curl -sS
+https://planner.example.com/api/health` under the same outage still answers
+Cloudflare's own error, not the page. Start everything again before moving on.
+For the planner and the ledger, a visitor who is not logged in may see Access's
+login instead of the page, depending on which runs first; whichever it is,
+note it here.
 
 Then use each tool once, end to end, because a health check proves less than it
 looks:

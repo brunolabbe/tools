@@ -152,3 +152,124 @@ checked):
 - 2026-11-03 — Filed after the owner asked whether a free-plan zone can have a
   custom 502 page. The answer is no for Custom Errors and yes for a Worker. The
   owner answered both decisions above when the ticket was filed.
+- 2026-11-08 — Built (branch `repo-143-down-page-worker`, base `64185876`). The
+  sandbox's firewall blocks `developers.cloudflare.com` and `api.cloudflare.com`
+  (dispatch measured exit 28 on both), so **nothing below was checked against
+  Cloudflare**: Build 1–6 are written against the fake fetch and the API shapes
+  this ticket names. Where it landed:
+  - `scripts/cloudflare-down-page.mjs` — the Worker: `default { fetch }` plus the
+    pure helpers (`shouldShowDownPage`, `isPageLoad`, `renderDownPage`,
+    `downPageResponse`, `DOWN_STATUSES`, `PALETTES`). No import, no build step.
+  - `scripts/cloudflare-setup.mjs` — `planWorker`, `planRoutes`,
+    `workerFromSource`, `deployedHash`, `desiredState(...).routes`, `applyOrder`
+    gains `worker` and `route` ops (after DNS, before the widget, so the widget
+    stays last), `TOOLS[].staticPaths`, a multipart branch in `call`, the six-
+    permission header, and two 401/403 messages naming `Account · Workers
+    Scripts · Edit` and `Zone · Workers Routes · Edit`.
+  - `scripts/test/cloudflare-down-page.test.ts` (59 cases), the shared fake
+    `scripts/test/fixtures/cloudflare-workers-fake.mjs`, and two small edits
+    to existing tests/fixtures so their fake accounts answer the two new reads
+    (`cloudflare-turnstile.test.ts`'s `fakeAccount`, `cloudflare-fake-fetch.mjs`).
+  - `docs/02-DEPLOYMENT.md` — the permissions table (six), the down page under
+    _Steps 2 and 3_, and a _Verifying_ paragraph.
+- 2026-11-08 — **Choices the brief left to the builder.**
+  - _Colours: copied, not read at deploy time._ The brief assumed
+    `packages/ui`'s base tokens hold values to inline; `tokens.css` holds **no
+    colour value** (its header: palettes are per tool, owner 2026-10-18), so
+    there was nothing to read. The page instead carries each tool's own six
+    roles (`--bg --surface --border --text --text-muted --accent`), light and
+    dark, chosen by the hostname's first label, so a visitor sees the palette of
+    the tool they were going to. A build step would be a second thing to keep
+    working for the one page that must work when everything else is down.
+    Drift is caught by `cloudflare-down-page.test.ts` › _the palettes are the
+    tools' own_, which parses each `tools/<tool>/web/src/styles.css`.
+  - _Idempotence by a marker line, not Cloudflare's etag._ The upload appends
+    `// repo-143-content-sha256: <hash of the source>`; a re-run downloads the
+    script and greps the raw text for the marker, so it does not matter whether
+    the download is bare or multipart. No marker means the script is not ours,
+    and that is a **conflict** (never overwritten), the same rule as a foreign
+    route. The brief only asked for the route conflict; this is the same rule
+    applied to the one other thing the script could clobber.
+  - _The page's wording_ says the home server is not answering and to try again
+    in a few minutes, and nothing more: a first draft promised that nothing open
+    is lost by waiting, which no tool has been shown to guarantee.
+  - _`TOOLS[].staticPaths`_ lists `/theme.js` for the downloader and the ledger
+    only; a test reads each `vite.config.ts` and fails if a config mentions
+    `theme.js` the table lacks (or the reverse), or sets `assetsDir`.
+- 2026-11-08 — **Unverified — needs web check.** Each is an assumption the code
+  makes; each names what would settle it.
+  1. **Access versus Workers order** (brief's _Facts to verify_). Believed:
+     Access runs first, so a logged-out planner or ledger visitor sees the login,
+     not the page. _Settles it:_ Cloudflare's "Workers and Access" / order of
+     operations page, or on the live host `curl -sSI -H 'Accept: text/html'
+     https://planner.<domain>/` with the container stopped, logged out.
+     _Where it shows:_ the _Verifying_ paragraph already tells the owner to note
+     it.
+  2. **`CF-Connecting-IP` on a pass-through subrequest.** The Worker calls
+     `fetch(request)` with the incoming request unchanged and `/api/*` is
+     excluded, so the downloader's per-client limits never go through it; the
+     page-load path is the only one that does. _Settles it:_ the Workers docs'
+     `fetch` / `CF-Connecting-IP` notes, or an `/api/`-less route logging the
+     header at the origin.
+  3. **Free-plan quota and CPU limit** (brief: about 100,000 requests/day, 10 ms
+     CPU). _Settles it:_ `developers.cloudflare.com/workers/platform/limits/`.
+     The Worker does no work beyond a `fetch` and a static string, which is far
+     inside either figure as the brief states them.
+  4. **A route with no `script` is how the API expresses an exclusion** (Build
+     3). The code POSTs `{ pattern }` with no `script` key and reads an existing
+     route as an exclusion when `script` is absent, null or empty. _Settles it:_
+     `POST /zones/{id}/workers/routes` and its list shape in the API reference.
+  5. **`request_limit_fail_open: true` on the Worker routes** is the field name
+     the builder remembers for "fail open"; whether the route body accepts it,
+     or whether failure mode is set elsewhere, is unchecked. If the API rejects
+     the unknown field the first `--apply` fails at the first Worker route, with
+     the exclusions already made. _Settles it:_ the same API reference.
+  6. **Script download and upload shapes.** Upload: `PUT
+     /accounts/{id}/workers/scripts/down-page`, multipart with a `metadata` part
+     (`main_module`, `compatibility_date`) and the module part
+     `application/javascript+module`. Download: `GET` the same path, answers the
+     module as text (or multipart), 404 when absent. The marker has to survive
+     the round trip for a second run to say `nothing to do`. _Settles it:_ the
+     API reference, then the owner's second `--apply` (Done when 4).
+  7. **What a Worker's own `fetch` does with no tunnel connector.** The Worker
+     handles both a throw and a 530, because which one a Worker sees is not
+     known. _Settles it:_ the live outage test (Done when 1).
+  8. **A new script's `workers.dev` route.** Not enabled by the script; whether
+     a freshly uploaded script is reachable on `*.workers.dev` by default is
+     unchecked. The Worker only forwards to the hostname in the request, so it
+     would answer a self-fetch error, but the owner may want it off. _Settles
+     it:_ the dashboard's Worker settings after the first `--apply`.
+- 2026-11-08 — **Done when, as built.**
+  1. _Owner's, on the live host — owed._ Needs `--apply` against the real
+     account, then a container stop and a `cloudflared` stop.
+  2. _Owner's, same outage — owed._ `/api/health` is excluded by construction
+     (`planner.example.com/api/*` is a route with no Worker; test `an exclusion is
+     created with no script, a Worker route with fail-open`), which is the
+     part this build can show; the live answer is the owner's.
+  3. Met: `npx vitest run scripts/test/cloudflare-down-page.test.ts` → 59 of 59.
+     The decision table is `the decision over (outcome x Accept x method)`; the
+     route plan `the route plan` (additions, exclusions for every tool in
+     `TOOLS`, the conflict on a foreign Worker, and the two exclusion/Worker
+     inversions); the idempotent upload `--apply uploads once and adds each
+     route once; the second run has nothing to do` (no PUT on the second run).
+     Mutants: `DOWN_STATUSES` widened to 500 failed 4; `planWorker`'s `ok`
+     branch disabled failed 2; the non-page-load guard removed failed 1.
+  4. _Plan half met, live half owed._ The dry run printed (fake account):
+     `ADD worker down-page (sha256 2dfb2786b825)`, then `ADD route` for
+     `<host>/api/*`, `<host>/assets/*` (both with `(no Worker)`),
+     `<host>/theme.js` (downloader and ledger) and `<host>/* -> down-page` for
+     each of the three tools, `21 change(s). Re-run with --apply`; against the
+     fake, `--apply` twice printed `applied …` then `nothing to do.` **A real
+     `--apply` twice on the live account is the owner's.**
+  5. Met: Playwright, 360×640, each of three tools in light and dark, from
+     `renderDownPage()`: `scrollWidth` 360 against `innerWidth` 360 in all six.
+     Screenshots are attached to the draft pull request.
+  6. Met: `docs/02-DEPLOYMENT.md` names both permissions (table, and the
+     paragraph under it) and the verification step.
+  7. Met: `npm run check` exit 0, and `npm test -- --project repo` exit 0
+     (16 files, 691 passed and 1 skipped of 692).
+- 2026-11-08 — **Not folded in:** `docs/02-DEPLOYMENT.md`'s _edge rate limit_
+  paragraph still says a WAF rule "would need a fourth permission on a token
+  whose header argues for three". It is a dated owner decision (dl-52,
+  2026-09-28) and was true when written; rewording another ticket's recorded
+  decision is not this change's to make.
