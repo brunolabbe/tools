@@ -7,7 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: standard
-note: held at 12 until a lockfile install can skip the compile
+note: held: at 12 until a lockfile install can skip the compile
 ---
 
 # repo-122 — better-sqlite3 13 and @types/better-sqlite3 9
