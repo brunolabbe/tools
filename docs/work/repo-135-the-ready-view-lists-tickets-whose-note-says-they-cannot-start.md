@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: []
 difficulty: standard
+awaiting: Done when 4 — after the merge, `npm run -s status -- --ready` on `main` lists neither repo-122 nor repo-134
 ---
 
 # repo-135 — The ready view lists tickets whose own note says they cannot start
