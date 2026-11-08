@@ -1486,10 +1486,10 @@ test("the receipt queue fits a phone and a desktop with who paid, whose and a bo
   await expect(page.getByRole("button", { name: /^Remove /u })).toHaveCount(3);
   const joint = page.getByLabel("Paid by, Pharmacie Exemple, 26.50 $").first();
   await joint.selectOption({ label: "Joint card" });
+  // Whose on a row: the last member owes all of it, the longest choice the select has.
+  const whose = page.getByLabel(/^Whose, Épicerie du Marché Central/u).first();
+  await whose.selectOption({ index: (await whose.locator("option").count()) - 1 });
   await page.getByRole("checkbox", { name: "Select all" }).check();
-  // Whose alone from the bar: the last member owes all of it, the longest choice the
-  // select has, and the joint-card row keeps its payer (the owner's answer to gate 1).
-  await page.getByLabel("Whose, for the selected").selectOption({ index: 3 });
   await expect(joint).toHaveValue("");
   await expect(page.getByText(/whose each item is, is chosen item by item/u)).toBeVisible();
   await page.getByRole("button", { name: "File selected" }).click();

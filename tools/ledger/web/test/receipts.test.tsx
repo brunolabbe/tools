@@ -1964,18 +1964,16 @@ test("Paid by and Whose set on three selected rows file three receipts, one at a
     "sam's — owes all of it",
   ]);
 
-  // The bar sets one pick at a time on every selected row.
-  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), {
-    target: { value: "sam" },
-  });
-  const whose = screen.getByLabelText("Whose, for the selected") as HTMLSelectElement;
-  expect(optionsOf(whose)).toEqual([
-    "Keep each row's",
-    "Shared",
-    "alex's — owes all of it",
-    "sam's — owes all of it",
-  ]);
-  fireEvent.change(whose, { target: { value: "alex" } });
+  // Each row's picks are set on the row; the bar only selects and files (the owner, 2026-11-08).
+  for (const shop of ["Shop 11", "Shop 12", "Shop 13"]) {
+    fireEvent.change(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`), {
+      target: { value: "sam" },
+    });
+    fireEvent.change(screen.getByLabelText(`Whose, ${shop}, 10.00 $`), {
+      target: { value: "alex" },
+    });
+  }
+  expect(screen.queryByLabelText(/for the selected$/u)).toBeNull();
   for (const shop of ["Shop 11", "Shop 12", "Shop 13"]) {
     expect((screen.getByLabelText(`Paid by, ${shop}, 10.00 $`) as HTMLSelectElement).value).toBe(
       "sam",
@@ -2139,7 +2137,9 @@ test("paid with the joint card, a row is attached on exactly one match, and left
   });
   await threeReadAndSelected();
 
-  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), { target: { value: "" } });
+  for (const shop of ["Shop 11", "Shop 12", "Shop 13"]) {
+    fireEvent.change(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`), { target: { value: "" } });
+  }
   // Whose each item is goes item by item on the joint card (lg-91): the whole receipt's is held.
   expect((screen.getByLabelText("Whose, Shop 11, 10.00 $") as HTMLSelectElement).disabled).toBe(
     true,
@@ -2475,39 +2475,6 @@ test("removing every receipt read from a photo, none filed, hands it back to the
   expect(screen.getByRole("button", { name: "Type it in" })).toBeTruthy();
 });
 
-test("the bar sets only the pick the person changed on the selected rows (lg-102 gate 1)", async () => {
-  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-  await threeReadAndSelected();
-  fireEvent.change(screen.getByLabelText("Paid by, Shop 12, 10.00 $"), {
-    target: { value: "sam" },
-  });
-  const paid = (shop: string) =>
-    (screen.getByLabelText(`Paid by, ${shop}, 10.00 $`) as HTMLSelectElement).value;
-  const whose = (shop: string) =>
-    (screen.getByLabelText(`Whose, ${shop}, 10.00 $`) as HTMLSelectElement).value;
-
-  // Whose alone: each row keeps who paid it.
-  fireEvent.change(screen.getByLabelText("Whose, for the selected"), {
-    target: { value: "casey" },
-  });
-  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
-    ["alex", "casey"],
-    ["sam", "casey"],
-    ["alex", "casey"],
-  ]);
-
-  // Row 13 shared again, then Paid by alone: each row keeps whose it is.
-  fireEvent.change(screen.getByLabelText("Whose, Shop 13, 10.00 $"), { target: { value: "" } });
-  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), {
-    target: { value: "sam" },
-  });
-  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
-    ["sam", "casey"],
-    ["sam", "casey"],
-    ["sam", ""],
-  ]);
-});
-
 test("each row says Filing…, why not and what it was filed as in a live region that was there before it spoke (lg-102 gate 1)", async () => {
   vi.mocked(fileReceipt).mockImplementation(async (id, request) => {
     if (id === 12) throw new AppError("RECEIPT_ALREADY_FILED", "That receipt is filed already.");
@@ -2539,107 +2506,6 @@ test("each row says Filing…, why not and what it was filed as in a live region
     "Filed as alex's line in the period.",
     "Not filed: That receipt is filed already.",
   ]);
-});
-
-/** What a select shows, as the person reads it. */
-function shownIn(select: HTMLElement): string {
-  return (select as HTMLSelectElement).selectedOptions[0]?.text ?? "";
-}
-
-test("the bar never shows a pick that some selected row does not have: each select starts on, and returns to, Keep each row's (lg-102 gate 2, N2)", async () => {
-  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-  await threeReadAndSelected();
-  fireEvent.change(screen.getByLabelText("Paid by, Shop 12, 10.00 $"), {
-    target: { value: "sam" },
-  });
-  const barPaid = screen.getByLabelText("Paid by, for the selected");
-  const barWhose = screen.getByLabelText("Whose, for the selected");
-
-  // Rows differ, so the bar shows no one's pick.
-  expect([shownIn(barPaid), shownIn(barWhose)]).toEqual(["Keep each row's", "Keep each row's"]);
-  expect(optionsOf(barPaid as HTMLSelectElement)).toEqual([
-    "Keep each row's",
-    "alex",
-    "casey",
-    "sam",
-    "Joint card",
-  ]);
-  expect(optionsOf(barWhose as HTMLSelectElement).slice(0, 2)).toEqual([
-    "Keep each row's",
-    "Shared",
-  ]);
-
-  // Each change is applied, and the select that applied it goes back.
-  fireEvent.change(barWhose, { target: { value: "casey" } });
-  expect([shownIn(barPaid), shownIn(barWhose)]).toEqual(["Keep each row's", "Keep each row's"]);
-  fireEvent.change(barPaid, { target: { value: "casey" } });
-  expect([shownIn(barPaid), shownIn(barWhose)]).toEqual(["Keep each row's", "Keep each row's"]);
-});
-
-test("the bar's Whose alone keeps each row's payer, a row on the joint card included (lg-102 gate 2, N2)", async () => {
-  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-  await threeReadAndSelected();
-  fireEvent.change(screen.getByLabelText("Paid by, Shop 12, 10.00 $"), {
-    target: { value: "sam" },
-  });
-  fireEvent.change(screen.getByLabelText("Paid by, Shop 13, 10.00 $"), { target: { value: "" } });
-
-  fireEvent.change(screen.getByLabelText("Whose, for the selected"), {
-    target: { value: "casey" },
-  });
-
-  const paid = (shop: string) => shownIn(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`));
-  const whose = (shop: string) => shownIn(screen.getByLabelText(`Whose, ${shop}, 10.00 $`));
-  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
-    ["alex", "casey's — owes all of it"],
-    ["sam", "casey's — owes all of it"],
-    ["Joint card", "Shared"],
-  ]);
-  // The bar says only that nothing is held for the rows to share.
-  expect(shownIn(screen.getByLabelText("Whose, for the selected"))).toBe("Keep each row's");
-  expect(shownIn(screen.getByLabelText("Paid by, for the selected"))).toBe("Keep each row's");
-});
-
-test("the bar's Paid by alone keeps each row's Whose, through the items' repick (lg-102 gate 2, N2)", async () => {
-  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-  await threeReadAndSelected();
-  fireEvent.change(screen.getByLabelText("Whose, Shop 11, 10.00 $"), {
-    target: { value: "casey" },
-  });
-
-  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), {
-    target: { value: "sam" },
-  });
-
-  const paid = (shop: string) => shownIn(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`));
-  const whose = (shop: string) => shownIn(screen.getByLabelText(`Whose, ${shop}, 10.00 $`));
-  expect(["Shop 11", "Shop 12", "Shop 13"].map((shop) => [paid(shop), whose(shop)])).toEqual([
-    ["sam", "casey's — owes all of it"],
-    ["sam", "Shared"],
-    ["sam", "Shared"],
-  ]);
-  expect(shownIn(screen.getByLabelText("Paid by, for the selected"))).toBe("Keep each row's");
-});
-
-test("Whose set to casey from the bar, over rows paid by alex, by sam and on the joint card, leaves the bar on Keep each row's (lg-102 gate 2, N2)", async () => {
-  vi.mocked(fetchHousehold).mockResolvedValue(household(["alex", "casey", "sam"]));
-  await threeReadAndSelected();
-  fireEvent.change(screen.getByLabelText("Paid by, Shop 12, 10.00 $"), {
-    target: { value: "sam" },
-  });
-  fireEvent.change(screen.getByLabelText("Paid by, Shop 13, 10.00 $"), { target: { value: "" } });
-  fireEvent.change(screen.getByLabelText("Whose, for the selected"), {
-    target: { value: "casey" },
-  });
-
-  // Before this, the bar read alex / casey's while one row was sam's and one joint.
-  expect(shownIn(screen.getByLabelText("Paid by, for the selected"))).toBe("Keep each row's");
-  expect(shownIn(screen.getByLabelText("Whose, for the selected"))).toBe("Keep each row's");
-  expect(
-    ["Shop 11", "Shop 12", "Shop 13"].map((shop) =>
-      shownIn(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`)),
-    ),
-  ).toEqual(["alex", "sam", "Joint card"]);
 });
 
 test("Remove cannot be tapped while a filing is out: the three are all filed, none lost from the list (lg-102 gate 2, N1a)", async () => {
@@ -2683,21 +2549,6 @@ test("Remove cannot be tapped while a filing is out: the three are all filed, no
   for (const shop of ["Shop 11", "Shop 12", "Shop 13"]) {
     expect(screen.getByText(`${shop}, 10.00 $, filed`)).toBeTruthy();
   }
-});
-
-test("the bar changes a selected row and leaves an unselected one as it was (lg-102 gate 2, N1b)", async () => {
-  await threeReadAndSelected();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select Shop 12, 10.00 $" }));
-
-  fireEvent.change(screen.getByLabelText("Paid by, for the selected"), {
-    target: { value: "sam" },
-  });
-
-  expect(
-    ["Shop 11", "Shop 12", "Shop 13"].map((shop) =>
-      shownIn(screen.getByLabelText(`Paid by, ${shop}, 10.00 $`)),
-    ),
-  ).toEqual(["sam", "alex", "sam"]);
 });
 
 test("removing one of two receipts read from a photo leaves the photo read: 1 of 1 read stays and no read is offered (lg-102 gate 2, N1c)", async () => {

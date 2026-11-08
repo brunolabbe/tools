@@ -15,8 +15,8 @@
  *
  * **Each receipt is filed from its row** (lg-102). A row carries who paid and
  * whose the receipt is, a box to select it, and opens the receipt to correct
- * it; a bar sets only the pick the person changes on every selected row (each
- * keeps the other; the bar's selects start on, and return to, "Keep each row's")
+ * it; a bar selects them all and files the selected (it once also set who paid
+ * or whose on every selected row, and was taken out: the owner, 2026-11-08)
  * and files them, one receipt at a time, each row saying filed or why not as its
  * answer comes back. A row's Remove takes a receipt out of the list, typed by
  * mistake or not a receipt, and hands a photo with nothing left back to the reader. A row
@@ -104,10 +104,6 @@ const WAIT_DEFAULT_SEC = 15;
 /** In a row, for one photo: past this the read is reported as failed, with a retry. */
 const MAX_WAITS = 5;
 
-/** The bar's first entry: no change to that pick. Not a name a member can have, and not "" (the joint card, Shared). */
-const KEEP = "(keep each row's)";
-const KEEP_ENTRY = "Keep each row's";
-
 /** What a joint-card row says when the batch cannot pick its row alone (lg-102). */
 export const CHOOSE_THE_ROW = "Open it to choose the row.";
 
@@ -154,11 +150,6 @@ export interface ReceiptQueue {
   edit: (key: number, part: number, change: (draft: Draft) => Draft) => void;
   /** Sets a receipt's picks, its items following who paid (`repick`). */
   pick: (key: number, part: number, picks: Picks, people: readonly string[]) => void;
-  /**
-   * Changes the picks on every selected receipt not filed yet, by `change`: the
-   * bar changes only the pick the person changed (the owner, 2026-11-07).
-   */
-  pickSelected: (change: (picks: Picks) => Picks, people: readonly string[]) => void;
   drop: (key: number, part: number) => void;
   /**
    * Takes a receipt not filed out of the list (the owner, 2026-11-07): one
@@ -439,12 +430,6 @@ export function useReceiptQueue(): ReceiptQueue {
       })),
     pick: (key, part, picks, people) =>
       revise(key, part, (entry) => repicked(entry, picks, people)),
-    pickSelected: (change, people) =>
-      reviseAll((photo, part, entry) =>
-        entry.selected && !photo.filed.includes(part)
-          ? repicked(entry, change(entry.picks), people)
-          : entry,
-      ),
     drop: (key, part) => revise(key, part, () => null),
     remove: (key, part) => {
       revise(key, part, () => null);
@@ -503,28 +488,21 @@ export interface PickSelectsProps {
   whoseLabel: string;
   labelled: boolean;
   disabled: boolean;
-  /**
-   * The bar (lg-102): each select starts on, and returns to, "Keep each row's",
-   * so it never shows a pick the rows do not all have; `picks` is then only the
-   * base the person's one change is made on.
-   */
-  keep?: boolean;
-  /** The picks as changed, and which of the two the person changed. */
-  onChange: (picks: Picks, changed: "paid" | "whose") => void;
+  /** The picks as changed. */
+  onChange: (picks: Picks) => void;
 }
 
 /**
- * Who paid, and whose the receipt is (lg-102): the list's row, its bar and the
- * opened receipt each carry the pair. Paid by offers each current member and
+ * Who paid, and whose the receipt is (lg-102): the list's row and the opened
+ * receipt each carry the pair. Paid by offers each current member and
  * then the joint card; Whose offers Shared and then each member other than the
  * payer, who owes all of it, and is held on the joint card, where whose each
  * item is, is said item by item (lg-91).
  */
 export function PickSelects(props: PickSelectsProps): React.ReactElement {
   const { picks, people, shown, paidByLabel, whoseLabel, labelled, disabled, onChange } = props;
-  const keep = props.keep === true;
   const id = useId();
-  const others = keep ? people : people.filter((person) => person !== picks.payer);
+  const others = people.filter((person) => person !== picks.payer);
   // Whoever took the photo is offered even when the household's record lacks them.
   const payers = people.includes(picks.payer) ? people : [picks.payer, ...people];
   const naming = (field: string, label: string) =>
@@ -536,18 +514,15 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
         <select
           {...naming("paid", paidByLabel)}
           disabled={disabled}
-          value={keep ? KEEP : picks.joint ? JOINT_CARD : picks.payer}
-          onChange={(event) => {
-            if (event.target.value === KEEP) return;
+          value={picks.joint ? JOINT_CARD : picks.payer}
+          onChange={(event) =>
             onChange(
               event.target.value === JOINT_CARD
                 ? { ...picks, joint: true }
                 : { ...picks, joint: false, payer: event.target.value },
-              "paid",
-            );
-          }}
+            )
+          }
         >
-          {keep && <option value={KEEP}>{KEEP_ENTRY}</option>}
           {payers.map((person) => (
             <option key={person} value={person}>
               {shownName(shown, person)}
@@ -560,17 +535,12 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
         {labelled && <label htmlFor={`${id}-whose`}>{whoseLabel}</label>}
         <select
           {...naming("whose", whoseLabel)}
-          disabled={disabled || (picks.joint && !keep)}
-          value={keep ? KEEP : picks.joint ? SHARED : (picks.whose ?? SHARED)}
-          onChange={(event) => {
-            if (event.target.value === KEEP) return;
-            onChange(
-              { ...picks, whose: event.target.value === SHARED ? null : event.target.value },
-              "whose",
-            );
-          }}
+          disabled={disabled || picks.joint}
+          value={picks.joint ? SHARED : (picks.whose ?? SHARED)}
+          onChange={(event) =>
+            onChange({ ...picks, whose: event.target.value === SHARED ? null : event.target.value })
+          }
         >
-          {keep && <option value={KEEP}>{KEEP_ENTRY}</option>}
           <option value={SHARED}>Shared</option>
           {others.map((person) => (
             <option key={person} value={person}>
@@ -579,7 +549,7 @@ export function PickSelects(props: PickSelectsProps): React.ReactElement {
           ))}
         </select>
       </span>
-      {picks.joint && !keep && (
+      {picks.joint && (
         <span className="muted hint">
           Paid with the joint card: whose each item is, is chosen item by item.
         </span>
@@ -623,10 +593,6 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
       .map((part) => photo.entries[part]),
   );
   const chosen = open.filter((entry) => entry?.selected === true).length;
-  // Whoever took the photos: one person's screen, so the first names them.
-  const taker = photos.find((photo) => photo.receipt !== null)?.receipt?.uploadedBy ?? "";
-  // The base for the bar's one change; the bar shows none of it (`keep`).
-  const bar: Picks = { joint: false, payer: taker, whose: null };
 
   const row = (photo: QueuedPhoto, part: number): React.ReactElement | null => {
     const entry = photo.entries[part];
@@ -803,33 +769,6 @@ export function ReceiptQueueView(props: ReceiptQueueViewProps): React.ReactEleme
             />
             Select all
           </label>
-          <p className="muted hint">
-            Only the pick you change here is set on every selected receipt; each keeps the other.
-          </p>
-          <PickSelects
-            picks={bar}
-            people={people}
-            shown={shown}
-            paidByLabel="Paid by, for the selected"
-            whoseLabel="Whose, for the selected"
-            labelled={false}
-            keep
-            disabled={busy || chosen === 0}
-            onChange={(picks, changed) => {
-              // Only the pick the person changed; each row keeps the other (the owner, 2026-11-07).
-              queue.pickSelected(
-                (before) =>
-                  changed === "paid"
-                    ? {
-                        ...before,
-                        joint: picks.joint,
-                        payer: picks.joint ? before.payer : picks.payer,
-                      }
-                    : { ...before, whose: picks.whose },
-                people,
-              );
-            }}
-          />
           <div className="actions">
             <button
               className="primary"

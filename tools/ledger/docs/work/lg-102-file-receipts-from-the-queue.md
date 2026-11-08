@@ -476,3 +476,16 @@ N5), and left gate 1's live-region finding fixed in part. The owner answered on
   and Remove on lines of their own at 360 px; nothing overflows), and gate 1's
   live-region finding in part (a second File selected with the same row still
   refused changes nothing in the region).
+
+### 2026-11-08 — the bar's two selects taken out (the owner)
+
+- In use, the owner could not tell what the bar's "Paid by, for the selected" and
+  "Whose, for the selected" selects were for. They were greyed out until a row was
+  ticked, and after a pick they went back to "Keep each row's", so the pick looked
+  ignored even though every ticked row took it. Offered: keep showing the last pick,
+  clearer labels, take the selects out, or leave them. The owner took them out.
+- The bar now holds Select all and File selected only. Who paid and whose are set
+  on each row or in the opened receipt. Gone with it: `pickSelected`, `PickSelects`'
+  `keep` mode, and the six unit tests about the bar's picks. The first filing test
+  and the joint-card test now set each row, and `e2e/layout.spec.ts` sets Whose on
+  a row to keep its longest-choice width case.
