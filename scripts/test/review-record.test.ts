@@ -2215,6 +2215,7 @@ test("land() puts preflight's reason on the stage's own FAIL line when the merge
     // The landing is still on origin, and the nested output still follows.
     expect(failed?.detail).toMatch(/landed and pushed to origin\/feature/);
     expect(failed?.detail).toContain("== mergeTree ==");
+    expect(gitIn(bareDir, "rev-parse", "refs/heads/feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
   } finally {
     cleanup();
   }

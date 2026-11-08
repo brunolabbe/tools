@@ -1171,6 +1171,27 @@ export function failedChecks(output) {
 }
 
 /**
+ * The `detail` of a failed preflight stage, reason first. `landMain` prints
+ * each stage as `FAIL  <detail>`, but preflight's output opens with a blank
+ * line and then its own nested blocks, so the stage line carried no reason and
+ * the lander saw a bare `FAIL` (repo-136). The reason is the verdict line when
+ * preflight printed one, else the output's first non-empty line; the whole
+ * output follows it unchanged, so nothing the nested blocks say is lost.
+ *
+ * @param {string} output
+ * @returns {string}
+ */
+export function preflightStageDetail(output) {
+  const verdict = /^preflight failed: [^\r\n]+/mu.exec(output)?.[0];
+  const firstLine = output
+    .split(/\r?\n/u)
+    .find((line) => line.trim() !== "")
+    ?.trim();
+  const reason = verdict ?? firstLine ?? "preflight printed no output";
+  return `${reason}\n${output.trimStart()}`;
+}
+
+/**
  * `--land`'s own default `preflight` step, resolved next to this file rather
  * than inside whatever `repo` the ticket lives in — see `land`'s docblock.
  * `spawn` is injectable (default `spawnSync`) purely so a test can assert on
@@ -1550,7 +1571,10 @@ export function land(options) {
     return fail("preflight", `${/** @type {Error} */ (error).message}${pushedHint()}`);
   }
   if (!preflightResult.ok)
-    return fail("preflight", `${preflightResult.output}${pushedHint(preflightResult.output)}`);
+    return fail(
+      "preflight",
+      `${preflightStageDetail(preflightResult.output)}${pushedHint(preflightResult.output)}`,
+    );
   pass("preflight", "exit 0");
 
   return { ok: true, steps };
