@@ -2014,3 +2014,14 @@ test("repo-135: a hold is a reminder, so --markdown still lists the ticket under
   const { stdout } = run(["--markdown"], heldBoard());
   expect(stdout).toContain("held: until the upstream fix publishes");
 });
+
+test("repo-135: --show on an in-flight ticket whose note opens `held:` still ends on `unblocked`", () => {
+  // A sliced ticket keeps its note while it is built; the tool view marks it
+  // `»` and the hold is advice for a dispatcher, which in-flight already is.
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "in-flight", note: "held: nobody cleared this note" }),
+  });
+  const { stdout } = run(["--show", "pl-1"], root);
+  expect(stdout).toMatch(/^ {2}unblocked$/m);
+  expect(stdout).not.toContain("held — not startable yet");
+});

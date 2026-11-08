@@ -125,3 +125,9 @@ Under the chosen option:
   the planner (recommended), or also convert pl-26 now in a `docs(planner)`
   pull request, or leave both: chose the first. Neither note is edited on this
   branch.
+- 2026-11-08 — Fixed at landing by owner choice: gate 1, F2 — "`--show` on an
+  in-flight ticket whose note still opens held: ends on held — not startable
+  yet". `printTicket` guards the branch with `ticket.status === "ready"`; the
+  test "repo-135: --show on an in-flight ticket whose note opens `held:` still
+  ends on `unblocked`" in `scripts/test/status.test.ts` failed on `4fa7ea17`
+  and passes with the guard. F1 stays recorded, unfixed.

@@ -1184,7 +1184,9 @@ function printTicket({ ticket, blockers, missing }, io) {
   // repo-135: before the pair, for the reason the decision is. `unblocked` is
   // true of a held ticket's `depends_on` and false as advice. The blockers stay
   // on the line, and the hold is a reminder: a human may dispatch it on purpose.
-  if (ticket.held) {
+  // Only for `ready`: an in-flight ticket has been dispatched, and its note is
+  // one nobody has cleared, so the closing line must not tell a reader no.
+  if (ticket.held && ticket.status === "ready") {
     const also = holding.length === 0 ? "" : `; also blocked by ${holding.join(", ")}`;
     io.stdout(`\n  held — not startable yet: ${holdText(ticket)}${also}\n\n`);
     return;
